@@ -37,6 +37,7 @@ import {
   plainEnv,
   recsEnv,
   rowShapeKey,
+  schemeRender,
   tsEnv,
   tsOf
 } from "./ts-types.mochi"
@@ -266,14 +267,13 @@ let genericParamsFrom = (t, arity, env, i) =>
     }
 
 export let genericLambdaParams = (sc, arity, recs) =>
-  let names = genericNames(sc) in
-  let env = tsEnv(names, recs) in
-    Map.size(names) == 0
-      ? None
-      : Some(
+  Map.size(genericNames(sc)) == 0
+    ? None
+    : let rendered = schemeRender(sc, recs) in
+      Some(
         {
-          generics: "<${Str.join(", ", Map.values(names))}>",
-          params: genericParamsFrom(sc.ty, arity, env, 0)
+          generics: rendered.head,
+          params: genericParamsFrom(sc.ty, arity, rendered.env, 0)
         }
       )
 
@@ -437,20 +437,25 @@ let declType = (t, value, env) => switch value {
 /// A CONCRETE function emits partial-application overloads so `_curry`'d calls
 /// typecheck (ADR 0037). A GENERIC one keeps the nested arrow: overloads there
 /// wreck tsc's callback contextual typing and type-argument inference. A
-/// non-function polymorphic binding has nowhere to bind generics, so its
-/// escaped vars fall back to `unknown`.
+/// scheme whose variables a single record alias explains renders as that alias
+/// (ADR 0106); once no letters remain it is concrete and takes the curry form.
+/// A non-function polymorphic binding has nowhere to bind generics, so its
+/// escaped vars fall back to `unknown` — except variables the alias pin
+/// resolved, which print as that concrete text.
 export let bindingTsType = (sc, value, recs) =>
-  let names = genericNames(sc) in
-  let env = tsEnv(names, recs) in
-  let head = Map.size(names) == 0
-    ? ""
-    : "<${Str.join(", ", Map.values(names))}>" in
+  let rendered = schemeRender(sc, recs) in
     switch value {
-      | Ast.ELambda(_, _, _) => head == ""
-          ? let (params, ret) = flatParamsFrom(sc.ty, value, env, 0, []) in
+      | Ast.ELambda(_, _, _) => rendered.head == ""
+          ? let (params, ret) = flatParamsFrom(
+            sc.ty,
+            value,
+            rendered.env,
+            0,
+            []
+          ) in
             curriedFnType(params, ret)
-          : "${head}${declType(sc.ty, value, env)}"
-      | _ => tsOf(sc.ty, recsEnv(recs))
+          : "${rendered.head}${declType(sc.ty, value, rendered.env)}"
+      | _ => tsOf(sc.ty, tsEnv(rendered.pins, recs))
     }
 
 // ---- module assembly -------------------------------------------------------
@@ -565,7 +570,8 @@ let aliasShapeKey = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>) 
 /// the emitted TEXT, so naming one here is exactly what makes its import appear.
 ///
 /// Nullary only — a parameterised alias would have to match a row up to
-/// substitution.
+/// substitution. The inverse, a use whose fields are still scheme variables,
+/// is pinned at `schemeRender` (ADR 0106), not here.
 ///
 /// A dep reached through `import * as Ast` seeds only the QUALIFIED key
 /// `"Ast.Span"` (infer.mochi's `qualAliasSeed`), so index under the last
@@ -600,6 +606,49 @@ let recordAliasIndexFrom = (keys, aliases: Map<string, AliasInfo>, i, acc) => sw
 
 export let recordAliasIndex = aliases =>
   recordAliasIndexFrom(Array.sort(Map.keys(aliases)), aliases, 0, #{})
+
+/// Bare names of parameterised aliases. `LocTok` and `LocTok<t>` share one,
+/// and printing the nullary name then imports the parameterised one.
+let parameterizedBares = (keys, aliases: Map<string, AliasInfo>, i, acc) => switch Array.get(i, keys) {
+  | None => acc
+  | Some(key) => switch Map.get(key, aliases) {
+      | Some(info) => parameterizedBares(
+          keys,
+          aliases,
+          i + 1,
+          Array.length(info.params) > 0 ? Set.add(bareName(key), acc) : acc
+        )
+      | None => parameterizedBares(keys, aliases, i + 1, acc)
+    }
+}
+
+let dropAmbiguous = (keys, recs, bad, localNames, i) => switch Array.get(i, keys) {
+  | None => recs
+  | Some(k) => switch Map.get(k, recs) {
+      | Some(name) => dropAmbiguous(
+          keys,
+          Set.has(name, bad) && !Set.has(name, localNames)
+            ? Map.set(k, "", recs)
+            : recs,
+          bad,
+          localNames,
+          i + 1
+        )
+      | None => dropAmbiguous(keys, recs, bad, localNames, i + 1)
+    }
+}
+
+/// A shape whose bare name is also a parameterised alias keeps its key, so a
+/// use can still pin its variables, but the printed name is blank unless this
+/// module declares the nullary alias. An empty name prints as the row.
+export let withoutAmbiguousAlias = (recs, aliases: Map<string, AliasInfo>, localNames) =>
+  dropAmbiguous(
+    Map.keys(recs),
+    recs,
+    parameterizedBares(Map.keys(aliases), aliases, 0, Set.fromArray([])),
+    localNames,
+    0
+  )
 
 /// The index an alias's OWN body renders against — itself removed, so it cannot
 /// come out as `export type Span = Span;`.
@@ -811,15 +860,18 @@ let scopedNamesAt = (spans, i, names, acc) => switch Array.get(i, spans) {
 }
 
 /// Each annotatable node nested in a GENERIC binding's value body -> that
-/// binding's letter map (ADR 0042). Scoped PER binding, never a global union:
-/// letters are positional, so the same var id can be `A` under one scheme and
-/// `C` under another, and a nested node must use exactly the assignment of the
-/// head it renders under.
-let scopedNamesFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
+/// binding's letter map (ADR 0042), after record-alias pins (ADR 0106). Scoped
+/// PER binding, never a global union: letters are positional, so the same var
+/// id can be `A` under one scheme and `C` under another, and a nested node
+/// must use exactly the assignment of the head it renders under. A pinned
+/// variable prints as its concrete type here too, so a cast inside the body
+/// does not mention a letter the head no longer binds.
+let scopedNamesFrom = (stmts, env, recs: Map<string, string>, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(Ast.SLet(name, _, _, value, _, _, _)) => scopedNamesFrom(
       stmts,
       env,
+      recs,
       i + 1,
       switch value {
         | Ast.ELambda(_, _, _) when !Str.startsWith("$", name) => switch Map.get(name, env) {
@@ -829,7 +881,7 @@ let scopedNamesFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
                 ? scopedNamesAt(
                   scopedSpans(value),
                   0,
-                  unionGenericNames([sc]),
+                  schemeRender(sc, recs).env.vars,
                   acc
                 )
                 : acc
@@ -838,7 +890,7 @@ let scopedNamesFrom = (stmts, env, i, acc) => switch Array.get(i, stmts) {
         | _ => acc
       }
     )
-  | Some(_) => scopedNamesFrom(stmts, env, i + 1, acc)
+  | Some(_) => scopedNamesFrom(stmts, env, recs, i + 1, acc)
 }
 
 /// The TS-backend options: every hook resolved against this module's inference
@@ -847,8 +899,12 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
   let typeAt = typeAtTable(types) in
   let letParamAt = typeAtTable(letParams) in
   let genericLams = genericLambdasFrom(stmts, env, 0, #{}) in
-  let scopedNames = scopedNamesFrom(stmts, env, 0, #{}) in
-  let recs = recordAliasIndex(aliases) in
+  let recs = withoutAmbiguousAlias(
+    recordAliasIndex(aliases),
+    aliases,
+    declaredTypeNames(stmts, 0, Set.fromArray([]))
+  ) in
+  let scopedNames = scopedNamesFrom(stmts, env, recs, 0, #{}) in
   let typeOf = e => Map.get(spanKey(exprSpan(e)), typeAt) in
   // ADR 0042: a node inside a generic binding renders under that binding's
   // letters; elsewhere only concrete types render (a free var would be `unknown`).
@@ -1009,7 +1065,11 @@ let hasJsxStmts = stmts =>
 export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
-  let recs = recordAliasIndex(aliases) in
+  let recs = withoutAmbiguousAlias(
+    recordAliasIndex(aliases),
+    aliases,
+    declared
+  ) in
   let typeHeader = typeHeaderFrom(stmts, aliases, recs, 0) in
   let body = codegenWith(
     stmts,

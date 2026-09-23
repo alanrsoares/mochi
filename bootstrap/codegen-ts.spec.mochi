@@ -17,6 +17,7 @@ import {
   recordAliasDecl,
   recordAliasIndex,
   typeDecl,
+  withoutAmbiguousAlias,
   bindingTsType,
   curriedOverloads,
   emitTsModule,
@@ -520,6 +521,45 @@ test("recordAliasIndex skips a parameterised alias", () =>
     )
   ))
 
+let spanAliases = #{
+  "Span": {
+    params: [],
+    fields: [
+      { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
+      { name: "end", fieldType: Ast.TyName("number", sp), optional: false }
+    ],
+    expr: None
+  },
+  "Other.Span": {
+    params: ["a"],
+    fields: [
+      { name: "value", fieldType: Ast.TyName("a", sp), optional: false }
+    ],
+    expr: None
+  }
+}
+
+test("a parameterised homonym hides the nullary name outside its module", () =>
+  // The shape stays, so a use can still pin; the blank name prints as the row.
+  assertEq(
+    #{ "end: number; start: number": "" },
+    withoutAmbiguousAlias(
+      recordAliasIndex(spanAliases),
+      spanAliases,
+      Set.fromArray([])
+    )
+  ))
+
+test("the module that declares the nullary alias still folds it", () =>
+  assertEq(
+    #{ "end: number; start: number": "Span" },
+    withoutAmbiguousAlias(
+      recordAliasIndex(spanAliases),
+      spanAliases,
+      Set.fromArray(["Span"])
+    )
+  ))
+
 test("a use of a record alias renders as the alias name", () =>
   assertEq(
     true,
@@ -528,6 +568,21 @@ test("a use of a record alias renders as the alias name", () =>
     )
       |> Str.contains(": Span")
   ))
+
+test("a generalized record use folds back to the alias", () =>
+  let out = tsOf(
+    "type LocTok = { tok: string, start: number, end: number, doc: Option<string> }\nlet at = (toks, i) => Array.get(i, toks) |> Option.unwrapOr({ tok: \"eof\", start: 0, end: 0, doc: None })"
+  ) in
+    assertEq(
+      true,
+      Str.contains("LocTok", out) && !Str.contains("Option<A>", out)
+    ))
+
+test("a span built from two field reads folds the closed result", () =>
+  let out = tsOf(
+    "type Span = { start: number, end: number }\nlet spanOf = lt => { start: lt.start, end: lt.end }"
+  ) in
+    assertEq(true, Str.contains("=> Span", out)))
 
 test("an alias declaration still renders its own body structurally", () =>
   // Without the self-exclusion this comes out `export type Span = Span;`.

@@ -15,6 +15,7 @@ import {
   declaredTypeNames,
   recordAliasIndex,
   referencedCons,
+  withoutAmbiguousAlias,
   opaqueTypeDecl,
   recordAliasDecl,
   typeDecl,
@@ -297,10 +298,10 @@ let nsTypeImportsFrom = (stmts, body, seen, i) => switch Array.get(i, stmts) {
 
 /// Emit `.d.ts` text from an already-typed program.
 export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs) =>
-  let recs = recordAliasIndex(aliases) in
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
+  let recs = withoutAmbiguousAlias(recordAliasIndex(aliases), aliases, local) in
   let quals = writtenQualsFrom(stmts, local, qualify, 0) in
   let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
   let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, 0) in

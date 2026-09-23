@@ -12,7 +12,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
-import type { QualAliasField } from "./infer";
+import type { LocTok, QualAliasField } from "./infer";
 import type { CtorFactoryTs, CtorFieldLike, CtorLike, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 
@@ -103,7 +103,16 @@ import { typeExprToType, collect, emptyVarSets } from "./schemes";
 import { builtinTypeDecls, keysOf } from "./ctors";
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "./infer";
-import { genericNames, letterAt, plainEnv, recsEnv, rowShapeKey, tsEnv, tsOf } from "./ts-types";
+import {
+  genericNames,
+  letterAt,
+  plainEnv,
+  recsEnv,
+  rowShapeKey,
+  schemeRender,
+  tsEnv,
+  tsOf,
+} from "./ts-types";
 /**
  * Type params are bound POSITIONALLY: the i-th param is var `i`, rendered as
  * the i-th letter. Both maps are built from one index so a field type and the
@@ -543,16 +552,14 @@ export const genericLambdaParams: <A>(
     sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
     arity: number,
     recs: Map<string, string>,
-  ) => {
-    const names: Map<number, string> = genericNames(sc);
-    const env: TsEnv = tsEnv(names, recs);
-    return eq(_Map_size(names), 0)
+  ) =>
+    eq(_Map_size(genericNames(sc)), 0)
       ? (None as Option<ParamAnnots>)
-      : (Some({
-          generics: `<${_Str_join(", ", _Map_values(names))}>`,
-          params: genericParamsFrom(sc.ty, arity, env, 0),
-        }) as Option<ParamAnnots>);
-  },
+      : ((rendered: { env: TsEnv; head: string; pins: Map<number, string> }) =>
+          Some({
+            generics: rendered.head,
+            params: genericParamsFrom(sc.ty, arity, rendered.env, 0),
+          }) as Option<ParamAnnots>)(schemeRender(sc, recs)),
 );
 /**
  * The typing for one variant ctor's factory (`GenOpts.annotateCtor`).
@@ -805,8 +812,11 @@ const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
  * A CONCRETE function emits partial-application overloads so `_curry`'d calls
  * typecheck (ADR 0037). A GENERIC one keeps the nested arrow: overloads there
  * wreck tsc's callback contextual typing and type-argument inference. A
- * non-function polymorphic binding has nowhere to bind generics, so its
- * escaped vars fall back to `unknown`.
+ * scheme whose variables a single record alias explains renders as that alias
+ * (ADR 0106); once no letters remain it is concrete and takes the curry form.
+ * A non-function polymorphic binding has nowhere to bind generics, so its
+ * escaped vars fall back to `unknown` — except variables the alias pin
+ * resolved, which print as that concrete text.
  */
 export const bindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -819,18 +829,19 @@ export const bindingTsType: <A>(
     value: Expr,
     recs: Map<string, string>,
   ) => {
-    const names: Map<number, string> = genericNames(sc);
-    const env: TsEnv = tsEnv(names, recs);
-    const head: string = eq(_Map_size(names), 0) ? "" : `<${_Str_join(", ", _Map_values(names))}>`;
+    const rendered: { env: TsEnv; head: string; pins: Map<number, string> } = schemeRender(
+      sc,
+      recs,
+    );
     return match(value)
       .with({ _tag: "ELambda" }, () =>
-        eq(head, "")
+        eq(rendered.head, "")
           ? (([params, ret]: [string[], string]) => curriedFnType(params, ret))(
-              flatParamsFrom(sc.ty, value, env, 0, [] as string[]),
+              flatParamsFrom(sc.ty, value, rendered.env, 0, [] as string[]),
             )
-          : `${head}${declType(sc.ty, value, env)}`,
+          : `${rendered.head}${declType(sc.ty, value, rendered.env)}`,
       )
-      .otherwise(() => tsOf(sc.ty, recsEnv(recs)));
+      .otherwise(() => tsOf(sc.ty, tsEnv(rendered.pins, recs)));
   },
 );
 /**
@@ -1025,7 +1036,8 @@ const aliasShapeKey: _Curry<
  * the emitted TEXT, so naming one here is exactly what makes its import appear.
  *
  * Nullary only — a parameterised alias would have to match a row up to
- * substitution.
+ * substitution. The inverse, a use whose fields are still scheme variables,
+ * is pinned at `schemeRender` (ADR 0106), not here.
  *
  * A dep reached through `import * as Ast` seeds only the QUALIFIED key
  * `"Ast.Span"` (infer.mochi's `qualAliasSeed`), so index under the last
@@ -1077,6 +1089,80 @@ const recordAliasIndexFrom: _Curry<
 export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, string> = (
   aliases: Map<string, AliasInfo>,
 ) => recordAliasIndexFrom(_Array_sort(_Map_keys(aliases)), aliases, 0, new Map<string, string>());
+/**
+ * Bare names of parameterised aliases. `LocTok` and `LocTok<t>` share one,
+ * and printing the nullary name then imports the parameterised one.
+ */
+const parameterizedBares: _Curry<
+  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Set<string>) =>
+  match(_Array_get(i, keys))
+    .with({ _tag: "None" }, () => acc)
+    .with({ _tag: "Some" }, ({ value: key }) =>
+      match(_Map_get(key, aliases))
+        .with({ _tag: "Some" }, ({ value: info }) =>
+          parameterizedBares(
+            keys,
+            aliases,
+            i + 1,
+            length(info.params) > 0 ? _Set_add(bareName(key), acc) : acc,
+          ),
+        )
+        .with({ _tag: "None" }, () => parameterizedBares(keys, aliases, i + 1, acc))
+        .exhaustive(),
+    )
+    .exhaustive(),
+);
+const dropAmbiguous: <A>(
+  keys: A[],
+  recs: Map<A, string>,
+  bad: Set<string>,
+  localNames: Set<string>,
+  i: number,
+) => Map<A, string> = _curry(
+  5,
+  <A>(keys: A[], recs: Map<A, string>, bad: Set<string>, localNames: Set<string>, i: number) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => recs)
+      .with({ _tag: "Some" }, ({ value: k }) =>
+        match(_Map_get(k, recs))
+          .with({ _tag: "Some" }, ({ value: name }) =>
+            dropAmbiguous(
+              keys,
+              and(_Set_has(name, bad), not(_Set_has(name, localNames)))
+                ? _Map_set(k, "", recs)
+                : recs,
+              bad,
+              localNames,
+              i + 1,
+            ),
+          )
+          .with({ _tag: "None" }, () => dropAmbiguous(keys, recs, bad, localNames, i + 1))
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+/**
+ * A shape whose bare name is also a parameterised alias keeps its key, so a
+ * use can still pin its variables, but the printed name is blank unless this
+ * module declares the nullary alias. An empty name prints as the row.
+ */
+export const withoutAmbiguousAlias: <A>(
+  recs: Map<A, string>,
+  aliases: Map<string, AliasInfo>,
+  localNames: Set<string>,
+) => Map<A, string> = _curry(
+  3,
+  <A>(recs: Map<A, string>, aliases: Map<string, AliasInfo>, localNames: Set<string>) =>
+    dropAmbiguous(
+      _Map_keys(recs),
+      recs,
+      parameterizedBares(_Map_keys(aliases), aliases, 0, _Set_fromArray([] as string[])),
+      localNames,
+      0,
+    ),
+);
 /**
  * The index an alias's OWN body renders against — itself removed, so it cannot
  * come out as `export type Span = Span;`.
@@ -1425,23 +1511,27 @@ const scopedNamesAt: <A, B, C, D>(
 );
 /**
  * Each annotatable node nested in a GENERIC binding's value body -> that
- * binding's letter map (ADR 0042). Scoped PER binding, never a global union:
- * letters are positional, so the same var id can be `A` under one scheme and
- * `C` under another, and a nested node must use exactly the assignment of the
- * head it renders under.
+ * binding's letter map (ADR 0042), after record-alias pins (ADR 0106). Scoped
+ * PER binding, never a global union: letters are positional, so the same var
+ * id can be `A` under one scheme and `C` under another, and a nested node
+ * must use exactly the assignment of the head it renders under. A pinned
+ * variable prints as its concrete type here too, so a cast inside the body
+ * does not mention a letter the head no longer binds.
  */
-const scopedNamesFrom: <A, B>(
+const scopedNamesFrom: <A>(
   stmts: Stmt[],
-  env: Map<string, { vars: A[]; rvars: A[] } & B>,
+  env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & A>,
+  recs: Map<string, string>,
   i: number,
-  acc: Map<string, Map<A, string>>,
-) => Map<string, Map<A, string>> = _curry(
-  4,
-  <A, B>(
+  acc: Map<string, Map<number, string>>,
+) => Map<string, Map<number, string>> = _curry(
+  5,
+  <A>(
     stmts: Stmt[],
-    env: Map<string, { vars: A[]; rvars: A[] } & B>,
+    env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & A>,
+    recs: Map<string, string>,
     i: number,
-    acc: Map<string, Map<A, string>>,
+    acc: Map<string, Map<number, string>>,
   ) =>
     match(_Array_get(i, stmts))
       .with({ _tag: "None" }, () => acc)
@@ -1458,6 +1548,7 @@ const scopedNamesFrom: <A, B>(
           scopedNamesFrom(
             stmts,
             env,
+            recs,
             i + 1,
             match(value)
               .with(
@@ -1469,7 +1560,7 @@ const scopedNamesFrom: <A, B>(
                   match(_Map_get(name, env))
                     .with({ _tag: "Some" }, ({ value: sc }) =>
                       or(length(sc.vars) > 0, length(sc.rvars) > 0)
-                        ? scopedNamesAt(scopedSpans(value), 0, unionGenericNames([sc]), acc)
+                        ? scopedNamesAt(scopedSpans(value), 0, schemeRender(sc, recs).env.vars, acc)
                         : acc,
                     )
                     .with({ _tag: "None" }, () => acc)
@@ -1478,7 +1569,7 @@ const scopedNamesFrom: <A, B>(
               .otherwise(() => acc),
           ),
       )
-      .with({ _tag: "Some" }, () => scopedNamesFrom(stmts, env, i + 1, acc))
+      .with({ _tag: "Some" }, () => scopedNamesFrom(stmts, env, recs, i + 1, acc))
       .exhaustive(),
 );
 /**
@@ -1508,13 +1599,18 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
       0,
       new Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>(),
     );
+    const recs: Map<string, string> = withoutAmbiguousAlias(
+      recordAliasIndex(aliases),
+      aliases,
+      declaredTypeNames(stmts, 0, _Set_fromArray([] as string[])),
+    );
     const scopedNames: Map<string, Map<number, string>> = scopedNamesFrom(
       stmts,
       env,
+      recs,
       0,
       new Map<string, Map<number, string>>(),
     );
-    const recs: Map<string, string> = recordAliasIndex(aliases);
     const typeOf: (a: Expr) => Option<Ty> = (e: Expr) => _Map_get(spanKey(exprSpan(e)), typeAt);
     const envAt: (a: string) => TsEnv = (key: string) =>
       match(_Map_get(key, scopedNames))
@@ -1764,7 +1860,11 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
   ) => {
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
-    const recs: Map<string, string> = recordAliasIndex(aliases);
+    const recs: Map<string, string> = withoutAmbiguousAlias(
+      recordAliasIndex(aliases),
+      aliases,
+      declared,
+    );
     const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
     const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {
       ...tsGenOpts(stmts, env, types, letParams, aliases),

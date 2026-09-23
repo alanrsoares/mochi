@@ -14,6 +14,7 @@ import {
   plainEnv,
   recsEnv,
   rowShapeKey,
+  schemeRender,
   tsEnv,
   tsOf
 } from "./ts-types.mochi"
@@ -106,3 +107,56 @@ test("rowShapeKey sorts fields and declines an open row", () => {
   assertEq(Some("end: number; start: number"), rowShapeKey(span, #{}));
   assertEq(None, rowShapeKey(rExtend("start", tPrim("number"), rVar(7)), #{}))
 })
+
+// ---- alias pins (ADR 0106) -------------------------------------------------
+
+let locTok = rExtend(
+  "tok",
+  tPrim("string"),
+  rExtend(
+    "start",
+    tPrim("number"),
+    rExtend(
+      "end",
+      tPrim("number"),
+      rExtend("doc", tCon("Option", [tVar(0)]), RowEmpty)
+    )
+  )
+)
+
+let locIdx = #{
+  "doc: Option<string>; end: number; start: number; tok: string": "LocTok"
+}
+
+test("a generic field pins so the row prints as the alias", () =>
+  let rendered = schemeRender(
+    { vars: [0], rvars: [], ty: tRecord(locTok) },
+    locIdx
+  ) in
+    assertEq("LocTok", tsOf(tRecord(locTok), rendered.env)))
+
+test("a closed span of scheme variables pins to Span, the open parameter does not", () =>
+  let ty = tArrow(
+    tRecord(rExtend("start", tVar(1), rExtend("end", tVar(2), rVar(3)))),
+    tRecord(rExtend("start", tVar(1), rExtend("end", tVar(2), RowEmpty)))
+  ) in
+  let rendered = schemeRender({ vars: [1, 2], rvars: [3], ty }, spanIdx) in
+    assertEq(
+      "(a: ({ start: number; end: number } & C)) => Span",
+      tsOf(ty, rendered.env)
+    ))
+
+test("an open row alone does not pin its fields", () =>
+  let ty = tRecord(
+    rExtend("start", tVar(1), rExtend("end", tVar(2), rVar(3)))
+  ) in
+  let rendered = schemeRender({ vars: [1, 2], rvars: [3], ty }, spanIdx) in
+    assertEq(0, Map.size(rendered.pins)))
+
+test("two aliases that both explain a row pin nothing", () =>
+  let ty = tRecord(rExtend("x", tVar(0), rExtend("y", tVar(1), RowEmpty))) in
+  let rendered = schemeRender(
+    { vars: [0, 1], rvars: [], ty },
+    #{ "x: number; y: number": "NumPt", "x: string; y: string": "StrPt" }
+  ) in
+    assertEq(0, Map.size(rendered.pins)))

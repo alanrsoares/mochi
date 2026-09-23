@@ -1,8 +1,7 @@
-import type { Stmt } from "./ast";
+import type { Stmt, TypeExpr } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { AliasInfo } from "./codegen-ts";
-import type { IErr } from "./infer";
+import type { IErr, QualAliasField } from "./infer";
 
 /**
  * Caller-supplied knobs: `open` selects open-world inference (host globals
@@ -125,10 +124,22 @@ const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(
     suggestions: noSuggestions,
   }),
 );
-const stampType: <A, B, C, D, E, F>(
-  e: { suggestions: A; help: B; end: C; start: D; message: E } & F,
-) => { kind: string; message: E; start: D; end: C; help: B; suggestions: A } = <A, B, C, D, E, F>(
-  e: { suggestions: A; help: B; end: C; start: D; message: E } & F,
+const stampType: <F>(
+  e: {
+    suggestions: { title: string; start: number; end: number; replaceWith: string }[];
+    help: Option<string>;
+    end: number;
+    start: number;
+    message: string;
+  } & F,
+) => Stamped = <F>(
+  e: {
+    suggestions: { title: string; start: number; end: number; replaceWith: string }[];
+    help: Option<string>;
+    end: number;
+    start: number;
+    message: string;
+  } & F,
 ) => ({
   kind: "type",
   message: e.message,
@@ -189,7 +200,10 @@ export const typedProgramWith: _Curry<
       {
         env: Map<string, Scheme>;
         types: TypeAt[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
         letParams: TypeAt[];
       },
     ],
@@ -204,7 +218,10 @@ export const typedProgramWith: _Curry<
           (r: {
             env: Map<string, Scheme>;
             types: TypeAt[];
-            aliases: Map<string, AliasInfo>;
+            aliases: Map<
+              string,
+              { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+            >;
             letParams: TypeAt[];
           }) => _tuple(stmts, r),
           inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
@@ -219,7 +236,7 @@ export const typedProgram: (src: string) => Result<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       letParams: TypeAt[];
     },
   ],
@@ -235,7 +252,7 @@ export const inferTypesWith: _Curry<
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -248,7 +265,10 @@ export const inferTypesWith: _Curry<
         _Result_map(
           (r: {
             letParams: TypeAt[];
-            aliases: Map<string, AliasInfo>;
+            aliases: Map<
+              string,
+              { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+            >;
             types: TypeAt[];
             env: Map<string, Scheme>;
           }) => ({
@@ -274,7 +294,7 @@ export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;
     types: { span: SpanAt; ty: Ty; display: string }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     letParams: TypeAt[];
   },
   Stamped[]
@@ -324,7 +344,10 @@ export const compileTsWith: _Curry<
             env: Map<string, Scheme>;
             types: TypeAt[];
             letParams: TypeAt[];
-            aliases: Map<string, AliasInfo>;
+            aliases: Map<
+              string,
+              { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+            >;
           }) =>
             emitTsModuleWith(
               stmts,

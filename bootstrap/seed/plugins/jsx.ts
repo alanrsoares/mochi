@@ -107,28 +107,19 @@ const jxTokName: (t: Tok) => string = (t: Tok) =>
     .with({ _tag: "TEof" }, () => "eof")
     .otherwise(() => "tok");
 const jxEofTok = { tok: TEof as Tok, start: 0, end: 0, doc: None };
-const jxTokAt: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  i: number,
-) => { tok: Tok; start: number; end: number; doc: Option<A> } = _curry(
+const jxTokAt: _Curry<[toks: LocTok[], i: number], LocTok> = _curry(
   2,
-  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], i: number) =>
-    _Option_unwrapOr(jxEofTok, _Array_get(i, toks)),
+  (toks: LocTok[], i: number) => _Option_unwrapOr(jxEofTok, _Array_get(i, toks)),
 );
-const jxSpanOf: <A, B, C>(lt: { end: A; start: B } & C) => { start: B; end: A } = <A, B, C>(
-  lt: { end: A; start: B } & C,
+const jxSpanOf: <C>(lt: { end: number; start: number } & C) => SpanAt = <C>(
+  lt: { end: number; start: number } & C,
 ) => ({ start: lt.start, end: lt.end });
-const jxToEnd: <A, B, C>(
-  start: { start: A } & C,
-  toks: { tok: Tok; start: number; end: number; doc: Option<B> }[],
-  pos: number,
-) => { start: A; end: number } = _curry(
+const jxToEnd: <C>(start: { start: number } & C, toks: LocTok[], pos: number) => SpanAt = _curry(
   3,
-  <A, B, C>(
-    start: { start: A } & C,
-    toks: { tok: Tok; start: number; end: number; doc: Option<B> }[],
-    pos: number,
-  ) => ({ start: start.start, end: jxTokAt(toks, pos - 1).end }),
+  <C>(start: { start: number } & C, toks: LocTok[], pos: number) => ({
+    start: start.start,
+    end: jxTokAt(toks, pos - 1).end,
+  }),
 );
 const jxErrAt: <A, B, C, D, E>(
   message: A,
@@ -138,38 +129,31 @@ const jxErrAt: <A, B, C, D, E>(
   <A, B, C, D, E>(message: A, lt: { end: B; start: C } & E) =>
     Err({ message: message, start: lt.start, end: lt.end }),
 );
-const jxExpectTok: <A>(
-  t: Tok,
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-) => Result<number, { message: string; start: number; end: number }> = _curry(
-  3,
-  <A>(t: Tok, toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const lt = jxTokAt(toks, pos);
-    return eq(lt.tok, t)
-      ? (Ok(pos + 1) as Result<number, { message: string; start: number; end: number }>)
-      : jxErrAt(`expected ${jxTokName(t)}, got ${jxTokName(lt.tok)}`, lt);
-  },
-);
-const jxExpectId: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-) => Result<[Name, number], { message: string; start: number; end: number }> = _curry(
-  2,
-  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const lt = jxTokAt(toks, pos);
-    return match(lt.tok)
-      .with(
-        { _tag: "TId" },
-        ({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
-            [Name, number],
-            { message: string; start: number; end: number }
-          >,
-      )
-      .otherwise((t) => jxErrAt(`expected id, got ${jxTokName(t)}`, lt));
-  },
-);
+const jxExpectTok: _Curry<
+  [t: Tok, toks: LocTok[], pos: number],
+  Result<number, { message: string; start: number; end: number }>
+> = _curry(3, (t: Tok, toks: LocTok[], pos: number) => {
+  const lt = jxTokAt(toks, pos);
+  return eq(lt.tok, t)
+    ? (Ok(pos + 1) as Result<number, { message: string; start: number; end: number }>)
+    : jxErrAt(`expected ${jxTokName(t)}, got ${jxTokName(lt.tok)}`, lt);
+});
+const jxExpectId: _Curry<
+  [toks: LocTok[], pos: number],
+  Result<[Name, number], { message: string; start: number; end: number }>
+> = _curry(2, (toks: LocTok[], pos: number) => {
+  const lt = jxTokAt(toks, pos);
+  return match(lt.tok)
+    .with(
+      { _tag: "TId" },
+      ({ value: name }) =>
+        Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+          [Name, number],
+          { message: string; start: number; end: number }
+        >,
+    )
+    .otherwise((t) => jxErrAt(`expected id, got ${jxTokName(t)}`, lt));
+});
 /**
  * Keyword spelling, mirroring `parser.mochi`'s `keywordText` (ADR 0077). The
  * plugin carries its own copy for the same reason it carries `jxTokName`: it
@@ -192,81 +176,67 @@ const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) =>
  * case that forced it. A valueless attr lowers to `true`, not a reference, so
  * there is no pun to reject.
  */
-const jxExpectLabel: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-) => Result<[Name, number], { message: string; start: number; end: number }> = _curry(
-  2,
-  <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) => {
-    const lt = jxTokAt(toks, pos);
-    return match(jxKeywordText(lt.tok))
-      .with(
-        { _tag: "Some" },
-        ({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
-            [Name, number],
-            { message: string; start: number; end: number }
-          >,
-      )
-      .with({ _tag: "None" }, () => jxExpectId(toks, pos))
-      .exhaustive();
-  },
-);
+const jxExpectLabel: _Curry<
+  [toks: LocTok[], pos: number],
+  Result<[Name, number], { message: string; start: number; end: number }>
+> = _curry(2, (toks: LocTok[], pos: number) => {
+  const lt = jxTokAt(toks, pos);
+  return match(jxKeywordText(lt.tok))
+    .with(
+      { _tag: "Some" },
+      ({ value: name }) =>
+        Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+          [Name, number],
+          { message: string; start: number; end: number }
+        >,
+    )
+    .with({ _tag: "None" }, () => jxExpectId(toks, pos))
+    .exhaustive();
+});
 /**
  * Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
  * splits those into label/minus/label, so glue the parts back together — but
  * only while the tokens are ADJACENT, or `<div id - x="1">` would silently
  * become `id-x`.
  */
-const jxAttrNameFrom: <A, B>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-  acc: { span: { end: number; start: B }; name: string },
-) => [{ span: { end: number; start: B }; name: string }, number] = _curry(
-  3,
-  <A, B>(
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    pos: number,
-    acc: { span: { end: number; start: B }; name: string },
-  ) => {
-    const minusTok = jxTokAt(toks, pos);
-    const partTok = jxTokAt(toks, pos + 1);
-    return and(
-      and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
-      eq(partTok.start, minusTok.end),
-    )
-      ? match(jxExpectLabel(toks, pos + 1))
-          .with(
-            (
-              _v,
-            ): _v is Extract<
-              Result<[Name, number], { message: string; start: number; end: number }>,
-              { _tag: "Ok" }
-            > => {
-              const _g: any = _v;
-              return _g._tag === "Ok";
-            },
-            ({ value: [part, p1] }) =>
-              jxAttrNameFrom(toks, p1, {
-                name: `${acc.name}-${part.name}`,
-                span: { start: acc.span.start, end: part.span.end },
-              }),
-          )
-          .with({ _tag: "Err" }, () => _tuple(acc, pos))
-          .exhaustive()
-      : _tuple(acc, pos);
-  },
-);
+const jxAttrNameFrom: _Curry<
+  [toks: LocTok[], pos: number, acc: { span: SpanAt; name: string }],
+  [{ span: SpanAt; name: string }, number]
+> = _curry(3, (toks: LocTok[], pos: number, acc: { span: SpanAt; name: string }) => {
+  const minusTok = jxTokAt(toks, pos);
+  const partTok = jxTokAt(toks, pos + 1);
+  return and(
+    and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
+    eq(partTok.start, minusTok.end),
+  )
+    ? match(jxExpectLabel(toks, pos + 1))
+        .with(
+          (
+            _v,
+          ): _v is Extract<
+            Result<[Name, number], { message: string; start: number; end: number }>,
+            { _tag: "Ok" }
+          > => {
+            const _g: any = _v;
+            return _g._tag === "Ok";
+          },
+          ({ value: [part, p1] }) =>
+            jxAttrNameFrom(toks, p1, {
+              name: `${acc.name}-${part.name}`,
+              span: { start: acc.span.start, end: part.span.end },
+            }),
+        )
+        .with({ _tag: "Err" }, () => _tuple(acc, pos))
+        .exhaustive()
+    : _tuple(acc, pos);
+});
 /**
  * `jxExpectLabel` plus any adjacent `-part` continuations.
  */
-const jxExpectAttrName: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-) => Result<
-  [{ span: SpanAt; name: string }, number],
-  { message: string; start: number; end: number }
-> = _curry(2, <A>(toks: { tok: Tok; start: number; end: number; doc: Option<A> }[], pos: number) =>
+const jxExpectAttrName: _Curry<
+  [toks: LocTok[], pos: number],
+  Result<[{ span: SpanAt; name: string }, number], { message: string; start: number; end: number }>
+> = _curry(2, (toks: LocTok[], pos: number) =>
   _Result_map(
     ([head, p1]: [{ span: SpanAt; name: string }, number]) => jxAttrNameFrom(toks, p1, head),
     jxExpectLabel(toks, pos),
@@ -300,23 +270,23 @@ const jxExprSpan: (e: Expr) => SpanAt = (e: Expr) =>
     .with({ _tag: "EMap" }, ({ span: sp }) => sp)
     .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
     .exhaustive();
-const makeJsxCall: <A, B>(
+const makeJsxCall: <B>(
   tagExpr: Expr,
   fields: Field[],
   spreadOpt: Option<Expr>,
   children: SeqElem[],
   startTok: { end: number; start: number } & B,
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+  toks: LocTok[],
   endPos: number,
 ) => Expr = _curry(
   7,
-  <A, B>(
+  <B>(
     tagExpr: Expr,
     fields: Field[],
     spreadOpt: Option<Expr>,
     children: SeqElem[],
     startTok: { end: number; start: number } & B,
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    toks: LocTok[],
     endPos: number,
   ) => {
     const fullSpan: SpanAt = jxToEnd(jxSpanOf(startTok), toks, endPos);
@@ -331,120 +301,123 @@ const makeJsxCall: <A, B>(
     );
   },
 );
-const parseJsxAttributes: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-  fieldsAcc: Field[],
-  spreadAcc: Option<Expr>,
-  parseExpr: (
-    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    b: number,
-  ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-) => Result<[Field[], Option<Expr>, number], { message: string; start: number; end: number }> =
-  _curry(
-    5,
-    <A>(
-      toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-      pos: number,
-      fieldsAcc: Field[],
-      spreadAcc: Option<Expr>,
-      parseExpr: (
-        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-        b: number,
-      ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-    ) => {
-      const tk: Tok = jxTokAt(toks, pos).tok;
-      const nxt: Tok = jxTokAt(toks, pos + 1).tok;
-      return or(eq(tk, TGt as Tok), and(eq(tk, TSlash as Tok), eq(nxt, TGt as Tok)))
-        ? (Ok(_tuple(fieldsAcc, spreadAcc, pos)) as Result<
-            [Field[], Option<Expr>, number],
-            { message: string; start: number; end: number }
-          >)
-        : eq(tk, TLbrace as Tok)
-          ? _Result_flatMap(
-              (p1) =>
-                _Result_flatMap(
-                  ([spExpr, p2]: [Expr, number]) =>
-                    _Result_flatMap(
-                      (p3) =>
-                        parseJsxAttributes(
-                          toks,
-                          p3,
-                          fieldsAcc,
-                          Some(spExpr) as Option<Expr>,
-                          parseExpr,
-                        ),
-                      jxExpectTok(TRbrace as Tok, toks, p2),
-                    ),
-                  parseExpr(toks, p1),
-                ),
-              jxExpectTok(TSpread as Tok, toks, pos + 1),
-            )
-          : _Result_flatMap(
-              ([attrId, p1]) =>
-                (([valExpr, p2]: [Expr, number]) => {
-                  const field: Field = { name: attrId.name, value: valExpr };
-                  return parseJsxAttributes(
-                    toks,
-                    p2,
-                    _Array_append(field, fieldsAcc),
-                    spreadAcc,
-                    parseExpr,
-                  );
-                })(
-                  eq(jxTokAt(toks, p1).tok, TEq as Tok)
-                    ? ((pEq: number) =>
-                        match(jxTokAt(toks, pEq).tok)
-                          .with({ _tag: "TStr" }, ({ value: v }) =>
-                            _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1),
-                          )
-                          .with({ _tag: "TLbrace" }, () =>
-                            match(parseExpr(toks, pEq + 1))
-                              .with(
-                                (
-                                  _v,
-                                ): _v is Extract<
-                                  Result<
-                                    [Expr, number],
-                                    { message: string; start: number; end: number }
-                                  >,
-                                  { _tag: "Ok" }
-                                > => {
-                                  const _g: any = _v;
-                                  return _g._tag === "Ok";
-                                },
-                                ({ value: [e, pR] }) => _tuple(e, pR + 1),
-                              )
-                              .with({ _tag: "Err" }, () =>
-                                _tuple(Ast.EBool(true, attrId.span), pEq),
-                              )
-                              .exhaustive(),
-                          )
-                          .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(p1 + 1)
-                    : _tuple(Ast.EBool(true, attrId.span), p1),
-                ),
-              jxExpectAttrName(toks, pos),
-            );
-    },
-  );
-const parseJsxChildren: <A>(
-  expectedTag: string,
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-  acc: SeqElem[],
-  parseExpr: (
-    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    b: number,
-  ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-) => Result<[SeqElem[], number], { message: string; start: number; end: number }> = _curry(
+const parseJsxAttributes: _Curry<
+  [
+    toks: LocTok[],
+    pos: number,
+    fieldsAcc: Field[],
+    spreadAcc: Option<Expr>,
+    parseExpr: (
+      a: LocTok[],
+      b: number,
+    ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+  ],
+  Result<[Field[], Option<Expr>, number], { message: string; start: number; end: number }>
+> = _curry(
   5,
-  <A>(
+  (
+    toks: LocTok[],
+    pos: number,
+    fieldsAcc: Field[],
+    spreadAcc: Option<Expr>,
+    parseExpr: (
+      a: LocTok[],
+      b: number,
+    ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+  ) => {
+    const tk: Tok = jxTokAt(toks, pos).tok;
+    const nxt: Tok = jxTokAt(toks, pos + 1).tok;
+    return or(eq(tk, TGt as Tok), and(eq(tk, TSlash as Tok), eq(nxt, TGt as Tok)))
+      ? (Ok(_tuple(fieldsAcc, spreadAcc, pos)) as Result<
+          [Field[], Option<Expr>, number],
+          { message: string; start: number; end: number }
+        >)
+      : eq(tk, TLbrace as Tok)
+        ? _Result_flatMap(
+            (p1) =>
+              _Result_flatMap(
+                ([spExpr, p2]: [Expr, number]) =>
+                  _Result_flatMap(
+                    (p3) =>
+                      parseJsxAttributes(
+                        toks,
+                        p3,
+                        fieldsAcc,
+                        Some(spExpr) as Option<Expr>,
+                        parseExpr,
+                      ),
+                    jxExpectTok(TRbrace as Tok, toks, p2),
+                  ),
+                parseExpr(toks, p1),
+              ),
+            jxExpectTok(TSpread as Tok, toks, pos + 1),
+          )
+        : _Result_flatMap(
+            ([attrId, p1]) =>
+              (([valExpr, p2]: [Expr, number]) => {
+                const field: Field = { name: attrId.name, value: valExpr };
+                return parseJsxAttributes(
+                  toks,
+                  p2,
+                  _Array_append(field, fieldsAcc),
+                  spreadAcc,
+                  parseExpr,
+                );
+              })(
+                eq(jxTokAt(toks, p1).tok, TEq as Tok)
+                  ? ((pEq: number) =>
+                      match(jxTokAt(toks, pEq).tok)
+                        .with({ _tag: "TStr" }, ({ value: v }) =>
+                          _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1),
+                        )
+                        .with({ _tag: "TLbrace" }, () =>
+                          match(parseExpr(toks, pEq + 1))
+                            .with(
+                              (
+                                _v,
+                              ): _v is Extract<
+                                Result<
+                                  [Expr, number],
+                                  { message: string; start: number; end: number }
+                                >,
+                                { _tag: "Ok" }
+                              > => {
+                                const _g: any = _v;
+                                return _g._tag === "Ok";
+                              },
+                              ({ value: [e, pR] }) => _tuple(e, pR + 1),
+                            )
+                            .with({ _tag: "Err" }, () => _tuple(Ast.EBool(true, attrId.span), pEq))
+                            .exhaustive(),
+                        )
+                        .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(p1 + 1)
+                  : _tuple(Ast.EBool(true, attrId.span), p1),
+              ),
+            jxExpectAttrName(toks, pos),
+          );
+  },
+);
+const parseJsxChildren: _Curry<
+  [
     expectedTag: string,
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+    toks: LocTok[],
     pos: number,
     acc: SeqElem[],
     parseExpr: (
-      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      a: LocTok[],
+      b: number,
+    ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+  ],
+  Result<[SeqElem[], number], { message: string; start: number; end: number }>
+> = _curry(
+  5,
+  (
+    expectedTag: string,
+    toks: LocTok[],
+    pos: number,
+    acc: SeqElem[],
+    parseExpr: (
+      a: LocTok[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ) => {
@@ -560,20 +533,23 @@ const parseJsxChildren: <A>(
                 .otherwise(() => jxErrAt("unexpected token in JSX children", lt));
   },
 );
-const parseJsx: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-  parseExpr: (
-    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    b: number,
-  ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-) => Result<[Expr, number], { message: string; start: number; end: number }> = _curry(
-  3,
-  <A>(
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+const parseJsx: _Curry<
+  [
+    toks: LocTok[],
     pos: number,
     parseExpr: (
-      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      a: LocTok[],
+      b: number,
+    ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+  ],
+  Result<[Expr, number], { message: string; start: number; end: number }>
+> = _curry(
+  3,
+  (
+    toks: LocTok[],
+    pos: number,
+    parseExpr: (
+      a: LocTok[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ) => {
@@ -664,20 +640,23 @@ const parseJsx: <A>(
 /**
  * Parse hook: claim a leading `<…>`; otherwise Ok(None) fall-through.
  */
-export const parseJsxAtom: <A>(
-  toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-  pos: number,
-  parseExpr: (
-    a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
-    b: number,
-  ) => Result<[Expr, number], { message: string; start: number; end: number }>,
-) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }> = _curry(
-  3,
-  <A>(
-    toks: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+export const parseJsxAtom: _Curry<
+  [
+    toks: LocTok[],
     pos: number,
     parseExpr: (
-      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      a: LocTok[],
+      b: number,
+    ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+  ],
+  Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
+> = _curry(
+  3,
+  (
+    toks: LocTok[],
+    pos: number,
+    parseExpr: (
+      a: LocTok[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ) =>

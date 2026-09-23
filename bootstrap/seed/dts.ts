@@ -1,10 +1,8 @@
 import type { Stmt, TypeExpr } from "./ast";
 import type { Row, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { AliasInfo } from "./codegen-ts";
 import type { QualAliasField } from "./infer";
 import type { CtorFieldLike, CtorLike } from "./codegen";
-import type { Opts } from "./module";
 import type { Stamped } from "./compile";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -53,6 +51,7 @@ import {
   declaredTypeNames,
   recordAliasIndex,
   referencedCons,
+  withoutAmbiguousAlias,
   opaqueTypeDecl,
   recordAliasDecl,
   typeDecl,
@@ -313,7 +312,7 @@ const qualifyAliasField: _Curry<[f: QualAliasField, qualify: Map<string, string>
 const typeDeclsFrom: _Curry<
   [
     stmts: Stmt[],
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -324,7 +323,7 @@ const typeDeclsFrom: _Curry<
   6,
   (
     stmts: Stmt[],
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -443,11 +442,21 @@ const bindingDeclsFrom: <A>(
  * runtime instead (ADR 0093).
  */
 const builtinDeclsFor: _Curry<
-  [names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number],
+  [
+    names: string[],
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+    recs: Map<string, string>,
+    i: number,
+  ],
   string[]
 > = _curry(
   4,
-  (names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
+  (
+    names: string[],
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+    recs: Map<string, string>,
+    i: number,
+  ) =>
     match(_Array_get(i, builtinTypeDecls))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: bt }) =>
@@ -503,7 +512,7 @@ const nsTypeImportsFrom: _Curry<
 export const emitDtsFromTypedWith: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-  aliases: Map<string, AliasInfo>,
+  aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   qualify: Map<string, string>,
   runtimeImport: string,
   docs: boolean,
@@ -512,13 +521,17 @@ export const emitDtsFromTypedWith: <A>(
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     qualify: Map<string, string>,
     runtimeImport: string,
     docs: boolean,
   ) => {
-    const recs: Map<string, string> = recordAliasIndex(aliases);
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
+    const recs: Map<string, string> = withoutAmbiguousAlias(
+      recordAliasIndex(aliases),
+      aliases,
+      local,
+    );
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
     const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, docs, 0);
@@ -618,7 +631,7 @@ export const qualifierMapOf: <A>(
 export const emitDtsFromTyped: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-  aliases: Map<string, AliasInfo>,
+  aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   qualify: Map<string, string>,
   runtimeImport: string,
 ) => string = _curry(
@@ -626,7 +639,7 @@ export const emitDtsFromTyped: <A>(
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     qualify: Map<string, string>,
     runtimeImport: string,
   ) => emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true),
@@ -636,29 +649,54 @@ export const emitDtsFromTyped: <A>(
  * surface as diagnostics.
  */
 export const emitDtsTextWith: _Curry<
-  [src: string, runtimeImport: string, opts: Opts],
+  [
+    src: string,
+    runtimeImport: string,
+    opts: {
+      docs: boolean;
+      open: boolean;
+      runtime: boolean;
+      moduleExt: string;
+      strictEntry: boolean;
+    },
+  ],
   Result<string, Stamped[]>
-> = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
-  _Result_map(
-    ([stmts, r]: [
-      Stmt[],
-      {
-        env: Map<string, Scheme>;
-        aliases: Map<string, AliasInfo>;
-        types: TypeAt[];
-        letParams: TypeAt[];
-      },
-    ]) =>
-      emitDtsFromTypedWith(
-        stmts,
-        r.env,
-        r.aliases,
-        new Map<string, string>(),
-        runtimeImport,
-        opts.docs,
-      ),
-    typedProgramWith(src, opts),
-  ),
+> = _curry(
+  3,
+  (
+    src: string,
+    runtimeImport: string,
+    opts: {
+      docs: boolean;
+      open: boolean;
+      runtime: boolean;
+      moduleExt: string;
+      strictEntry: boolean;
+    },
+  ) =>
+    _Result_map(
+      ([stmts, r]: [
+        Stmt[],
+        {
+          env: Map<string, Scheme>;
+          aliases: Map<
+            string,
+            { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+          >;
+          types: TypeAt[];
+          letParams: TypeAt[];
+        },
+      ]) =>
+        emitDtsFromTypedWith(
+          stmts,
+          r.env,
+          r.aliases,
+          new Map<string, string>(),
+          runtimeImport,
+          opts.docs,
+        ),
+      typedProgramWith(src, opts),
+    ),
 );
 export const emitDtsText: _Curry<
   [src: string, runtimeImport: string],

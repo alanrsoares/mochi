@@ -82,12 +82,9 @@ import {
   ExFuel,
 } from "./usefulness";
 
-const checkErr: <A, B, C, D>(
-  message: A,
-  sp: { end: B; start: C } & D,
-) => { message: A; start: C; end: B } = _curry(
+const checkErr: <D>(message: string, sp: { end: number; start: number } & D) => PErr = _curry(
   2,
-  <A, B, C, D>(message: A, sp: { end: B; start: C } & D) => ({
+  <D>(message: string, sp: { end: number; start: number } & D) => ({
     message: message,
     start: sp.start,
     end: sp.end,
@@ -424,29 +421,26 @@ const altMapsFrom: <A, B>(
       )
       .exhaustive(),
 );
-const missingNameErr: <A, B, C>(
-  name: string,
-  sp: { end: A; start: B } & C,
-) => { message: string; start: B; end: A } = _curry(
+const missingNameErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
   2,
-  <A, B, C>(name: string, sp: { end: A; start: B } & C) =>
+  <C>(name: string, sp: { end: number; start: number } & C) =>
     checkErr(
       `or-pattern alternatives must bind the same names ('${name}' is missing in an alternative)`,
       sp,
     ),
 );
-const consistentBindsFrom: <A, B, C>(
+const consistentBindsFrom: <C>(
   maps: Map<string, string>[],
   i: number,
   ref: Map<string, string>,
-  sp: { end: A; start: B } & C,
-) => Option<{ message: string; start: B; end: A }> = _curry(
+  sp: { end: number; start: number } & C,
+) => Option<PErr> = _curry(
   4,
-  <A, B, C>(
+  <C>(
     maps: Map<string, string>[],
     i: number,
     ref: Map<string, string>,
-    sp: { end: A; start: B } & C,
+    sp: { end: number; start: number } & C,
   ) =>
     match(_Array_get(i, maps))
       .with({ _tag: "None" }, () => None)
@@ -724,19 +718,19 @@ const namedUnguarded: <A, B>(
       leaves,
     ),
   );
-const matrixVerdict: <A, B, C, D, E>(
+const matrixVerdict: <A, D, E>(
   arms: MatchArm[],
   leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
   ownerOpt: Option<string>,
-  mSpan: { end: B; start: C } & E,
+  mSpan: { end: number; start: number } & E,
   reg: Registry,
-) => Option<{ message: string; start: C; end: B }> = _curry(
+) => Option<PErr> = _curry(
   5,
-  <A, B, C, D, E>(
+  <A, D, E>(
     arms: MatchArm[],
     leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
     ownerOpt: Option<string>,
-    mSpan: { end: B; start: C } & E,
+    mSpan: { end: number; start: number } & E,
     reg: Registry,
   ) =>
     match(checkExhaustiveM(unguardedPatterns(arms), reg))
@@ -1085,12 +1079,9 @@ const checkExprs: _Curry<
 );
 const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Task", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
-const reservedErr: <A, B, C>(
-  name: string,
-  sp: { end: A; start: B } & C,
-) => { message: string; start: B; end: A } = _curry(
+const reservedErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
   2,
-  <A, B, C>(name: string, sp: { end: A; start: B } & C) =>
+  <C>(name: string, sp: { end: number; start: number } & C) =>
     checkErr(`'${name}' is a reserved collection namespace and cannot be bound`, sp),
 );
 const checkReservedNames: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
@@ -1235,12 +1226,9 @@ const jsReserved: string[] = [
   "public",
   "await",
 ];
-const reservedWord: <A, B, C>(
-  name: string,
-  sp: { end: A; start: B } & C,
-) => { message: string; start: B; end: A }[] = _curry(
+const reservedWord: <C>(name: string, sp: { end: number; start: number } & C) => PErr[] = _curry(
   2,
-  <A, B, C>(name: string, sp: { end: A; start: B } & C) =>
+  <C>(name: string, sp: { end: number; start: number } & C) =>
     _Array_contains(name, jsReserved)
       ? [
           checkErr(
@@ -1248,7 +1236,7 @@ const reservedWord: <A, B, C>(
             sp,
           ),
         ]
-      : ([] as { message: string; start: B; end: A }[]),
+      : ([] as PErr[]),
 );
 const typeExprSpan: (te: TypeExpr) => SpanAt = (te: TypeExpr) =>
   match(te)
@@ -1788,10 +1776,10 @@ const checkQualifiedTypeNamesAll: <A>(
   );
 });
 
-const duplicateLoopParam: <A, B, C, D>(
-  params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
-) => Option<{ message: string; start: B; end: A }> = <A, B, C, D>(
-  params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
+const duplicateLoopParam: <C, D>(
+  params: ({ name: string; nameSpan: { end: number; start: number } & C } & D)[],
+) => Option<PErr> = <C, D>(
+  params: ({ name: string; nameSpan: { end: number; start: number } & C } & D)[],
 ) => {
   let i: number = 0;
   let seen: Set<string> = _Set_fromArray([] as string[]);
@@ -2022,14 +2010,14 @@ const checkLoops: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
         .otherwise(() => None as Option<PErr>),
     stmts,
   );
-const loopParamErrors: <A, B, C, D>(
-  params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
-) => { message: string; start: B; end: A }[] = <A, B, C, D>(
-  params: ({ name: string; nameSpan: { end: A; start: B } & C } & D)[],
+const loopParamErrors: <C, D>(
+  params: ({ name: string; nameSpan: { end: number; start: number } & C } & D)[],
+) => PErr[] = <C, D>(
+  params: ({ name: string; nameSpan: { end: number; start: number } & C } & D)[],
 ) => {
   let i: number = 0;
   let seen: Set<string> = _Set_fromArray([] as string[]);
-  let errors = [] as { message: string; start: B; end: A }[];
+  let errors = [] as PErr[];
   while (true) {
     const _step = match(_Array_get(i, params))
       .with({ _tag: "None" }, () => _done(errors))

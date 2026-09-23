@@ -63,9 +63,9 @@ import {
 import * as Types from "./types";
 import { primTypeNames } from "./ctors";
 
-export const mono: <A, B, C>(t: A) => { vars: B[]; rvars: C[]; ty: A } = <A, B, C>(t: A) => ({
-  vars: [] as B[],
-  rvars: [] as C[],
+export const mono: (t: Ty) => Scheme = (t: Ty) => ({
+  vars: [] as number[],
+  rvars: [] as number[],
   ty: t,
 });
 export const tNumber: Ty = tPrim("number");
@@ -84,15 +84,15 @@ export const primType: (name: string) => Ty = (name: string) =>
     .otherwise(() => tPrim(name));
 
 export const emptyVarSets: VarSets = { tv: _Set_fromArray([]), rv: _Set_fromArray([]) };
-const diffVarSets: <A, B, C, D>(
-  a: { rv: Set<A>; tv: Set<B> } & C,
-  b: { rv: Set<A>; tv: Set<B> } & D,
-) => { tv: Set<B>; rv: Set<A> } = _curry(
+const diffVarSets: <C, D>(
+  a: { rv: Set<number>; tv: Set<number> } & C,
+  b: { rv: Set<number>; tv: Set<number> } & D,
+) => VarSets = _curry(
   2,
-  <A, B, C, D>(a: { rv: Set<A>; tv: Set<B> } & C, b: { rv: Set<A>; tv: Set<B> } & D) => ({
-    tv: _Set_diff(a.tv, b.tv),
-    rv: _Set_diff(a.rv, b.rv),
-  }),
+  <C, D>(
+    a: { rv: Set<number>; tv: Set<number> } & C,
+    b: { rv: Set<number>; tv: Set<number> } & D,
+  ) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }),
 );
 export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, (t: Ty, acc: VarSets) =>
   match(t)

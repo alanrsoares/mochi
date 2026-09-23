@@ -1,9 +1,8 @@
 import type { Tok } from "./lexer";
 import type { Expr, Stmt, TypeExpr } from "./ast";
 import type { SpanAt, St, Ty, TypeAt } from "./types";
+import type { IErr, InferApi, LocTok, QualAliasField } from "./infer";
 import type { Scheme } from "./schemes";
-import type { AliasInfo } from "./codegen-ts";
-import type { IErr, InferApi, QualAliasField } from "./infer";
 import type { StageErr, Stamped } from "./compile";
 import type { Occurrence } from "./symbols";
 
@@ -31,7 +30,10 @@ export type RecoveryAliasInfo = {
   fields: QualAliasField[];
   expr: Option<TypeExpr>;
 };
-export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
+export type RecoveryQualScope = {
+  types: Set<string>;
+  aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
+};
 export type RecoveryScheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type RecoveryCtx = {
   exportsByPath: Map<string, Map<string, Scheme>>;
@@ -211,18 +213,18 @@ import { readFile } from "./host.mjs";
 import { resolveImport as $resolveImport } from "./host.mjs";
 const resolveImport = _curry(2, $resolveImport);
 import { absPath } from "./host.mjs";
-const mErr: <A>(message: A) => { message: A; start: number; end: number } = <A>(message: A) => ({
+const mErr: (message: string) => StageErr = (message: string) => ({
   message: message,
   start: 0,
   end: 0,
 });
 const recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) };
-const atPath: <A, B, C>(
+const atPath: <C>(
   path: string,
-  e: { end: A; start: B; message: string } & C,
-) => { message: string; start: B; end: A } = _curry(
+  e: { end: number; start: number; message: string } & C,
+) => StageErr = _curry(
   2,
-  <A, B, C>(path: string, e: { end: A; start: B; message: string } & C) => ({
+  <C>(path: string, e: { end: number; start: number; message: string } & C) => ({
     message: `module '${path}': ${e.message}`,
     start: e.start,
     end: e.end,
@@ -366,45 +368,58 @@ const exportedTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
       stmts,
     ),
   );
-const aliasesOf: (stmts: Stmt[]) => Map<string, AliasInfo> = (stmts: Stmt[]) =>
+const aliasesOf: (
+  stmts: Stmt[],
+) => Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }> = (
+  stmts: Stmt[],
+) =>
   reduce(
-    _curry(2, (acc: Map<string, AliasInfo>, s: Stmt) =>
-      match(s)
-        .with(
-          (
-            _v,
-          ): _v is Extract<Stmt, { _tag: "SType" }> & {
-            alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "SType" && _g.alias._tag === "Some";
-          },
-          ({ name, params, alias: { value: fields } }) =>
-            _Map_set(name, { params: params, fields: fields, expr: None as Option<TypeExpr> }, acc),
-        )
-        .with(
-          (
-            _v,
-          ): _v is Extract<Stmt, { _tag: "SType" }> & {
-            aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "SType" && _g.aliasType._tag === "Some";
-          },
-          ({ name, params, aliasType: { value: te } }) =>
-            _Map_set(
-              name,
-              {
-                params: params,
-                fields: [] as QualAliasField[],
-                expr: Some(te) as Option<TypeExpr>,
-              },
-              acc,
-            ),
-        )
-        .otherwise(() => acc),
+    _curry(
+      2,
+      (
+        acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+        s: Stmt,
+      ) =>
+        match(s)
+          .with(
+            (
+              _v,
+            ): _v is Extract<Stmt, { _tag: "SType" }> & {
+              alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
+            } => {
+              const _g: any = _v;
+              return _g._tag === "SType" && _g.alias._tag === "Some";
+            },
+            ({ name, params, alias: { value: fields } }) =>
+              _Map_set(
+                name,
+                { params: params, fields: fields, expr: None as Option<TypeExpr> },
+                acc,
+              ),
+          )
+          .with(
+            (
+              _v,
+            ): _v is Extract<Stmt, { _tag: "SType" }> & {
+              aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
+            } => {
+              const _g: any = _v;
+              return _g._tag === "SType" && _g.aliasType._tag === "Some";
+            },
+            ({ name, params, aliasType: { value: te } }) =>
+              _Map_set(
+                name,
+                {
+                  params: params,
+                  fields: [] as QualAliasField[],
+                  expr: Some(te) as Option<TypeExpr>,
+                },
+                acc,
+              ),
+          )
+          .otherwise(() => acc),
     ),
-    new Map<string, AliasInfo>(),
+    new Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>(),
     stmts,
   );
 const qualScopeOf: (stmts: Stmt[]) => RecoveryQualScope = (stmts: Stmt[]) => ({
@@ -460,9 +475,9 @@ const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
     quals: res.quals,
   }),
 );
-const takeNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
+const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
   name: string,
-  span: { end: A; start: B } & I,
+  span: { end: number; start: number } & I,
   depReg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> } & K,
   depKeys: Map<string, E>,
   res: {
@@ -480,12 +495,12 @@ const takeNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
     nsImports: G;
     imports: H;
   },
-  { message: string; start: B; end: A }
+  StageErr
 > = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I, J, K>(
+  <C, D, E, F, G, H, I, J, K>(
     name: string,
-    span: { end: A; start: B } & I,
+    span: { end: number; start: number } & I,
     depReg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> } & K,
     depKeys: Map<string, E>,
     res: {
@@ -550,10 +565,10 @@ const prefixCtorsInto: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
-  names: ({ name: string; span: { end: A; start: B } & I } & J)[],
+const resolveNames: <D, E, F, G, H, I, J, K, L>(
+  names: ({ name: string; span: { end: number; start: number } & I } & J)[],
   from: string,
-  depExports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>,
+  depExports: Map<string, Scheme>,
   depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
   depKeys: Map<string, F>,
   res: {
@@ -561,7 +576,7 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
     keys: Map<string, F>;
     reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
     nsImports: H;
-    imports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>;
+    imports: Map<string, Scheme>;
   },
   recovering: boolean,
 ) => Result<
@@ -570,15 +585,15 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
     keys: Map<string, F>;
     reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
     nsImports: H;
-    imports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>;
+    imports: Map<string, Scheme>;
   },
-  { message: string; start: B; end: A }
+  StageErr
 > = _curry(
   7,
-  <A, B, C, D, E, F, G, H, I, J, K, L>(
-    names: ({ name: string; span: { end: A; start: B } & I } & J)[],
+  <D, E, F, G, H, I, J, K, L>(
+    names: ({ name: string; span: { end: number; start: number } & I } & J)[],
     from: string,
-    depExports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>,
+    depExports: Map<string, Scheme>,
     depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
     depKeys: Map<string, F>,
     res: {
@@ -586,7 +601,7 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
       keys: Map<string, F>;
       reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
       nsImports: H;
-      imports: Map<string, { vars: number[]; rvars: C[]; ty: Ty }>;
+      imports: Map<string, Scheme>;
     },
     recovering: boolean,
   ) =>
@@ -644,9 +659,9 @@ const resolveNames: <A, B, C, D, E, F, G, H, I, J, K, L>(
         throw new Error("non-exhaustive match");
       }),
 );
-const resolveImportsFrom: <A, B, C, D>(
+const resolveImportsFrom: <B, C, D>(
   ctx: {
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, B>>;
     qualsByPath: Map<string, C>;
@@ -658,8 +673,8 @@ const resolveImportsFrom: <A, B, C, D>(
     quals: Map<string, C>;
     keys: Map<string, B>;
     reg: Registry;
-    nsImports: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
-    imports: Map<string, { vars: number[]; rvars: A[]; ty: Ty }>;
+    nsImports: Map<string, Map<string, Scheme>>;
+    imports: Map<string, Scheme>;
   },
   recovering: boolean,
 ) => Result<
@@ -667,15 +682,15 @@ const resolveImportsFrom: <A, B, C, D>(
     quals: Map<string, C>;
     keys: Map<string, B>;
     reg: Registry;
-    nsImports: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
-    imports: Map<string, { vars: number[]; rvars: A[]; ty: Ty }>;
+    nsImports: Map<string, Map<string, Scheme>>;
+    imports: Map<string, Scheme>;
   },
   StageErr
 > = _curry(
   6,
-  <A, B, C, D>(
+  <B, C, D>(
     ctx: {
-      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+      exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, B>>;
       qualsByPath: Map<string, C>;
@@ -687,8 +702,8 @@ const resolveImportsFrom: <A, B, C, D>(
       quals: Map<string, C>;
       keys: Map<string, B>;
       reg: Registry;
-      nsImports: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
-      imports: Map<string, { vars: number[]; rvars: A[]; ty: Ty }>;
+      nsImports: Map<string, Map<string, Scheme>>;
+      imports: Map<string, Scheme>;
     },
     recovering: boolean,
   ) =>
@@ -715,13 +730,9 @@ const resolveImportsFrom: <A, B, C, D>(
                     )
                     .exhaustive())(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(
-              _Map_getOr(
-                new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
-                dp,
-                ctx.exportsByPath,
-              ),
-            ))(resolveImport(path, from)),
+              ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
+            resolveImport(path, from),
+          ),
       )
       .with(
         (
@@ -765,13 +776,9 @@ const resolveImportsFrom: <A, B, C, D>(
                     recovering,
                   ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
                 _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(
-              _Map_getOr(
-                new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
-                dp,
-                ctx.exportsByPath,
-              ),
-            ))(resolveImport(path, from)),
+              ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
+            resolveImport(path, from),
+          ),
       )
       .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering))
       .exhaustive(),
@@ -1112,9 +1119,9 @@ const depsPublished: <A, B>(
       .with({ _tag: "Some" }, () => depsPublished(ctx, stmts, i + 1, path))
       .exhaustive(),
 );
-const checkErrorsRecovering: <A, B, C, D>(
+const checkErrorsRecovering: <B, C, D>(
   ctx: {
-    exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+    exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, B>>;
     qualsByPath: Map<string, { types: Set<string> } & C>;
@@ -1122,9 +1129,9 @@ const checkErrorsRecovering: <A, B, C, D>(
   loaded: Loaded,
 ) => StageErr[] = _curry(
   2,
-  <A, B, C, D>(
+  <B, C, D>(
     ctx: {
-      exportsByPath: Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>;
+      exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, B>>;
       qualsByPath: Map<string, { types: Set<string> } & C>;
@@ -1139,8 +1146,8 @@ const checkErrorsRecovering: <A, B, C, D>(
             0,
             loaded.path,
             {
-              imports: new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
-              nsImports: new Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>(),
+              imports: new Map<string, Scheme>(),
+              nsImports: new Map<string, Map<string, Scheme>>(),
               reg: emptyReg,
               keys: new Map<string, B>(),
               quals: new Map<string, { types: Set<string> } & C>(),
@@ -1159,8 +1166,8 @@ const checkErrorsRecovering: <A, B, C, D>(
         0,
         loaded.path,
         {
-          imports: new Map<string, { vars: number[]; rvars: A[]; ty: Ty }>(),
-          nsImports: new Map<string, Map<string, { vars: number[]; rvars: A[]; ty: Ty }>>(),
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
           reg: emptyReg,
           keys: new Map<string, B>(),
           quals: new Map<string, { types: Set<string> } & C>(),
@@ -1486,9 +1493,9 @@ const inferOne: <A, B>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   } & A,
   loaded: { stmts: Stmt[]; path: string; src: string } & B,
   opts: Opts,
@@ -1498,11 +1505,11 @@ const inferOne: <A, B>(
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, RecoveryQualScope>;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
   },
   StageErr
@@ -1526,9 +1533,12 @@ const inferOne: <A, B>(
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string }[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
       }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     } & A,
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
@@ -1567,11 +1577,17 @@ const inferOne: <A, B>(
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
               qualsByPath: Map<string, RecoveryQualScope>;
-              aliases: Map<string, AliasInfo>;
+              aliases: Map<
+                string,
+                { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+              >;
               outputs: {
                 path: string;
                 types: { span: SpanAt; ty: Ty; display: string }[];
-                aliases: Map<string, AliasInfo>;
+                aliases: Map<
+                  string,
+                  { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                >;
               }[];
             },
             StageErr
@@ -1588,11 +1604,17 @@ const inferOne: <A, B>(
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<string, RecoveryQualScope>;
-                  aliases: Map<string, AliasInfo>;
+                  aliases: Map<
+                    string,
+                    { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                  >;
                   outputs: {
                     path: string;
                     types: { span: SpanAt; ty: Ty; display: string }[];
-                    aliases: Map<string, AliasInfo>;
+                    aliases: Map<
+                      string,
+                      { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                    >;
                   }[];
                 },
                 StageErr
@@ -1643,11 +1665,17 @@ const inferOne: <A, B>(
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, AliasInfo>;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                       outputs: {
                         path: string;
                         types: { span: SpanAt; ty: Ty; display: string }[];
-                        aliases: Map<string, AliasInfo>;
+                        aliases: Map<
+                          string,
+                          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                        >;
                       }[];
                     },
                     StageErr
@@ -1691,11 +1719,17 @@ const inferOne: <A, B>(
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, AliasInfo>;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                       outputs: {
                         path: string;
                         types: { span: SpanAt; ty: Ty; display: string }[];
-                        aliases: Map<string, AliasInfo>;
+                        aliases: Map<
+                          string,
+                          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                        >;
                       }[];
                     },
                     StageErr
@@ -1725,9 +1759,9 @@ const inferAll: <A>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   },
   graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
   opts: Opts,
@@ -1749,9 +1783,9 @@ const inferAll: <A>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   },
   StageErr
 > = _curry(
@@ -1774,9 +1808,12 @@ const inferAll: <A>(
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string }[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
       }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
     opts: Opts,
@@ -1803,9 +1840,15 @@ const inferAll: <A>(
               outputs: {
                 path: string;
                 types: { span: SpanAt; ty: Ty; display: string }[];
-                aliases: Map<string, AliasInfo>;
+                aliases: Map<
+                  string,
+                  { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                >;
               }[];
-              aliases: Map<string, AliasInfo>;
+              aliases: Map<
+                string,
+                { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+              >;
             },
             StageErr
           >,
@@ -1835,9 +1878,15 @@ const inferAll: <A>(
                     outputs: {
                       path: string;
                       types: { span: SpanAt; ty: Ty; display: string }[];
-                      aliases: Map<string, AliasInfo>;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                     }[];
-                    aliases: Map<string, AliasInfo>;
+                    aliases: Map<
+                      string,
+                      { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                    >;
                   },
                   StageErr
                 >,
@@ -1892,9 +1941,9 @@ export const inferGraphTypesFromWith: <A>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   },
   graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
   opts: Opts,
@@ -1916,9 +1965,9 @@ export const inferGraphTypesFromWith: <A>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   },
   StageErr
 > = _curry(
@@ -1941,9 +1990,12 @@ export const inferGraphTypesFromWith: <A>(
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string }[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
       }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
     opts: Opts,
@@ -1967,9 +2019,9 @@ export const inferGraphTypesFrom: <A>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   },
   graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
 ) => Result<
@@ -1990,9 +2042,9 @@ export const inferGraphTypesFrom: <A>(
     outputs: {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   },
   StageErr
 > = _curry(
@@ -2015,9 +2067,12 @@ export const inferGraphTypesFrom: <A>(
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string }[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
       }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
   ) => inferGraphTypesFromWith(state, graph, defaultOpts),
@@ -2034,7 +2089,7 @@ export const inferGraphTypesWith: <A>(
   {
     path: string;
     types: { span: SpanAt; ty: Ty; display: string }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   }[],
   StageErr
 > = _curry(2, <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[], opts: Opts) =>
@@ -2044,7 +2099,10 @@ export const inferGraphTypesWith: <A>(
         {
           path: string;
           types: { span: SpanAt; ty: Ty; display: string }[];
-          aliases: Map<string, AliasInfo>;
+          aliases: Map<
+            string,
+            { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+          >;
         }[],
         StageErr
       >,
@@ -2057,7 +2115,7 @@ export const inferGraphTypes: <A>(
   {
     path: string;
     types: { span: SpanAt; ty: Ty; display: string }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   }[],
   StageErr
 > = <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[]) =>
@@ -2152,29 +2210,162 @@ const valueImported: (ts: string) => Set<string> = (ts: string) =>
     _Set_fromArray([] as string[]),
     filter(_Str_startsWith("import {"), _Str_split("\n", ts)),
   );
-const ownTypesInto: <A>(stmts: Stmt[], path: A, acc: Map<string, A>) => Map<string, A> = _curry(
+const ownTypesInto: <A>(
+  stmts: Stmt[],
+  path: A,
+  acc: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] },
+) => { owner: Map<string, A>; dups: Set<string>; dupNames: string[] } = _curry(
   3,
-  <A>(stmts: Stmt[], path: A, acc: Map<string, A>) =>
+  <A>(
+    stmts: Stmt[],
+    path: A,
+    acc: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] },
+  ) =>
     reduce(
-      _curry(2, (a: Map<string, A>, s: Stmt) =>
+      _curry(2, (a: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] }, s: Stmt) =>
         match(s)
-          .with({ _tag: "SType" }, ({ name }) => _Map_set(name, path, a))
+          .with({ _tag: "SType" }, ({ name }) =>
+            _Map_has(name, a.owner)
+              ? {
+                  owner: _Map_set(name, path, a.owner),
+                  dups: _Set_add(name, a.dups),
+                  dupNames: _Set_has(name, a.dups) ? a.dupNames : _Array_append(name, a.dupNames),
+                }
+              : { owner: _Map_set(name, path, a.owner), dups: a.dups, dupNames: a.dupNames },
+          )
           .otherwise(() => a),
       ),
       acc,
       stmts,
     ),
 );
-const typeOwnerOf: <A, B>(graph: ({ stmts: Stmt[]; path: A } & B)[]) => Map<string, A> = <A, B>(
+const typeOwnerOf: <A, B>(
+  graph: ({ stmts: Stmt[]; path: A } & B)[],
+) => { owner: Map<string, A>; dups: Set<string>; dupNames: string[] } = <A, B>(
   graph: ({ stmts: Stmt[]; path: A } & B)[],
 ) =>
   reduce(
-    _curry(2, (acc: Map<string, A>, m: { stmts: Stmt[]; path: A } & B) =>
-      ownTypesInto(m.stmts, m.path, acc),
+    _curry(
+      2,
+      (
+        acc: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] },
+        m: { stmts: Stmt[]; path: A } & B,
+      ) => ownTypesInto(m.stmts, m.path, acc),
     ),
-    new Map<string, A>(),
+    { owner: new Map<string, A>(), dups: _Set_fromArray([] as string[]), dupNames: [] as string[] },
     graph,
   );
+/**
+ * A bare name declared in two modules (`LocTok` in parser and `LocTok<t>` in
+ * infer) must not be the fold target outside the module whose own alias is
+ * the nullary record. The import table keeps one owner, and it may be the
+ * parameterised declaration.
+ */
+const nullaryDeclared: <A, B, C, D>(
+  name: A,
+  local: Map<A, { params: B[]; fields: C[] } & D>,
+) => boolean = _curry(2, <A, B, C, D>(name: A, local: Map<A, { params: B[]; fields: C[] } & D>) =>
+  match(_Map_get(name, local))
+    .with({ _tag: "None" }, () => false)
+    .with({ _tag: "Some" }, ({ value: info }) =>
+      and(eq(length(info.params), 0), length(info.fields) > 0),
+    )
+    .exhaustive(),
+);
+/**
+ * A synthetic parameterised homonym makes `withoutAmbiguousAlias` blank the
+ * printed name while the nullary shape stays in the index, so the variables
+ * still pin and the row prints structurally.
+ */
+const addDupMarkers: <A, B, E>(
+  names: string[],
+  local: Map<string, { params: A[]; fields: B[] } & E>,
+  acc: Map<
+    string,
+    {
+      params: string[];
+      fields: { name: string; fieldType: TypeExpr; optional: boolean }[];
+      expr: Option<TypeExpr>;
+    }
+  >,
+  i: number,
+) => Map<
+  string,
+  {
+    params: string[];
+    fields: { name: string; fieldType: TypeExpr; optional: boolean }[];
+    expr: Option<TypeExpr>;
+  }
+> = _curry(
+  4,
+  <A, B, E>(
+    names: string[],
+    local: Map<string, { params: A[]; fields: B[] } & E>,
+    acc: Map<
+      string,
+      {
+        params: string[];
+        fields: { name: string; fieldType: TypeExpr; optional: boolean }[];
+        expr: Option<TypeExpr>;
+      }
+    >,
+    i: number,
+  ) =>
+    match(_Array_get(i, names))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: name }) =>
+        addDupMarkers(
+          names,
+          local,
+          nullaryDeclared(name, local)
+            ? acc
+            : _Map_set(
+                `dup.${name}`,
+                {
+                  params: ["_"],
+                  fields: [] as { name: string; fieldType: TypeExpr; optional: boolean }[],
+                  expr: None,
+                },
+                acc,
+              ),
+          i + 1,
+        ),
+      )
+      .exhaustive(),
+);
+const aliasesForTs: <C, D, E>(
+  merged: Map<
+    string,
+    {
+      params: string[];
+      fields: { name: string; fieldType: TypeExpr; optional: boolean }[];
+      expr: Option<TypeExpr>;
+    }
+  >,
+  local: Map<string, { params: C[]; fields: D[] } & E>,
+  dupNames: string[],
+) => Map<
+  string,
+  {
+    params: string[];
+    fields: { name: string; fieldType: TypeExpr; optional: boolean }[];
+    expr: Option<TypeExpr>;
+  }
+> = _curry(
+  3,
+  <C, D, E>(
+    merged: Map<
+      string,
+      {
+        params: string[];
+        fields: { name: string; fieldType: TypeExpr; optional: boolean }[];
+        expr: Option<TypeExpr>;
+      }
+    >,
+    local: Map<string, { params: C[]; fields: D[] } & E>,
+    dupNames: string[],
+  ) => addDupMarkers(dupNames, local, merged, 0),
+);
 const localTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   _Set_fromArray(
     _Array_flatMap(
@@ -2310,7 +2501,8 @@ const compileOneTs: <A, B>(
         >;
       }
     >;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
+    dupNames: string[];
     runtimeImport: string;
     typeOwner: Map<string, string>;
     outputs: ModuleOutput[];
@@ -2324,8 +2516,9 @@ const compileOneTs: <A, B>(
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, RecoveryQualScope>;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     typeOwner: Map<string, string>;
+    dupNames: string[];
     runtimeImport: string;
     externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
     outputs: ModuleOutput[];
@@ -2348,7 +2541,8 @@ const compileOneTs: <A, B>(
           >;
         }
       >;
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
+      dupNames: string[];
       runtimeImport: string;
       typeOwner: Map<string, string>;
       outputs: ModuleOutput[];
@@ -2391,8 +2585,12 @@ const compileOneTs: <A, B>(
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
               qualsByPath: Map<string, RecoveryQualScope>;
-              aliases: Map<string, AliasInfo>;
+              aliases: Map<
+                string,
+                { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+              >;
               typeOwner: Map<string, string>;
+              dupNames: string[];
               runtimeImport: string;
               externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
               outputs: ModuleOutput[];
@@ -2411,8 +2609,12 @@ const compileOneTs: <A, B>(
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<string, RecoveryQualScope>;
-                  aliases: Map<string, AliasInfo>;
+                  aliases: Map<
+                    string,
+                    { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                  >;
                   typeOwner: Map<string, string>;
+                  dupNames: string[];
                   runtimeImport: string;
                   externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
                   outputs: ModuleOutput[];
@@ -2465,8 +2667,12 @@ const compileOneTs: <A, B>(
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, AliasInfo>;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                       typeOwner: Map<string, string>;
+                      dupNames: string[];
                       runtimeImport: string;
                       externs: Map<
                         string,
@@ -2504,6 +2710,7 @@ const compileOneTs: <A, B>(
                         ),
                         aliases: mergeMap(r.aliases, ctx.aliases),
                         typeOwner: ctx.typeOwner,
+                        dupNames: ctx.dupNames,
                         runtimeImport: ctx.runtimeImport,
                         externs: externBindingsInto(loaded.stmts, loaded.path, r.env, ctx.externs),
                         outputs: [...ctx.outputs, { path: loaded.path, js: ts }],
@@ -2513,8 +2720,12 @@ const compileOneTs: <A, B>(
                           regByPath: Map<string, Registry>;
                           keysByPath: Map<string, Map<string, string[]>>;
                           qualsByPath: Map<string, RecoveryQualScope>;
-                          aliases: Map<string, AliasInfo>;
+                          aliases: Map<
+                            string,
+                            { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                          >;
                           typeOwner: Map<string, string>;
+                          dupNames: string[];
                           runtimeImport: string;
                           externs: Map<
                             string,
@@ -2542,7 +2753,11 @@ ${body}`,
                     r.env,
                     r.types,
                     r.letParams,
-                    mergeMap(r.aliases, ctx.aliases),
+                    aliasesForTs(
+                      mergeMap(r.aliases, ctx.aliases),
+                      aliasesOf(loaded.stmts),
+                      ctx.dupNames,
+                    ),
                     res.keys,
                     [] as string[],
                     namespaceRuntime,
@@ -2559,14 +2774,17 @@ ${body}`,
       )
       .exhaustive(),
 );
-const noAliases: Map<string, AliasInfo> = aliasesOf([] as Stmt[]);
-const externOutputs: <A, B, C>(
-  externs: Map<A, ({ scheme: { ty: Ty } & B; imported: string; curried: boolean } & C)[]>,
-) => { path: A; js: string }[] = <A, B, C>(
-  externs: Map<A, ({ scheme: { ty: Ty } & B; imported: string; curried: boolean } & C)[]>,
+const noAliases: Map<
+  string,
+  { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+> = aliasesOf([] as Stmt[]);
+const externOutputs: <B, C>(
+  externs: Map<string, ({ scheme: { ty: Ty } & B; imported: string; curried: boolean } & C)[]>,
+) => ModuleOutput[] = <B, C>(
+  externs: Map<string, ({ scheme: { ty: Ty } & B; imported: string; curried: boolean } & C)[]>,
 ) =>
   map(
-    (dp: A) => ({
+    (dp: string) => ({
       path: dp,
       js: externModuleDts(
         _Map_getOr(
@@ -2596,7 +2814,8 @@ const compileAllTs: <A>(
         >;
       }
     >;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
+    dupNames: string[];
     runtimeImport: string;
     typeOwner: Map<string, string>;
   },
@@ -2621,7 +2840,8 @@ const compileAllTs: <A>(
           >;
         }
       >;
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
+      dupNames: string[];
       runtimeImport: string;
       typeOwner: Map<string, string>;
     },
@@ -2665,8 +2885,10 @@ export const compileGraphTsWith: <A>(
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
     runtimeImport: string,
     opts: Opts,
-  ) =>
-    compileAllTs(
+  ) => {
+    const noted: { owner: Map<string, string>; dups: Set<string>; dupNames: string[] } =
+      typeOwnerOf(graph);
+    return compileAllTs(
       {
         exportsByPath: new Map<string, Map<string, Scheme>>(),
         regByPath: new Map<string, Registry>(),
@@ -2681,15 +2903,20 @@ export const compileGraphTsWith: <A>(
             >;
           }
         >(),
-        aliases: new Map<string, AliasInfo>(),
-        typeOwner: typeOwnerOf(graph),
+        aliases: new Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >(),
+        typeOwner: noted.owner,
+        dupNames: noted.dupNames,
         runtimeImport: runtimeImport,
         externs: new Map<string, { scheme: Scheme; imported: string; curried: boolean }[]>(),
         outputs: [] as ModuleOutput[],
       },
       graph,
       opts,
-    ),
+    );
+  },
 );
 export const compileGraphTs: <A>(
   graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
@@ -2715,7 +2942,7 @@ const dtsOne: <A, B>(
       }
     >;
     target: string;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     runtimeImport: string;
     dts: string;
   } & A,
@@ -2727,7 +2954,7 @@ const dtsOne: <A, B>(
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, RecoveryQualScope>;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     runtimeImport: string;
     target: string;
     dts: string;
@@ -2751,7 +2978,7 @@ const dtsOne: <A, B>(
         }
       >;
       target: string;
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       runtimeImport: string;
       dts: string;
     } & A,
@@ -2792,7 +3019,10 @@ const dtsOne: <A, B>(
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
               qualsByPath: Map<string, RecoveryQualScope>;
-              aliases: Map<string, AliasInfo>;
+              aliases: Map<
+                string,
+                { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+              >;
               runtimeImport: string;
               target: string;
               dts: string;
@@ -2811,7 +3041,10 @@ const dtsOne: <A, B>(
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
                   qualsByPath: Map<string, RecoveryQualScope>;
-                  aliases: Map<string, AliasInfo>;
+                  aliases: Map<
+                    string,
+                    { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                  >;
                   runtimeImport: string;
                   target: string;
                   dts: string;
@@ -2864,7 +3097,10 @@ const dtsOne: <A, B>(
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, AliasInfo>;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                       runtimeImport: string;
                       target: string;
                       dts: string;
@@ -2907,7 +3143,10 @@ const dtsOne: <A, B>(
                       regByPath: Map<string, Registry>;
                       keysByPath: Map<string, Map<string, string[]>>;
                       qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, AliasInfo>;
+                      aliases: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                       runtimeImport: string;
                       target: string;
                       dts: string;
@@ -2938,7 +3177,7 @@ const dtsAll: <A>(
       }
     >;
     target: string;
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     runtimeImport: string;
   },
   graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
@@ -2962,7 +3201,7 @@ const dtsAll: <A>(
         }
       >;
       target: string;
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       runtimeImport: string;
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
@@ -3010,7 +3249,10 @@ export const emitDtsForFileWith: _Curry<
               >;
             }
           >(),
-          aliases: new Map<string, AliasInfo>(),
+          aliases: new Map<
+            string,
+            { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+          >(),
           runtimeImport: runtimeImport,
           target: absPath(entry),
           dts: "",

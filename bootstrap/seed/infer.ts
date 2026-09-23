@@ -17,7 +17,6 @@ import type {
 import type { Row, SpanAt, St, Ty, TypeAt } from "./types";
 import type { PErr } from "./parser";
 import type { Scheme, VarSets } from "./schemes";
-import type { AliasInfo } from "./codegen-ts";
 import type { TSt } from "./scc";
 
 export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
@@ -30,7 +29,9 @@ export type IErr = {
 };
 export type QualAliasField = { name: string; fieldType: TypeExpr; optional: boolean };
 export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
-export type QualScope = { aliases: Map<string, AliasInfo> };
+export type QualScope = {
+  aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
+};
 /**
  * The API an `inferCall` plugin hook is handed (ADR 0011 6).
  */
@@ -82,7 +83,7 @@ export type Ctx<A> = {
   env: Map<string, Scheme>;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, AliasInfo>;
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   plugins: {
     name: string;
     parse: Option<
@@ -303,13 +304,13 @@ const lastSeg: (name: string) => string = (name: string) => {
 };
 const aliasRowFrom: <A>(
   fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & A)[],
-  aliases: Map<string, AliasInfo>,
+  aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   i: number,
 ) => Row = _curry(
   3,
   <A>(
     fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & A)[],
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     i: number,
   ) =>
     match(_Array_get(i, fields))
@@ -334,7 +335,7 @@ const shownOfAlias: <A, B, C, D>(
     expr: Option<B>;
     fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & C)[];
   } & D,
-  aliases: Map<string, AliasInfo>,
+  aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
 ) => Option<string> = _curry(
   2,
   <A, B, C, D>(
@@ -343,7 +344,7 @@ const shownOfAlias: <A, B, C, D>(
       expr: Option<B>;
       fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & C)[];
     } & D,
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   ) =>
     not(eq(length(info.params), 0))
       ? (None as Option<string>)
@@ -456,7 +457,7 @@ const u: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -494,7 +495,7 @@ const u: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -543,7 +544,7 @@ const checkFits: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -581,7 +582,7 @@ const checkFits: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -622,127 +623,115 @@ const checkFits: <A>(
       )
       .exhaustive(),
 );
-const bindParamNamesFrom: <A, B, C>(
+const bindParamNamesFrom: <A>(
   names: A[],
-  env: Map<A, { vars: B[]; rvars: C[]; ty: Ty }>,
+  env: Map<A, Scheme>,
   st: St,
-) => [Ty[], Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, St] = _curry(
-  3,
-  <A, B, C>(names: A[], env: Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, st: St) =>
-    match(names)
-      .with(
-        (_v) => _v.length === 0,
-        () => _tuple([] as Ty[], env, st),
-      )
-      .with(
-        (_v) => _v.length >= 1,
-        ([n, ...rest]) =>
-          (([t, st1]: [Ty, St]) =>
-            (([restTs, env2, st2]: [Ty[], Map<A, { vars: B[]; rvars: C[]; ty: Ty }>, St]) =>
-              _tuple(_Array_prepend(t, restTs), env2, st2))(
-              bindParamNamesFrom(rest, _Map_set(n, mono(t), env), st1),
-            ))(freshVar(st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+) => [Ty[], Map<A, Scheme>, St] = _curry(3, <A>(names: A[], env: Map<A, Scheme>, st: St) =>
+  match(names)
+    .with(
+      (_v) => _v.length === 0,
+      () => _tuple([] as Ty[], env, st),
+    )
+    .with(
+      (_v) => _v.length >= 1,
+      ([n, ...rest]) =>
+        (([t, st1]: [Ty, St]) =>
+          (([restTs, env2, st2]: [Ty[], Map<A, Scheme>, St]) =>
+            _tuple(_Array_prepend(t, restTs), env2, st2))(
+            bindParamNamesFrom(rest, _Map_set(n, mono(t), env), st1),
+          ))(freshVar(st)),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const bindParamFieldsFrom: <A, B>(
-  fields: string[],
-  env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  row: Row,
-  st: St,
-) => [Row, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
-  4,
-  <A, B>(fields: string[], env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, row: Row, st: St) =>
-    match(fields)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(row, env, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([f, ...rest]) =>
-          (([ft, st1]: [Ty, St]) =>
-            bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
-            freshVar(st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
-);
-const bindParam: <A, B>(
-  p: LamParam,
-  env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  st: St,
-) => [Ty, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
-  3,
-  <A, B>(p: LamParam, env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
-    match(p)
-      .with({ _tag: "LPSpanned" }, ({ param: inner }) => bindParam(inner, env, st))
-      .with({ _tag: "LPName" }, ({ name }) =>
-        (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
-      )
-      .with({ _tag: "LPTuple" }, ({ names }) =>
-        (([elems, env1, st1]: [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
-          _tuple(tTuple(elems), env1, st1))(bindParamNamesFrom(names, env, st)),
-      )
-      .with({ _tag: "LPRecord" }, ({ fields }) =>
-        (([rowBase, st1]: [Row, St]) =>
-          (([row, env1, st2]: [Row, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
-            _tuple(tRecord(row), env1, st2))(bindParamFieldsFrom(fields, env, rowBase, st1)))(
-          freshRowVar(st),
+const bindParamFieldsFrom: _Curry<
+  [fields: string[], env: Map<string, Scheme>, row: Row, st: St],
+  [Row, Map<string, Scheme>, St]
+> = _curry(4, (fields: string[], env: Map<string, Scheme>, row: Row, st: St) =>
+  match(fields)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => _tuple(row, env, st),
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([f, ...rest]) =>
+        (([ft, st1]: [Ty, St]) =>
+          bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
+          freshVar(st),
         ),
-      )
-      .with({ _tag: "LPLabeled" }, ({ name }) =>
-        (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
-      )
-      .exhaustive(),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const bindParamsFrom: <A, B>(
-  params: LamParam[],
-  env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  st: St,
-) => [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
-  3,
-  <A, B>(params: LamParam[], env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
-    match(params)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple([] as Ty[], env, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([p, ...rest]) =>
-          (([t, env1, st1]: [Ty, Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
-            (([restTs, env2, st2]: [Ty[], Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St]) =>
-              _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
-            bindParam(p, env, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+const bindParam: _Curry<
+  [p: LamParam, env: Map<string, Scheme>, st: St],
+  [Ty, Map<string, Scheme>, St]
+> = _curry(3, (p: LamParam, env: Map<string, Scheme>, st: St) =>
+  match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => bindParam(inner, env, st))
+    .with({ _tag: "LPName" }, ({ name }) =>
+      (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
+    )
+    .with({ _tag: "LPTuple" }, ({ names }) =>
+      (([elems, env1, st1]: [Ty[], Map<string, Scheme>, St]) => _tuple(tTuple(elems), env1, st1))(
+        bindParamNamesFrom(names, env, st),
+      ),
+    )
+    .with({ _tag: "LPRecord" }, ({ fields }) =>
+      (([rowBase, st1]: [Row, St]) =>
+        (([row, env1, st2]: [Row, Map<string, Scheme>, St]) => _tuple(tRecord(row), env1, st2))(
+          bindParamFieldsFrom(fields, env, rowBase, st1),
+        ))(freshRowVar(st)),
+    )
+    .with({ _tag: "LPLabeled" }, ({ name }) =>
+      (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
+    )
+    .exhaustive(),
+);
+const bindParamsFrom: _Curry<
+  [params: LamParam[], env: Map<string, Scheme>, st: St],
+  [Ty[], Map<string, Scheme>, St]
+> = _curry(3, (params: LamParam[], env: Map<string, Scheme>, st: St) =>
+  match(params)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => _tuple([] as Ty[], env, st),
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([p, ...rest]) =>
+        (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
+          (([restTs, env2, st2]: [Ty[], Map<string, Scheme>, St]) =>
+            _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
+          bindParam(p, env, st),
+        ),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
 const constrainParamAnnotsFrom: <A>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -780,7 +769,7 @@ const constrainParamAnnotsFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -922,7 +911,7 @@ const ctxWithEnv: <A, B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -954,7 +943,7 @@ const ctxWithEnv: <A, B>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, AliasInfo>;
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   plugins: {
     name: string;
     parse: Option<
@@ -981,7 +970,7 @@ const ctxWithEnv: <A, B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1025,7 +1014,7 @@ const ctxWithLets: <A, B, C>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1058,7 +1047,7 @@ const ctxWithLets: <A, B, C>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, AliasInfo>;
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   plugins: {
     name: string;
     parse: Option<
@@ -1085,7 +1074,7 @@ const ctxWithLets: <A, B, C>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1130,7 +1119,7 @@ const ctxWithLoop: <A, B, C>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1164,7 +1153,7 @@ const ctxWithLoop: <A, B, C>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, AliasInfo>;
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
   plugins: {
     name: string;
     parse: Option<
@@ -1191,7 +1180,7 @@ const ctxWithLoop: <A, B, C>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1237,7 +1226,7 @@ const inferLoopParamsFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1277,7 +1266,7 @@ const inferLoopParamsFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1343,7 +1332,7 @@ const unifyRecurArgsFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1381,7 +1370,7 @@ const unifyRecurArgsFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1437,7 +1426,7 @@ const inferRecur: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1474,7 +1463,7 @@ const inferRecur: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1592,7 +1581,7 @@ const labFieldsFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1631,7 +1620,10 @@ const labFieldsFrom: <A>(
         env: Map<string, Scheme>;
         open: boolean;
         ns: Map<string, Map<string, Scheme>>;
-        aliasMap: Map<string, AliasInfo>;
+        aliasMap: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
         plugins: {
           name: string;
           parse: Option<
@@ -1796,15 +1788,12 @@ const rowOfLabFields: <A>(
     .otherwise(() => {
       throw new Error("non-exhaustive match");
     });
-const envWithLabFields: <A, B, C, D, E>(
-  fields: ({ name: A; bodyType: B } & E)[],
-  env: Map<A, { vars: C[]; rvars: D[]; ty: B }>,
-) => Map<A, { vars: C[]; rvars: D[]; ty: B }> = _curry(
+const envWithLabFields: <A, E>(
+  fields: ({ name: A; bodyType: Ty } & E)[],
+  env: Map<A, Scheme>,
+) => Map<A, Scheme> = _curry(
   2,
-  <A, B, C, D, E>(
-    fields: ({ name: A; bodyType: B } & E)[],
-    env: Map<A, { vars: C[]; rvars: D[]; ty: B }>,
-  ) =>
+  <A, E>(fields: ({ name: A; bodyType: Ty } & E)[], env: Map<A, Scheme>) =>
     match(fields)
       .with(
         (_v) => _v.length === 0,
@@ -1823,7 +1812,7 @@ const inferCallArgs: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1861,7 +1850,7 @@ const inferCallArgs: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -1941,7 +1930,7 @@ const inferNormalCall: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -1978,7 +1967,7 @@ const inferNormalCall: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2048,7 +2037,7 @@ const inferTernary: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2086,7 +2075,7 @@ const inferTernary: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2144,7 +2133,7 @@ const inferBindBody: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2184,7 +2173,7 @@ const inferBindBody: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2240,7 +2229,7 @@ const inferTwoSlotBind: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2281,7 +2270,7 @@ const inferTwoSlotBind: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2337,7 +2326,7 @@ const inferQuestionBind: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2378,7 +2367,7 @@ const inferQuestionBind: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2463,7 +2452,7 @@ const inferLetBind: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2504,7 +2493,7 @@ const inferLetBind: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2552,7 +2541,7 @@ const inferRecordRow: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2588,7 +2577,7 @@ const inferRecordRow: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2677,7 +2666,7 @@ const inferFieldAccess: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2716,7 +2705,7 @@ const inferFieldAccess: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2784,7 +2773,7 @@ const inferDuckField: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2822,7 +2811,7 @@ const inferDuckField: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2866,7 +2855,7 @@ const inferNsField: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2904,7 +2893,7 @@ const inferNsField: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -2951,7 +2940,7 @@ const inferInterpParts: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -2987,7 +2976,7 @@ const inferInterpParts: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3056,7 +3045,7 @@ const inferTupleElems: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3092,7 +3081,7 @@ const inferTupleElems: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3160,7 +3149,7 @@ const inferSeqSlotsElems: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3198,7 +3187,7 @@ const inferSeqSlotsElems: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3269,7 +3258,7 @@ const inferSeqSlots: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3306,7 +3295,7 @@ const inferSeqSlots: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3348,7 +3337,7 @@ const inferMapEntries: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3386,7 +3375,7 @@ const inferMapEntries: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3458,7 +3447,7 @@ const inferMapExpr: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3494,7 +3483,7 @@ const inferMapExpr: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3556,38 +3545,33 @@ const mergeBindingMaps: <A, B>(dest: Map<A, B>, src: Map<A, B>) => Map<A, B> = _
   2,
   <A, B>(dest: Map<A, B>, src: Map<A, B>) => mergeBindingMapsFrom(_Map_keys(src), src, dest),
 );
-const mergeEnvBindingsFrom: <A, B, C, D>(
+const mergeEnvBindingsFrom: <A>(
   keys: A[],
-  bindings: Map<A, B>,
-  env: Map<A, { vars: C[]; rvars: D[]; ty: B }>,
-) => Map<A, { vars: C[]; rvars: D[]; ty: B }> = _curry(
-  3,
-  <A, B, C, D>(keys: A[], bindings: Map<A, B>, env: Map<A, { vars: C[]; rvars: D[]; ty: B }>) =>
-    match(keys)
-      .with(
-        (_v) => _v.length === 0,
-        () => env,
-      )
-      .with(
-        (_v) => _v.length >= 1,
-        ([k, ...rest]) =>
-          match(_Map_get(k, bindings))
-            .with({ _tag: "Some" }, ({ value: t }) =>
-              mergeEnvBindingsFrom(rest, bindings, _Map_set(k, mono(t), env)),
-            )
-            .with({ _tag: "None" }, () => mergeEnvBindingsFrom(rest, bindings, env))
-            .exhaustive(),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+  bindings: Map<A, Ty>,
+  env: Map<A, Scheme>,
+) => Map<A, Scheme> = _curry(3, <A>(keys: A[], bindings: Map<A, Ty>, env: Map<A, Scheme>) =>
+  match(keys)
+    .with(
+      (_v) => _v.length === 0,
+      () => env,
+    )
+    .with(
+      (_v) => _v.length >= 1,
+      ([k, ...rest]) =>
+        match(_Map_get(k, bindings))
+          .with({ _tag: "Some" }, ({ value: t }) =>
+            mergeEnvBindingsFrom(rest, bindings, _Map_set(k, mono(t), env)),
+          )
+          .with({ _tag: "None" }, () => mergeEnvBindingsFrom(rest, bindings, env))
+          .exhaustive(),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
-const mergeEnvBindings: <A, B, C, D>(
-  bindings: Map<A, B>,
-  env: Map<A, { vars: C[]; rvars: D[]; ty: B }>,
-) => Map<A, { vars: C[]; rvars: D[]; ty: B }> = _curry(
+const mergeEnvBindings: <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) => Map<A, Scheme> = _curry(
   2,
-  <A, B, C, D>(bindings: Map<A, B>, env: Map<A, { vars: C[]; rvars: D[]; ty: B }>) =>
+  <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
 const inferArms: <A>(
@@ -3595,7 +3579,7 @@ const inferArms: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3633,7 +3617,7 @@ const inferArms: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3718,7 +3702,7 @@ const inferMatch: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3755,7 +3739,7 @@ const inferMatch: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3806,7 +3790,7 @@ const inferExpr: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3842,7 +3826,7 @@ const inferExpr: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -3882,7 +3866,7 @@ const inferExprRaw: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -3918,7 +3902,7 @@ const inferExprRaw: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4195,7 +4179,7 @@ const inferDo: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4231,7 +4215,7 @@ const inferDo: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4294,7 +4278,7 @@ const inferPatRecordFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4332,7 +4316,7 @@ const inferPatRecordFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4399,7 +4383,7 @@ const inferPatRecord: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4435,7 +4419,7 @@ const inferPatRecord: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4477,7 +4461,7 @@ const inferPatCtorArgs: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4517,7 +4501,7 @@ const inferPatCtorArgs: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4602,7 +4586,7 @@ const inferPatTupleFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4638,7 +4622,7 @@ const inferPatTupleFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4711,7 +4695,7 @@ const inferPatTuple: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4747,7 +4731,7 @@ const inferPatTuple: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4788,7 +4772,7 @@ const inferSeqPatElems: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4825,7 +4809,7 @@ const inferSeqPatElems: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -4896,7 +4880,7 @@ const inferSeqPat: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -4934,7 +4918,7 @@ const inferSeqPat: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -5003,7 +4987,7 @@ const inferPat: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -5039,7 +5023,7 @@ const inferPat: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -5083,7 +5067,7 @@ const inferPatRaw: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -5119,7 +5103,7 @@ const inferPatRaw: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -5248,7 +5232,7 @@ const unifyOrPatBinding: <A, B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -5287,7 +5271,7 @@ const unifyOrPatBinding: <A, B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -5335,7 +5319,7 @@ const unifyOrPatBindings: <A, B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -5374,7 +5358,7 @@ const unifyOrPatBindings: <A, B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -5429,7 +5413,7 @@ const inferOrPatAlts: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -5468,7 +5452,7 @@ const inferOrPatAlts: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -5531,7 +5515,7 @@ const inferOrPat: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -5568,7 +5552,7 @@ const inferOrPat: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -6122,77 +6106,85 @@ const seedNsImports: <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> = 
     seedNsImportsFrom(_Map_keys(nsImports), nsImports, ns),
 );
 const aliasMapFrom: _Curry<
-  [stmts: Stmt[], acc: Map<string, AliasInfo>],
-  Map<string, AliasInfo>
-> = _curry(2, (stmts: Stmt[], acc: Map<string, AliasInfo>) =>
-  match(stmts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with(
-            (
-              _v,
-            ): _v is Extract<Stmt, { _tag: "SType" }> & {
-              alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "SType" && _g.alias._tag === "Some";
-            },
-            ({ name, params, alias: { value: fields } }) =>
-              aliasMapFrom(
-                rest,
-                _Map_set(
-                  name,
-                  { params: params, fields: fields, expr: None as Option<TypeExpr> },
-                  acc,
+  [
+    stmts: Stmt[],
+    acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+  ],
+  Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>
+> = _curry(
+  2,
+  (
+    stmts: Stmt[],
+    acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+  ) =>
+    match(stmts)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => acc,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([s, ...rest]) =>
+          match(s)
+            .with(
+              (
+                _v,
+              ): _v is Extract<Stmt, { _tag: "SType" }> & {
+                alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
+              } => {
+                const _g: any = _v;
+                return _g._tag === "SType" && _g.alias._tag === "Some";
+              },
+              ({ name, params, alias: { value: fields } }) =>
+                aliasMapFrom(
+                  rest,
+                  _Map_set(
+                    name,
+                    { params: params, fields: fields, expr: None as Option<TypeExpr> },
+                    acc,
+                  ),
                 ),
-              ),
-          )
-          .with(
-            (
-              _v,
-            ): _v is Extract<Stmt, { _tag: "SType" }> & {
-              aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "SType" && _g.aliasType._tag === "Some";
-            },
-            ({ name, params, aliasType: { value: te } }) =>
-              aliasMapFrom(
-                rest,
-                _Map_set(
-                  name,
-                  {
-                    params: params,
-                    fields: [] as QualAliasField[],
-                    expr: Some(te) as Option<TypeExpr>,
-                  },
-                  acc,
+            )
+            .with(
+              (
+                _v,
+              ): _v is Extract<Stmt, { _tag: "SType" }> & {
+                aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
+              } => {
+                const _g: any = _v;
+                return _g._tag === "SType" && _g.aliasType._tag === "Some";
+              },
+              ({ name, params, aliasType: { value: te } }) =>
+                aliasMapFrom(
+                  rest,
+                  _Map_set(
+                    name,
+                    {
+                      params: params,
+                      fields: [] as QualAliasField[],
+                      expr: Some(te) as Option<TypeExpr>,
+                    },
+                    acc,
+                  ),
                 ),
-              ),
-          )
-          .otherwise(() => aliasMapFrom(rest, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+            )
+            .otherwise(() => aliasMapFrom(rest, acc)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const registerCtorsFrom: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<string, AliasInfo>,
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
@@ -6201,7 +6193,7 @@ const registerCtorsFrom: <A, B>(
     ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
-    aliasMap: Map<string, AliasInfo>,
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -6223,41 +6215,53 @@ const registerCtorsFrom: <A, B>(
       }),
 );
 const registerUserCtorsFrom: _Curry<
-  [stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St],
+  [
+    stmts: Stmt[],
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+    env: Map<string, Scheme>,
+    st: St,
+  ],
   [Map<string, Scheme>, St]
-> = _curry(4, (stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St) =>
-  match(stmts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple(env, st),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with({ _tag: "SType" }, ({ name, params, ctors }) =>
-            (([env1, st1]: [Map<string, Scheme>, St]) =>
-              registerUserCtorsFrom(rest, aliasMap, env1, st1))(
-              registerCtorsFrom(ctors, name, params, aliasMap, env, st),
-            ),
-          )
-          .otherwise(() => registerUserCtorsFrom(rest, aliasMap, env, st)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+> = _curry(
+  4,
+  (
+    stmts: Stmt[],
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+    env: Map<string, Scheme>,
+    st: St,
+  ) =>
+    match(stmts)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => _tuple(env, st),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([s, ...rest]) =>
+          match(s)
+            .with({ _tag: "SType" }, ({ name, params, ctors }) =>
+              (([env1, st1]: [Map<string, Scheme>, St]) =>
+                registerUserCtorsFrom(rest, aliasMap, env1, st1))(
+                registerCtorsFrom(ctors, name, params, aliasMap, env, st),
+              ),
+            )
+            .otherwise(() => registerUserCtorsFrom(rest, aliasMap, env, st)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const registerBuiltinCtorGroup: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<string, AliasInfo>,
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
@@ -6266,7 +6270,7 @@ const registerBuiltinCtorGroup: <A, B>(
     ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
-    aliasMap: Map<string, AliasInfo>,
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -6300,7 +6304,7 @@ const registerBuiltinCtorsFrom: <A, B, C>(
     name: string;
     params: string[];
   } & C)[],
-  aliasMap: Map<string, AliasInfo>,
+  aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
@@ -6311,7 +6315,7 @@ const registerBuiltinCtorsFrom: <A, B, C>(
       name: string;
       params: string[];
     } & C)[],
-    aliasMap: Map<string, AliasInfo>,
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -6333,47 +6337,61 @@ const registerBuiltinCtorsFrom: <A, B, C>(
       }),
 );
 const registerExternsFrom: _Curry<
-  [stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St],
+  [
+    stmts: Stmt[],
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+    env: Map<string, Scheme>,
+    st: St,
+  ],
   [Map<string, Scheme>, St]
-> = _curry(4, (stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St) =>
-  match(stmts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple(env, st),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
-            (([vars, st0]: [Map<string, Ty>, St]) =>
-              (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
-                registerExternsFrom(
-                  rest,
-                  aliasMap,
-                  _Map_set(name, generalize(env, t, st1, false), env),
-                  st1,
-                ))(typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[]))))(
-              reduce(
-                _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
-                  (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
+> = _curry(
+  4,
+  (
+    stmts: Stmt[],
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+    env: Map<string, Scheme>,
+    st: St,
+  ) =>
+    match(stmts)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () => _tuple(env, st),
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([s, ...rest]) =>
+          match(s)
+            .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
+              (([vars, st0]: [Map<string, Ty>, St]) =>
+                (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
+                  registerExternsFrom(
+                    rest,
+                    aliasMap,
+                    _Map_set(name, generalize(env, t, st1, false), env),
+                    st1,
+                  ))(
+                  typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[])),
+                ))(
+                reduce(
+                  _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
+                    (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
+                  ),
+                  _tuple(new Map<string, Ty>(), st),
+                  params,
                 ),
-                _tuple(new Map<string, Ty>(), st),
-                params,
               ),
-            ),
-          )
-          .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+            )
+            .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
   match(stmts)
@@ -6510,45 +6528,42 @@ const groupOfFrom: <A>(idxs: number[], lets: A[]) => A[] = _curry(
         throw new Error("non-exhaustive match");
       }),
 );
-const preBindGroupFrom: <A, B>(
-  group: Stmt[],
-  env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>,
-  st: St,
-) => [Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, St] = _curry(
-  3,
-  <A, B>(group: Stmt[], env: Map<string, { vars: A[]; rvars: B[]; ty: Ty }>, st: St) =>
-    match(group)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(env, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SLet" }, ({ name }) =>
-              (([v, st1]: [Ty, St]) => preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(
-                freshVar(st),
-              ),
-            )
-            .otherwise(() => preBindGroupFrom(rest, env, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+const preBindGroupFrom: _Curry<
+  [group: Stmt[], env: Map<string, Scheme>, st: St],
+  [Map<string, Scheme>, St]
+> = _curry(3, (group: Stmt[], env: Map<string, Scheme>, st: St) =>
+  match(group)
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length === 0;
+      },
+      () => _tuple(env, st),
+    )
+    .with(
+      (_v) => {
+        const _g: any = _v;
+        return _g.length >= 1;
+      },
+      ([s, ...rest]) =>
+        match(s)
+          .with({ _tag: "SLet" }, ({ name }) =>
+            (([v, st1]: [Ty, St]) => preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(
+              freshVar(st),
+            ),
+          )
+          .otherwise(() => preBindGroupFrom(rest, env, st)),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
 const inferGroupFrom: <A>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -6584,7 +6599,7 @@ const inferGroupFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -6799,7 +6814,7 @@ const processGroupsFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -6835,7 +6850,7 @@ const processGroupsFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -6872,7 +6887,7 @@ const processGroupsFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -6945,7 +6960,7 @@ const inferExprStmtsFrom: <A>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, AliasInfo>;
+    aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     plugins: {
       name: string;
       parse: Option<
@@ -6981,7 +6996,7 @@ const inferExprStmtsFrom: <A>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
+      aliasMap: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       plugins: {
         name: string;
         parse: Option<
@@ -7111,14 +7126,14 @@ const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeE
       )
       .otherwise(() => te),
 );
-const qualifyField: <A, B, C, D>(
-  fld: { optional: A; fieldType: TypeExpr; name: B } & D,
+const qualifyField: <C, D>(
+  fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
   alias: string,
   from: Map<string, C>,
-) => { name: B; fieldType: TypeExpr; optional: A } = _curry(
+) => QualAliasField = _curry(
   3,
-  <A, B, C, D>(
-    fld: { optional: A; fieldType: TypeExpr; name: B } & D,
+  <C, D>(
+    fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
     alias: string,
     from: Map<string, C>,
   ) => ({
@@ -7127,72 +7142,60 @@ const qualifyField: <A, B, C, D>(
     optional: fld.optional,
   }),
 );
-const qualifyInfo: <A, B, C, D, E, F>(
+const qualifyInfo: <D, E, F>(
   info: {
     expr: Option<TypeExpr>;
-    fields: ({ optional: A; fieldType: TypeExpr; name: B } & E)[];
-    params: C;
+    fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & E)[];
+    params: string[];
   } & F,
   alias: string,
   from: Map<string, D>,
-) => {
-  params: C;
-  fields: { name: B; fieldType: TypeExpr; optional: A }[];
-  expr: Option<TypeExpr>;
-} = _curry(
+) => { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> } = _curry(
   3,
-  <A, B, C, D, E, F>(
+  <D, E, F>(
     info: {
       expr: Option<TypeExpr>;
-      fields: ({ optional: A; fieldType: TypeExpr; name: B } & E)[];
-      params: C;
+      fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & E)[];
+      params: string[];
     } & F,
     alias: string,
     from: Map<string, D>,
   ) => ({
     params: info.params,
     fields: map(
-      (f: { optional: A; fieldType: TypeExpr; name: B } & E) => qualifyField(f, alias, from),
+      (f: { optional: boolean; fieldType: TypeExpr; name: string } & E) =>
+        qualifyField(f, alias, from),
       info.fields,
     ),
     expr: _Option_map((te: TypeExpr) => qualifyTe(te, alias, from), info.expr),
   }),
 );
-const qualAliasSeedFrom: <A, B, C, D, E>(
+const qualAliasSeedFrom: <D, E>(
   names: string[],
   alias: string,
   from: Map<
     string,
     {
       expr: Option<TypeExpr>;
-      fields: ({ optional: A; fieldType: TypeExpr; name: B } & D)[];
-      params: C;
+      fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+      params: string[];
     } & E
   >,
-  acc: Map<
-    string,
-    { params: C; fields: { name: B; fieldType: TypeExpr; optional: A }[]; expr: Option<TypeExpr> }
-  >,
-) => Map<
-  string,
-  { params: C; fields: { name: B; fieldType: TypeExpr; optional: A }[]; expr: Option<TypeExpr> }
-> = _curry(
+  acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+) => Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }> = _curry(
   4,
-  <A, B, C, D, E>(
+  <D, E>(
     names: string[],
     alias: string,
     from: Map<
       string,
       {
         expr: Option<TypeExpr>;
-        fields: ({ optional: A; fieldType: TypeExpr; name: B } & D)[];
-        params: C;
+        fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+        params: string[];
       } & E
     >,
-    acc: Map<
-      string,
-      { params: C; fields: { name: B; fieldType: TypeExpr; optional: A }[]; expr: Option<TypeExpr> }
-    >,
+    acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   ) =>
     match(names)
       .with(
@@ -7224,7 +7227,7 @@ const qualAliasSeedFrom: <A, B, C, D, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const qualAliasSeed: <A, B, C, D, E, F>(
+const qualAliasSeed: <D, E, F>(
   stmts: Stmt[],
   quals: Map<
     string,
@@ -7233,22 +7236,16 @@ const qualAliasSeed: <A, B, C, D, E, F>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: A; fieldType: TypeExpr; name: B } & D)[];
-          params: C;
+          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+          params: string[];
         } & E
       >;
     } & F
   >,
-  acc: Map<
-    string,
-    { params: C; fields: { name: B; fieldType: TypeExpr; optional: A }[]; expr: Option<TypeExpr> }
-  >,
-) => Map<
-  string,
-  { params: C; fields: { name: B; fieldType: TypeExpr; optional: A }[]; expr: Option<TypeExpr> }
-> = _curry(
+  acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
+) => Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }> = _curry(
   3,
-  <A, B, C, D, E, F>(
+  <D, E, F>(
     stmts: Stmt[],
     quals: Map<
       string,
@@ -7257,16 +7254,13 @@ const qualAliasSeed: <A, B, C, D, E, F>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: A; fieldType: TypeExpr; name: B } & D)[];
-            params: C;
+            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+            params: string[];
           } & E
         >;
       } & F
     >,
-    acc: Map<
-      string,
-      { params: C; fields: { name: B; fieldType: TypeExpr; optional: A }[]; expr: Option<TypeExpr> }
-    >,
+    acc: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>,
   ) =>
     match(stmts)
       .with(
@@ -7307,13 +7301,20 @@ const qualAliasSeed: <A, B, C, D, E, F>(
  * once the whole program's substitution is settled, and later records win when
  * two nodes share a span.
  */
-const zonkRecorded: <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) => { span: A; ty: Ty }[] =
-  _curry(2, <A, B>(recorded: ({ ty: Ty; span: A } & B)[], st: St) =>
+const zonkRecorded: <B>(
+  recorded: ({ ty: Ty; span: { start: number; end: number } } & B)[],
+  st: St,
+) => TypeAt[] = _curry(
+  2,
+  <B>(recorded: ({ ty: Ty; span: { start: number; end: number } } & B)[], st: St) =>
     map(
-      (r: { ty: Ty; span: A } & B) => ({ span: r.span, ty: zonk(r.ty, st) }),
+      (r: { ty: Ty; span: { start: number; end: number } } & B) => ({
+        span: r.span,
+        ty: zonk(r.ty, st),
+      }),
       _Array_reverse(recorded),
     ),
-  );
+);
 /**
  * A type with no free type OR row vars — the only kind worth annotating from:
  * a generic position has nowhere to bind letters at a `const` / IIFE param.
@@ -7437,7 +7438,7 @@ const runInferImports: <A, B, C>(
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     letParams: TypeAt[];
   },
   IErr
@@ -7516,9 +7517,16 @@ const runInferImports: <A, B, C>(
       nsImports,
       seedNs(namespaces, env0, st0),
     );
-    const aliasMap: Map<string, AliasInfo> = aliasMapFrom(
+    const aliasMap: Map<
+      string,
+      { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+    > = aliasMapFrom(
       stmts,
-      qualAliasSeed(stmts, quals, new Map<string, AliasInfo>()),
+      qualAliasSeed(
+        stmts,
+        quals,
+        new Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>(),
+      ),
     );
     return (([env1, st1]: [Map<string, Scheme>, St]) =>
       (([env2, st2]: [Map<string, Scheme>, St]) =>
@@ -7554,7 +7562,10 @@ const runInferImports: <A, B, C>(
                       env: Map<string, Scheme>;
                       open: boolean;
                       ns: Map<string, Map<string, Scheme>>;
-                      aliasMap: Map<string, AliasInfo>;
+                      aliasMap: Map<
+                        string,
+                        { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                      >;
                       plugins: {
                         name: string;
                         parse: Option<
@@ -7604,7 +7615,10 @@ const runInferImports: <A, B, C>(
                         {
                           env: Map<string, Scheme>;
                           types: TypeAt[];
-                          aliases: Map<string, AliasInfo>;
+                          aliases: Map<
+                            string,
+                            { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                          >;
                           letParams: TypeAt[];
                         },
                         IErr
@@ -7617,7 +7631,10 @@ const runInferImports: <A, B, C>(
                         {
                           env: Map<string, Scheme>;
                           types: TypeAt[];
-                          aliases: Map<string, AliasInfo>;
+                          aliases: Map<
+                            string,
+                            { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                          >;
                           letParams: TypeAt[];
                         },
                         IErr
@@ -7632,7 +7649,10 @@ const runInferImports: <A, B, C>(
                   {
                     env: Map<string, Scheme>;
                     types: TypeAt[];
-                    aliases: Map<string, AliasInfo>;
+                    aliases: Map<
+                      string,
+                      { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+                    >;
                     letParams: TypeAt[];
                   },
                   IErr
@@ -7743,7 +7763,10 @@ export const inferProgramImports: <A, B, C>(
       (r: {
         env: Map<string, Scheme>;
         types: TypeAt[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<
+          string,
+          { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }
+        >;
         letParams: TypeAt[];
       }) => r.env,
       runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
@@ -7855,7 +7878,7 @@ export const inferProgramImportsTypes: <A, B, C>(
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
     letParams: TypeAt[];
   },
   IErr
@@ -7923,7 +7946,7 @@ export const inferProgramTypes: _Curry<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> }>;
       letParams: TypeAt[];
     },
     IErr

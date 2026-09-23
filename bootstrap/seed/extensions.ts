@@ -42,16 +42,16 @@ export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] 
       )
       .exhaustive(),
 );
-export const resolvePluginsDefault: <A, B, C>(
+export const resolvePluginsDefault: <B, C>(
   pluginsOpt: Option<
     {
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -74,10 +74,10 @@ export const resolvePluginsDefault: <A, B, C>(
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
       b: number,
       c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
         b: number,
       ) => Result<[Expr, number], { message: string; start: number; end: number }>,
     ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -94,16 +94,16 @@ export const resolvePluginsDefault: <A, B, C>(
       } & C,
     ) => Result<Option<[Ty, St]>, BoundErr>
   >;
-}[] = <A, B, C>(
+}[] = <B, C>(
   pluginsOpt: Option<
     {
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<A> }[],
+            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
