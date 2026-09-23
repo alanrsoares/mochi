@@ -1057,7 +1057,7 @@ let etaPartial = (ctx: Ctx, params, body) => switch params {
       | Ast.LPName(name, None) => Str.startsWith("$", name)
           ? None
           : switch body {
-            | Ast.ECall(_, _, _, _) => let flat = switch flattenCallSpine(ctx, body) {
+            | Ast.ECall(_, _, _, _) => let flat = switch ctx->flattenCallSpine(body) {
                 | Some(f) => f
                 | None => body
               } in
