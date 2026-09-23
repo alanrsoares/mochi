@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { buildModules } from "@mochi/compiler/module";
 import { repoRoot } from "@mochi/test-support";
-import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 import { unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
@@ -31,7 +31,7 @@ beforeAll(async () => {
     loadGraph: typeof loadGraph;
   });
   dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
-});
+}, BOOTSTRAP_BUILD_HOOK_MS);
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 test("orders a real graph so every dependency precedes its dependent", () => {

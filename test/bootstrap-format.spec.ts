@@ -12,7 +12,7 @@ import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx";
 import { repoRoot } from "@mochi/test-support";
-import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
@@ -33,7 +33,7 @@ beforeAll(async () => {
   alLex = (await import(join(root, "bootstrap/lexer.js"))).lex;
   alParseRecovering = (await import(join(root, "bootstrap/parser.js"))).parseRecovering;
   alFormatProgram = (await import(join(root, "bootstrap/format.js"))).formatProgram;
-});
+}, BOOTSTRAP_BUILD_HOOK_MS);
 
 /** Print one expression by formatting the wrapped program and dropping the head. */
 const alExprText = (src: string): string => {

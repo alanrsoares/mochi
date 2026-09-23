@@ -13,13 +13,12 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
 import {
   BIOME_BIN,
-  BOOTSTRAP_CLI,
   BOOTSTRAP_DIR,
   BOOTSTRAP_SEED,
   HOST_SHIMS,
+  loadCachedTsEmit,
   REPO_ROOT,
   readSeedManifest,
   sha256,
@@ -52,7 +51,7 @@ const stripBundleSourceLabels = (file: string): void => {
 };
 
 const tmp = await mkdtemp(join(tmpdir(), "mochi-seed-"));
-const built = buildModulesTsBootstrap(BOOTSTRAP_CLI, RUNTIME);
+const built = loadCachedTsEmit(RUNTIME);
 if (built._tag === "Err") {
   rmSync(tmp, { recursive: true, force: true });
   throw new Error(`bootstrap emit failed: ${JSON.stringify(built.error)}`);

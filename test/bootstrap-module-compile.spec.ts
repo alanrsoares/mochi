@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { buildModulesTs, buildModules as tsBuild } from "@mochi/compiler/module";
 import { repoRoot } from "@mochi/test-support";
-import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
 const root = repoRoot(import.meta.url);
 
@@ -28,7 +28,7 @@ beforeAll(async () => {
   // Shared cache → bootstrap/module.js (+ deps). Import the shipped driver.
   ensureInTreeBootstrapBuild();
   ({ buildModules } = await import(join(root, "bootstrap/module.js")));
-});
+}, BOOTSTRAP_BUILD_HOOK_MS);
 
 test("compiles examples/modules end to end", () => {
   const r = buildModules(join(root, "examples/modules/main.mochi"));

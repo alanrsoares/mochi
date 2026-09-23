@@ -12,7 +12,7 @@ import { compile as tsCompile } from "@mochi/compiler/compile";
 import { buildModules as tsBuild } from "@mochi/compiler/module";
 import { format as tsFormat } from "@mochi/dx/format";
 import { repoRoot } from "@mochi/test-support";
-import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 import { unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
@@ -40,7 +40,7 @@ beforeAll(() => {
   // .js can resolve runtime deps (@onrails/pattern) via the repo's own
   // node_modules, same as any real project depending on mochic's output.
   dir = mkdtempSync(join(root, "test", ".mochi-cli-"));
-});
+}, BOOTSTRAP_BUILD_HOOK_MS);
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });

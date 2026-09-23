@@ -23,6 +23,18 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # Content-addressed graph caches. Key patterns match BOOTSTRAP_CACHE_GLOBS
+      # in packages/test-support/src/bootstrap.ts. Saved even when the gate fails
+      # so a cold emit is not repeated on the next push of the same sources.
+      - name: Restore bootstrap graph cache
+        id: bootstrap-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .cache/bootstrap-build
+            .cache/bootstrap-ts-emit
+          key: bootstrap-graph-${{ hashFiles('bootstrap/**/*.mochi', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/bootstrap/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
+
       # The complete quality gate: biome + tsc --noEmit + workspace checks (docs
       # vite build included via @mochi/docs) + formatter dogfood + the full test
       # suite, including the two self-hosting north-stars — the tsc --strict-clean
@@ -30,3 +42,13 @@ jobs:
       # (bootstrap-fixpoint-binary.spec.ts). Local day-to-day uses `bun run check`
       # (same gate without those two specs).
       - run: bun run check:full
+
+      - name: Save bootstrap graph cache
+        if: always() && steps.bootstrap-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .cache/bootstrap-build
+            .cache/bootstrap-ts-emit
+          key: ${{ steps.bootstrap-cache.outputs.cache-primary-key }}
