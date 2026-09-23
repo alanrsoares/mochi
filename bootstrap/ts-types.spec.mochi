@@ -1,12 +1,15 @@
 import { assertEq, test } from "@mochi/test"
 import {
   RowEmpty,
+  TySingleton,
   rExtend,
   rVar,
   tArrow,
   tCon,
+  tLit,
   tPrim,
   tRecord,
+  tUnion,
   tVar
 } from "./types.mochi"
 import {
@@ -106,6 +109,24 @@ test("an empty index leaves every row structural", () =>
 test("rowShapeKey sorts fields and declines an open row", () => {
   assertEq(Some("end: number; start: number"), rowShapeKey(span, #{}));
   assertEq(None, rowShapeKey(rExtend("start", tPrim("number"), rVar(7)), #{}))
+})
+
+test("rowShapeKey keeps distinct literal unions apart", () => {
+  assertEq(
+    Some("k: \"x\" | \"y\""),
+    rowShapeKey(rExtend("k", tUnion([tLit("x"), tLit("y")]), RowEmpty), #{})
+  );
+  assertEq(
+    Some("n: 1 | 2"),
+    rowShapeKey(
+      rExtend(
+        "n",
+        tUnion([TySingleton("number", "1"), TySingleton("number", "2")]),
+        RowEmpty
+      ),
+      #{}
+    )
+  )
 })
 
 test("rowShapeKey sorts a nested record", () =>

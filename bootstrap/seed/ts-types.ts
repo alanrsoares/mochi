@@ -233,7 +233,14 @@ const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(
       .with({ _tag: "TyOneOf" }, ({ members }) =>
         _Str_join(
           " | ",
-          map((m: Ty) => shapeType(m, vars), members),
+          map(
+            (m: Ty) =>
+              match(m)
+                .with({ _tag: "TySingleton", base: "string" }, ({ value }) => `"${value}"`)
+                .with({ _tag: "TySingleton" }, ({ value }) => value)
+                .otherwise(() => shapeType(m, vars)),
+            members,
+          ),
         ),
       )
       .otherwise(() => tsOf(t, plainEnv(vars))),

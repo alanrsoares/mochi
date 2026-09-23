@@ -15,6 +15,7 @@ import {
   lambdaParamTypesTs,
   opaqueTypeDecl,
   recordAliasDecl,
+  nullaryLocalNames,
   recordAliasIndex,
   typeDecl,
   withoutAmbiguousAlias,
@@ -559,6 +560,57 @@ test("the module that declares the nullary alias still folds it", () =>
       Set.fromArray(["Span"])
     )
   ))
+
+test("a parameterised local homonym does not print a dep's nullary name", () =>
+  let src = "type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }\nlet eof = () => { tok: \"eof\", start: 0, end: 0, doc: None }" in
+  let dep = {
+    params: [],
+    fields: [
+      { name: "tok", fieldType: Ast.TyName("string", sp), optional: false },
+      { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
+      { name: "end", fieldType: Ast.TyName("number", sp), optional: false },
+      {
+        name: "doc",
+        fieldType: Ast.TyApp("Option", [Ast.TyName("string", sp)], sp),
+        optional: false
+      }
+    ],
+    expr: None
+  } in
+  let stmts = lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.unwrapOr([]) in
+  let out = inferProgramTypes(stmts, builtins, namespaces, false)
+    |> Result.mapErr(e => { message: e.message, start: e.start, end: e.end })
+    |> Result.map(r =>
+      emitTsModule(
+        stmts,
+        r.env,
+        r.types,
+        r.letParams,
+        Map.set("Parser.LocTok", dep, r.aliases),
+        noImportedKeys,
+        [],
+        namespaceRuntime,
+        preludeJsDefs,
+        runtimeDeps,
+        "@mochi/runtime"
+      ))
+    |> Result.unwrapOr("<error>") in
+    do {
+      assertEq(
+        false,
+        Set.has("LocTok", nullaryLocalNames(stmts, 0, Set.fromArray([])))
+      );
+      assertEq(
+        true,
+        Str.contains(
+          "const eof: () => { tok: string; start: number; end: number; doc: Option<string> }",
+          out
+        )
+      )
+    })
 
 test("a use of a record alias renders as the alias name", () =>
   assertEq(

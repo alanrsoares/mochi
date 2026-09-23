@@ -8509,7 +8509,7 @@ var shapeType = _curry18(2, (t, vars) => match17(widenLits(t)).with({ _tag: "TyR
 }, ({ args: [elem] }) => `Iterable<${shapeType(elem, vars)}>`).with((_v) => {
   const _g = _v;
   return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
-}, ({ args: [value, error] }) => `() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>`).with({ _tag: "TyCon", name: "tuple" }, ({ args: elems }) => `[${shapeJoined(elems, vars)}]`).with({ _tag: "TyCon" }, ({ name, args }) => eq16(length13(args), 0) ? primitiveTs(name) : `${name}<${shapeJoined(args, vars)}>`).with({ _tag: "TyOneOf" }, ({ members }) => _Str_join6(" | ", map10((m) => shapeType(m, vars), members))).otherwise(() => tsOf(t, plainEnv(vars))));
+}, ({ args: [value, error] }) => `() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>`).with({ _tag: "TyCon", name: "tuple" }, ({ args: elems }) => `[${shapeJoined(elems, vars)}]`).with({ _tag: "TyCon" }, ({ name, args }) => eq16(length13(args), 0) ? primitiveTs(name) : `${name}<${shapeJoined(args, vars)}>`).with({ _tag: "TyOneOf" }, ({ members }) => _Str_join6(" | ", map10((m) => match17(m).with({ _tag: "TySingleton", base: "string" }, ({ value }) => `"${value}"`).with({ _tag: "TySingleton" }, ({ value }) => value).otherwise(() => shapeType(m, vars)), members))).otherwise(() => tsOf(t, plainEnv(vars))));
 var rowShapeKey = _curry18(2, (row, vars) => _Option_map2((fs) => _Str_join6("; ", _Array_sort(fs)), shapeFieldsFrom(row, vars)));
 var aliasNameFor = _curry18(2, (row, env) => eq16(_Map_size(env.recs), 0) ? None17 : _Option_flatMap((k) => match17(_Map_get8(k, env.recs)).with({ _tag: "Some", value: "" }, () => None17).with({ _tag: "Some" }, ({ value: name }) => Some17(name)).with({ _tag: "None" }, () => None17).exhaustive(), rowShapeKey(row, env.vars)));
 var tsRow = _curry18(2, (row, env) => match17(aliasNameFor(row, env)).with({ _tag: "Some" }, ({ value: alias }) => alias).with({ _tag: "None" }, () => (([fields, tail]) => {
@@ -8682,6 +8682,10 @@ var declaredTypeNames = _curry19(3, (stmts, i, acc) => match18(_Array_get15(i, s
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SType";
 }, ({ value: { name } }) => declaredTypeNames(stmts, i + 1, _Set_add8(name, acc))).with({ _tag: "Some" }, () => declaredTypeNames(stmts, i + 1, acc)).exhaustive());
+var nullaryLocalNames = _curry19(3, (stmts, i, acc) => match18(_Array_get15(i, stmts)).with({ _tag: "None" }, () => acc).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.alias._tag === "Some";
+}, ({ value: { name, params, alias: { value: fields } } }) => nullaryLocalNames(stmts, i + 1, and13(eq17(length14(params), 0), length14(fields) > 0) ? _Set_add8(name, acc) : acc)).with({ _tag: "Some" }, () => nullaryLocalNames(stmts, i + 1, acc)).exhaustive());
 var referencedCons = _curry19(4, (stmts, env, i, acc) => match18(_Array_get15(i, stmts)).with({ _tag: "None" }, () => acc).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SLet";
@@ -8750,7 +8754,7 @@ var tsGenOpts = _curry19(5, (stmts, env, types, letParams, aliases) => {
   const typeAt = typeAtTable(types);
   const letParamAt = typeAtTable(letParams);
   const genericLams = genericLambdasFrom(stmts, env, 0, new Map);
-  const recs = withoutAmbiguousAlias(recordAliasIndex(aliases), aliases, declaredTypeNames(stmts, 0, _Set_fromArray8([])));
+  const recs = withoutAmbiguousAlias(recordAliasIndex(aliases), aliases, nullaryLocalNames(stmts, 0, _Set_fromArray8([])));
   const scopedNames = scopedNamesFrom(stmts, env, recs, 0, new Map);
   const typeOf = (e) => _Map_get9(spanKey(exprSpan3(e)), typeAt);
   const envAt = (key) => match18(_Map_get9(key, scopedNames)).with({ _tag: "Some" }, ({ value: vars }) => tsEnv(vars, recs)).with({ _tag: "None" }, () => recsEnv(recs)).exhaustive();
@@ -8768,7 +8772,7 @@ var hasJsxStmts = (stmts) => anyOf((stmt) => match18(stmt).with({ _tag: "SLet" }
 var emitTsModuleWith = _curry19(12, (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs) => {
   const declared = declaredTypeNames(stmts, 0, _Set_fromArray8([]));
   const wanted = referencedCons(stmts, env, 0, _Set_fromArray8([]));
-  const recs = withoutAmbiguousAlias(recordAliasIndex(aliases), aliases, declared);
+  const recs = withoutAmbiguousAlias(recordAliasIndex(aliases), aliases, nullaryLocalNames(stmts, 0, _Set_fromArray8([])));
   const typeHeader = typeHeaderFrom(stmts, aliases, recs, 0);
   const body = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, { ...tsGenOpts(stmts, env, types, letParams, aliases), docs });
   const deps0 = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);

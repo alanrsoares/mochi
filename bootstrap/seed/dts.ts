@@ -49,6 +49,7 @@ import {
   bindingTsType,
   builtinTypeNamesFor,
   declaredTypeNames,
+  nullaryLocalNames,
   recordAliasIndex,
   referencedCons,
   withoutAmbiguousAlias,
@@ -520,7 +521,7 @@ export const emitDtsFromTypedWith: <A>(
     const recs: Map<string, string> = withoutAmbiguousAlias(
       recordAliasIndex(aliases),
       aliases,
-      local,
+      nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[])),
     );
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);

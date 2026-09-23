@@ -935,6 +935,48 @@ export const declaredTypeNames: _Curry<
     .with({ _tag: "Some" }, () => declaredTypeNames(stmts, i + 1, acc))
     .exhaustive(),
 );
+/**
+ * Nullary record aliases this module declares. Same test as `nullaryDeclared`:
+ * a parameterised homonym (`LocTok<t>`) shares the bare name but is not an
+ * owner of it. Passing every declared name would print that bare name for a
+ * dep's nullary row, and `tsc` reports TS2314.
+ */
+export const nullaryLocalNames: _Curry<
+  [stmts: Stmt[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(3, (stmts: Stmt[], i: number, acc: Set<string>) =>
+  match(_Array_get(i, stmts))
+    .with({ _tag: "None" }, () => acc)
+    .with(
+      (
+        _v,
+      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
+        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }> & {
+          alias: Extract<
+            Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>["alias"],
+            { _tag: "Some" }
+          >;
+        };
+      } => {
+        const _g: any = _v;
+        return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.alias._tag === "Some";
+      },
+      ({
+        value: {
+          name,
+          params,
+          alias: { value: fields },
+        },
+      }) =>
+        nullaryLocalNames(
+          stmts,
+          i + 1,
+          and(eq(length(params), 0), length(fields) > 0) ? _Set_add(name, acc) : acc,
+        ),
+    )
+    .with({ _tag: "Some" }, () => nullaryLocalNames(stmts, i + 1, acc))
+    .exhaustive(),
+);
 export const referencedCons: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty } & A>,
@@ -1220,10 +1262,10 @@ const dropAmbiguous: _Curry<
 );
 /**
  * A shape whose bare name is also a parameterised alias keeps its key, so a
- * use can still pin its variables. The printed name stays when this module
- * declares the nullary alias. Otherwise another nullary alias of the same
- * shape is printed, and only when there is none does the name go blank and
- * the row print structurally (ADR 0107).
+ * use can still pin its variables. The printed name stays when `localNames`
+ * contains that nullary alias (`nullaryLocalNames`, not every declared type).
+ * Otherwise another nullary alias of the same shape is printed, and only when
+ * there is none does the name go blank and the row print structurally (ADR 0107).
  */
 export const withoutAmbiguousAlias: _Curry<
   [recs: Map<string, string>, aliases: Map<string, AliasInfo>, localNames: Set<string>],
@@ -1682,7 +1724,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
     const recs: Map<string, string> = withoutAmbiguousAlias(
       recordAliasIndex(aliases),
       aliases,
-      declaredTypeNames(stmts, 0, _Set_fromArray([] as string[])),
+      nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[])),
     );
     const scopedNames: Map<string, Map<number, string>> = scopedNamesFrom(
       stmts,
@@ -1943,7 +1985,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
     const recs: Map<string, string> = withoutAmbiguousAlias(
       recordAliasIndex(aliases),
       aliases,
-      declared,
+      nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[])),
     );
     const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
     const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {

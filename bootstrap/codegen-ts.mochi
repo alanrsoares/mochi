@@ -510,6 +510,22 @@ export let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | Some(_) => declaredTypeNames(stmts, i + 1, acc)
 }
 
+/// Nullary record aliases this module declares. Same test as `nullaryDeclared`:
+/// a parameterised homonym (`LocTok<t>`) shares the bare name but is not an
+/// owner of it. Passing every declared name would print that bare name for a
+/// dep's nullary row, and `tsc` reports TS2314.
+export let nullaryLocalNames = (stmts, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SType(name, params, _, Some(fields), _, _, _, _)) => nullaryLocalNames(
+      stmts,
+      i + 1,
+      Array.length(params) == 0 && Array.length(fields) > 0
+        ? Set.add(name, acc)
+        : acc
+    )
+  | Some(_) => nullaryLocalNames(stmts, i + 1, acc)
+}
+
 export let referencedCons = (stmts, env, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(Ast.SLet(name, _, _, _, _, _, _)) => referencedCons(
@@ -681,10 +697,10 @@ let dropAmbiguous = (keys, recs, aliases: Map<string, AliasInfo>, bad, localName
 }
 
 /// A shape whose bare name is also a parameterised alias keeps its key, so a
-/// use can still pin its variables. The printed name stays when this module
-/// declares the nullary alias. Otherwise another nullary alias of the same
-/// shape is printed, and only when there is none does the name go blank and
-/// the row print structurally (ADR 0107).
+/// use can still pin its variables. The printed name stays when `localNames`
+/// contains that nullary alias (`nullaryLocalNames`, not every declared type).
+/// Otherwise another nullary alias of the same shape is printed, and only when
+/// there is none does the name go blank and the row print structurally (ADR 0107).
 export let withoutAmbiguousAlias = (recs, aliases: Map<string, AliasInfo>, localNames) =>
   let aliasKeys = Array.sort(Map.keys(aliases)) in
     dropAmbiguous(
@@ -949,7 +965,7 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
   let recs = withoutAmbiguousAlias(
     recordAliasIndex(aliases),
     aliases,
-    declaredTypeNames(stmts, 0, Set.fromArray([]))
+    nullaryLocalNames(stmts, 0, Set.fromArray([]))
   ) in
   let scopedNames = scopedNamesFrom(stmts, env, recs, 0, #{}) in
   let typeOf = e => Map.get(spanKey(exprSpan(e)), typeAt) in
@@ -1115,7 +1131,7 @@ export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string
   let recs = withoutAmbiguousAlias(
     recordAliasIndex(aliases),
     aliases,
-    declared
+    nullaryLocalNames(stmts, 0, Set.fromArray([]))
   ) in
   let typeHeader = typeHeaderFrom(stmts, aliases, recs, 0) in
   let body = codegenWith(

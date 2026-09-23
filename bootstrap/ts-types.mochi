@@ -133,7 +133,15 @@ let shapeType = (t, vars) => switch widenLits(t) {
   | TyCon(name, args) => Array.length(args) == 0
       ? primitiveTs(name)
       : "${name}<${shapeJoined(args, vars)}>"
-  | TyOneOf(members) => Str.join(" | ", members |> map(m => shapeType(m, vars)))
+  | TyOneOf(members) => Str.join(
+      " | ",
+      members
+        |> map(m => switch m {
+          | TySingleton("string", value) => "\"${value}\""
+          | TySingleton(_, value) => value
+          | _ => shapeType(m, vars)
+        })
+    )
   | _ => tsOf(t, plainEnv(vars))
 }
 

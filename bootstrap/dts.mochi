@@ -13,6 +13,7 @@ import {
   bindingTsType,
   builtinTypeNamesFor,
   declaredTypeNames,
+  nullaryLocalNames,
   recordAliasIndex,
   referencedCons,
   withoutAmbiguousAlias,
@@ -301,7 +302,11 @@ export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, 
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
-  let recs = withoutAmbiguousAlias(recordAliasIndex(aliases), aliases, local) in
+  let recs = withoutAmbiguousAlias(
+    recordAliasIndex(aliases),
+    aliases,
+    nullaryLocalNames(stmts, 0, Set.fromArray([]))
+  ) in
   let quals = writtenQualsFrom(stmts, local, qualify, 0) in
   let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
   let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, 0) in
