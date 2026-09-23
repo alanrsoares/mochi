@@ -507,8 +507,7 @@ let splitLamParams = (params, positional, labeled) => switch params {
 let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs {
   | [] => Ok(([], st))
   | [lab, ...rest] => switch lab {
-      | Ast.LPSpanned(inner, _) => labFieldsFrom(
-          ctx,
+      | Ast.LPSpanned(inner, _) => ctx->labFieldsFrom(
           [inner, ...rest],
           env,
           vars,
@@ -526,8 +525,7 @@ let labFieldsFrom = (ctx: Ctx<a>, labs, env, vars, st: Types.St) => switch labs 
         } in
         let? (fieldT1, st2) = switch defaultValue {
           | None => Ok((fieldT, st1))
-          | Some(d) => let? (dt, s2) = ctxWithEnv(
-              ctx,
+          | Some(d) => let? (dt, s2) = ctx->ctxWithEnv(
               env
             )->inferExpr(d, st1) in
               switch annot {
@@ -644,7 +642,7 @@ let inferTernary = (ctx: Ctx<a>, cond, thenE, elseE, st: Types.St) =>
 let inferBindBody = (ctx: Ctx<a>, param, paramSpan, body, payloadT, mkBody, st: Types.St) =>
   let (paramT, bodyEnv, st1) = bindParam(param, ctx.env, st) in
   let? st2 = ctx->u(paramT, payloadT, st1, paramSpan) in
-  let? (bodyT, st3) = ctxWithEnv(ctx, bodyEnv)->inferExpr(body, st2) in
+  let? (bodyT, st3) = ctx->ctxWithEnv(bodyEnv)->inferExpr(body, st2) in
   let (resT, st4) = freshVar(st3) in
   let wantBody = mkBody(resT) in
   let? st5 = ctx->u(bodyT, wantBody, st4, exprSpan(body)) in Ok((wantBody, st5))
@@ -869,7 +867,7 @@ let inferArms = (ctx: Ctx<a>, scrutT, resultT, arms, st: Types.St) => switch arm
       st
     ) in
     let? st2 = ctx->u(scrutT, patT, st1, patSpan(arm.pattern)) in
-    let armCtx = ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env)) in
+    let armCtx = ctx->ctxWithEnv(mergeEnvBindings(bindings, ctx.env)) in
     let? st3 = switch arm.guard {
       | None => Ok(st2)
       | Some(g) => let? (guardT, stg) = armCtx->inferExpr(g, st2) in
@@ -954,8 +952,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
       | [] => paramTypes
       | _ => Array.append(tRecord(rowOfLabFields(labFields)), paramTypes)
     } in
-    let? (bodyT, st4) = ctxWithEnv(
-      ctx,
+    let? (bodyT, st4) = ctx->ctxWithEnv(
       envWithLabFields(labFields, bodyEnv)
     )->inferExpr(body, st3) in
       Ok((arrowChain(allTypes, bodyT), st4))
@@ -991,8 +988,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         let widen = switch annot { | Some(_) => false | None => true } in
         let sc = generalize(ctx.env, pinned, st2, widen) in
         let vsp = exprSpan(value) in
-        let $ctx = ctxWithLets(
-          ctx,
+        let $ctx = ctx->ctxWithLets(
           Map.set(name, sc, ctx.env),
           Map.set(name, vsp, ctx.letOwner)
         ) in
@@ -1083,7 +1079,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
       ctx.letOwner,
       st
     ) in
-      ctxWithLoop(ctx, bodyEnv, frame, bodyOwner)->inferExpr(body, st1)
+      ctx->ctxWithLoop(bodyEnv, frame, bodyOwner)->inferExpr(body, st1)
   | Ast.ERecur(args, sp) => ctx->inferRecur(args, sp, st)
   | Ast.EInterp(parts, _) => let? st1 = ctx->inferInterpParts(parts, st) in
       Ok((tString, st1))
@@ -1830,7 +1826,7 @@ let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St) => switch sccs {
   | [] => Ok((ctx, st))
   | [comp, ...restSccs] => let group = groupOfFrom(comp, lets) in
     let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
-    let preCtx = ctxWithEnv(ctx, preEnv) in
+    let preCtx = ctx->ctxWithEnv(preEnv) in
     let? (bodyTypes, st2) = preCtx->inferGroupFrom(group, st1) in
     let finalEnv = generalizeGroupFrom(
       group,
@@ -1839,8 +1835,7 @@ let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St) => switch sccs {
       st2
     ) in
     let (finalOwner, st3) = noteGroupLets(group, ctx.letOwner, st2) in
-      ctxWithLets(
-        ctx,
+      ctx->ctxWithLets(
         finalEnv,
         finalOwner
       )->processGroupsFrom(restSccs, lets, st3)

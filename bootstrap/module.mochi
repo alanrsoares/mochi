@@ -597,13 +597,12 @@ let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
   | [] => { ctx, errors }
   | [m, ...rest] => switch ctx->compileOne(m, true, Array.length(rest) == 0, opts) {
       | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
-          compileAllRecovering(
-            ctx,
+          ctx->compileAllRecovering(
             rest,
             Array.concat(errors, mergeRecovered(e, checks)),
             opts
           )
-      | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors, opts)
+      | Ok(ctx1) => ctx1->compileAllRecovering(rest, errors, opts)
     }
 }
 
@@ -625,7 +624,7 @@ export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
 /// recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
 /// Advance a graph recovery state by a dependency-ordered suffix.
 export let recoverGraphFromWith = (state, graph, opts: Opts) =>
-  compileAllRecovering(state.ctx, graph, state.errors, opts)
+  state.ctx->compileAllRecovering(graph, state.errors, opts)
 
 export let recoverGraphFrom = (state, graph) =>
   state->recoverGraphFromWith(graph, defaultOpts)
