@@ -622,33 +622,80 @@ let parameterizedBares = (keys, aliases: Map<string, AliasInfo>, i, acc) => swit
     }
 }
 
-let dropAmbiguous = (keys, recs, bad, localNames, i) => switch Array.get(i, keys) {
+/// Last nullary alias of `shape` whose bare name is safe to print, or `""`
+/// when every owner is ambiguous. Keys are sorted, so a later qualified copy
+/// (`Schemes.AliasInfo`) cannot bury an earlier unique name (`QualAliasInfo`).
+let printableName = (keys, shape, aliases: Map<string, AliasInfo>, bad, acc, i) => switch Array.get(i, keys) {
+  | None => acc
+  | Some(key) => let bare = bareName(key) in
+      switch Map.get(key, aliases) {
+        | None => printableName(keys, shape, aliases, bad, acc, i + 1)
+        | Some(info) => printableName(
+            keys,
+            shape,
+            aliases,
+            bad,
+            switch info.expr {
+              | Some(_) => acc
+              | None => Set.has(
+                  bare,
+                  bad
+                ) || Array.length(
+                  info.params
+                ) != 0 || Array.length(info.fields) == 0
+                  ? acc
+                  : switch aliasShapeKey(info.fields, aliases) {
+                    | Some(k) => k == shape ? bare : acc
+                    | None => acc
+                  }
+            },
+            i + 1
+          )
+      }
+}
+
+let dropAmbiguous = (keys, recs, aliases: Map<string, AliasInfo>, bad, localNames, aliasKeys, i) => switch Array.get(i, keys) {
   | None => recs
   | Some(k) => switch Map.get(k, recs) {
       | Some(name) => dropAmbiguous(
           keys,
           Set.has(name, bad) && !Set.has(name, localNames)
-            ? Map.set(k, "", recs)
+            ? Map.set(k, printableName(aliasKeys, k, aliases, bad, "", 0), recs)
             : recs,
+          aliases,
           bad,
           localNames,
+          aliasKeys,
           i + 1
         )
-      | None => dropAmbiguous(keys, recs, bad, localNames, i + 1)
+      | None => dropAmbiguous(
+          keys,
+          recs,
+          aliases,
+          bad,
+          localNames,
+          aliasKeys,
+          i + 1
+        )
     }
 }
 
 /// A shape whose bare name is also a parameterised alias keeps its key, so a
-/// use can still pin its variables, but the printed name is blank unless this
-/// module declares the nullary alias. An empty name prints as the row.
+/// use can still pin its variables. The printed name stays when this module
+/// declares the nullary alias. Otherwise another nullary alias of the same
+/// shape is printed, and only when there is none does the name go blank and
+/// the row print structurally (ADR 0107).
 export let withoutAmbiguousAlias = (recs, aliases: Map<string, AliasInfo>, localNames) =>
-  dropAmbiguous(
-    Map.keys(recs),
-    recs,
-    parameterizedBares(Map.keys(aliases), aliases, 0, Set.fromArray([])),
-    localNames,
-    0
-  )
+  let aliasKeys = Array.sort(Map.keys(aliases)) in
+    dropAmbiguous(
+      Map.keys(recs),
+      recs,
+      aliases,
+      parameterizedBares(aliasKeys, aliases, 0, Set.fromArray([])),
+      localNames,
+      aliasKeys,
+      0
+    )
 
 /// The index an alias's OWN body renders against — itself removed, so it cannot
 /// come out as `export type Span = Span;`.

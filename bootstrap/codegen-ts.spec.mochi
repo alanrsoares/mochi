@@ -569,6 +569,125 @@ test("a use of a record alias renders as the alias name", () =>
       |> Str.contains(": Span")
   ))
 
+test("a unique alias keeps a shape a duplicate name would blank", () =>
+  let fld = {
+    params: [],
+    fields: [
+      { name: "name", fieldType: Ast.TyName("string", sp), optional: false },
+      {
+        name: "fieldType",
+        fieldType: Ast.TyName("TypeExpr", sp),
+        optional: false
+      },
+      { name: "optional", fieldType: Ast.TyName("bool", sp), optional: false }
+    ],
+    expr: None
+  } in
+  let infoOf = elem =>
+    {
+      params: [],
+      fields: [
+        {
+          name: "params",
+          fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
+          optional: false
+        },
+        {
+          name: "fields",
+          fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
+          optional: false
+        },
+        {
+          name: "expr",
+          fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
+          optional: false
+        }
+      ],
+      expr: None
+    } in
+  let aliases = #{
+    "QualAliasField": fld,
+    "AliasField": fld,
+    "QualAliasInfo": infoOf("QualAliasField"),
+    "AliasInfo": infoOf("AliasField"),
+    "Schemes.AliasInfo": infoOf("AliasField"),
+    "dup.AliasInfo": { params: ["_"], fields: [], expr: None }
+  } in
+  let shape = "expr: Option<TypeExpr>; fields: { fieldType: TypeExpr; name: string; optional: boolean }[]; params: string[]" in
+    assertEq(
+      "QualAliasInfo",
+      Option.unwrapOr(
+        "",
+        Map.get(
+          shape,
+          withoutAmbiguousAlias(
+            recordAliasIndex(aliases),
+            aliases,
+            Set.fromArray([])
+          )
+        )
+      )
+    ))
+
+test("the module that declares the duplicate alias still prints it", () =>
+  let fld = {
+    params: [],
+    fields: [
+      { name: "name", fieldType: Ast.TyName("string", sp), optional: false },
+      {
+        name: "fieldType",
+        fieldType: Ast.TyName("TypeExpr", sp),
+        optional: false
+      },
+      { name: "optional", fieldType: Ast.TyName("bool", sp), optional: false }
+    ],
+    expr: None
+  } in
+  let infoOf = elem =>
+    {
+      params: [],
+      fields: [
+        {
+          name: "params",
+          fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
+          optional: false
+        },
+        {
+          name: "fields",
+          fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
+          optional: false
+        },
+        {
+          name: "expr",
+          fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
+          optional: false
+        }
+      ],
+      expr: None
+    } in
+  let aliases = #{
+    "QualAliasInfo": infoOf("QualAliasField"),
+    "QualAliasField": fld,
+    "AliasField": fld,
+    "Schemes.AliasInfo": infoOf("AliasField"),
+    "dup.AliasInfo": { params: ["_"], fields: [], expr: None }
+  } in
+  let shape = "expr: Option<TypeExpr>; fields: { fieldType: TypeExpr; name: string; optional: boolean }[]; params: string[]" in
+    assertEq(
+      "AliasInfo",
+      Option.unwrapOr(
+        "",
+        Map.get(
+          shape,
+          withoutAmbiguousAlias(
+            recordAliasIndex(aliases),
+            aliases,
+            Set.fromArray(["AliasInfo"])
+          )
+        )
+      )
+    ))
+
 test("a generalized record use folds back to the alias", () =>
   let out = tsOf(
     "type LocTok = { tok: string, start: number, end: number, doc: Option<string> }\nlet at = (toks, i) => Array.get(i, toks) |> Option.unwrapOr({ tok: \"eof\", start: 0, end: 0, doc: None })"

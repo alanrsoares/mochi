@@ -199,46 +199,46 @@ const jxExpectLabel: _Curry<
  * only while the tokens are ADJACENT, or `<div id - x="1">` would silently
  * become `id-x`.
  */
-const jxAttrNameFrom: _Curry<
-  [toks: LocTok[], pos: number, acc: { span: SpanAt; name: string }],
-  [{ span: SpanAt; name: string }, number]
-> = _curry(3, (toks: LocTok[], pos: number, acc: { span: SpanAt; name: string }) => {
-  const minusTok = jxTokAt(toks, pos);
-  const partTok = jxTokAt(toks, pos + 1);
-  return and(
-    and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
-    eq(partTok.start, minusTok.end),
-  )
-    ? match(jxExpectLabel(toks, pos + 1))
-        .with(
-          (
-            _v,
-          ): _v is Extract<
-            Result<[Name, number], { message: string; start: number; end: number }>,
-            { _tag: "Ok" }
-          > => {
-            const _g: any = _v;
-            return _g._tag === "Ok";
-          },
-          ({ value: [part, p1] }) =>
-            jxAttrNameFrom(toks, p1, {
-              name: `${acc.name}-${part.name}`,
-              span: { start: acc.span.start, end: part.span.end },
-            }),
-        )
-        .with({ _tag: "Err" }, () => _tuple(acc, pos))
-        .exhaustive()
-    : _tuple(acc, pos);
-});
+const jxAttrNameFrom: _Curry<[toks: LocTok[], pos: number, acc: Name], [Name, number]> = _curry(
+  3,
+  (toks: LocTok[], pos: number, acc: Name) => {
+    const minusTok = jxTokAt(toks, pos);
+    const partTok = jxTokAt(toks, pos + 1);
+    return and(
+      and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
+      eq(partTok.start, minusTok.end),
+    )
+      ? match(jxExpectLabel(toks, pos + 1))
+          .with(
+            (
+              _v,
+            ): _v is Extract<
+              Result<[Name, number], { message: string; start: number; end: number }>,
+              { _tag: "Ok" }
+            > => {
+              const _g: any = _v;
+              return _g._tag === "Ok";
+            },
+            ({ value: [part, p1] }) =>
+              jxAttrNameFrom(toks, p1, {
+                name: `${acc.name}-${part.name}`,
+                span: { start: acc.span.start, end: part.span.end },
+              }),
+          )
+          .with({ _tag: "Err" }, () => _tuple(acc, pos))
+          .exhaustive()
+      : _tuple(acc, pos);
+  },
+);
 /**
  * `jxExpectLabel` plus any adjacent `-part` continuations.
  */
 const jxExpectAttrName: _Curry<
   [toks: LocTok[], pos: number],
-  Result<[{ span: SpanAt; name: string }, number], { message: string; start: number; end: number }>
+  Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) =>
   _Result_map(
-    ([head, p1]: [{ span: SpanAt; name: string }, number]) => jxAttrNameFrom(toks, p1, head),
+    ([head, p1]: [Name, number]) => jxAttrNameFrom(toks, p1, head),
     jxExpectLabel(toks, pos),
   ),
 );

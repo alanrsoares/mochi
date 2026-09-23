@@ -156,6 +156,9 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
 /**
  * Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
  * `{ … } & R` is not the alias, only its prefix, so it has no name to take.
+ * Nested records are sorted too: `unify` reorders fields at every depth, and
+ * an unsorted nested row would miss the alias even when the nested row itself
+ * still folds (ADR 0107).
  */
 const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<string[]>> = _curry(
   2,
@@ -166,14 +169,74 @@ const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<stri
       .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
         _Option_map(
           (fs: string[]) =>
-            _Array_prepend(
-              `${label}${optional ? "?" : ""}: ${tsOf(fieldType, plainEnv(vars))}`,
-              fs,
-            ),
+            _Array_prepend(`${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`, fs),
           shapeFieldsFrom(rest, vars),
         ),
       )
       .exhaustive(),
+);
+const shapeJoined: _Curry<[ts: Ty[], vars: Map<number, string>], string> = _curry(
+  2,
+  (ts: Ty[], vars: Map<number, string>) =>
+    _Str_join(
+      ", ",
+      map((t: Ty) => shapeType(t, vars), ts),
+    ),
+);
+/**
+ * Type text for a shape key. Same spelling as `tsOf` with an empty index,
+ * except a closed record's fields are sorted at every depth.
+ */
+const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(
+  2,
+  (t: Ty, vars: Map<number, string>) =>
+    match(widenLits(t))
+      .with({ _tag: "TyRecord" }, ({ row }) =>
+        match(shapeFieldsFrom(row, vars))
+          .with({ _tag: "None" }, () => tsOf(t, plainEnv(vars)))
+          .with({ _tag: "Some" }, ({ value: fs }) =>
+            eq(length(fs), 0) ? "{}" : `{ ${_Str_join("; ", _Array_sort(fs))} }`,
+          )
+          .exhaustive(),
+      )
+      .with(
+        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
+          const _g: any = _v;
+          return _g._tag === "TyCon" && _g.name === "Array" && _g.args.length === 1;
+        },
+        ({ args: [elem] }) =>
+          ((inner: string) =>
+            match(widenLits(elem))
+              .with({ _tag: "TyFn" }, () => `(${inner})[]`)
+              .with({ _tag: "TyOneOf" }, () => `(${inner})[]`)
+              .otherwise(() => `${inner}[]`))(shapeType(elem, vars)),
+      )
+      .with(
+        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
+          const _g: any = _v;
+          return _g._tag === "TyCon" && _g.name === "List" && _g.args.length === 1;
+        },
+        ({ args: [elem] }) => `Iterable<${shapeType(elem, vars)}>`,
+      )
+      .with(
+        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
+          const _g: any = _v;
+          return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
+        },
+        ({ args: [value, error] }) =>
+          `() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>`,
+      )
+      .with({ _tag: "TyCon", name: "tuple" }, ({ args: elems }) => `[${shapeJoined(elems, vars)}]`)
+      .with({ _tag: "TyCon" }, ({ name, args }) =>
+        eq(length(args), 0) ? primitiveTs(name) : `${name}<${shapeJoined(args, vars)}>`,
+      )
+      .with({ _tag: "TyOneOf" }, ({ members }) =>
+        _Str_join(
+          " | ",
+          map((m: Ty) => shapeType(m, vars), members),
+        ),
+      )
+      .otherwise(() => tsOf(t, plainEnv(vars))),
 );
 /**
  * The index key for a row. Sorted, because a row carries fields in the order

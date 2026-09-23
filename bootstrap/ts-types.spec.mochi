@@ -108,6 +108,36 @@ test("rowShapeKey sorts fields and declines an open row", () => {
   assertEq(None, rowShapeKey(rExtend("start", tPrim("number"), rVar(7)), #{}))
 })
 
+test("rowShapeKey sorts a nested record", () =>
+  let fwd = tCon(
+    "Array",
+    [
+      tRecord(
+        rExtend(
+          "name",
+          tPrim("string"),
+          rExtend("fieldType", tPrim("string"), RowEmpty)
+        )
+      )
+    ]
+  ) in
+  let rev = tCon(
+    "Array",
+    [
+      tRecord(
+        rExtend(
+          "fieldType",
+          tPrim("string"),
+          rExtend("name", tPrim("string"), RowEmpty)
+        )
+      )
+    ]
+  ) in
+    assertEq(
+      rowShapeKey(rExtend("fields", fwd, RowEmpty), #{}),
+      rowShapeKey(rExtend("fields", rev, RowEmpty), #{})
+    ))
+
 // ---- alias pins (ADR 0106) -------------------------------------------------
 
 let locTok = rExtend(

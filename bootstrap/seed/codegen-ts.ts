@@ -12,7 +12,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
-import type { LocTok, QualAliasField } from "./infer";
+import type { LocTok, QualAliasField, QualAliasInfo } from "./infer";
 import type { CtorFactoryTs, CtorFieldLike, CtorLike, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 
@@ -1114,15 +1114,86 @@ const parameterizedBares: _Curry<
     )
     .exhaustive(),
 );
-const dropAmbiguous: <A>(
-  keys: A[],
-  recs: Map<A, string>,
-  bad: Set<string>,
-  localNames: Set<string>,
-  i: number,
-) => Map<A, string> = _curry(
-  5,
-  <A>(keys: A[], recs: Map<A, string>, bad: Set<string>, localNames: Set<string>, i: number) =>
+/**
+ * Last nullary alias of `shape` whose bare name is safe to print, or `""`
+ * when every owner is ambiguous. Keys are sorted, so a later qualified copy
+ * (`Schemes.AliasInfo`) cannot bury an earlier unique name (`QualAliasInfo`).
+ */
+const printableName: _Curry<
+  [
+    keys: string[],
+    shape: string,
+    aliases: Map<string, AliasInfo>,
+    bad: Set<string>,
+    acc: string,
+    i: number,
+  ],
+  string
+> = _curry(
+  6,
+  (
+    keys: string[],
+    shape: string,
+    aliases: Map<string, AliasInfo>,
+    bad: Set<string>,
+    acc: string,
+    i: number,
+  ) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => acc)
+      .with({ _tag: "Some" }, ({ value: key }) =>
+        ((bare: string) =>
+          match(_Map_get(key, aliases))
+            .with({ _tag: "None" }, () => printableName(keys, shape, aliases, bad, acc, i + 1))
+            .with({ _tag: "Some" }, ({ value: info }) =>
+              printableName(
+                keys,
+                shape,
+                aliases,
+                bad,
+                match(info.expr)
+                  .with({ _tag: "Some" }, () => acc)
+                  .with({ _tag: "None" }, () =>
+                    or(
+                      or(_Set_has(bare, bad), not(eq(length(info.params), 0))),
+                      eq(length(info.fields), 0),
+                    )
+                      ? acc
+                      : match(aliasShapeKey(info.fields, aliases))
+                          .with({ _tag: "Some" }, ({ value: k }) => (eq(k, shape) ? bare : acc))
+                          .with({ _tag: "None" }, () => acc)
+                          .exhaustive(),
+                  )
+                  .exhaustive(),
+                i + 1,
+              ),
+            )
+            .exhaustive())(bareName(key)),
+      )
+      .exhaustive(),
+);
+const dropAmbiguous: _Curry<
+  [
+    keys: string[],
+    recs: Map<string, string>,
+    aliases: Map<string, AliasInfo>,
+    bad: Set<string>,
+    localNames: Set<string>,
+    aliasKeys: string[],
+    i: number,
+  ],
+  Map<string, string>
+> = _curry(
+  7,
+  (
+    keys: string[],
+    recs: Map<string, string>,
+    aliases: Map<string, AliasInfo>,
+    bad: Set<string>,
+    localNames: Set<string>,
+    aliasKeys: string[],
+    i: number,
+  ) =>
     match(_Array_get(i, keys))
       .with({ _tag: "None" }, () => recs)
       .with({ _tag: "Some" }, ({ value: k }) =>
@@ -1131,37 +1202,46 @@ const dropAmbiguous: <A>(
             dropAmbiguous(
               keys,
               and(_Set_has(name, bad), not(_Set_has(name, localNames)))
-                ? _Map_set(k, "", recs)
+                ? _Map_set(k, printableName(aliasKeys, k, aliases, bad, "", 0), recs)
                 : recs,
+              aliases,
               bad,
               localNames,
+              aliasKeys,
               i + 1,
             ),
           )
-          .with({ _tag: "None" }, () => dropAmbiguous(keys, recs, bad, localNames, i + 1))
+          .with({ _tag: "None" }, () =>
+            dropAmbiguous(keys, recs, aliases, bad, localNames, aliasKeys, i + 1),
+          )
           .exhaustive(),
       )
       .exhaustive(),
 );
 /**
  * A shape whose bare name is also a parameterised alias keeps its key, so a
- * use can still pin its variables, but the printed name is blank unless this
- * module declares the nullary alias. An empty name prints as the row.
+ * use can still pin its variables. The printed name stays when this module
+ * declares the nullary alias. Otherwise another nullary alias of the same
+ * shape is printed, and only when there is none does the name go blank and
+ * the row print structurally (ADR 0107).
  */
-export const withoutAmbiguousAlias: <A>(
-  recs: Map<A, string>,
-  aliases: Map<string, AliasInfo>,
-  localNames: Set<string>,
-) => Map<A, string> = _curry(
+export const withoutAmbiguousAlias: _Curry<
+  [recs: Map<string, string>, aliases: Map<string, AliasInfo>, localNames: Set<string>],
+  Map<string, string>
+> = _curry(
   3,
-  <A>(recs: Map<A, string>, aliases: Map<string, AliasInfo>, localNames: Set<string>) =>
-    dropAmbiguous(
+  (recs: Map<string, string>, aliases: Map<string, AliasInfo>, localNames: Set<string>) => {
+    const aliasKeys: string[] = _Array_sort(_Map_keys(aliases));
+    return dropAmbiguous(
       _Map_keys(recs),
       recs,
-      parameterizedBares(_Map_keys(aliases), aliases, 0, _Set_fromArray([] as string[])),
+      aliases,
+      parameterizedBares(aliasKeys, aliases, 0, _Set_fromArray([] as string[])),
       localNames,
+      aliasKeys,
       0,
-    ),
+    );
+  },
 );
 /**
  * The index an alias's OWN body renders against — itself removed, so it cannot
