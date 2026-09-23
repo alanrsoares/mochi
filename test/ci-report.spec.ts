@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { BOOTSTRAP_CACHE_GLOBS, bootstrapCacheFiles } from "@mochi/test-support/bootstrap";
-import { formatCiFailure, formatCiSummary, formatCiTaskLine } from "../scripts/lib/ci-report";
+import {
+  formatCiFailure,
+  formatCiSummary,
+  formatCiTaskLine,
+  pushTail,
+} from "../scripts/lib/ci-report";
 import { REPO_ROOT } from "../scripts/lib/repo";
 import { cachedTsEmit, RUNTIME_SENTINEL } from "../scripts/lib/ts-emit-cache";
 
@@ -50,6 +55,51 @@ test("ci failure report caps the tail and names a timeout", () => {
   expect(report).toContain("::error title=seed%3Acheck::timed out after 900.00s\n");
 });
 
+test("ci failure tail drops group lines before the cap", () => {
+  const report = formatCiFailure({
+    name: "test:full",
+    outcome: "failed",
+    ms: 10,
+    exit: 1,
+    timeoutMs: 5000,
+    tail: 1,
+    lines: ["::error::root cause", "::endgroup::"],
+  });
+
+  expect(report).toContain("::error::root cause\n");
+  expect(report).not.toContain("earlier lines omitted");
+});
+
+test("ci failure report escapes workflow commands that are not annotations", () => {
+  const report = formatCiFailure({
+    name: "lint",
+    outcome: "failed",
+    ms: 10,
+    exit: 1,
+    timeoutMs: 5000,
+    tail: 40,
+    lines: ["::stop-commands::token", "::warning title=w::careful", "::notice::ok"],
+  });
+
+  expect(report).toContain("\\::stop-commands::token\n");
+  expect(report).toContain("::warning title=w::careful\n");
+  expect(report).toContain("::notice::ok\n");
+});
+
+test("pushTail bounds the buffer and ignores group lines", () => {
+  const kept = ["::error::root cause", "::endgroup::"].reduce(
+    (buf, line) => pushTail(buf, line, 1),
+    { lines: [] as readonly string[], dropped: 0 },
+  );
+  expect(kept).toEqual({ lines: ["::error::root cause"], dropped: 0 });
+
+  const bounded = ["::endgroup::", "first", "second"].reduce(
+    (buf, line) => pushTail(buf, line, 1),
+    { lines: [] as readonly string[], dropped: 0 },
+  );
+  expect(bounded).toEqual({ lines: ["second"], dropped: 1 });
+});
+
 test("ci summary annotates failures and stays plain when green", () => {
   expect(
     formatCiSummary({
@@ -91,7 +141,7 @@ test("ci workflow cache key lists the bootstrap graph inputs", () => {
 });
 
 test("ts emit cache compiles once and rewrites the runtime import", () => {
-  const root = mkdtempSync(join(REPO_ROOT, ".cache", "ts-emit-test-"));
+  const root = mkdtempSync(join(tmpdir(), "mochi-ts-emit-test-"));
   const modPath = join(root, "mod.mochi");
   let calls = 0;
   const build = (runtime: string) => {
@@ -114,6 +164,31 @@ test("ts emit cache compiles once and rewrites the runtime import", () => {
     expect(second.value[0]?.js).toBe(`import { x } from "${join(root, "runtime.ts")}";\n`);
     expect(resolve(first.value[0]?.path ?? "")).toBe(resolve(modPath));
     expect(first.value[0]?.js).not.toContain(RUNTIME_SENTINEL);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("ts emit cache steals a claim whose holder is dead", () => {
+  const root = mkdtempSync(join(tmpdir(), "mochi-ts-emit-dead-"));
+  const cacheRoot = join(root, "cache");
+  mkdirSync(cacheRoot);
+  writeFileSync(join(cacheRoot, "abc.building"), "2147483646");
+  let calls = 0;
+  const build = () => {
+    calls += 1;
+    return {
+      _tag: "Ok" as const,
+      value: [{ path: join(root, "mod.mochi"), js: "export const x = 1;\n" }],
+    };
+  };
+
+  const started = Date.now();
+  try {
+    const result = cachedTsEmit("runtime", { root: cacheRoot, key: "abc", build });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(result._tag).toBe("Ok");
+    expect(calls).toBe(1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

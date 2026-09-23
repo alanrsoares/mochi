@@ -30,8 +30,10 @@ import {
   meter,
   type Outcome,
   type Phase,
+  pushTail,
   REPO_ROOT,
   SPINNER,
+  type TailBuf,
   taskColor,
 } from "./lib";
 
@@ -268,10 +270,10 @@ type Sink = {
 };
 
 const machineSink = (spec: TaskSpec, opts: Options): Sink => {
-  const buffered: string[] = [];
+  let buf: TailBuf = { lines: [], dropped: 0 };
   return {
     line: (text) => {
-      if (text.trim() !== "") buffered.push(text);
+      if (text.trim() !== "") buf = pushTail(buf, text, opts.tail);
     },
     flush: (outcome, ms, exit) => {
       if (outcome !== "failed" && outcome !== "timeout") return;
@@ -282,8 +284,9 @@ const machineSink = (spec: TaskSpec, opts: Options): Sink => {
           ms,
           exit,
           timeoutMs: opts.timeout,
-          lines: buffered,
-          tail: opts.tail,
+          lines: buf.lines,
+          tail: 0,
+          dropped: buf.dropped,
         }),
       );
     },

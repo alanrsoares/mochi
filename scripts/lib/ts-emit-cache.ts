@@ -87,6 +87,39 @@ const writeEmit = (dir: string, modules: readonly BootstrapModuleOutput[]): void
   writeFileSync(join(dir, "outputs.json"), `${JSON.stringify(stored)}\n`);
 };
 
+const errnoCode = (err: unknown): string | undefined => {
+  if (typeof err !== "object" || err === null || !("code" in err)) return undefined;
+  const code = err.code;
+  return typeof code === "string" ? code : undefined;
+};
+
+/** `kill(pid, 0)` — alive, or alive and not signalable. A dead pid is ESRCH. */
+const holderAlive = (claim: string): boolean => {
+  let pid: number;
+  try {
+    pid = Number(readFileSync(claim, "utf8"));
+  } catch {
+    return false;
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: unknown) {
+    return errnoCode(err) === "EPERM";
+  }
+};
+
+const stealClaim = (claim: string): boolean => {
+  rmSync(claim, { force: true });
+  try {
+    writeFileSync(claim, String(process.pid), { flag: "wx" });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const tryClaim = (claim: string): boolean => {
   try {
     writeFileSync(claim, String(process.pid), { flag: "wx" });
@@ -94,13 +127,9 @@ const tryClaim = (claim: string): boolean => {
   } catch {
     try {
       const age = Date.now() - statSync(claim).mtimeMs;
-      if (age > CLAIM_STALE_MS) {
-        rmSync(claim, { force: true });
-        writeFileSync(claim, String(process.pid), { flag: "wx" });
-        return true;
-      }
+      if (age > CLAIM_STALE_MS || !holderAlive(claim)) return stealClaim(claim);
     } catch {
-      // Peer still holds a fresh claim, or we lost the stale-retry race.
+      // Peer removed the claim between our failed create and this stat.
     }
     return false;
   }
@@ -118,7 +147,7 @@ const waitUntilReady = (dir: string, claim: string): boolean => {
   const deadline = Date.now() + WAIT_MS;
   while (Date.now() < deadline) {
     if (ready(dir)) return true;
-    if (!existsSync(claim)) return ready(dir);
+    if (!existsSync(claim) || !holderAlive(claim)) return ready(dir);
     Bun.sleepSync(200);
   }
   return ready(dir);

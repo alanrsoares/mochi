@@ -9,6 +9,13 @@ export type CiFailureReport = {
   readonly timeoutMs: number;
   readonly lines: readonly string[];
   readonly tail: number;
+  /** Lines already dropped by a bounded sink, before `lines` was handed over. */
+  readonly dropped?: number;
+};
+
+export type TailBuf = {
+  readonly lines: readonly string[];
+  readonly dropped: number;
 };
 
 export type CiSummary = {
@@ -35,6 +42,31 @@ const ghMessage = (value: string): string =>
 const isChildGroup = (line: string): boolean =>
   line.startsWith("::group::") || line.startsWith("::endgroup::");
 
+/** Annotations we mean to replay. Every other `::` command is task output, not a workflow command. */
+const isAnnotation = (line: string): boolean =>
+  line.startsWith("::error::") ||
+  line.startsWith("::error ") ||
+  line.startsWith("::warning::") ||
+  line.startsWith("::warning ") ||
+  line.startsWith("::notice::") ||
+  line.startsWith("::notice ");
+
+const neutralize = (line: string): string =>
+  line.startsWith("::") && !isAnnotation(line) ? `\\${line}` : line;
+
+/**
+ * Keep a bounded tail while a task is still running. Group commands are
+ * dropped first, so a trailing `::endgroup::` cannot push the real diagnostic
+ * out of a short tail. `tail === 0` keeps every non-group line.
+ */
+export const pushTail = (buf: TailBuf, line: string, tail: number): TailBuf => {
+  if (isChildGroup(line)) return buf;
+  if (tail === 0 || buf.lines.length < tail) {
+    return { lines: [...buf.lines, line], dropped: buf.dropped };
+  }
+  return { lines: [...buf.lines.slice(1), line], dropped: buf.dropped + 1 };
+};
+
 /**
  * One settled task, off a TTY. `failed` / `timeout` lines are the agent parse
  * target; `::error::` is the GitHub annotation and must stay at column 0.
@@ -59,9 +91,9 @@ export const formatCiTaskLine = (
 };
 
 export const formatCiFailure = (input: CiFailureReport): string => {
-  const capped = input.tail === 0 ? input.lines : input.lines.slice(-input.tail);
-  const dropped = input.lines.length - capped.length;
-  const kept = capped.filter((line) => !isChildGroup(line));
+  const visible = input.lines.filter((line) => !isChildGroup(line)).map(neutralize);
+  const capped = input.tail === 0 ? visible : visible.slice(-input.tail);
+  const dropped = (input.dropped ?? 0) + (visible.length - capped.length);
   const detail =
     input.outcome === "timeout"
       ? `timeout ${input.name} after=${duration(input.timeoutMs)}`
@@ -71,7 +103,7 @@ export const formatCiFailure = (input: CiFailureReport): string => {
       ? `::error title=${ghProp(input.name)}::timed out after ${duration(input.timeoutMs)}`
       : `::error title=${ghProp(input.name)}::failed in ${duration(input.ms)} (exit ${input.exit})`;
   const omit = dropped > 0 ? `${dropped} earlier lines omitted\n` : "";
-  const body = kept.length > 0 ? `${kept.join("\n")}\n` : "";
+  const body = capped.length > 0 ? `${capped.join("\n")}\n` : "";
   return `${detail}\n::group::${input.name}\n${omit}${body}::endgroup::\n${annotation}\n`;
 };
 
