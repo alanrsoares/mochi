@@ -1,12 +1,14 @@
 /**
  * Runs the repo's quality gates concurrently — the same task set the sequential
- * `&&` chains in `check` / `check:full` held, minus the waiting.
+ * `&&` chains in `check` / `check:north-star` held, minus the waiting.
+ * `check:full` is those two in sequence, not one merged set: each phase runs a
+ * core-count-wide test suite, and two at once starve short property tests.
  *
  * The set is DERIVED, never duplicated: root gates are `bun run <script>` against
  * this package.json (so editing `lint`/`typecheck`/`test` there moves the gate),
  * and every workspace package declaring the target script contributes one task.
  *
- * Usage: bun scripts/tui-runner.ts [check | check:full | <script>]
+ * Usage: bun scripts/tui-runner.ts [check | check:north-star | <script>]
  *          [--filter <glob>] [--bail] [--timeout <ms>]
  *          [--jobs <n>] [--compact] [--tail <n>]
  *
@@ -66,9 +68,8 @@ const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 /**
  * How many tasks may be in flight. On a dev box this exceeds the task count, so
  * the gate still starts everything at once; on a 4-vCPU CI runner it stops
- * `check:full` from putting eleven tasks — several of them CPU-bound compilers —
- * on four cores, where the one task that cannot self-parallelise (`test:full` is
- * `--parallel=1` by design) starves and eventually trips `--timeout`.
+ * several CPU-bound compilers sharing four cores, where a graph-sized test
+ * starves and eventually trips `--timeout`.
  */
 const DEFAULT_JOBS = availableParallelism();
 
@@ -76,7 +77,7 @@ const DEFAULT_JOBS = availableParallelism();
 const DEFAULT_TAIL_LINES = 40;
 
 const USAGE =
-  "usage: bun scripts/tui-runner.ts [check | check:full | <script>] " +
+  "usage: bun scripts/tui-runner.ts [check | check:north-star | <script>] " +
   "[--filter <glob>] [--bail] [--timeout <ms>] [--jobs <n>] [--compact] [--tail <n>]";
 
 /** `never` return, so the `Err` branch below needs no value of its own. */
@@ -472,32 +473,35 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
 // ── task discovery ───────────────────────────────────────────────────────────
 
 /** Root gates, named by script so this file never restates what they run. */
-const ROOT_GATES = ["lint", "typecheck", "fmt:check"] as const;
+const ROOT_GATES = ["lint", "typecheck", "fmt:check", "test"] as const;
+
+/**
+ * The graph-sized gates `check:full` adds over `check`, grouped because they
+ * share one cached typed-graph emit. CI runs them as their own job;
+ * `test:mochi:coverage` gets a third runner so its workers do not starve the
+ * single-threaded graph build. `bootstrap:self-tsc` and `bootstrap:conformance`
+ * are not listed: `test:north-star` and `test` already run them as specs.
+ */
+const NORTH_STAR_GATES = ["test:north-star", "seed:check"] as const;
 
 const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
-  const isCheck = opts.target === "check" || opts.target === "check:full";
-  const script = isCheck ? "check" : opts.target;
+  const isNorthStar = opts.target === "check:north-star";
+  const isCheck = opts.target === "check";
+  const script = opts.target;
 
   // `--filter` scopes to workspace packages, so the root gates step aside.
   const rootScripts =
-    isCheck && opts.filter === null
-      ? [
-          ...ROOT_GATES,
-          ...(opts.target === "check:full"
-            ? [
-                "test:full",
-                "test:mochi:coverage",
-                "seed:check",
-                "bootstrap:self-tsc",
-                "bootstrap:conformance",
-              ]
-            : ["test"]),
-        ]
-      : [];
+    opts.filter !== null
+      ? []
+      : isNorthStar
+        ? [...NORTH_STAR_GATES]
+        : isCheck
+          ? [...ROOT_GATES]
+          : [];
 
   const scope = opts.filter === null ? null : new Bun.Glob(opts.filter);
   const members = (await findWorkspacePackages(REPO_ROOT))
-    .filter((pkg) => pkg.scripts.includes(script))
+    .filter((pkg) => !isNorthStar && pkg.scripts.includes(script))
     .filter((pkg) => scope === null || scope.match(pkg.name));
 
   const specs = [
@@ -515,8 +519,8 @@ const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
 
 /**
  * Start order, not priority — a long pole queued behind the short ones sets the
- * wall time of the whole gate. `test:full` is the longest by a wide margin,
- * then the bootstrap north-stars; package `check`s outrank the root one-liners.
+ * wall time of the whole gate. The `test*` suites are the longest, then
+ * `seed:check`; package `check`s outrank the root one-liners.
  */
 const startWeight = (name: string): number =>
   name.startsWith("test")

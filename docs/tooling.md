@@ -41,13 +41,17 @@ a typed `extern` whenever possible. For a narrow host-global seam, begin the fil
 
 ```bash
 bun run check          # biome + tsc + workspace + fmt + tests (skips north-stars)
-bun run check:full     # CI / pre-push — also runs fixpoint + bootstrap-tsc
+bun run check:full     # pre-push — check, check:north-star, test:mochi:coverage
+bun run check:north-star # north-star specs + seed:check (own CI job)
 bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3)
 bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star: 0)
 ```
 
-`check` / `test` omit `test/bootstrap-fixpoint-binary.spec.ts` and
-`test/bootstrap-tsc.spec.ts`. `check:full` / `test:full` run everything.
+`check` / `test` omit the four graph-sized north-star specs
+(`test/bootstrap-{fixpoint-binary,seed-alias,self-tsc,tsc}.spec.ts`);
+`test:north-star` runs only those, and `test:full` runs both. CI runs `check` and
+`check:north-star` and `test:mochi:coverage` as parallel jobs, so none shares
+cores with another.
 
 ## Mochi specs (`*.spec.mochi`)
 

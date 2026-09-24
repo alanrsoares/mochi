@@ -3,14 +3,21 @@
 // strict-clean (0 errors) — this now guards against regression: the count may
 // never rise. Reproduce/inspect with `bun run bootstrap:tsc`.
 import { expect, test } from "bun:test";
+import { BOOTSTRAP_BUILD_HOOK_MS } from "@mochi/test-support/bootstrap";
 import { bootstrapTsc } from "../scripts/bootstrap-tsc";
 
 // Lower this as levers land; never raise it to make a regression pass.
 const CEILING = 0; // ADR 0044 (binding type annotations): 1 → 0 — bootstrap is strict-clean.
 
-test("bootstrap emits within the tsc-error ceiling (ratchet)", async () => {
-  const { total, byCode } = await bootstrapTsc();
-  // Surface the breakdown on failure so the diff is legible in CI output.
-  expect({ total, byCode }).toMatchObject({ total: expect.any(Number) });
-  expect(total).toBeLessThanOrEqual(CEILING);
-}, 30_000);
+test(
+  "bootstrap emits within the tsc-error ceiling (ratchet)",
+  async () => {
+    const { total, byCode } = await bootstrapTsc();
+    // Surface the breakdown on failure so the diff is legible in CI output.
+    expect({ total, byCode }).toMatchObject({ total: expect.any(Number) });
+    expect(total).toBeLessThanOrEqual(CEILING);
+    // Emits the whole graph through the oracle, then runs `tsc` over it — on a cold
+    // 4-core runner that sits beside coverage and `seed:check`.
+  },
+  BOOTSTRAP_BUILD_HOOK_MS,
+);

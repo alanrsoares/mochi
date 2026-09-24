@@ -13,7 +13,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot } from "@mochi/test-support";
-import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 import { buildShimSource, SHIM_PATH } from "../scripts/gen-prelude";
@@ -33,52 +33,58 @@ const compileAl = bootstrapModuleJs;
 const evalNames = <T extends Record<string, unknown>>(js: string, names: string[]): T =>
   new Function("match", `"use strict";\n${js}\nreturn { ${names.join(", ")} };`)(match) as T;
 
-test("shim tables drive the compiled inferrer and codegen", async () => {
-  const shim = await import(join(root, SHIM_PATH));
+test(
+  "shim tables drive the compiled inferrer and codegen",
+  async () => {
+    const shim = await import(join(root, SHIM_PATH));
 
-  const { lex } = evalNames<{ lex: (s: string) => AlResult }>(compileAl("bootstrap/lexer.mochi"), [
-    "lex",
-  ]);
-  const { parse } = evalNames<{ parse: (t: unknown) => AlResult }>(
-    compileAl("bootstrap/parser.mochi"),
-    ["parse"],
-  );
-  const { inferProgram } = evalNames<{
-    inferProgram: (
-      stmts: unknown,
-      builtins: Map<string, unknown>,
-      namespaces: Map<string, Map<string, unknown>>,
-      openMode: boolean,
-    ) => AlResult;
-  }>(compileAl("bootstrap/infer.mochi"), ["inferProgram"]);
-  const { codegen } = evalNames<{
-    codegen: (
-      stmts: unknown,
-      imported: Map<string, string[]>,
-      useRuntime: boolean,
-      ns: Map<string, Map<string, string>>,
-      jsDefs: Map<string, string>,
-      deps: Map<string, string[]>,
-    ) => string;
-  }>(compileAl("bootstrap/codegen.mochi"), ["codegen"]);
+    const { lex } = evalNames<{ lex: (s: string) => AlResult }>(
+      compileAl("bootstrap/lexer.mochi"),
+      ["lex"],
+    );
+    const { parse } = evalNames<{ parse: (t: unknown) => AlResult }>(
+      compileAl("bootstrap/parser.mochi"),
+      ["parse"],
+    );
+    const { inferProgram } = evalNames<{
+      inferProgram: (
+        stmts: unknown,
+        builtins: Map<string, unknown>,
+        namespaces: Map<string, Map<string, unknown>>,
+        openMode: boolean,
+      ) => AlResult;
+    }>(compileAl("bootstrap/infer.mochi"), ["inferProgram"]);
+    const { codegen } = evalNames<{
+      codegen: (
+        stmts: unknown,
+        imported: Map<string, string[]>,
+        useRuntime: boolean,
+        ns: Map<string, Map<string, string>>,
+        jsDefs: Map<string, string>,
+        deps: Map<string, string[]>,
+      ) => string;
+    }>(compileAl("bootstrap/codegen.mochi"), ["codegen"]);
 
-  const lr = lex("let twice = n => mul(n, 2)\n");
-  const pr = parse(unwrapOk(lr as never));
-  const stmts = unwrapOk(pr as never);
+    const lr = lex("let twice = n => mul(n, 2)\n");
+    const pr = parse(unwrapOk(lr as never));
+    const stmts = unwrapOk(pr as never);
 
-  // Inference: builtins + namespaces from the shim yield an Ok scheme.
-  const ir = inferProgram(stmts, shim.builtins, shim.namespaces, true);
-  expect(ir._tag).toBe("Ok");
+    // Inference: builtins + namespaces from the shim yield an Ok scheme.
+    const ir = inferProgram(stmts, shim.builtins, shim.namespaces, true);
+    expect(ir._tag).toBe("Ok");
 
-  // Codegen: the three runtime tables from the shim emit runnable JS.
-  const js = codegen(
-    stmts,
-    new Map(),
-    true,
-    shim.namespaceRuntime,
-    shim.preludeJsDefs,
-    shim.runtimeDeps,
-  );
-  expect(js).toContain("twice");
-  expect(js).toContain("mul");
-});
+    // Codegen: the three runtime tables from the shim emit runnable JS.
+    const js = codegen(
+      stmts,
+      new Map(),
+      true,
+      shim.namespaceRuntime,
+      shim.preludeJsDefs,
+      shim.runtimeDeps,
+    );
+    expect(js).toContain("twice");
+    expect(js).toContain("mul");
+    // `compileAl` waits on the shared graph build when the cache is cold.
+  },
+  BOOTSTRAP_BUILD_HOOK_MS,
+);

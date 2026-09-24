@@ -11,9 +11,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Three jobs on three runners, together `check:full`: `check` is the everyday
+  # gate, `check:north-star` the graph-sized north-star specs + seed:check, and
+  # `test:mochi:coverage` the bootstrap Mochi coverage floor. Apart, none starves
+  # another of the runner's four cores.
   check:
-    name: check
+    name: ${{ matrix.gate }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [check, "check:north-star", "test:mochi:coverage"]
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +35,8 @@ jobs:
       # in packages/test-support/src/bootstrap.ts. Saved only after a green gate:
       # a failed run can hold a half-written emit, and storing that under the
       # final key would make every later hit rebuild it and never replace it.
+      # Keyed per gate: each job fills different entries, and the first green job
+      # to save a shared key would lock the others out of theirs.
       - name: Restore bootstrap graph cache
         id: bootstrap-cache
         uses: actions/cache/restore@v4
@@ -34,15 +44,14 @@ jobs:
           path: |
             .cache/bootstrap-build
             .cache/bootstrap-ts-emit
-          key: bootstrap-graph-${{ hashFiles('bootstrap/**/*.mochi', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/bootstrap/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
+          key: bootstrap-graph-${{ matrix.gate }}-${{ hashFiles('bootstrap/**/*.mochi', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/bootstrap/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
 
-      # The complete quality gate: biome + tsc --noEmit + workspace checks (docs
-      # vite build included via @mochi/docs) + formatter dogfood + the full test
-      # suite, including the two self-hosting north-stars — the tsc --strict-clean
-      # ratchet (bootstrap-tsc.spec.ts) and the byte-exact fixpoint reproduction
-      # (bootstrap-fixpoint-binary.spec.ts). Local day-to-day uses `bun run check`
-      # (same gate without those two specs).
-      - run: bun run check:full
+      # `check`: biome + tsc --noEmit + workspace checks (docs vite build included
+      # via @mochi/docs) + formatter dogfood + the parallel test suite.
+      # `check:north-star`: the tsc --strict-clean ratchets, the byte-exact
+      # fixpoint reproduction, and the seed freshness diff.
+      # `test:mochi:coverage`: every bootstrap/*.spec.mochi under --coverage.
+      - run: bun run ${{ matrix.gate }}
 
       - name: Save bootstrap graph cache
         if: success() && steps.bootstrap-cache.outputs.cache-hit != 'true'

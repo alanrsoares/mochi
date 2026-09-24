@@ -14,7 +14,8 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "test": "bun test --parallel --path-ignore-patterns 'test/bootstrap-fixpoint-binary.spec.ts' --path-ignore-patterns 'test/bootstrap-seed-alias.spec.ts' --path-ignore-patterns 'test/bootstrap-self-tsc.spec.ts' --path-ignore-patterns 'test/bootstrap-tsc.spec.ts'",
-    "test:full": "bun test --parallel=1 --bail",
+    "test:full": "bun run test && bun run test:north-star",
+    "test:north-star": "bun test --bail test/bootstrap-fixpoint-binary.spec.ts test/bootstrap-seed-alias.spec.ts test/bootstrap-self-tsc.spec.ts test/bootstrap-tsc.spec.ts",
     "test:mochi:coverage": "bun scripts/mochi-coverage.ts",
     "build:ext": "bun scripts/build-extension.mjs",
     "loc": "bun scripts/find-long-files.ts",
@@ -47,7 +48,8 @@
     "docs:build": "bun run --cwd apps/docs build",
     "docs:preview": "bun run --cwd apps/docs preview",
     "check": "bun scripts/tui-runner.ts check",
-    "check:full": "bun scripts/tui-runner.ts check:full"
+    "check:full": "bun run check && bun run check:north-star && bun run test:mochi:coverage",
+    "check:north-star": "bun scripts/tui-runner.ts check:north-star"
   },
   "workspaces": {
     "packages": [

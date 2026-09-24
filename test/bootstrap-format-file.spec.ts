@@ -75,7 +75,9 @@ for (const file of corpus) {
     const ts = format(src);
     if (ts._tag !== "Ok") throw new Error("ts formatter failed");
     expect(alFormat(src)).toBe(ts.value);
-  });
+    // The largest compiler modules take ~1s each uncontended; the parallel gate
+    // can slow them past the 5s default without anything being wedged.
+  }, 30_000);
 }
 
 test("the corpus covers a meaningful number of files", () => {

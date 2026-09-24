@@ -11,7 +11,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
 import { compile as tsCompile } from "@mochi/compiler/compile";
 import { repoRoot } from "@mochi/test-support";
-import { bootstrapModuleJs } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 
@@ -71,7 +71,7 @@ beforeAll(async () => {
       runtimeDeps: shim.runtimeDeps,
     },
   ).compile;
-});
+}, BOOTSTRAP_BUILD_HOOK_MS);
 
 test("well-typed source: bootstrap compile ≡ TS compile", () => {
   const src =
