@@ -182,14 +182,17 @@ export const collectValueRefs = (prog: Program): Set<string> => {
 /**
  * The names a program binds at module scope — anything that would shadow a
  * prelude builtin, so its runtime def must NOT be inlined (else a duplicate
- * `const` and a JS SyntaxError, e.g. a user `let hypot = …`).
+ * `const` and a JS SyntaxError, e.g. a user `let hypot = …`). A ctor binds only
+ * when its factory is emitted: an unused local `| Some(value: a)` drops its
+ * `const Some`, and a runtime `_Map_get` still needs the builtin one.
  */
-const boundNames = (prog: Program): Set<string> => {
+const boundNames = (prog: Program, valueRefs: ReadonlySet<string>): Set<string> => {
   const bound = new Set<string>();
   for (const s of prog.stmts) {
     if (s.kind === "let" || s.kind === "extern") bound.add(s.name);
-    else if (s.kind === "type") for (const c of s.ctors) bound.add(c.name);
-    else if (s.kind === "import") {
+    else if (s.kind === "type") {
+      for (const c of s.ctors) if (s.exported || valueRefs.has(c.name)) bound.add(c.name);
+    } else if (s.kind === "import") {
       for (const n of s.names) bound.add(n.name);
       if (s.alias) bound.add(s.alias.name);
     }
@@ -203,7 +206,8 @@ const boundNames = (prog: Program): Set<string> => {
  * (inlines the defs) and the TS backend (imports them from the typed runtime).
  */
 export const collectRuntimeDeps = (prog: Program): string[] => {
-  const refs = collectValueRefs(prog);
+  const valueRefs = collectValueRefs(prog);
+  const refs = new Set(valueRefs);
   for (const s of prog.stmts) {
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here — but only for factories
@@ -228,7 +232,7 @@ export const collectRuntimeDeps = (prog: Program): string[] => {
         queue.push(d);
       }
   }
-  const bound = boundNames(prog);
+  const bound = boundNames(prog, valueRefs);
   return Object.keys(preludeJsDefs).filter((name) => refs.has(name) && !bound.has(name));
 };
 
