@@ -26,7 +26,7 @@ then `eq` / `ok` / `throws` in `Test_utils` — not a fluent matcher object.
    calls it — a test-module `eq` would shadow both. Boolean compare stays `==`.
    Distinct from `@mochi/test-support` (TypeScript compiler-test harness).
 
-2. **Bun plugin** — `@mochi/test/plugin` compiles `.mochi` through `buildModules`
+2. **Bun plugin** — `@mochi/test/plugin` (since [ADR 0108](0108-bun-mochi-loader.md) a re-export of `@mochi/bun/plugin`) compiles `.mochi` through `buildModules`
    with `moduleExt: ".mochi"`, so imported names keep their schemes. `bunfig.toml`
    `[test] preload` registers it.
 

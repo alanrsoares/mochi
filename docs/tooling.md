@@ -22,6 +22,7 @@ bun run mochi fmt  <file.mochi>     # pretty-print (add --write to edit in place
 bun run mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>
                                     #   AST codemod: lex/parse → user transform → format
 bun run mochi dts [--open] <file.mochi> # emit a .d.ts
+bun run mochi dts --write <file|dir>  # write X.d.mochi.ts beside each module (host TS types)
 bun run mochi build [--open] <entry.mochi> # compile a module graph, writing a .js beside each source
                                     #   build --emit=ts writes .ts for the whole graph
 ```
@@ -29,6 +30,21 @@ bun run mochi build [--open] <entry.mochi> # compile a module graph, writing a .
 `extern` bindings name a host module by path (`extern log : … = "./host.mjs" "log"`);
 codegen emits that specifier verbatim, so host runtimes are plain `.mjs` files Bun
 resolves at runtime, and the TS backend emits a matching `.d.mts` for them.
+
+## Mochi in a Bun TypeScript codebase
+
+Three pieces, one per phase ([ADR 0108](adr/0108-bun-mochi-loader.md)):
+
+- **Run** — bunfig `preload = ["@mochi/bun/preload"]` (or `bun --preload
+  @mochi/bun/preload`) compiles every `.mochi` import, direct or via a package export.
+- **Type-check** — `mochi dts --write src` writes an `X.d.mochi.ts` sidecar beside each
+  module; with `allowArbitraryExtensions: true`, `tsc` checks `import … from "./X.mochi"`
+  against Mochi's inferred types. Rerun it after editing a `.mochi` export.
+- **Bundle** — pass the loader to Bun's bundler:
+  `Bun.build({ entrypoints, plugins: [mochiPlugin] })` with `mochiPlugin` from
+  `@mochi/bun/plugin`. The bundle runs with no preload.
+
+Compiled Mochi imports `@onrails/pattern`, so the host project depends on it.
 
 ## Strict inference
 
@@ -70,6 +86,8 @@ Timeouts take milliseconds first: `testTimeout` / `testTaskTimeout` / …
 `bunfig.toml` maps `.mochi` to the JS loader so `bun test` discovers
 `*.spec.mochi` the same way it discovers `*.spec.ts`; `@mochi/test/preload`
 compiles them through the module graph ([ADR 0086](adr/0086-bun-test-bindings.md)).
+It re-exports `@mochi/bun/preload`, the same loader any Bun process that imports
+`.mochi` runs with: `bun --preload @mochi/bun/preload app.ts` ([ADR 0108](adr/0108-bun-mochi-loader.md)).
 
 A spec file is top-level `test(...)` / `describe(...)` / `testEach(...)` /
 `check(...)` / `testTask(...)` / `testEachTask(...)` / `checkTask(...)`

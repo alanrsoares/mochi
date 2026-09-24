@@ -93,6 +93,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@mochi/compiler": "workspace:*",
+        "@onrails/result": "^0.4.0",
       },
     },
     "packages/cli": {
@@ -201,6 +202,7 @@
       "name": "@mochi/test",
       "version": "0.1.0",
       "dependencies": {
+        "@mochi/bun": "workspace:*",
         "@mochi/compiler": "workspace:*",
         "@onrails/result": "^0.4.0",
         "fast-check": "^4.9.0",

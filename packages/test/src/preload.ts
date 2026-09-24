@@ -1,4 +1,2 @@
-import { plugin } from "bun";
-import { mochiPlugin } from "./plugin.ts";
-
-plugin(mochiPlugin);
+// `bun test` preload for `*.spec.mochi` — the loader itself is `@mochi/bun/preload` (ADR 0108).
+import "@mochi/bun/preload";

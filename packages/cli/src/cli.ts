@@ -6,6 +6,8 @@
  * fallback.
  */
 
+import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import {
   expandMochiGlobs,
   loadTransform,
@@ -28,7 +30,7 @@ import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
 
 const USAGE =
-  "usage: mochi [--open] [--no-docs] <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>  |  mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>  |  mochi dts [--open] [--no-docs] <file.mochi>  |  mochi ts [--open] [--no-docs] <file.mochi>";
+  "usage: mochi [--open] [--no-docs] <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>  |  mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>  |  mochi dts [--write] [--open] [--no-docs] <file.mochi|dir>  |  mochi ts [--open] [--no-docs] <file.mochi>";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -63,6 +65,21 @@ function dieBootstrap(path: string, src: string, errors: readonly BootstrapDiagn
   }
   process.exit(1);
 }
+
+/**
+ * `X.mochi` → `X.d.mochi.ts`, the TS 5 `allowArbitraryExtensions` sidecar name, so
+ * a host `.ts` file's `import … from "./X.mochi"` type-checks (ADR 0108).
+ */
+const sidecarPath = (file: string): string => `${file.slice(0, -".mochi".length)}.d.mochi.ts`;
+
+/** The modules `dts --write` covers: the file itself, or every non-spec `.mochi` under a directory. */
+const dtsTargets = (path: string): readonly string[] =>
+  statSync(path).isDirectory()
+    ? [...new Bun.Glob("**/*.mochi").scanSync({ cwd: path })]
+        .filter((f) => !f.endsWith(".spec.mochi") && !f.includes("node_modules/"))
+        .map((f) => join(path, f))
+        .toSorted()
+    : [path];
 
 await match(cmd)
   .with("codemod", async () => {
@@ -106,20 +123,31 @@ await match(cmd)
   .with("dts", async () => {
     const open = rest.includes("--open");
     const docs = !rest.includes("--no-docs");
+    const write = rest.includes("--write") || rest.includes("-w");
     const path = requireArg(
       rest.find((a) => !a.startsWith("-")),
-      `usage: mochi dts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
+      `usage: mochi dts [--write] [--open] [--no-docs] <file.mochi|dir>\n${USAGE}`,
     );
-    const src = await Bun.file(path).text();
-    const result = emitDtsForFileBootstrapWith(path, "@mochi/runtime", {
-      open,
-      runtime: true,
-      docs,
-      moduleExt: ".js",
-      strictEntry: false,
-    });
-    if (result._tag === "Err") dieBootstrap(path, src, [result.error]);
-    process.stdout.write(result.value);
+    // Type imports name `.mochi` siblings, so stdout and sidecars share one emit.
+    const emit = (file: string): string => {
+      const result = emitDtsForFileBootstrapWith(file, "@mochi/runtime", {
+        open,
+        runtime: true,
+        docs,
+        moduleExt: ".js",
+        strictEntry: false,
+      });
+      if (result._tag === "Err") dieBootstrap(file, readFileSync(file, "utf8"), [result.error]);
+      return result.value;
+    };
+    if (!write) {
+      process.stdout.write(emit(path));
+      return;
+    }
+    for (const file of dtsTargets(path)) {
+      await Bun.write(sidecarPath(file), emit(file));
+      console.error(`  ${sidecarPath(file)}`);
+    }
   })
   .with("ts", async () => {
     const open = rest.includes("--open");

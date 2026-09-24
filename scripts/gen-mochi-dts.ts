@@ -11,9 +11,11 @@
 //
 // Docs tree registers the docs project's vendor-plugin list (#20, ADR 0010)
 // so `tw.*` factories emit `$tone` unions — not part of language core.
+
 import { readFileSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { emitDts } from "@mochi/compiler/dts";
+import { emitDtsForFile } from "@mochi/compiler/module";
 import { isErr, unwrapOk } from "@onrails/result";
 import { repoPath, vendorPluginsFor } from "./lib";
 
@@ -57,7 +59,11 @@ const drift: string[] = [];
 for (const file of files) {
   const targetRoot = targets.find((t) => file.startsWith(t)) ?? targets[0]!;
   const plugins = vendorPluginsFor(targetRoot);
-  const r = emitDts(readFileSync(file, "utf8"), { plugins: plugins ? [...plugins] : [] });
+  // Graph-aware: a module importing a sibling needs that sibling's schemes, which
+  // single-file `emitDts` reports as unbound.
+  const r = await emitDtsForFile(file, readFileSync(file, "utf8"), (p) => readFile(p, "utf8"), {
+    plugins: plugins ? [...plugins] : [],
+  });
   if (isErr(r)) {
     for (const d of r.error) console.error(`dts error in ${file}: ${d.kind}: ${d.message}`);
     process.exit(1);

@@ -9,8 +9,8 @@
 //   bun run example:life
 //   MOCHI_BUN_FAIL_ONCE=1 bun run example:life   # force one Err draw
 //
-// `@mochi/bun/terminal` resolves to `.mochi` source, so the run preloads the
-// Bun `.mochi` plugin (packages/test/src/preload.ts) to compile it on import.
+// `@mochi/bun/terminal` resolves to `.mochi` source, so the run preloads
+// `@mochi/bun/preload` to compile it on import (ADR 0108).
 
 import { enter, draw, leave } from "@mochi/bun/terminal"
 
