@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { compileMochiFile } from "./plugin.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { compileMochiFile, mochiPlugin } from "./plugin.ts";
 
 const fixture = (name: string): string => new URL(`./fixtures/${name}`, import.meta.url).pathname;
 
@@ -31,4 +34,23 @@ test("a plain bun process preloading @mochi/bun/preload runs JS that imports .mo
   );
   expect(run.stderr.toString()).toBe("");
   expect(run.stdout.toString()).toBe("84\n");
+});
+
+test("Bun.build bundles .mochi imports through mochiPlugin", async () => {
+  const outdir = mkdtempSync(join(tmpdir(), "mochi-bun-build-"));
+  try {
+    const built = await Bun.build({
+      entrypoints: [fixture("entry.mjs")],
+      outdir,
+      target: "bun",
+      plugins: [mochiPlugin],
+    });
+    expect(built.logs).toEqual([]);
+    expect(built.success).toBe(true);
+    // The bundle carries the compiled graph, so it runs with no preload.
+    const run = Bun.spawnSync([process.execPath, join(outdir, "entry.js")]);
+    expect(run.stdout.toString()).toBe("84\n");
+  } finally {
+    rmSync(outdir, { recursive: true, force: true });
+  }
 });
