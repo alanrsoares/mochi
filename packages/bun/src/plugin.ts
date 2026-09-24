@@ -16,8 +16,6 @@ import type { BunPlugin } from "bun";
 
 type MochiJsByPath = Map<string, string>;
 
-const outputCache: MochiJsByPath = new Map();
-
 /** Compile `entry` and every reachable `.mochi` module; cache all outputs. */
 export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> => {
   const abs = resolve(entry);
@@ -47,6 +45,9 @@ export const compileMochiFile = async (entry: string): Promise<string> => {
 export const mochiPlugin: BunPlugin = {
   name: "mochi",
   setup(build) {
+    // Per-build: one graph compile serves every sibling load in this build, and a
+    // later `Bun.build` recompiles instead of reusing stale output.
+    const outputCache: MochiJsByPath = new Map();
     build.onLoad({ filter: /\.mochi$/ }, async (args) => {
       const path = resolve(args.path);
       const cached = outputCache.get(path);

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileMochiFile, mochiPlugin } from "./plugin.ts";
@@ -34,6 +34,7 @@ test("a plain bun process preloading @mochi/bun/preload runs JS that imports .mo
   );
   expect(run.stderr.toString()).toBe("");
   expect(run.stdout.toString()).toBe("84\n");
+  expect(run.exitCode).toBe(0);
 });
 
 test("Bun.build bundles .mochi imports through mochiPlugin", async () => {
@@ -50,7 +51,26 @@ test("Bun.build bundles .mochi imports through mochiPlugin", async () => {
     // The bundle carries the compiled graph, so it runs with no preload.
     const run = Bun.spawnSync([process.execPath, join(outdir, "entry.js")]);
     expect(run.stdout.toString()).toBe("84\n");
+    expect(run.exitCode).toBe(0);
   } finally {
     rmSync(outdir, { recursive: true, force: true });
+  }
+});
+
+test("a later Bun.build recompiles an edited .mochi source", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-bun-rebuild-"));
+  const src = join(dir, "value.mochi");
+  const build = async (): Promise<string> => {
+    const built = await Bun.build({ entrypoints: [src], target: "bun", plugins: [mochiPlugin] });
+    expect(built.success).toBe(true);
+    return built.outputs[0]?.text() ?? "";
+  };
+  try {
+    writeFileSync(src, "export let value = 1\n");
+    expect(await build()).toContain("value = 1");
+    writeFileSync(src, "export let value = 2\n");
+    expect(await build()).toContain("value = 2");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
