@@ -9,7 +9,8 @@ pre-commit:
 pre-push:
   jobs:
     - name: check:full
-      run: bun run check:full -- --bail
+      # check:full, spelled out so --bail reaches both phases.
+      run: bun run check -- --bail && bun run check:north-star -- --bail
 
 prepare-commit-msg:
   jobs:
