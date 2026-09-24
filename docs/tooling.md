@@ -70,6 +70,8 @@ Timeouts take milliseconds first: `testTimeout` / `testTaskTimeout` / …
 `bunfig.toml` maps `.mochi` to the JS loader so `bun test` discovers
 `*.spec.mochi` the same way it discovers `*.spec.ts`; `@mochi/test/preload`
 compiles them through the module graph ([ADR 0086](adr/0086-bun-test-bindings.md)).
+It re-exports `@mochi/bun/preload`, the same loader any Bun process that imports
+`.mochi` runs with: `bun --preload @mochi/bun/preload app.ts` ([ADR 0108](adr/0108-bun-mochi-loader.md)).
 
 A spec file is top-level `test(...)` / `describe(...)` / `testEach(...)` /
 `check(...)` / `testTask(...)` / `testEachTask(...)` / `checkTask(...)`

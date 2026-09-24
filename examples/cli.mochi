@@ -1,7 +1,7 @@
 // CLI Example Router written in Mochi
 //
 // Build and run with:
-//   bun run example <example>   # preloads the Bun `.mochi` plugin for @mochi/bun/cli
+//   bun run example <example>   # preloads @mochi/bun/preload for @mochi/bun/cli (ADR 0108)
 
 import { args, log } from "@mochi/bun/cli"
 

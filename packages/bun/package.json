@@ -6,9 +6,12 @@
   "exports": {
     "./cli": "./cli.mochi",
     "./terminal": "./terminal.mochi",
+    "./plugin": "./src/plugin.ts",
+    "./preload": "./src/preload.ts",
     "./runtime": "./src/runtime.ts"
   },
   "dependencies": {
-    "@mochi/compiler": "workspace:*"
+    "@mochi/compiler": "workspace:*",
+    "@onrails/result": "^0.4.0"
   }
 }

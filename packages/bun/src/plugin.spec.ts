@@ -20,3 +20,15 @@ test("graph compile fails on unbound names", async () => {
     /unbound variable 'notAName'/,
   );
 });
+
+test("a plain bun process preloading @mochi/bun/preload runs JS that imports .mochi", () => {
+  // Outside `bun test`: the path `bun run example:life` takes (ADR 0108).
+  const run = Bun.spawnSync(
+    [process.execPath, "--preload", "@mochi/bun/preload", fixture("entry.mjs")],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+    },
+  );
+  expect(run.stderr.toString()).toBe("");
+  expect(run.stdout.toString()).toBe("84\n");
+});
