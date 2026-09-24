@@ -54,8 +54,12 @@ export const BOOTSTRAP_CACHE_GLOBS = [
   "packages/test-support/src/bootstrap.ts",
 ] as const;
 
-/** Bun's default hook timeout is 5s. A cold graph build on a busy CI runner exceeds it. */
-export const BOOTSTRAP_BUILD_HOOK_MS = 180_000;
+/**
+ * Bun's default hook timeout is 5s. A cold typed-graph build on a 4-core CI
+ * runner took 210s while another suite shared the box, so this is a wedge
+ * detector, not a performance budget.
+ */
+export const BOOTSTRAP_BUILD_HOOK_MS = 300_000;
 
 export const bootstrapCacheFiles = (): readonly string[] => {
   const files = BOOTSTRAP_CACHE_GLOBS.flatMap((pattern) =>

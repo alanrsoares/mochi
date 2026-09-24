@@ -99,4 +99,5 @@ test("highlights a stack-sized token stream iteratively", () => {
 
   const spans = api.highlightMochiCode(Array(12_000).fill("value").join(" "));
   expect(spans.filter((span) => span.text === "value")).toHaveLength(12_000);
-});
+  // ~0.6s uncontended, compile included; a loaded CI runner runs it 10x slower.
+}, 30_000);
