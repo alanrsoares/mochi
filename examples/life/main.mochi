@@ -6,9 +6,11 @@
 // frame); `Task.run` at the very end is the only place an effect fires. Build +
 // run:
 //
-//   bun src/cli.ts build examples/life/main.mochi
-//   bun examples/life/main.js
-//   MOCHI_BUN_FAIL_ONCE=1 bun examples/life/main.js   # force one Err draw
+//   bun run example:life
+//   MOCHI_BUN_FAIL_ONCE=1 bun run example:life   # force one Err draw
+//
+// `@mochi/bun/terminal` resolves to `.mochi` source, so the run preloads the
+// Bun `.mochi` plugin (packages/test/src/preload.ts) to compile it on import.
 
 import { enter, draw, leave } from "@mochi/bun/terminal"
 
