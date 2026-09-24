@@ -10,7 +10,7 @@ pre-push:
   jobs:
     - name: check:full
       # check:full, spelled out so --bail reaches both phases.
-      run: bun run check -- --bail && bun run check:north-star -- --bail
+      run: bun run check -- --bail && bun run check:north-star -- --bail && bun run test:mochi:coverage
 
 prepare-commit-msg:
   jobs:

@@ -17,8 +17,8 @@ Read this, then `CONTEXT.md` for vocabulary and `docs/` for the language, compil
 
 ```bash
 bun run check                 # default gate = biome + tsc + workspace + fmt + tests (skip north-stars)
-bun run check:full            # CI / pre-push gate = check, then check:north-star
-bun run check:north-star      # fixpoint + both bootstrap-tsc north-stars + coverage + seed (own CI job)
+bun run check:full            # CI / pre-push gate = check, check:north-star, test:mochi:coverage
+bun run check:north-star      # fixpoint + both bootstrap-tsc north-stars + seed:check (own CI job)
 bun run mochi <file.mochi>       # compile one file to JS on stdout (also: ts, fmt, dts, build)
 bun packages/cli/src/cli.ts ts <file.mochi>   # emit typed TypeScript (build --emit=ts for the graph)
 bun run bootstrap:tsc         # north-star: TS oracle emits self-hosted graph with 0 tsc --strict errors

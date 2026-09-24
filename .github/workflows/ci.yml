@@ -11,17 +11,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Two jobs on two runners: `check` is the everyday gate, `check:north-star` is
-  # what `check:full` adds (graph-sized north-star specs, bootstrap coverage,
-  # seed:check). Together they are `check:full`; apart, neither starves the other
-  # of the runner's four cores.
+  # Three jobs on three runners, together `check:full`: `check` is the everyday
+  # gate, `check:north-star` the graph-sized north-star specs + seed:check, and
+  # `test:mochi:coverage` the bootstrap Mochi coverage floor. Apart, none starves
+  # another of the runner's four cores.
   check:
     name: ${{ matrix.gate }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        gate: [check, "check:north-star"]
+        gate: [check, "check:north-star", "test:mochi:coverage"]
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +35,8 @@ jobs:
       # in packages/test-support/src/bootstrap.ts. Saved only after a green gate:
       # a failed run can hold a half-written emit, and storing that under the
       # final key would make every later hit rebuild it and never replace it.
+      # Keyed per gate: each job fills different entries, and the first green job
+      # to save a shared key would lock the others out of theirs.
       - name: Restore bootstrap graph cache
         id: bootstrap-cache
         uses: actions/cache/restore@v4
@@ -42,12 +44,13 @@ jobs:
           path: |
             .cache/bootstrap-build
             .cache/bootstrap-ts-emit
-          key: bootstrap-graph-${{ hashFiles('bootstrap/**/*.mochi', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/bootstrap/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
+          key: bootstrap-graph-${{ matrix.gate }}-${{ hashFiles('bootstrap/**/*.mochi', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/bootstrap/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
 
       # `check`: biome + tsc --noEmit + workspace checks (docs vite build included
       # via @mochi/docs) + formatter dogfood + the parallel test suite.
       # `check:north-star`: the tsc --strict-clean ratchets, the byte-exact
-      # fixpoint reproduction, bootstrap Mochi coverage, and the seed freshness diff.
+      # fixpoint reproduction, and the seed freshness diff.
+      # `test:mochi:coverage`: every bootstrap/*.spec.mochi under --coverage.
       - run: bun run ${{ matrix.gate }}
 
       - name: Save bootstrap graph cache

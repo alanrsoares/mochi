@@ -48,7 +48,7 @@
     "docs:build": "bun run --cwd apps/docs build",
     "docs:preview": "bun run --cwd apps/docs preview",
     "check": "bun scripts/tui-runner.ts check",
-    "check:full": "bun run check && bun run check:north-star",
+    "check:full": "bun run check && bun run check:north-star && bun run test:mochi:coverage",
     "check:north-star": "bun scripts/tui-runner.ts check:north-star"
   },
   "workspaces": {

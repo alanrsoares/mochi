@@ -476,12 +476,13 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
 const ROOT_GATES = ["lint", "typecheck", "fmt:check", "test"] as const;
 
 /**
- * What `check:full` adds over `check`. CI runs it as its own job, on its own
- * runner. `bootstrap:self-tsc` and
- * `bootstrap:conformance` are not listed: `test:north-star` and `test` already
- * run the same functions through their specs.
+ * The graph-sized gates `check:full` adds over `check`, grouped because they
+ * share one cached typed-graph emit. CI runs them as their own job;
+ * `test:mochi:coverage` gets a third runner so its workers do not starve the
+ * single-threaded graph build. `bootstrap:self-tsc` and `bootstrap:conformance`
+ * are not listed: `test:north-star` and `test` already run them as specs.
  */
-const NORTH_STAR_GATES = ["test:north-star", "test:mochi:coverage", "seed:check"] as const;
+const NORTH_STAR_GATES = ["test:north-star", "seed:check"] as const;
 
 const buildTasks = async (opts: Options): Promise<TaskSpec[]> => {
   const isNorthStar = opts.target === "check:north-star";
