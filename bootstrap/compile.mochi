@@ -6,7 +6,7 @@
 // span and never reaches codegen. Passes are threaded opaquely (ticket 0002);
 // the prelude tables come from the generated shim (ticket 0004).
 import { lex } from "./lexer.mochi"
-import { parse } from "./parser.mochi"
+import { parseRecovering } from "./parser.mochi"
 import { checkAll } from "./check.mochi"
 import { inferProgram, inferProgramTypes } from "./infer.mochi"
 import { codegenWith, jsGenOpts } from "./codegen.mochi"
@@ -118,15 +118,17 @@ let typecheckWith = (prog, open) =>
     |> Result.map(_ => prog)
     |> Result.mapErr(e => [stampType(e)])
 
-// lex -> parse -> check. Lex and parse have one primary error; `checkAll`
-// collects every independent checker finding. Shared by both backends.
+// lex -> parse -> check. Parse keeps every recovering diagnostic (source
+// order); `checkAll` collects every independent checker finding. Shared by
+// both backends.
 let frontend = src => switch lex(src) {
   | Err(e) => Err([stampStage("lex", e)])
-  | Ok(tokens) => switch parse(tokens) {
-      | Err(e) => Err([stampStage("parse", e)])
-      | Ok(stmts) => checkAll(stmts)
-          |> Result.mapErr(es => es |> map(e => stampStage("check", e)))
-    }
+  | Ok(tokens) => let parsed = parseRecovering(tokens, None) in
+      switch parsed.diagnostics {
+        | [] => checkAll(parsed.stmts)
+            |> Result.mapErr(es => es |> map(e => stampStage("check", e)))
+        | ds => Err(ds |> map(e => stampStage("parse", e)))
+      }
 }
 
 // The front-end pipeline: lex -> parse -> check -> typecheck

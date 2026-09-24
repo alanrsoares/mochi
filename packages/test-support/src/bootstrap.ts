@@ -10,7 +10,7 @@
 // injected as parameters.
 //
 // The graph build is cached cross-process under `.cache/bootstrap-build/<hash>/`
-// (keyed by bootstrap sources + the bootstrap host facade). Bun runs spec
+// (keyed by bootstrap sources, the frozen seed, and the host facade). Bun runs spec
 // files in parallel workers; without a shared cache each worker rebuilt the graph
 // into its own temp dir. A `.building` claim + wait-for-peer keeps usually one
 // builder.
@@ -38,20 +38,42 @@ const WAIT_MS = 120_000;
 
 let outDir: string | null = null;
 
-const sourceHash = (): string => {
+/**
+ * Inputs for `.cache/bootstrap-build` and `.cache/bootstrap-ts-emit`.
+ * `.github/workflows/ci.yml` `hashFiles` must list these same patterns.
+ * `**` not `*`: `bootstrap/plugins/jsx.mochi` is part of the graph, so a
+ * change to it must invalidate the cache.
+ */
+export const BOOTSTRAP_CACHE_GLOBS = [
+  "bootstrap/**/*.mochi",
+  "bootstrap/seed/**/*.ts",
+  "bootstrap/seed/**/*.cjs",
+  "bootstrap/seed/**/*.mjs",
+  "bootstrap/seed/**/*.d.mts",
+  "packages/compiler/src/bootstrap/**/*.ts",
+  "packages/test-support/src/bootstrap.ts",
+] as const;
+
+/** Bun's default hook timeout is 5s. A cold graph build on a busy CI runner exceeds it. */
+export const BOOTSTRAP_BUILD_HOOK_MS = 180_000;
+
+export const bootstrapCacheFiles = (): readonly string[] => {
+  const files = BOOTSTRAP_CACHE_GLOBS.flatMap((pattern) =>
+    pattern.includes("*")
+      ? [...new Bun.Glob(pattern).scanSync({ cwd: root })]
+      : existsSync(join(root, pattern))
+        ? [pattern]
+        : [],
+  );
+  return [...new Set(files)].toSorted();
+};
+
+export const bootstrapCacheHash = (): string => {
   const h = createHash("sha256");
-  const files = [
-    // `**`, not `*`: `bootstrap/plugins/jsx.mochi` is part of the graph, so a
-    // change to it must invalidate the cache — with `*` the stale build was
-    // silently reused and the parity tests scored the previous source.
-    ...new Bun.Glob("bootstrap/**/*.mochi").scanSync({ cwd: root }),
-    ...new Bun.Glob("packages/compiler/src/bootstrap/**/*.ts").scanSync({ cwd: root }),
-    "packages/test-support/src/bootstrap.ts",
-  ].toSorted();
-  for (const p of files) {
-    h.update(p);
+  for (const rel of bootstrapCacheFiles()) {
+    h.update(rel);
     h.update("\0");
-    h.update(readFileSync(join(root, p)));
+    h.update(readFileSync(join(root, rel)));
     h.update("\0");
   }
   return h.digest("hex").slice(0, 16);
@@ -105,7 +127,7 @@ const releaseClaim = (claim: string): void => {
 const buildGraph = (): string => {
   if (outDir) return outDir;
 
-  const hash = sourceHash();
+  const hash = bootstrapCacheHash();
   const dest = join(CACHE_ROOT, hash);
   if (ready(dest)) {
     outDir = dest;

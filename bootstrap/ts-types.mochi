@@ -74,8 +74,18 @@ let primitiveTs = name => switch name {
 let namesOf = (ts, env: TsEnv) =>
   Str.join(", ", ts |> map(t => tsOfRaw(t, env)))
 
+/// `aliasRow` falls back to a bare con (`Node`) so a cycle still unifies with
+/// the declaring module. A `.d.ts` records `Node` → `Ast.Node` in this index
+/// under the bare name, which is never a row-shape key. A value without a dot
+/// is an alias fold, not a qualifier, and prints as itself.
+let qualifiedCon = (name, env: TsEnv) => switch Map.get(name, env.recs) {
+  | Some(qual) when Str.contains(".", qual) => qual
+  | _ => primitiveTs(name)
+}
+
 let nominal = (name, args, env: TsEnv) =>
-  Array.length(args) == 0 ? primitiveTs(name) : "${name}<${namesOf(args, env)}>"
+  let shown = qualifiedCon(name, env) in
+    Array.length(args) == 0 ? shown : "${shown}<${namesOf(args, env)}>"
 
 let tsRowFields = (row, env: TsEnv) => switch row {
   | RowEmpty => ([], None)
@@ -95,15 +105,54 @@ let tsRowFields = (row, env: TsEnv) => switch row {
 
 /// Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
 /// `{ … } & R` is not the alias, only its prefix, so it has no name to take.
+/// Nested records are sorted too: `unify` reorders fields at every depth, and
+/// an unsorted nested row would miss the alias even when the nested row itself
+/// still folds (ADR 0107).
 let shapeFieldsFrom = (row, vars) => switch row {
   | RowEmpty => Some([])
   | RowVar(_) => None
   | RowExtend(label, fieldType, optional, rest) => shapeFieldsFrom(rest, vars)
       |> Option.map(fs =>
         Array.prepend(
-          "${label}${optional ? "?" : ""}: ${tsOf(fieldType, plainEnv(vars))}",
+          "${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}",
           fs
         ))
+}
+
+let shapeJoined = (ts, vars) =>
+  Str.join(", ", ts |> map(t => shapeType(t, vars)))
+
+/// Type text for a shape key. Same spelling as `tsOf` with an empty index,
+/// except a closed record's fields are sorted at every depth.
+let shapeType = (t, vars) => switch widenLits(t) {
+  | TyRecord(row) => switch shapeFieldsFrom(row, vars) {
+      | None => tsOf(t, plainEnv(vars))
+      | Some(fs) => Array.length(fs) == 0
+          ? "{}"
+          : "{ ${Str.join("; ", Array.sort(fs))} }"
+    }
+  | TyCon("Array", [elem]) => let inner = shapeType(elem, vars) in
+      switch widenLits(elem) {
+        | TyFn(_, _) => "(${inner})[]"
+        | TyOneOf(_) => "(${inner})[]"
+        | _ => "${inner}[]"
+      }
+  | TyCon("List", [elem]) => "Iterable<${shapeType(elem, vars)}>"
+  | TyCon("Task", [value, error]) => "() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>"
+  | TyCon("tuple", elems) => "[${shapeJoined(elems, vars)}]"
+  | TyCon(name, args) => Array.length(args) == 0
+      ? primitiveTs(name)
+      : "${name}<${shapeJoined(args, vars)}>"
+  | TyOneOf(members) => Str.join(
+      " | ",
+      members
+        |> map(m => switch m {
+          | TySingleton("string", value) => "\"${value}\""
+          | TySingleton(_, value) => value
+          | _ => shapeType(m, vars)
+        })
+    )
+  | _ => tsOf(t, plainEnv(vars))
 }
 
 /// The index key for a row. Sorted, because a row carries fields in the order
@@ -120,7 +169,12 @@ export let rowShapeKey = (row, vars) =>
 let aliasNameFor = (row, env) =>
   Map.size(env.recs) == 0
     ? None
-    : rowShapeKey(row, env.vars) |> Option.flatMap(k => Map.get(k, env.recs))
+    : rowShapeKey(row, env.vars)
+      |> Option.flatMap(k => switch Map.get(k, env.recs) {
+        | Some("") => None
+        | Some(name) => Some(name)
+        | None => None
+      })
 
 let tsRow = (row, env: TsEnv) => switch aliasNameFor(row, env) {
   | Some(alias) => alias
@@ -182,3 +236,346 @@ let tsOfRaw = (t, env: TsEnv) => switch t {
   | TySingleton(_, value) => value
   | TyOneOf(members) => Str.join(" | ", members |> map(m => tsOfRaw(m, env)))
 }
+
+/// A scheme variable prints as `A`, `B`, … then `T26`. A nominal type named
+/// `Tok` is not one of those letters, so it must not be treated as a hole.
+let isDigitChar = ch => switch Str.codeAt(0, ch) {
+  | Some(n) => n >= 48 && n <= 57
+  | None => false
+}
+
+let isUpperChar = ch => switch Str.codeAt(0, ch) {
+  | Some(n) => n >= 65 && n <= 90
+  | None => false
+}
+
+let allDigitsFrom = (s, i) =>
+  i >= Str.length(s)
+    ? i > 1
+    : isDigitChar(Str.slice(i, i + 1, s)) && allDigitsFrom(s, i + 1)
+
+let isTypeLetter = s =>
+  Str.length(s) == 1
+    ? isUpperChar(s)
+    : Str.length(s) > 1 && Str.slice(0, 1, s) == "T" && allDigitsFrom(s, 1)
+
+let depthStep = (s, i, depth) =>
+  let ch = Str.slice(i, i + 1, s) in
+    ch == "<" || ch == "{" || ch == "(" || ch == "["
+      ? depth + 1
+      : ch == "}" || ch == ")" || ch == "]"
+      ? depth - 1
+      : ch == ">" && (i == 0 || Str.slice(i - 1, i, s) != "=")
+      ? depth - 1
+      : depth
+
+let hasSuffix = (suf, s) =>
+  let n = Str.length(suf) in
+  let m = Str.length(s) in m >= n && Str.slice(m - n, m, s) == suf
+
+/// Split on `sep` only at bracket depth 0, so a nested `{ end: number; start: number }`
+/// stays one field.
+let splitTop = (sep, s) => splitTopAt(sep, s, 0, 0, 0, [])
+
+let splitTopAt = (sep, s, i, depth, start, acc) =>
+  i >= Str.length(s)
+    ? Array.append(Str.slice(start, Str.length(s), s), acc)
+    : let n = Str.length(sep) in
+      depth == 0 && i + n <= Str.length(s) && Str.slice(i, i + n, s) == sep
+        ? splitTopAt(
+          sep,
+          s,
+          i + n,
+          0,
+          i + n,
+          Array.append(Str.slice(start, i, s), acc)
+        )
+        : splitTopAt(sep, s, i + 1, depthStep(s, i, depth), start, acc)
+
+let findTop = (ch, s, i, depth) =>
+  i >= Str.length(s)
+    ? None
+    : depth == 0 && Str.slice(i, i + 1, s) == ch
+    ? Some(i)
+    : findTop(ch, s, i + 1, depthStep(s, i, depth))
+
+let bindLetter = (letter, concrete, subst) => switch Map.get(letter, subst) {
+  | None => Some(Map.set(letter, concrete, subst))
+  | Some(prev) => prev == concrete ? Some(subst) : None
+}
+
+let agreeList = (useTs, aliasTs, subst, i) =>
+  Array.length(useTs) != Array.length(aliasTs)
+    ? None
+    : i >= Array.length(useTs)
+    ? Some(subst)
+    : switch Array.get(i, useTs) {
+      | None => None
+      | Some(u) => switch Array.get(i, aliasTs) {
+          | None => None
+          | Some(a) => switch typesAgree(u, a, subst) {
+              | None => None
+              | Some(subst1) => agreeList(useTs, aliasTs, subst1, i + 1)
+            }
+        }
+    }
+
+let peelApp = s => switch findTop("<", s, 0, 0) {
+  | None => None
+  | Some(i) => hasSuffix(">", s) && i > 0
+      ? Some(
+        {
+          name: Str.slice(0, i, s),
+          args: Str.slice(i + 1, Str.length(s) - 1, s)
+        }
+      )
+      : None
+}
+
+let wrapped = (open, close, s) =>
+  Str.startsWith(open, s) && hasSuffix(close, s) && Str.length(s) >= 2
+
+let innerOf = s => Str.slice(1, Str.length(s) - 1, s)
+
+let stripParens = s =>
+  wrapped("(", ")", s) ? Str.slice(1, Str.length(s) - 1, s) : s
+
+let agreeArray = (useT, aliasT, subst) =>
+  hasSuffix("[]", useT) && hasSuffix("[]", aliasT)
+    ? typesAgree(
+      stripParens(Str.slice(0, Str.length(useT) - 2, useT)),
+      stripParens(Str.slice(0, Str.length(aliasT) - 2, aliasT)),
+      subst
+    )
+    : None
+
+let agreeApp = (useT, aliasT, subst) => switch peelApp(useT) {
+  | None => None
+  | Some(u) => switch peelApp(aliasT) {
+      | None => None
+      | Some(a) => u.name == a.name
+          ? agreeList(splitTop(", ", u.args), splitTop(", ", a.args), subst, 0)
+          : None
+    }
+}
+
+let splitLabel = s => switch findTop(":", s, 0, 0) {
+  | None => None
+  | Some(i) => Some(
+      { label: Str.slice(0, i, s), ty: Str.slice(i + 1, Str.length(s), s) }
+    )
+}
+
+let fieldAgree = (useF, aliasF, subst) => switch splitLabel(useF) {
+  | None => None
+  | Some(u) => switch splitLabel(aliasF) {
+      | None => None
+      | Some(a) => Str.trim(u.label) == Str.trim(a.label)
+          ? typesAgree(Str.trim(u.ty), Str.trim(a.ty), subst)
+          : None
+    }
+}
+
+let fieldsAgree = (useFs, aliasFs, subst) =>
+  agreeFields(useFs, aliasFs, subst, 0)
+
+let agreeFields = (useFs, aliasFs, subst, i) =>
+  Array.length(useFs) != Array.length(aliasFs)
+    ? None
+    : i >= Array.length(useFs)
+    ? Some(subst)
+    : switch Array.get(i, useFs) {
+      | None => None
+      | Some(u) => switch Array.get(i, aliasFs) {
+          | None => None
+          | Some(a) => switch fieldAgree(u, a, subst) {
+              | None => None
+              | Some(subst1) => agreeFields(useFs, aliasFs, subst1, i + 1)
+            }
+        }
+    }
+
+let agreeBrace = (useT, aliasT, subst) =>
+  wrapped("{", "}", useT) && wrapped("{", "}", aliasT)
+    ? fieldsAgree(
+      splitTop("; ", innerOf(useT)),
+      splitTop("; ", innerOf(aliasT)),
+      subst
+    )
+    : None
+
+let agreeTuple = (useT, aliasT, subst) =>
+  wrapped("[", "]", useT) && wrapped("[", "]", aliasT)
+    ? agreeList(
+      splitTop(", ", innerOf(useT)),
+      splitTop(", ", innerOf(aliasT)),
+      subst,
+      0
+    )
+    : None
+
+let agreeUnion = (useT, aliasT, subst) =>
+  let us = splitTop(" | ", useT) in
+  let als = splitTop(" | ", aliasT) in
+    Array.length(us) > 1 && Array.length(us) == Array.length(als)
+      ? agreeList(us, als, subst, 0)
+      : None
+
+let firstSome = (a, b) => switch a { | Some(_) => a | None => b }
+
+/// `useT` matches `aliasT` exactly, or by binding a scheme letter (`A`, `T26`)
+/// to the alias's concrete spelling. The binding has to be consistent: `A`
+/// cannot be `number` in one field and `string` in another.
+let typesAgree = (useT, aliasT, subst) =>
+  useT == aliasT
+    ? Some(subst)
+    : isTypeLetter(useT)
+    ? bindLetter(useT, aliasT, subst)
+    : firstSome(
+      agreeArray(useT, aliasT, subst),
+      firstSome(
+        agreeApp(useT, aliasT, subst),
+        firstSome(
+          agreeBrace(useT, aliasT, subst),
+          firstSome(
+            agreeTuple(useT, aliasT, subst),
+            agreeUnion(useT, aliasT, subst)
+          )
+        )
+      )
+    )
+
+/// One alias explains this closed row. Two aliases (a `{ x: A, y: B }` that
+/// matches both a numeric point and a string point) explain nothing — folding
+/// either name would be a guess.
+let uniqueSubst = (useKey, keys, i, found) => switch Array.get(i, keys) {
+  | None => found
+  | Some(k) => switch fieldsAgree(splitTop("; ", useKey), splitTop("; ", k), #{}) {
+      | None => uniqueSubst(useKey, keys, i + 1, found)
+      | Some(subst) => switch found {
+          | None => uniqueSubst(useKey, keys, i + 1, Some(subst))
+          | Some(_) => uniqueSubst(useKey, keys, i + 1, Some(#{ "*": "" }))
+        }
+    }
+}
+
+let substOf = (useKey, env) => switch uniqueSubst(useKey, Map.keys(env.recs), 0, None) {
+  | None => None
+  | Some(subst) => Map.has("*", subst) ? None : Some(subst)
+}
+
+let idForLetter = (letter, ids, vars, i) => switch Array.get(i, ids) {
+  | None => None
+  | Some(id) => switch Map.get(id, vars) {
+      | Some(name) => name == letter
+          ? Some(id)
+          : idForLetter(letter, ids, vars, i + 1)
+      | None => idForLetter(letter, ids, vars, i + 1)
+    }
+}
+
+/// A variable pinned to two different concrete types is dropped. Printing it
+/// as either one would make the other occurrence not assignable.
+let notePin = (id, concrete, st) =>
+  Set.has(id, st.bad)
+    ? st
+    : switch Map.get(id, st.pins) {
+      | None => { pins: Map.set(id, concrete, st.pins), bad: st.bad }
+      | Some(prev) => prev == concrete
+          ? st
+          : { pins: Map.delete(id, st.pins), bad: Set.add(id, st.bad) }
+    }
+
+let mergeSubst = (letters, subst, vars, ids, st, i) => switch Array.get(i, letters) {
+  | None => st
+  | Some(letter) => switch Map.get(letter, subst) {
+      | None => mergeSubst(letters, subst, vars, ids, st, i + 1)
+      | Some(concrete) => switch idForLetter(letter, ids, vars, 0) {
+          | None => mergeSubst(letters, subst, vars, ids, st, i + 1)
+          | Some(id) => mergeSubst(
+              letters,
+              subst,
+              vars,
+              ids,
+              notePin(id, concrete, st),
+              i + 1
+            )
+        }
+    }
+}
+
+let emptyPins = { pins: #{}, bad: Set.fromArray([]) }
+
+let considerClosed = (row, env, st) => switch rowShapeKey(row, env.vars) {
+  | None => st
+  | Some(key) => switch Map.get(key, env.recs) {
+      | Some(_) => st
+      | None => switch substOf(key, env) {
+          | None => st
+          | Some(subst) => mergeSubst(
+              Map.keys(subst),
+              subst,
+              env.vars,
+              Map.keys(env.vars),
+              st,
+              0
+            )
+        }
+    }
+}
+
+let pinInTys = (ts, env, st, i) => switch Array.get(i, ts) {
+  | None => st
+  | Some(t) => pinInTys(ts, env, pinInTy(t, env, st), i + 1)
+}
+
+let pinInRow = (row, env, st) => switch row {
+  | RowExtend(_, ft, _, rest) => pinInRow(rest, env, pinInTy(ft, env, st))
+  | _ => st
+}
+
+let pinInTy = (t, env, st) => switch t {
+  | TyRecord(row) => pinInRow(row, env, considerClosed(row, env, st))
+  | TyFn(a, b) => pinInTy(b, env, pinInTy(a, env, st))
+  | TyCon(_, args) => pinInTys(args, env, st, 0)
+  | TyOneOf(ms) => pinInTys(ms, env, st, 0)
+  | _ => st
+}
+
+/// Variables a unique in-scope record alias explains, as concrete type text.
+/// Open rows are skipped: `{ start: A, end: B } & R` is not the alias. An
+/// exact key needs no pin — `aliasNameFor` already prints the name.
+let pinAliasVars = (t, env) => pinInTy(t, env, emptyPins).pins
+
+let overlayPins = (ids, pins, names, i) => switch Array.get(i, ids) {
+  | None => names
+  | Some(id) => switch Map.get(id, pins) {
+      | Some(concrete) => overlayPins(
+          ids,
+          pins,
+          Map.set(id, concrete, names),
+          i + 1
+        )
+      | None => overlayPins(ids, pins, names, i + 1)
+    }
+}
+
+let headLetters = (names, pins) =>
+  let letters = Map.keys(names)
+    |> filter(id => !Map.has(id, pins))
+    |> map(id => Option.unwrapOr("", Map.get(id, names))) in
+    Array.length(letters) == 0 ? "" : "<${Str.join(", ", letters)}>"
+
+/// Render a scheme with record-alias pins applied (ADR 0106). The same
+/// substitution covers every occurrence of a variable, so a parameter and the
+/// return cannot disagree about it. `head` omits pinned letters — they are
+/// concrete type text now, not parameters. `pins` is the id → text map a
+/// non-function binding can print with, leaving every unpinned var `unknown`.
+export let schemeRender = (sc, recs) =>
+  let names = genericNames(sc) in
+  let pins = pinAliasVars(sc.ty, tsEnv(names, recs)) in
+    {
+      env: tsEnv(overlayPins(Map.keys(pins), pins, names, 0), recs),
+      head: headLetters(names, pins),
+      pins
+    }

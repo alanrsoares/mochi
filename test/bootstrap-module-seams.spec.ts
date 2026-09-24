@@ -9,7 +9,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
 import { repoRoot } from "@mochi/test-support";
-import { ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
+import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
 const root = repoRoot(import.meta.url);
 const bs = (f: string) => join(root, `bootstrap/${f}`);
@@ -55,7 +55,7 @@ beforeAll(async () => {
   ({ exportedRegistry, exportedCtorKeys } = await import(bs("ctors.js")));
   ({ inferProgram, inferProgramImports } = await import(bs("infer.js")));
   ({ builtins, namespaces } = await import(bs("prelude.gen.mjs")));
-});
+}, BOOTSTRAP_BUILD_HOOK_MS);
 
 // ---- exportedRegistry ------------------------------------------------------
 

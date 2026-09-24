@@ -126,18 +126,18 @@ export const builtinDeclsFor: (
     (bt: { name: string; params: string[]; ctors: Ctor[] }) => not(declaresType(stmts, 0, bt.name)),
     builtinTypeDecls,
   );
-const seedRegCtorsFrom: <A, B, C, D>(
+const seedRegCtorsFrom: <A, B, D>(
   ctors: ({ name: A; fields: B[] } & D)[],
   i: number,
-  owner: C,
-  acc: Map<A, { owner: C; arity: number }>,
-) => Map<A, { owner: C; arity: number }> = _curry(
+  owner: string,
+  acc: Map<A, CtorInfo>,
+) => Map<A, CtorInfo> = _curry(
   4,
-  <A, B, C, D>(
+  <A, B, D>(
     ctors: ({ name: A; fields: B[] } & D)[],
     i: number,
-    owner: C,
-    acc: Map<A, { owner: C; arity: number }>,
+    owner: string,
+    acc: Map<A, CtorInfo>,
   ) =>
     match(_Array_get(i, ctors))
       .with({ _tag: "None" }, () => acc)
@@ -153,16 +153,16 @@ const seedRegCtorsFrom: <A, B, C, D>(
       )
       .exhaustive(),
 );
-const seedRegDeclsFrom: <A, B, C, D, E>(
-  decls: ({ name: A; ctors: ({ name: B; fields: C[] } & D)[] } & E)[],
+const seedRegDeclsFrom: <C, D, E>(
+  decls: ({ name: string; ctors: ({ name: string; fields: C[] } & D)[] } & E)[],
   i: number,
-  reg: { types: Map<A, B[]>; ctors: Map<B, { owner: A; arity: number }> },
-) => { types: Map<A, B[]>; ctors: Map<B, { owner: A; arity: number }> } = _curry(
+  reg: Registry,
+) => Registry = _curry(
   3,
-  <A, B, C, D, E>(
-    decls: ({ name: A; ctors: ({ name: B; fields: C[] } & D)[] } & E)[],
+  <C, D, E>(
+    decls: ({ name: string; ctors: ({ name: string; fields: C[] } & D)[] } & E)[],
     i: number,
-    reg: { types: Map<A, B[]>; ctors: Map<B, { owner: A; arity: number }> },
+    reg: Registry,
   ) =>
     match(_Array_get(i, decls))
       .with({ _tag: "None" }, () => reg)
@@ -171,55 +171,51 @@ const seedRegDeclsFrom: <A, B, C, D, E>(
           ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
           types: _Map_set(
             bt.name,
-            map((c: { name: B; fields: C[] } & D) => c.name, bt.ctors),
+            map((c: { name: string; fields: C[] } & D) => c.name, bt.ctors),
             reg.types,
           ),
         }),
       )
       .exhaustive(),
 );
-const ctorErr: <A, B, C, D>(
-  message: A,
-  sp: { end: B; start: C } & D,
-) => { message: A; start: C; end: B } = _curry(
+const ctorErr: <D>(message: string, sp: { end: number; start: number } & D) => PErr = _curry(
   2,
-  <A, B, C, D>(message: A, sp: { end: B; start: C } & D) => ({
+  <D>(message: string, sp: { end: number; start: number } & D) => ({
     message: message,
     start: sp.start,
     end: sp.end,
   }),
 );
-const ctorsInto: <A, B, C, D, E, F>(
+const ctorsInto: <A, E, F>(
   ctors: ({ name: string; fields: A[] } & E)[],
   i: number,
-  owner: B,
-  sp: { end: C; start: D } & F,
-  acc: Map<string, { owner: B; arity: number }>,
-) => Result<Map<string, { owner: B; arity: number }>, { message: string; start: D; end: C }> =
-  _curry(
-    5,
-    <A, B, C, D, E, F>(
-      ctors: ({ name: string; fields: A[] } & E)[],
-      i: number,
-      owner: B,
-      sp: { end: C; start: D } & F,
-      acc: Map<string, { owner: B; arity: number }>,
-    ) =>
-      match(_Array_get(i, ctors))
-        .with({ _tag: "None" }, () => Ok(acc))
-        .with({ _tag: "Some" }, ({ value: c }) =>
-          _Map_has(c.name, acc)
-            ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
-            : ctorsInto(
-                ctors,
-                i + 1,
-                owner,
-                sp,
-                _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-              ),
-        )
-        .exhaustive(),
-  );
+  owner: string,
+  sp: { end: number; start: number } & F,
+  acc: Map<string, CtorInfo>,
+) => Result<Map<string, CtorInfo>, PErr> = _curry(
+  5,
+  <A, E, F>(
+    ctors: ({ name: string; fields: A[] } & E)[],
+    i: number,
+    owner: string,
+    sp: { end: number; start: number } & F,
+    acc: Map<string, CtorInfo>,
+  ) =>
+    match(_Array_get(i, ctors))
+      .with({ _tag: "None" }, () => Ok(acc))
+      .with({ _tag: "Some" }, ({ value: c }) =>
+        _Map_has(c.name, acc)
+          ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
+          : ctorsInto(
+              ctors,
+              i + 1,
+              owner,
+              sp,
+              _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
+            ),
+      )
+      .exhaustive(),
+);
 const buildLoop: _Curry<[stmts: Stmt[], i: number, reg: Registry], Result<Registry, PErr>> = _curry(
   3,
   (stmts: Stmt[], i: number, reg: Registry) =>

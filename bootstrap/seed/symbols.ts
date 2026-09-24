@@ -42,12 +42,9 @@ import { match } from "@onrails/pattern";
 
 import * as Ast from "./ast";
 
-const def: <A, B, C, D>(
-  name: A,
-  span: { end: B; start: C } & D,
-) => { name: A; defStart: C; defEnd: B; start: C; end: B; role: string } = _curry(
+const def: <D>(name: string, span: { end: number; start: number } & D) => Occurrence = _curry(
   2,
-  <A, B, C, D>(name: A, span: { end: B; start: C } & D) => ({
+  <D>(name: string, span: { end: number; start: number } & D) => ({
     name: name,
     defStart: span.start,
     defEnd: span.end,
@@ -56,22 +53,19 @@ const def: <A, B, C, D>(
     role: "def",
   }),
 );
-const use: <A, B, C, D, E, F, G>(
-  name: A,
-  span: { end: B; start: C } & F,
-  env: Map<A, { end: D; start: E } & G>,
-) => { name: A; defStart: E; defEnd: D; start: C; end: B; role: string }[] = _curry(
+const use: <F, G>(
+  name: string,
+  span: { end: number; start: number } & F,
+  env: Map<string, { end: number; start: number } & G>,
+) => Occurrence[] = _curry(
   3,
-  <A, B, C, D, E, F, G>(
-    name: A,
-    span: { end: B; start: C } & F,
-    env: Map<A, { end: D; start: E } & G>,
+  <F, G>(
+    name: string,
+    span: { end: number; start: number } & F,
+    env: Map<string, { end: number; start: number } & G>,
   ) =>
     match(_Map_get(name, env))
-      .with(
-        { _tag: "None" },
-        () => [] as { name: A; defStart: E; defEnd: D; start: C; end: B; role: string }[],
-      )
+      .with({ _tag: "None" }, () => [] as Occurrence[])
       .with({ _tag: "Some" }, ({ value: binding }) => [
         {
           name: name,
@@ -84,17 +78,14 @@ const use: <A, B, C, D, E, F, G>(
       ])
       .exhaustive(),
 );
-const bind: <A, B, C, D>(
-  name: A,
-  span: { end: B; start: C } & D,
-  env: Map<A, { name: A; start: C; end: B }>,
-) => Map<A, { name: A; start: C; end: B }> = _curry(
+const bind: <D>(
+  name: string,
+  span: { end: number; start: number } & D,
+  env: Map<string, Binding>,
+) => Map<string, Binding> = _curry(
   3,
-  <A, B, C, D>(
-    name: A,
-    span: { end: B; start: C } & D,
-    env: Map<A, { name: A; start: C; end: B }>,
-  ) => _Map_set(name, { name: name, start: span.start, end: span.end }, env),
+  <D>(name: string, span: { end: number; start: number } & D, env: Map<string, Binding>) =>
+    _Map_set(name, { name: name, start: span.start, end: span.end }, env),
 );
 const bindSpannedNames: _Curry<
   [names: string[], spans: SpanAt[], env: Map<string, Binding>, i: number],
@@ -367,15 +358,15 @@ const walkLoopParams: _Curry<
     )
     .exhaustive(),
 );
-const loopEnv: <A, B, C, D, E>(
-  params: ({ name: A; nameSpan: { end: B; start: C } & D } & E)[],
-  env: Map<A, { name: A; start: C; end: B }>,
+const loopEnv: <D, E>(
+  params: ({ name: string; nameSpan: { end: number; start: number } & D } & E)[],
+  env: Map<string, Binding>,
   i: number,
-) => Map<A, { name: A; start: C; end: B }> = _curry(
+) => Map<string, Binding> = _curry(
   3,
-  <A, B, C, D, E>(
-    params: ({ name: A; nameSpan: { end: B; start: C } & D } & E)[],
-    env: Map<A, { name: A; start: C; end: B }>,
+  <D, E>(
+    params: ({ name: string; nameSpan: { end: number; start: number } & D } & E)[],
+    env: Map<string, Binding>,
     i: number,
   ) =>
     match(_Array_get(i, params))
@@ -385,17 +376,17 @@ const loopEnv: <A, B, C, D, E>(
       )
       .exhaustive(),
 );
-const loopDefs: <A, B, C, D, E>(
-  params: ({ name: A; nameSpan: { end: B; start: C } & D } & E)[],
+const loopDefs: <D, E>(
+  params: ({ name: string; nameSpan: { end: number; start: number } & D } & E)[],
   i: number,
-) => { name: A; defStart: C; defEnd: B; start: C; end: B; role: string }[] = _curry(
+) => Occurrence[] = _curry(
   2,
-  <A, B, C, D, E>(params: ({ name: A; nameSpan: { end: B; start: C } & D } & E)[], i: number) =>
+  <D, E>(
+    params: ({ name: string; nameSpan: { end: number; start: number } & D } & E)[],
+    i: number,
+  ) =>
     match(_Array_get(i, params))
-      .with(
-        { _tag: "None" },
-        () => [] as { name: A; defStart: C; defEnd: B; start: C; end: B; role: string }[],
-      )
+      .with({ _tag: "None" }, () => [] as Occurrence[])
       .with({ _tag: "Some" }, ({ value: param }) =>
         _Array_concat([def(param.name, param.nameSpan)], loopDefs(params, i + 1)),
       )

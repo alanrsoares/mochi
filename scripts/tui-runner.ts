@@ -10,9 +10,9 @@
  *          [--filter <glob>] [--bail] [--timeout <ms>]
  *          [--jobs <n>] [--compact] [--tail <n>]
  *
- * `--compact` is the machine-readable mode: no colour, no cursor tricks, no
- * per-line prefixes, and output only from the tasks that actually failed —
- * capped to the last `--tail` lines each. A green run prints one line total.
+ * Off a TTY — CI, a pipe, or `--compact` — failing tasks print an unprefixed
+ * tail and a column-0 `::error::` annotation. `--compact` stays quiet on a
+ * green run (one summary line). A TTY keeps the live view.
  */
 import { availableParallelism } from "node:os";
 import { parseArgs } from "node:util";
@@ -24,11 +24,16 @@ import {
   duration,
   findWorkspacePackages,
   fit,
+  formatCiFailure,
+  formatCiSummary,
+  formatCiTaskLine,
   meter,
   type Outcome,
   type Phase,
+  pushTail,
   REPO_ROOT,
   SPINNER,
+  type TailBuf,
   taskColor,
 } from "./lib";
 
@@ -126,10 +131,12 @@ const OPTS = readOptions(process.argv.slice(2));
  * isatty, NO_COLOR, FORCE_COLOR, TERM=dumb and CI into it. `INTERACTIVE` says
  * whether the cursor can be moved, which is what live streaming and the pinned
  * status block actually need. Conflating them made `NO_COLOR=1` on a terminal
- * silently switch to buffered CI output.
+ * silently switch to buffered CI output. `CI=true` forces that buffered report
+ * even when stdout is a TTY, so annotations stay at column 0.
  */
 const COLOR = !OPTS.compact && Bun.enableANSIColors;
-const INTERACTIVE = !OPTS.compact && Boolean(process.stdout.isTTY);
+const IN_CI = process.env.CI === "true" || process.env.CI === "1";
+const INTERACTIVE = !OPTS.compact && !IN_CI && Boolean(process.stdout.isTTY);
 
 const { RESET, BOLD, DIM, GRAY, RED, GREEN, YELLOW, CYAN, PHASE_ICON, PHASE_COLOR } =
   createTerminalStyles(COLOR);
@@ -252,65 +259,52 @@ const showCursor = (): void => {
 // ── task execution ───────────────────────────────────────────────────────────
 
 /**
- * Where a task's output goes. On a TTY it streams live, prefixed by task name;
- * off a TTY it is buffered and only a failing task's tail is printed. This keeps
- * successful Vite/Bun output from pushing the diagnostic that matters out of a
- * CI log.
+ * Where a task's output goes. On a TTY it streams live, prefixed by task name.
+ * Off a TTY it is buffered and only a failing task's tail is printed, unprefixed,
+ * so a child `::error::` stays at column 0. Successful Vite/Bun output stays out
+ * of the CI log.
  */
 type Sink = {
   readonly line: (text: string, stderr: boolean) => void;
-  readonly flush: (outcome: Outcome) => void;
+  readonly flush: (outcome: Outcome, ms: number, exit: number) => void;
 };
 
-/** Compact mode drops the per-line `name │` prefix for a single header — same information, once. */
-const compactSink = (spec: TaskSpec, opts: Options): Sink => {
-  const buffered: string[] = [];
+const machineSink = (spec: TaskSpec, opts: Options): Sink => {
+  let buf: TailBuf = { lines: [], dropped: 0 };
   return {
     line: (text) => {
-      if (text.trim() !== "") buffered.push(text);
+      if (text.trim() !== "") buf = pushTail(buf, text, opts.tail);
     },
-    flush: (outcome) => {
-      if (outcome === "passed" || outcome === "cancelled" || buffered.length === 0) return;
-      const capped = opts.tail === 0 ? buffered : buffered.slice(-opts.tail);
-      const dropped = buffered.length - capped.length;
-      const head =
-        dropped > 0
-          ? `--- ${spec.name} (${dropped} earlier lines omitted)\n`
-          : `--- ${spec.name}\n`;
-      write(`${head}${capped.join("\n")}\n`);
+    flush: (outcome, ms, exit) => {
+      if (outcome !== "failed" && outcome !== "timeout") return;
+      write(
+        formatCiFailure({
+          name: spec.name,
+          outcome,
+          ms,
+          exit,
+          timeoutMs: opts.timeout,
+          lines: buf.lines,
+          tail: 0,
+          dropped: buf.dropped,
+        }),
+      );
     },
   };
 };
 
 const makeSink = (spec: TaskSpec, opts: Options): Sink => {
-  if (opts.compact) return compactSink(spec, opts);
+  if (!INTERACTIVE) return machineSink(spec, opts);
 
-  const buffered: string[] = [];
   const render = (text: string, stderr: boolean): string =>
     `${label(spec)} ${GRAY}${stderr ? "┃" : "│"}${RESET} ${text}\n`;
 
-  return INTERACTIVE
-    ? {
-        line: (text, stderr) => {
-          if (text.trim() !== "") write(render(text, stderr));
-        },
-        flush: () => {},
-      }
-    : {
-        line: (text, stderr) => {
-          if (text.trim() !== "") buffered.push(render(text, stderr));
-        },
-        flush: (outcome) => {
-          if (outcome === "passed" || outcome === "cancelled" || buffered.length === 0) return;
-          const capped = opts.tail === 0 ? buffered : buffered.slice(-opts.tail);
-          const dropped = buffered.length - capped.length;
-          const head =
-            dropped > 0
-              ? `${YELLOW}--- ${spec.name} (${dropped} earlier lines omitted)${RESET}\n`
-              : `${YELLOW}--- ${spec.name} (final output)${RESET}\n`;
-          write(`${head}${capped.join("")}\n`);
-        },
-      };
+  return {
+    line: (text, stderr) => {
+      if (text.trim() !== "") write(render(text, stderr));
+    },
+    flush: () => {},
+  };
 };
 
 /**
@@ -399,11 +393,9 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   const started = performance.now();
   const sink = makeSink(spec, opts);
   setPhase(spec.name, "running", { began: started });
-  // On a TTY the pinned block already shows this; off one it is the only trace.
-  // Compact mode reports nothing until a task has an outcome worth a line.
-  if (!INTERACTIVE && !opts.compact) {
-    write(`${CYAN}•${RESET} ${label(spec)} ${GRAY}started${RESET}\n`);
-  }
+  // On a TTY the pinned block already shows this. Off one, a single `running`
+  // line is the heartbeat; `--compact` stays silent until something fails.
+  if (!INTERACTIVE && !opts.compact) write(formatCiTaskLine(spec.name, "running"));
 
   const proc = Bun.spawn(["bun", ...spec.args], {
     cwd: spec.cwd,
@@ -442,7 +434,11 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
     bail.signal.removeEventListener("abort", stopDrain);
     const ms = performance.now() - started;
     setPhase(spec.name, "cancelled", { ms });
-    if (!opts.compact) write(verdict(spec, "cancelled", ms, 0, opts));
+    if (!INTERACTIVE) {
+      if (!opts.compact) write(formatCiTaskLine(spec.name, "cancelled", ms));
+    } else {
+      write(verdict(spec, "cancelled", ms, 0, opts));
+    }
     return { name: spec.name, outcome: "cancelled", ms };
   }
   clearTimeout(timeoutId);
@@ -461,11 +457,11 @@ const runTask = async (spec: TaskSpec, opts: Options): Promise<TaskResult> => {
   // Only our deadline callback sets `timedOut`; external signals remain failures.
   const outcome: Outcome = exit === 0 ? "passed" : timedOut ? "timeout" : "failed";
   setPhase(spec.name, outcome, { ms });
-  if (opts.compact) {
-    if (outcome !== "passed") write(`${outcome.toUpperCase()} ${spec.name} (${duration(ms)})\n`);
-    sink.flush(outcome);
+  if (!INTERACTIVE) {
+    if (outcome === "failed" || outcome === "timeout") sink.flush(outcome, ms, exit);
+    else if (!opts.compact) write(formatCiTaskLine(spec.name, "passed", ms));
   } else {
-    sink.flush(outcome);
+    sink.flush(outcome, ms, exit);
     write(verdict(spec, outcome, ms, exit, opts));
   }
 
@@ -642,15 +638,17 @@ const main = async (): Promise<void> => {
     done = true;
 
     const elapsed = duration(performance.now() - started);
-    if (opts.compact) {
-      // One line, and it is the only line a fully green run produces.
-      const tally = [
-        `${passed.length} passed`,
-        failed.length > 0 ? `${failed.length} failed` : "",
-        cancelled > 0 ? `${cancelled} cancelled` : "",
-      ].filter((part) => part !== "");
-      const names = failed.length > 0 ? ` — ${failed.map((r) => r.name).join(", ")}` : "";
-      write(`${results.length} tasks: ${tally.join(", ")} (${elapsed})${names}\n`);
+    if (!INTERACTIVE) {
+      write(
+        formatCiSummary({
+          total: results.length,
+          passed: passed.length,
+          failed: results.filter((r) => r.outcome === "failed").map((r) => r.name),
+          timedOut: results.filter((r) => r.outcome === "timeout").map((r) => r.name),
+          cancelled,
+          elapsed,
+        }),
+      );
     } else {
       const green = failed.length === 0 && cancelled === 0;
       const banner = green

@@ -597,13 +597,12 @@ let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
   | [] => { ctx, errors }
   | [m, ...rest] => switch ctx->compileOne(m, true, Array.length(rest) == 0, opts) {
       | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
-          compileAllRecovering(
-            ctx,
+          ctx->compileAllRecovering(
             rest,
             Array.concat(errors, mergeRecovered(e, checks)),
             opts
           )
-      | Ok(ctx1) => compileAllRecovering(ctx1, rest, errors, opts)
+      | Ok(ctx1) => ctx1->compileAllRecovering(rest, errors, opts)
     }
 }
 
@@ -625,7 +624,7 @@ export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
 /// recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
 /// Advance a graph recovery state by a dependency-ordered suffix.
 export let recoverGraphFromWith = (state, graph, opts: Opts) =>
-  compileAllRecovering(state.ctx, graph, state.errors, opts)
+  state.ctx->compileAllRecovering(graph, state.errors, opts)
 
 export let recoverGraphFrom = (state, graph) =>
   state->recoverGraphFromWith(graph, defaultOpts)
@@ -823,14 +822,63 @@ let ownTypesInto = (stmts, path, acc) =>
   stmts
     |> Array.reduce(
       (a, s) => switch s {
-        | Ast.SType(name, _, _, _, _, _, _, _) => a |> Map.set(name, path)
+        | Ast.SType(name, _, _, _, _, _, _, _) => Map.has(name, a.owner)
+            ? {
+              owner: Map.set(name, path, a.owner),
+              dups: Set.add(name, a.dups),
+              dupNames: Set.has(name, a.dups)
+                ? a.dupNames
+                : Array.append(name, a.dupNames)
+            }
+            : {
+              owner: Map.set(name, path, a.owner),
+              dups: a.dups,
+              dupNames: a.dupNames
+            }
         | _ => a
       },
       acc
     )
 
 let typeOwnerOf = graph =>
-  graph |> Array.reduce((acc, m) => ownTypesInto(m.stmts, m.path, acc), #{})
+  graph
+    |> Array.reduce(
+      (acc, m) => ownTypesInto(m.stmts, m.path, acc),
+      { owner: #{}, dups: Set.fromArray([]), dupNames: [] }
+    )
+
+/// A bare name declared in two modules (`LocTok` in parser and `LocTok<t>` in
+/// infer) must not be the fold target outside the module whose own alias is
+/// the nullary record. The import table keeps one owner, and it may be the
+/// parameterised declaration.
+let nullaryDeclared = (name, local) => switch Map.get(name, local) {
+  | None => false
+  | Some(info) => Array.length(
+      info.params
+    ) == 0 && Array.length(info.fields) > 0
+}
+
+/// A synthetic parameterised homonym makes `withoutAmbiguousAlias` blank the
+/// printed name while the nullary shape stays in the index, so the variables
+/// still pin and the row prints structurally.
+let addDupMarkers = (names, local, acc, i) => switch Array.get(i, names) {
+  | None => acc
+  | Some(name) => addDupMarkers(
+      names,
+      local,
+      nullaryDeclared(name, local)
+        ? acc
+        : Map.set(
+          "dup.${name}",
+          { params: ["_"], fields: [], expr: None },
+          acc
+        ),
+      i + 1
+    )
+}
+
+let aliasesForTs = (merged, local, dupNames) =>
+  addDupMarkers(dupNames, local, merged, 0)
 
 let localTypeNames = stmts =>
   stmts
@@ -918,8 +966,14 @@ let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(l
               // Keep dependency aliases in scope for TS rendering. Inference
               // expands record aliases to rows, so without this accumulated
               // index a type imported from an earlier module prints inline
-              // instead of as the alias that module declared.
-              mergeMap(r.aliases, ctx.aliases),
+              // instead of as the alias that module declared. A bare name
+              // declared twice is kept only for the module whose own alias is
+              // the nullary record (ADR 0106).
+              aliasesForTs(
+                mergeMap(r.aliases, ctx.aliases),
+                aliasesOf(loaded.stmts),
+                ctx.dupNames
+              ),
               res.keys,
               [],
               namespaceRuntime,
@@ -961,6 +1015,7 @@ let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(l
                   ),
                   aliases: mergeMap(r.aliases, ctx.aliases),
                   typeOwner: ctx.typeOwner,
+                  dupNames: ctx.dupNames,
                   runtimeImport: ctx.runtimeImport,
                   externs: externBindingsInto(
                     loaded.stmts,
@@ -1002,21 +1057,23 @@ let compileAllTs = (ctx, graph, opts) => switch graph {
 /// `.mochi` module paths (the writer swaps the extension) followed by the extern
 /// sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
 export let compileGraphTsWith = (graph, runtimeImport, opts: Opts) =>
-  compileAllTs(
-    {
-      exportsByPath: #{},
-      regByPath: #{},
-      keysByPath: #{},
-      qualsByPath: #{},
-      aliases: #{},
-      typeOwner: typeOwnerOf(graph),
-      runtimeImport,
-      externs: #{},
-      outputs: []
-    },
-    graph,
-    opts
-  )
+  let noted = typeOwnerOf(graph) in
+    compileAllTs(
+      {
+        exportsByPath: #{},
+        regByPath: #{},
+        keysByPath: #{},
+        qualsByPath: #{},
+        aliases: #{},
+        typeOwner: noted.owner,
+        dupNames: noted.dupNames,
+        runtimeImport,
+        externs: #{},
+        outputs: []
+      },
+      graph,
+      opts
+    )
 
 export let compileGraphTs = (graph, runtimeImport) =>
   graph->compileGraphTsWith(runtimeImport, defaultOpts)

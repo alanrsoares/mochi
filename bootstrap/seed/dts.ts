@@ -1,10 +1,8 @@
-import type { Stmt, TypeExpr } from "./ast";
+import type { Span, Stmt, TypeExpr } from "./ast";
 import type { Row, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { AliasInfo } from "./codegen-ts";
-import type { QualAliasField } from "./infer";
+import type { QualAliasField, QualAliasInfo } from "./infer";
 import type { CtorFieldLike, CtorLike } from "./codegen";
-import type { Opts } from "./module";
 import type { Stamped } from "./compile";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -35,7 +33,9 @@ import {
   _Str_startsWith,
   _curry,
   add,
+  and,
   eq,
+  gt,
   length,
   map,
   not,
@@ -51,8 +51,10 @@ import {
   bindingTsType,
   builtinTypeNamesFor,
   declaredTypeNames,
+  nullaryLocalNames,
   recordAliasIndex,
   referencedCons,
+  withoutAmbiguousAlias,
   opaqueTypeDecl,
   recordAliasDecl,
   typeDecl,
@@ -313,7 +315,7 @@ const qualifyAliasField: _Curry<[f: QualAliasField, qualify: Map<string, string>
 const typeDeclsFrom: _Curry<
   [
     stmts: Stmt[],
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, QualAliasInfo>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -324,7 +326,7 @@ const typeDeclsFrom: _Curry<
   6,
   (
     stmts: Stmt[],
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, QualAliasInfo>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -443,11 +445,11 @@ const bindingDeclsFrom: <A>(
  * runtime instead (ADR 0093).
  */
 const builtinDeclsFor: _Curry<
-  [names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number],
+  [names: string[], aliases: Map<string, QualAliasInfo>, recs: Map<string, string>, i: number],
   string[]
 > = _curry(
   4,
-  (names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
+  (names: string[], aliases: Map<string, QualAliasInfo>, recs: Map<string, string>, i: number) =>
     match(_Array_get(i, builtinTypeDecls))
       .with({ _tag: "None" }, () => [] as string[])
       .with({ _tag: "Some" }, ({ value: bt }) =>
@@ -498,12 +500,109 @@ const nsTypeImportsFrom: _Curry<
     .exhaustive(),
 );
 /**
+ * A `.d.ts` has no named-import pass. `recordAliasIndex` stores `bareName`,
+ * so `Ast.Span` is printed as `Span` — a type this file never imports.
+ * Blank every printed name the file does not itself declare; the row then
+ * prints structurally. A local nullary alias stays, so `export type Span`
+ * still names `Span` at use sites in the same file.
+ */
+const blankNonLocal: <A>(
+  keys: A[],
+  recs: Map<A, string>,
+  locals: Set<string>,
+  i: number,
+) => Map<A, string> = _curry(
+  4,
+  <A>(keys: A[], recs: Map<A, string>, locals: Set<string>, i: number) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => recs)
+      .with({ _tag: "Some" }, ({ value: k }) =>
+        match(_Map_get(k, recs))
+          .with({ _tag: "None" }, () => blankNonLocal(keys, recs, locals, i + 1))
+          .with({ _tag: "Some" }, ({ value: name }) =>
+            blankNonLocal(
+              keys,
+              and(not(eq(name, "")), not(_Set_has(name, locals))) ? _Map_set(k, "", recs) : recs,
+              locals,
+              i + 1,
+            ),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+export const declarationRecs: _Curry<
+  [stmts: Stmt[], aliases: Map<string, QualAliasInfo>],
+  Map<string, string>
+> = _curry(2, (stmts: Stmt[], aliases: Map<string, QualAliasInfo>) => {
+  const locals: Set<string> = nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[]));
+  const indexed: Map<string, string> = recordAliasIndex(aliases);
+  return blankNonLocal(
+    _Map_keys(indexed),
+    withoutAmbiguousAlias(indexed, aliases, locals),
+    locals,
+    0,
+  );
+});
+/**
+ * A recursive non-local alias cannot print structurally: the cycle hole is a
+ * bare con (`Node`), and this file never imports that name. Point the hole at
+ * the qualified spelling (`Ast.Node`) so the declaration keeps a reference the
+ * `import type * as` line can resolve. Inference is unchanged — `aliasRow`
+ * still falls back to the bare con.
+ */
+const qualConRecs: <A, B, C, D, E>(
+  keys: A[],
+  qualify: Map<A, B>,
+  aliases: Map<B, { expr: Option<C>; fields: D[] } & E>,
+  recs: Map<A, B>,
+  i: number,
+) => Map<A, B> = _curry(
+  5,
+  <A, B, C, D, E>(
+    keys: A[],
+    qualify: Map<A, B>,
+    aliases: Map<B, { expr: Option<C>; fields: D[] } & E>,
+    recs: Map<A, B>,
+    i: number,
+  ) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => recs)
+      .with({ _tag: "Some" }, ({ value: name }) =>
+        qualConRecs(
+          keys,
+          qualify,
+          aliases,
+          match(_Map_get(name, qualify))
+            .with({ _tag: "None" }, () => recs)
+            .with({ _tag: "Some" }, ({ value: qual }) =>
+              match(_Map_get(qual, aliases))
+                .with({ _tag: "None" }, () => recs)
+                .with({ _tag: "Some" }, ({ value: info }) =>
+                  match(info.expr)
+                    .with({ _tag: "Some" }, () => recs)
+                    .with({ _tag: "None" }, () =>
+                      and(length(info.fields) > 0, not(_Map_has(name, recs)))
+                        ? _Map_set(name, qual, recs)
+                        : recs,
+                    )
+                    .exhaustive(),
+                )
+                .exhaustive(),
+            )
+            .exhaustive(),
+          i + 1,
+        ),
+      )
+      .exhaustive(),
+);
+/**
  * Emit `.d.ts` text from an already-typed program.
  */
 export const emitDtsFromTypedWith: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-  aliases: Map<string, AliasInfo>,
+  aliases: Map<string, QualAliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
   docs: boolean,
@@ -512,14 +611,20 @@ export const emitDtsFromTypedWith: <A>(
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, QualAliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
     docs: boolean,
   ) => {
-    const recs: Map<string, string> = recordAliasIndex(aliases);
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
+    const recs: Map<string, string> = qualConRecs(
+      _Map_keys(quals),
+      quals,
+      aliases,
+      declarationRecs(stmts, aliases),
+      0,
+    );
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
     const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, docs, 0);
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
@@ -618,7 +723,7 @@ export const qualifierMapOf: <A>(
 export const emitDtsFromTyped: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-  aliases: Map<string, AliasInfo>,
+  aliases: Map<string, QualAliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
 ) => string = _curry(
@@ -626,7 +731,7 @@ export const emitDtsFromTyped: <A>(
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-    aliases: Map<string, AliasInfo>,
+    aliases: Map<string, QualAliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
   ) => emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true),
@@ -636,29 +741,51 @@ export const emitDtsFromTyped: <A>(
  * surface as diagnostics.
  */
 export const emitDtsTextWith: _Curry<
-  [src: string, runtimeImport: string, opts: Opts],
+  [
+    src: string,
+    runtimeImport: string,
+    opts: {
+      docs: boolean;
+      open: boolean;
+      runtime: boolean;
+      moduleExt: string;
+      strictEntry: boolean;
+    },
+  ],
   Result<string, Stamped[]>
-> = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
-  _Result_map(
-    ([stmts, r]: [
-      Stmt[],
-      {
-        env: Map<string, Scheme>;
-        aliases: Map<string, AliasInfo>;
-        types: TypeAt[];
-        letParams: TypeAt[];
-      },
-    ]) =>
-      emitDtsFromTypedWith(
-        stmts,
-        r.env,
-        r.aliases,
-        new Map<string, string>(),
-        runtimeImport,
-        opts.docs,
-      ),
-    typedProgramWith(src, opts),
-  ),
+> = _curry(
+  3,
+  (
+    src: string,
+    runtimeImport: string,
+    opts: {
+      docs: boolean;
+      open: boolean;
+      runtime: boolean;
+      moduleExt: string;
+      strictEntry: boolean;
+    },
+  ) =>
+    _Result_map(
+      ([stmts, r]: [
+        Stmt[],
+        {
+          env: Map<string, Scheme>;
+          aliases: Map<string, QualAliasInfo>;
+          types: TypeAt[];
+          letParams: TypeAt[];
+        },
+      ]) =>
+        emitDtsFromTypedWith(
+          stmts,
+          r.env,
+          r.aliases,
+          new Map<string, string>(),
+          runtimeImport,
+          opts.docs,
+        ),
+      typedProgramWith(src, opts),
+    ),
 );
 export const emitDtsText: _Curry<
   [src: string, runtimeImport: string],

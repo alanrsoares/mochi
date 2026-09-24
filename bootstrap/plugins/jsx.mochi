@@ -11,11 +11,14 @@ import {
   tUnion,
   rExtend,
   TyFn,
+  TyVar,
+  TyCon,
   TyRecord,
   RowExtend,
   RowEmpty,
   RowVar
 } from "../types.mochi"
+import { closestName } from "../suggest.mochi"
 import * as Lexer from "../lexer.mochi"
 import {
   TLet,
@@ -445,24 +448,190 @@ let attrKindType = kind =>
     )
     : None
 
-let intrinsicAttrType = (tag, attr) =>
-  Map.get(tag, jsxIntrinsicElements)
-    |> Option.flatMap(Map.get(attr))
-    |> Option.flatMap(attrKindType)
-
-let inferIntrinsicFields = (tag, fields, st, api) => switch fields {
-  | [] => Ok(st)
-  | [f, ...rest] => switch intrinsicAttrType(tag, f.name) {
-      | Some(expectedT) => api.inferExpr(f.value, st)
-          |> Result.flatMap(((valT, st1)) =>
-            api.unify(valT, expectedT, st1, jxExprSpan(f.value))
-              |> Result.flatMap(st2 =>
-                inferIntrinsicFields(tag, rest, st2, api)))
-      | None => api.inferExpr(f.value, st)
-          |> Result.flatMap(((_, st1)) =>
-            inferIntrinsicFields(tag, rest, st1, api))
-    }
+let mismatchHint = name => switch name {
+  | "class" => Some("In JSX, use 'className' instead of 'class'.")
+  | "for" => Some("In JSX, use 'htmlFor' instead of 'for'.")
+  | "tabindex" => Some("In JSX, use 'tabIndex' instead of 'tabindex'.")
+  | "autofocus" => Some("In JSX, use 'autoFocus' instead of 'autofocus'.")
+  | "autocomplete" => Some(
+      "In JSX, use 'autoComplete' instead of 'autocomplete'."
+    )
+  | "readonly" => Some("In JSX, use 'readOnly' instead of 'readonly'.")
+  | "maxlength" => Some("In JSX, use 'maxLength' instead of 'maxlength'.")
+  | "minlength" => Some("In JSX, use 'minLength' instead of 'minlength'.")
+  | "spellcheck" => Some("In JSX, use 'spellCheck' instead of 'spellcheck'.")
+  | "contenteditable" => Some(
+      "In JSX, use 'contentEditable' instead of 'contenteditable'."
+    )
+  | "viewbox" => Some("In JSX, use 'viewBox' instead of 'viewbox'.")
+  | "strokewidth" => Some("In JSX, use 'strokeWidth' instead of 'strokewidth'.")
+  | "strokelinecap" => Some(
+      "In JSX, use 'strokeLinecap' instead of 'strokelinecap'."
+    )
+  | "strokelinejoin" => Some(
+      "In JSX, use 'strokeLinejoin' instead of 'strokelinejoin'."
+    )
+  | "onclick" => Some(
+      "In JSX, event handlers are camelCase: use 'onClick' instead of 'onclick'."
+    )
+  | "onchange" => Some(
+      "In JSX, event handlers are camelCase: use 'onChange' instead of 'onchange'."
+    )
+  | "oninput" => Some(
+      "In JSX, event handlers are camelCase: use 'onInput' instead of 'oninput'."
+    )
+  | "onkeydown" => Some(
+      "In JSX, event handlers are camelCase: use 'onKeyDown' instead of 'onkeydown'."
+    )
+  | "onkeyup" => Some(
+      "In JSX, event handlers are camelCase: use 'onKeyUp' instead of 'onkeyup'."
+    )
+  | "onsubmit" => Some(
+      "In JSX, event handlers are camelCase: use 'onSubmit' instead of 'onsubmit'."
+    )
+  | "onfocus" => Some(
+      "In JSX, event handlers are camelCase: use 'onFocus' instead of 'onfocus'."
+    )
+  | "onblur" => Some(
+      "In JSX, event handlers are camelCase: use 'onBlur' instead of 'onblur'."
+    )
+  | _ => None
 }
+
+type Hint = { title: string, start: number, end: number, replaceWith: string }
+// Named `BoundErr` so it sorts before infer's `IErr`. The TS emitter folds one
+// row shape to one alias, last sorted name wins, and compile's error must
+// stay `IErr`.
+type BoundErr = {
+  message: string,
+  start: number,
+  end: number,
+  help: Option<string>,
+  suggestions: [Hint]
+}
+let noJxSuggestions : [Hint] = []
+let jxTypeErr : string -> Ast.Span -> Result<b, BoundErr> = (message, sp) =>
+  Err(
+    {
+      message,
+      start: sp.start,
+      end: sp.end,
+      help: None,
+      suggestions: noJxSuggestions
+    }
+  )
+
+let isHandlerName = name =>
+  Str.startsWith(
+    "on",
+    name
+  ) && Str.length(name) > 2 && jxIsUpper(Str.slice(2, 3, name))
+
+let isFnOrOpen = t => switch t {
+  | TyFn(_, _) => true
+  | TyVar(_) => true
+  | TyCon(name, _) => name == "any"
+  | _ => false
+}
+
+let checkHandler = (name, value, st, api, cont) =>
+  let? (valT, st1) = api.inferExpr(value, st) in
+    isFnOrOpen(zonk(valT, st1))
+      ? cont(st1)
+      : jxTypeErr(
+        "Expected function for event handler '${name}'",
+        jxExprSpan(value)
+      )
+
+let unknownProp = (tag, name, value, schema) =>
+  let hint = closestName(name, Map.keys(schema)) in
+  let did = switch hint { | Some(s) => " Did you mean '${s}'?" | None => "" } in
+    jxTypeErr(
+      "Property '${name}' does not exist on '<${tag}>'.${did}",
+      jxExprSpan(value)
+    )
+
+let inferIntrinsicFields = (tag, fields, st, api, schema) => switch fields {
+  | [] => Ok(st)
+  | [f, ...rest] => let cont = st1 =>
+      inferIntrinsicFields(tag, rest, st1, api, schema) in
+      switch mismatchHint(f.name) {
+        | Some(msg) => jxTypeErr(msg, jxExprSpan(f.value))
+        | None => Str.startsWith(
+            "data-",
+            f.name
+          ) || Str.startsWith("aria-", f.name)
+            ? let? (_, st1) = api.inferExpr(f.value, st) in cont(st1)
+            : switch schema {
+              | None => let? (_, st1) = api.inferExpr(f.value, st) in cont(st1)
+              | Some(m) => let expected = switch Map.get(f.name, m) {
+                  | Some(k) => Some(k)
+                  | None => isHandlerName(f.name) ? Some("event") : None
+                } in
+                  switch expected {
+                    | None => unknownProp(tag, f.name, f.value, m)
+                    | Some(kind) => kind == "event"
+                        ? checkHandler(f.name, f.value, st, api, cont)
+                        : kind == "any"
+                        ? let? (_, st1) = api.inferExpr(f.value, st) in
+                          cont(st1)
+                        : switch attrKindType(kind) {
+                          | Some(expectedT) => let? (valT, st1) = api.inferExpr(
+                              f.value,
+                              st
+                            ) in
+                            let? st2 = api.unify(
+                              valT,
+                              expectedT,
+                              st1,
+                              jxExprSpan(f.value)
+                            ) in
+                              cont(st2)
+                          | None => let? (_, st1) = api.inferExpr(
+                              f.value,
+                              st
+                            ) in
+                              cont(st1)
+                        }
+                  }
+            }
+      }
+}
+
+let inferFragmentFields = (fields, st, api) => switch fields {
+  | [] => Ok(st)
+  | [f, ...rest] => f.name == "key"
+      ? let? (_, st1) = api.inferExpr(f.value, st) in
+        inferFragmentFields(rest, st1, api)
+      : jxTypeErr(
+        "JSX fragments only accept the 'key' prop, got '${f.name}'",
+        jxExprSpan(f.value)
+      )
+}
+
+let unknownTagErr = (tagName, sp) =>
+  let hint = closestName(tagName, Map.keys(jsxIntrinsicElements)) in
+  let did = switch hint {
+    | Some(s) => " Did you mean '<${s}>'?"
+    | None => ""
+  } in
+    jxTypeErr("Unknown JSX element '<${tagName}>'.${did}", sp)
+
+let inferStringTag = (tagName, tagExpr, fields, st, api) =>
+  tagName == "Fragment"
+    ? inferFragmentFields(fields, st, api)
+    : switch Map.get(tagName, jsxIntrinsicElements) {
+      | Some(schema) => inferIntrinsicFields(
+          tagName,
+          fields,
+          st,
+          api,
+          Some(schema)
+        )
+      | None => Str.contains("-", tagName)
+          ? inferIntrinsicFields(tagName, fields, st, api, None)
+          : unknownTagErr(tagName, jxExprSpan(tagExpr))
+    }
 
 let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
   api.inferExpr(tagExpr, st)
@@ -491,8 +660,9 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
                     }
                   | _ => switch tagExpr {
                       | Ast.EStr(tagName, _) => switch propsExpr {
-                          | Ast.ERecord(fields, _, _) => inferIntrinsicFields(
+                          | Ast.ERecord(fields, _, _) => inferStringTag(
                               tagName,
+                              tagExpr,
                               fields,
                               st3,
                               api

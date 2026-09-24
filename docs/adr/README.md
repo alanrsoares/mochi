@@ -150,6 +150,8 @@ What else was on the table and why not.
 | [0103](0103-binding-identity-is-the-declaration-span.md) | Binding identity is the declaration span | Accepted |
 | [0104](0104-self-hosted-core-takes-the-compile-options.md) | The self-hosted core takes the compile options | Accepted |
 | [0105](0105-bootstrap-conformance-oracle.md) | Bootstrap conformance corpus replaces the TS core oracle | Accepted |
+| [0106](0106-pin-record-alias-vars.md) | Pin scheme variables that one record alias explains | Accepted |
+| [0107](0107-prefer-printable-record-alias.md) | Prefer a printable alias when the winning name is ambiguous | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

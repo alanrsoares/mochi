@@ -693,7 +693,16 @@ let checkExprs = (e, reg) => switch e {
 // Collection namespaces are built-in; binding one would shadow `List.map` and
 // desync codegen. Option/Result type redeclarations stay legal (builtin
 // variant contract: user redeclarations win).
-let reservedNames = ["Array", "List", "Set", "Map", "Option", "Result", "Str"]
+let reservedNames = [
+  "Array",
+  "List",
+  "Set",
+  "Map",
+  "Option",
+  "Result",
+  "Task",
+  "Str"
+]
 let redeclarableTypes = ["Option", "Result"]
 
 let reservedErr = (name, sp) =>

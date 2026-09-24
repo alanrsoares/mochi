@@ -15,8 +15,10 @@ import {
   lambdaParamTypesTs,
   opaqueTypeDecl,
   recordAliasDecl,
+  nullaryLocalNames,
   recordAliasIndex,
   typeDecl,
+  withoutAmbiguousAlias,
   bindingTsType,
   curriedOverloads,
   emitTsModule,
@@ -520,6 +522,96 @@ test("recordAliasIndex skips a parameterised alias", () =>
     )
   ))
 
+let spanAliases = #{
+  "Span": {
+    params: [],
+    fields: [
+      { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
+      { name: "end", fieldType: Ast.TyName("number", sp), optional: false }
+    ],
+    expr: None
+  },
+  "Other.Span": {
+    params: ["a"],
+    fields: [
+      { name: "value", fieldType: Ast.TyName("a", sp), optional: false }
+    ],
+    expr: None
+  }
+}
+
+test("a parameterised homonym hides the nullary name outside its module", () =>
+  // The shape stays, so a use can still pin; the blank name prints as the row.
+  assertEq(
+    #{ "end: number; start: number": "" },
+    withoutAmbiguousAlias(
+      recordAliasIndex(spanAliases),
+      spanAliases,
+      Set.fromArray([])
+    )
+  ))
+
+test("the module that declares the nullary alias still folds it", () =>
+  assertEq(
+    #{ "end: number; start: number": "Span" },
+    withoutAmbiguousAlias(
+      recordAliasIndex(spanAliases),
+      spanAliases,
+      Set.fromArray(["Span"])
+    )
+  ))
+
+test("a parameterised local homonym does not print a dep's nullary name", () =>
+  let src = "type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }\nlet eof = () => { tok: \"eof\", start: 0, end: 0, doc: None }" in
+  let dep = {
+    params: [],
+    fields: [
+      { name: "tok", fieldType: Ast.TyName("string", sp), optional: false },
+      { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
+      { name: "end", fieldType: Ast.TyName("number", sp), optional: false },
+      {
+        name: "doc",
+        fieldType: Ast.TyApp("Option", [Ast.TyName("string", sp)], sp),
+        optional: false
+      }
+    ],
+    expr: None
+  } in
+  let stmts = lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.unwrapOr([]) in
+  let out = inferProgramTypes(stmts, builtins, namespaces, false)
+    |> Result.mapErr(e => { message: e.message, start: e.start, end: e.end })
+    |> Result.map(r =>
+      emitTsModule(
+        stmts,
+        r.env,
+        r.types,
+        r.letParams,
+        Map.set("Parser.LocTok", dep, r.aliases),
+        noImportedKeys,
+        [],
+        namespaceRuntime,
+        preludeJsDefs,
+        runtimeDeps,
+        "@mochi/runtime"
+      ))
+    |> Result.unwrapOr("<error>") in
+    do {
+      assertEq(
+        false,
+        Set.has("LocTok", nullaryLocalNames(stmts, 0, Set.fromArray([])))
+      );
+      assertEq(
+        true,
+        Str.contains(
+          "const eof: () => { tok: string; start: number; end: number; doc: Option<string> }",
+          out
+        )
+      )
+    })
+
 test("a use of a record alias renders as the alias name", () =>
   assertEq(
     true,
@@ -528,6 +620,140 @@ test("a use of a record alias renders as the alias name", () =>
     )
       |> Str.contains(": Span")
   ))
+
+test("a unique alias keeps a shape a duplicate name would blank", () =>
+  let fld = {
+    params: [],
+    fields: [
+      { name: "name", fieldType: Ast.TyName("string", sp), optional: false },
+      {
+        name: "fieldType",
+        fieldType: Ast.TyName("TypeExpr", sp),
+        optional: false
+      },
+      { name: "optional", fieldType: Ast.TyName("bool", sp), optional: false }
+    ],
+    expr: None
+  } in
+  let infoOf = elem =>
+    {
+      params: [],
+      fields: [
+        {
+          name: "params",
+          fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
+          optional: false
+        },
+        {
+          name: "fields",
+          fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
+          optional: false
+        },
+        {
+          name: "expr",
+          fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
+          optional: false
+        }
+      ],
+      expr: None
+    } in
+  let aliases = #{
+    "QualAliasField": fld,
+    "AliasField": fld,
+    "QualAliasInfo": infoOf("QualAliasField"),
+    "AliasInfo": infoOf("AliasField"),
+    "Schemes.AliasInfo": infoOf("AliasField"),
+    "dup.AliasInfo": { params: ["_"], fields: [], expr: None }
+  } in
+  let shape = "expr: Option<TypeExpr>; fields: { fieldType: TypeExpr; name: string; optional: boolean }[]; params: string[]" in
+    assertEq(
+      "QualAliasInfo",
+      Option.unwrapOr(
+        "",
+        Map.get(
+          shape,
+          withoutAmbiguousAlias(
+            recordAliasIndex(aliases),
+            aliases,
+            Set.fromArray([])
+          )
+        )
+      )
+    ))
+
+test("the module that declares the duplicate alias still prints it", () =>
+  let fld = {
+    params: [],
+    fields: [
+      { name: "name", fieldType: Ast.TyName("string", sp), optional: false },
+      {
+        name: "fieldType",
+        fieldType: Ast.TyName("TypeExpr", sp),
+        optional: false
+      },
+      { name: "optional", fieldType: Ast.TyName("bool", sp), optional: false }
+    ],
+    expr: None
+  } in
+  let infoOf = elem =>
+    {
+      params: [],
+      fields: [
+        {
+          name: "params",
+          fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
+          optional: false
+        },
+        {
+          name: "fields",
+          fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
+          optional: false
+        },
+        {
+          name: "expr",
+          fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
+          optional: false
+        }
+      ],
+      expr: None
+    } in
+  let aliases = #{
+    "QualAliasInfo": infoOf("QualAliasField"),
+    "QualAliasField": fld,
+    "AliasField": fld,
+    "Schemes.AliasInfo": infoOf("AliasField"),
+    "dup.AliasInfo": { params: ["_"], fields: [], expr: None }
+  } in
+  let shape = "expr: Option<TypeExpr>; fields: { fieldType: TypeExpr; name: string; optional: boolean }[]; params: string[]" in
+    assertEq(
+      "AliasInfo",
+      Option.unwrapOr(
+        "",
+        Map.get(
+          shape,
+          withoutAmbiguousAlias(
+            recordAliasIndex(aliases),
+            aliases,
+            Set.fromArray(["AliasInfo"])
+          )
+        )
+      )
+    ))
+
+test("a generalized record use folds back to the alias", () =>
+  let out = tsOf(
+    "type LocTok = { tok: string, start: number, end: number, doc: Option<string> }\nlet at = (toks, i) => Array.get(i, toks) |> Option.unwrapOr({ tok: \"eof\", start: 0, end: 0, doc: None })"
+  ) in
+    assertEq(
+      true,
+      Str.contains("LocTok", out) && !Str.contains("Option<A>", out)
+    ))
+
+test("a span built from two field reads folds the closed result", () =>
+  let out = tsOf(
+    "type Span = { start: number, end: number }\nlet spanOf = lt => { start: lt.start, end: lt.end }"
+  ) in
+    assertEq(true, Str.contains("=> Span", out)))
 
 test("an alias declaration still renders its own body structurally", () =>
   // Without the self-exclusion this comes out `export type Span = Span;`.

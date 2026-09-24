@@ -1,8 +1,7 @@
 import type { Stmt } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { AliasInfo } from "./codegen-ts";
-import type { IErr } from "./infer";
+import type { IErr, QualAliasInfo } from "./infer";
 
 /**
  * Caller-supplied knobs: `open` selects open-world inference (host globals
@@ -56,7 +55,7 @@ import {
 import { match } from "@onrails/pattern";
 
 import { lex } from "./lexer";
-import { parse } from "./parser";
+import { parseRecovering } from "./parser";
 import { checkAll } from "./check";
 import { inferProgram, inferProgramTypes } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
@@ -125,10 +124,22 @@ const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(
     suggestions: noSuggestions,
   }),
 );
-const stampType: <A, B, C, D, E, F>(
-  e: { suggestions: A; help: B; end: C; start: D; message: E } & F,
-) => { kind: string; message: E; start: D; end: C; help: B; suggestions: A } = <A, B, C, D, E, F>(
-  e: { suggestions: A; help: B; end: C; start: D; message: E } & F,
+const stampType: <F>(
+  e: {
+    suggestions: { end: number; replaceWith: string; start: number; title: string }[];
+    help: Option<string>;
+    end: number;
+    start: number;
+    message: string;
+  } & F,
+) => Stamped = <F>(
+  e: {
+    suggestions: { end: number; replaceWith: string; start: number; title: string }[];
+    help: Option<string>;
+    end: number;
+    start: number;
+    message: string;
+  } & F,
 ) => ({
   kind: "type",
   message: e.message,
@@ -152,18 +163,23 @@ const frontend: (src: string) => Result<Stmt[], Stamped[]> = (src: string) =>
       ({ error: e }) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
     )
     .with({ _tag: "Ok" }, ({ value: tokens }) =>
-      match(parse(tokens))
-        .with(
-          { _tag: "Err" },
-          ({ error: e }) => Err([stampStage("parse", e)]) as Result<Stmt[], Stamped[]>,
-        )
-        .with({ _tag: "Ok" }, ({ value: stmts }) =>
-          _Result_mapErr(
-            (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
-            checkAll(stmts),
-          ),
-        )
-        .exhaustive(),
+      ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
+        match(parsed.diagnostics)
+          .with(
+            (_v) => {
+              const _g: any = _v;
+              return _g.length === 0;
+            },
+            () =>
+              _Result_mapErr(
+                (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+                checkAll(parsed.stmts),
+              ),
+          )
+          .otherwise(
+            (ds) =>
+              Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>,
+          ))(parseRecovering(tokens, None)),
     )
     .exhaustive();
 const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], Stamped[]>> = _curry(
@@ -184,7 +200,7 @@ export const typedProgramWith: _Curry<
       {
         env: Map<string, Scheme>;
         types: TypeAt[];
-        aliases: Map<string, AliasInfo>;
+        aliases: Map<string, QualAliasInfo>;
         letParams: TypeAt[];
       },
     ],
@@ -199,7 +215,7 @@ export const typedProgramWith: _Curry<
           (r: {
             env: Map<string, Scheme>;
             types: TypeAt[];
-            aliases: Map<string, AliasInfo>;
+            aliases: Map<string, QualAliasInfo>;
             letParams: TypeAt[];
           }) => _tuple(stmts, r),
           inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
@@ -214,7 +230,7 @@ export const typedProgram: (src: string) => Result<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
     },
   ],
@@ -230,7 +246,7 @@ export const inferTypesWith: _Curry<
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string }[];
-      aliases: Map<string, AliasInfo>;
+      aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -243,7 +259,7 @@ export const inferTypesWith: _Curry<
         _Result_map(
           (r: {
             letParams: TypeAt[];
-            aliases: Map<string, AliasInfo>;
+            aliases: Map<string, QualAliasInfo>;
             types: TypeAt[];
             env: Map<string, Scheme>;
           }) => ({
@@ -269,7 +285,7 @@ export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;
     types: { span: SpanAt; ty: Ty; display: string }[];
-    aliases: Map<string, AliasInfo>;
+    aliases: Map<string, QualAliasInfo>;
     letParams: TypeAt[];
   },
   Stamped[]
@@ -319,7 +335,7 @@ export const compileTsWith: _Curry<
             env: Map<string, Scheme>;
             types: TypeAt[];
             letParams: TypeAt[];
-            aliases: Map<string, AliasInfo>;
+            aliases: Map<string, QualAliasInfo>;
           }) =>
             emitTsModuleWith(
               stmts,

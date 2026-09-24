@@ -403,7 +403,7 @@ let tsxArgs = (ctx: GCtx, args) => switch args {
           | Ast.EStr(value, _) => value
           | _ => ctx->genMember(tag)
         } in
-      let attrs = jsxAttrs(ctx, fields, spread) in
+      let attrs = ctx->jsxAttrs(fields, spread) in
         Array.length(children) == 0 && !fragment
           ? Some("<${name}${attrs} />")
           : let body = Str.join(
@@ -425,7 +425,7 @@ let tsxCall = (ctx: GCtx, fn, args, origin) =>
     ? None
     : switch origin {
       | Some("jsx") => switch fn {
-          | Ast.ERef("h", _) => tsxArgs(ctx, args)
+          | Ast.ERef("h", _) => ctx->tsxArgs(args)
           | _ => None
         }
       | _ => None
@@ -449,9 +449,9 @@ let genExpr = (ctx: GCtx, e) => switch e {
     // An applied parametric ctor (`Ok("")`) leaves the type param its argument
     // does not determine free, so tsc widens it to `unknown`. Cast the call to
     // its resolved type (ADR 0043). Gated on an uppercase callee — a ctor.
-    switch tsxCall(ctx, fn, args, origin) {
+    switch ctx->tsxCall(fn, args, origin) {
       | Some(jsx) => jsx
-      | None => switch tsInfix(ctx, fn, args) {
+      | None => switch ctx->tsInfix(fn, args) {
           | Some(infix) => infix
           | None => let inner = "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
               castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None)
@@ -1698,7 +1698,7 @@ let genStmt = (ctx: GCtx, s) => switch s {
     "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
   | Ast.SImport(_, _, _) => genImport(s, ctx.moduleExt)
   | Ast.SImportNs(_, _, _) => genImport(s, ctx.moduleExt)
-  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = genType(ctx, s) in
+  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = ctx->genType(s) in
       decls == ""
         ? "" // record alias, or every ctor is pattern-only
         : exported

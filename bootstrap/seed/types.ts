@@ -395,7 +395,7 @@ export const noteUse: <A, B, C>(span: { start: A; end: B } & C, t: Ty, st: St) =
       .exhaustive();
   },
 );
-export const fail: <A, B>(message: A) => Result<B, { message: A }> = <A, B>(message: A) =>
+export const fail: <B>(message: string) => Result<B, TypeErr> = <B>(message: string) =>
   Err({ message: message });
 export const freshVar: <A>(st: { next: number } & A) => [Ty, { next: number } & A] = <A>(
   st: { next: number } & A,

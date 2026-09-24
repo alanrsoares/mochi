@@ -534,8 +534,8 @@ let hasLead = (cts: Ctx, kind, sp) =>
   Array.length(atKey(cts.leading, spanKey(kind, sp))) > 0
 
 let withComments = (cts: Ctx, kind, sp, doc) =>
-  let lead = leadingDocs(cts, kind, sp) in
-  let trail = trailingDocs(cts, kind, sp) in
+  let lead = cts->leadingDocs(kind, sp) in
+  let trail = cts->trailingDocs(kind, sp) in
     Array.length(lead) == 0 && Array.length(trail) == 0
       ? doc
       : cat([...lead, doc, ...trail])
@@ -1057,7 +1057,7 @@ let etaPartial = (ctx: Ctx, params, body) => switch params {
       | Ast.LPName(name, None) => Str.startsWith("$", name)
           ? None
           : switch body {
-            | Ast.ECall(_, _, _, _) => let flat = switch flattenCallSpine(ctx, body) {
+            | Ast.ECall(_, _, _, _) => let flat = switch ctx->flattenCallSpine(body) {
                 | Some(f) => f
                 | None => body
               } in
@@ -1079,7 +1079,7 @@ let etaPartial = (ctx: Ctx, params, body) => switch params {
                                   fn,
                                   name
                                 ) && !anyMentions(prefix, name)
-                                  ? switch etaCalleeArity(ctx, fn) {
+                                  ? switch ctx->etaCalleeArity(fn) {
                                     | Some(arity) => n == arity
                                         ? Some(Ast.ECall(fn, prefix, None, sp))
                                         : None
@@ -1122,7 +1122,7 @@ let flattenCallSpine = (ctx: Ctx, e) => switch spineGroups(e, []) {
     // to `f(a, b)` in one pass rather than printing `f(a)(b)` and waiting for
     // pass two to settle.
     let (callee, allGroups) = switch head {
-      | Ast.ELambda(params, lbody, _) => switch etaPartial(ctx, params, lbody) {
+      | Ast.ELambda(params, lbody, _) => switch ctx->etaPartial(params, lbody) {
           | Some(Ast.ECall(efn, eargs, _, _)) => (
               efn,
               Array.prepend(eargs, groups)
@@ -1133,7 +1133,7 @@ let flattenCallSpine = (ctx: Ctx, e) => switch spineGroups(e, []) {
     } in
       Array.length(allGroups) < 2 || anyEmptyGroup(allGroups)
         ? None
-        : switch calleeArity(ctx, callee) {
+        : switch ctx->calleeArity(callee) {
           | None => None
           | Some(arity) => let args = Array.flatMap(g => g, allGroups) in
               Array.length(args) > arity || anyUnit(args)
@@ -1395,7 +1395,7 @@ let plainLambdaD = (cts, params, body) =>
               | Ast.EMatch(_, _, _) when // A `switch` body brings its own braces, so it hugs the arrow instead of
 // dropping to an indented line — unless a comment leads it, which has to
 // stay on its own line.
-!hasLead(cts, EXPR, exprSpan(body)) => cat(
+!(cts->hasLead(EXPR, exprSpan(body))) => cat(
                   [head, txt(" "), cts->exprD(body)]
                 )
               | _ => group(cat([head, indent(cat([line, cts->exprD(body)]))]))
@@ -1411,7 +1411,7 @@ let condD = (cts, c) => switch c {
 /// A commented branch drops to its own indented line, so the comment stays
 /// own-line and the layout stays idempotent.
 let branchD = (cts, marker, e) =>
-  hasLead(cts, EXPR, exprSpan(e))
+  cts->hasLead(EXPR, exprSpan(e))
     ? cat([txt(marker), indent(cat([hardline, cts->exprD(e)]))])
     : cat([txt("${marker} "), cts->exprD(e)])
 
@@ -1429,7 +1429,7 @@ let ternaryRestParts = (cts, arms, i) => switch Array.get(i, arms) {
   | None => []
   | Some(a) => [
       line,
-      hasLead(cts, EXPR, exprSpan(a.cond))
+      cts->hasLead(EXPR, exprSpan(a.cond))
         ? cat([txt(":"), indent(cat([hardline, cts->condD(a.cond)]))])
         : cat([txt(": "), cts->condD(a.cond)]),
       line,
@@ -1493,10 +1493,10 @@ let letLikeD = (cts, head, value, body) =>
       cat(
         [
           txt("${head} = "),
-          ...leadingDocs(cts, EXPR, exprSpan(value)),
+          ...cts->leadingDocs(EXPR, exprSpan(value)),
           cts->exprRaw(value),
           txt(" in"),
-          ...trailingDocs(cts, EXPR, exprSpan(value)),
+          ...cts->trailingDocs(EXPR, exprSpan(value)),
           cont
         ]
       )
@@ -1542,7 +1542,7 @@ let matchArmD = (cts, a: Ast.MatchArm) =>
     | None => ""
   } in
   let head = txt("| ${pattern(a.pattern)}${guard} =>") in
-    hasLead(cts, EXPR, exprSpan(a.body))
+    cts->hasLead(EXPR, exprSpan(a.body))
       ? cat([head, indent(cat([hardline, cts->exprD(a.body)]))])
       : cat([head, txt(" "), indent(cts->exprD(a.body))])
 
@@ -1766,7 +1766,7 @@ let aliasFieldText = (f: Ast.AliasField) =>
 let ctorArms = (cts: Ctx, ctors, i) => switch Array.get(i, ctors) {
   | None => []
   | Some(c) => Array.prepend(
-      cat([hardline, withComments(cts, CTOR, c.span, txt("| ${ctorText(c)}"))]),
+      cat([hardline, cts->withComments(CTOR, c.span, txt("| ${ctorText(c)}"))]),
       cts->ctorArms(ctors, i + 1)
     )
 }
@@ -1807,7 +1807,7 @@ export let importNsStmtD = (alias, from) =>
 
 /// Leading comments print above the node, trailing ones inline after it.
 export let exprD = (cts, e) =>
-  withComments(cts, EXPR, exprSpan(e), cts->exprRaw(e))
+  cts->withComments(EXPR, exprSpan(e), cts->exprRaw(e))
 
 // --- statements + program ----------------------------------------------------
 
@@ -1944,7 +1944,7 @@ let stmtParts = (cts: Ctx, stmts, i, src, prevEnd, acc) => switch Array.get(i, s
   | None => (acc, prevEnd)
   | Some(cur) => let sep = switch prevEnd {
       | None => []
-      | Some(pe) => blankBetween(Str.slice(pe, anchorStart(cts, cur), src))
+      | Some(pe) => blankBetween(Str.slice(pe, cts->anchorStart(cur), src))
           ? [hardline, hardline]
           : [hardline]
     } in
@@ -1954,15 +1954,14 @@ let stmtParts = (cts: Ctx, stmts, i, src, prevEnd, acc) => switch Array.get(i, s
       | Some(last) => stmtSpan(last).end
       | None => 0
     } in
-      stmtParts(
-        cts,
+      cts->stmtParts(
         stmts,
         i + printed.consumed,
         src,
         Some(end),
         Array.concat(
           acc,
-          Array.append(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep)
+          Array.append(cts->withComments(STMT, stmtSpan(cur), printed.doc), sep)
         )
       )
 }
@@ -1984,7 +1983,7 @@ let tailParts = (tail, src, prevEnd) => switch Array.get(0, tail) {
 }
 
 let programDoc = (cts: Ctx, stmts, src, tail) =>
-  let (parts, prevEnd) = stmtParts(cts, stmts, 0, src, None, []) in
+  let (parts, prevEnd) = cts->stmtParts(stmts, 0, src, None, []) in
     cat(
       Array.concat(
         Array.concat(parts, tailParts(tail, src, prevEnd)),
