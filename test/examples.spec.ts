@@ -18,6 +18,25 @@ test("example.mochi compiles", () => {
   expect(isErr(compile(read("examples/example.mochi")))).toBe(false);
 });
 
+test("example.mochi runs to its documented Option values", () => {
+  expect(compileAndEval(read("examples/example.mochi"), "[lookedUp, firstName]")).toEqual([
+    { _tag: "Some", value: 30 },
+    { _tag: "Some", value: "alice" },
+  ]);
+});
+
+test("an unused local Some ctor does not suppress the runtime one Map.get needs", () => {
+  const src = `type Option<a> =
+  | Some(value: a)
+  | None
+let hit = Map.get("a", #{"a": 1})
+let miss = Map.get("b", #{"a": 1})`;
+  expect(compileAndEval(src, "[hit, miss]")).toEqual([
+    { _tag: "Some", value: 1 },
+    { _tag: "None" },
+  ]);
+});
+
 test("examples/life/main.mochi builds with the Bun terminal bindings", async () => {
   const result = await buildModules(path("examples/life/main.mochi"), (p) => Bun.file(p).text());
   expect(isErr(result)).toBe(false);

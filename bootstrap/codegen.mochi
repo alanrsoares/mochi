@@ -1957,18 +1957,25 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
 
 // Names a module binds at top scope — anything here would shadow a
 // prelude builtin, so its runtime def must NOT be inlined (else a duplicate
-// `const` is a JS SyntaxError, e.g. a user `let hypot = …`).
-let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
+// `const` is a JS SyntaxError, e.g. a user `let hypot = …`). A ctor binds only
+// when its factory is emitted: an unused local `| Some(value: a)` drops its
+// `const Some`, and a runtime `_Map_get` still needs the builtin one.
+let boundNamesFrom = (valueRefs, stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
   | Some(s) => boundNamesFrom(
+      valueRefs,
       stmts,
       i + 1,
       switch s {
         | Ast.SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
         | Ast.SExtern(name, _, _, _, _, _, _, _, _, _) => Set.add(name, acc)
-        | Ast.SType(_, _, ctors, _, _, _, _, _) => Set.union(
+        | Ast.SType(_, _, ctors, _, _, exported, _, _) => Set.union(
             acc,
-            Set.fromArray(ctors |> map(c => c.name))
+            Set.fromArray(
+              ctors
+                |> filter(c => exported || Set.has(c.name, valueRefs))
+                |> map(c => c.name)
+            )
           )
         | Ast.SImport(names, _, _) => Set.union(
             acc,
@@ -1982,7 +1989,8 @@ let boundNamesFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
       }
     )
 }
-let boundNames = stmts => boundNamesFrom(stmts, 0, Set.fromArray([]))
+let boundNames = (valueRefs, stmts) =>
+  boundNamesFrom(valueRefs, stmts, 0, Set.fromArray([]))
 
 /// Names referenced in let/expr values — not patterns. `| TLet =>` does not
 /// count, so a local unused ctor factory can be dropped.
@@ -2056,7 +2064,7 @@ let closeRefsFrom = (queue, i, refs, runtimeDeps) => switch Array.get(i, queue) 
 let runtimeRefNames = (ctx: GCtx, stmts, jsDefs, runtimeDeps) =>
   let refs0 = ctx->collectRefsFrom(stmts, 0, Set.fromArray([])) in
   let refs = closeRefsFrom(Set.toArray(refs0), 0, refs0, runtimeDeps) in
-  let bound = boundNames(stmts) in
+  let bound = boundNames(ctx.valueRefs, stmts) in
     Map.keys(jsDefs) |> filter(n => Set.has(n, refs) && !Set.has(n, bound))
 
 let preludePreamble = (ctx: GCtx, stmts, jsDefs, runtimeDeps) =>

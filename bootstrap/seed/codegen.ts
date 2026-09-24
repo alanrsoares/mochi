@@ -2842,34 +2842,47 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
       .with({ _tag: "EInterp" }, ({ parts }) => exprRefsInterpPartsFrom(ctx, parts, 0, acc))
       .exhaustive(),
 );
-const boundNamesFrom: _Curry<[stmts: Stmt[], i: number, acc: Set<string>], Set<string>> = _curry(
-  3,
-  (stmts: Stmt[], i: number, acc: Set<string>) =>
-    match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: s }) =>
-        boundNamesFrom(
-          stmts,
-          i + 1,
-          match(s)
-            .with({ _tag: "SLet" }, ({ name }) => _Set_add(name, acc))
-            .with({ _tag: "SExtern" }, ({ name }) => _Set_add(name, acc))
-            .with({ _tag: "SType" }, ({ ctors }) =>
-              _Set_union(acc, _Set_fromArray(map((c: CtorLike) => c.name, ctors))),
-            )
-            .with({ _tag: "SImport" }, ({ names }) =>
-              _Set_union(acc, _Set_fromArray(map((n: Name) => n.name, names))),
-            )
-            .with({ _tag: "SImportNs" }, ({ alias }) => _Set_add(alias.name, acc))
-            .with({ _tag: "SError" }, () => acc)
-            .with({ _tag: "SExpr" }, () => acc)
-            .exhaustive(),
-        ),
-      )
-      .exhaustive(),
+const boundNamesFrom: _Curry<
+  [valueRefs: Set<string>, stmts: Stmt[], i: number, acc: Set<string>],
+  Set<string>
+> = _curry(4, (valueRefs: Set<string>, stmts: Stmt[], i: number, acc: Set<string>) =>
+  match(_Array_get(i, stmts))
+    .with({ _tag: "None" }, () => acc)
+    .with({ _tag: "Some" }, ({ value: s }) =>
+      boundNamesFrom(
+        valueRefs,
+        stmts,
+        i + 1,
+        match(s)
+          .with({ _tag: "SLet" }, ({ name }) => _Set_add(name, acc))
+          .with({ _tag: "SExtern" }, ({ name }) => _Set_add(name, acc))
+          .with({ _tag: "SType" }, ({ ctors, exported }) =>
+            _Set_union(
+              acc,
+              _Set_fromArray(
+                map(
+                  (c: CtorLike) => c.name,
+                  filter((c: CtorLike) => or(exported, _Set_has(c.name, valueRefs)), ctors),
+                ),
+              ),
+            ),
+          )
+          .with({ _tag: "SImport" }, ({ names }) =>
+            _Set_union(acc, _Set_fromArray(map((n: Name) => n.name, names))),
+          )
+          .with({ _tag: "SImportNs" }, ({ alias }) => _Set_add(alias.name, acc))
+          .with({ _tag: "SError" }, () => acc)
+          .with({ _tag: "SExpr" }, () => acc)
+          .exhaustive(),
+      ),
+    )
+    .exhaustive(),
 );
-const boundNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
-  boundNamesFrom(stmts, 0, _Set_fromArray([] as string[]));
+const boundNames: _Curry<[valueRefs: Set<string>, stmts: Stmt[]], Set<string>> = _curry(
+  2,
+  (valueRefs: Set<string>, stmts: Stmt[]) =>
+    boundNamesFrom(valueRefs, stmts, 0, _Set_fromArray([] as string[])),
+);
 /**
  * Names referenced in let/expr values — not patterns. `| TLet =>` does not
  * count, so a local unused ctor factory can be dropped.
@@ -2963,7 +2976,7 @@ const runtimeRefNames: <A>(
   <A>(ctx: GCtx, stmts: Stmt[], jsDefs: Map<string, A>, runtimeDeps: Map<string, string[]>) => {
     const refs0: Set<string> = collectRefsFrom(ctx, stmts, 0, _Set_fromArray([] as string[]));
     const refs: Set<string> = closeRefsFrom(_Set_toArray(refs0), 0, refs0, runtimeDeps);
-    const bound: Set<string> = boundNames(stmts);
+    const bound: Set<string> = boundNames(ctx.valueRefs, stmts);
     return filter(
       (n: string) => and(_Set_has(n, refs), not(_Set_has(n, bound))),
       _Map_keys(jsDefs),
