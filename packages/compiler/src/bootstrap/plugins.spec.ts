@@ -10,24 +10,16 @@ import {
   defaultBootstrapOptions,
 } from "./options.ts";
 import { compileBootstrapSyncWith } from "./sync.ts";
+import { tCon } from "./types.ts";
 
 // A host plugin in the self-hosted shape (ADR 0109): claims `magic(…)` calls
 // and types them as `number`, so an otherwise unbound name compiles.
-const claimMagic: BootstrapInferCallHook = (fn, _args, _origin, st) => {
-  const ref = fn as { _tag: string; name?: string };
-  return ref._tag === "ERef" && ref.name === "magic"
-    ? {
-        _tag: "Ok",
-        value: { _tag: "Some", value: [{ _tag: "TyCon", name: "number", args: [] }, st] },
-      }
+const claimMagic: BootstrapInferCallHook = (fn, _args, _origin, st) =>
+  fn._tag === "ERef" && fn.name === "magic"
+    ? { _tag: "Ok", value: { _tag: "Some", value: [tCon("number", []), st] } }
     : { _tag: "Ok", value: { _tag: "None" } };
-};
 
-const magicPlugin: BootstrapPlugin = {
-  name: "magic",
-  parse: { _tag: "None" },
-  inferCall: { _tag: "Some", value: claimMagic },
-};
+const magicPlugin: BootstrapPlugin = { name: "magic", inferCall: claimMagic };
 
 const withPlugins = (plugins?: readonly BootstrapPlugin[]): BootstrapOptions => ({
   ...defaultBootstrapOptions,

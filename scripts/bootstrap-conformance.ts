@@ -19,6 +19,7 @@ import {
   compileTsBootstrapSyncWith,
 } from "@mochi/compiler/bootstrap/sync";
 import { formatBootstrap } from "@mochi/compiler/bootstrap/syntax";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 import { match } from "@onrails/pattern";
 
 type CompileCase = { id: string; kind: "compile"; source: string; expect: string };
@@ -69,10 +70,12 @@ const baseOptions: BootstrapOptions = {
 };
 
 /**
- * Host plugins, in the bootstrap shape (ADR 0109), that cases may name. Empty
- * until the first vendor plugin is ported: a case naming a missing one fails.
+ * Host plugins, in the bootstrap shape (ADR 0109), that cases may name. A case
+ * naming one missing from here fails.
  */
-const conformancePlugins: Record<string, BootstrapPlugin> = {};
+const conformancePlugins: Record<string, BootstrapPlugin> = {
+  "styled-cva": styledCvaBootstrap,
+};
 
 const optionsFor = (test: ManifestCase): BootstrapOptions | string => {
   if (test.plugins === undefined) return baseOptions;

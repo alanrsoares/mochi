@@ -1,17 +1,1 @@
-{
-  "name": "@mochi/plugin-styled-cva",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./tw": "./tw.mochi"
-  },
-  "dependencies": {
-    "@mochi/compiler": "workspace:*"
-  },
-  "peerDependencies": {
-    "@onrails/result": "^0.4.0",
-    "@styled-cva/react": "^0.7.1"
-  }
-}
+{"name": "@mochi/plugin-styled-cva", "version": "0.1.0", "private": true, "type": "module", "exports": {".": "./src/index.ts", "./bootstrap": "./src/bootstrap.ts", "./tw": "./tw.mochi"}, "dependencies": {"@mochi/compiler": "workspace:*"}, "peerDependencies": {"@onrails/result": "^0.4.0", "@styled-cva/react": "^0.7.1"}}

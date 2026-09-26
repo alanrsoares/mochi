@@ -5,7 +5,8 @@ type SeedSyntax = {
   lex: (src: string) => unknown;
   parse: (tokens: unknown) => unknown;
   parseRecovering: (tokens: unknown, plugins?: unknown) => unknown;
-  formatProgram: (stmts: unknown, src: string) => string;
+  formatProgramWith: (stmts: unknown, src: string, formatHooks: unknown) => string;
+  formatHooksFor: (pluginsOpt: unknown) => unknown;
 };
 
 const seed = loadSeed<SeedSyntax>("syntax.bundle.cjs");
@@ -18,8 +19,8 @@ type Lexed = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: unknown };
 
 /**
  * `mochi fmt` over the bootstrap printer. The recovering parse never fails, so
- * a lex error is the only way to get `null`. Plugins take part in parsing only:
- * bootstrap has no `format` hook yet (ADR 0109, #106).
+ * a lex error is the only way to get `null`. Plugins parse, and their `format`
+ * hooks may rewrite nodes before layout (ADR 0109).
  */
 export const formatBootstrap = (
   src: string,
@@ -27,6 +28,7 @@ export const formatBootstrap = (
 ): string | null => {
   const lexed = lex(src) as Lexed;
   if (lexed._tag === "Err") return null;
-  const parsed = parseRecovering(lexed.value, toSeedPlugins(plugins)) as { stmts: unknown };
-  return seed.formatProgram(parsed.stmts, src);
+  const pluginsOpt = toSeedPlugins(plugins);
+  const parsed = parseRecovering(lexed.value, pluginsOpt) as { stmts: unknown };
+  return seed.formatProgramWith(parsed.stmts, src, seed.formatHooksFor(pluginsOpt));
 };

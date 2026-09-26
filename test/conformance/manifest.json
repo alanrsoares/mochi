@@ -17,14 +17,14 @@
       "dts",
       "format",
       "typed-ts",
-      "typed-ts-graph"
-    ],
-    "pending": [
+      "typed-ts-graph",
       "styled-cva-compile",
       "styled-cva-bad-tone",
       "styled-cva-unknown-tag",
-      "styled-cva-dts",
       "styled-cva-format"
+    ],
+    "pending": [
+      "styled-cva-dts"
     ]
   },
   "cases": [

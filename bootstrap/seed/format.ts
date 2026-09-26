@@ -17,6 +17,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { SpanAt } from "./types";
+import type { Plugin } from "./infer";
 import type { Doc } from "./doc";
 
 export type Comment = {
@@ -32,6 +33,7 @@ export type Ctx = {
   flatArity: Map<string, number>;
   shadowed: Set<string>;
   etaSkip: boolean;
+  formatHooks: ((a: Expr) => Option<Expr>)[];
 };
 export type Attached = { table: Ctx; tail: Comment[] };
 export type StmtDoc = { doc: Doc; consumed: number };
@@ -115,6 +117,7 @@ import {
 } from "./doc";
 import { skipStringLiteral } from "./str-scan";
 import { showTypeExpr } from "./show-type-expr";
+import { runFormatHooks } from "./extensions";
 /**
  * `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
  * interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
@@ -334,6 +337,7 @@ export const noComments: Ctx = {
   flatArity: new Map<string, number>(),
   shadowed: _Set_fromArray([] as string[]),
   etaSkip: false,
+  formatHooks: [] as ((a: Expr) => Option<Expr>)[],
 };
 /**
  * A statement and its expression can carry the SAME span (`test(…)` as an
@@ -2701,9 +2705,16 @@ export const importNsStmtD: _Curry<[alias: string, from: string], Doc> = _curry(
 );
 /**
  * Leading comments print above the node, trailing ones inline after it.
+ * Plugin `format` hooks may rewrite the node first (ADR 0109); comments stay
+ * keyed to the node as written.
  */
 export const exprD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
-  withComments(cts, EXPR, exprSpan(e), exprRaw(cts, e)),
+  withComments(
+    cts,
+    EXPR,
+    exprSpan(e),
+    exprRaw(cts, _Option_unwrapOr(e, runFormatHooks(cts.formatHooks, e))),
+  ),
 );
 const expPrefix: (exported: boolean) => string = (exported: boolean) => (exported ? "export " : "");
 /**
@@ -2991,26 +3002,35 @@ const hasOpenDirective: (src: string) => boolean = (src: string) =>
  */
 export const formatProgram: _Curry<[stmts: Stmt[], src: string], string> = _curry(
   2,
-  (stmts: Stmt[], src: string) => {
-    const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
-    const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
-    const base: Ctx = {
-      ...noComments,
-      flatArity: buildFlatArity(stmts, innerBound),
-      shadowed: shadowed,
-    };
-    const attached: Attached = attachFrom(
-      filter((c: Comment) => not(inErrorSpan(stmts, c)), collectComments(src)),
-      0,
-      sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
-      src,
-      { table: base, tail: [] as Comment[] },
-    );
-    const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
-    return hasOpenDirective(src)
-      ? `"use open"
+  (stmts: Stmt[], src: string) =>
+    formatProgramWith(stmts, src, [] as ((a: Expr) => Option<Expr>)[]),
+);
+/**
+ * `formatProgram` with plugin `format` hooks (`formatHooksFor`).
+ */
+export const formatProgramWith: _Curry<
+  [stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]],
+  string
+> = _curry(3, (stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]) => {
+  const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
+  const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
+  const base: Ctx = {
+    ...noComments,
+    flatArity: buildFlatArity(stmts, innerBound),
+    shadowed: shadowed,
+    formatHooks: formatHooks,
+  };
+  const attached: Attached = attachFrom(
+    filter((c: Comment) => not(inErrorSpan(stmts, c)), collectComments(src)),
+    0,
+    sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
+    src,
+    { table: base, tail: [] as Comment[] },
+  );
+  const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
+  return hasOpenDirective(src)
+    ? `"use open"
 
 ${body}`
-      : body;
-  },
-);
+    : body;
+});

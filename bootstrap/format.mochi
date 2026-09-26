@@ -27,6 +27,7 @@ import {
 } from "./doc.mochi"
 import { skipStringLiteral } from "./str-scan.mochi"
 import { showTypeExpr } from "./show-type-expr.mochi"
+import { runFormatHooks } from "./extensions.mochi"
 
 /// `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
 /// interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
@@ -228,7 +229,8 @@ export type Ctx = {
   trailing: Map<string, [Comment]>,
   flatArity: Map<string, number>,
   shadowed: Set<string>,
-  etaSkip: bool
+  etaSkip: bool,
+  formatHooks: [Ast.Expr -> Option<Ast.Expr>]
 }
 // Program-level facts for the ADR 0065 / 0091 re-folds: how many arguments a
 // callable takes in one flat call, and which names the file rebinds.
@@ -241,7 +243,8 @@ export let noComments : Ctx = {
   trailing: #{},
   flatArity: #{},
   shadowed: Set.fromArray([]),
-  etaSkip: false
+  etaSkip: false,
+  formatHooks: []
 }
 
 /// A statement and its expression can carry the SAME span (`test(…)` as an
@@ -1806,8 +1809,14 @@ export let importNsStmtD = (alias, from) =>
   txt("import * as ${alias} from ${strLit(from)}")
 
 /// Leading comments print above the node, trailing ones inline after it.
+/// Plugin `format` hooks may rewrite the node first (ADR 0109); comments stay
+/// keyed to the node as written.
 export let exprD = (cts, e) =>
-  cts->withComments(EXPR, exprSpan(e), cts->exprRaw(e))
+  cts->withComments(
+    EXPR,
+    exprSpan(e),
+    cts->exprRaw(runFormatHooks(cts.formatHooks, e) |> Option.unwrapOr(e))
+  )
 
 // --- statements + program ----------------------------------------------------
 
@@ -2028,7 +2037,10 @@ let hasOpenDirective = src => switch Array.get(0, Str.split("\n", Str.trim(src))
 }
 
 /// Print an already-parsed program with comment and blank-line fidelity to `src`.
-export let formatProgram = (stmts, src) =>
+export let formatProgram = (stmts, src) => formatProgramWith(stmts, src, [])
+
+/// `formatProgram` with plugin `format` hooks (`formatHooksFor`).
+export let formatProgramWith = (stmts, src, formatHooks) =>
   // The two re-folds need program-level facts: a name the file rebinds must
   // not be regrouped against the prelude entry it shadows.
   let innerBound = Set.fromArray(Array.flatMap(stmtInnerNames, stmts)) in
@@ -2036,7 +2048,8 @@ export let formatProgram = (stmts, src) =>
   let base = {
     ...noComments,
     flatArity: buildFlatArity(stmts, innerBound),
-    shadowed
+    shadowed,
+    formatHooks
   } in
   let attached = attachFrom(
     Array.filter(c => !inErrorSpan(stmts, c), collectComments(src)),

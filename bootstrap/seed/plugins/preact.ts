@@ -442,4 +442,10 @@ export const inferPreactCall: <A, B, C>(
       inferUseState(fn, args, st, api),
     ),
 );
-export const preactPlugin = { name: "preact", parse: None, inferCall: Some(inferPreactCall) };
+export const preactPlugin = {
+  name: "preact",
+  parse: None,
+  inferCall: Some(inferPreactCall),
+  format: None,
+  dtsBinding: None,
+};

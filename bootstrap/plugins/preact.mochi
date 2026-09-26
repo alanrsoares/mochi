@@ -241,5 +241,7 @@ export let inferPreactCall = (fn, args, _origin, st, api) =>
 export let preactPlugin = {
   name: "preact",
   parse: None,
-  inferCall: Some(inferPreactCall)
+  inferCall: Some(inferPreactCall),
+  format: None,
+  dtsBinding: None
 }

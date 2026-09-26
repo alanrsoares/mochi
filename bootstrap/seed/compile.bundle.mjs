@@ -6416,7 +6416,7 @@ var inferJsxCallHook = _curry6(5, (_fn, args, origin, st, api) => match5(origin)
   const _g = _v;
   return _g.length >= 2;
 }, ([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some5(r), inferJsxCall(tagExpr, propsExpr, rest, st, api))).otherwise(() => Ok3(None5)) : Ok3(None5)).with({ _tag: "None" }, () => Ok3(None5)).exhaustive());
-var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook) };
+var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook), format: None5, dtsBinding: None5 };
 
 import { None as None6, Ok as Ok4, Some as Some6, _Array_drop, _Array_get as _Array_get4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry7, _tuple as _tuple4, and as and5, eq as eq6, length as length4 } from "@mochi/compiler/runtime";
 import { match as match6 } from "@onrails/pattern";
@@ -6441,7 +6441,7 @@ var inferHookDeps = _curry7(4, (fn, args, st, api) => {
   return match6(expected).with({ _tag: "Some" }, ({ value: n }) => eq6(length4(args), n) ? _Result_map3((st1) => (([elem, st2]) => Some6(_tuple4(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok4(None6)).with({ _tag: "None" }, () => Ok4(None6)).exhaustive();
 });
 var inferPreactCall = _curry7(5, (fn, args, _origin, st, api) => _Result_flatMap3((first) => match6(first).with({ _tag: "Some" }, () => Ok4(first)).with({ _tag: "None" }, () => _Result_flatMap3((lazy) => match6(lazy).with({ _tag: "Some" }, () => Ok4(lazy)).with({ _tag: "None" }, () => _Result_flatMap3((ref) => match6(ref).with({ _tag: "Some" }, () => Ok4(ref)).with({ _tag: "None" }, () => _Result_flatMap3((effect) => match6(effect).with({ _tag: "Some" }, () => Ok4(effect)).with({ _tag: "None" }, () => _Result_flatMap3((layout) => match6(layout).with({ _tag: "Some" }, () => Ok4(layout)).with({ _tag: "None" }, () => _Result_flatMap3((callback) => match6(callback).with({ _tag: "Some" }, () => Ok4(callback)).with({ _tag: "None" }, () => _Result_flatMap3((memo) => match6(memo).with({ _tag: "Some" }, () => Ok4(memo)).with({ _tag: "None" }, () => inferHookDeps(fn, args, st, api)).exhaustive(), inferUseMemo(fn, args, st, api))).exhaustive(), inferUseCallback(fn, args, st, api))).exhaustive(), inferEffectLike(fn, args, st, api, "useLayoutEffect"))).exhaustive(), inferEffectLike(fn, args, st, api, "useEffect"))).exhaustive(), inferUseRef(fn, args, st, api))).exhaustive(), inferUseLazyState(fn, args, st, api))).exhaustive(), inferUseState(fn, args, st, api)));
-var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall) };
+var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall), format: None6, dtsBinding: None6 };
 
 var DEFAULT_PLUGINS = [jsxPlugin];
 var resolvePlugins = _curry8(2, (pluginsOpt, builtins) => match7(pluginsOpt).with({ _tag: "None" }, () => builtins).with({ _tag: "Some" }, ({ value: ps }) => eq7(length5(ps), 0) ? [] : _Array_concat(builtins, ps)).exhaustive());
@@ -6454,6 +6454,14 @@ var runParseHooks = _curry8(4, (hooks, toks, pos, parseExpr) => match7(hooks).wi
   throw new Error("non-exhaustive match");
 }));
 var runInferCallHooks = _curry8(6, (hooks, fn, args, origin, st, api) => match7(hooks).with((_v) => _v.length === 0, () => Ok5(None7)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(fn, args, origin, st, api)).with({ _tag: "Err" }, ({ error: e }) => Err4(e)).with({ _tag: "Ok" }, ({ value: v }) => match7(v).with({ _tag: "None" }, () => runInferCallHooks(rest, fn, args, origin, st, api)).with({ _tag: "Some" }, ({ value: claim }) => Ok5(Some7(claim))).exhaustive()).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var formatHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.format).with({ _tag: "Some" }, ({ value: hook }) => formatHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => formatHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var dtsHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.dtsBinding).with({ _tag: "Some" }, ({ value: hook }) => dtsHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => dtsHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var runFormatHooks = _curry8(2, (hooks, e) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(e)).with({ _tag: "Some" }, ({ value: out }) => Some7(out)).with({ _tag: "None" }, () => runFormatHooks(rest, e)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var runDtsHooks = _curry8(3, (hooks, name, value) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(name, value)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 

@@ -102,6 +102,7 @@ import { showType, tVar } from "./types";
 import { widenLits } from "./schemes";
 import { index } from "./symbols";
 import { emitDtsFromTypedWith, emitDtsText, qualifierMapOf } from "./dts";
+import { dtsHooksFor } from "./extensions";
 import { openMode } from "./compile";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
@@ -2439,6 +2440,7 @@ const dtsOne: <A, B>(
                           qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
                           ctx.runtimeImport,
                           opts.docs,
+                          dtsHooksFor(opts.plugins),
                         )
                       : ctx.dts,
                   }) as Result<

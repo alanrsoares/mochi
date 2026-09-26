@@ -2106,13 +2106,17 @@ type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }
 /// inline record is not a legal type argument here.
 type HookErr = { message: string, start: number, end: number }
 
-/// A plugin as INFERENCE sees it. The parse hook is written INLINE rather than
+/// A plugin as every pass sees it (ADR 0011, 0109). `format` rewrites a node
+/// before the printer lays it out; `dtsBinding` supplies a binding's `.d.ts`
+/// type text. The parse hook is written INLINE rather than
 /// behind its own alias: a parameterized alias whose body is an arrow emits as
 /// an opaque brand, not a transparent type.
 type Plugin<t> = {
   name: string,
   parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
-  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >
+  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
+  format: Option<Ast.Expr -> Option<Ast.Expr> >,
+  dtsBinding: Option<string -> Ast.Expr -> Option<string> >
 }
 
 /// `Plugin` at the lexer's token type: the list a host hands the compile and
@@ -2121,7 +2125,9 @@ type Plugin<t> = {
 export type HostPlugin = {
   name: string,
   parse: Option<[LocTok<Lexer.Tok>] -> number -> ([LocTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
-  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >
+  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
+  format: Option<Ast.Expr -> Option<Ast.Expr> >,
+  dtsBinding: Option<string -> Ast.Expr -> Option<string> >
 }
 
 /// The context threaded through Algorithm W. Declared and annotated at every
