@@ -8,15 +8,17 @@
 // Cross-module scheme/registry threading and the actual compileGraph land in
 // parts (b) and (c); this half only parses and orders.
 import { lex } from "./lexer.mochi"
-import { parse } from "./parser.mochi"
+import { parseWith } from "./parser.mochi"
 import { checkAllWith, checkWith } from "./check.mochi"
 import { exportedRegistry, exportedCtorKeys } from "./ctors.mochi"
 import {
   inferProgramImports,
   inferProgramImportsTypes,
-  exportedSchemes
+  exportedSchemes,
+  scopeAliases
 } from "./infer.mochi"
 import { codegenWith, jsGenOpts } from "./codegen.mochi"
+import * as Infer from "./infer.mochi"
 import { emitTsModuleWith, externModuleDts } from "./codegen-ts.mochi"
 import { showType, tVar } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
@@ -53,7 +55,8 @@ type Opts = {
   runtime: bool,
   docs: bool,
   moduleExt: string,
-  strictEntry: bool
+  strictEntry: bool,
+  plugins: Option<[Infer.HostPlugin]>
 }
 
 let defaultOpts : Opts = {
@@ -61,7 +64,8 @@ let defaultOpts : Opts = {
   runtime: true,
   docs: true,
   moduleExt: ".js",
-  strictEntry: false
+  strictEntry: false,
+  plugins: None
 }
 
 // One loaded module: its canonical path, source, and parsed statements. The
@@ -136,7 +140,8 @@ let atPath = (path, e) =>
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
 // graph's exports resolved first, which only happens in a later part.
-let parseModule = lex >> Result.flatMap(parse)
+let parseModule = (src, plugins: Option<[Infer.HostPlugin]>) =>
+  let? toks = lex(src) in toks->parseWith(plugins)
 
 // The `from` specs of a module's import statements, in source order.
 let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
@@ -164,7 +169,7 @@ type Acc = { state: Map<string, string>, order: [Loaded] }
 // Visit one module: mark it loading, parse it, recurse into its deps, then mark
 // it done and append it to `order`. First Err short-circuits. A path already
 // "loading" is a cycle; already "done" is a no-op.
-let visit = (path, acc) => switch Map.get(path, acc.state) {
+let visit = (path, acc, plugins: Option<[Infer.HostPlugin]>) => switch Map.get(path, acc.state) {
   | Some("done") => Ok(acc)
   | Some("loading") => Err(mErr("import cycle through '${path}'"))
   | _ => let acc1 = {
@@ -173,9 +178,9 @@ let visit = (path, acc) => switch Map.get(path, acc.state) {
     } in
       switch readFile(path) {
         | Err(_) => Err(mErr("cannot read module '${path}'"))
-        | Ok(src) => switch parseModule(src) {
+        | Ok(src) => switch parseModule(src, plugins) {
             | Err(e) => Err(e)
-            | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1) {
+            | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1, plugins) {
                 | Err(e) => Err(e)
                 | Ok(acc2) => Ok(
                     {
@@ -189,18 +194,23 @@ let visit = (path, acc) => switch Map.get(path, acc.state) {
 }
 
 // Visit each dep spec, resolved against `importer`, threading the accumulator.
-let visitAll = (froms, importer, acc) => switch froms {
+let visitAll = (froms, importer, acc, plugins: Option<[Infer.HostPlugin]>) => switch froms {
   | [] => Ok(acc)
-  | [from, ...rest] => switch visit(resolveImport(importer, from), acc) {
+  | [from, ...rest] => switch visit(resolveImport(importer, from), acc, plugins) {
       | Err(e) => Err(e)
-      | Ok(acc1) => visitAll(rest, importer, acc1)
+      | Ok(acc1) => visitAll(rest, importer, acc1, plugins)
     }
 }
 
-/// loadGraph : string -> Result [Loaded] MErr
-/// Load every module reachable from `entry`, in dependency order.
-export let loadGraph = entry =>
-  let? acc = absPath(entry)->visit({ state: #{}, order: [] }) in Ok(acc.order)
+/// loadGraphWith : string -> Option [Plugin] -> Result [Loaded] MErr
+/// Load every module reachable from `entry`, in dependency order, parsing
+/// each under the host's plugin list (ADR 0109).
+export let loadGraphWith = (entry, plugins: Option<[Infer.HostPlugin]>) =>
+  let? acc = absPath(entry)->visit({ state: #{}, order: [] }, plugins) in
+    Ok(acc.order)
+
+/// loadGraph : string -> Result [Loaded] MErr — default plugins.
+export let loadGraph = entry => entry->loadGraphWith(None)
 
 // --- part (b): compile the loaded graph -------------------------------------
 // Each module checks + infers + codegens with the prelude PLUS everything its
@@ -264,14 +274,12 @@ let aliasesOf = stmts =>
 
 // src/module.ts nests the dep's FULL type scope here (`scope.quals`), so a
 // qualified name written inside the dep's own alias expands too. The bootstrap
-// mirror is one hop: `{ types, aliases }`, no nested `quals`. Making it
-// recursive needs a named recursive record type over `Ast.AliasField` — a
-// cross-module TYPE name, i.e. the feature this very slice is building. Unwind
-// once d-3 lands (the "shared-module workaround" the C5 ticket asks about);
-// until then a qualified name nested inside an imported record alias lowers
-// nominally instead of expanding, which only differs under row unification.
-let qualScopeOf = stmts =>
-  { types: stmts->exportedTypeNames(), aliases: stmts->aliasesOf() }
+// mirror flattens that scope instead: `aliases` is the dep's own alias map WITH
+// its namespace imports already seeded (`Types.St`), and `qualifyTe` requalifies
+// those under the importer's alias (`Infer.Types.St`), so resolution stays
+// transitive without a recursive record type.
+let qualScopeOf = (stmts, quals) =>
+  { types: stmts->exportedTypeNames(), aliases: stmts->scopeAliases(quals) }
 
 // Seed one named constructor into the importer. Sibling ctors stay out of the
 // ctor map; the owning type's full list still lands so exhaustiveness is sound.
@@ -437,7 +445,7 @@ let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switc
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, opts.plugins) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(env) => let js = codegenWith(
               loaded.stmts,
@@ -467,7 +475,7 @@ let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switc
                   ),
                   qualsByPath: Map.set(
                     loaded.path,
-                    qualScopeOf(loaded.stmts),
+                    qualScopeOf(loaded.stmts, res.quals),
                     ctx.qualsByPath
                   ),
                   outputs: [...ctx.outputs, { path: loaded.path, js }]
@@ -647,7 +655,7 @@ let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loade
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(r) => Ok(
               {
@@ -668,7 +676,7 @@ let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loade
                 ),
                 qualsByPath: Map.set(
                   loaded.path,
-                  qualScopeOf(loaded.stmts),
+                  qualScopeOf(loaded.stmts, res.quals),
                   ctx.qualsByPath
                 ),
                 aliases: mergeMap(r.aliases, ctx.aliases),
@@ -735,7 +743,7 @@ export let inferGraphTypes = graph => graph->inferGraphTypesWith(defaultOpts)
 /// Resolve the graph, collect every recoverable module diagnostic, then emit.
 /// Graph-load failures are singular but normalize to `[MErr]` at this public
 /// boundary, matching the single-file compiler railway.
-export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraph() {
+export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraphWith(opts.plugins) {
   | Err(e) => Err([e])
   | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
       Array.length(recovered.errors) == 0
@@ -956,7 +964,7 @@ let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(l
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(r) => let body = emitTsModuleWith(
               loaded.stmts,
@@ -1010,7 +1018,7 @@ let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(l
                   ),
                   qualsByPath: Map.set(
                     loaded.path,
-                    qualScopeOf(loaded.stmts),
+                    qualScopeOf(loaded.stmts, res.quals),
                     ctx.qualsByPath
                   ),
                   aliases: mergeMap(r.aliases, ctx.aliases),
@@ -1085,7 +1093,7 @@ let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.
   | Err(e) => Err(atPath(loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath(loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, None) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
           | Err(e) => Err(atPath(loaded.path, e))
           | Ok(r) => Ok(
               {
@@ -1106,7 +1114,7 @@ let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.
                 ),
                 qualsByPath: Map.set(
                   loaded.path,
-                  qualScopeOf(loaded.stmts),
+                  qualScopeOf(loaded.stmts, res.quals),
                   ctx.qualsByPath
                 ),
                 aliases: mergeMap(r.aliases, ctx.aliases),
@@ -1142,7 +1150,7 @@ let dtsAll = (ctx, graph, opts) => switch graph {
 /// emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
 /// file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
 export let emitDtsForFileWith = (entry, runtimeImport, opts: Opts) =>
-  let? graph = entry->loadGraph() in
+  let? graph = entry->loadGraphWith(opts.plugins) in
     dtsAll(
       {
         exportsByPath: #{},
@@ -1164,7 +1172,7 @@ export let emitDtsForFile = (entry, runtimeImport) =>
 /// buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
 /// Typed graph emit shares the recovery preflight with JS graph emit, so both
 /// CLI targets render the same complete diagnostic set.
-export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) => switch entry->loadGraph() {
+export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) => switch entry->loadGraphWith(opts.plugins) {
   | Err(e) => Err([e])
   | Ok(graph) =>
     // The preflight runs the JS rail, whose `openFor` hands the ENTRY `opts.open`

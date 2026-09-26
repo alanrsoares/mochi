@@ -46,10 +46,10 @@ beforeAll(async () => {
   const { checkAll } = evalNames<{ checkAll: unknown }>(compileAl("bootstrap/check.mochi"), [
     "checkAll",
   ]);
-  const { inferProgram } = evalNames<{ inferProgram: unknown }>(
-    compileAl("bootstrap/infer.mochi"),
-    ["inferProgram"],
-  );
+  const { inferProgramWith, inferProgramTypesWith } = evalNames<{
+    inferProgramWith: unknown;
+    inferProgramTypesWith: unknown;
+  }>(compileAl("bootstrap/infer.mochi"), ["inferProgramWith", "inferProgramTypesWith"]);
   const { codegenWith, jsGenOpts } = evalNames<{ codegenWith: unknown; jsGenOpts: unknown }>(
     compileAl("bootstrap/codegen.mochi"),
     ["codegenWith", "jsGenOpts"],
@@ -61,7 +61,8 @@ beforeAll(async () => {
       lex,
       parseRecovering,
       checkAll,
-      inferProgram,
+      inferProgramWith,
+      inferProgramTypesWith,
       codegenWith,
       jsGenOpts,
       builtins: shim.builtins,

@@ -8000,7 +8000,7 @@ var inferExprStmtsFrom = _curry16(3, (ctx, stmts, st) => match15(stmts).with((_v
 var seedImportsFrom = _curry16(3, (keys, imports, env) => match15(keys).with((_v) => _v.length === 0, () => env).with((_v) => _v.length >= 1, ([k, ...rest]) => match15(_Map_get6(k, imports)).with({ _tag: "Some" }, ({ value: sc }) => seedImportsFrom(rest, imports, _Map_set6(k, sc, env))).with({ _tag: "None" }, () => seedImportsFrom(rest, imports, env)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var qualifyTe = _curry16(3, (te, alias, from) => match15(te).with({ _tag: "TyName" }, ({ name, span: sp }) => _Map_has4(name, from) ? TyQual(alias, name, sp, [], sp) : te).with({ _tag: "TyApp" }, ({ ctor, args, span: sp }) => ((args1) => _Map_has4(ctor, from) ? TyQual(alias, ctor, sp, args1, sp) : TyApp(ctor, args1, sp))(map8((a) => qualifyTe(a, alias, from), args))).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe, span: sp }) => TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp)).with({ _tag: "TyTuple" }, ({ elems, span: sp }) => TyTuple(map8((e) => qualifyTe(e, alias, from), elems), sp)).with({ _tag: "TyList" }, ({ elem, span: sp }) => TyList(qualifyTe(elem, alias, from), sp)).with({ _tag: "TyUnion" }, ({ members, span: sp }) => TyUnion(map8((m) => qualifyTe(m, alias, from), members), sp)).otherwise(() => te));
+var qualifyTe = _curry16(3, (te, alias, from) => match15(te).with({ _tag: "TyName" }, ({ name, span: sp }) => _Map_has4(name, from) ? TyQual(alias, name, sp, [], sp) : te).with({ _tag: "TyApp" }, ({ ctor, args, span: sp }) => ((args1) => _Map_has4(ctor, from) ? TyQual(alias, ctor, sp, args1, sp) : TyApp(ctor, args1, sp))(map8((a) => qualifyTe(a, alias, from), args))).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe, span: sp }) => TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp)).with({ _tag: "TyTuple" }, ({ elems, span: sp }) => TyTuple(map8((e) => qualifyTe(e, alias, from), elems), sp)).with({ _tag: "TyList" }, ({ elem, span: sp }) => TyList(qualifyTe(elem, alias, from), sp)).with({ _tag: "TyUnion" }, ({ members, span: sp }) => TyUnion(map8((m) => qualifyTe(m, alias, from), members), sp)).with({ _tag: "TyQual" }, ({ alias: inner, name, nameSpan: nsp, args, span: sp }) => ((args1) => _Map_has4(`${inner}.${name}`, from) ? TyQual(alias, `${inner}.${name}`, nsp, args1, sp) : TyQual(inner, name, nsp, args1, sp))(map8((a) => qualifyTe(a, alias, from), args))).otherwise(() => te));
 var qualifyField = _curry16(3, (fld, alias, from) => ({ name: fld.name, fieldType: qualifyTe(fld.fieldType, alias, from), optional: fld.optional }));
 var qualifyInfo = _curry16(3, (info, alias, from) => ({ params: info.params, fields: map8((f) => qualifyField(f, alias, from), info.fields), expr: _Option_map((te) => qualifyTe(te, alias, from), info.expr) }));
 var qualAliasSeedFrom = _curry16(4, (names, alias, from, acc) => match15(names).with((_v) => {
@@ -8055,11 +8055,13 @@ var runInferImports = _curry16(8, (stmts, builtins, namespaces, openMode, import
     }, ({ value: [finalCtx, st4] }) => match15(inferExprStmtsFrom(finalCtx, stmts, st4)).with({ _tag: "Ok" }, ({ value: st5 }) => Ok9({ env: finalCtx.env, types: zonkRecorded(st5.recorded, st5), aliases: aliasMap, letParams: resolveLetParams(st5) })).with({ _tag: "Err" }, ({ error: e }) => Err8(e)).exhaustive()).with({ _tag: "Err" }, ({ error: e }) => Err8(e)).exhaustive();
   })(registerExternsFrom(stmts, aliasMap, env2, st2)))(registerBuiltinCtorsFrom(builtinDeclsFor(stmts), aliasMap, env1, st1)))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
 });
+var scopeAliases = _curry16(2, (stmts, quals) => aliasMapFrom(stmts, qualAliasSeed(stmts, quals, new Map)));
 var inferProgramImports = _curry16(8, (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) => _Result_map6((r) => r.env, runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt)));
 var emptyQuals2 = new Map;
 var inferProgram = _curry16(4, (stmts, builtins, namespaces, openMode) => inferProgramImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, None15));
 var inferProgramImportsTypes = _curry16(8, (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) => runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt));
 var inferProgramTypes = _curry16(4, (stmts, builtins, namespaces, openMode) => runInferImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, None15));
+var inferProgramTypesWith = _curry16(5, (stmts, builtins, namespaces, openMode, pluginsOpt) => runInferImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, pluginsOpt));
 var inferProgramWith = _curry16(5, (stmts, builtins, namespaces, openMode, pluginsOpt) => inferProgramImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, pluginsOpt));
 var takeScheme = _curry16(3, (name, env, acc) => match15(_Map_get6(name, env)).with({ _tag: "Some" }, ({ value: sc }) => _Map_set6(name, sc, acc)).with({ _tag: "None" }, () => acc).exhaustive());
 var exportCtorsInto = _curry16(4, (ctors, i, env, acc) => match15(_Array_get12(i, ctors)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc))).exhaustive());
@@ -13504,7 +13506,7 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-var defaultOpts = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
+var defaultOpts = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false, plugins: None19 };
 var afterBlanks = _curry20(2, (s, i) => match19(_Str_get5(i, s)).with({ _tag: "Some", value: " " }, () => afterBlanks(s, i + 1)).with({ _tag: "Some", value: "\t" }, () => afterBlanks(s, i + 1)).otherwise((other) => other));
 var openDirective = (src) => {
   const t = _Str_trim2(src);
@@ -13515,20 +13517,20 @@ var openMode = _curry20(2, (src, requested) => or11(requested, openDirective(src
 var noSuggestions2 = [];
 var stampStage = _curry20(2, (kind, e) => ({ kind, message: e.message, start: e.start, end: e.end, help: None19, suggestions: noSuggestions2 }));
 var stampType = (e) => ({ kind: "type", message: e.message, start: e.start, end: e.end, help: e.help, suggestions: e.suggestions });
-var typecheckWith = _curry20(2, (prog, open) => _Result_mapErr((e) => [stampType(e)], _Result_map7((_) => prog, inferProgram(prog, builtins, namespaces, open))));
-var frontend = (src) => match19(lex(src)).with({ _tag: "Err" }, ({ error: e }) => Err9([stampStage("lex", e)])).with({ _tag: "Ok" }, ({ value: tokens }) => ((parsed) => match19(parsed.diagnostics).with((_v) => {
+var typecheckWith = _curry20(3, (prog, open, plugins) => _Result_mapErr((e) => [stampType(e)], _Result_map7((_) => prog, inferProgramWith(prog, builtins, namespaces, open, plugins))));
+var frontend = _curry20(2, (src, plugins) => match19(lex(src)).with({ _tag: "Err" }, ({ error: e }) => Err9([stampStage("lex", e)])).with({ _tag: "Ok" }, ({ value: tokens }) => ((parsed) => match19(parsed.diagnostics).with((_v) => {
   const _g = _v;
   return _g.length === 0;
-}, () => _Result_mapErr((es) => map12((e) => stampStage("check", e), es), checkAll(parsed.stmts))).otherwise((ds) => Err9(map12((e) => stampStage("parse", e), ds))))(parseRecovering(tokens, None19))).exhaustive();
-var pipelineWith = _curry20(2, (src, open) => _Result_flatMap8((stmts) => typecheckWith(stmts, open), frontend(src)));
-var typedProgramWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => _tuple12(stmts, r), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)))), frontend(src)));
+}, () => _Result_mapErr((es) => map12((e) => stampStage("check", e), es), checkAll(parsed.stmts))).otherwise((ds) => Err9(map12((e) => stampStage("parse", e), ds))))(parseRecovering(tokens, plugins))).exhaustive());
+var pipelineWith = _curry20(3, (src, open, plugins) => _Result_flatMap8((stmts) => typecheckWith(stmts, open, plugins), frontend(src, plugins)));
+var typedProgramWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => _tuple12(stmts, r), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var typedProgram = (src) => typedProgramWith(src, defaultOpts);
-var inferTypesWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => ({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)))), frontend(src)));
+var inferTypesWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => ({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var inferTypes = (src) => inferTypesWith(src, defaultOpts);
-var compileWith = _curry20(2, (src, opts) => _Result_map7((prog) => codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }), pipelineWith(src, openMode(src, opts.open))));
+var compileWith = _curry20(2, (src, opts) => _Result_map7((prog) => codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }), pipelineWith(src, openMode(src, opts.open), opts.plugins)));
 var compile = (src) => compileWith(src, defaultOpts);
 var noImportedKeys = new Map;
-var compileTsWith = _curry20(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)))), frontend(src)));
+var compileTsWith = _curry20(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var compileTs = _curry20(2, (src, runtimeImport) => compileTsWith(src, runtimeImport, defaultOpts));
 export {
   compile,

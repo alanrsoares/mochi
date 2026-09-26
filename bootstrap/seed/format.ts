@@ -1,5 +1,7 @@
 import type {
+  AliasField,
   Ctor,
+  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -15,8 +17,6 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { SpanAt } from "./types";
-import type { QualAliasField } from "./infer";
-import type { CtorFieldLike, CtorLike } from "./codegen";
 import type { Doc } from "./doc";
 
 export type Comment = {
@@ -201,12 +201,12 @@ export const pattern: (p: Pattern) => string = (p: Pattern) =>
     )
     .with({ _tag: "POr" }, ({ alts }) => _Str_join(" | ", map(pattern, alts)))
     .exhaustive();
-const ctorField: (f: CtorFieldLike) => string = (f: CtorFieldLike) =>
+const ctorField: (f: CtorField) => string = (f: CtorField) =>
   match(f.name)
     .with({ _tag: "None" }, () => showTypeExpr(f.fieldType))
     .with({ _tag: "Some" }, ({ value: name }) => `${name}: ${showTypeExpr(f.fieldType)}`)
     .exhaustive();
-export const ctorText: (c: CtorLike) => string = (c: CtorLike) =>
+export const ctorText: (c: Ctor) => string = (c: Ctor) =>
   eq(length(c.fields), 0) ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
 const generics: (params: string[]) => string = (params: string[]) =>
   eq(length(params), 0) ? "" : `<${_Str_join(", ", params)}>`;
@@ -2615,11 +2615,11 @@ const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) 
     )
     .exhaustive(),
 );
-const aliasFieldText: (f: QualAliasField) => string = (f: QualAliasField) =>
+const aliasFieldText: (f: AliasField) => string = (f: AliasField) =>
   `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
-const ctorArms: _Curry<[cts: Ctx, ctors: CtorLike[], i: number], Doc[]> = _curry(
+const ctorArms: _Curry<[cts: Ctx, ctors: Ctor[], i: number], Doc[]> = _curry(
   3,
-  (cts: Ctx, ctors: CtorLike[], i: number) =>
+  (cts: Ctx, ctors: Ctor[], i: number) =>
     match(_Array_get(i, ctors))
       .with({ _tag: "None" }, () => [] as Doc[])
       .with({ _tag: "Some" }, ({ value: c }) =>
@@ -2640,8 +2640,8 @@ export const typeStmtD: _Curry<
     cts: Ctx,
     name: string,
     params: string[],
-    ctors: CtorLike[],
-    alias: Option<QualAliasField[]>,
+    ctors: Ctor[],
+    alias: Option<AliasField[]>,
     aliasType: Option<TypeExpr>,
   ],
   Doc
@@ -2651,8 +2651,8 @@ export const typeStmtD: _Curry<
     cts: Ctx,
     name: string,
     params: string[],
-    ctors: CtorLike[],
-    alias: Option<QualAliasField[]>,
+    ctors: Ctor[],
+    alias: Option<AliasField[]>,
     aliasType: Option<TypeExpr>,
   ) => {
     const head: string = `type ${name}${generics(params)}`;
@@ -2663,7 +2663,7 @@ export const typeStmtD: _Curry<
           braced(
             "{",
             "}",
-            map((f: QualAliasField) => txt(aliasFieldText(f)), fields),
+            map((f: AliasField) => txt(aliasFieldText(f)), fields),
           ),
         ]),
       )
@@ -2946,9 +2946,7 @@ const stmtAnchors: (s: Stmt) => { kind: string; sp: SpanAt }[] = (s: Stmt) =>
     match(s)
       .with({ _tag: "SLet" }, ({ value }) => exprAnchors(value))
       .with({ _tag: "SExpr" }, ({ value }) => exprAnchors(value))
-      .with({ _tag: "SType" }, ({ ctors }) =>
-        map((c: CtorLike) => ({ kind: CTOR, sp: c.span }), ctors),
-      )
+      .with({ _tag: "SType" }, ({ ctors }) => map((c: Ctor) => ({ kind: CTOR, sp: c.span }), ctors))
       .otherwise(() => [] as { kind: string; sp: SpanAt }[]),
   );
 /**

@@ -1,20 +1,22 @@
 import * as seed from "../../../../bootstrap/seed/compile.bundle.mjs";
 import type { BootstrapDiagnostic, BootstrapInferResult, BootstrapResult } from "./index.ts";
-import { type BootstrapOptions, defaultBootstrapOptions } from "./options.ts";
+import {
+  type BootstrapOptions,
+  defaultBootstrapOptions,
+  type SeedOptions,
+  toSeedOptions,
+} from "./options.ts";
 
 type SeedCompile = {
-  compileWith: (
-    src: string,
-    opts: BootstrapOptions,
-  ) => BootstrapResult<string, BootstrapDiagnostic[]>;
+  compileWith: (src: string, opts: SeedOptions) => BootstrapResult<string, BootstrapDiagnostic[]>;
   compileTsWith: (
     src: string,
     runtimeImport: string,
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<string, BootstrapDiagnostic[]>;
   inferTypesWith: (
     src: string,
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
 };
 
@@ -24,7 +26,8 @@ const seedCompile = seed as unknown as SeedCompile;
 export const compileBootstrapSyncWith = (
   src: string,
   opts: BootstrapOptions,
-): BootstrapResult<string, BootstrapDiagnostic[]> => seedCompile.compileWith(src, opts);
+): BootstrapResult<string, BootstrapDiagnostic[]> =>
+  seedCompile.compileWith(src, toSeedOptions(opts));
 
 export const compileBootstrapSync = (src: string): BootstrapResult<string, BootstrapDiagnostic[]> =>
   compileBootstrapSyncWith(src, defaultBootstrapOptions);
@@ -34,7 +37,7 @@ export const compileTsBootstrapSyncWith = (
   runtimeImport: string,
   opts: BootstrapOptions,
 ): BootstrapResult<string, BootstrapDiagnostic[]> =>
-  seedCompile.compileTsWith(src, runtimeImport, opts);
+  seedCompile.compileTsWith(src, runtimeImport, toSeedOptions(opts));
 
 export const compileTsBootstrapSync = (
   src: string,
@@ -45,4 +48,4 @@ export const compileTsBootstrapSync = (
 export const inferTypesBootstrapSync = (
   src: string,
 ): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
-  seedCompile.inferTypesWith(src, defaultBootstrapOptions);
+  seedCompile.inferTypesWith(src, toSeedOptions(defaultBootstrapOptions));

@@ -34,7 +34,7 @@ import {
   TyVar
 } from "./types.mochi"
 import { jsDoc } from "./codegen.mochi"
-import { typedProgramWith } from "./compile.mochi"
+import { defaultOpts, typedProgramWith } from "./compile.mochi"
 
 /// Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
 /// resolve, without needing the module graph: single-file dts sees the `tqual`
@@ -437,14 +437,4 @@ export let emitDtsTextWith = (src, runtimeImport, opts) =>
       ))
 
 export let emitDtsText = (src, runtimeImport) =>
-  emitDtsTextWith(
-    src,
-    runtimeImport,
-    {
-      open: false,
-      runtime: true,
-      docs: true,
-      moduleExt: ".js",
-      strictEntry: false
-    }
-  )
+  emitDtsTextWith(src, runtimeImport, defaultOpts)

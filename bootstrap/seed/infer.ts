@@ -1,5 +1,6 @@
 import type { Tok } from "./lexer";
 import type {
+  AliasField,
   CtorField,
   Expr,
   Field,
@@ -28,7 +29,7 @@ export type IErr = {
   suggestions: Suggestion[];
 };
 export type QualAliasField = { name: string; fieldType: TypeExpr; optional: boolean };
-export type QualAliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
+export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type QualScope = { aliases: Map<string, QualAliasInfo> };
 /**
  * The API an `inferCall` plugin hook is handed (ADR 0011 6).
@@ -62,6 +63,27 @@ export type Plugin<A> = {
       b: number,
       c: (
         a: { tok: A; start: number; end: number; doc: Option<string> }[],
+        b: number,
+      ) => Result<[Expr, number], PErr>,
+    ) => Result<Option<[Expr, number]>, PErr>
+  >;
+  inferCall: Option<
+    (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
+  >;
+};
+/**
+ * `Plugin` at the lexer's token type: the list a host hands the compile and
+ * module drivers (ADR 0109). Spelled out rather than `Plugin<Lexer.Tok>`
+ * because only a parameterless alias folds to its name in the TS backend.
+ */
+export type HostPlugin = {
+  name: string;
+  parse: Option<
+    (
+      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      b: number,
+      c: (
+        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
         b: number,
       ) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>
@@ -186,6 +208,7 @@ import * as Ast from "./ast";
 import { localBinderNames } from "./local-names";
 import { closestName } from "./suggest";
 import * as Types from "./types";
+import * as Lexer from "./lexer";
 const setLetBindMonad = _curry(2, ($receiver, $value) => ($receiver["monad"] = $value));
 /**
  * Inference discovers that `p.field` reads an optional row field; preserve
@@ -6145,7 +6168,7 @@ const aliasMapFrom: _Curry<
                   name,
                   {
                     params: params,
-                    fields: [] as QualAliasField[],
+                    fields: [] as AliasField[],
                     expr: Some(te) as Option<TypeExpr>,
                   },
                   acc,
@@ -7082,13 +7105,21 @@ const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeE
           sp,
         ),
       )
+      .with({ _tag: "TyQual" }, ({ alias: inner, name, nameSpan: nsp, args, span: sp }) =>
+        ((args1: TypeExpr[]) =>
+          _Map_has(`${inner}.${name}`, from)
+            ? Ast.TyQual(alias, `${inner}.${name}`, nsp, args1, sp)
+            : Ast.TyQual(inner, name, nsp, args1, sp))(
+          map((a: TypeExpr) => qualifyTe(a, alias, from), args),
+        ),
+      )
       .otherwise(() => te),
 );
 const qualifyField: <C, D>(
   fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
   alias: string,
   from: Map<string, C>,
-) => QualAliasField = _curry(
+) => AliasField = _curry(
   3,
   <C, D>(
     fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
@@ -7368,30 +7399,7 @@ const runInferImports: <A, B, C>(
       >;
     } & C
   >,
-  pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
-  >,
+  pluginsOpt: Option<HostPlugin[]>,
 ) => Result<
   {
     env: Map<string, Scheme>;
@@ -7422,30 +7430,7 @@ const runInferImports: <A, B, C>(
         >;
       } & C
     >,
-    pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
-    >,
+    pluginsOpt: Option<HostPlugin[]>,
   ) => {
     const plugins: {
       name: string;
@@ -7514,28 +7499,7 @@ const runInferImports: <A, B, C>(
                       open: boolean;
                       ns: Map<string, Map<string, Scheme>>;
                       aliasMap: Map<string, QualAliasInfo>;
-                      plugins: {
-                        name: string;
-                        parse: Option<
-                          (
-                            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                            b: number,
-                            c: (
-                              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                              b: number,
-                            ) => Result<[Expr, number], PErr>,
-                          ) => Result<Option<[Expr, number]>, PErr>
-                        >;
-                        inferCall: Option<
-                          (
-                            a: Expr,
-                            b: Expr[],
-                            c: Option<string>,
-                            d: St,
-                            e: InferApi,
-                          ) => Result<Option<[Ty, St]>, IErr>
-                        >;
-                      }[];
+                      plugins: HostPlugin[];
                       loopStack: Ty[][];
                       letOwner: Map<string, SpanAt>;
                       localNames: Set<string>;
@@ -7604,6 +7568,46 @@ const runInferImports: <A, B, C>(
   },
 );
 /**
+ * Every record alias a module's own type expressions can name: its
+ * declarations plus each namespace import's, qualified (`Types.St`). An
+ * importer seeds from THIS map rather than the dep's declarations alone, so a
+ * qualified name inside a dep's alias still expands (`Infer.Types.St`).
+ */
+export const scopeAliases: <A, B, C>(
+  stmts: Stmt[],
+  quals: Map<
+    string,
+    {
+      aliases: Map<
+        string,
+        {
+          expr: Option<TypeExpr>;
+          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          params: string[];
+        } & B
+      >;
+    } & C
+  >,
+) => Map<string, QualAliasInfo> = _curry(
+  2,
+  <A, B, C>(
+    stmts: Stmt[],
+    quals: Map<
+      string,
+      {
+        aliases: Map<
+          string,
+          {
+            expr: Option<TypeExpr>;
+            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            params: string[];
+          } & B
+        >;
+      } & C
+    >,
+  ) => aliasMapFrom(stmts, qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>())),
+);
+/**
  * Env-only view — the shape every existing caller (compile.mochi,
  * module.mochi) and the TS parity oracle expect.
  */
@@ -7627,30 +7631,7 @@ export const inferProgramImports: <A, B, C>(
       >;
     } & C
   >,
-  pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
-  >,
+  pluginsOpt: Option<HostPlugin[]>,
 ) => Result<Map<string, Scheme>, IErr> = _curry(
   8,
   <A, B, C>(
@@ -7673,30 +7654,7 @@ export const inferProgramImports: <A, B, C>(
         >;
       } & C
     >,
-    pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
-    >,
+    pluginsOpt: Option<HostPlugin[]>,
   ) =>
     _Result_map(
       (r: {
@@ -7734,30 +7692,7 @@ export const inferProgram: _Curry<
       new Map<string, Scheme>(),
       new Map<string, Map<string, Scheme>>(),
       emptyQuals,
-      None as Option<
-        {
-          name: string;
-          parse: Option<
-            (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-              c: (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], PErr>,
-            ) => Result<Option<[Expr, number]>, PErr>
-          >;
-          inferCall: Option<
-            (
-              a: Expr,
-              b: Expr[],
-              c: Option<string>,
-              d: St,
-              e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
-          >;
-        }[]
-      >,
+      None as Option<HostPlugin[]>,
     ),
 );
 /**
@@ -7786,30 +7721,7 @@ export const inferProgramImportsTypes: <A, B, C>(
       >;
     } & C
   >,
-  pluginsOpt: Option<
-    {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-    }[]
-  >,
+  pluginsOpt: Option<HostPlugin[]>,
 ) => Result<
   {
     env: Map<string, Scheme>;
@@ -7840,30 +7752,7 @@ export const inferProgramImportsTypes: <A, B, C>(
         >;
       } & C
     >,
-    pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
-    >,
+    pluginsOpt: Option<HostPlugin[]>,
   ) =>
     runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
 );
@@ -7903,30 +7792,47 @@ export const inferProgramTypes: _Curry<
       new Map<string, Scheme>(),
       new Map<string, Map<string, Scheme>>(),
       emptyQuals,
-      None as Option<
-        {
-          name: string;
-          parse: Option<
-            (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-              c: (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], PErr>,
-            ) => Result<Option<[Expr, number]>, PErr>
-          >;
-          inferCall: Option<
-            (
-              a: Expr,
-              b: Expr[],
-              c: Option<string>,
-              d: St,
-              e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
-          >;
-        }[]
-      >,
+      None as Option<HostPlugin[]>,
+    ),
+);
+/**
+ * `inferProgramTypes` under a host plugin list (ADR 0109).
+ */
+export const inferProgramTypesWith: _Curry<
+  [
+    stmts: Stmt[],
+    builtins: Map<string, Ty>,
+    namespaces: Map<string, Map<string, Ty>>,
+    openMode: boolean,
+    pluginsOpt: Option<HostPlugin[]>,
+  ],
+  Result<
+    {
+      env: Map<string, Scheme>;
+      types: TypeAt[];
+      aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
+    },
+    IErr
+  >
+> = _curry(
+  5,
+  (
+    stmts: Stmt[],
+    builtins: Map<string, Ty>,
+    namespaces: Map<string, Map<string, Ty>>,
+    openMode: boolean,
+    pluginsOpt: Option<HostPlugin[]>,
+  ) =>
+    runInferImports(
+      stmts,
+      builtins,
+      namespaces,
+      openMode,
+      new Map<string, Scheme>(),
+      new Map<string, Map<string, Scheme>>(),
+      emptyQuals,
+      pluginsOpt,
     ),
 );
 export const inferProgramWith: _Curry<
@@ -7935,30 +7841,7 @@ export const inferProgramWith: _Curry<
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-    pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
-    >,
+    pluginsOpt: Option<HostPlugin[]>,
   ],
   Result<Map<string, Scheme>, IErr>
 > = _curry(
@@ -7968,30 +7851,7 @@ export const inferProgramWith: _Curry<
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
-    pluginsOpt: Option<
-      {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-      }[]
-    >,
+    pluginsOpt: Option<HostPlugin[]>,
   ) =>
     inferProgramImports(
       stmts,

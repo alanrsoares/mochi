@@ -1,7 +1,7 @@
 import type { Stmt } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { IErr, QualAliasInfo } from "./infer";
+import type { HostPlugin, IErr, QualAliasInfo } from "./infer";
 
 /**
  * Caller-supplied knobs: `open` selects open-world inference (host globals
@@ -13,6 +13,8 @@ import type { IErr, QualAliasInfo } from "./infer";
  * `strictEntry` only reaches the module-graph drivers (`module.mochi`); a
  * single file is always its own entry, so honouring the directive here would
  * make the flag mean "ignore the directive", which no caller wants.
+ * `plugins` is the host's plugin list (ADR 0109): None = builtins (JSX on),
+ * Some([]) = hard opt-out, Some(ps) = builtins then `ps`.
  */
 export type Opts = {
   open: boolean;
@@ -20,6 +22,7 @@ export type Opts = {
   docs: boolean;
   moduleExt: string;
   strictEntry: boolean;
+  plugins: Option<HostPlugin[]>;
 };
 export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
 export type StageErr = { message: string; start: number; end: number };
@@ -57,8 +60,9 @@ import { match } from "@onrails/pattern";
 import { lex } from "./lexer";
 import { parseRecovering } from "./parser";
 import { checkAll } from "./check";
-import { inferProgram, inferProgramTypes } from "./infer";
+import { inferProgramWith, inferProgramTypesWith } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
+import * as Infer from "./infer";
 import { emitTsModuleWith } from "./codegen-ts";
 import { showType } from "./types";
 import { widenLits } from "./schemes";
@@ -78,6 +82,7 @@ export const defaultOpts: Opts = {
   docs: true,
   moduleExt: ".js",
   strictEntry: false,
+  plugins: None as Option<HostPlugin[]>,
 };
 const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(
   2,
@@ -148,15 +153,22 @@ const stampType: <F>(
   help: e.help,
   suggestions: e.suggestions,
 });
-const typecheckWith: _Curry<[prog: Stmt[], open: boolean], Result<Stmt[], Stamped[]>> = _curry(
-  2,
-  (prog: Stmt[], open: boolean) =>
-    _Result_mapErr(
-      (e: IErr) => [stampType(e)],
-      _Result_map((_: Map<string, Scheme>) => prog, inferProgram(prog, builtins, namespaces, open)),
+const typecheckWith: _Curry<
+  [prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>],
+  Result<Stmt[], Stamped[]>
+> = _curry(3, (prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>) =>
+  _Result_mapErr(
+    (e: IErr) => [stampType(e)],
+    _Result_map(
+      (_: Map<string, Scheme>) => prog,
+      inferProgramWith(prog, builtins, namespaces, open, plugins),
     ),
+  ),
 );
-const frontend: (src: string) => Result<Stmt[], Stamped[]> = (src: string) =>
+const frontend: _Curry<
+  [src: string, plugins: Option<HostPlugin[]>],
+  Result<Stmt[], Stamped[]>
+> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
   match(lex(src))
     .with(
       { _tag: "Err" },
@@ -179,13 +191,15 @@ const frontend: (src: string) => Result<Stmt[], Stamped[]> = (src: string) =>
           .otherwise(
             (ds) =>
               Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>,
-          ))(parseRecovering(tokens, None)),
+          ))(parseRecovering(tokens, plugins)),
     )
-    .exhaustive();
-const pipelineWith: _Curry<[src: string, open: boolean], Result<Stmt[], Stamped[]>> = _curry(
-  2,
-  (src: string, open: boolean) =>
-    _Result_flatMap((stmts) => typecheckWith(stmts, open), frontend(src)),
+    .exhaustive(),
+);
+const pipelineWith: _Curry<
+  [src: string, open: boolean, plugins: Option<HostPlugin[]>],
+  Result<Stmt[], Stamped[]>
+> = _curry(3, (src: string, open: boolean, plugins: Option<HostPlugin[]>) =>
+  _Result_flatMap((stmts) => typecheckWith(stmts, open, plugins), frontend(src, plugins)),
 );
 /**
  * typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
@@ -218,10 +232,16 @@ export const typedProgramWith: _Curry<
             aliases: Map<string, QualAliasInfo>;
             letParams: TypeAt[];
           }) => _tuple(stmts, r),
-          inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+          inferProgramTypesWith(
+            stmts,
+            builtins,
+            namespaces,
+            openMode(src, opts.open),
+            opts.plugins,
+          ),
         ),
       ),
-    frontend(src),
+    frontend(src, opts.plugins),
   ),
 );
 export const typedProgram: (src: string) => Result<
@@ -275,10 +295,16 @@ export const inferTypesWith: _Curry<
             aliases: r.aliases,
             letParams: r.letParams,
           }),
-          inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+          inferProgramTypesWith(
+            stmts,
+            builtins,
+            namespaces,
+            openMode(src, opts.open),
+            opts.plugins,
+          ),
         ),
       ),
-    frontend(src),
+    frontend(src, opts.plugins),
   ),
 );
 export const inferTypes: (src: string) => Result<
@@ -307,7 +333,7 @@ export const compileWith: _Curry<[src: string, opts: Opts], Result<string, Stamp
           runtimeDeps,
           { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
         ),
-      pipelineWith(src, openMode(src, opts.open)),
+      pipelineWith(src, openMode(src, opts.open), opts.plugins),
     ),
 );
 /**
@@ -351,10 +377,16 @@ export const compileTsWith: _Curry<
               runtimeImport,
               opts.docs,
             ),
-          inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)),
+          inferProgramTypesWith(
+            stmts,
+            builtins,
+            namespaces,
+            openMode(src, opts.open),
+            opts.plugins,
+          ),
         ),
       ),
-    frontend(src),
+    frontend(src, opts.plugins),
   ),
 );
 export const compileTs: _Curry<
