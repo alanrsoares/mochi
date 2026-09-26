@@ -1,0 +1,8 @@
+extern tw<A> : A = "@styled-cva/react" "default"
+
+let Badge = tw.span(
+  "rounded",
+  { variants: { $tone: { rose: "text-rose-700", amber: "text-amber-700" } } }
+)
+
+export let cold = <Badge $tone="blue">{"cold"}</Badge>

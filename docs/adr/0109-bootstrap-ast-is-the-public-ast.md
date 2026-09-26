@@ -41,7 +41,11 @@ The bootstrap AST is Mochi's only AST, including at public host boundaries.
   them. The seed façades accept host plugin lists so plugin-bearing paths stop
   falling back. `@mochi/plugin-styled-cva` and the in-repo manifests are ported
   in the same change. Plugin behavior is pinned with conformance cases (ADR 0105)
-  before the port.
+  before the port. Cases name the plugins they compile under. The seed cannot
+  run them yet, so they start in the manifest's `coverage.pending` list with
+  expectations captured once from the pre-deletion compiler and reviewed like
+  any other fixture. A pending case may fail, but one that passes fails the run
+  until it is moved to `coverage.required`.
 - **Codemods.** `CodemodTransform` takes and returns the bootstrap `Program`, and
   output is printed by the bootstrap formatter. `@mochi/codemod` is private, so
   this is a breaking change with no migration shim.

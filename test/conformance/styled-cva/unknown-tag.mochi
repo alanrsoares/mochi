@@ -1,0 +1,3 @@
+extern tw<A> : A = "@styled-cva/react" "default"
+
+export let Marquee = tw.blink("animate-pulse")

@@ -14,8 +14,17 @@
       "transitive-alias",
       "module-cycle",
       "multiple-graph-check-errors",
+      "dts",
+      "format",
       "typed-ts",
       "typed-ts-graph"
+    ],
+    "pending": [
+      "styled-cva-compile",
+      "styled-cva-bad-tone",
+      "styled-cva-unknown-tag",
+      "styled-cva-dts",
+      "styled-cva-format"
     ]
   },
   "cases": [
@@ -92,6 +101,18 @@
       "expect": "multiple-graph-check-errors.expect.json"
     },
     {
+      "id": "dts",
+      "kind": "dts",
+      "entry": "dts.mochi",
+      "expect": "dts.expect.txt"
+    },
+    {
+      "id": "format",
+      "kind": "format",
+      "source": "format.src.txt",
+      "expect": "format.expect.mochi"
+    },
+    {
       "id": "typed-ts",
       "kind": "typed-ts",
       "source": "typed-ts.mochi",
@@ -102,6 +123,51 @@
       "kind": "typed-ts-graph",
       "entry": "typed-ts-graph/main.mochi",
       "expect": "typed-ts-graph.expect.json"
+    },
+    {
+      "id": "styled-cva-compile",
+      "kind": "compile",
+      "source": "styled-cva/badge.mochi",
+      "expect": "styled-cva-compile.expect.js",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-bad-tone",
+      "kind": "diagnostic",
+      "source": "styled-cva/bad-tone.mochi",
+      "expect": "styled-cva-bad-tone.expect.json",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-unknown-tag",
+      "kind": "diagnostic",
+      "source": "styled-cva/unknown-tag.mochi",
+      "expect": "styled-cva-unknown-tag.expect.json",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-dts",
+      "kind": "dts",
+      "entry": "styled-cva/badge.mochi",
+      "expect": "styled-cva-dts.expect.txt",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-format",
+      "kind": "format",
+      "source": "styled-cva/reflow.src.txt",
+      "expect": "styled-cva-format.expect.mochi",
+      "plugins": [
+        "styled-cva"
+      ]
     }
   ]
 }

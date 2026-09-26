@@ -11,11 +11,14 @@ import { dirname, join, relative, resolve } from "node:path";
 import {
   buildModulesBootstrapWith,
   buildModulesTsBootstrapWith,
+  emitDtsForFileBootstrapWith,
 } from "@mochi/compiler/bootstrap/module";
+import type { BootstrapOptions, BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import {
   compileBootstrapSyncWith,
   compileTsBootstrapSyncWith,
 } from "@mochi/compiler/bootstrap/sync";
+import { formatBootstrap } from "@mochi/compiler/bootstrap/syntax";
 import { match } from "@onrails/pattern";
 
 type CompileCase = { id: string; kind: "compile"; source: string; expect: string };
@@ -30,6 +33,8 @@ type GraphCase = { id: string; kind: "graph"; entry: string; expect: string };
 type GraphDiagnosticCase = { id: string; kind: "graph-diagnostic"; entry: string; expect: string };
 type TypedTsCase = { id: string; kind: "typed-ts"; source: string; expect: string };
 type TypedTsGraphCase = { id: string; kind: "typed-ts-graph"; entry: string; expect: string };
+type DtsCase = { id: string; kind: "dts"; entry: string; expect: string };
+type FormatCase = { id: string; kind: "format"; source: string; expect: string };
 type CompactDiagnostic = { message: string; start: number; end: number };
 type EmittedModule = { path: string; js: string };
 type Case =
@@ -39,10 +44,42 @@ type Case =
   | GraphCase
   | GraphDiagnosticCase
   | TypedTsCase
-  | TypedTsGraphCase;
-type Manifest = { version: 1; coverage: { required: string[] }; cases: Case[] };
+  | TypedTsGraphCase
+  | DtsCase
+  | FormatCase;
+/** `plugins` names entries of `conformancePlugins`; the case compiles under them. */
+type ManifestCase = Case & { plugins?: string[] };
+/**
+ * `pending` cases pin behaviour the bootstrap compiler does not have yet. Their
+ * expectations come from the accepted pre-deletion compiler, reviewed like any
+ * other fixture. They run but may fail; one that passes must move to `required`.
+ */
+type Manifest = {
+  version: 1;
+  coverage: { required: string[]; pending?: string[] };
+  cases: ManifestCase[];
+};
 
-const options = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
+const baseOptions: BootstrapOptions = {
+  open: false,
+  runtime: true,
+  docs: true,
+  moduleExt: ".js",
+  strictEntry: false,
+};
+
+/**
+ * Host plugins, in the bootstrap shape (ADR 0109), that cases may name. Empty
+ * until the first vendor plugin is ported: a case naming a missing one fails.
+ */
+const conformancePlugins: Record<string, BootstrapPlugin> = {};
+
+const optionsFor = (test: ManifestCase): BootstrapOptions | string => {
+  if (test.plugins === undefined) return baseOptions;
+  const missing = test.plugins.filter((name) => !(name in conformancePlugins));
+  if (missing.length > 0) return `no bootstrap plugin ${missing.map((n) => `'${n}'`).join(", ")}`;
+  return { ...baseOptions, plugins: test.plugins.map((name) => conformancePlugins[name]!) };
+};
 const fixtureRoot = resolve(import.meta.dir, "../test/conformance");
 const candidateRoot = join(fixtureRoot, ".candidate");
 
@@ -121,7 +158,9 @@ const typecheckGraph = (id: string, entry: string, outputs: EmittedModule[]): st
   }
 };
 
-const runCase = (test: Case): string | null => {
+const runCase = (test: ManifestCase): string | null => {
+  const options = optionsFor(test);
+  if (typeof options === "string") return resultError(test.id, options);
   switch (test.kind) {
     case "compile": {
       const result = compileBootstrapSyncWith(text(test.source), options);
@@ -178,6 +217,25 @@ const runCase = (test: Case): string | null => {
         ? null
         : resultError(test.id, `graph diagnostic differs: ${JSON.stringify(actual)}`);
     }
+    case "dts": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = emitDtsForFileBootstrapWith(entry, "@mochi/runtime", options);
+      if (result._tag === "Err")
+        return resultError(
+          test.id,
+          `unexpected diagnostics ${JSON.stringify(compactDiagnostics([result.error]))}`,
+        );
+      return result.value === text(test.expect)
+        ? null
+        : resultError(test.id, `declarations differ: ${JSON.stringify(result.value)}`);
+    }
+    case "format": {
+      const result = formatBootstrap(text(test.source), options.plugins);
+      if (result === null) return resultError(test.id, "unexpected lex error");
+      return result === text(test.expect)
+        ? null
+        : resultError(test.id, `formatted text differs: ${JSON.stringify(result)}`);
+    }
     case "typed-ts-graph": {
       const entry = join(fixtureRoot, test.entry);
       const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
@@ -203,7 +261,9 @@ const runCase = (test: Case): string | null => {
   return typecheck(test.id, result.value);
 };
 
-const candidateFor = (test: Case): { path: string; contents: string } => {
+const candidateFor = (test: ManifestCase): { path: string; contents: string } => {
+  const options = optionsFor(test);
+  if (typeof options === "string") throw new Error(resultError(test.id, options));
   switch (test.kind) {
     case "compile": {
       const result = compileBootstrapSyncWith(text(test.source), options);
@@ -245,6 +305,18 @@ const candidateFor = (test: Case): { path: string; contents: string } => {
         throw new Error(resultError(test.id, "expected a graph diagnostic"));
       return { path: test.expect, contents: json(graphDiagnostics(entry, result.error)) };
     }
+    case "dts": {
+      const entry = join(fixtureRoot, test.entry);
+      const result = emitDtsForFileBootstrapWith(entry, "@mochi/runtime", options);
+      if (result._tag === "Err")
+        throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics([result.error]))));
+      return { path: test.expect, contents: result.value };
+    }
+    case "format": {
+      const result = formatBootstrap(text(test.source), options.plugins);
+      if (result === null) throw new Error(resultError(test.id, "unexpected lex error"));
+      return { path: test.expect, contents: result };
+    }
     case "typed-ts-graph": {
       const entry = join(fixtureRoot, test.entry);
       const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
@@ -265,9 +337,14 @@ const coverageErrorsFor = (manifest: Manifest): string[] => {
   const ids = manifest.cases.map((test) => test.id);
   const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);
   const missing = manifest.coverage.required.filter((id) => !ids.includes(id));
+  const pending = manifest.coverage.pending ?? [];
+  const missingPending = pending.filter((id) => !ids.includes(id));
+  const both = pending.filter((id) => manifest.coverage.required.includes(id));
   return [
     ...[...new Set(duplicated)].map((id) => `duplicate conformance case '${id}'`),
     ...missing.map((id) => `required conformance case '${id}' is missing`),
+    ...missingPending.map((id) => `pending conformance case '${id}' is missing`),
+    ...both.map((id) => `conformance case '${id}' is both required and pending`),
   ];
 };
 
@@ -283,7 +360,10 @@ export const freezeBootstrapConformance = (out = candidateRoot): string[] => {
   if (coverageErrors.length > 0) throw new Error(coverageErrors.join("\n"));
   rmSync(out, { recursive: true, force: true });
   const paths: string[] = [];
+  const pending = new Set(manifest.coverage.pending ?? []);
   for (const test of manifest.cases) {
+    // Pending expectations come from the pre-deletion compiler, not the seed.
+    if (pending.has(test.id)) continue;
     const candidate = candidateFor(test);
     const path = join(out, candidate.path);
     mkdirSync(dirname(path), { recursive: true });
@@ -293,22 +373,41 @@ export const freezeBootstrapConformance = (out = candidateRoot): string[] => {
   return paths;
 };
 
+export type PendingStatus = { id: string; failure: string | null };
+
+/** Where each pending case stands: its current failure, or `null` once it conforms. */
+export const pendingBootstrapConformance = (): PendingStatus[] => {
+  const manifest = JSON.parse(text("manifest.json")) as Manifest;
+  const pending = new Set(manifest.coverage.pending ?? []);
+  return manifest.cases
+    .filter((test) => pending.has(test.id))
+    .map((test) => ({ id: test.id, failure: runCase(test) }));
+};
+
 /** Execute every checked-in case. `null` means the corpus conforms. */
 export const runBootstrapConformance = (): string[] => {
   const manifest = JSON.parse(text("manifest.json")) as Manifest;
   if (manifest.version !== 1)
     return [`unsupported conformance manifest version ${manifest.version}`];
+  const pending = new Set(manifest.coverage.pending ?? []);
   return [
     ...coverageErrorsFor(manifest),
     ...manifest.cases.flatMap((test) => {
       const failure = runCase(test);
+      if (pending.has(test.id))
+        return failure
+          ? []
+          : [resultError(test.id, "pending case now conforms; move it to coverage.required")];
       return failure ? [failure] : [];
     }),
   ];
 };
 
 if (import.meta.main) {
-  if (process.argv.includes("--freeze")) {
+  if (process.argv.includes("--pending")) {
+    for (const { id, failure } of pendingBootstrapConformance())
+      process.stdout.write(`${failure === null ? "conforms" : "pending "}  ${failure ?? id}\n`);
+  } else if (process.argv.includes("--freeze")) {
     const paths = freezeBootstrapConformance();
     process.stdout.write(`bootstrap conformance candidates: ${paths.length}\n`);
   } else {

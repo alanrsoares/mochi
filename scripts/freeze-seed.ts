@@ -130,7 +130,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\n',
+  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram } from "./format.ts";\n',
 );
 execFileSync(
   "bun",

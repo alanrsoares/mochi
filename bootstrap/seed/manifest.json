@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "1d605c767ef0481cb5b2d8b3de49e6711c068f10",
+  "sourceRevision": "fa54eedc339ff1354b8e3bf915fb1c6032e48a23",
   "emitted": {
     "ast.ts": "bddf8c6f50743a8da5cd4bb43a8ee15597c61dc89b7bdc3d3aef77c6508d8bce",
     "check.ts": "84100533235532446415644daa0ecc85c342c419dce1374056835d09b93ab5aa",
@@ -35,7 +35,7 @@
     "str-scan.ts": "b15ad99e674c6c71d7c219385365d756ef32ab89d5da8e8673d4d0376991bc13",
     "suggest.ts": "ecebb7715e5e6ac73a8a5e71d9241d297b6763fdae509ec659797de98b9671e7",
     "symbols.ts": "b127524ca2a181aee0ff7cbac9a8a4c13ec8bc7ceb082d7bf176f32821ee0c92",
-    "syntax.bundle.cjs": "d980ec7f25d3ca3c832d7a7ee08ac65c5418a6e88043ae03f8a774b006d7d27c",
+    "syntax.bundle.cjs": "d037a19b19e1608a8e66165df8b7a81d6d98c66d706576c6845da53076ad0ad7",
     "ts-types.ts": "f623d2a45679ecb5704b285fc0f1c5fe7381afd4aff77d1bace894836062e797",
     "types.ts": "81c95550f9351bb66bae1bf38be24f369c5953b503287dcc536a0ab91d49aff9",
     "usefulness.ts": "782889f718d919280973d86e7b6a2c986be404b9d855123267eb5e629f3ae6fd"
@@ -75,7 +75,7 @@
     "str-scan.ts": "b0e8f632da71870efa683f8af58560d5f892f47d1499f2b6070f085432ea5d96",
     "suggest.ts": "161f6aef05571a9721b1073a096acfbef66d8e62c185173ebda6884e61a3f839",
     "symbols.ts": "f18d77886b8009f36860c64d40a976769047e128d41479d578460412b024d5b3",
-    "syntax.bundle.cjs": "d980ec7f25d3ca3c832d7a7ee08ac65c5418a6e88043ae03f8a774b006d7d27c",
+    "syntax.bundle.cjs": "d037a19b19e1608a8e66165df8b7a81d6d98c66d706576c6845da53076ad0ad7",
     "ts-types.ts": "10b83c4fb840e43d8060d8427222dbe17783e01064631d7d3c77d92f28627ccf",
     "types.ts": "c318f961afcc59ffc7bb8e429afb4052f4ac60e25f47a4b6e6cb7c8238fe0c4d",
     "usefulness.ts": "625d015f7add6c21e167bffb206ed2887f99e40252f5bfc8f84f9155915a1893"

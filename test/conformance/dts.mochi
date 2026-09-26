@@ -1,0 +1,13 @@
+/// A labelled point.
+export type Point = { x: number, y: number, label: string }
+
+export type Shape =
+  | Circle(radius: number)
+  | Rect(width: number, height: number)
+
+export let origin : Point = { x: 0, y: 0, label: "o" }
+
+export let area = s => switch s {
+  | Circle(r) => r * r * 3
+  | Rect(w, h) => w * h
+}

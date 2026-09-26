@@ -73,9 +73,15 @@ export type SeedOptions = Omit<BootstrapOptions, "plugins"> & {
   plugins: BootstrapOption<readonly BootstrapPlugin[]>;
 };
 
+/** The seed's `pluginsOpt`: omitted = builtins, `[]` = hard opt-out. */
+export const toSeedPlugins = (
+  plugins: readonly BootstrapPlugin[] | undefined,
+): BootstrapOption<readonly BootstrapPlugin[]> =>
+  plugins === undefined ? { _tag: "None" } : { _tag: "Some", value: plugins };
+
 export const toSeedOptions = ({ plugins, ...rest }: BootstrapOptions): SeedOptions => ({
   ...rest,
-  plugins: plugins === undefined ? { _tag: "None" } : { _tag: "Some", value: plugins },
+  plugins: toSeedPlugins(plugins),
 });
 
 /** Strict inference, docstrings retained, `.js` siblings, directive in charge. */
