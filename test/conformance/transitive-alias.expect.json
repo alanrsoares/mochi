@@ -1,0 +1,14 @@
+[
+  {
+    "path": "span.mochi",
+    "js": "\n"
+  },
+  {
+    "path": "st.mochi",
+    "js": "import * as S from \"./span.js\";\n\n"
+  },
+  {
+    "path": "main.mochi",
+    "js": "import * as T from \"./st.js\";\nconst startOf = (s) => s.at.start;\nexport const start = startOf({ at: { start: 1, end: 2 }, n: 0 });\n"
+  }
+]

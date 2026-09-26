@@ -1,4 +1,7 @@
 import type {
+  AliasField,
+  Ctor,
+  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -12,8 +15,8 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
-import type { LocTok, QualAliasField, QualAliasInfo } from "./infer";
-import type { CtorFactoryTs, CtorFieldLike, CtorLike, GenOpts, ParamAnnots } from "./codegen";
+import type { LocTok, QualAliasInfo } from "./infer";
+import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 
 /**
@@ -22,7 +25,7 @@ import type { TsEnv } from "./ts-types";
  * well as in schemes.mochi rather than shared through an import — a local
  * record alias expands, so both copies unify structurally (ADR 0044).
  */
-export type AliasInfo = { params: string[]; fields: QualAliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -170,7 +173,7 @@ const fieldTs: _Curry<
  */
 const ctorFieldsFrom: _Curry<
   [
-    fields: CtorFieldLike[],
+    fields: CtorField[],
     keys: string[],
     params: string[],
     aliases: Map<string, AliasInfo>,
@@ -181,7 +184,7 @@ const ctorFieldsFrom: _Curry<
 > = _curry(
   6,
   (
-    fields: CtorFieldLike[],
+    fields: CtorField[],
     keys: string[],
     params: string[],
     aliases: Map<string, AliasInfo>,
@@ -202,11 +205,11 @@ const ctorFieldsFrom: _Curry<
  * One ctor's runtime shape: the `_tag` discriminant plus its fields.
  */
 const ctorVariant: _Curry<
-  [c: CtorLike, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
+  [c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
   string
 > = _curry(
   4,
-  (c: CtorLike, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
+  (c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
     return eq(length(fields), 0)
       ? `{ _tag: "${c.name}" }`
@@ -215,7 +218,7 @@ const ctorVariant: _Curry<
 );
 const ctorVariantsFrom: _Curry<
   [
-    ctors: CtorLike[],
+    ctors: Ctor[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -225,7 +228,7 @@ const ctorVariantsFrom: _Curry<
 > = _curry(
   5,
   (
-    ctors: CtorLike[],
+    ctors: Ctor[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -248,7 +251,7 @@ export const typeDecl: _Curry<
   [
     name: string,
     params: string[],
-    ctors: CtorLike[],
+    ctors: Ctor[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -258,7 +261,7 @@ export const typeDecl: _Curry<
   (
     name: string,
     params: string[],
-    ctors: CtorLike[],
+    ctors: Ctor[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -269,7 +272,7 @@ ${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};`;
 );
 const aliasFieldsFrom: _Curry<
   [
-    fields: QualAliasField[],
+    fields: AliasField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -279,7 +282,7 @@ const aliasFieldsFrom: _Curry<
 > = _curry(
   5,
   (
-    fields: QualAliasField[],
+    fields: AliasField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -303,7 +306,7 @@ export const recordAliasDecl: _Curry<
   [
     name: string,
     params: string[],
-    fields: QualAliasField[],
+    fields: AliasField[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -313,7 +316,7 @@ export const recordAliasDecl: _Curry<
   (
     name: string,
     params: string[],
-    fields: QualAliasField[],
+    fields: AliasField[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -576,7 +579,7 @@ const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry
 );
 const ctorParamTypes: _Curry<
   [
-    fields: CtorFieldLike[],
+    fields: CtorField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -586,7 +589,7 @@ const ctorParamTypes: _Curry<
 > = _curry(
   5,
   (
-    fields: CtorFieldLike[],
+    fields: CtorField[],
     params: string[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
@@ -606,7 +609,7 @@ export const ctorFactoryTs: _Curry<
   [
     typeName: string,
     params: string[],
-    c: CtorLike,
+    c: Ctor,
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ],
@@ -616,7 +619,7 @@ export const ctorFactoryTs: _Curry<
   (
     typeName: string,
     params: string[],
-    c: CtorLike,
+    c: Ctor,
     aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
   ) => {
@@ -1045,30 +1048,28 @@ export const builtinTypeNamesFor: _Curry<
  * expands a record alias at `typeExprToType`, so this reproduces exactly what
  * inference will have put in the type table for a value of that alias.
  */
-const aliasRowOf: _Curry<
-  [fields: QualAliasField[], aliases: Map<string, AliasInfo>, i: number],
-  Row
-> = _curry(3, (fields: QualAliasField[], aliases: Map<string, AliasInfo>, i: number) =>
-  match(_Array_get(i, fields))
-    .with({ _tag: "None" }, () => RowEmpty as Row)
-    .with({ _tag: "Some" }, ({ value: f }) =>
-      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-        RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
-        typeExprToType(
-          f.fieldType,
-          new Map<string, Ty>(),
-          mkSt(0),
-          aliases,
-          _Set_fromArray([] as string[]),
+const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
+  _curry(3, (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number) =>
+    match(_Array_get(i, fields))
+      .with({ _tag: "None" }, () => RowEmpty as Row)
+      .with({ _tag: "Some" }, ({ value: f }) =>
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+          RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
+          typeExprToType(
+            f.fieldType,
+            new Map<string, Ty>(),
+            mkSt(0),
+            aliases,
+            _Set_fromArray([] as string[]),
+          ),
         ),
-      ),
-    )
-    .exhaustive(),
-);
+      )
+      .exhaustive(),
+  );
 const aliasShapeKey: _Curry<
-  [fields: QualAliasField[], aliases: Map<string, AliasInfo>],
+  [fields: AliasField[], aliases: Map<string, AliasInfo>],
   Option<string>
-> = _curry(2, (fields: QualAliasField[], aliases: Map<string, AliasInfo>) =>
+> = _curry(2, (fields: AliasField[], aliases: Map<string, AliasInfo>) =>
   rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>()),
 );
 /**
@@ -1290,14 +1291,14 @@ export const withoutAmbiguousAlias: _Curry<
  * come out as `export type Span = Span;`.
  */
 export const withoutOwnShape: <A, B>(
-  fields: QualAliasField[],
+  fields: AliasField[],
   params: A[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, B>,
 ) => Map<string, B> = _curry(
   4,
   <A, B>(
-    fields: QualAliasField[],
+    fields: AliasField[],
     params: A[],
     aliases: Map<string, AliasInfo>,
     recs: Map<string, B>,
@@ -1768,7 +1769,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
         ),
       ) as Option<(a: string, b: Expr) => Option<string>>,
       annotateCtor: Some(
-        _curry(2, (s: Stmt, c: CtorLike) =>
+        _curry(2, (s: Stmt, c: Ctor) =>
           match(s)
             .with(
               { _tag: "SType" },
@@ -1777,7 +1778,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
             )
             .otherwise(() => None as Option<CtorFactoryTs>),
         ),
-      ) as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
+      ) as Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>,
       annotateParams: Some(
         _curry(2, (sp: SpanAt, arity: number) =>
           match(_Map_get(spanKey(sp), genericLams))
@@ -2281,11 +2282,10 @@ export const externModuleDts: <A, B>(
         "\n",
         _Array_concat(
           map(
-            (bt: { name: string; params: string[]; ctors: CtorLike[] }) =>
+            (bt: { name: string; params: string[]; ctors: Ctor[] }) =>
               typeDecl(bt.name, bt.params, bt.ctors, aliases, new Map<string, string>()),
             filter(
-              (bt: { name: string; params: string[]; ctors: CtorLike[] }) =>
-                _Set_has(bt.name, wanted),
+              (bt: { name: string; params: string[]; ctors: Ctor[] }) => _Set_has(bt.name, wanted),
               builtinTypeDecls,
             ),
           ),

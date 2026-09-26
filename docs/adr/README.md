@@ -153,6 +153,7 @@ What else was on the table and why not.
 | [0106](0106-pin-record-alias-vars.md) | Pin scheme variables that one record alias explains | Accepted |
 | [0107](0107-prefer-printable-record-alias.md) | Prefer a printable alias when the winning name is ambiguous | Accepted |
 | [0108](0108-bun-mochi-loader.md) | The Bun `.mochi` loader ships in `@mochi/bun` | Accepted |
+| [0109](0109-bootstrap-ast-is-the-public-ast.md) | The bootstrap AST is the public AST | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

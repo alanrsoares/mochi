@@ -1,5 +1,6 @@
 import type {
   Ctor,
+  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -39,10 +40,10 @@ export type ParamAnnots = { generics: string; params: Option<string>[] };
  * locally and still unify structurally with the real AST values.
  */
 export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
-export type CtorLike = { name: string; fields: CtorFieldLike[]; span: SpanAt };
+export type CtorLike = { name: string; fields: CtorField[]; span: SpanAt };
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
-  annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
+  annotateCtor: Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>;
   annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
   annotateEmpty: Option<(a: Expr) => Option<string>>;
   annotateLetin: Option<(a: Expr) => Option<string>>;
@@ -67,7 +68,7 @@ export type GCtx = {
   keys: Map<string, string[]>;
   ns: Map<string, Map<string, string>>;
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
-  annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
+  annotateCtor: Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>;
   annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
   annotateEmpty: Option<(a: Expr) => Option<string>>;
   annotateLetin: Option<(a: Expr) => Option<string>>;
@@ -150,7 +151,7 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors";
  */
 export const jsGenOpts: GenOpts = {
   annotateLet: None as Option<(a: string, b: Expr) => Option<string>>,
-  annotateCtor: None as Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>,
+  annotateCtor: None as Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>,
   annotateParams: None as Option<(a: SpanAt, b: number) => ParamAnnots>,
   annotateEmpty: None as Option<(a: Expr) => Option<string>>,
   annotateLetin: None as Option<(a: Expr) => Option<string>>,
@@ -2861,8 +2862,8 @@ const boundNamesFrom: _Curry<
               acc,
               _Set_fromArray(
                 map(
-                  (c: CtorLike) => c.name,
-                  filter((c: CtorLike) => or(exported, _Set_has(c.name, valueRefs)), ctors),
+                  (c: Ctor) => c.name,
+                  filter((c: Ctor) => or(exported, _Set_has(c.name, valueRefs)), ctors),
                 ),
               ),
             ),
@@ -2912,7 +2913,7 @@ const refsForStmt: _Curry<[ctx: GCtx, s: Stmt], Set<string>> = _curry(2, (ctx: G
     .with({ _tag: "SExpr" }, ({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))
     .with({ _tag: "SType" }, ({ ctors, exported }) =>
       someOf(
-        (c: CtorLike) => and(length(c.fields) >= 2, or(exported, _Set_has(c.name, ctx.valueRefs))),
+        (c: Ctor) => and(length(c.fields) >= 2, or(exported, _Set_has(c.name, ctx.valueRefs))),
         ctors,
       )
         ? _Set_add("_curry", _Set_fromArray([] as string[]))
@@ -3036,7 +3037,7 @@ export const codegenWith: <A>(
     annotateLetin: Option<(a: Expr) => Option<string>>;
     annotateEmpty: Option<(a: Expr) => Option<string>>;
     annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
-    annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
+    annotateCtor: Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>;
     annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   } & A,
 ) => string = _curry(
@@ -3060,7 +3061,7 @@ export const codegenWith: <A>(
       annotateLetin: Option<(a: Expr) => Option<string>>;
       annotateEmpty: Option<(a: Expr) => Option<string>>;
       annotateParams: Option<(a: SpanAt, b: number) => ParamAnnots>;
-      annotateCtor: Option<(a: Stmt, b: CtorLike) => Option<CtorFactoryTs>>;
+      annotateCtor: Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>;
       annotateLet: Option<(a: string, b: Expr) => Option<string>>;
     } & A,
   ) => {

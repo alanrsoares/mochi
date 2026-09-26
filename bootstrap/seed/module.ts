@@ -1,7 +1,6 @@
-import type { Tok } from "./lexer";
-import type { Expr, Stmt, TypeExpr } from "./ast";
-import type { SpanAt, St, Ty, TypeAt } from "./types";
-import type { IErr, InferApi, LocTok, QualAliasField } from "./infer";
+import type { AliasField, Stmt, TypeExpr } from "./ast";
+import type { SpanAt, Ty, TypeAt } from "./types";
+import type { HostPlugin, LocTok, Plugin } from "./infer";
 import type { Scheme } from "./schemes";
 import type { StageErr, Stamped } from "./compile";
 import type { Occurrence } from "./symbols";
@@ -12,6 +11,7 @@ export type Opts = {
   docs: boolean;
   moduleExt: string;
   strictEntry: boolean;
+  plugins: Option<HostPlugin[]>;
 };
 export type Loaded = { path: string; src: string; stmts: Stmt[] };
 export type ModuleOutput = { path: string; js: string };
@@ -25,11 +25,7 @@ export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type GraphRecovery = { outputs: ModuleOutput[]; errors: StageErr[] };
-export type RecoveryAliasInfo = {
-  params: string[];
-  fields: QualAliasField[];
-  expr: Option<TypeExpr>;
-};
+export type RecoveryAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, RecoveryAliasInfo> };
 export type RecoveryScheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type RecoveryCtx = {
@@ -90,11 +86,17 @@ import {
 import { match } from "@onrails/pattern";
 
 import { lex } from "./lexer";
-import { parse } from "./parser";
+import { parseWith } from "./parser";
 import { checkAllWith, checkWith } from "./check";
 import { exportedRegistry, exportedCtorKeys } from "./ctors";
-import { inferProgramImports, inferProgramImportsTypes, exportedSchemes } from "./infer";
+import {
+  inferProgramImports,
+  inferProgramImportsTypes,
+  exportedSchemes,
+  scopeAliases,
+} from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
+import * as Infer from "./infer";
 import { emitTsModuleWith, externModuleDts } from "./codegen-ts";
 import { showType, tVar } from "./types";
 import { widenLits } from "./schemes";
@@ -129,6 +131,7 @@ const defaultOpts: Opts = {
   docs: true,
   moduleExt: ".js",
   strictEntry: false,
+  plugins: None as Option<HostPlugin[]>,
 };
 
 const addCtorOrigins: <A, B, C>(
@@ -227,8 +230,12 @@ const atPath: <C>(
     end: e.end,
   }),
 );
-const parseModule: ($x: string) => Result<Stmt[], StageErr> = ($x: string) =>
-  _Result_flatMap(parse)(lex($x));
+const parseModule: _Curry<
+  [src: string, plugins: Option<HostPlugin[]>],
+  Result<Stmt[], StageErr>
+> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
+  _Result_flatMap((toks) => parseWith(toks, plugins), lex(src)),
+);
 const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
   3,
   (stmts: Stmt[], i: number, acc: string[]) =>
@@ -249,47 +256,48 @@ const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
   importFromsFrom(stmts, 0, [] as string[]);
 
-const visit: _Curry<[path: string, acc: Acc], Result<Acc, StageErr>> = _curry(
-  2,
-  (path: string, acc: Acc) =>
-    match(_Map_get(path, acc.state))
-      .with({ _tag: "Some", value: "done" }, () => Ok(acc) as Result<Acc, StageErr>)
-      .with(
-        { _tag: "Some", value: "loading" },
-        () => Err(mErr(`import cycle through '${path}'`)) as Result<Acc, StageErr>,
-      )
-      .otherwise(() =>
-        ((acc1: Acc) =>
-          match(readFile(path))
-            .with(
-              { _tag: "Err" },
-              () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, StageErr>,
-            )
-            .with({ _tag: "Ok" }, ({ value: src }) =>
-              match(parseModule(src))
-                .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
-                .with({ _tag: "Ok" }, ({ value: stmts }) =>
-                  match(visitAll(importFroms(stmts), path, acc1))
-                    .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
-                    .with(
-                      { _tag: "Ok" },
-                      ({ value: acc2 }) =>
-                        Ok({
-                          state: _Map_set(path, "done", acc2.state),
-                          order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
-                        }) as Result<Acc, StageErr>,
-                    )
-                    .exhaustive(),
-                )
-                .exhaustive(),
-            )
-            .exhaustive())({ state: _Map_set(path, "loading", acc.state), order: acc.order }),
-      ),
+const visit: _Curry<
+  [path: string, acc: Acc, plugins: Option<HostPlugin[]>],
+  Result<Acc, StageErr>
+> = _curry(3, (path: string, acc: Acc, plugins: Option<HostPlugin[]>) =>
+  match(_Map_get(path, acc.state))
+    .with({ _tag: "Some", value: "done" }, () => Ok(acc) as Result<Acc, StageErr>)
+    .with(
+      { _tag: "Some", value: "loading" },
+      () => Err(mErr(`import cycle through '${path}'`)) as Result<Acc, StageErr>,
+    )
+    .otherwise(() =>
+      ((acc1: Acc) =>
+        match(readFile(path))
+          .with(
+            { _tag: "Err" },
+            () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, StageErr>,
+          )
+          .with({ _tag: "Ok" }, ({ value: src }) =>
+            match(parseModule(src, plugins))
+              .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
+              .with({ _tag: "Ok" }, ({ value: stmts }) =>
+                match(visitAll(importFroms(stmts), path, acc1, plugins))
+                  .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
+                  .with(
+                    { _tag: "Ok" },
+                    ({ value: acc2 }) =>
+                      Ok({
+                        state: _Map_set(path, "done", acc2.state),
+                        order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
+                      }) as Result<Acc, StageErr>,
+                  )
+                  .exhaustive(),
+              )
+              .exhaustive(),
+          )
+          .exhaustive())({ state: _Map_set(path, "loading", acc.state), order: acc.order }),
+    ),
 );
 const visitAll: _Curry<
-  [froms: string[], importer: string, acc: Acc],
+  [froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>],
   Result<Acc, StageErr>
-> = _curry(3, (froms: string[], importer: string, acc: Acc) =>
+> = _curry(4, (froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>) =>
   match(froms)
     .with(
       (_v) => {
@@ -304,9 +312,9 @@ const visitAll: _Curry<
         return _g.length >= 1;
       },
       ([from, ...rest]) =>
-        match(visit(resolveImport(importer, from), acc))
+        match(visit(resolveImport(importer, from), acc, plugins))
           .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
-          .with({ _tag: "Ok" }, ({ value: acc1 }) => visitAll(rest, importer, acc1))
+          .with({ _tag: "Ok" }, ({ value: acc1 }) => visitAll(rest, importer, acc1, plugins))
           .exhaustive(),
     )
     .otherwise(() => {
@@ -314,14 +322,24 @@ const visitAll: _Curry<
     }),
 );
 /**
- * loadGraph : string -> Result [Loaded] MErr
- * Load every module reachable from `entry`, in dependency order.
+ * loadGraphWith : string -> Option [Plugin] -> Result [Loaded] MErr
+ * Load every module reachable from `entry`, in dependency order, parsing
+ * each under the host's plugin list (ADR 0109).
  */
-export const loadGraph: (entry: string) => Result<Loaded[], StageErr> = (entry: string) =>
+export const loadGraphWith: _Curry<
+  [entry: string, plugins: Option<HostPlugin[]>],
+  Result<Loaded[], StageErr>
+> = _curry(2, (entry: string, plugins: Option<HostPlugin[]>) =>
   _Result_flatMap(
     (acc) => Ok(acc.order) as Result<Loaded[], StageErr>,
-    visit(absPath(entry), { state: new Map<string, string>(), order: [] as Loaded[] }),
-  );
+    visit(absPath(entry), { state: new Map<string, string>(), order: [] as Loaded[] }, plugins),
+  ),
+);
+/**
+ * loadGraph : string -> Result [Loaded] MErr — default plugins.
+ */
+export const loadGraph: (entry: string) => Result<Loaded[], StageErr> = (entry: string) =>
+  loadGraphWith(entry, None as Option<HostPlugin[]>);
 
 const emptyReg: Registry = {
   ctors: new Map<string, CtorInfo>(),
@@ -393,11 +411,7 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, RecoveryAliasInfo> = (stmts: Stm
           ({ name, params, aliasType: { value: te } }) =>
             _Map_set(
               name,
-              {
-                params: params,
-                fields: [] as QualAliasField[],
-                expr: Some(te) as Option<TypeExpr>,
-              },
+              { params: params, fields: [] as AliasField[], expr: Some(te) as Option<TypeExpr> },
               acc,
             ),
         )
@@ -406,10 +420,40 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, RecoveryAliasInfo> = (stmts: Stm
     new Map<string, RecoveryAliasInfo>(),
     stmts,
   );
-const qualScopeOf: (stmts: Stmt[]) => RecoveryQualScope = (stmts: Stmt[]) => ({
-  types: exportedTypeNames(stmts),
-  aliases: aliasesOf(stmts),
-});
+const qualScopeOf: <A, B, C>(
+  stmts: Stmt[],
+  quals: Map<
+    string,
+    {
+      aliases: Map<
+        string,
+        {
+          expr: Option<TypeExpr>;
+          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          params: string[];
+        } & B
+      >;
+    } & C
+  >,
+) => RecoveryQualScope = _curry(
+  2,
+  <A, B, C>(
+    stmts: Stmt[],
+    quals: Map<
+      string,
+      {
+        aliases: Map<
+          string,
+          {
+            expr: Option<TypeExpr>;
+            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            params: string[];
+          } & B
+        >;
+      } & C
+    >,
+  ) => ({ types: exportedTypeNames(stmts), aliases: scopeAliases(stmts, quals) }),
+);
 const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
   name: A,
   info: { owner: B } & H,
@@ -835,30 +879,7 @@ const compileOne: <A>(
                 res.imports,
                 res.nsImports,
                 res.quals,
-                None as Option<
-                  {
-                    name: string;
-                    parse: Option<
-                      (
-                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                        b: number,
-                        c: (
-                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                          b: number,
-                        ) => Result<[Expr, number], StageErr>,
-                      ) => Result<Option<[Expr, number]>, StageErr>
-                    >;
-                    inferCall: Option<
-                      (
-                        a: Expr,
-                        b: Expr[],
-                        c: Option<string>,
-                        d: St,
-                        e: InferApi,
-                      ) => Result<Option<[Ty, St]>, IErr>
-                    >;
-                  }[]
-                >,
+                opts.plugins,
               ),
             )
               .with(
@@ -879,7 +900,11 @@ const compileOne: <A>(
                       exportedCtorKeys(loaded.stmts),
                       ctx.keysByPath,
                     ),
-                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    qualsByPath: _Map_set(
+                      loaded.path,
+                      qualScopeOf(loaded.stmts, res.quals),
+                      ctx.qualsByPath,
+                    ),
                     outputs: [...ctx.outputs, { path: loaded.path, js: js }],
                   }) as Result<RecoveryCtx, StageErr>)(
                   codegenWith(
@@ -1255,30 +1280,7 @@ const inferOne: <A, B>(
                 res.imports,
                 res.nsImports,
                 res.quals,
-                None as Option<
-                  {
-                    name: string;
-                    parse: Option<
-                      (
-                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                        b: number,
-                        c: (
-                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                          b: number,
-                        ) => Result<[Expr, number], StageErr>,
-                      ) => Result<Option<[Expr, number]>, StageErr>
-                    >;
-                    inferCall: Option<
-                      (
-                        a: Expr,
-                        b: Expr[],
-                        c: Option<string>,
-                        d: St,
-                        e: InferApi,
-                      ) => Result<Option<[Ty, St]>, IErr>
-                    >;
-                  }[]
-                >,
+                opts.plugins,
               ),
             )
               .with(
@@ -1315,7 +1317,11 @@ const inferOne: <A, B>(
                       exportedCtorKeys(loaded.stmts),
                       ctx.keysByPath,
                     ),
-                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    qualsByPath: _Map_set(
+                      loaded.path,
+                      qualScopeOf(loaded.stmts, res.quals),
+                      ctx.qualsByPath,
+                    ),
                     aliases: mergeMap(r.aliases, ctx.aliases),
                     outputs: [
                       ...ctx.outputs,
@@ -1620,7 +1626,7 @@ export const buildModulesWith: _Curry<
   [entry: string, opts: Opts],
   Result<ModuleOutput[], StageErr[]>
 > = _curry(2, (entry: string, opts: Opts) =>
-  match(loadGraph(entry))
+  match(loadGraphWith(entry, opts.plugins))
     .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<ModuleOutput[], StageErr[]>)
     .with({ _tag: "Ok" }, ({ value: graph }) =>
       ((recovered: GraphRecovery) =>
@@ -2047,30 +2053,7 @@ const compileOneTs: <A, B>(
                 res.imports,
                 res.nsImports,
                 res.quals,
-                None as Option<
-                  {
-                    name: string;
-                    parse: Option<
-                      (
-                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                        b: number,
-                        c: (
-                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                          b: number,
-                        ) => Result<[Expr, number], StageErr>,
-                      ) => Result<Option<[Expr, number]>, StageErr>
-                    >;
-                    inferCall: Option<
-                      (
-                        a: Expr,
-                        b: Expr[],
-                        c: Option<string>,
-                        d: St,
-                        e: InferApi,
-                      ) => Result<Option<[Ty, St]>, IErr>
-                    >;
-                  }[]
-                >,
+                opts.plugins,
               ),
             )
               .with(
@@ -2117,7 +2100,7 @@ const compileOneTs: <A, B>(
                         ),
                         qualsByPath: _Map_set(
                           loaded.path,
-                          qualScopeOf(loaded.stmts),
+                          qualScopeOf(loaded.stmts, res.quals),
                           ctx.qualsByPath,
                         ),
                         aliases: mergeMap(r.aliases, ctx.aliases),
@@ -2405,30 +2388,7 @@ const dtsOne: <A, B>(
                 res.imports,
                 res.nsImports,
                 res.quals,
-                None as Option<
-                  {
-                    name: string;
-                    parse: Option<
-                      (
-                        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                        b: number,
-                        c: (
-                          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                          b: number,
-                        ) => Result<[Expr, number], StageErr>,
-                      ) => Result<Option<[Expr, number]>, StageErr>
-                    >;
-                    inferCall: Option<
-                      (
-                        a: Expr,
-                        b: Expr[],
-                        c: Option<string>,
-                        d: St,
-                        e: InferApi,
-                      ) => Result<Option<[Ty, St]>, IErr>
-                    >;
-                  }[]
-                >,
+                opts.plugins,
               ),
             )
               .with(
@@ -2463,7 +2423,11 @@ const dtsOne: <A, B>(
                       exportedCtorKeys(loaded.stmts),
                       ctx.keysByPath,
                     ),
-                    qualsByPath: _Map_set(loaded.path, qualScopeOf(loaded.stmts), ctx.qualsByPath),
+                    qualsByPath: _Map_set(
+                      loaded.path,
+                      qualScopeOf(loaded.stmts, res.quals),
+                      ctx.qualsByPath,
+                    ),
                     aliases: mergeMap(r.aliases, ctx.aliases),
                     runtimeImport: ctx.runtimeImport,
                     target: ctx.target,
@@ -2567,7 +2531,7 @@ export const emitDtsForFileWith: _Curry<
         graph,
         opts,
       ),
-    loadGraph(entry),
+    loadGraphWith(entry, opts.plugins),
   ),
 );
 export const emitDtsForFile: _Curry<
@@ -2585,7 +2549,7 @@ export const buildModulesTsWith: _Curry<
   [entry: string, runtimeImport: string, opts: Opts],
   Result<ModuleOutput[], StageErr[]>
 > = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
-  match(loadGraph(entry))
+  match(loadGraphWith(entry, opts.plugins))
     .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<ModuleOutput[], StageErr[]>)
     .with({ _tag: "Ok" }, ({ value: graph }) =>
       ((recovered: GraphRecovery) =>
