@@ -41,7 +41,10 @@ The bootstrap AST is Mochi's only AST, including at public host boundaries.
   in the narrowest shape that serves them:
   - `format` rewrites a node before the printer lays it out (`Expr → Option<Expr>`).
     It gets no `Doc` or printer API: the one host hook reflows class strings,
-    which is an AST rewrite followed by ordinary printing.
+    which is an AST rewrite followed by ordinary printing. Every expression
+    print path consults the hooks, and the formatter skips them on a node with
+    a comment inside it: comments attach by span, so a rewrite could otherwise
+    drop or duplicate one.
   - `dtsBinding` supplies a binding's `.d.ts` type text from its name and value.
   - `inferCall` keeps its existing signature. Hooks filter calls themselves, so
     the TypeScript `refs`/`memberTargets` dispatch lists are not ported.

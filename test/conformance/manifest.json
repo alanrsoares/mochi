@@ -21,7 +21,9 @@
       "styled-cva-compile",
       "styled-cva-bad-tone",
       "styled-cva-unknown-tag",
-      "styled-cva-format"
+      "styled-cva-format",
+      "styled-cva-format-paths",
+      "styled-cva-format-comments"
     ],
     "pending": [
       "styled-cva-dts"
@@ -165,6 +167,24 @@
       "kind": "format",
       "source": "styled-cva/reflow.src.txt",
       "expect": "styled-cva-format.expect.mochi",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-format-paths",
+      "kind": "format",
+      "source": "styled-cva/reflow-paths.src.txt",
+      "expect": "styled-cva-format-paths.expect.mochi",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-format-comments",
+      "kind": "format",
+      "source": "styled-cva/reflow-comments.src.txt",
+      "expect": "styled-cva-format-comments.expect.mochi",
       "plugins": [
         "styled-cva"
       ]

@@ -1,0 +1,12 @@
+extern tw : a = "@styled-cva/react" "default"
+
+export let P = let x = tw.a(
+  "inline-flex items-center gap-1.5 px-5 py-2.5 bg-fur hover:bg-fur-deep"
+    ++ " text-paper font-bold rounded-full shadow-cta"
+) in
+  x
+
+export let el = tw.a(
+  "inline-flex items-center gap-1.5 px-5 py-2.5 bg-fur hover:bg-fur-deep"
+    ++ " text-paper font-bold rounded-full shadow-cta"
+)({})

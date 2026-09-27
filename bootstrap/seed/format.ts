@@ -34,6 +34,7 @@ export type Ctx = {
   shadowed: Set<string>;
   etaSkip: boolean;
   formatHooks: ((a: Expr) => Option<Expr>)[];
+  commentStarts: number[];
 };
 export type Attached = { table: Ctx; tail: Comment[] };
 export type StmtDoc = { doc: Doc; consumed: number };
@@ -45,6 +46,7 @@ import {
   Some,
   _Array_append,
   _Array_concat,
+  _Array_find,
   _Array_flatMap,
   _Array_get,
   _Array_prepend,
@@ -338,6 +340,7 @@ export const noComments: Ctx = {
   shadowed: _Set_fromArray([] as string[]),
   etaSkip: false,
   formatHooks: [] as ((a: Expr) => Option<Expr>)[],
+  commentStarts: [] as number[],
 };
 /**
  * A statement and its expression can carry the SAME span (`test(…)` as an
@@ -2473,7 +2476,7 @@ const callD: _Curry<[cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>], 
     callArgsD(cts, fn, args, origin, false),
 );
 const calleeD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
-  match(e)
+  match(hooked(cts, e))
     .with({ _tag: "ECall" }, ({ fn, args, origin }) => callArgsD(cts, fn, args, origin, true))
     .otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))),
 );
@@ -2539,7 +2542,25 @@ const letBindHead: _Curry<[cts: Ctx, monad: string, param: LamParam], string> = 
   (cts: Ctx, monad: string, param: LamParam) =>
     `let${eq(monad, "Task") ? "!" : "?"} ${paramText(cts, param)}`,
 );
+/**
+ * Plugin `format` hooks may rewrite a node before layout (ADR 0109), except
+ * when a comment sits inside it: the rewrite would drop or duplicate it.
+ */
+const hooked: _Curry<[cts: Ctx, e: Expr], Expr> = _curry(2, (cts: Ctx, e: Expr) =>
+  eq(length(cts.formatHooks), 0)
+    ? e
+    : ((sp: SpanAt) =>
+        _Option_isSome(_Array_find((s: number) => and(s > sp.start, s < sp.end), cts.commentStarts))
+          ? e
+          : _Option_unwrapOr(e, runFormatHooks(cts.formatHooks, e)))(exprSpan(e)),
+);
+/**
+ * Every expression prints through here, so every path sees the hooks.
+ */
 const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
+  exprRawOf(cts, hooked(cts, e)),
+);
+const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ raw }) => txt(raw))
     .with({ _tag: "EUnit" }, () => txt("()"))
@@ -2705,16 +2726,10 @@ export const importNsStmtD: _Curry<[alias: string, from: string], Doc> = _curry(
 );
 /**
  * Leading comments print above the node, trailing ones inline after it.
- * Plugin `format` hooks may rewrite the node first (ADR 0109); comments stay
- * keyed to the node as written.
+ * Leading comments print above the node, trailing ones inline after it.
  */
 export const exprD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
-  withComments(
-    cts,
-    EXPR,
-    exprSpan(e),
-    exprRaw(cts, _Option_unwrapOr(e, runFormatHooks(cts.formatHooks, e))),
-  ),
+  withComments(cts, EXPR, exprSpan(e), exprRaw(cts, e)),
 );
 const expPrefix: (exported: boolean) => string = (exported: boolean) => (exported ? "export " : "");
 /**
@@ -3014,14 +3029,19 @@ export const formatProgramWith: _Curry<
 > = _curry(3, (stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]) => {
   const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
   const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
+  const comments: Comment[] = filter(
+    (c: Comment) => not(inErrorSpan(stmts, c)),
+    collectComments(src),
+  );
   const base: Ctx = {
     ...noComments,
     flatArity: buildFlatArity(stmts, innerBound),
     shadowed: shadowed,
     formatHooks: formatHooks,
+    commentStarts: map((c: Comment) => c.start, comments),
   };
   const attached: Attached = attachFrom(
-    filter((c: Comment) => not(inErrorSpan(stmts, c)), collectComments(src)),
+    comments,
     0,
     sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
     src,

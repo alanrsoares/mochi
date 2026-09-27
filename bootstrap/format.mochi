@@ -230,7 +230,8 @@ export type Ctx = {
   flatArity: Map<string, number>,
   shadowed: Set<string>,
   etaSkip: bool,
-  formatHooks: [Ast.Expr -> Option<Ast.Expr>]
+  formatHooks: [Ast.Expr -> Option<Ast.Expr>],
+  commentStarts: [number]
 }
 // Program-level facts for the ADR 0065 / 0091 re-folds: how many arguments a
 // callable takes in one flat call, and which names the file rebinds.
@@ -244,7 +245,8 @@ export let noComments : Ctx = {
   flatArity: #{},
   shadowed: Set.fromArray([]),
   etaSkip: false,
-  formatHooks: []
+  formatHooks: [],
+  commentStarts: []
 }
 
 /// A statement and its expression can carry the SAME span (`test(…)` as an
@@ -1655,7 +1657,7 @@ let plainCallD = (cts, fn, args, origin, asCallee) =>
 
 let callD = (cts, fn, args, origin) => cts->callArgsD(fn, args, origin, false)
 
-let calleeD = (cts, e) => switch e {
+let calleeD = (cts, e) => switch cts->hooked(e) {
   | Ast.ECall(fn, args, origin, _) => cts->callArgsD(fn, args, origin, true)
   | _ => parenIf(cts->loosePrefix(e), cts->exprD(e))
 }
@@ -1699,7 +1701,21 @@ let pipeD = (cts, e) => switch e {
 let letBindHead = (cts, monad, param) =>
   "let${monad == "Task" ? "!" : "?"} ${cts->paramText(param)}"
 
-let exprRaw = (cts, e) => switch e {
+/// Plugin `format` hooks may rewrite a node before layout (ADR 0109), except
+/// when a comment sits inside it: the rewrite would drop or duplicate it.
+let hooked = (cts: Ctx, e) =>
+  Array.length(cts.formatHooks) == 0
+    ? e
+    : let sp = exprSpan(e) in
+      Array.find(s => s > sp.start && s < sp.end, cts.commentStarts)
+        |> Option.isSome
+        ? e
+        : runFormatHooks(cts.formatHooks, e) |> Option.unwrapOr(e)
+
+/// Every expression prints through here, so every path sees the hooks.
+let exprRaw = (cts, e) => cts->exprRawOf(cts->hooked(e))
+
+let exprRawOf = (cts, e) => switch e {
   | Ast.ENum(_, raw, _) => txt(raw)
   | Ast.EUnit(_) => txt("()")
   | Ast.EBool(value, _) => txt(show(value))
@@ -1809,14 +1825,9 @@ export let importNsStmtD = (alias, from) =>
   txt("import * as ${alias} from ${strLit(from)}")
 
 /// Leading comments print above the node, trailing ones inline after it.
-/// Plugin `format` hooks may rewrite the node first (ADR 0109); comments stay
-/// keyed to the node as written.
+/// Leading comments print above the node, trailing ones inline after it.
 export let exprD = (cts, e) =>
-  cts->withComments(
-    EXPR,
-    exprSpan(e),
-    cts->exprRaw(runFormatHooks(cts.formatHooks, e) |> Option.unwrapOr(e))
-  )
+  cts->withComments(EXPR, exprSpan(e), cts->exprRaw(e))
 
 // --- statements + program ----------------------------------------------------
 
@@ -2045,14 +2056,19 @@ export let formatProgramWith = (stmts, src, formatHooks) =>
   // not be regrouped against the prelude entry it shadows.
   let innerBound = Set.fromArray(Array.flatMap(stmtInnerNames, stmts)) in
   let shadowed = Set.union(innerBound, Set.fromArray(topLevelNames(stmts))) in
+  let comments = Array.filter(
+    c => !inErrorSpan(stmts, c),
+    collectComments(src)
+  ) in
   let base = {
     ...noComments,
     flatArity: buildFlatArity(stmts, innerBound),
     shadowed,
-    formatHooks
+    formatHooks,
+    commentStarts: comments |> map(c => c.start)
   } in
   let attached = attachFrom(
-    Array.filter(c => !inErrorSpan(stmts, c), collectComments(src)),
+    comments,
     0,
     sortAnchors(Array.flatMap(stmtAnchors, stmts)),
     src,
