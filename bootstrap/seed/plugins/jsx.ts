@@ -21,6 +21,7 @@ import {
   Ok,
   Some,
   _Array_append,
+  _Array_concat,
   _Array_find,
   _Array_get,
   _Map_get,
@@ -47,6 +48,7 @@ import {
   map,
   not,
   or,
+  show,
   sub,
 } from "@mochi/compiler/runtime";
 
@@ -1385,6 +1387,56 @@ const componentPropsTs: <A>(row: Row, api: { tsType: (a: Ty) => string } & A) =>
       return eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
     })(propFieldsFrom(row, api, [] as string[])),
 );
+const componentPropsParamTs: <A>(
+  t: Ty,
+  api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
+) => string = _curry(
+  2,
+  <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
+    match(t)
+      .with({ _tag: "TyRecord" }, ({ row }) =>
+        match(api.aliasOf(row))
+          .with({ _tag: "Some" }, ({ value: name }) => name)
+          .with({ _tag: "None" }, () => componentPropsTs(row, api))
+          .exhaustive(),
+      )
+      .with({ _tag: "TyVar" }, () => "Record<string, unknown>")
+      .otherwise(() => api.tsType(t)),
+);
+const extraParamTs: <A>(t: Ty, api: { tsType: (a: Ty) => string } & A) => string = _curry(
+  2,
+  <A>(t: Ty, api: { tsType: (a: Ty) => string } & A) =>
+    match(t)
+      .with({ _tag: "TyVar" }, () => "unknown")
+      .with({ _tag: "TyCon", name: "VNode" }, () => "any")
+      .otherwise(() => api.tsType(t)),
+);
+/**
+ * Params after `props`, for a component that takes more than one.
+ */
+const extraParamsFrom: <A>(
+  t: Ty,
+  api: { tsType: (a: Ty) => string } & A,
+  i: number,
+  acc: string[],
+) => string[] = _curry(
+  4,
+  <A>(t: Ty, api: { tsType: (a: Ty) => string } & A, i: number, acc: string[]) =>
+    match(t)
+      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+        extraParamsFrom(
+          toT,
+          api,
+          i + 1,
+          _Array_append(`_${show(i)}: ${extraParamTs(fromT, api)}`, acc),
+        ),
+      )
+      .otherwise(() => acc),
+);
+/**
+ * A multi-param component is `_curry`'d like any other function, so it takes
+ * the core's `_Curry` form (ADR 0093) with `any` standing in for `VNode`.
+ */
 const componentSig: <A>(
   t: Ty,
   api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
@@ -1392,33 +1444,15 @@ const componentSig: <A>(
   2,
   <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
     match(t)
-      .with(
-        (
-          _v,
-        ): _v is Extract<Ty, { _tag: "TyFn" }> & {
-          from: Extract<Extract<Ty, { _tag: "TyFn" }>["from"], { _tag: "TyRecord" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "TyFn" && _g.from._tag === "TyRecord";
-        },
-        ({ from: { row } }) =>
-          match(api.aliasOf(row))
-            .with({ _tag: "Some" }, ({ value: name }) => `(props: ${name}) => any`)
-            .with({ _tag: "None" }, () => `(props: ${componentPropsTs(row, api)}) => any`)
-            .exhaustive(),
+      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
+        ((props: string) =>
+          ((extras: string[]) =>
+            eq(length(extras), 0)
+              ? `(${props}) => any`
+              : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], any>`)(
+            extraParamsFrom(toT, api, 1, [] as string[]),
+          ))(`props: ${componentPropsParamTs(fromT, api)}`),
       )
-      .with(
-        (
-          _v,
-        ): _v is Extract<Ty, { _tag: "TyFn" }> & {
-          from: Extract<Extract<Ty, { _tag: "TyFn" }>["from"], { _tag: "TyVar" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "TyFn" && _g.from._tag === "TyVar";
-        },
-        () => "(props: Record<string, unknown>) => any",
-      )
-      .with({ _tag: "TyFn" }, ({ from: fromT }) => `(props: ${api.tsType(fromT)}) => any`)
       .otherwise(() => "(props: Record<string, unknown>) => any"),
 );
 export const componentBindingTs: <A>(

@@ -763,13 +763,40 @@ let componentPropsTs = (row, api) =>
     : fields1 in
     Array.length(fields) == 0 ? "{}" : "{ ${Str.join("; ", fields)} }"
 
-let componentSig = (t, api) => switch t {
-  | TyFn(TyRecord(row), _) => switch api.aliasOf(row) {
-      | Some(name) => "(props: ${name}) => any"
-      | None => "(props: ${componentPropsTs(row, api)}) => any"
+let componentPropsParamTs = (t, api) => switch t {
+  | TyRecord(row) => switch api.aliasOf(row) {
+      | Some(name) => name
+      | None => componentPropsTs(row, api)
     }
-  | TyFn(TyVar(_), _) => "(props: Record<string, unknown>) => any"
-  | TyFn(fromT, _) => "(props: ${api.tsType(fromT)}) => any"
+  | TyVar(_) => "Record<string, unknown>"
+  | _ => api.tsType(t)
+}
+
+let extraParamTs = (t, api) => switch t {
+  | TyVar(_) => "unknown"
+  | TyCon("VNode", _) => "any"
+  | _ => api.tsType(t)
+}
+
+/// Params after `props`, for a component that takes more than one.
+let extraParamsFrom = (t, api, i, acc) => switch t {
+  | TyFn(fromT, toT) => extraParamsFrom(
+      toT,
+      api,
+      i + 1,
+      Array.append("_${show(i)}: ${extraParamTs(fromT, api)}", acc)
+    )
+  | _ => acc
+}
+
+/// A multi-param component is `_curry`'d like any other function, so it takes
+/// the core's `_Curry` form (ADR 0093) with `any` standing in for `VNode`.
+let componentSig = (t, api) => switch t {
+  | TyFn(fromT, toT) => let props = "props: ${componentPropsParamTs(fromT, api)}" in
+    let extras = extraParamsFrom(toT, api, 1, []) in
+      Array.length(extras) == 0
+        ? "(${props}) => any"
+        : "_Curry<[${Str.join(", ", Array.concat([props], extras))}], any>"
   | _ => "(props: Record<string, unknown>) => any"
 }
 
