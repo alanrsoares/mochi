@@ -697,5 +697,7 @@ export let inferJsxCallHook = (_fn, args, origin, st, api) => switch origin {
 export let jsxPlugin = {
   name: "jsx",
   parse: Some(parseJsxAtom),
-  inferCall: Some(inferJsxCallHook)
+  inferCall: Some(inferJsxCallHook),
+  format: None,
+  dtsBinding: None
 }

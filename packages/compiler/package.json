@@ -9,6 +9,7 @@
     "./bootstrap": "./src/bootstrap/index.ts",
     "./bootstrap/browser": "./src/bootstrap/browser.ts",
     "./bootstrap/syntax": "./src/bootstrap/syntax.ts",
+    "./bootstrap/types": "./src/bootstrap/types.ts",
     "./bootstrap/sync": "./src/bootstrap/sync.ts",
     "./bootstrap/options": "./src/bootstrap/options.ts",
     "./bootstrap/module": "./src/bootstrap/module.ts",

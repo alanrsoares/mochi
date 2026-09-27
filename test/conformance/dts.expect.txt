@@ -1,0 +1,9 @@
+/**
+ * A labelled point.
+ */
+export type Point = { x: number; y: number; label: string };
+export type Shape =
+  | { _tag: "Circle"; radius: number }
+  | { _tag: "Rect"; width: number; height: number };
+export declare const origin: Point;
+export declare const area: (s: Shape) => number;

@@ -1,0 +1,3 @@
+import * as S from "./span.mochi"
+
+export type St = { at: S.Span, n: number }

@@ -1,5 +1,7 @@
 import type {
+  AliasField,
   Ctor,
+  CtorField,
   Expr,
   Field,
   InterpPart,
@@ -15,8 +17,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { SpanAt } from "./types";
-import type { QualAliasField } from "./infer";
-import type { CtorFieldLike, CtorLike } from "./codegen";
+import type { Plugin } from "./infer";
 import type { Doc } from "./doc";
 
 export type Comment = {
@@ -32,6 +33,8 @@ export type Ctx = {
   flatArity: Map<string, number>;
   shadowed: Set<string>;
   etaSkip: boolean;
+  formatHooks: ((a: Expr) => Option<Expr>)[];
+  commentStarts: number[];
 };
 export type Attached = { table: Ctx; tail: Comment[] };
 export type StmtDoc = { doc: Doc; consumed: number };
@@ -43,6 +46,7 @@ import {
   Some,
   _Array_append,
   _Array_concat,
+  _Array_find,
   _Array_flatMap,
   _Array_get,
   _Array_prepend,
@@ -115,6 +119,7 @@ import {
 } from "./doc";
 import { skipStringLiteral } from "./str-scan";
 import { showTypeExpr } from "./show-type-expr";
+import { runFormatHooks } from "./extensions";
 /**
  * `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
  * interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
@@ -201,12 +206,12 @@ export const pattern: (p: Pattern) => string = (p: Pattern) =>
     )
     .with({ _tag: "POr" }, ({ alts }) => _Str_join(" | ", map(pattern, alts)))
     .exhaustive();
-const ctorField: (f: CtorFieldLike) => string = (f: CtorFieldLike) =>
+const ctorField: (f: CtorField) => string = (f: CtorField) =>
   match(f.name)
     .with({ _tag: "None" }, () => showTypeExpr(f.fieldType))
     .with({ _tag: "Some" }, ({ value: name }) => `${name}: ${showTypeExpr(f.fieldType)}`)
     .exhaustive();
-export const ctorText: (c: CtorLike) => string = (c: CtorLike) =>
+export const ctorText: (c: Ctor) => string = (c: Ctor) =>
   eq(length(c.fields), 0) ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
 const generics: (params: string[]) => string = (params: string[]) =>
   eq(length(params), 0) ? "" : `<${_Str_join(", ", params)}>`;
@@ -334,6 +339,8 @@ export const noComments: Ctx = {
   flatArity: new Map<string, number>(),
   shadowed: _Set_fromArray([] as string[]),
   etaSkip: false,
+  formatHooks: [] as ((a: Expr) => Option<Expr>)[],
+  commentStarts: [] as number[],
 };
 /**
  * A statement and its expression can carry the SAME span (`test(…)` as an
@@ -2469,7 +2476,7 @@ const callD: _Curry<[cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>], 
     callArgsD(cts, fn, args, origin, false),
 );
 const calleeD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
-  match(e)
+  match(hooked(cts, e))
     .with({ _tag: "ECall" }, ({ fn, args, origin }) => callArgsD(cts, fn, args, origin, true))
     .otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))),
 );
@@ -2535,7 +2542,25 @@ const letBindHead: _Curry<[cts: Ctx, monad: string, param: LamParam], string> = 
   (cts: Ctx, monad: string, param: LamParam) =>
     `let${eq(monad, "Task") ? "!" : "?"} ${paramText(cts, param)}`,
 );
+/**
+ * Plugin `format` hooks may rewrite a node before layout (ADR 0109), except
+ * when a comment sits inside it: the rewrite would drop or duplicate it.
+ */
+const hooked: _Curry<[cts: Ctx, e: Expr], Expr> = _curry(2, (cts: Ctx, e: Expr) =>
+  eq(length(cts.formatHooks), 0)
+    ? e
+    : ((sp: SpanAt) =>
+        _Option_isSome(_Array_find((s: number) => and(s > sp.start, s < sp.end), cts.commentStarts))
+          ? e
+          : _Option_unwrapOr(e, runFormatHooks(cts.formatHooks, e)))(exprSpan(e)),
+);
+/**
+ * Every expression prints through here, so every path sees the hooks.
+ */
 const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
+  exprRawOf(cts, hooked(cts, e)),
+);
+const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ raw }) => txt(raw))
     .with({ _tag: "EUnit" }, () => txt("()"))
@@ -2615,11 +2640,11 @@ const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) 
     )
     .exhaustive(),
 );
-const aliasFieldText: (f: QualAliasField) => string = (f: QualAliasField) =>
+const aliasFieldText: (f: AliasField) => string = (f: AliasField) =>
   `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
-const ctorArms: _Curry<[cts: Ctx, ctors: CtorLike[], i: number], Doc[]> = _curry(
+const ctorArms: _Curry<[cts: Ctx, ctors: Ctor[], i: number], Doc[]> = _curry(
   3,
-  (cts: Ctx, ctors: CtorLike[], i: number) =>
+  (cts: Ctx, ctors: Ctor[], i: number) =>
     match(_Array_get(i, ctors))
       .with({ _tag: "None" }, () => [] as Doc[])
       .with({ _tag: "Some" }, ({ value: c }) =>
@@ -2640,8 +2665,8 @@ export const typeStmtD: _Curry<
     cts: Ctx,
     name: string,
     params: string[],
-    ctors: CtorLike[],
-    alias: Option<QualAliasField[]>,
+    ctors: Ctor[],
+    alias: Option<AliasField[]>,
     aliasType: Option<TypeExpr>,
   ],
   Doc
@@ -2651,8 +2676,8 @@ export const typeStmtD: _Curry<
     cts: Ctx,
     name: string,
     params: string[],
-    ctors: CtorLike[],
-    alias: Option<QualAliasField[]>,
+    ctors: Ctor[],
+    alias: Option<AliasField[]>,
     aliasType: Option<TypeExpr>,
   ) => {
     const head: string = `type ${name}${generics(params)}`;
@@ -2663,7 +2688,7 @@ export const typeStmtD: _Curry<
           braced(
             "{",
             "}",
-            map((f: QualAliasField) => txt(aliasFieldText(f)), fields),
+            map((f: AliasField) => txt(aliasFieldText(f)), fields),
           ),
         ]),
       )
@@ -2700,6 +2725,7 @@ export const importNsStmtD: _Curry<[alias: string, from: string], Doc> = _curry(
   (alias: string, from: string) => txt(`import * as ${alias} from ${strLit(from)}`),
 );
 /**
+ * Leading comments print above the node, trailing ones inline after it.
  * Leading comments print above the node, trailing ones inline after it.
  */
 export const exprD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
@@ -2946,9 +2972,7 @@ const stmtAnchors: (s: Stmt) => { kind: string; sp: SpanAt }[] = (s: Stmt) =>
     match(s)
       .with({ _tag: "SLet" }, ({ value }) => exprAnchors(value))
       .with({ _tag: "SExpr" }, ({ value }) => exprAnchors(value))
-      .with({ _tag: "SType" }, ({ ctors }) =>
-        map((c: CtorLike) => ({ kind: CTOR, sp: c.span }), ctors),
-      )
+      .with({ _tag: "SType" }, ({ ctors }) => map((c: Ctor) => ({ kind: CTOR, sp: c.span }), ctors))
       .otherwise(() => [] as { kind: string; sp: SpanAt }[]),
   );
 /**
@@ -2993,26 +3017,40 @@ const hasOpenDirective: (src: string) => boolean = (src: string) =>
  */
 export const formatProgram: _Curry<[stmts: Stmt[], src: string], string> = _curry(
   2,
-  (stmts: Stmt[], src: string) => {
-    const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
-    const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
-    const base: Ctx = {
-      ...noComments,
-      flatArity: buildFlatArity(stmts, innerBound),
-      shadowed: shadowed,
-    };
-    const attached: Attached = attachFrom(
-      filter((c: Comment) => not(inErrorSpan(stmts, c)), collectComments(src)),
-      0,
-      sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
-      src,
-      { table: base, tail: [] as Comment[] },
-    );
-    const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
-    return hasOpenDirective(src)
-      ? `"use open"
+  (stmts: Stmt[], src: string) =>
+    formatProgramWith(stmts, src, [] as ((a: Expr) => Option<Expr>)[]),
+);
+/**
+ * `formatProgram` with plugin `format` hooks (`formatHooksFor`).
+ */
+export const formatProgramWith: _Curry<
+  [stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]],
+  string
+> = _curry(3, (stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]) => {
+  const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
+  const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
+  const comments: Comment[] = filter(
+    (c: Comment) => not(inErrorSpan(stmts, c)),
+    collectComments(src),
+  );
+  const base: Ctx = {
+    ...noComments,
+    flatArity: buildFlatArity(stmts, innerBound),
+    shadowed: shadowed,
+    formatHooks: formatHooks,
+    commentStarts: map((c: Comment) => c.start, comments),
+  };
+  const attached: Attached = attachFrom(
+    comments,
+    0,
+    sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
+    src,
+    { table: base, tail: [] as Comment[] },
+  );
+  const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
+  return hasOpenDirective(src)
+    ? `"use open"
 
 ${body}`
-      : body;
-  },
-);
+    : body;
+});

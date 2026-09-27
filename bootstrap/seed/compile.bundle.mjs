@@ -6416,7 +6416,7 @@ var inferJsxCallHook = _curry6(5, (_fn, args, origin, st, api) => match5(origin)
   const _g = _v;
   return _g.length >= 2;
 }, ([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some5(r), inferJsxCall(tagExpr, propsExpr, rest, st, api))).otherwise(() => Ok3(None5)) : Ok3(None5)).with({ _tag: "None" }, () => Ok3(None5)).exhaustive());
-var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook) };
+var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook), format: None5, dtsBinding: None5 };
 
 import { None as None6, Ok as Ok4, Some as Some6, _Array_drop, _Array_get as _Array_get4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry7, _tuple as _tuple4, and as and5, eq as eq6, length as length4 } from "@mochi/compiler/runtime";
 import { match as match6 } from "@onrails/pattern";
@@ -6441,7 +6441,7 @@ var inferHookDeps = _curry7(4, (fn, args, st, api) => {
   return match6(expected).with({ _tag: "Some" }, ({ value: n }) => eq6(length4(args), n) ? _Result_map3((st1) => (([elem, st2]) => Some6(_tuple4(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok4(None6)).with({ _tag: "None" }, () => Ok4(None6)).exhaustive();
 });
 var inferPreactCall = _curry7(5, (fn, args, _origin, st, api) => _Result_flatMap3((first) => match6(first).with({ _tag: "Some" }, () => Ok4(first)).with({ _tag: "None" }, () => _Result_flatMap3((lazy) => match6(lazy).with({ _tag: "Some" }, () => Ok4(lazy)).with({ _tag: "None" }, () => _Result_flatMap3((ref) => match6(ref).with({ _tag: "Some" }, () => Ok4(ref)).with({ _tag: "None" }, () => _Result_flatMap3((effect) => match6(effect).with({ _tag: "Some" }, () => Ok4(effect)).with({ _tag: "None" }, () => _Result_flatMap3((layout) => match6(layout).with({ _tag: "Some" }, () => Ok4(layout)).with({ _tag: "None" }, () => _Result_flatMap3((callback) => match6(callback).with({ _tag: "Some" }, () => Ok4(callback)).with({ _tag: "None" }, () => _Result_flatMap3((memo) => match6(memo).with({ _tag: "Some" }, () => Ok4(memo)).with({ _tag: "None" }, () => inferHookDeps(fn, args, st, api)).exhaustive(), inferUseMemo(fn, args, st, api))).exhaustive(), inferUseCallback(fn, args, st, api))).exhaustive(), inferEffectLike(fn, args, st, api, "useLayoutEffect"))).exhaustive(), inferEffectLike(fn, args, st, api, "useEffect"))).exhaustive(), inferUseRef(fn, args, st, api))).exhaustive(), inferUseLazyState(fn, args, st, api))).exhaustive(), inferUseState(fn, args, st, api)));
-var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall) };
+var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall), format: None6, dtsBinding: None6 };
 
 var DEFAULT_PLUGINS = [jsxPlugin];
 var resolvePlugins = _curry8(2, (pluginsOpt, builtins) => match7(pluginsOpt).with({ _tag: "None" }, () => builtins).with({ _tag: "Some" }, ({ value: ps }) => eq7(length5(ps), 0) ? [] : _Array_concat(builtins, ps)).exhaustive());
@@ -6454,6 +6454,14 @@ var runParseHooks = _curry8(4, (hooks, toks, pos, parseExpr) => match7(hooks).wi
   throw new Error("non-exhaustive match");
 }));
 var runInferCallHooks = _curry8(6, (hooks, fn, args, origin, st, api) => match7(hooks).with((_v) => _v.length === 0, () => Ok5(None7)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(fn, args, origin, st, api)).with({ _tag: "Err" }, ({ error: e }) => Err4(e)).with({ _tag: "Ok" }, ({ value: v }) => match7(v).with({ _tag: "None" }, () => runInferCallHooks(rest, fn, args, origin, st, api)).with({ _tag: "Some" }, ({ value: claim }) => Ok5(Some7(claim))).exhaustive()).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var formatHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.format).with({ _tag: "Some" }, ({ value: hook }) => formatHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => formatHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var dtsHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.dtsBinding).with({ _tag: "Some" }, ({ value: hook }) => dtsHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => dtsHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var runFormatHooks = _curry8(2, (hooks, e) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(e)).with({ _tag: "Some" }, ({ value: out }) => Some7(out)).with({ _tag: "None" }, () => runFormatHooks(rest, e)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var runDtsHooks = _curry8(3, (hooks, name, value) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(name, value)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 
@@ -8000,7 +8008,7 @@ var inferExprStmtsFrom = _curry16(3, (ctx, stmts, st) => match15(stmts).with((_v
 var seedImportsFrom = _curry16(3, (keys, imports, env) => match15(keys).with((_v) => _v.length === 0, () => env).with((_v) => _v.length >= 1, ([k, ...rest]) => match15(_Map_get6(k, imports)).with({ _tag: "Some" }, ({ value: sc }) => seedImportsFrom(rest, imports, _Map_set6(k, sc, env))).with({ _tag: "None" }, () => seedImportsFrom(rest, imports, env)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var qualifyTe = _curry16(3, (te, alias, from) => match15(te).with({ _tag: "TyName" }, ({ name, span: sp }) => _Map_has4(name, from) ? TyQual(alias, name, sp, [], sp) : te).with({ _tag: "TyApp" }, ({ ctor, args, span: sp }) => ((args1) => _Map_has4(ctor, from) ? TyQual(alias, ctor, sp, args1, sp) : TyApp(ctor, args1, sp))(map8((a) => qualifyTe(a, alias, from), args))).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe, span: sp }) => TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp)).with({ _tag: "TyTuple" }, ({ elems, span: sp }) => TyTuple(map8((e) => qualifyTe(e, alias, from), elems), sp)).with({ _tag: "TyList" }, ({ elem, span: sp }) => TyList(qualifyTe(elem, alias, from), sp)).with({ _tag: "TyUnion" }, ({ members, span: sp }) => TyUnion(map8((m) => qualifyTe(m, alias, from), members), sp)).otherwise(() => te));
+var qualifyTe = _curry16(3, (te, alias, from) => match15(te).with({ _tag: "TyName" }, ({ name, span: sp }) => _Map_has4(name, from) ? TyQual(alias, name, sp, [], sp) : te).with({ _tag: "TyApp" }, ({ ctor, args, span: sp }) => ((args1) => _Map_has4(ctor, from) ? TyQual(alias, ctor, sp, args1, sp) : TyApp(ctor, args1, sp))(map8((a) => qualifyTe(a, alias, from), args))).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe, span: sp }) => TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp)).with({ _tag: "TyTuple" }, ({ elems, span: sp }) => TyTuple(map8((e) => qualifyTe(e, alias, from), elems), sp)).with({ _tag: "TyList" }, ({ elem, span: sp }) => TyList(qualifyTe(elem, alias, from), sp)).with({ _tag: "TyUnion" }, ({ members, span: sp }) => TyUnion(map8((m) => qualifyTe(m, alias, from), members), sp)).with({ _tag: "TyQual" }, ({ alias: inner, name, nameSpan: nsp, args, span: sp }) => ((args1) => _Map_has4(`${inner}.${name}`, from) ? TyQual(alias, `${inner}.${name}`, nsp, args1, sp) : TyQual(inner, name, nsp, args1, sp))(map8((a) => qualifyTe(a, alias, from), args))).otherwise(() => te));
 var qualifyField = _curry16(3, (fld, alias, from) => ({ name: fld.name, fieldType: qualifyTe(fld.fieldType, alias, from), optional: fld.optional }));
 var qualifyInfo = _curry16(3, (info, alias, from) => ({ params: info.params, fields: map8((f) => qualifyField(f, alias, from), info.fields), expr: _Option_map((te) => qualifyTe(te, alias, from), info.expr) }));
 var qualAliasSeedFrom = _curry16(4, (names, alias, from, acc) => match15(names).with((_v) => {
@@ -8055,11 +8063,13 @@ var runInferImports = _curry16(8, (stmts, builtins, namespaces, openMode, import
     }, ({ value: [finalCtx, st4] }) => match15(inferExprStmtsFrom(finalCtx, stmts, st4)).with({ _tag: "Ok" }, ({ value: st5 }) => Ok9({ env: finalCtx.env, types: zonkRecorded(st5.recorded, st5), aliases: aliasMap, letParams: resolveLetParams(st5) })).with({ _tag: "Err" }, ({ error: e }) => Err8(e)).exhaustive()).with({ _tag: "Err" }, ({ error: e }) => Err8(e)).exhaustive();
   })(registerExternsFrom(stmts, aliasMap, env2, st2)))(registerBuiltinCtorsFrom(builtinDeclsFor(stmts), aliasMap, env1, st1)))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
 });
+var scopeAliases = _curry16(2, (stmts, quals) => aliasMapFrom(stmts, qualAliasSeed(stmts, quals, new Map)));
 var inferProgramImports = _curry16(8, (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) => _Result_map6((r) => r.env, runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt)));
 var emptyQuals2 = new Map;
 var inferProgram = _curry16(4, (stmts, builtins, namespaces, openMode) => inferProgramImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, None15));
 var inferProgramImportsTypes = _curry16(8, (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt) => runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt));
 var inferProgramTypes = _curry16(4, (stmts, builtins, namespaces, openMode) => runInferImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, None15));
+var inferProgramTypesWith = _curry16(5, (stmts, builtins, namespaces, openMode, pluginsOpt) => runInferImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, pluginsOpt));
 var inferProgramWith = _curry16(5, (stmts, builtins, namespaces, openMode, pluginsOpt) => inferProgramImports(stmts, builtins, namespaces, openMode, new Map, new Map, emptyQuals2, pluginsOpt));
 var takeScheme = _curry16(3, (name, env, acc) => match15(_Map_get6(name, env)).with({ _tag: "Some" }, ({ value: sc }) => _Map_set6(name, sc, acc)).with({ _tag: "None" }, () => acc).exhaustive());
 var exportCtorsInto = _curry16(4, (ctors, i, env, acc) => match15(_Array_get12(i, ctors)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc))).exhaustive());
@@ -13504,7 +13514,7 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-var defaultOpts = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false };
+var defaultOpts = { open: false, runtime: true, docs: true, moduleExt: ".js", strictEntry: false, plugins: None19 };
 var afterBlanks = _curry20(2, (s, i) => match19(_Str_get5(i, s)).with({ _tag: "Some", value: " " }, () => afterBlanks(s, i + 1)).with({ _tag: "Some", value: "\t" }, () => afterBlanks(s, i + 1)).otherwise((other) => other));
 var openDirective = (src) => {
   const t = _Str_trim2(src);
@@ -13515,20 +13525,20 @@ var openMode = _curry20(2, (src, requested) => or11(requested, openDirective(src
 var noSuggestions2 = [];
 var stampStage = _curry20(2, (kind, e) => ({ kind, message: e.message, start: e.start, end: e.end, help: None19, suggestions: noSuggestions2 }));
 var stampType = (e) => ({ kind: "type", message: e.message, start: e.start, end: e.end, help: e.help, suggestions: e.suggestions });
-var typecheckWith = _curry20(2, (prog, open) => _Result_mapErr((e) => [stampType(e)], _Result_map7((_) => prog, inferProgram(prog, builtins, namespaces, open))));
-var frontend = (src) => match19(lex(src)).with({ _tag: "Err" }, ({ error: e }) => Err9([stampStage("lex", e)])).with({ _tag: "Ok" }, ({ value: tokens }) => ((parsed) => match19(parsed.diagnostics).with((_v) => {
+var typecheckWith = _curry20(3, (prog, open, plugins) => _Result_mapErr((e) => [stampType(e)], _Result_map7((_) => prog, inferProgramWith(prog, builtins, namespaces, open, plugins))));
+var frontend = _curry20(2, (src, plugins) => match19(lex(src)).with({ _tag: "Err" }, ({ error: e }) => Err9([stampStage("lex", e)])).with({ _tag: "Ok" }, ({ value: tokens }) => ((parsed) => match19(parsed.diagnostics).with((_v) => {
   const _g = _v;
   return _g.length === 0;
-}, () => _Result_mapErr((es) => map12((e) => stampStage("check", e), es), checkAll(parsed.stmts))).otherwise((ds) => Err9(map12((e) => stampStage("parse", e), ds))))(parseRecovering(tokens, None19))).exhaustive();
-var pipelineWith = _curry20(2, (src, open) => _Result_flatMap8((stmts) => typecheckWith(stmts, open), frontend(src)));
-var typedProgramWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => _tuple12(stmts, r), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)))), frontend(src)));
+}, () => _Result_mapErr((es) => map12((e) => stampStage("check", e), es), checkAll(parsed.stmts))).otherwise((ds) => Err9(map12((e) => stampStage("parse", e), ds))))(parseRecovering(tokens, plugins))).exhaustive());
+var pipelineWith = _curry20(3, (src, open, plugins) => _Result_flatMap8((stmts) => typecheckWith(stmts, open, plugins), frontend(src, plugins)));
+var typedProgramWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => _tuple12(stmts, r), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var typedProgram = (src) => typedProgramWith(src, defaultOpts);
-var inferTypesWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => ({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)))), frontend(src)));
+var inferTypesWith = _curry20(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => ({ env: r.env, types: map12((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)) }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var inferTypes = (src) => inferTypesWith(src, defaultOpts);
-var compileWith = _curry20(2, (src, opts) => _Result_map7((prog) => codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }), pipelineWith(src, openMode(src, opts.open))));
+var compileWith = _curry20(2, (src, opts) => _Result_map7((prog) => codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }), pipelineWith(src, openMode(src, opts.open), opts.plugins)));
 var compile = (src) => compileWith(src, defaultOpts);
 var noImportedKeys = new Map;
-var compileTsWith = _curry20(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs), inferProgramTypes(stmts, builtins, namespaces, openMode(src, opts.open)))), frontend(src)));
+var compileTsWith = _curry20(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var compileTs = _curry20(2, (src, runtimeImport) => compileTsWith(src, runtimeImport, defaultOpts));
 export {
   compile,

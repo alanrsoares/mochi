@@ -1,0 +1,5 @@
+import * as T from "./st.mochi"
+
+let startOf = (s: T.St) => s.at.start
+
+export let start = startOf({ at: { start: 1, end: 2 }, n: 0 })

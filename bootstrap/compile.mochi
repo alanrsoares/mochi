@@ -8,8 +8,9 @@
 import { lex } from "./lexer.mochi"
 import { parseRecovering } from "./parser.mochi"
 import { checkAll } from "./check.mochi"
-import { inferProgram, inferProgramTypes } from "./infer.mochi"
+import { inferProgramWith, inferProgramTypesWith } from "./infer.mochi"
 import { codegenWith, jsGenOpts } from "./codegen.mochi"
+import * as Infer from "./infer.mochi"
 import { emitTsModuleWith } from "./codegen-ts.mochi"
 import { showType } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
@@ -32,12 +33,15 @@ extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 /// `strictEntry` only reaches the module-graph drivers (`module.mochi`); a
 /// single file is always its own entry, so honouring the directive here would
 /// make the flag mean "ignore the directive", which no caller wants.
+/// `plugins` is the host's plugin list (ADR 0109): None = builtins (JSX on),
+/// Some([]) = hard opt-out, Some(ps) = builtins then `ps`.
 type Opts = {
   open: bool,
   runtime: bool,
   docs: bool,
   moduleExt: string,
-  strictEntry: bool
+  strictEntry: bool,
+  plugins: Option<[Infer.HostPlugin]>
 }
 
 /// The default every arity-preserving entrypoint below passes: strict
@@ -47,7 +51,8 @@ export let defaultOpts : Opts = {
   runtime: true,
   docs: true,
   moduleExt: ".js",
-  strictEntry: false
+  strictEntry: false,
+  plugins: None
 }
 
 // First non-space, non-tab character at or after `i`.
@@ -113,17 +118,17 @@ let stampType = e =>
     suggestions: e.suggestions
   }
 
-let typecheckWith = (prog, open) =>
-  prog->inferProgram(builtins, namespaces, open)
+let typecheckWith = (prog, open, plugins: Option<[Infer.HostPlugin]>) =>
+  prog->inferProgramWith(builtins, namespaces, open, plugins)
     |> Result.map(_ => prog)
     |> Result.mapErr(e => [stampType(e)])
 
 // lex -> parse -> check. Parse keeps every recovering diagnostic (source
 // order); `checkAll` collects every independent checker finding. Shared by
 // both backends.
-let frontend = src => switch lex(src) {
+let frontend = (src, plugins: Option<[Infer.HostPlugin]>) => switch lex(src) {
   | Err(e) => Err([stampStage("lex", e)])
-  | Ok(tokens) => let parsed = parseRecovering(tokens, None) in
+  | Ok(tokens) => let parsed = parseRecovering(tokens, plugins) in
       switch parsed.diagnostics {
         | [] => checkAll(parsed.stmts)
             |> Result.mapErr(es => es |> map(e => stampStage("check", e)))
@@ -132,15 +137,20 @@ let frontend = src => switch lex(src) {
 }
 
 // The front-end pipeline: lex -> parse -> check -> typecheck
-let pipelineWith = (src, open) =>
-  let? stmts = src->frontend() in stmts->typecheckWith(open)
+let pipelineWith = (src, open, plugins: Option<[Infer.HostPlugin]>) =>
+  let? stmts = src->frontend(plugins) in stmts->typecheckWith(open, plugins)
 
 /// typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
 /// inference, for passes that print declarations (`dts.mochi`) rather than
 /// answering span queries. `inferTypes` deliberately drops the AST.
 export let typedProgramWith = (src, opts: Opts) =>
-  let? stmts = src->frontend() in
-    stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
+  let? stmts = src->frontend(opts.plugins) in
+    stmts->inferProgramTypesWith(
+      builtins,
+      namespaces,
+      openMode(src, opts.open),
+      opts.plugins
+    )
       |> Result.map(r => (stmts, r))
       |> Result.mapErr(e => [stampType(e)])
 
@@ -149,8 +159,13 @@ export let typedProgram = src => src->typedProgramWith(defaultOpts)
 /// inferTypes : string -> Result InferResult Err — strict typed-query seam
 /// for host DX. Keeps the recorded span -> type table instead of discarding it.
 export let inferTypesWith = (src, opts: Opts) =>
-  let? stmts = src->frontend() in
-    stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
+  let? stmts = src->frontend(opts.plugins) in
+    stmts->inferProgramTypesWith(
+      builtins,
+      namespaces,
+      openMode(src, opts.open),
+      opts.plugins
+    )
       |> Result.map(r =>
         {
           env: r.env,
@@ -170,7 +185,7 @@ export let inferTypes = src => src->inferTypesWith(defaultOpts)
 
 /// compileWith : string -> Opts -> Result string Err
 export let compileWith = (src, opts: Opts) =>
-  src->pipelineWith(openMode(src, opts.open))
+  src->pipelineWith(openMode(src, opts.open), opts.plugins)
     |> Result.map(prog =>
       prog->codegenWith(
         #{},
@@ -195,8 +210,13 @@ let noImportedKeys : Map<string, [string]> = #{}
 /// `inferProgramTypes` so the emitter gets the span -> type table its
 /// annotation hooks are driven from, not just the final env.
 export let compileTsWith = (src, runtimeImport, opts: Opts) =>
-  let? stmts = src->frontend() in
-    stmts->inferProgramTypes(builtins, namespaces, openMode(src, opts.open))
+  let? stmts = src->frontend(opts.plugins) in
+    stmts->inferProgramTypesWith(
+      builtins,
+      namespaces,
+      openMode(src, opts.open),
+      opts.plugins
+    )
       |> Result.map(r =>
         stmts->emitTsModuleWith(
           r.env,

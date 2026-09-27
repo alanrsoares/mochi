@@ -11,25 +11,183 @@
       "runtime",
       "runtime-variant",
       "module-graph",
+      "transitive-alias",
       "module-cycle",
       "multiple-graph-check-errors",
+      "dts",
+      "format",
       "typed-ts",
-      "typed-ts-graph"
+      "typed-ts-graph",
+      "styled-cva-compile",
+      "styled-cva-bad-tone",
+      "styled-cva-unknown-tag",
+      "styled-cva-format",
+      "styled-cva-format-paths",
+      "styled-cva-format-comments"
+    ],
+    "pending": [
+      "styled-cva-dts"
     ]
   },
   "cases": [
-    { "id": "single-js", "kind": "compile", "source": "single-js.mochi", "expect": "single-js.expect.js" },
-    { "id": "unbound-name", "kind": "diagnostic", "source": "unbound-name.mochi", "expect": "unbound-name.expect.json" },
-    { "id": "parse-error", "kind": "diagnostic", "source": "parse-error.mochi", "expect": "parse-error.expect.json" },
-    { "id": "type-error", "kind": "diagnostic", "source": "type-error.mochi", "expect": "type-error.expect.json" },
-    { "id": "non-exhaustive", "kind": "diagnostic", "source": "non-exhaustive.mochi", "expect": "non-exhaustive.expect.json" },
-    { "id": "multiple-check-errors", "kind": "diagnostic", "source": "multiple-check-errors.mochi", "expect": "multiple-check-errors.expect.json" },
-    { "id": "runtime", "kind": "runtime", "source": "runtime.mochi", "expect": "runtime.expect.json" },
-    { "id": "runtime-variant", "kind": "runtime", "source": "runtime-variant.mochi", "expect": "runtime-variant.expect.json" },
-    { "id": "module-graph", "kind": "graph", "entry": "module-graph/main.mochi", "expect": "module-graph.expect.json" },
-    { "id": "module-cycle", "kind": "graph-diagnostic", "entry": "module-cycle/a.mochi", "expect": "module-cycle.expect.json" },
-    { "id": "multiple-graph-check-errors", "kind": "graph-diagnostic", "entry": "multiple-graph-check-errors/main.mochi", "expect": "multiple-graph-check-errors.expect.json" },
-    { "id": "typed-ts", "kind": "typed-ts", "source": "typed-ts.mochi", "expect": "typed-ts.expect.txt" },
-    { "id": "typed-ts-graph", "kind": "typed-ts-graph", "entry": "typed-ts-graph/main.mochi", "expect": "typed-ts-graph.expect.json" }
+    {
+      "id": "single-js",
+      "kind": "compile",
+      "source": "single-js.mochi",
+      "expect": "single-js.expect.js"
+    },
+    {
+      "id": "unbound-name",
+      "kind": "diagnostic",
+      "source": "unbound-name.mochi",
+      "expect": "unbound-name.expect.json"
+    },
+    {
+      "id": "parse-error",
+      "kind": "diagnostic",
+      "source": "parse-error.mochi",
+      "expect": "parse-error.expect.json"
+    },
+    {
+      "id": "type-error",
+      "kind": "diagnostic",
+      "source": "type-error.mochi",
+      "expect": "type-error.expect.json"
+    },
+    {
+      "id": "non-exhaustive",
+      "kind": "diagnostic",
+      "source": "non-exhaustive.mochi",
+      "expect": "non-exhaustive.expect.json"
+    },
+    {
+      "id": "multiple-check-errors",
+      "kind": "diagnostic",
+      "source": "multiple-check-errors.mochi",
+      "expect": "multiple-check-errors.expect.json"
+    },
+    {
+      "id": "runtime",
+      "kind": "runtime",
+      "source": "runtime.mochi",
+      "expect": "runtime.expect.json"
+    },
+    {
+      "id": "runtime-variant",
+      "kind": "runtime",
+      "source": "runtime-variant.mochi",
+      "expect": "runtime-variant.expect.json"
+    },
+    {
+      "id": "module-graph",
+      "kind": "graph",
+      "entry": "module-graph/main.mochi",
+      "expect": "module-graph.expect.json"
+    },
+    {
+      "id": "transitive-alias",
+      "kind": "graph",
+      "entry": "transitive-alias/main.mochi",
+      "expect": "transitive-alias.expect.json"
+    },
+    {
+      "id": "module-cycle",
+      "kind": "graph-diagnostic",
+      "entry": "module-cycle/a.mochi",
+      "expect": "module-cycle.expect.json"
+    },
+    {
+      "id": "multiple-graph-check-errors",
+      "kind": "graph-diagnostic",
+      "entry": "multiple-graph-check-errors/main.mochi",
+      "expect": "multiple-graph-check-errors.expect.json"
+    },
+    {
+      "id": "dts",
+      "kind": "dts",
+      "entry": "dts.mochi",
+      "expect": "dts.expect.txt"
+    },
+    {
+      "id": "format",
+      "kind": "format",
+      "source": "format.src.txt",
+      "expect": "format.expect.mochi"
+    },
+    {
+      "id": "typed-ts",
+      "kind": "typed-ts",
+      "source": "typed-ts.mochi",
+      "expect": "typed-ts.expect.txt"
+    },
+    {
+      "id": "typed-ts-graph",
+      "kind": "typed-ts-graph",
+      "entry": "typed-ts-graph/main.mochi",
+      "expect": "typed-ts-graph.expect.json"
+    },
+    {
+      "id": "styled-cva-compile",
+      "kind": "compile",
+      "source": "styled-cva/badge.mochi",
+      "expect": "styled-cva-compile.expect.js",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-bad-tone",
+      "kind": "diagnostic",
+      "source": "styled-cva/bad-tone.mochi",
+      "expect": "styled-cva-bad-tone.expect.json",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-unknown-tag",
+      "kind": "diagnostic",
+      "source": "styled-cva/unknown-tag.mochi",
+      "expect": "styled-cva-unknown-tag.expect.json",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-dts",
+      "kind": "dts",
+      "entry": "styled-cva/badge.mochi",
+      "expect": "styled-cva-dts.expect.txt",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-format",
+      "kind": "format",
+      "source": "styled-cva/reflow.src.txt",
+      "expect": "styled-cva-format.expect.mochi",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-format-paths",
+      "kind": "format",
+      "source": "styled-cva/reflow-paths.src.txt",
+      "expect": "styled-cva-format-paths.expect.mochi",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-format-comments",
+      "kind": "format",
+      "source": "styled-cva/reflow-comments.src.txt",
+      "expect": "styled-cva-format-comments.expect.mochi",
+      "plugins": [
+        "styled-cva"
+      ]
+    }
   ]
 }

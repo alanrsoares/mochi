@@ -91,5 +91,7 @@ export let inferStyledCvaCall = (fn, args, _origin, st, api) =>
 export let styledCvaPlugin = {
   name: "styled-cva",
   parse: None,
-  inferCall: Some(inferStyledCvaCall)
+  inferCall: Some(inferStyledCvaCall),
+  format: None,
+  dtsBinding: None
 }

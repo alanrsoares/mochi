@@ -6411,7 +6411,7 @@ var inferJsxCallHook = _curry6(5, (_fn, args, origin, st, api) => match5(origin)
   const _g = _v;
   return _g.length >= 2;
 }, ([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some5(r), inferJsxCall(tagExpr, propsExpr, rest, st, api))).otherwise(() => Ok3(None5)) : Ok3(None5)).with({ _tag: "None" }, () => Ok3(None5)).exhaustive());
-var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook) };
+var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook), format: None5, dtsBinding: None5 };
 
 import { None as None6, Ok as Ok4, Some as Some6, _Array_drop, _Array_get as _Array_get4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry7, _tuple as _tuple4, and as and5, eq as eq6, length as length4 } from "@mochi/compiler/runtime";
 import { match as match6 } from "@onrails/pattern";
@@ -6436,7 +6436,7 @@ var inferHookDeps = _curry7(4, (fn, args, st, api) => {
   return match6(expected).with({ _tag: "Some" }, ({ value: n }) => eq6(length4(args), n) ? _Result_map3((st1) => (([elem, st2]) => Some6(_tuple4(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok4(None6)).with({ _tag: "None" }, () => Ok4(None6)).exhaustive();
 });
 var inferPreactCall = _curry7(5, (fn, args, _origin, st, api) => _Result_flatMap3((first) => match6(first).with({ _tag: "Some" }, () => Ok4(first)).with({ _tag: "None" }, () => _Result_flatMap3((lazy) => match6(lazy).with({ _tag: "Some" }, () => Ok4(lazy)).with({ _tag: "None" }, () => _Result_flatMap3((ref) => match6(ref).with({ _tag: "Some" }, () => Ok4(ref)).with({ _tag: "None" }, () => _Result_flatMap3((effect) => match6(effect).with({ _tag: "Some" }, () => Ok4(effect)).with({ _tag: "None" }, () => _Result_flatMap3((layout) => match6(layout).with({ _tag: "Some" }, () => Ok4(layout)).with({ _tag: "None" }, () => _Result_flatMap3((callback) => match6(callback).with({ _tag: "Some" }, () => Ok4(callback)).with({ _tag: "None" }, () => _Result_flatMap3((memo) => match6(memo).with({ _tag: "Some" }, () => Ok4(memo)).with({ _tag: "None" }, () => inferHookDeps(fn, args, st, api)).exhaustive(), inferUseMemo(fn, args, st, api))).exhaustive(), inferUseCallback(fn, args, st, api))).exhaustive(), inferEffectLike(fn, args, st, api, "useLayoutEffect"))).exhaustive(), inferEffectLike(fn, args, st, api, "useEffect"))).exhaustive(), inferUseRef(fn, args, st, api))).exhaustive(), inferUseLazyState(fn, args, st, api))).exhaustive(), inferUseState(fn, args, st, api)));
-var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall) };
+var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall), format: None6, dtsBinding: None6 };
 
 var DEFAULT_PLUGINS = [jsxPlugin];
 var resolvePlugins = _curry8(2, (pluginsOpt, builtins) => match7(pluginsOpt).with({ _tag: "None" }, () => builtins).with({ _tag: "Some" }, ({ value: ps }) => eq7(length5(ps), 0) ? [] : _Array_concat(builtins, ps)).exhaustive());
@@ -6448,6 +6448,16 @@ var runParseHooks = _curry8(4, (hooks, toks, pos, parseExpr) => match7(hooks).wi
   throw new Error("non-exhaustive match");
 }));
 var runInferCallHooks = _curry8(6, (hooks, fn, args, origin, st, api) => match7(hooks).with((_v) => _v.length === 0, () => Ok5(None7)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(fn, args, origin, st, api)).with({ _tag: "Err" }, ({ error: e }) => Err4(e)).with({ _tag: "Ok" }, ({ value: v }) => match7(v).with({ _tag: "None" }, () => runInferCallHooks(rest, fn, args, origin, st, api)).with({ _tag: "Some" }, ({ value: claim }) => Ok5(Some7(claim))).exhaustive()).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var formatHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.format).with({ _tag: "Some" }, ({ value: hook }) => formatHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => formatHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var formatHooksOf = (plugins) => formatHooksFrom(plugins, 0, []);
+var formatHooksFor = (pluginsOpt) => formatHooksOf(resolvePluginsDefault(pluginsOpt));
+var dtsHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.dtsBinding).with({ _tag: "Some" }, ({ value: hook }) => dtsHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => dtsHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var runFormatHooks = _curry8(2, (hooks, e) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(e)).with({ _tag: "Some" }, ({ value: out }) => Some7(out)).with({ _tag: "None" }, () => runFormatHooks(rest, e)).exhaustive()).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var runDtsHooks = _curry8(3, (hooks, name, value) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(name, value)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 
@@ -6794,8 +6804,5207 @@ var parseWith = _curry9(2, (toks, pluginsOpt) => {
   const r = parseRecovering(toks, pluginsOpt);
   return match8(_Array_get6(0, r.diagnostics)).with({ _tag: "Some" }, ({ value: d }) => Err5(d)).with({ _tag: "None" }, () => Ok6(r.stmts)).exhaustive();
 });
+import { None as None10, Some as Some10, _Array_append as _Array_append8, _Array_concat as _Array_concat3, _Array_find, _Array_flatMap, _Array_get as _Array_get8, _Array_prepend as _Array_prepend3, _Array_sortBy, _Array_take, _Map_delete, _Map_get as _Map_get3, _Map_keys as _Map_keys3, _Map_set as _Map_set2, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome, _Option_unwrapOr as _Option_unwrapOr5, _Set_fromArray, _Set_has, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt5, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join4, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split3, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry12, _tuple as _tuple6, and as and8, concat, eq as eq11, filter, length as length9, map as map5, not as not6, or as or7, reduce, show as show3 } from "@mochi/compiler/runtime";
+import { match as match11 } from "@onrails/pattern";
+
+import { _Array_append as _Array_append7, _Array_get as _Array_get7, _Option_unwrapOr as _Option_unwrapOr4, _Str_length as _Str_length4, _Str_split as _Str_split2, _curry as _curry10, _done as _done4, _recur as _recur4, and as and7, eq as eq9, length as length7, not as not5, or as or6 } from "@mochi/compiler/runtime";
+import { match as match9 } from "@onrails/pattern";
+var DText = (s) => ({ _tag: "DText", s });
+var DVerbatim = (s) => ({ _tag: "DVerbatim", s });
+var DLine = _curry10(2, (hard, soft) => ({ _tag: "DLine", hard, soft }));
+var DCat = (parts) => ({ _tag: "DCat", parts });
+var DIndent = (doc) => ({ _tag: "DIndent", doc });
+var DGroup = (doc) => ({ _tag: "DGroup", doc });
+var DLineSuffix = (doc) => ({ _tag: "DLineSuffix", doc });
+var DBreakParent = { _tag: "DBreakParent" };
+var INDENT = 2;
+var txt = (s) => DText(s);
+var verbatim = (s) => DVerbatim(s);
+var cat = (parts) => DCat(parts);
+var line = DLine(false, false);
+var softline = DLine(false, true);
+var hardline = DLine(true, false);
+var breakParent = DBreakParent;
+var indent = (doc) => DIndent(doc);
+var group = (doc) => DGroup(doc);
+var lineSuffix = (doc) => DLineSuffix(doc);
+var joinFrom = _curry10(4, (sep, parts, i, acc) => match9(_Array_get7(i, parts)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => joinFrom(sep, parts, i + 1, eq9(i, 0) ? _Array_append7(p, acc) : _Array_append7(p, _Array_append7(sep, acc)))).exhaustive());
+var join = _curry10(2, (sep, parts) => DCat(joinFrom(sep, parts, 0, [])));
+var WNil = { _tag: "WNil" };
+var WCons = _curry10(2, (head, tail) => ({ _tag: "WCons", head, tail }));
+var consParts = _curry10(4, (parts, i, m, tail) => {
+  let k = length7(parts) - 1;
+  let w = tail;
+  while (true) {
+    if (k < 0) {
+      return w;
+    } else {
+      const _step = match9(_Array_get7(k, parts)).with({ _tag: "None" }, () => _done4(w)).with({ _tag: "Some" }, ({ value: d }) => _recur4(k - 1, WCons({ i, m, d }, w))).exhaustive();
+      if (_step._tag === "recur") {
+        [k, w] = _step.args;
+        continue;
+      }
+      return _step.value;
+    }
+  }
+});
+var fits2 = _curry10(2, (width, start) => {
+  let rem = width;
+  let work = start;
+  while (true) {
+    if (rem < 0) {
+      return false;
+    } else {
+      const _step = match9(work).with({ _tag: "WNil" }, () => _done4(true)).with((_v) => {
+        const _g = _v;
+        return _g._tag === "WCons";
+      }, ({ head: { i, m, d }, tail }) => match9(d).with({ _tag: "DText" }, ({ s }) => _recur4(rem - _Str_length4(s), tail)).with({ _tag: "DVerbatim" }, () => _done4(true)).with({ _tag: "DCat" }, ({ parts }) => _recur4(rem, consParts(parts, i, m, tail))).with({ _tag: "DIndent" }, ({ doc: inner }) => _recur4(rem, WCons({ i: i + INDENT, m, d: inner }, tail))).with({ _tag: "DGroup" }, ({ doc: inner }) => _recur4(rem, WCons({ i, m: "flat", d: inner }, tail))).with({ _tag: "DLine" }, ({ hard, soft }) => or6(hard, eq9(m, "break")) ? _done4(true) : _recur4(rem - (soft ? 0 : 1), tail)).with({ _tag: "DLineSuffix" }, ({ doc: inner }) => _recur4(rem, WCons({ i, m, d: inner }, tail))).with({ _tag: "DBreakParent" }, () => _recur4(rem, tail)).exhaustive()).exhaustive();
+      if (_step._tag === "recur") {
+        [rem, work] = _step.args;
+        continue;
+      }
+      return _step.value;
+    }
+  }
+});
+var anyForcesBreak = _curry10(2, (parts, i) => match9(_Array_get7(i, parts)).with({ _tag: "None" }, () => false).with({ _tag: "Some" }, ({ value: p }) => or6(forcesBreak(p), anyForcesBreak(parts, i + 1))).exhaustive());
+var forcesBreak = (d) => match9(d).with({ _tag: "DBreakParent" }, () => true).with({ _tag: "DVerbatim" }, () => true).with({ _tag: "DLine" }, ({ hard }) => hard).with({ _tag: "DCat" }, ({ parts }) => anyForcesBreak(parts, 0)).with({ _tag: "DIndent" }, ({ doc: inner }) => forcesBreak(inner)).with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner)).with({ _tag: "DLineSuffix" }, () => false).with({ _tag: "DText" }, () => false).exhaustive();
+var spaces = (n) => {
+  let k = n;
+  let acc = "";
+  while (true) {
+    if (k <= 0) {
+      return acc;
+    } else {
+      [k, acc] = [k - 1, `${acc} `];
+      continue;
+    }
+  }
+};
+var posAfter = _curry10(2, (pos, s) => {
+  const parts = _Str_split2(`
+`, s);
+  return eq9(length7(parts), 1) ? pos + _Str_length4(s) : _Str_length4(_Option_unwrapOr4("", _Array_get7(length7(parts) - 1, parts)));
+});
+var consItems = _curry10(2, (items, tail) => {
+  let k = length7(items) - 1;
+  let w = tail;
+  while (true) {
+    if (k < 0) {
+      return w;
+    } else {
+      const _step = match9(_Array_get7(k, items)).with({ _tag: "None" }, () => _done4(w)).with({ _tag: "Some" }, ({ value: it }) => _recur4(k - 1, WCons(it, w))).exhaustive();
+      if (_step._tag === "recur") {
+        [k, w] = _step.args;
+        continue;
+      }
+      return _step.value;
+    }
+  }
+});
+var render = _curry10(2, (root, width) => {
+  let out = "";
+  let pos = 0;
+  let work = WCons({ i: 0, m: "break", d: root }, WNil);
+  let sfx = [];
+  while (true) {
+    const _step = match9(work).with({ _tag: "WNil" }, () => eq9(length7(sfx), 0) ? _done4(out) : _recur4(out, pos, consItems(sfx, WNil), [])).with((_v) => {
+      const _g = _v;
+      return _g._tag === "WCons";
+    }, ({ head: { i, m, d }, tail }) => match9(d).with({ _tag: "DText" }, ({ s }) => _recur4(`${out}${s}`, pos + _Str_length4(s), tail, sfx)).with({ _tag: "DVerbatim" }, ({ s }) => _recur4(`${out}${s}`, posAfter(pos, s), tail, sfx)).with({ _tag: "DCat" }, ({ parts }) => _recur4(out, pos, consParts(parts, i, m, tail), sfx)).with({ _tag: "DIndent" }, ({ doc: inner }) => _recur4(out, pos, WCons({ i: i + INDENT, m, d: inner }, tail), sfx)).with({ _tag: "DLine" }, ({ hard, soft }) => and7(eq9(m, "flat"), not5(hard)) ? ((s) => _recur4(`${out}${s}`, pos + _Str_length4(s), tail, sfx))(soft ? "" : " ") : eq9(length7(sfx), 0) ? _recur4(`${out}
+${spaces(i)}`, i, tail, []) : _recur4(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [])).with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner) ? _recur4(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx) : ((cand) => fits2(width - pos, cand) ? _recur4(out, pos, cand, sfx) : _recur4(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx))(WCons({ i, m: "flat", d: inner }, tail))).with({ _tag: "DLineSuffix" }, ({ doc: inner }) => _recur4(out, pos, tail, _Array_append7({ i, m, d: inner }, sfx))).with({ _tag: "DBreakParent" }, () => _recur4(out, pos, tail, sfx)).exhaustive()).exhaustive();
+    if (_step._tag === "recur") {
+      [out, pos, work, sfx] = _step.args;
+      continue;
+    }
+    return _step.value;
+  }
+});
+var flat = (d) => render(d, 1e9);
+
+import { _Str_chars, _Str_endsWith, _Str_join as _Str_join3, _curry as _curry11, eq as eq10, length as length8, map as map4 } from "@mochi/compiler/runtime";
+import { match as match10 } from "@onrails/pattern";
+var escChar2 = (c) => match10(c).with("\\", () => "\\\\").with('"', () => "\\\"").with(`
+`, () => "\\n").with("\t", () => "\\t").otherwise(() => c);
+var strLit = (s) => `"${_Str_join3("", map4(escChar2, _Str_chars(s)))}"`;
+var typeArg = (te) => {
+  const shown = showTypeExpr(te);
+  return _Str_endsWith(">", shown) ? `${shown} ` : shown;
+};
+var joinWith = _curry11(3, (f, sep, tes) => _Str_join3(sep, map4(f, tes)));
+var showTypeExpr = (te) => match10(te).with({ _tag: "TyName" }, ({ name }) => eq10(name, "unit") ? "()" : name).with({ _tag: "TyApp" }, ({ ctor, args }) => `${ctor}<${joinWith(typeArg, ", ", args)}>`).with({ _tag: "TyTuple" }, ({ elems }) => `(${joinWith(showTypeExpr, ", ", elems)})`).with({ _tag: "TyList" }, ({ elem }) => `[${showTypeExpr(elem)}]`).with({ _tag: "TyQual" }, ({ alias, name, args }) => ((head) => eq10(length8(args), 0) ? head : `${head}<${joinWith(typeArg, ", ", args)}>`)(`${alias}.${name}`)).with({ _tag: "TyLit" }, ({ value }) => strLit(value)).with({ _tag: "TyUnion" }, ({ members }) => joinWith(parenArrow, " | ", members)).with({ _tag: "TyArrow" }, ({ from, to }) => `${parenArrow(from)} -> ${showTypeExpr(to)}`).exhaustive();
+var parenArrow = (te) => match10(te).with({ _tag: "TyArrow" }, () => `(${showTypeExpr(te)})`).otherwise(() => showTypeExpr(te));
+
+var _builtins = {
+  add: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  sub: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  mul: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  div: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  square: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  sqrt: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  hypot: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  pi: {
+    _tag: "TyCon",
+    name: "number",
+    args: []
+  },
+  concat: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyVar",
+        id: 0
+      }
+    }
+  },
+  eq: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  compare: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  show: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyCon",
+      name: "string",
+      args: []
+    }
+  },
+  ignore: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyCon",
+      name: "unit",
+      args: []
+    }
+  },
+  lt: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  gt: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  gte: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  lte: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  not: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "bool",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "bool",
+      args: []
+    }
+  },
+  and: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "bool",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  or: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "bool",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  min: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  max: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  pow: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  mod: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    }
+  },
+  abs: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  floor: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  ceil: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  round: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  sign: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  negate: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  length: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "Array",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    }
+  },
+  map: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyVar",
+        id: 1
+      }
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      }
+    }
+  },
+  filter: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    }
+  },
+  reduce: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      }
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      }
+    }
+  },
+  identity: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyVar",
+      id: 0
+    }
+  },
+  always: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1
+      },
+      to: {
+        _tag: "TyVar",
+        id: 0
+      }
+    }
+  },
+  compose: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1
+      },
+      to: {
+        _tag: "TyVar",
+        id: 2
+      }
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 2
+        }
+      }
+    }
+  },
+  capitalize: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "string",
+      args: []
+    },
+    to: {
+      _tag: "TyCon",
+      name: "string",
+      args: []
+    }
+  },
+  range: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "number",
+            args: []
+          }
+        ]
+      }
+    }
+  },
+  iterate: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyVar",
+        id: 0
+      }
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    }
+  },
+  repeat: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0
+    },
+    to: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    }
+  },
+  take: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    }
+  },
+  takeWhile: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    }
+  },
+  drop: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: []
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    }
+  },
+  fromArray: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "Array",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    },
+    to: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    }
+  },
+  toArray: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    },
+    to: {
+      _tag: "TyCon",
+      name: "Array",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    }
+  }
+};
+var _namespaces = {
+  Array: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    filter: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    reduce: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 1
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyVar",
+            id: 0
+          },
+          to: {
+            _tag: "TyVar",
+            id: 1
+          }
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 1
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Array",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          },
+          to: {
+            _tag: "TyVar",
+            id: 1
+          }
+        }
+      }
+    },
+    length: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    },
+    head: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    forEach: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "unit",
+          args: []
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "unit",
+          args: []
+        }
+      }
+    },
+    find: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    reverse: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    concat: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    append: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    prepend: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    take: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    drop: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    tail: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    contains: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    sort: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    sortBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    dedupe: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    dedupeBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    max: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    min: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    maxBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    minBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    }
+  },
+  List: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    filter: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    concat: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    head: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    empty: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    }
+  },
+  Set: {
+    has: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    add: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    delete: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    size: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    },
+    toArray: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    fromArray: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    empty: {
+      _tag: "TyCon",
+      name: "Set",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    },
+    union: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    intersect: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    diff: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    }
+  },
+  Map: {
+    has: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    getOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Map",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 1
+              }
+            ]
+          },
+          to: {
+            _tag: "TyVar",
+            id: 1
+          }
+        }
+      }
+    },
+    set: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 1
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Map",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 1
+              }
+            ]
+          },
+          to: {
+            _tag: "TyCon",
+            name: "Map",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    delete: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    size: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    },
+    keys: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    values: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      }
+    },
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    empty: {
+      _tag: "TyCon",
+      name: "Map",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        },
+        {
+          _tag: "TyVar",
+          id: 1
+        }
+      ]
+    }
+  },
+  Option: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    mapOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyVar",
+            id: 0
+          },
+          to: {
+            _tag: "TyVar",
+            id: 1
+          }
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Option",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          },
+          to: {
+            _tag: "TyVar",
+            id: 1
+          }
+        }
+      }
+    },
+    exists: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    contains: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    unwrapOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyVar",
+          id: 0
+        }
+      }
+    },
+    orElse: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    isSome: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    },
+    isNone: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  Result: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      }
+    },
+    mapErr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 2
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      }
+    },
+    unwrapOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyVar",
+          id: 0
+        }
+      }
+    },
+    isOk: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Result",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    },
+    isErr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Result",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: []
+      }
+    }
+  },
+  Task: {
+    of: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      }
+    },
+    fail: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 2
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      }
+    },
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      }
+    },
+    mapErr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 2
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    andThen: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      }
+    },
+    recover: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 2
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    },
+    fromResult: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Result",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      }
+    },
+    match: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyVar",
+            id: 2
+          },
+          to: {
+            _tag: "TyVar",
+            id: 1
+          }
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 2
+              }
+            ]
+          },
+          to: {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 1
+              },
+              {
+                _tag: "TyVar",
+                id: 3
+              }
+            ]
+          }
+        }
+      }
+    },
+    delay: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      }
+    },
+    run: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Promise",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Result",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    all: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 2
+              }
+            ]
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Array",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      }
+    },
+    race: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 2
+              }
+            ]
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 2
+          }
+        ]
+      }
+    },
+    traverse: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "Array",
+              args: [
+                {
+                  _tag: "TyVar",
+                  id: 1
+                }
+              ]
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        }
+      }
+    }
+  },
+  Str: {
+    length: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    },
+    concat: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        }
+      }
+    },
+    toUpper: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      }
+    },
+    toLower: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      }
+    },
+    trim: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      }
+    },
+    split: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "string",
+              args: []
+            }
+          ]
+        }
+      }
+    },
+    join: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "string",
+              args: []
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        }
+      }
+    },
+    contains: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    startsWith: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    endsWith: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    slice: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "number",
+          args: []
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "string",
+            args: []
+          },
+          to: {
+            _tag: "TyCon",
+            name: "string",
+            args: []
+          }
+        }
+      }
+    },
+    replace: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "string",
+            args: []
+          },
+          to: {
+            _tag: "TyCon",
+            name: "string",
+            args: []
+          }
+        }
+      }
+    },
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "string",
+              args: []
+            }
+          ]
+        }
+      }
+    },
+    codeAt: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "number",
+              args: []
+            }
+          ]
+        }
+      }
+    },
+    fromCode: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      }
+    },
+    chars: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "string",
+            args: []
+          }
+        ]
+      }
+    },
+    toNumber: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "number",
+            args: []
+          }
+        ]
+      }
+    }
+  }
+};
+var _namespaceRuntime = {
+  Array: {
+    map: "map",
+    filter: "filter",
+    reduce: "reduce",
+    length: "length",
+    head: "_Array_head",
+    get: "_Array_get",
+    forEach: "_Array_forEach",
+    find: "_Array_find",
+    reverse: "_Array_reverse",
+    concat: "_Array_concat",
+    append: "_Array_append",
+    prepend: "_Array_prepend",
+    flatMap: "_Array_flatMap",
+    take: "_Array_take",
+    drop: "_Array_drop",
+    tail: "_Array_tail",
+    contains: "_Array_contains",
+    sort: "_Array_sort",
+    sortBy: "_Array_sortBy",
+    dedupe: "_Array_dedupe",
+    dedupeBy: "_Array_dedupeBy",
+    max: "_Array_max",
+    min: "_Array_min",
+    maxBy: "_Array_maxBy",
+    minBy: "_Array_minBy"
+  },
+  List: {
+    map: "_List_map",
+    filter: "_List_filter",
+    concat: "_List_concat",
+    flatMap: "_List_flatMap",
+    head: "_List_head"
+  },
+  Set: {
+    has: "_Set_has",
+    add: "_Set_add",
+    delete: "_Set_delete",
+    size: "_Set_size",
+    toArray: "_Set_toArray",
+    fromArray: "_Set_fromArray",
+    union: "_Set_union",
+    intersect: "_Set_intersect",
+    diff: "_Set_diff"
+  },
+  Map: {
+    has: "_Map_has",
+    getOr: "_Map_getOr",
+    set: "_Map_set",
+    delete: "_Map_delete",
+    size: "_Map_size",
+    keys: "_Map_keys",
+    values: "_Map_values",
+    get: "_Map_get"
+  },
+  Option: {
+    map: "_Option_map",
+    flatMap: "_Option_flatMap",
+    mapOr: "_Option_mapOr",
+    exists: "_Option_exists",
+    contains: "_Option_contains",
+    unwrapOr: "_Option_unwrapOr",
+    orElse: "_Option_orElse",
+    isSome: "_Option_isSome",
+    isNone: "_Option_isNone"
+  },
+  Result: {
+    map: "_Result_map",
+    mapErr: "_Result_mapErr",
+    flatMap: "_Result_flatMap",
+    unwrapOr: "_Result_unwrapOr",
+    isOk: "_Result_isOk",
+    isErr: "_Result_isErr"
+  },
+  Task: {
+    of: "_Task_of",
+    fail: "_Task_fail",
+    map: "_Task_map",
+    mapErr: "_Task_mapErr",
+    andThen: "_Task_andThen",
+    recover: "_Task_recover",
+    fromResult: "_Task_fromResult",
+    match: "_Task_match",
+    delay: "_Task_delay",
+    run: "_Task_run",
+    all: "_Task_all",
+    race: "_Task_race",
+    traverse: "_Task_traverse"
+  },
+  Str: {
+    length: "_Str_length",
+    concat: "_Str_concat",
+    toUpper: "_Str_toUpper",
+    toLower: "_Str_toLower",
+    trim: "_Str_trim",
+    split: "_Str_split",
+    join: "_Str_join",
+    contains: "_Str_contains",
+    startsWith: "_Str_startsWith",
+    endsWith: "_Str_endsWith",
+    slice: "_Str_slice",
+    replace: "_Str_replace",
+    get: "_Str_get",
+    codeAt: "_Str_codeAt",
+    fromCode: "_Str_fromCode",
+    chars: "_Str_chars",
+    toNumber: "_Str_toNumber"
+  }
+};
+var _preludeJsDefs = {
+  _list: "const _list = (g) => ({ [Symbol.iterator]: g });",
+  _curry: `const _curry = (n, f) => function c(...a) {
+  if (a.length < n)
+    return (...b) => c(...a, ...b);
+  if (a.length === n)
+    return f(...a);
+  return a.slice(n).reduce((g, x) => g(x), f(...a.slice(0, n)));
+};`,
+  _tuple: "const _tuple = (...xs) => xs;",
+  _recur: `const _recur = (...args) => ({
+  _tag: "recur",
+  args
+});`,
+  _done: 'const _done = (value) => ({ _tag: "done", value });',
+  Some: 'const Some = (value) => ({ _tag: "Some", value });',
+  None: 'const None = { _tag: "None" };',
+  Ok: 'const Ok = (value) => ({ _tag: "Ok", value });',
+  Err: 'const Err = (error) => ({ _tag: "Err", error });',
+  add: "const add = _curry(2, (a, b) => a + b);",
+  sub: "const sub = _curry(2, (a, b) => a - b);",
+  mul: "const mul = _curry(2, (a, b) => a * b);",
+  div: "const div = _curry(2, (a, b) => a / b);",
+  square: "const square = (x) => x * x;",
+  sqrt: "const sqrt = (x) => Math.sqrt(x);",
+  hypot: "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
+  pi: "const pi = Math.PI;",
+  concat: 'const concat = _curry(2, (a, b) => typeof a === "string" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b));',
+  eq: `const eq = _curry(2, (x, y) => {
+  if (x === y)
+    return true;
+  if (typeof x !== "object" || x === null || typeof y !== "object" || y === null)
+    return false;
+  const ax = Array.isArray(x);
+  if (ax !== Array.isArray(y))
+    return false;
+  if (ax) {
+    if (x.length !== y.length)
+      return false;
+    for (let i = 0;i < x.length; i++)
+      if (!eq(x[i], y[i]))
+        return false;
+    return true;
+  }
+  if (x instanceof Map || y instanceof Map) {
+    if (!(x instanceof Map) || !(y instanceof Map))
+      return false;
+    if (x.size !== y.size)
+      return false;
+    for (const [k, v] of x) {
+      if (!y.has(k) || !eq(v, y.get(k)))
+        return false;
+    }
+    return true;
+  }
+  if (x instanceof Set || y instanceof Set) {
+    if (!(x instanceof Set) || !(y instanceof Set))
+      return false;
+    if (x.size !== y.size)
+      return false;
+    for (const v of x)
+      if (!y.has(v))
+        return false;
+    return true;
+  }
+  if (typeof x[Symbol.iterator] === "function" || typeof y[Symbol.iterator] === "function")
+    throw new TypeError("eq on List: force it first with List.toArray");
+  const kx = Object.keys(x), ky = Object.keys(y);
+  if (kx.length !== ky.length)
+    return false;
+  for (const k of kx)
+    if (!eq(x[k], y[k]))
+      return false;
+  return true;
+});`,
+  compare: `const compare = _curry(2, (x, y) => {
+  if (x === y)
+    return 0;
+  const t = typeof x;
+  if (t === "number" || t === "string" || t === "boolean")
+    return x < y ? -1 : x > y ? 1 : 0;
+  if (Array.isArray(x) && Array.isArray(y)) {
+    const n = Math.min(x.length, y.length);
+    for (let i = 0;i < n; i++) {
+      const c = compare(x[i], y[i]);
+      if (c !== 0)
+        return c;
+    }
+    return compare(x.length, y.length);
+  }
+  if (x instanceof Map && y instanceof Map) {
+    const kx = [...x.keys()].sort(compare), ky = [...y.keys()].sort(compare);
+    const n = Math.min(kx.length, ky.length);
+    for (let i = 0;i < n; i++) {
+      const kc = compare(kx[i], ky[i]);
+      if (kc !== 0)
+        return kc;
+      const vc = compare(x.get(kx[i]), y.get(ky[i]));
+      if (vc !== 0)
+        return vc;
+    }
+    return compare(kx.length, ky.length);
+  }
+  if (x instanceof Set && y instanceof Set) {
+    const ex = [...x].sort(compare), ey = [...y].sort(compare);
+    const n = Math.min(ex.length, ey.length);
+    for (let i = 0;i < n; i++) {
+      const c = compare(ex[i], ey[i]);
+      if (c !== 0)
+        return c;
+    }
+    return compare(ex.length, ey.length);
+  }
+  if (typeof x === "object" && x !== null && !Array.isArray(x) && typeof x[Symbol.iterator] === "function")
+    throw new TypeError("compare on List: force it first with List.toArray");
+  const sx = JSON.stringify(x), sy = JSON.stringify(y);
+  return sx < sy ? -1 : sx > sy ? 1 : 0;
+});`,
+  show: 'const show = (x) => {\n  const t = typeof x;\n  if (t === "string")\n    return JSON.stringify(x);\n  if (t !== "object" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(", ")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(", ")}}`;\n  if (typeof x[Symbol.iterator] === "function")\n    return "<List>";\n  if (typeof x._tag === "string") {\n    const ks = Object.keys(x).filter((k) => k !== "_tag");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(", ")})`;\n  }\n  const ks = Object.keys(x);\n  return ks.length === 0 ? String(x) : `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(", ")} }`;\n};',
+  ignore: `const ignore = (_x) => {
+  return;
+};`,
+  lt: "const lt = _curry(2, (a, b) => a < b);",
+  gt: "const gt = _curry(2, (a, b) => a > b);",
+  gte: "const gte = _curry(2, (a, b) => a >= b);",
+  lte: "const lte = _curry(2, (a, b) => a <= b);",
+  not: "const not = (b) => !b;",
+  and: "const and = _curry(2, (a, b) => a && b);",
+  or: "const or = _curry(2, (a, b) => a || b);",
+  min: "const min = _curry(2, (a, b) => Math.min(a, b));",
+  max: "const max = _curry(2, (a, b) => Math.max(a, b));",
+  pow: "const pow = _curry(2, (a, b) => a ** b);",
+  mod: "const mod = _curry(2, (a, b) => (a % b + b) % b);",
+  abs: "const abs = (x) => Math.abs(x);",
+  floor: "const floor = (x) => Math.floor(x);",
+  ceil: "const ceil = (x) => Math.ceil(x);",
+  round: "const round = (x) => Math.round(x);",
+  sign: "const sign = (x) => Math.sign(x);",
+  negate: "const negate = (x) => -x;",
+  length: "const length = (xs) => xs.length;",
+  map: "const map = _curry(2, (f, xs) => xs.map((x) => f(x)));",
+  filter: "const filter = _curry(2, (f, xs) => xs.filter((x) => f(x)));",
+  reduce: "const reduce = _curry(3, (f, init, xs) => xs.reduce((acc, x) => f(acc)(x), init));",
+  identity: "const identity = (x) => x;",
+  always: "const always = _curry(2, (x, _y) => x);",
+  compose: "const compose = _curry(3, (f, g, x) => f(g(x)));",
+  capitalize: "const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);",
+  range: `const range = _curry(2, (lo, hi) => _list(function* () {
+  for (let i = lo;i < hi; i++)
+    yield i;
+}));`,
+  iterate: `const iterate = _curry(2, (f, x) => _list(function* () {
+  let v = x;
+  for (;; ) {
+    yield v;
+    v = f(v);
+  }
+}));`,
+  repeat: `const repeat = (x) => _list(function* () {
+  for (;; )
+    yield x;
+});`,
+  take: `const take = _curry(2, (n, xs) => _list(function* () {
+  let i = 0;
+  for (const x of xs) {
+    if (i >= n)
+      break;
+    yield x;
+    i++;
+  }
+}));`,
+  takeWhile: `const takeWhile = _curry(2, (p, xs) => _list(function* () {
+  for (const x of xs) {
+    if (!p(x))
+      break;
+    yield x;
+  }
+}));`,
+  drop: `const drop = _curry(2, (n, xs) => _list(function* () {
+  let i = 0;
+  for (const x of xs) {
+    if (i < n) {
+      i++;
+      continue;
+    }
+    yield x;
+  }
+}));`,
+  fromArray: `const fromArray = (xs) => _list(function* () {
+  yield* xs;
+});`,
+  toArray: "const toArray = (xs) => [...xs];",
+  _List_map: `const _List_map = _curry(2, (f, xs) => _list(function* () {
+  for (const x of xs)
+    yield f(x);
+}));`,
+  _List_filter: `const _List_filter = _curry(2, (p, xs) => _list(function* () {
+  for (const x of xs)
+    if (p(x))
+      yield x;
+}));`,
+  _List_concat: `const _List_concat = _curry(2, (xs, ys) => _list(function* () {
+  yield* xs;
+  yield* ys;
+}));`,
+  _List_flatMap: `const _List_flatMap = _curry(2, (f, xs) => _list(function* () {
+  for (const x of xs)
+    yield* f(x);
+}));`,
+  _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(x));",
+  _Set_add: "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
+  _Set_delete: `const _Set_delete = _curry(2, (x, s) => {
+  const n = new Set(s);
+  n.delete(x);
+  return n;
+});`,
+  _Set_size: "const _Set_size = (s) => s.size;",
+  _Set_toArray: "const _Set_toArray = (s) => [...s];",
+  _Set_fromArray: "const _Set_fromArray = (xs) => new Set(xs);",
+  _Set_union: "const _Set_union = _curry(2, (a, b) => new Set([...a, ...b]));",
+  _Set_intersect: "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
+  _Set_diff: "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
+  _Map_has: "const _Map_has = _curry(2, (k, m) => m.has(k));",
+  _Map_getOr: "const _Map_getOr = _curry(3, (d, k, m) => m.has(k) ? m.get(k) : d);",
+  _Map_set: `const _Map_set = _curry(3, (k, v, m) => {
+  const n = new Map(m);
+  n.set(k, v);
+  return n;
+});`,
+  _Map_delete: `const _Map_delete = _curry(2, (k, m) => {
+  const n = new Map(m);
+  n.delete(k);
+  return n;
+});`,
+  _Map_size: "const _Map_size = (m) => m.size;",
+  _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
+  _Map_values: "const _Map_values = (m) => [...m.values()];",
+  _Map_get: "const _Map_get = _curry(2, (k, m) => m.has(k) ? Some(m.get(k)) : None);",
+  _Option_map: 'const _Option_map = _curry(2, (f, o) => o._tag === "Some" ? Some(f(o.value)) : None);',
+  _Option_flatMap: 'const _Option_flatMap = _curry(2, (f, o) => o._tag === "Some" ? f(o.value) : None);',
+  _Option_mapOr: 'const _Option_mapOr = _curry(3, (d, f, o) => o._tag === "Some" ? f(o.value) : d);',
+  _Option_exists: 'const _Option_exists = _curry(2, (p, o) => o._tag === "Some" && p(o.value));',
+  _Option_contains: 'const _Option_contains = _curry(2, (x, o) => o._tag === "Some" && eq(x, o.value));',
+  _Option_unwrapOr: 'const _Option_unwrapOr = _curry(2, (d, o) => o._tag === "Some" ? o.value : d);',
+  _Option_orElse: 'const _Option_orElse = _curry(2, (fb, o) => o._tag === "Some" ? o : fb);',
+  _Option_isSome: 'const _Option_isSome = (o) => o._tag === "Some";',
+  _Option_isNone: 'const _Option_isNone = (o) => o._tag === "None";',
+  _Result_map: 'const _Result_map = _curry(2, (f, r) => r._tag === "Ok" ? Ok(f(r.value)) : r);',
+  _Result_mapErr: 'const _Result_mapErr = _curry(2, (f, r) => r._tag === "Err" ? Err(f(r.error)) : r);',
+  _Result_flatMap: 'const _Result_flatMap = _curry(2, (f, r) => r._tag === "Ok" ? f(r.value) : r);',
+  _Result_unwrapOr: 'const _Result_unwrapOr = _curry(2, (d, r) => r._tag === "Ok" ? r.value : d);',
+  _Result_isOk: 'const _Result_isOk = (r) => r._tag === "Ok";',
+  _Result_isErr: 'const _Result_isErr = (r) => r._tag === "Err";',
+  _List_head: `const _List_head = (xs) => {
+  for (const x of xs)
+    return Some(x);
+  return None;
+};`,
+  _Array_head: "const _Array_head = (xs) => xs.length > 0 ? Some(xs[0]) : None;",
+  _Array_forEach: `const _Array_forEach = _curry(2, (f, xs) => {
+  for (const x of xs)
+    f(x);
+});`,
+  _Array_get: "const _Array_get = _curry(2, (i, xs) => i >= 0 && i < xs.length ? Some(xs[i]) : None);",
+  _Array_find: `const _Array_find = _curry(2, (p, xs) => {
+  for (const x of xs)
+    if (p(x))
+      return Some(x);
+  return None;
+});`,
+  _Array_reverse: "const _Array_reverse = (xs) => [...xs].reverse();",
+  _Array_concat: "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
+  _Array_append: "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
+  _Array_prepend: "const _Array_prepend = _curry(2, (x, xs) => [x, ...xs]);",
+  _Array_flatMap: "const _Array_flatMap = _curry(2, (f, xs) => xs.flatMap((x) => f(x)));",
+  _Array_take: "const _Array_take = _curry(2, (n, xs) => xs.slice(0, n));",
+  _Array_drop: "const _Array_drop = _curry(2, (n, xs) => xs.slice(n));",
+  _Array_tail: "const _Array_tail = (xs) => xs.slice(1);",
+  _Array_contains: "const _Array_contains = _curry(2, (x, xs) => xs.some((y) => eq(x, y)));",
+  _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
+  _Array_sortBy: "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
+  _Array_dedupe: "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
+  _Array_dedupeBy: `const _Array_dedupeBy = _curry(2, (f, xs) => {
+  const seen = [];
+  return xs.filter((x) => {
+    const k = f(x);
+    if (seen.some((s) => eq(s, k)))
+      return false;
+    seen.push(k);
+    return true;
+  });
+});`,
+  _Array_max: "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
+  _Array_min: "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
+  _Array_maxBy: "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
+  _Array_minBy: "const _Array_minBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None);",
+  _Str_length: "const _Str_length = (s) => s.length;",
+  _Str_concat: "const _Str_concat = _curry(2, (a, b) => a + b);",
+  _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
+  _Str_toLower: "const _Str_toLower = (s) => s.toLowerCase();",
+  _Str_trim: "const _Str_trim = (s) => s.trim();",
+  _Str_split: "const _Str_split = _curry(2, (sep, s) => s.split(sep));",
+  _Str_join: "const _Str_join = _curry(2, (sep, xs) => xs.join(sep));",
+  _Str_contains: "const _Str_contains = _curry(2, (needle, s) => s.includes(needle));",
+  _Str_startsWith: "const _Str_startsWith = _curry(2, (p, s) => s.startsWith(p));",
+  _Str_endsWith: "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
+  _Str_slice: "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
+  _Str_replace: "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
+  _Str_get: "const _Str_get = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s[i]) : None);",
+  _Str_codeAt: "const _Str_codeAt = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None);",
+  _Str_fromCode: "const _Str_fromCode = (n) => String.fromCharCode(n);",
+  _Str_chars: "const _Str_chars = (s) => [...s];",
+  _Str_toNumber: `const _Str_toNumber = (s) => {
+  const n = Number(s);
+  return Number.isNaN(n) ? None : Some(n);
+};`,
+  _Task_of: "const _Task_of = (x) => () => Promise.resolve(Ok(x));",
+  _Task_fail: "const _Task_fail = (e) => () => Promise.resolve(Err(e));",
+  _Task_map: 'const _Task_map = _curry(2, (f, t) => () => t().then((r) => r._tag === "Ok" ? Ok(f(r.value)) : r));',
+  _Task_mapErr: 'const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => r._tag === "Err" ? Err(f(r.error)) : r));',
+  _Task_andThen: 'const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => r._tag === "Ok" ? f(r.value)() : r));',
+  _Task_recover: 'const _Task_recover = _curry(2, (f, t) => () => t().then((r) => r._tag === "Err" ? f(r.error)() : r));',
+  _Task_fromResult: "const _Task_fromResult = (r) => () => Promise.resolve(r);",
+  _Task_match: 'const _Task_match = _curry(3, (onOk, onErr, t) => () => t().then((r) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))));',
+  _Task_delay: "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(Ok(x)), ms)));",
+  _Task_run: "const _Task_run = (t) => t();",
+  _Task_all: `const _Task_all = (ts) => () => new Promise((res) => {
+  const out = new Array(ts.length);
+  let left = ts.length;
+  let settled = false;
+  if (left === 0) {
+    res(Ok(out));
+    return;
+  }
+  ts.forEach((t, i) => {
+    t().then((r) => {
+      if (settled)
+        return;
+      if (r._tag === "Err") {
+        settled = true;
+        res(r);
+        return;
+      }
+      out[i] = r.value;
+      left -= 1;
+      if (left === 0) {
+        settled = true;
+        res(Ok(out));
+      }
+    });
+  });
+});`,
+  _Task_race: `const _Task_race = (ts) => () => new Promise((res) => {
+  let settled = false;
+  ts.forEach((t) => {
+    t().then((r) => {
+      if (settled)
+        return;
+      settled = true;
+      res(r);
+    });
+  });
+});`,
+  _Task_traverse: "const _Task_traverse = _curry(2, (f, xs) => _Task_all(xs.map(f)));"
+};
+var _runtimeDeps = {
+  add: [
+    "_curry"
+  ],
+  sub: [
+    "_curry"
+  ],
+  mul: [
+    "_curry"
+  ],
+  div: [
+    "_curry"
+  ],
+  hypot: [
+    "_curry"
+  ],
+  concat: [
+    "_curry",
+    "_List_concat"
+  ],
+  eq: [
+    "_curry"
+  ],
+  compare: [
+    "_curry"
+  ],
+  lt: [
+    "_curry"
+  ],
+  gt: [
+    "_curry"
+  ],
+  gte: [
+    "_curry"
+  ],
+  lte: [
+    "_curry"
+  ],
+  and: [
+    "_curry"
+  ],
+  or: [
+    "_curry"
+  ],
+  min: [
+    "_curry"
+  ],
+  max: [
+    "_curry"
+  ],
+  pow: [
+    "_curry"
+  ],
+  mod: [
+    "_curry"
+  ],
+  map: [
+    "_curry"
+  ],
+  filter: [
+    "_curry"
+  ],
+  reduce: [
+    "_curry"
+  ],
+  always: [
+    "_curry"
+  ],
+  compose: [
+    "_curry"
+  ],
+  range: [
+    "_list",
+    "_curry"
+  ],
+  iterate: [
+    "_list",
+    "_curry"
+  ],
+  repeat: [
+    "_list"
+  ],
+  take: [
+    "_list",
+    "_curry"
+  ],
+  takeWhile: [
+    "_list",
+    "_curry"
+  ],
+  drop: [
+    "_list",
+    "_curry"
+  ],
+  fromArray: [
+    "_list"
+  ],
+  _List_map: [
+    "_list",
+    "_curry"
+  ],
+  _List_filter: [
+    "_list",
+    "_curry"
+  ],
+  _List_concat: [
+    "_list",
+    "_curry"
+  ],
+  _List_flatMap: [
+    "_list",
+    "_curry"
+  ],
+  _Set_has: [
+    "_curry"
+  ],
+  _Set_add: [
+    "_curry"
+  ],
+  _Set_delete: [
+    "_curry"
+  ],
+  _Set_union: [
+    "_curry"
+  ],
+  _Set_intersect: [
+    "_curry"
+  ],
+  _Set_diff: [
+    "_curry"
+  ],
+  _Map_has: [
+    "_curry"
+  ],
+  _Map_getOr: [
+    "_curry"
+  ],
+  _Map_set: [
+    "_curry"
+  ],
+  _Map_delete: [
+    "_curry"
+  ],
+  _Map_get: [
+    "_curry",
+    "Some",
+    "None"
+  ],
+  _Option_map: [
+    "_curry",
+    "Some",
+    "None"
+  ],
+  _Option_flatMap: [
+    "_curry",
+    "None"
+  ],
+  _Option_mapOr: [
+    "_curry"
+  ],
+  _Option_exists: [
+    "_curry"
+  ],
+  _Option_contains: [
+    "_curry",
+    "eq"
+  ],
+  _Option_unwrapOr: [
+    "_curry"
+  ],
+  _Option_orElse: [
+    "_curry"
+  ],
+  _Result_map: [
+    "_curry",
+    "Ok"
+  ],
+  _Result_mapErr: [
+    "_curry",
+    "Err"
+  ],
+  _Result_flatMap: [
+    "_curry"
+  ],
+  _Result_unwrapOr: [
+    "_curry"
+  ],
+  _List_head: [
+    "Some",
+    "None"
+  ],
+  _Array_head: [
+    "Some",
+    "None"
+  ],
+  _Array_forEach: [
+    "_curry"
+  ],
+  _Array_get: [
+    "_curry",
+    "Some",
+    "None"
+  ],
+  _Array_find: [
+    "_curry",
+    "Some",
+    "None"
+  ],
+  _Array_concat: [
+    "_curry"
+  ],
+  _Array_append: [
+    "_curry"
+  ],
+  _Array_prepend: [
+    "_curry"
+  ],
+  _Array_flatMap: [
+    "_curry"
+  ],
+  _Array_take: [
+    "_curry"
+  ],
+  _Array_drop: [
+    "_curry"
+  ],
+  _Array_contains: [
+    "_curry",
+    "eq"
+  ],
+  _Array_sort: [
+    "compare"
+  ],
+  _Array_sortBy: [
+    "_curry",
+    "compare"
+  ],
+  _Array_dedupe: [
+    "eq"
+  ],
+  _Array_dedupeBy: [
+    "_curry",
+    "eq"
+  ],
+  _Array_max: [
+    "Some",
+    "None",
+    "compare"
+  ],
+  _Array_min: [
+    "Some",
+    "None",
+    "compare"
+  ],
+  _Array_maxBy: [
+    "_curry",
+    "Some",
+    "None",
+    "compare"
+  ],
+  _Array_minBy: [
+    "_curry",
+    "Some",
+    "None",
+    "compare"
+  ],
+  _Str_concat: [
+    "_curry"
+  ],
+  _Str_split: [
+    "_curry"
+  ],
+  _Str_join: [
+    "_curry"
+  ],
+  _Str_contains: [
+    "_curry"
+  ],
+  _Str_startsWith: [
+    "_curry"
+  ],
+  _Str_endsWith: [
+    "_curry"
+  ],
+  _Str_slice: [
+    "_curry"
+  ],
+  _Str_replace: [
+    "_curry"
+  ],
+  _Str_get: [
+    "_curry",
+    "Some",
+    "None"
+  ],
+  _Str_codeAt: [
+    "_curry",
+    "Some",
+    "None"
+  ],
+  _Str_toNumber: [
+    "Some",
+    "None"
+  ],
+  _Task_of: [
+    "Ok"
+  ],
+  _Task_fail: [
+    "Err"
+  ],
+  _Task_map: [
+    "_curry",
+    "Ok"
+  ],
+  _Task_mapErr: [
+    "_curry",
+    "Err"
+  ],
+  _Task_andThen: [
+    "_curry"
+  ],
+  _Task_recover: [
+    "_curry"
+  ],
+  _Task_match: [
+    "_curry",
+    "Ok"
+  ],
+  _Task_delay: [
+    "_curry",
+    "Ok"
+  ],
+  _Task_all: [
+    "Ok"
+  ],
+  _Task_traverse: [
+    "_curry",
+    "_Task_all"
+  ]
+};
+var _map = (o) => new Map(Object.entries(o));
+var _mapmap = (o) => new Map(Object.entries(o).map(([k, v]) => [k, _map(v)]));
+var builtins = _map(_builtins);
+var namespaces = _mapmap(_namespaces);
+var namespaceRuntime = _mapmap(_namespaceRuntime);
+var preludeJsDefs = _map(_preludeJsDefs);
+var runtimeDeps = _map(_runtimeDeps);
+
+var escChar3 = (c) => match11(c).with("\\", () => "\\\\").with('"', () => "\\\"").with(`
+`, () => "\\n").with("\t", () => "\\t").otherwise(() => c);
+var escFrom = _curry12(3, (chars, i, acc) => match11(_Array_get8(i, chars)).with({ _tag: "None" }, () => acc).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value === "$" && _Option_contains3("{", _Array_get8(i + 1, chars));
+}, () => escFrom(chars, i + 2, `${acc}\\\${`)).with({ _tag: "Some" }, ({ value: c }) => escFrom(chars, i + 1, `${acc}${escChar3(c)}`)).exhaustive());
+var escStrBody = (s) => escFrom(_Str_chars2(s), 0, "");
+var strLit2 = (s) => `"${escStrBody(s)}"`;
+var WIDTH = 80;
+var commaJoin = _curry12(2, (f, xs) => _Str_join4(", ", map5(f, xs)));
+var patField = (f) => match11(f.pat).with((_v) => {
+  const _g = _v;
+  return _g._tag === "PBind" && (({ name }) => eq11(name, f.label))(_g);
+}, ({ name }) => f.label).otherwise(() => `${f.label}: ${pattern(f.pat)}`);
+var restOf = (rest) => match11(rest).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: p }) => [`...${pattern(p)}`]).exhaustive();
+var pattern = (p) => match11(p).with({ _tag: "PAs" }, ({ pat: inner, name }) => `${pattern(inner)} as ${name}`).with({ _tag: "PWild" }, () => "_").with({ _tag: "PUnit" }, () => "()").with({ _tag: "PBind" }, ({ name }) => name).with({ _tag: "PLit" }, ({ raw }) => raw).with({ _tag: "PBool" }, ({ value }) => show3(value)).with({ _tag: "PStr" }, ({ value }) => strLit2(value)).with({ _tag: "PRecord" }, ({ fields }) => `{ ${commaJoin(patField, fields)} }`).with({ _tag: "PTuple" }, ({ elems }) => `(${commaJoin(pattern, elems)})`).with({ _tag: "PCtor" }, ({ ctor: ctorName, args, ns }) => ((head) => eq11(length9(args), 0) ? head : `${head}(${commaJoin(pattern, args)})`)(match11(ns).with({ _tag: "None" }, () => ctorName).with({ _tag: "Some" }, ({ value: alias }) => `${alias}.${ctorName}`).exhaustive())).with({ _tag: "PArr" }, ({ elems, rest }) => `[${_Str_join4(", ", _Array_concat3(map5(pattern, elems), restOf(rest)))}]`).with({ _tag: "PList" }, ({ elems, rest }) => `@{${_Str_join4(", ", _Array_concat3(map5(pattern, elems), restOf(rest)))}}`).with({ _tag: "POr" }, ({ alts }) => _Str_join4(" | ", map5(pattern, alts))).exhaustive();
+var ctorField = (f) => match11(f.name).with({ _tag: "None" }, () => showTypeExpr(f.fieldType)).with({ _tag: "Some" }, ({ value: name }) => `${name}: ${showTypeExpr(f.fieldType)}`).exhaustive();
+var ctorText = (c) => eq11(length9(c.fields), 0) ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
+var generics = (params) => eq11(length9(params), 0) ? "" : `<${_Str_join4(", ", params)}>`;
+var conventionOf = (module) => _Array_get8(0, filter((c) => _Str_startsWith3(`mochi:${c}:`, module), ["global", "send", "get", "set", "new"]));
+var externStmt = _curry12(6, (name, params, typeExpr, module, imported, curried) => {
+  const head = `extern ${name}${generics(params)} : ${showTypeExpr(typeExpr)} = `;
+  return match11(conventionOf(module)).with({ _tag: "None" }, () => `${head}${curried ? "curried " : ""}${strLit2(module)} ${strLit2(imported)}`).with({ _tag: "Some" }, ({ value: convention }) => ((first) => ((second) => `${head}${convention} ${strLit2(first)}${second}`)(eq11(imported, "") ? "" : ` ${strLit2(imported)}`))(_Str_slice3(_Str_length5(`mochi:${convention}:`), _Str_length5(module), module))).exhaustive();
+});
+var sepLine = cat([txt(","), line]);
+var bracketed = _curry12(3, (open, close, items) => eq11(length9(items), 0) ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([softline, join(sepLine, items)])), softline, txt(close)])));
+var braced = _curry12(3, (open, close, items) => eq11(length9(items), 0) ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)])));
+var parenIf = _curry12(2, (cond, d) => cond ? cat([txt("("), d, txt(")")]) : d);
+var loosePrefix = _curry12(2, (cts, e) => match11(e).with({ _tag: "ETernary" }, () => true).with({ _tag: "EPipe" }, () => true).otherwise(() => printsAsLambda(cts, e)));
+var unspan = (p) => match11(p).with({ _tag: "LPSpanned" }, ({ param: inner }) => inner).otherwise(() => p);
+var exprSpan2 = (e) => match11(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
+var noComments = { leading: new Map, trailing: new Map, flatArity: new Map, shadowed: _Set_fromArray([]), etaSkip: false, formatHooks: [], commentStarts: [] };
+var spanKey = _curry12(2, (kind, sp) => `${kind}:${show3(sp.start)}:${show3(sp.end)}`);
+var STMT = "s";
+var EXPR = "e";
+var CTOR = "c";
+var atKey = _curry12(2, (table, key) => match11(_Map_get3(key, table)).with({ _tag: "Some" }, ({ value: cs }) => cs).with({ _tag: "None" }, () => []).exhaustive());
+var pushAt = _curry12(3, (key, c, table) => _Map_set2(key, _Array_append8(c, atKey(table, key)), table));
+var lineEndFrom = _curry12(2, (src, i) => match11(_Str_get4(i, src)).with({ _tag: "None" }, () => i).with({ _tag: "Some", value: `
+` }, () => i).with({ _tag: "Some" }, () => lineEndFrom(src, i + 1)).exhaustive());
+var trimEndFrom = _curry12(2, (s, n) => eq11(n, 0) ? "" : match11(_Str_codeAt5(n - 1, s)).with({ _tag: "Some", value: 32 }, () => trimEndFrom(s, n - 1)).with({ _tag: "Some", value: 9 }, () => trimEndFrom(s, n - 1)).with({ _tag: "Some", value: 13 }, () => trimEndFrom(s, n - 1)).otherwise(() => _Str_slice3(0, n, s)));
+var trimEnd = (s) => trimEndFrom(s, _Str_length5(s));
+var commentAt = _curry12(3, (src, i, end) => {
+  const lineEnd = lineEndFrom(src, end + 1);
+  return { start: i, end, text: trimEnd(_Str_slice3(i, end, src)), blankAfter: eq11(_Str_trim(_Str_slice3(end + 1, lineEnd, src)), ""), trailing: false };
+});
+var scanComments = _curry12(4, (src, i, lineHasToken, acc) => match11(_Str_get4(i, src)).with({ _tag: "None" }, () => acc).with({ _tag: "Some", value: `
+` }, () => scanComments(src, i + 1, false, acc)).with({ _tag: "Some", value: " " }, () => scanComments(src, i + 1, lineHasToken, acc)).with({ _tag: "Some", value: "\t" }, () => scanComments(src, i + 1, lineHasToken, acc)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && eq11(_Str_codeAt5(i, src), Some10(13));
+}, () => scanComments(src, i + 1, lineHasToken, acc)).with({ _tag: "Some", value: '"' }, () => match11(skipStringLiteral(src, i)).with({ _tag: "Some" }, ({ value: end }) => scanComments(src, end, true, acc)).with({ _tag: "None" }, () => scanComments(src, i + 1, true, acc)).exhaustive()).with({ _tag: "Some", value: "/" }, () => eq11(_Str_get4(i + 1, src), Some10("/")) ? ((end) => ((c) => scanComments(src, end, lineHasToken, _Array_append8({ ...c, trailing: lineHasToken }, acc)))(commentAt(src, i, end)))(lineEndFrom(src, i)) : scanComments(src, i + 1, true, acc)).with({ _tag: "Some" }, () => scanComments(src, i + 1, true, acc)).exhaustive());
+var collectComments = (src) => scanComments(src, 0, false, []);
+var seqElemExpr2 = (el) => match11(el).with({ _tag: "SEExpr" }, ({ expr: e }) => e).with({ _tag: "SESpread" }, ({ expr: e }) => e).exhaustive();
+var exprAnchors = (e) => _Array_append8({ kind: EXPR, sp: exprSpan2(e) }, match11(e).with({ _tag: "ECall" }, ({ fn, args }) => _Array_concat3(exprAnchors(fn), _Array_flatMap(exprAnchors, args))).with({ _tag: "ELambda" }, ({ params, body }) => _Array_concat3(exprAnchors(body), _Array_flatMap((p) => match11(unspan(p)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
+}, ({ defaultValue: { value: d } }) => exprAnchors(d)).otherwise(() => []), params))).with({ _tag: "ELetIn" }, ({ value, body }) => _Array_concat3(exprAnchors(value), exprAnchors(body))).with({ _tag: "ELetBind" }, ({ value, body }) => _Array_concat3(exprAnchors(value), exprAnchors(body))).with({ _tag: "EPipe" }, ({ left, right }) => _Array_concat3(exprAnchors(left), exprAnchors(right))).with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(exprAnchors, exprs)).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => _Array_concat3(exprAnchors(cond), _Array_concat3(exprAnchors(thenE), exprAnchors(elseE)))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => _Array_concat3(exprAnchors(scrutinee), _Array_flatMap((a) => _Array_concat3(match11(a.guard).with({ _tag: "Some" }, ({ value: g }) => exprAnchors(g)).with({ _tag: "None" }, () => []).exhaustive(), exprAnchors(a.body)), arms))).with({ _tag: "ERecord" }, ({ fields, spread }) => _Array_concat3(match11(spread).with({ _tag: "Some" }, ({ value: sp }) => exprAnchors(sp)).with({ _tag: "None" }, () => []).exhaustive(), _Array_flatMap((f) => exprAnchors(f.value), fields))).with({ _tag: "EField" }, ({ target }) => exprAnchors(target)).with({ _tag: "ELoop" }, ({ params, body }) => _Array_concat3(_Array_flatMap((prm) => exprAnchors(prm.init), params), exprAnchors(body))).with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(exprAnchors, args)).with({ _tag: "ETuple" }, ({ elements }) => _Array_flatMap(exprAnchors, elements)).with({ _tag: "EArr" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "EList" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "ESet" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "EMap" }, ({ entries }) => _Array_flatMap((en) => _Array_concat3(exprAnchors(en.key), exprAnchors(en.value)), entries)).with({ _tag: "EInterp" }, ({ parts }) => _Array_flatMap((prt) => match11(prt).with({ _tag: "IPLit" }, () => []).with({ _tag: "IPExpr" }, ({ expr: ex }) => exprAnchors(ex)).exhaustive(), parts)).otherwise(() => []));
+var SPAN_SCALE = 1e7;
+var anchorKey = (a) => a.sp.start * SPAN_SCALE - a.sp.end;
+var sortAnchors = _Array_sortBy(anchorKey);
+var trailedByFrom = _curry12(5, (anchors, i, c, src, best) => match11(_Array_get8(i, anchors)).with({ _tag: "None" }, () => best).with({ _tag: "Some" }, ({ value: a }) => ((fits) => ((better) => trailedByFrom(anchors, i + 1, c, src, better ? Some10(a) : best))(and8(fits, match11(best).with({ _tag: "None" }, () => true).with({ _tag: "Some" }, ({ value: b }) => a.sp.end > b.sp.end).exhaustive())))(and8(a.sp.end <= c.start, not6(_Str_contains2(`
+`, _Str_slice3(a.sp.end, c.start, src)))))).exhaustive());
+var trailedBy = _curry12(3, (anchors, c, src) => trailedByFrom(anchors, 0, c, src, None10));
+var leadTargetFrom = _curry12(3, (anchors, i, c) => match11(_Array_get8(i, anchors)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: a }) => a.sp.start >= c.end ? Some10(a) : leadTargetFrom(anchors, i + 1, c)).exhaustive());
+var leadTarget = _curry12(2, (anchors, c) => leadTargetFrom(anchors, 0, c));
+var attachOne = _curry12(4, (anchors, src, c, tbl) => {
+  const trailed = c.trailing ? trailedBy(anchors, c, src) : None10;
+  return match11(trailed).with({ _tag: "Some" }, ({ value: a }) => Some10({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) })).with({ _tag: "None" }, () => match11(leadTarget(anchors, c)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: a }) => Some10({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) })).exhaustive()).exhaustive();
+});
+var attachFrom = _curry12(5, (comments, i, anchors, src, acc) => match11(_Array_get8(i, comments)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => attachFrom(comments, i + 1, anchors, src, match11(attachOne(anchors, src, c, acc.table)).with({ _tag: "Some" }, ({ value: table }) => ({ table, tail: acc.tail })).with({ _tag: "None" }, () => ({ table: acc.table, tail: _Array_append8(c, acc.tail) })).exhaustive())).exhaustive());
+var commentsForExpr = _curry12(2, (src, e) => attachFrom(collectComments(src), 0, sortAnchors(exprAnchors(e)), src, { table: noComments, tail: [] }).table);
+var leadingDocs = _curry12(3, (cts, kind, sp) => _Array_flatMap((c) => c.blankAfter ? [txt(c.text), hardline, hardline] : [txt(c.text), hardline], atKey(cts.leading, spanKey(kind, sp))));
+var trailingDocs = _curry12(3, (cts, kind, sp) => _Array_flatMap((c) => [lineSuffix(txt(` ${c.text}`)), breakParent], atKey(cts.trailing, spanKey(kind, sp))));
+var hasLead = _curry12(3, (cts, kind, sp) => length9(atKey(cts.leading, spanKey(kind, sp))) > 0);
+var withComments = _curry12(4, (cts, kind, sp, doc) => {
+  const lead = leadingDocs(cts, kind, sp);
+  const trail = trailingDocs(cts, kind, sp);
+  return and8(eq11(length9(lead), 0), eq11(length9(trail), 0)) ? doc : cat([...lead, doc, ...trail]);
+});
+var curryArityFrom = _curry12(3, (def, i, acc) => match11(_Str_codeAt5(i, def)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: code }) => and8(code >= 48, code <= 57) ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode2(code)}`) : acc).exhaustive());
+var commaCountFrom = _curry12(3, (s, i, acc) => match11(_Str_get4(i, s)).with({ _tag: "None" }, () => acc).with({ _tag: "Some", value: "," }, () => commaCountFrom(s, i + 1, acc + 1)).with({ _tag: "Some" }, () => commaCountFrom(s, i + 1, acc)).exhaustive());
+var indexOfFrom = _curry12(3, (needle, s, i) => i + _Str_length5(needle) > _Str_length5(s) ? -1 : eq11(_Str_slice3(i, i + _Str_length5(needle), s), needle) ? i : indexOfFrom(needle, s, i + 1));
+var arityOfDef = (def) => {
+  const curried = indexOfFrom("_curry(", def, 0);
+  return curried >= 0 ? ((digits) => eq11(_Str_length5(digits), 0) ? 0 : _Option_unwrapOr5(0, _Str_toNumber2(digits)))(curryArityFrom(def, curried + 7, "")) : ((open) => open < 0 ? 0 : ((close) => close < 0 ? 0 : ((params) => eq11(_Str_length5(params), 0) ? 0 : commaCountFrom(params, 0, 1))(_Str_trim(_Str_slice3(open + 3, close, def))))(indexOfFrom(") =>", def, open)))(indexOfFrom("= (", def, 0));
+};
+var runtimeArityOf = (jsId) => match11(_Map_get3(jsId, preludeJsDefs)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: def }) => ((n) => n >= 2 ? Some10(n) : None10)(arityOfDef(def))).exhaustive();
+var namespaceArity = _curry12(3, (shadowed, target, member) => match11(target).with({ _tag: "ERef" }, ({ name: nsName }) => _Set_has(nsName, shadowed) ? None10 : match11(_Map_get3(nsName, namespaceRuntime)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: members }) => match11(_Map_get3(member, members)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: jsId }) => runtimeArityOf(jsId)).exhaustive()).exhaustive()).otherwise(() => None10));
+var labeledCount = (params) => length9(filter((p) => match11(unspan(p)).with({ _tag: "LPLabeled" }, () => true).otherwise(() => false), params));
+var jsArity = (params) => {
+  const labs = labeledCount(params);
+  return length9(params) - labs + (labs > 0 ? 1 : 0);
+};
+var collapsedArity = (e) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => jsArity(params) + collapsedArity(body)).otherwise(() => 0);
+var patNames = (p) => match11(p).with({ _tag: "PBind" }, ({ name }) => [name]).with({ _tag: "PAs" }, ({ pat: inner, name }) => _Array_append8(name, patNames(inner))).with({ _tag: "PTuple" }, ({ elems }) => _Array_flatMap(patNames, elems)).with({ _tag: "PRecord" }, ({ fields }) => _Array_flatMap((f) => patNames(f.pat), fields)).with({ _tag: "PCtor" }, ({ args }) => _Array_flatMap(patNames, args)).with({ _tag: "PArr" }, ({ elems, rest }) => _Array_concat3(_Array_flatMap(patNames, elems), match11(rest).with({ _tag: "Some" }, ({ value: r }) => patNames(r)).with({ _tag: "None" }, () => []).exhaustive())).with({ _tag: "PList" }, ({ elems, rest }) => _Array_concat3(_Array_flatMap(patNames, elems), match11(rest).with({ _tag: "Some" }, ({ value: r }) => patNames(r)).with({ _tag: "None" }, () => []).exhaustive())).with({ _tag: "POr" }, ({ alts }) => _Array_flatMap(patNames, alts)).otherwise(() => []);
+var paramNames = (p) => match11(unspan(p)).with({ _tag: "LPName" }, ({ name }) => [name]).with({ _tag: "LPLabeled" }, ({ name }) => [name]).with({ _tag: "LPTuple" }, ({ names }) => names).with({ _tag: "LPRecord" }, ({ fields }) => fields).otherwise(() => []);
+var innerNames = (e) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => _Array_concat3(_Array_flatMap(paramNames, params), _Array_concat3(innerNames(body), _Array_flatMap((p) => match11(unspan(p)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
+}, ({ defaultValue: { value: d } }) => innerNames(d)).otherwise(() => []), params)))).with({ _tag: "ELetIn" }, ({ name, value, body }) => _Array_append8(name, _Array_concat3(innerNames(value), innerNames(body)))).with({ _tag: "ELetBind" }, ({ param, value, body }) => _Array_concat3(paramNames(param), _Array_concat3(innerNames(value), innerNames(body)))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => _Array_concat3(innerNames(scrutinee), _Array_flatMap((a) => _Array_concat3(patNames(a.pattern), _Array_concat3(match11(a.guard).with({ _tag: "Some" }, ({ value: g }) => innerNames(g)).with({ _tag: "None" }, () => []).exhaustive(), innerNames(a.body))), arms))).with({ _tag: "ELoop" }, ({ params, body }) => _Array_concat3(map5((p) => p.name, params), _Array_concat3(_Array_flatMap((p) => innerNames(p.init), params), innerNames(body)))).with({ _tag: "ECall" }, ({ fn, args }) => _Array_concat3(innerNames(fn), _Array_flatMap(innerNames, args))).with({ _tag: "EPipe" }, ({ left: l, right: r }) => _Array_concat3(innerNames(l), innerNames(r))).with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(innerNames, exprs)).with({ _tag: "ETernary" }, ({ cond: c, thenE: t, elseE: f }) => _Array_concat3(innerNames(c), _Array_concat3(innerNames(t), innerNames(f)))).with({ _tag: "ERecord" }, ({ fields, spread }) => _Array_concat3(match11(spread).with({ _tag: "Some" }, ({ value: s }) => innerNames(s)).with({ _tag: "None" }, () => []).exhaustive(), _Array_flatMap((f) => innerNames(f.value), fields))).with({ _tag: "EField" }, ({ target }) => innerNames(target)).with({ _tag: "ETuple" }, ({ elements: els }) => _Array_flatMap(innerNames, els)).with({ _tag: "EArr" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "EList" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "ESet" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "EMap" }, ({ entries }) => _Array_flatMap((en) => _Array_concat3(innerNames(en.key), innerNames(en.value)), entries)).with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(innerNames, args)).with({ _tag: "EInterp" }, ({ parts }) => _Array_flatMap((p) => match11(p).with({ _tag: "IPLit" }, () => []).with({ _tag: "IPExpr" }, ({ expr: ex }) => innerNames(ex)).exhaustive(), parts)).otherwise(() => []);
+var stmtInnerNames = (s) => match11(s).with({ _tag: "SLet" }, ({ value }) => innerNames(value)).with({ _tag: "SExpr" }, ({ value }) => innerNames(value)).with({ _tag: "SImport" }, ({ names }) => map5((n) => n.name, names)).with({ _tag: "SImportNs" }, ({ alias }) => [alias.name]).otherwise(() => []);
+var topLevelNames = (stmts) => _Array_flatMap((s) => match11(s).with({ _tag: "SLet" }, ({ name }) => [name]).with({ _tag: "SExtern" }, ({ name }) => [name]).otherwise(() => []), stmts);
+var preludeArity = (innerBound) => reduce(_curry12(2, (acc, name) => _Set_has(name, innerBound) ? acc : match11(runtimeArityOf(name)).with({ _tag: "Some" }, ({ value: n }) => _Map_set2(name, n, acc)).with({ _tag: "None" }, () => acc).exhaustive()), new Map, _Map_keys3(preludeJsDefs));
+var withLetArities = _curry12(3, (stmts, innerBound, base) => reduce(_curry12(2, (acc, s) => match11(s).with({ _tag: "SLet" }, ({ name, value }) => _Set_has(name, innerBound) ? _Map_delete(name, acc) : ((n) => n >= 2 ? _Map_set2(name, n, acc) : _Map_delete(name, acc))(collapsedArity(value))).with({ _tag: "SExtern" }, ({ name }) => _Map_delete(name, acc)).otherwise(() => acc)), base, stmts));
+var buildFlatArity = _curry12(2, (stmts, innerBound) => withLetArities(stmts, innerBound, preludeArity(innerBound)));
+var isInert = (e) => match11(e).with({ _tag: "ERef" }, () => true).with({ _tag: "ENum" }, () => true).with({ _tag: "EBool" }, () => true).with({ _tag: "EStr" }, () => true).with({ _tag: "EUnit" }, () => true).with({ _tag: "EField" }, ({ target }) => isInert(target)).otherwise(() => false);
+var mentionsRef = _curry12(2, (e, name) => match11(e).with({ _tag: "ERef" }, ({ name: n }) => eq11(n, name)).with({ _tag: "EField" }, ({ target }) => mentionsRef(target, name)).otherwise(() => false));
+var calleeArity = _curry12(2, (ctx, fn) => match11(fn).with({ _tag: "ERef" }, ({ name }) => _Map_get3(name, ctx.flatArity)).with({ _tag: "EField" }, ({ target, name: member }) => namespaceArity(ctx.shadowed, target, member)).otherwise(() => None10));
+var etaCalleeArity = _curry12(2, (ctx, fn) => match11(fn).with({ _tag: "ERef" }, ({ name }) => _Set_has(name, ctx.shadowed) ? None10 : runtimeArityOf(name)).with({ _tag: "EField" }, ({ target, name: member }) => namespaceArity(ctx.shadowed, target, member)).otherwise(() => None10));
+var PIPE_PREC = 5;
+var FAST_PIPE_PREC = 21;
+var NEQ_PREC = 8;
+var CONCAT_PREC = 10;
+var binOpInfo = (name) => match11(name).with("or", () => Some10({ symbol: "||", prec: 7 })).with("and", () => Some10({ symbol: "&&", prec: 7 })).with("eq", () => Some10({ symbol: "==", prec: 8 })).with("lt", () => Some10({ symbol: "<", prec: 8 })).with("lte", () => Some10({ symbol: "<=", prec: 8 })).with("gt", () => Some10({ symbol: ">", prec: 8 })).with("gte", () => Some10({ symbol: ">=", prec: 8 })).with("concat", () => Some10({ symbol: "++", prec: 10 })).with("add", () => Some10({ symbol: "+", prec: 10 })).with("sub", () => Some10({ symbol: "-", prec: 10 })).with("mul", () => Some10({ symbol: "*", prec: 20 })).with("div", () => Some10({ symbol: "/", prec: 20 })).with("mod", () => Some10({ symbol: "%", prec: 20 })).otherwise(() => None10);
+var isLambdaExpr = (e) => match11(e).with({ _tag: "ELambda" }, () => true).otherwise(() => false);
+var printsAsLambda = _curry12(2, (cts, e) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => or7(cts.etaSkip, _Option_isNone(etaPartial(cts, params, body)))).otherwise(() => false));
+var isLambdaOrTernary = _curry12(2, (cts, e) => match11(e).with({ _tag: "ETernary" }, () => true).otherwise(() => printsAsLambda(cts, e)));
+var binOpFor = _curry12(2, (fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+  const _g = _v;
+  return _g[0]._tag === "ERef" && _g[1].length === 2;
+}, ([{ name }]) => binOpInfo(name)).otherwise(() => None10));
+var binOpOf = (e) => match11(e).with({ _tag: "ECall" }, ({ fn, args }) => binOpFor(fn, args)).otherwise(() => None10);
+var unaryOpOf = (name) => match11(name).with("not", () => Some10("!")).with("negate", () => Some10("-")).otherwise(() => None10);
+var pipePrecOf = (e) => match11(e).with({ _tag: "EPipe" }, ({ fast }) => Some10(fast ? FAST_PIPE_PREC : PIPE_PREC)).otherwise(() => None10);
+var neqFor = _curry12(2, (fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+  const _g = _v;
+  return _g[0]._tag === "ERef" && _g[0].name === "not" && _g[1].length === 1 && _g[1][0]._tag === "ECall" && _g[1][0].fn._tag === "ERef" && _g[1][0].fn.name === "eq" && _g[1][0].args.length === 2;
+}, ([, [{ args: [l, r] }]]) => Some10(_tuple6(l, r))).otherwise(() => None10));
+var neqOperands = (e) => match11(e).with({ _tag: "ECall" }, ({ fn, args }) => neqFor(fn, args)).otherwise(() => None10);
+var infixPrec = (e) => match11(pipePrecOf(e)).with({ _tag: "Some" }, ({ value: p }) => Some10(p)).with({ _tag: "None" }, () => match11(binOpOf(e)).with({ _tag: "Some" }, ({ value: info }) => Some10(info.prec)).with({ _tag: "None" }, () => match11(neqOperands(e)).with({ _tag: "Some" }, () => Some10(NEQ_PREC)).with({ _tag: "None" }, () => None10).exhaustive()).exhaustive()).exhaustive();
+var binOperandD = _curry12(4, (cts, e, parentPrec, isRight) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : match11(infixPrec(e)).with({ _tag: "Some" }, ({ value: prec }) => parenIf(isRight ? prec <= parentPrec : prec < parentPrec, exprD(cts, e))).with({ _tag: "None" }, () => exprD(cts, e)).exhaustive());
+var pipeLeftD = _curry12(3, (cts, e, parentPrec) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : match11(infixPrec(e)).with({ _tag: "Some" }, ({ value: prec }) => parenIf(prec < parentPrec, exprD(cts, e))).with({ _tag: "None" }, () => exprD(cts, e)).exhaustive());
+var concatSegmentsFrom = _curry12(2, (e, acc) => match11(e).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ECall" && _g.fn._tag === "ERef" && _g.fn.name === "concat" && _g.args.length === 2;
+}, ({ args: [l, r] }) => concatSegmentsFrom(l, _Array_prepend3(r, acc))).otherwise(() => _Array_prepend3(e, acc)));
+var concatD = _curry12(3, (cts, l, r) => match11(concatSegmentsFrom(l, [r])).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => txt("")).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([head, ...rest]) => group(cat([binOperandD(cts, head, CONCAT_PREC, false), indent(cat(map5((s) => cat([line, txt("++ "), binOperandD(cts, s, CONCAT_PREC, true)]), rest)))]))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var binaryD = _curry12(3, (cts, fn, args) => match11(neqFor(fn, args)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some";
+}, ({ value: [l, r] }) => Some10(group(cat([binOperandD(cts, l, NEQ_PREC, false), txt(" != "), binOperandD(cts, r, NEQ_PREC, true)])))).with({ _tag: "None" }, () => match11(binOpFor(fn, args)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: info }) => match11(args).with((_v) => {
+  const _g = _v;
+  return _g.length === 2;
+}, ([l, r]) => eq11(info.symbol, "++") ? Some10(concatD(cts, l, r)) : Some10(group(cat([binOperandD(cts, l, info.prec, false), txt(` ${info.symbol} `), binOperandD(cts, r, info.prec, true)])))).otherwise(() => None10)).exhaustive()).exhaustive());
+var unaryD = _curry12(3, (cts, fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+  const _g = _v;
+  return _g[0]._tag === "ERef" && _g[1].length === 1;
+}, ([{ name }, [operand]]) => match11(unaryOpOf(name)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: symbol }) => ((forced) => Some10(cat([txt(symbol), parenIf(forced, exprD(cts, operand))])))(or7(or7(loosePrefix(cts, operand), _Option_isSome(binOpOf(operand))), _Option_isSome(neqOperands(operand))))).exhaustive()).otherwise(() => None10));
+var etaPartial = _curry12(3, (ctx, params, body) => match11(params).with((_v) => {
+  const _g = _v;
+  return _g.length === 1;
+}, ([only]) => match11(unspan(only)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "LPName" && _g.annot._tag === "None";
+}, ({ name }) => _Str_startsWith3("$", name) ? None10 : match11(body).with({ _tag: "ECall" }, () => ((flat) => match11(flat).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ECall" && _g.origin._tag === "None";
+}, ({ fn, args, span: sp }) => ((n) => eq11(n, 0) ? None10 : match11(_Array_get8(n - 1, args)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "ERef";
+}, ({ value: { name: lastName } }) => not6(eq11(lastName, name)) ? None10 : ((prefix) => and8(and8(and8(isInert(fn), allInert(prefix)), not6(mentionsRef(fn, name))), not6(anyMentions(prefix, name))) ? match11(etaCalleeArity(ctx, fn)).with({ _tag: "Some" }, ({ value: arity }) => eq11(n, arity) ? Some10(ECall(fn, prefix, None10, sp)) : None10).with({ _tag: "None" }, () => None10).exhaustive() : None10)(_Array_take(n - 1, args))).otherwise(() => None10))(length9(args))).otherwise(() => None10))(match11(flattenCallSpine(ctx, body)).with({ _tag: "Some" }, ({ value: f }) => f).with({ _tag: "None" }, () => body).exhaustive())).otherwise(() => None10)).otherwise(() => None10)).otherwise(() => None10));
+var allInert = (args) => eq11(length9(filter((a) => not6(isInert(a)), args)), 0);
+var anyMentions = _curry12(2, (args, name) => length9(filter((a) => mentionsRef(a, name), args)) > 0);
+var spineGroups = _curry12(2, (e, acc) => match11(e).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ECall" && _g.origin._tag === "Some";
+}, () => None10).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ECall" && _g.origin._tag === "None";
+}, ({ fn, args }) => spineGroups(fn, _Array_prepend3(args, acc))).otherwise(() => Some10(_tuple6(e, acc))));
+var flattenCallSpine = _curry12(2, (ctx, e) => match11(spineGroups(e, [])).with({ _tag: "None" }, () => None10).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some";
+}, ({ value: [head, groups] }) => (([callee, allGroups]) => or7(length9(allGroups) < 2, anyEmptyGroup(allGroups)) ? None10 : match11(calleeArity(ctx, callee)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: arity }) => ((args) => or7(length9(args) > arity, anyUnit(args)) ? None10 : Some10(ECall(callee, args, None10, exprSpan2(e))))(_Array_flatMap((g) => g, allGroups))).exhaustive())(match11(head).with({ _tag: "ELambda" }, ({ params, body: lbody }) => match11(etaPartial(ctx, params, lbody)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "ECall";
+}, ({ value: { fn: efn, args: eargs } }) => _tuple6(efn, _Array_prepend3(eargs, groups))).otherwise(() => _tuple6(head, groups))).otherwise(() => _tuple6(head, groups)))).exhaustive());
+var anyEmptyGroup = (groups) => length9(filter((g) => eq11(length9(g), 0), groups)) > 0;
+var anyUnit = (args) => length9(filter((a) => match11(a).with({ _tag: "EUnit" }, () => true).otherwise(() => false), args)) > 0;
+var isSectionParam = (p) => match11(unspan(p)).with({ _tag: "LPName", name: "$s" }, () => true).otherwise(() => false);
+var isRef2 = _curry12(2, (e, name) => match11(e).with({ _tag: "ERef" }, ({ name: n }) => eq11(n, name)).otherwise(() => false));
+var sectionParts = (body) => match11(neqOperands(body)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some";
+}, ({ value: [l, r] }) => Some10(_tuple6({ symbol: "!=", prec: NEQ_PREC }, l, r))).with({ _tag: "None" }, () => match11(binOpOf(body)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: info }) => match11(body).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ECall" && _g.args.length === 2;
+}, ({ args: [l, r] }) => Some10(_tuple6(info, l, r))).otherwise(() => None10)).exhaustive()).exhaustive();
+var sectionOf = _curry12(3, (cts, params, body) => match11(params).with((_v) => {
+  const _g = _v;
+  return _g.length === 1;
+}, ([only]) => isSectionParam(only) ? match11(sectionParts(body)).with({ _tag: "None" }, () => None10).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some";
+}, ({ value: [info, l, r] }) => ((lIsParam) => ((rIsParam) => eq11(lIsParam, rIsParam) ? None10 : lIsParam ? Some10(cat([txt(`(${info.symbol} `), binOperandD(cts, r, info.prec, true), txt(")")])) : Some10(cat([txt("("), binOperandD(cts, l, info.prec, false), txt(` ${info.symbol})`)])))(isRef2(r, "$s")))(isRef2(l, "$s"))).exhaustive() : None10).otherwise(() => None10));
+var composeParts = _curry12(2, (params, body) => match11(_tuple6(params, body)).with((_v) => {
+  const _g = _v;
+  return _g[0].length === 1 && _g[1]._tag === "ECall" && _g[1].args.length === 1 && _g[1].args[0]._tag === "ECall" && _g[1].args[0].args.length === 1;
+}, ([[p], { fn: right, args: [{ fn: left, args: [inner] }] }]) => match11(unspan(p)).with({ _tag: "LPName", name: "$x" }, () => isRef2(inner, "$x") ? Some10(_tuple6(left, right)) : None10).otherwise(() => None10)).otherwise(() => None10));
+var composeSegmentsFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => match11(composeParts(params, body)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some";
+}, ({ value: [left, right] }) => composeSegmentsFrom(left, _Array_prepend3(right, acc))).with({ _tag: "None" }, () => _Array_prepend3(e, acc)).exhaustive()).otherwise(() => _Array_prepend3(e, acc)));
+var destructureLetD = _curry12(3, (cts, fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+  const _g = _v;
+  return _g[0]._tag === "ELambda" && _g[0].params.length === 1 && _g[1].length === 1;
+}, ([{ params: [p], body: lbody }, [value]]) => match11(unspan(p)).with({ _tag: "LPName" }, () => None10).otherwise(() => Some10(letLikeD(cts, `let ${paramText(cts, p)}`, value, lbody)))).otherwise(() => None10));
+var refoldCall = _curry12(3, (cts, fn, args) => match11(destructureLetD(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => Some10(d)).with({ _tag: "None" }, () => match11(binaryD(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => Some10(d)).with({ _tag: "None" }, () => unaryD(cts, fn, args)).exhaustive()).exhaustive());
+var labeledFieldD = _curry12(2, (cts, f) => match11(f.value).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ERef" && (({ name }) => eq11(name, f.name))(_g);
+}, ({ name }) => txt(`~${f.name}`)).otherwise(() => cat([txt(`~${f.name}=`), exprD(cts, f.value)])));
+var callArgDocs = _curry12(3, (cts, args, origin) => match11(origin).with({ _tag: "Some", value: "labeled" }, () => match11(_Array_get8(length9(args) - 1, args)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "ERecord" && _g.value.spread._tag === "None";
+}, ({ value: { fields } }) => _Array_concat3(map5((x) => exprD(cts, x), _Array_take(length9(args) - 1, args)), map5((f) => labeledFieldD(cts, f), fields))).otherwise(() => map5((x) => exprD(cts, x), args))).otherwise(() => map5((x) => exprD(cts, x), args)));
+var labeledParamText = _curry12(5, (cts, name, annot, optional, defaultValue) => {
+  const ann = match11(annot).with({ _tag: "Some" }, ({ value: te }) => `: ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive();
+  const def = match11(defaultValue).with({ _tag: "Some" }, ({ value: d }) => ` = ${flat(exprD(cts, d))}`).with({ _tag: "None" }, () => "").exhaustive();
+  return `~${name}${optional ? "?" : ""}${ann}${def}`;
+});
+var paramText = _curry12(2, (cts, p) => match11(unspan(p)).with({ _tag: "LPName" }, ({ name, annot }) => match11(annot).with({ _tag: "Some" }, ({ value: te }) => `${name}: ${showTypeExpr(te)}`).with({ _tag: "None" }, () => name).exhaustive()).with({ _tag: "LPTuple" }, ({ names }) => `(${_Str_join4(", ", names)})`).with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join4(", ", fields)} }`).with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) => labeledParamText(cts, name, annot, optional, defaultValue)).with({ _tag: "LPSpanned" }, () => "").exhaustive());
+var paramsText = _curry12(2, (cts, ps) => match11(ps).with((_v) => {
+  const _g = _v;
+  return _g.length === 1;
+}, ([only]) => match11(unspan(only)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "LPName" && _g.annot._tag === "None";
+}, ({ name }) => name).otherwise(() => `(${commaJoin((p) => paramText(cts, p), ps)})`)).otherwise(() => `(${commaJoin((p) => paramText(cts, p), ps)})`));
+var quoted = (body) => concat(concat('"', body), '"');
+var interpText = _curry12(2, (cts, parts) => {
+  const hole = (ex) => concat(concat(concat("$", "{"), flat(exprD(cts, ex))), "}");
+  return quoted(_Str_join4("", map5((p) => match11(p).with({ _tag: "IPLit" }, ({ value }) => escStrBody(value)).with({ _tag: "IPExpr" }, ({ expr: ex }) => hole(ex)).exhaustive(), parts)));
+});
+var discardedFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "ELetIn", name: "_" }, ({ value, body }) => discardedFrom(body, _Array_append8(value, acc))).otherwise(() => eq11(length9(acc), 0) ? None10 : Some10(_Array_append8(e, acc))));
+var discardedLetExprs = (e) => discardedFrom(e, []);
+var doBlockD = _curry12(2, (cts, exprs) => cat([txt("{"), indent(cat([hardline, join(cat([txt(";"), hardline]), map5((x) => exprD(cts, x), exprs))])), hardline, txt("}")]));
+var doD = _curry12(2, (cts, exprs) => cat([txt("do "), doBlockD(cts, exprs)]));
+var lambdaD = _curry12(3, (cts, params, body) => match11(sectionOf(cts, params, body)).with({ _tag: "Some" }, ({ value: section }) => section).with({ _tag: "None" }, () => match11(cts.etaSkip ? None10 : etaPartial(cts, params, body)).with({ _tag: "Some" }, ({ value: eta }) => exprD(cts, eta)).with({ _tag: "None" }, () => match11(composeParts(params, body)).with({ _tag: "Some" }, () => match11(composeSegmentsFrom(ELambda(params, body, { start: 0, end: 0 }), [])).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => txt("")).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([head, ...rest]) => group(cat([operandD(cts, head), indent(cat(map5((s) => cat([line, txt(">> "), operandD(cts, s)]), rest)))]))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+})).with({ _tag: "None" }, () => plainLambdaD({ ...cts, etaSkip: isLambdaExpr(body) }, params, body)).exhaustive()).exhaustive()).exhaustive());
+var plainLambdaD = _curry12(3, (cts, params, body) => {
+  const head = txt(`${paramsText(cts, params)} =>`);
+  return match11(body).with({ _tag: "EDo" }, ({ exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)])).otherwise(() => match11(discardedLetExprs(body)).with({ _tag: "Some" }, ({ value: exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)])).with({ _tag: "None" }, () => match11(body).with((_v) => {
+    const _g = _v;
+    return _g._tag === "EMatch" && not6(hasLead(cts, EXPR, exprSpan2(body)));
+  }, () => cat([head, txt(" "), exprD(cts, body)])).otherwise(() => group(cat([head, indent(cat([line, exprD(cts, body)]))])))).exhaustive());
+});
+var condD = _curry12(2, (cts, c) => match11(c).with({ _tag: "ETernary" }, () => cat([txt("("), exprD(cts, c), txt(")")])).otherwise(() => exprD(cts, c)));
+var branchD = _curry12(3, (cts, marker, e) => hasLead(cts, EXPR, exprSpan2(e)) ? cat([txt(marker), indent(cat([hardline, exprD(cts, e)]))]) : cat([txt(`${marker} `), exprD(cts, e)]));
+var ternaryArmsFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => ternaryArmsFrom(elseE, _Array_append8({ cond, thenE }, acc))).otherwise(() => _tuple6(acc, e)));
+var ternaryRestParts = _curry12(3, (cts, arms, i) => match11(_Array_get8(i, arms)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: a }) => [line, hasLead(cts, EXPR, exprSpan2(a.cond)) ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))]) : cat([txt(": "), condD(cts, a.cond)]), line, branchD(cts, "?", a.thenE), ...ternaryRestParts(cts, arms, i + 1)]).exhaustive());
+var ternaryD = _curry12(2, (cts, e) => (([arms, elseE]) => match11(_Array_get8(0, arms)).with({ _tag: "None" }, () => txt("")).with({ _tag: "Some" }, ({ value: first }) => group(cat([condD(cts, first.cond), indent(cat([line, branchD(cts, "?", first.thenE), ...ternaryRestParts(cts, arms, 1), line, branchD(cts, ":", elseE)]))]))).exhaustive())(ternaryArmsFrom(e, [])));
+var printsAsLet = (e) => match11(e).with({ _tag: "ELetIn" }, () => _Option_isNone(discardedLetExprs(e))).with({ _tag: "ELetBind" }, () => true).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ECall" && _g.fn._tag === "ELambda" && _g.fn.params.length === 1 && _g.args.length === 1;
+}, ({ fn: { params: [p] } }) => match11(unspan(p)).with({ _tag: "LPName" }, () => false).otherwise(() => true)).otherwise(() => false);
+var letLikeD = _curry12(4, (cts, head, value, body) => {
+  const cont = printsAsLet(body) ? cat([line, exprD(cts, body)]) : indent(cat([line, exprD(cts, body)]));
+  return group(cat([txt(`${head} = `), ...leadingDocs(cts, EXPR, exprSpan2(value)), exprRaw(cts, value), txt(" in"), ...trailingDocs(cts, EXPR, exprSpan2(value)), cont]));
+});
+var recordFieldD = _curry12(2, (cts, f) => match11(f.value).with((_v) => {
+  const _g = _v;
+  return _g._tag === "ERef" && (({ name }) => eq11(name, f.name))(_g);
+}, ({ name }) => exprD(cts, f.value)).otherwise(() => cat([txt(`${f.name}: `), exprD(cts, f.value)])));
+var recordD = _curry12(3, (cts, fields, spread) => {
+  const fieldDocs = map5((f) => recordFieldD(cts, f), fields);
+  return braced("{", "}", match11(spread).with({ _tag: "Some" }, ({ value: s }) => _Array_prepend3(cat([txt("..."), exprD(cts, s)]), fieldDocs)).with({ _tag: "None" }, () => fieldDocs).exhaustive());
+});
+var seqElemD = _curry12(2, (cts, el) => match11(el).with({ _tag: "SEExpr" }, ({ expr: e }) => exprD(cts, e)).with({ _tag: "SESpread" }, ({ expr: e }) => cat([txt("..."), exprD(cts, e)])).exhaustive());
+var pipeSegmentsFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "EPipe", fast: false }, ({ left, right }) => pipeSegmentsFrom(left, _Array_prepend3(right, acc))).otherwise(() => _Array_prepend3(e, acc)));
+var matchArmD = _curry12(2, (cts, a) => {
+  const guard = match11(a.guard).with({ _tag: "Some" }, ({ value: g }) => ` when ${flat(exprD(cts, g))}`).with({ _tag: "None" }, () => "").exhaustive();
+  const head = txt(`| ${pattern(a.pattern)}${guard} =>`);
+  return hasLead(cts, EXPR, exprSpan2(a.body)) ? cat([head, indent(cat([hardline, exprD(cts, a.body)]))]) : cat([head, txt(" "), indent(exprD(cts, a.body))]);
+});
+var matchD = _curry12(3, (cts, scrutinee, arms) => group(cat([txt(`switch ${flat(exprD(cts, scrutinee))} {`), indent(cat(map5((a) => cat([line, matchArmD(cts, a)]), arms))), line, txt("}")])));
+var loopD = _curry12(3, (cts, params, body) => group(cat([txt("loop ("), join(txt(", "), map5((p) => cat([txt(`${p.name} = `), exprD(cts, p.init)]), params)), txt(") {"), indent(cat([line, exprD(cts, body)])), line, txt("}")])));
+var lastArgHugs = (body) => match11(body).with({ _tag: "EMatch" }, () => true).with({ _tag: "ELoop" }, () => true).with({ _tag: "EDo" }, () => true).otherwise(() => _Option_isSome(discardedLetExprs(body)));
+var callArgsD = _curry12(5, (cts, fn, args, origin, asCallee) => match11(refoldCall(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => d).with({ _tag: "None" }, () => match11(flattenCallSpine(cts, ECall(fn, args, origin, { start: 0, end: 0 }))).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "ECall";
+}, ({ value: { fn: ffn, args: fargs, origin: forigin } }) => plainCallD(cts, ffn, fargs, forigin, asCallee)).otherwise(() => plainCallD(cts, fn, args, origin, asCallee))).exhaustive());
+var plainCallD = _curry12(5, (cts, fn, args, origin, asCallee) => {
+  const fnD = calleeD(cts, fn);
+  return match11(args).with((_v) => {
+    const _g = _v;
+    return _g.length === 0;
+  }, () => cat([fnD, txt("()")])).with((_v) => {
+    const _g = _v;
+    return _g.length === 1 && _g[0]._tag === "ETuple";
+  }, ([{ elements, span: tsp }]) => group(cat([fnD, txt("("), exprD(cts, ETuple(elements, tsp)), txt(")")]))).otherwise(() => ((argDocs) => match11(_Array_get8(length9(args) - 1, args)).with((_v) => {
+    const _g = _v;
+    return _g._tag === "Some" && _g.value._tag === "ELambda";
+  }, ({ value: { body: lbody } }) => group(cat([fnD, txt("("), join(txt(", "), argDocs), or7(lastArgHugs(lbody), not6(asCallee)) ? txt(")") : cat([softline, txt(")")])]))).otherwise(() => cat([fnD, group(cat([txt("("), indent(cat([softline, join(cat([txt(","), line]), argDocs)])), softline, txt(")")]))])))(callArgDocs(cts, args, origin)));
+});
+var callD = _curry12(4, (cts, fn, args, origin) => callArgsD(cts, fn, args, origin, false));
+var calleeD = _curry12(2, (cts, e) => match11(hooked(cts, e)).with({ _tag: "ECall" }, ({ fn, args, origin }) => callArgsD(cts, fn, args, origin, true)).otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))));
+var operandD = _curry12(2, (cts, e) => parenIf(loosePrefix(cts, e), exprD(cts, e)));
+var memberD = _curry12(2, (cts, e) => match11(e).with({ _tag: "ERecord" }, () => cat([txt("("), exprD(cts, e), txt(")")])).otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))));
+var pipeD = _curry12(2, (cts, e) => match11(e).with((_v) => {
+  const _g = _v;
+  return _g._tag === "EPipe" && _g.right._tag === "ECall" && _g.fast === true;
+}, ({ left, right: { fn: rfn, args: rargs, origin: rorigin } }) => cat([pipeLeftD(cts, left, FAST_PIPE_PREC), txt("->"), callD(cts, rfn, rargs, rorigin)])).otherwise(() => ((segments) => match11(segments).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => txt("")).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([head, ...rest]) => group(cat([pipeLeftD(cts, head, PIPE_PREC), indent(cat(map5((s) => cat([line, txt("|> "), operandD(cts, s)]), rest)))]))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}))(pipeSegmentsFrom(e, []))));
+var letBindHead = _curry12(3, (cts, monad, param) => `let${eq11(monad, "Task") ? "!" : "?"} ${paramText(cts, param)}`);
+var hooked = _curry12(2, (cts, e) => eq11(length9(cts.formatHooks), 0) ? e : ((sp) => _Option_isSome(_Array_find((s) => and8(s > sp.start, s < sp.end), cts.commentStarts)) ? e : _Option_unwrapOr5(e, runFormatHooks(cts.formatHooks, e)))(exprSpan2(e)));
+var exprRaw = _curry12(2, (cts, e) => exprRawOf(cts, hooked(cts, e)));
+var exprRawOf = _curry12(2, (cts, e) => match11(e).with({ _tag: "ENum" }, ({ raw }) => txt(raw)).with({ _tag: "EUnit" }, () => txt("()")).with({ _tag: "EBool" }, ({ value }) => txt(show3(value))).with({ _tag: "EStr" }, ({ value }) => txt(strLit2(value))).with({ _tag: "EInterp" }, ({ parts }) => txt(interpText(cts, parts))).with({ _tag: "ERef" }, ({ name }) => txt(name)).with({ _tag: "ECall" }, ({ fn, args, origin }) => callD(cts, fn, args, origin)).with({ _tag: "ELambda" }, ({ params, body }) => lambdaD(cts, params, body)).with({ _tag: "EPipe" }, () => pipeD(cts, e)).with({ _tag: "EDo" }, ({ exprs }) => doD(cts, exprs)).with({ _tag: "ETernary" }, () => ternaryD(cts, e)).with({ _tag: "ERecord" }, ({ fields, spread }) => recordD(cts, fields, spread)).with({ _tag: "EField" }, ({ target, name }) => cat([memberD(cts, target), txt(`.${name}`)])).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => matchD(cts, scrutinee, arms)).with({ _tag: "ELetIn" }, ({ name, annot, value, body }) => match11(discardedLetExprs(e)).with({ _tag: "Some" }, ({ value: exprs }) => doD(cts, exprs)).with({ _tag: "None" }, () => ((ann) => letLikeD(cts, `let ${name}${ann}`, value, body))(match11(annot).with({ _tag: "Some" }, ({ value: te }) => ` : ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive())).exhaustive()).with({ _tag: "ELetBind" }, ({ param, monad, value, body }) => letLikeD(cts, letBindHead(cts, monad, param), value, body)).with({ _tag: "ELoop" }, ({ params, body }) => loopD(cts, params, body)).with({ _tag: "ERecur" }, ({ args }) => cat([txt("recur"), bracketed("(", ")", map5((x) => exprD(cts, x), args))])).with({ _tag: "ETuple" }, ({ elements }) => bracketed("(", ")", map5((x) => exprD(cts, x), elements))).with({ _tag: "EArr" }, ({ elements }) => bracketed("[", "]", map5((el) => seqElemD(cts, el), elements))).with({ _tag: "EList" }, ({ elements }) => bracketed("@{", "}", map5((el) => seqElemD(cts, el), elements))).with({ _tag: "ESet" }, ({ elements }) => bracketed("#{", "}", map5((el) => seqElemD(cts, el), elements))).with({ _tag: "EMap" }, ({ entries }) => braced("#{", "}", map5((en) => cat([exprD(cts, en.key), txt(": "), exprD(cts, en.value)]), entries))).exhaustive());
+var aliasFieldText = (f) => `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
+var ctorArms = _curry12(3, (cts, ctors, i) => match11(_Array_get8(i, ctors)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: c }) => _Array_prepend3(cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]), ctorArms(cts, ctors, i + 1))).exhaustive());
+var typeStmtD = _curry12(6, (cts, name, params, ctors, alias, aliasType) => {
+  const head = `type ${name}${generics(params)}`;
+  return match11(alias).with({ _tag: "Some" }, ({ value: fields }) => cat([txt(`${head} = `), braced("{", "}", map5((f) => txt(aliasFieldText(f)), fields))])).with({ _tag: "None" }, () => match11(aliasType).with({ _tag: "Some" }, ({ value: te }) => txt(`${head} = ${showTypeExpr(te)}`)).with({ _tag: "None" }, () => eq11(length9(ctors), 0) ? txt(`extern ${head}`) : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))])).exhaustive()).exhaustive();
+});
+var importStmtD = _curry12(2, (names, from) => group(cat([txt("import "), braced("{", "}", map5((n) => txt(n.name), names)), txt(` from ${strLit2(from)}`)])));
+var importNsStmtD = _curry12(2, (alias, from) => txt(`import * as ${alias} from ${strLit2(from)}`));
+var exprD = _curry12(2, (cts, e) => withComments(cts, EXPR, exprSpan2(e), exprRaw(cts, e)));
+var expPrefix = (exported) => exported ? "export " : "";
+var fieldOf = _curry12(2, (e, tmp) => match11(e).with((_v) => {
+  const _g = _v;
+  return _g._tag === "EField" && _g.target._tag === "ERef";
+}, ({ target: { name: target }, name }) => eq11(target, tmp) ? Some10(name) : None10).otherwise(() => None10));
+var destructureFieldsFrom = _curry12(4, (stmts, j, tmp, acc) => match11(_Array_get8(j, stmts)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SLet";
+}, ({ value: { name, value } }) => match11(fieldOf(value, tmp)).with({ _tag: "Some" }, ({ value: f }) => eq11(f, name) ? destructureFieldsFrom(stmts, j + 1, tmp, _Array_append8(f, acc)) : acc).with({ _tag: "None" }, () => acc).exhaustive()).otherwise(() => acc));
+var stmtDoc = _curry12(4, (cts, stmts, i, src) => match11(_Array_get8(i, stmts)).with({ _tag: "None" }, () => ({ doc: txt(""), consumed: 1 })).with({ _tag: "Some" }, ({ value: s }) => match11(s).with({ _tag: "SImport" }, ({ names, from }) => ({ doc: importStmtD(names, from), consumed: 1 })).with({ _tag: "SImportNs" }, ({ alias, from }) => ({ doc: importNsStmtD(alias.name, from), consumed: 1 })).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported }) => ({ doc: cat([txt(expPrefix(exported)), typeStmtD(cts, name, params, ctors, alias, aliasType)]), consumed: 1 })).with({ _tag: "SExtern" }, ({ name, params, typeExpr: te, module, imported, curried, exported }) => ({ doc: txt(`${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`), consumed: 1 })).with({ _tag: "SError" }, ({ span: sp }) => ({ doc: verbatim(_Str_slice3(sp.start, sp.end, src)), consumed: 1 })).with({ _tag: "SExpr" }, ({ value }) => ({ doc: exprD(cts, value), consumed: 1 })).with({ _tag: "SLet" }, ({ name, annot, value, exported }) => _Str_startsWith3("$", name) ? ((fields) => ({ doc: cat([txt(`${expPrefix(exported)}let { ${_Str_join4(", ", fields)} } = `), exprD(cts, value)]), consumed: length9(fields) + 1 }))(destructureFieldsFrom(stmts, i + 1, name, [])) : ((ann) => ({ doc: cat([txt(`${expPrefix(exported)}let ${name}${ann} = `), exprD(cts, value)]), consumed: 1 }))(match11(annot).with({ _tag: "Some" }, ({ value: te }) => ` : ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive())).exhaustive()).exhaustive());
+var stmtSpan = (s) => match11(s).with({ _tag: "SLet" }, ({ span: sp }) => sp).with({ _tag: "SType" }, ({ span: sp }) => sp).with({ _tag: "SExtern" }, ({ span: sp }) => sp).with({ _tag: "SImport" }, ({ span: sp }) => sp).with({ _tag: "SImportNs" }, ({ span: sp }) => sp).with({ _tag: "SExpr" }, ({ span: sp }) => sp).with({ _tag: "SError" }, ({ span: sp }) => sp).exhaustive();
+var blankBetweenFrom = _curry12(3, (s, i, seenNl) => match11(_Str_get4(i, s)).with({ _tag: "None" }, () => false).with({ _tag: "Some", value: `
+` }, () => or7(seenNl, blankBetweenFrom(s, i + 1, true))).with({ _tag: "Some", value: " " }, () => blankBetweenFrom(s, i + 1, seenNl)).with({ _tag: "Some", value: "\t" }, () => blankBetweenFrom(s, i + 1, seenNl)).with({ _tag: "Some", value: "r" }, () => blankBetweenFrom(s, i + 1, seenNl)).with({ _tag: "Some" }, () => blankBetweenFrom(s, i + 1, false)).exhaustive());
+var blankBetween = (gap) => blankBetweenFrom(gap, 0, false);
+var anchorStart = _curry12(2, (cts, s) => {
+  const sp = stmtSpan(s);
+  return match11(_Array_get8(0, atKey(cts.leading, spanKey(STMT, sp)))).with({ _tag: "Some" }, ({ value: c }) => c.start).with({ _tag: "None" }, () => sp.start).exhaustive();
+});
+var stmtParts = _curry12(6, (cts, stmts, i, src, prevEnd, acc) => match11(_Array_get8(i, stmts)).with({ _tag: "None" }, () => _tuple6(acc, prevEnd)).with({ _tag: "Some" }, ({ value: cur }) => ((sep) => ((printed) => ((lastIdx) => ((end) => stmtParts(cts, stmts, i + printed.consumed, src, Some10(end), _Array_concat3(acc, _Array_append8(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep))))(match11(_Array_get8(lastIdx, stmts)).with({ _tag: "Some" }, ({ value: last }) => stmtSpan(last).end).with({ _tag: "None" }, () => 0).exhaustive()))(i + printed.consumed - 1))(stmtDoc(cts, stmts, i, src)))(match11(prevEnd).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: pe }) => blankBetween(_Str_slice3(pe, anchorStart(cts, cur), src)) ? [hardline, hardline] : [hardline]).exhaustive())).exhaustive());
+var tailParts = _curry12(3, (tail, src, prevEnd) => match11(_Array_get8(0, tail)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: first }) => ((sep) => _Array_append8(join(hardline, map5((c) => txt(c.text), tail)), sep))(match11(prevEnd).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: pe }) => blankBetween(_Str_slice3(pe, first.start, src)) ? [hardline, hardline] : [hardline]).exhaustive())).exhaustive());
+var programDoc = _curry12(4, (cts, stmts, src, tail) => (([parts, prevEnd]) => cat(_Array_concat3(_Array_concat3(parts, tailParts(tail, src, prevEnd)), [hardline])))(stmtParts(cts, stmts, 0, src, None10, [])));
+var stmtAnchors = (s) => _Array_append8({ kind: STMT, sp: stmtSpan(s) }, match11(s).with({ _tag: "SLet" }, ({ value }) => exprAnchors(value)).with({ _tag: "SExpr" }, ({ value }) => exprAnchors(value)).with({ _tag: "SType" }, ({ ctors }) => map5((c) => ({ kind: CTOR, sp: c.span }), ctors)).otherwise(() => []));
+var inErrorSpanFrom = _curry12(3, (stmts, i, c) => match11(_Array_get8(i, stmts)).with({ _tag: "None" }, () => false).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SError";
+}, ({ value: { span: sp } }) => or7(and8(c.start >= sp.start, c.start < sp.end), inErrorSpanFrom(stmts, i + 1, c))).with({ _tag: "Some" }, () => inErrorSpanFrom(stmts, i + 1, c)).exhaustive());
+var inErrorSpan = _curry12(2, (stmts, c) => inErrorSpanFrom(stmts, 0, c));
+var hasOpenDirective = (src) => match11(_Array_get8(0, _Str_split3(`
+`, _Str_trim(src)))).with({ _tag: "Some" }, ({ value: first }) => eq11(_Str_trim(first), '"use open"')).with({ _tag: "None" }, () => false).exhaustive();
+var formatProgram = _curry12(2, (stmts, src) => formatProgramWith(stmts, src, []));
+var formatProgramWith = _curry12(3, (stmts, src, formatHooks) => {
+  const innerBound = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
+  const shadowed = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
+  const comments = filter((c) => not6(inErrorSpan(stmts, c)), collectComments(src));
+  const base = { ...noComments, flatArity: buildFlatArity(stmts, innerBound), shadowed, formatHooks, commentStarts: map5((c) => c.start, comments) };
+  const attached = attachFrom(comments, 0, sortAnchors(_Array_flatMap(stmtAnchors, stmts)), src, { table: base, tail: [] });
+  const body = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
+  return hasOpenDirective(src) ? `"use open"
+
+${body}` : body;
+});
 export {
+  formatHooksFor,
+  formatProgram,
+  formatProgramWith,
+  freshRowVar,
+  freshVar,
   lex,
   parse,
-  parseRecovering
+  parseRecovering,
+  rExtend,
+  tArrow,
+  tCon,
+  tLit,
+  tRecord,
+  tUnion
 };

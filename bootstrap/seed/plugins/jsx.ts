@@ -1293,4 +1293,6 @@ export const jsxPlugin = {
   name: "jsx",
   parse: Some(parseJsxAtom),
   inferCall: Some(inferJsxCallHook),
+  format: None,
+  dtsBinding: None,
 };

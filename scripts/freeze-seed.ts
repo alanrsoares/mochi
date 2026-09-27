@@ -24,6 +24,7 @@ import {
   sha256,
   walkFiles,
 } from "./lib";
+import { hostTypesDts } from "./lib/host-types";
 
 // Package export, not `@mochi/runtime`: the latter is the published name the
 // CLI writes into *user* TS emit, and it does not resolve in-repo. Nested
@@ -130,7 +131,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\n',
+  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "./types.ts";\n',
 );
 execFileSync(
   "bun",
@@ -150,6 +151,18 @@ execFileSync(
 );
 stripBundleSourceLabels(join(tmp, "syntax.bundle.cjs"));
 rmSync(join(tmp, "syntax-entry.ts"), { force: true });
+
+// Types host plugins build against (ADR 0109), copied out of the emit so hosts
+// never compile the seed itself under their own, stricter flags.
+writeFileSync(
+  join(tmp, "host-types.d.ts"),
+  hostTypesDts(tmp, [
+    { file: "ast.ts", names: ["Expr", "Field", "Pattern", "Span", "Stmt", "TypeExpr"] },
+    { file: "infer.ts", names: ["IErr", "InferApi", "LocTok"] },
+    { file: "lexer.ts", names: ["Tok"] },
+    { file: "types.ts", names: ["Row", "St", "Ty"] },
+  ]),
+);
 
 const hashesOf = (dir: string): Record<string, string> => {
   const out: Record<string, string> = {};

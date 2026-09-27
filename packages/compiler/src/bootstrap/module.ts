@@ -12,36 +12,36 @@ import type {
 type SeedModule = {
   buildModulesWith: (
     entry: string,
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   buildModulesTsWith: (
     entry: string,
     runtimeImport: string,
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   compileGraphWith: (
     modules: BootstrapGraphModule[],
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
   inferGraphTypesWith: (
     modules: BootstrapGraphModule[],
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
   freshInferGraphState: () => BootstrapGraphInferState;
   inferGraphTypesFromWith: (
     state: BootstrapGraphInferState,
     modules: BootstrapGraphModule[],
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic>;
   freshRecoveryGraphState: () => BootstrapRecoveryGraphState;
   recoverGraphFromWith: (
     state: BootstrapRecoveryGraphState,
     modules: BootstrapGraphModule[],
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapRecoveryGraphState;
   compileGraphRecoveringWith: (
     modules: BootstrapGraphModule[],
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapGraphRecovery;
   exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
   symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
@@ -49,7 +49,7 @@ type SeedModule = {
   emitDtsForFileWith: (
     entry: string,
     runtimeImport: string,
-    opts: BootstrapOptions,
+    opts: SeedOptions,
   ) => BootstrapResult<string, BootstrapDiagnostic>;
 };
 
@@ -57,6 +57,8 @@ import {
   type BootstrapOptions,
   defaultBootstrapOptions,
   editorBootstrapOptions,
+  type SeedOptions,
+  toSeedOptions,
 } from "./options.ts";
 import { loadSeed } from "./seed-path.ts";
 
@@ -76,7 +78,7 @@ export const buildModulesBootstrapWith = (
   entry: string,
   opts: BootstrapOptions,
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
-  seed.buildModulesWith(entry, opts);
+  seed.buildModulesWith(entry, toSeedOptions(opts));
 
 export const buildModulesBootstrap = (
   entry: string,
@@ -88,7 +90,7 @@ export const buildModulesTsBootstrapWith = (
   runtimeImport: string,
   opts: BootstrapOptions,
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
-  seed.buildModulesTsWith(entry, runtimeImport, opts);
+  seed.buildModulesTsWith(entry, runtimeImport, toSeedOptions(opts));
 
 export const buildModulesTsBootstrap = (
   entry: string,
@@ -99,12 +101,12 @@ export const buildModulesTsBootstrap = (
 export const compileGraphBootstrap = (
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
-  seed.compileGraphWith(modules, editorBootstrapOptions);
+  seed.compileGraphWith(modules, toSeedOptions(editorBootstrapOptions));
 
 export const inferGraphTypesBootstrap = (
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic> =>
-  seed.inferGraphTypesWith(modules, defaultBootstrapOptions);
+  seed.inferGraphTypesWith(modules, toSeedOptions(defaultBootstrapOptions));
 
 export const freshInferGraphStateBootstrap = (): BootstrapGraphInferState =>
   seed.freshInferGraphState();
@@ -113,7 +115,7 @@ export const inferGraphTypesFromBootstrap = (
   state: BootstrapGraphInferState,
   modules: BootstrapGraphModule[],
 ): BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic> =>
-  seed.inferGraphTypesFromWith(state, modules, defaultBootstrapOptions);
+  seed.inferGraphTypesFromWith(state, modules, toSeedOptions(defaultBootstrapOptions));
 
 export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState =>
   seed.freshRecoveryGraphState();
@@ -121,11 +123,13 @@ export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState 
 export const recoverGraphFromBootstrap = (
   state: BootstrapRecoveryGraphState,
   modules: BootstrapGraphModule[],
-): BootstrapRecoveryGraphState => seed.recoverGraphFromWith(state, modules, editorBootstrapOptions);
+): BootstrapRecoveryGraphState =>
+  seed.recoverGraphFromWith(state, modules, toSeedOptions(editorBootstrapOptions));
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],
-): BootstrapGraphRecovery => seed.compileGraphRecoveringWith(modules, editorBootstrapOptions);
+): BootstrapGraphRecovery =>
+  seed.compileGraphRecoveringWith(modules, toSeedOptions(editorBootstrapOptions));
 
 export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins =>
   seed.exportedOrigins(stmts);
@@ -149,7 +153,7 @@ export const emitDtsForFileBootstrapWith = (
   runtimeImport: string,
   opts: BootstrapOptions,
 ): BootstrapResult<string, BootstrapDiagnostic> =>
-  seed.emitDtsForFileWith(entry, runtimeImport, opts);
+  seed.emitDtsForFileWith(entry, runtimeImport, toSeedOptions(opts));
 
 export const emitDtsForFileBootstrap = (
   entry: string,

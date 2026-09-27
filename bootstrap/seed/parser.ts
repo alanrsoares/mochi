@@ -4166,7 +4166,7 @@ const stmtsLoop: _Curry<
  * The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
  * tooling that wants the partial tree calls this and says so.
  */
-export const parseRecovering: <A, B>(
+export const parseRecovering: <A, B, C, D>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4187,14 +4187,16 @@ export const parseRecovering: <A, B>(
           e: {
             unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
             inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
-          } & B,
+          } & D,
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
+      format: Option<B>;
+      dtsBinding: Option<C>;
     }[]
   >,
 ) => { stmts: Stmt[]; diagnostics: PErr[] } = _curry(
   2,
-  <A, B>(
+  <A, B, C, D>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4215,9 +4217,11 @@ export const parseRecovering: <A, B>(
             e: {
               unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
               inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
-            } & B,
+            } & D,
           ) => Result<Option<[Ty, St]>, BoundErr>
         >;
+        format: Option<B>;
+        dtsBinding: Option<C>;
       }[]
     >,
   ) => {
@@ -4245,7 +4249,7 @@ export const parse: (toks: LocTok[]) => Result<Stmt[], PErr> = (toks: LocTok[]) 
  * this reports the first diagnostic in source order.
  * `pluginsOpt`: None = default builtins (JSX on); Some([]) = hard opt-out.
  */
-export const parseWith: <A, B>(
+export const parseWith: <A, B, C, D>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4266,14 +4270,16 @@ export const parseWith: <A, B>(
           e: {
             unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
             inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
-          } & B,
+          } & D,
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
+      format: Option<B>;
+      dtsBinding: Option<C>;
     }[]
   >,
 ) => Result<Stmt[], PErr> = _curry(
   2,
-  <A, B>(
+  <A, B, C, D>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4294,9 +4300,11 @@ export const parseWith: <A, B>(
             e: {
               unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
               inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
-            } & B,
+            } & D,
           ) => Result<Option<[Ty, St]>, BoundErr>
         >;
+        format: Option<B>;
+        dtsBinding: Option<C>;
       }[]
     >,
   ) => {

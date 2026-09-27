@@ -34,7 +34,8 @@ import {
   TyVar
 } from "./types.mochi"
 import { jsDoc } from "./codegen.mochi"
-import { typedProgramWith } from "./compile.mochi"
+import { defaultOpts, typedProgramWith } from "./compile.mochi"
+import { dtsHooksFor, runDtsHooks } from "./extensions.mochi"
 
 /// Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
 /// resolve, without needing the module graph: single-file dts sees the `tqual`
@@ -236,7 +237,8 @@ let typeDeclsFrom = (stmts, aliases, recs, qualify, docs, i) => switch Array.get
 
 /// `export declare const` per top-level binding that has an inferred scheme.
 /// `$`-prefixed synthetic binders declare nothing.
-let bindingDeclsFrom = (stmts, env, recs, qualify, docs, i) => switch Array.get(i, stmts) {
+/// A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead.
+let bindingDeclsFrom = (stmts, env, recs, qualify, docs, dtsHooks, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SLet(name, _, _, value, _, doc, _)) => let rest = bindingDeclsFrom(
       stmts,
@@ -244,18 +246,42 @@ let bindingDeclsFrom = (stmts, env, recs, qualify, docs, i) => switch Array.get(
       recs,
       qualify,
       docs,
+      dtsHooks,
       i + 1
     ) in
+    let decl = ts =>
+      "${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};" in
       Str.startsWith("$", name)
         ? rest
         : switch Map.get(name, env) {
           | None => rest
           | Some(sc) => Array.prepend(
-              "${docs ? jsDoc(doc) : ""}export declare const ${name}: ${bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) }, value, recs)};",
+              decl(
+                runDtsHooks(dtsHooks, name, value)
+                  |> Option.unwrapOr(
+                    bindingTsType(
+                      {
+                        vars: sc.vars,
+                        rvars: sc.rvars,
+                        ty: qualifyTy(sc.ty, qualify)
+                      },
+                      value,
+                      recs
+                    )
+                  )
+              ),
               rest
             )
         }
-  | Some(_) => bindingDeclsFrom(stmts, env, recs, qualify, docs, i + 1)
+  | Some(_) => bindingDeclsFrom(
+      stmts,
+      env,
+      recs,
+      qualify,
+      docs,
+      dtsHooks,
+      i + 1
+    )
 }
 
 /// A builtin variant named in an exported type (`Option<number>` from `Map.get`)
@@ -353,7 +379,7 @@ let qualConRecs = (keys, qualify, aliases, recs, i) => switch Array.get(i, keys)
 }
 
 /// Emit `.d.ts` text from an already-typed program.
-export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs) =>
+export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs, dtsHooks) =>
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
@@ -366,7 +392,7 @@ export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, 
     0
   ) in
   let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
-  let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, 0) in
+  let bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, dtsHooks, 0) in
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let core = Str.join("\n", Array.concat(types, bindings)) in
@@ -420,7 +446,7 @@ export let qualifierMapOf = (quals, local) =>
 
 /// Source -> `.d.ts` text. Infers first; type errors surface as diagnostics.
 export let emitDtsFromTyped = (stmts, env, aliases, qualify, runtimeImport) =>
-  emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true)
+  emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true, [])
 
 /// Source -> `.d.ts` text under caller options. Infers first; type errors
 /// surface as diagnostics.
@@ -433,18 +459,9 @@ export let emitDtsTextWith = (src, runtimeImport, opts) =>
         r.aliases,
         #{},
         runtimeImport,
-        opts.docs
+        opts.docs,
+        dtsHooksFor(opts.plugins)
       ))
 
 export let emitDtsText = (src, runtimeImport) =>
-  emitDtsTextWith(
-    src,
-    runtimeImport,
-    {
-      open: false,
-      runtime: true,
-      docs: true,
-      moduleExt: ".js",
-      strictEntry: false
-    }
-  )
+  emitDtsTextWith(src, runtimeImport, defaultOpts)
