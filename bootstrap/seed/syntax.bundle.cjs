@@ -12023,7 +12023,166 @@ var formatProgramWith = _curry12(3, (stmts, src, formatHooks) => {
 
 ${body}` : body;
 });
+import { _Array_contains, _Array_prepend as _Array_prepend5, _Map_get as _Map_get4, _Map_getOr, _Map_set as _Map_set4, _Map_values, _Set_add, _Set_diff, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_toArray, _Str_codeAt as _Str_codeAt6, _curry as _curry14, _tuple as _tuple7, and as and9, map as map7 } from "@mochi/compiler/runtime";
+import { match as match13 } from "@onrails/pattern";
+
+import { Err as Err6, Ok as Ok7, Some as Some11, _Array_get as _Array_get9, _Array_prepend as _Array_prepend4, _Map_has, _Map_set as _Map_set3, _Option_unwrapOr as _Option_unwrapOr6, _Result_flatMap as _Result_flatMap5, _Result_map as _Result_map5, _curry as _curry13, _done as _done5, _recur as _recur5, eq as eq12, filter as filter2, length as length10, map as map6, not as not8, show as show5 } from "@mochi/compiler/runtime";
+import { match as match12 } from "@onrails/pattern";
+var emptyRegistry = { ctors: new Map, types: new Map };
+var primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
+var keysOfFrom = _curry13(2, (fields, i) => match12(_Array_get9(i, fields)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: f }) => _Array_prepend4(_Option_unwrapOr6(`_${show5(i)}`, f.name), keysOfFrom(fields, i + 1))).exhaustive());
+var keysOf = (fields) => keysOfFrom(fields, 0);
+var builtinSpan = { start: 0, end: 0 };
+var builtinTypeDecls = [{ name: "Option", params: ["a"], ctors: [{ name: "Some", fields: [{ name: Some11("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "None", fields: [], span: builtinSpan }] }, { name: "Result", params: ["a", "e"], ctors: [{ name: "Ok", fields: [{ name: Some11("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "Err", fields: [{ name: Some11("error"), fieldType: TyName("e", builtinSpan) }], span: builtinSpan }] }];
+var declaresType = _curry13(3, (stmts, i, name) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => false).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType";
+}, ({ value: { name: n } }) => eq12(n, name) ? true : declaresType(stmts, i + 1, name)).with({ _tag: "Some" }, () => declaresType(stmts, i + 1, name)).exhaustive());
+var builtinDeclsFor = (stmts) => filter2((bt) => not8(declaresType(stmts, 0, bt.name)), builtinTypeDecls);
+var seedRegCtorsFrom = _curry13(4, (ctors, i, owner, acc) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => seedRegCtorsFrom(ctors, i + 1, owner, _Map_has(c.name, acc) ? acc : _Map_set3(c.name, { owner, arity: length10(c.fields) }, acc))).exhaustive());
+var seedRegDeclsFrom = _curry13(3, (decls, i, reg) => match12(_Array_get9(i, decls)).with({ _tag: "None" }, () => reg).with({ _tag: "Some" }, ({ value: bt }) => seedRegDeclsFrom(decls, i + 1, { ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors), types: _Map_set3(bt.name, map6((c) => c.name, bt.ctors), reg.types) })).exhaustive());
+var ctorErr = _curry13(2, (message, sp) => ({ message, start: sp.start, end: sp.end }));
+var ctorsInto = _curry13(5, (ctors, i, owner, sp, acc) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => Ok7(acc)).with({ _tag: "Some" }, ({ value: c }) => _Map_has(c.name, acc) ? Err6(ctorErr(`duplicate constructor '${c.name}'`, sp)) : ctorsInto(ctors, i + 1, owner, sp, _Map_set3(c.name, { owner, arity: length10(c.fields) }, acc))).exhaustive());
+var buildLoop = _curry13(3, (stmts, i, reg) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => Ok7(reg)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType";
+}, ({ value: { name, ctors, span: sp } }) => _Map_has(name, reg.types) ? Err6(ctorErr(`duplicate type '${name}'`, sp)) : _Result_flatMap5((cs) => buildLoop(stmts, i + 1, { ctors: cs, types: _Map_set3(name, map6((c) => c.name, ctors), reg.types) }), ctorsInto(ctors, 0, name, sp, reg.ctors))).with({ _tag: "Some" }, () => buildLoop(stmts, i + 1, reg)).exhaustive());
+var exportedRegLoop = _curry13(3, (stmts, i0, reg0) => {
+  let i = i0;
+  let reg = reg0;
+  while (true) {
+    const _step = match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => _done5(reg)).with((_v) => {
+      const _g = _v;
+      return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+    }, ({ value: { name, ctors } }) => _recur5(i + 1, { ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors), types: _Map_set3(name, map6((c) => c.name, ctors), reg.types) })).with({ _tag: "Some" }, () => _recur5(i + 1, reg)).exhaustive();
+    if (_step._tag === "recur") {
+      [i, reg] = _step.args;
+      continue;
+    }
+    return _step.value;
+  }
+});
+var ctorKeysInto = _curry13(3, (ctors, i, m) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => ctorKeysInto(ctors, i + 1, _Map_set3(name, keysOf(fields), m))).exhaustive());
+var ctorKeysFrom = _curry13(3, (stmts, i, m) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType";
+}, ({ value: { ctors } }) => ctorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => ctorKeysFrom(stmts, i + 1, m)).exhaustive());
+var ctorKeysFromStmts = _curry13(2, (stmts, m) => ctorKeysFrom(stmts, 0, m));
+var seedKeyCtorsFrom = _curry13(3, (ctors, i, m) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => seedKeyCtorsFrom(ctors, i + 1, _Map_has(name, m) ? m : _Map_set3(name, keysOf(fields), m))).exhaustive());
+var seedKeyDeclsFrom = _curry13(3, (decls, i, m) => match12(_Array_get9(i, decls)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { ctors } }) => seedKeyDeclsFrom(decls, i + 1, seedKeyCtorsFrom(ctors, 0, m))).exhaustive());
+var seedBuiltinCtorKeys = _curry13(2, (stmts, m) => seedKeyDeclsFrom(builtinDeclsFor(stmts), 0, m));
+var exportedCtorKeysFrom = _curry13(3, (stmts, i, m) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+}, ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m)).exhaustive());
+
+var tNumber = tPrim("number");
+var tBool = tPrim("bool");
+var tString = tPrim("string");
+var primType = (name) => match13(name).with("float", () => tNumber).with("int", () => tNumber).with("string", () => tString).with("bool", () => tBool).otherwise(() => tPrim(name));
+var emptyVarSets = { tv: _Set_fromArray2([]), rv: _Set_fromArray2([]) };
+var diffVarSets = _curry14(2, (a, b) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }));
+var collect = _curry14(2, (t, acc) => match13(t).with({ _tag: "TyVar" }, ({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv })).with({ _tag: "TyCon" }, ({ args }) => collectArgs(args, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc))).with({ _tag: "TyRecord" }, ({ row }) => collectRow(row, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => collectArgs(members, acc)).exhaustive());
+var collectArgs = _curry14(2, (args, acc) => match13(args).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => acc).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([a, ...rest]) => collectArgs(rest, collect(a, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var collectRow = _curry14(2, (row, acc) => match13(row).with({ _tag: "RowVar" }, ({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) })).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectRow(rest, collect(fieldType, acc))).with({ _tag: "RowEmpty" }, () => acc).exhaustive());
+var freeInType = (t) => collect(t, emptyVarSets);
+var collectFree = _curry14(4, (t, bound, st, acc) => match13(t).with({ _tag: "TyVar" }, ({ id }) => _Set_has2(id, bound.tv) ? acc : match13(_Map_get4(id, st.tv)).with({ _tag: "Some" }, ({ value: next }) => collectFree(next, bound, st, acc)).with({ _tag: "None" }, () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv })).exhaustive()).with({ _tag: "TyCon" }, ({ args }) => collectFreeArgs(args, bound, st, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collectFree(toT, bound, st, collectFree(fromT, bound, st, acc))).with({ _tag: "TyRecord" }, ({ row }) => collectFreeRow(row, bound, st, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => collectFreeArgs(members, bound, st, acc)).exhaustive());
+var collectFreeArgs = _curry14(4, (args, bound, st, acc) => match13(args).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => acc).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var collectFreeRow = _curry14(4, (row, bound, st, acc) => match13(row).with({ _tag: "RowVar" }, ({ id }) => _Set_has2(id, bound.rv) ? acc : match13(_Map_get4(id, st.rv)).with({ _tag: "Some" }, ({ value: next }) => collectFreeRow(next, bound, st, acc)).with({ _tag: "None" }, () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) })).exhaustive()).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc))).with({ _tag: "RowEmpty" }, () => acc).exhaustive());
+var freeInScheme = _curry14(3, (sc, st, acc) => collectFree(sc.ty, { tv: _Set_fromArray2(sc.vars), rv: _Set_fromArray2(sc.rvars) }, st, acc));
+var freeInEnvFrom = _curry14(3, (schemes, st, acc) => match13(schemes).with((_v) => _v.length === 0, () => acc).with((_v) => _v.length >= 1, ([sc, ...rest]) => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var freeInEnv = _curry14(2, (env, st) => freeInEnvFrom(_Map_values(env), st, emptyVarSets));
+var generalize = _curry14(4, (env, t, st, widen) => {
+  const zt = widen ? widenLits(zonk(t, st)) : zonk(t, st);
+  const free = diffVarSets(freeInType(zt), freeInEnv(env, st));
+  return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
+});
+var widenLits = (t) => match13(t).with({ _tag: "TySingleton", base: "string" }, () => tString).with({ _tag: "TySingleton" }, () => tNumber).with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map7((m) => match13(m).with({ _tag: "TySingleton" }, () => m).otherwise(() => widenLits(m)), members))).with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map7(widenLits, args))).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(widenLits(fromT), widenLits(toT))).with({ _tag: "TyRecord" }, ({ row }) => tRecord(widenRow(row))).with({ _tag: "TyVar" }, () => t).exhaustive();
+var widenRow = (row) => match13(row).with({ _tag: "RowEmpty" }, () => row).with({ _tag: "RowVar" }, () => row).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => rField(label, widenLits(fieldType), widenRow(rest), optional)).exhaustive();
+var instMapFrom = _curry14(3, (vars, acc, st) => match13(vars).with((_v) => _v.length === 0, () => _tuple7(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fv, st1]) => instMapFrom(rest, _Map_set4(v, fv, acc), st1))(freshVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var instRowMapFrom = _curry14(3, (vars, acc, st) => match13(vars).with((_v) => _v.length === 0, () => _tuple7(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fr, st1]) => instRowMapFrom(rest, _Map_set4(v, fr, acc), st1))(freshRowVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var instSub = _curry14(3, (t, tmap, rmap) => match13(t).with({ _tag: "TyVar" }, ({ id }) => _Map_getOr(t, id, tmap)).with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map7((a) => instSub(a, tmap, rmap), args))).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap))).with({ _tag: "TyRecord" }, ({ row }) => tRecord(instSubRow(row, tmap, rmap))).with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value)).with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map7((m) => instSub(m, tmap, rmap), members))).exhaustive());
+var instSubRow = _curry14(3, (row, tmap, rmap) => match13(row).with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap)).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => rField(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap), optional)).with({ _tag: "RowEmpty" }, () => row).exhaustive());
+var instantiate = _curry14(2, (sc, st) => (([tmap, st1]) => (([rmap, st2]) => _tuple7(instSub(sc.ty, tmap, rmap), st2))(instRowMapFrom(sc.rvars, new Map, st1)))(instMapFrom(sc.vars, new Map, st)));
+var isUpperStart = (s) => match13(_Str_codeAt6(0, s)).with({ _tag: "Some" }, ({ value: c }) => and9(c >= 65, c <= 90)).with({ _tag: "None" }, () => false).exhaustive();
+var typeExprListToType = _curry14(5, (tes, vars, st, aliases, expanding) => match13(tes).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => _tuple7([], vars, st)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([te, ...rest]) => (([t, vars1, st1]) => (([restTs, vars2, st2]) => _tuple7(_Array_prepend5(t, restTs), vars2, st2))(typeExprListToType(rest, vars1, st1, aliases, expanding)))(typeExprToType(te, vars, st, aliases, expanding))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var typeExprName = _curry14(5, (name, vars, st, aliases, expanding) => _Array_contains(name, primTypeNames) ? _tuple7(primType(name), vars, st) : match13(_Map_get4(name, vars)).with({ _tag: "Some" }, ({ value: v }) => _tuple7(v, vars, st)).with({ _tag: "None" }, () => match13(_Map_get4(name, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st1]) => _tuple7(t, vars, st1))(aliasRow(name, info, [], st, aliases, expanding))).with({ _tag: "None" }, () => isUpperStart(name) ? _tuple7(tPrim(name), vars, st) : (([v, st1]) => _tuple7(v, _Map_set4(name, v, vars), st1))(freshVar(st))).exhaustive()).exhaustive());
+var typeExprToType = _curry14(5, (te, vars, st, aliases, expanding) => match13(te).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe }) => (([fromT, vars1, st1]) => (([toT, vars2, st2]) => _tuple7(tArrow(fromT, toT), vars2, st2))(typeExprToType(toTe, vars1, st1, aliases, expanding)))(typeExprToType(fromTe, vars, st, aliases, expanding))).with({ _tag: "TyApp" }, ({ ctor, args: argTes }) => (([args, vars1, st1]) => match13(_Map_get4(ctor, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st2]) => _tuple7(t, vars1, st2))(aliasRow(ctor, info, args, st1, aliases, expanding))).with({ _tag: "None" }, () => _tuple7(tCon(ctor, args), vars1, st1)).exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding))).with({ _tag: "TyTuple" }, ({ elems: elemTes }) => (([elems, vars1, st1]) => _tuple7(tTuple(elems), vars1, st1))(typeExprListToType(elemTes, vars, st, aliases, expanding))).with({ _tag: "TyList" }, ({ elem: elemTe }) => (([elemT, vars1, st1]) => _tuple7(tCon("Array", [elemT]), vars1, st1))(typeExprToType(elemTe, vars, st, aliases, expanding))).with({ _tag: "TyName" }, ({ name }) => typeExprName(name, vars, st, aliases, expanding)).with({ _tag: "TyQual" }, ({ alias, name, args: argTes }) => (([args, vars1, st1]) => match13(_Map_get4(`${alias}.${name}`, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st2]) => _tuple7(t, vars1, st2))(aliasRow(name, info, args, st1, aliases, expanding))).with({ _tag: "None" }, () => _tuple7(tCon(name, args), vars1, st1)).exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding))).with({ _tag: "TyLit" }, ({ value }) => _tuple7(tLit(value), vars, st)).with({ _tag: "TyUnion" }, ({ members }) => (([ts, vars1, st1]) => _tuple7(tUnion(ts), vars1, st1))(typeExprListToType(members, vars, st, aliases, expanding))).exhaustive());
+var aliasLocalVarsFrom = _curry14(3, (params, args, st) => match13(params).with((_v) => _v.length === 0, () => _tuple7(new Map, st)).with((_v) => _v.length >= 1, ([p, ...restParams]) => match13(args).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([a, ...restArgs]) => (([restMap, st1]) => _tuple7(_Map_set4(p, a, restMap), st1))(aliasLocalVarsFrom(restParams, restArgs, st))).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => (([v, st1]) => (([restMap, st2]) => _tuple7(_Map_set4(p, v, restMap), st2))(aliasLocalVarsFrom(restParams, [], st1)))(freshVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+})).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var aliasFieldsFrom = _curry14(5, (fields, vars, st, aliases, expanding) => match13(fields).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => _tuple7(RowEmpty, st)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([fld, ...rest]) => (([ft, vars1, st1]) => (([restRow, st2]) => _tuple7(rField(fld.name, ft, restRow, fld.optional), st2))(aliasFieldsFrom(rest, vars1, st1, aliases, expanding)))(typeExprToType(fld.fieldType, vars, st, aliases, expanding))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var aliasRow = _curry14(6, (name, info, args, st, aliases, expanding) => _Set_has2(name, expanding) ? _tuple7(tCon(name, args), st) : match13(info.expr).with({ _tag: "Some" }, ({ value: te }) => (([local, st1]) => (([t, _, st2]) => _tuple7(t, st2))(typeExprToType(te, local, st1, aliases, _Set_add(name, expanding))))(aliasLocalVarsFrom(info.params, args, st))).with({ _tag: "None" }, () => (([local, st1]) => {
+  const next = _Set_add(name, expanding);
+  return (([row, st2]) => _tuple7(tRecord(row), st2))(aliasFieldsFrom(info.fields, local, st1, aliases, next));
+})(aliasLocalVarsFrom(info.params, args, st))).exhaustive());
+var pvarsFrom = _curry14(2, (params, st) => match13(params).with((_v) => _v.length === 0, () => _tuple7(new Map, [], st)).with((_v) => _v.length >= 1, ([p, ...rest]) => (([v, st1]) => (([restMap, restVars, st2]) => _tuple7(_Map_set4(p, v, restMap), _Array_prepend5(v, restVars), st2))(pvarsFrom(rest, st1)))(freshVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var ctorFieldsArrowFrom = _curry14(5, (fields, pvars, st, aliases, result) => match13(fields).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => _tuple7(result, st)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([fld, ...rest]) => (([ft, _, st1]) => (([restT, st2]) => _tuple7(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray2([])))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var ctorScheme = _curry14(5, (typeName, params, c, st, aliases) => (([pvars, pvarTypes, st1]) => {
+  const result = tCon(typeName, pvarTypes);
+  return (([ty, st2]) => {
+    const sets = collect(ty, emptyVarSets);
+    return _tuple7({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty }, st2);
+  })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
+})(pvarsFrom(params, st)));
 export {
+  UNIT,
   formatHooksFor,
   formatProgram,
   formatProgramWith,
@@ -12034,9 +12193,13 @@ export {
   parseRecovering,
   rExtend,
   tArrow,
+  tBool,
   tCon,
   tLit,
+  tNumber,
+  tPrim,
   tRecord,
+  tString,
   tUnion,
   zonk
 };

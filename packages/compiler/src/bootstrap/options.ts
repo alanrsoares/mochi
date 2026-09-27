@@ -1,4 +1,4 @@
-import type { Expr, IErr, InferApi, LocTok, St, Tok, TsApi, Ty } from "./types.ts";
+import type { HostPlugin } from "./types.ts";
 
 /**
  * The knobs the self-hosted core takes: `open` selects open-world inference (a
@@ -27,52 +27,49 @@ export type BootstrapOptions = {
 
 export type BootstrapOption<T> = { _tag: "Some"; value: T } | { _tag: "None" };
 
-type HookResult<T, E> = { _tag: "Ok"; value: T } | { _tag: "Err"; error: E };
-
-/** Parse-hook failure: parse diagnostics carry no help or suggestions. */
-export type BootstrapHookErr = { message: string; start: number; end: number };
-
-type Token = LocTok<Tok>;
-
-/** Parses the expression at `pos`, returning it and the next position. */
-export type BootstrapParseExpr = (
-  toks: readonly Token[],
-  pos: number,
-) => HookResult<[Expr, number], BootstrapHookErr>;
-
-/** `Ok(None)` falls through to the next hook; `Ok(Some(…))` claims the tokens. */
-export type BootstrapParseHook = (
-  toks: readonly Token[],
-  pos: number,
-  parseExpr: BootstrapParseExpr,
-) => HookResult<BootstrapOption<[Expr, number]>, BootstrapHookErr>;
-
-/** `Ok(None)` falls through; `Ok(Some([ty, st]))` types the call. */
-export type BootstrapInferCallHook = (
-  fn: Expr,
-  args: readonly Expr[],
-  origin: BootstrapOption<string>,
-  st: St,
-  api: InferApi,
-) => HookResult<BootstrapOption<[Ty, St]>, IErr>;
-
-/** A rewritten node for the printer to lay out, or `null` to leave it alone. */
-export type BootstrapFormatHook = (expr: Expr) => Expr | null;
+type SomeOf<O> = O extends { _tag: "Some"; value: infer T } ? T : never;
 
 /**
- * A binding's `.d.ts` type text, or `null` for the inferred one. `ty` is the
- * binding's inferred type; `api` renders a type as the core would.
+ * `bootstrap/infer.mochi`'s `HostPlugin`, as the seed reads it. Generated into
+ * `host-types.d.ts` by the freeze; every hook type below is derived from it, so
+ * a hook signature changed in Mochi is a type error here (ADR 0109).
  */
-export type BootstrapDtsBindingHook = (
-  name: string,
-  value: Expr,
-  ty: Ty,
-  api: TsApi,
-) => string | null;
+export type SeedPlugin = HostPlugin;
+
+/** The hook a seed plugin field holds, unwrapped from its `Option`. */
+type SeedHook<K extends keyof SeedPlugin> = SomeOf<SeedPlugin[K]>;
+
+/** A seed hook as hosts write it: `null` in place of `None`, `T` for `Some(T)`. */
+type Nullable<F> = F extends (...args: infer A) => infer R
+  ? (...args: A) => SomeOf<R> | null
+  : never;
+
+/** `Ok(None)` falls through to the next hook; `Ok(Some(…))` claims the tokens. */
+export type BootstrapParseHook = SeedHook<"parse">;
+
+/** Parses the expression at `pos`, returning it and the next position. */
+export type BootstrapParseExpr = Parameters<BootstrapParseHook>[2];
+
+/** Parse-hook failure: parse diagnostics carry no help or suggestions. */
+export type BootstrapHookErr = Extract<ReturnType<BootstrapParseHook>, { _tag: "Err" }>["error"];
+
+/** `Ok(None)` falls through; `Ok(Some([ty, st]))` types the call. */
+export type BootstrapInferCallHook = SeedHook<"inferCall">;
+
+/** A rewritten node for the printer to lay out, or `null` to leave it alone. */
+export type BootstrapFormatHook = Nullable<SeedHook<"format">>;
+
+/**
+ * A binding's `.d.ts` type text, or `null` for the inferred one. Takes the
+ * binding's name, value, inferred type, and a `TsApi` that renders a type as
+ * the core would.
+ */
+export type BootstrapDtsBindingHook = Nullable<SeedHook<"dtsBinding">>;
 
 /**
  * A host plugin over the self-hosted core (ADR 0109). Every hook is optional;
  * `toSeedPlugins` turns the record into the seed's `Option`-shaped `Plugin`.
+ * `bindingType` stays builtin-only (the JSX plugin's ADR 0055 rendering).
  */
 export type BootstrapPlugin = {
   name: string;
@@ -80,19 +77,6 @@ export type BootstrapPlugin = {
   inferCall?: BootstrapInferCallHook;
   format?: BootstrapFormatHook;
   dtsBinding?: BootstrapDtsBindingHook;
-};
-
-/** `bootstrap/infer.mochi`'s `Plugin`, as the seed reads it. */
-export type SeedPlugin = {
-  name: string;
-  parse: BootstrapOption<BootstrapParseHook>;
-  inferCall: BootstrapOption<BootstrapInferCallHook>;
-  format: BootstrapOption<(expr: Expr) => BootstrapOption<Expr>>;
-  dtsBinding: BootstrapOption<
-    (name: string, value: Expr, ty: Ty, api: TsApi) => BootstrapOption<string>
-  >;
-  /** Builtin-only for now (the JSX plugin's ADR 0055 rendering); hosts pass none. */
-  bindingType: { _tag: "None" };
 };
 
 /** The options record as the seed reads it: `plugins` is an `Option`. */

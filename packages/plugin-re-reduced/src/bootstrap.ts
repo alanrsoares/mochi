@@ -33,8 +33,12 @@ import {
   freshVar,
   rExtend,
   tArrow,
+  tBool,
   tCon,
+  tNumber,
   tRecord,
+  tString,
+  tUnit,
   zonk,
 } from "@mochi/compiler/bootstrap/types";
 import { isErr, ok, type Result } from "@onrails/result";
@@ -50,10 +54,6 @@ const INTENTS = "Intent";
 
 const none = { _tag: "None" } as const;
 const rEmpty: Row = { _tag: "RowEmpty" };
-const tUnit = tCon("unit", []);
-const tString = tCon("string", []);
-const tNumber = tCon("number", []);
-const tBool = tCon("bool", []);
 const tIntent = tCon("Intent", []);
 const tReaction = tCon("Reaction", []);
 const tArray = (t: Ty): Ty => tCon("Array", [t]);

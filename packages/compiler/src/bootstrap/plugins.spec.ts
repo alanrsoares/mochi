@@ -10,13 +10,13 @@ import {
   defaultBootstrapOptions,
 } from "./options.ts";
 import { compileBootstrapSyncWith } from "./sync.ts";
-import { tCon } from "./types.ts";
+import { tNumber } from "./types.ts";
 
 // A host plugin in the self-hosted shape (ADR 0109): claims `magic(…)` calls
 // and types them as `number`, so an otherwise unbound name compiles.
 const claimMagic: BootstrapInferCallHook = (fn, _args, _origin, st) =>
   fn._tag === "ERef" && fn.name === "magic"
-    ? { _tag: "Ok", value: { _tag: "Some", value: [tCon("number", []), st] } }
+    ? { _tag: "Ok", value: { _tag: "Some", value: [tNumber, st] } }
     : { _tag: "Ok", value: { _tag: "None" } };
 
 const magicPlugin: BootstrapPlugin = { name: "magic", inferCall: claimMagic };

@@ -22,6 +22,7 @@ import {
   tCon,
   tLit,
   tRecord,
+  tString,
   tUnion,
 } from "@mochi/compiler/bootstrap/types";
 import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
@@ -69,7 +70,7 @@ const inferTwFactory: BootstrapInferCallHook = (fn, args, _origin, st0, api) => 
     for (const vf of variants.fields) {
       const keys: Ty[] =
         vf.value._tag === "ERecord" ? vf.value.fields.map((k) => tLit(k.name)) : [];
-      row = rExtend(vf.name, keys.length > 0 ? tUnion(keys) : tCon("string", []), row);
+      row = rExtend(vf.name, keys.length > 0 ? tUnion(keys) : tString, row);
     }
   return {
     _tag: "Ok",
