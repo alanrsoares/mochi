@@ -64,6 +64,7 @@ import { inferProgramWith, inferProgramTypesWith } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
 import * as Infer from "./infer";
 import { emitTsModuleWith } from "./codegen-ts";
+import { bindingHooksFor } from "./extensions";
 import { showType } from "./types";
 import { widenLits } from "./schemes";
 import { builtins } from "./prelude.gen.mjs";
@@ -376,6 +377,7 @@ export const compileTsWith: _Curry<
               runtimeDeps,
               runtimeImport,
               opts.docs,
+              bindingHooksFor(opts.plugins),
             ),
           inferProgramTypesWith(
             stmts,

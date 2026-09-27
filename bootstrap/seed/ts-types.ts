@@ -299,6 +299,13 @@ const aliasNameFor: _Curry<[row: Row, env: TsEnv], Option<string>> = _curry(
           rowShapeKey(row, env.vars),
         ),
 );
+/**
+ * The record alias `row` prints as under `recs`, for plugin hooks (ADR 0055).
+ */
+export const rowAliasName: _Curry<[row: Row, recs: Map<string, string>], Option<string>> = _curry(
+  2,
+  (row: Row, recs: Map<string, string>) => aliasNameFor(row, recsEnv(recs)),
+);
 const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: TsEnv) =>
   match(aliasNameFor(row, env))
     .with({ _tag: "Some" }, ({ value: alias }) => alias)

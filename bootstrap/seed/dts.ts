@@ -2,7 +2,7 @@ import type { Tok } from "./lexer";
 import type { AliasField, Ctor, CtorField, Expr, Span, Stmt, TypeExpr } from "./ast";
 import type { Row, St, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { IErr, InferApi, QualAliasInfo } from "./infer";
+import type { IErr, InferApi, QualAliasInfo, TsApi } from "./infer";
 import type { StageErr, Stamped } from "./compile";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -74,7 +74,7 @@ import {
 } from "./types";
 import { jsDoc } from "./codegen";
 import { defaultOpts, typedProgramWith } from "./compile";
-import { dtsHooksFor, runDtsHooks } from "./extensions";
+import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "./extensions";
 /**
  * Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
  * resolve, without needing the module graph: single-file dts sees the `tqual`
@@ -408,9 +408,10 @@ const bindingDeclsFrom: <A>(
   qualify: Map<string, string>,
   docs: boolean,
   dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+  bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   i: number,
 ) => string[] = _curry(
-  7,
+  8,
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
@@ -418,6 +419,7 @@ const bindingDeclsFrom: <A>(
     qualify: Map<string, string>,
     docs: boolean,
     dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+    bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
     i: number,
   ) =>
     match(_Array_get(i, stmts))
@@ -446,6 +448,7 @@ const bindingDeclsFrom: <A>(
                               { vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) },
                               value,
                               recs,
+                              bindingHooks,
                             ),
                             runDtsHooks(dtsHooks, name, value),
                           ),
@@ -455,10 +458,10 @@ const bindingDeclsFrom: <A>(
                     )
                     .exhaustive())(
               (ts: string) => `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`,
-            ))(bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, i + 1)),
+            ))(bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i + 1)),
       )
       .with({ _tag: "Some" }, () =>
-        bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, i + 1),
+        bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i + 1),
       )
       .exhaustive(),
 );
@@ -630,8 +633,9 @@ export const emitDtsFromTypedWith: <A>(
   runtimeImport: string,
   docs: boolean,
   dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+  bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
 ) => string = _curry(
-  7,
+  8,
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
@@ -640,6 +644,7 @@ export const emitDtsFromTypedWith: <A>(
     runtimeImport: string,
     docs: boolean,
     dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+    bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   ) => {
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
@@ -651,7 +656,16 @@ export const emitDtsFromTypedWith: <A>(
       0,
     );
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
-    const bindings: string[] = bindingDeclsFrom(stmts, env, recs, quals, docs, dtsHooks, 0);
+    const bindings: string[] = bindingDeclsFrom(
+      stmts,
+      env,
+      recs,
+      quals,
+      docs,
+      dtsHooks,
+      bindingHooks,
+      0,
+    );
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
     const core: string = _Str_join("\n", _Array_concat(types, bindings));
@@ -768,6 +782,7 @@ export const emitDtsFromTyped: <A>(
       runtimeImport,
       true,
       [] as ((a: string, b: Expr) => Option<string>)[],
+      bindingHooksFor(None),
     ),
 );
 /**
@@ -804,6 +819,7 @@ export const emitDtsTextWith: _Curry<
           >;
           format: Option<(a: Expr) => Option<Expr>>;
           dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
       open: boolean;
@@ -844,6 +860,7 @@ export const emitDtsTextWith: _Curry<
           >;
           format: Option<(a: Expr) => Option<Expr>>;
           dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
       open: boolean;
@@ -870,6 +887,7 @@ export const emitDtsTextWith: _Curry<
           runtimeImport,
           opts.docs,
           dtsHooksFor(opts.plugins),
+          bindingHooksFor(opts.plugins),
         ),
       typedProgramWith(src, opts),
     ),

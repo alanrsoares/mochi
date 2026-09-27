@@ -1,6 +1,6 @@
 import type { Tok } from "./lexer";
 import type { Expr } from "./ast";
-import type { SpanAt, St, Ty } from "./types";
+import type { Row, SpanAt, St, Ty } from "./types";
 import type { BoundErr } from "./plugins/jsx";
 
 import type { Option, Result } from "@mochi/compiler/runtime";
@@ -42,7 +42,7 @@ export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] 
       )
       .exhaustive(),
 );
-export const resolvePluginsDefault: <B, C, D, E>(
+export const resolvePluginsDefault: <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -70,6 +70,13 @@ export const resolvePluginsDefault: <B, C, D, E>(
       >;
       format: Option<C>;
       dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
     }[]
   >,
 ) => {
@@ -98,7 +105,14 @@ export const resolvePluginsDefault: <B, C, D, E>(
   >;
   format: Option<C>;
   dtsBinding: Option<D>;
-}[] = <B, C, D, E>(
+  bindingType: Option<
+    (
+      a: Expr,
+      b: Ty,
+      c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+    ) => Option<string>
+  >;
+}[] = <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -126,6 +140,13 @@ export const resolvePluginsDefault: <B, C, D, E>(
       >;
       format: Option<C>;
       dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
     }[]
   >,
 ) => resolvePlugins(pluginsOpt, DEFAULT_PLUGINS);
@@ -272,7 +293,7 @@ export const formatHooksOf: <A, B>(plugins: ({ format: Option<A> } & B)[]) => A[
 /**
  * The format hooks a caller's `pluginsOpt` resolves to (builtins included).
  */
-export const formatHooksFor: <B, C, D, E>(
+export const formatHooksFor: <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -300,9 +321,16 @@ export const formatHooksFor: <B, C, D, E>(
       >;
       format: Option<C>;
       dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
     }[]
   >,
-) => C[] = <B, C, D, E>(
+) => C[] = <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -330,6 +358,13 @@ export const formatHooksFor: <B, C, D, E>(
       >;
       format: Option<C>;
       dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
     }[]
   >,
 ) => formatHooksOf(resolvePluginsDefault(pluginsOpt));
@@ -347,7 +382,7 @@ const dtsHooksFrom: <A, B>(plugins: ({ dtsBinding: Option<A> } & B)[], i: number
       )
       .exhaustive(),
   );
-export const dtsHooksFor: <B, C, D, E>(
+export const dtsHooksFor: <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -375,9 +410,16 @@ export const dtsHooksFor: <B, C, D, E>(
       >;
       format: Option<C>;
       dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
     }[]
   >,
-) => D[] = <B, C, D, E>(
+) => D[] = <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -405,6 +447,13 @@ export const dtsHooksFor: <B, C, D, E>(
       >;
       format: Option<C>;
       dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
     }[]
   >,
 ) => dtsHooksFrom(resolvePluginsDefault(pluginsOpt), 0, [] as D[]);
@@ -455,4 +504,137 @@ export const runDtsHooks: <A, B, C>(
     .otherwise(() => {
       throw new Error("non-exhaustive match");
     }),
+);
+const bindingHooksFrom: <A, B>(
+  plugins: ({ bindingType: Option<A> } & B)[],
+  i: number,
+  acc: A[],
+) => A[] = _curry(3, <A, B>(plugins: ({ bindingType: Option<A> } & B)[], i: number, acc: A[]) =>
+  match(_Array_get(i, plugins))
+    .with({ _tag: "None" }, () => acc)
+    .with({ _tag: "Some" }, ({ value: p }) =>
+      match(p.bindingType)
+        .with({ _tag: "Some" }, ({ value: hook }) =>
+          bindingHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
+        )
+        .with({ _tag: "None" }, () => bindingHooksFrom(plugins, i + 1, acc))
+        .exhaustive(),
+    )
+    .exhaustive(),
+);
+export const bindingHooksFor: <B, C, D, E, F>(
+  pluginsOpt: Option<
+    {
+      name: string;
+      parse: Option<
+        (
+          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          b: number,
+          c: (
+            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            b: number,
+          ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+        ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
+      >;
+      inferCall: Option<
+        (
+          a: B,
+          b: Expr[],
+          c: Option<string>,
+          d: St,
+          e: {
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+          } & E,
+        ) => Result<Option<[Ty, St]>, BoundErr>
+      >;
+      format: Option<C>;
+      dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
+    }[]
+  >,
+) => ((
+  a: Expr,
+  b: Ty,
+  c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+) => Option<string>)[] = <B, C, D, E, F>(
+  pluginsOpt: Option<
+    {
+      name: string;
+      parse: Option<
+        (
+          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          b: number,
+          c: (
+            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            b: number,
+          ) => Result<[Expr, number], { message: string; start: number; end: number }>,
+        ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
+      >;
+      inferCall: Option<
+        (
+          a: B,
+          b: Expr[],
+          c: Option<string>,
+          d: St,
+          e: {
+            unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+            inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+          } & E,
+        ) => Result<Option<[Ty, St]>, BoundErr>
+      >;
+      format: Option<C>;
+      dtsBinding: Option<D>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+        ) => Option<string>
+      >;
+    }[]
+  >,
+) =>
+  bindingHooksFrom(
+    resolvePluginsDefault(pluginsOpt),
+    0,
+    [] as ((
+      a: Expr,
+      b: Ty,
+      c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+    ) => Option<string>)[],
+  );
+/**
+ * First hook to claim wins: `Some(ts)` replaces the binding's TS type.
+ */
+export const runBindingHooks: <A, B, C, D>(
+  hooks: ((a: A, b: B, c: C) => Option<D>)[],
+  value: A,
+  ty: B,
+  api: C,
+) => Option<D> = _curry(
+  4,
+  <A, B, C, D>(hooks: ((a: A, b: B, c: C) => Option<D>)[], value: A, ty: B, api: C) =>
+    match(hooks)
+      .with(
+        (_v) => _v.length === 0,
+        () => None,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([hook, ...rest]) =>
+          match(hook(value, ty, api))
+            .with({ _tag: "Some" }, ({ value: ts }) => Some(ts))
+            .with({ _tag: "None" }, () => runBindingHooks(rest, value, ty, api))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );

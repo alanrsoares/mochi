@@ -176,6 +176,9 @@ let aliasNameFor = (row, env) =>
         | None => None
       })
 
+/// The record alias `row` prints as under `recs`, for plugin hooks (ADR 0055).
+export let rowAliasName = (row, recs) => aliasNameFor(row, recsEnv(recs))
+
 let tsRow = (row, env: TsEnv) => switch aliasNameFor(row, env) {
   | Some(alias) => alias
   | None => let (fields, tail) = tsRowFields(row, env) in

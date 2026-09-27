@@ -51,6 +51,11 @@ export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string
  */
 export type HookErr = { message: string; start: number; end: number };
 /**
+ * What a `bindingType` hook renders with (ADR 0055): the TS text of a type,
+ * and the record alias a closed row prints as, if the module declared one.
+ */
+export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };
+/**
  * A plugin as every pass sees it (ADR 0011, 0109). `format` rewrites a node
  * before the printer lays it out; `dtsBinding` supplies a binding's `.d.ts`
  * type text. The parse hook is written INLINE rather than
@@ -74,6 +79,7 @@ export type Plugin<A> = {
   >;
   format: Option<(a: Expr) => Option<Expr>>;
   dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+  bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
 /**
  * `Plugin` at the lexer's token type: the list a host hands the compile and
@@ -97,6 +103,7 @@ export type HostPlugin = {
   >;
   format: Option<(a: Expr) => Option<Expr>>;
   dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+  bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
 /**
  * The context threaded through Algorithm W. Declared and annotated at every
@@ -127,6 +134,7 @@ export type Ctx<A> = {
     >;
     format: Option<(a: Expr) => Option<Expr>>;
     dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
@@ -501,6 +509,7 @@ const u: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -541,6 +550,7 @@ const u: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -592,6 +602,7 @@ const checkFits: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -632,6 +643,7 @@ const checkFits: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -783,6 +795,7 @@ const constrainParamAnnotsFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -823,6 +836,7 @@ const constrainParamAnnotsFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -967,6 +981,7 @@ const ctxWithEnv: <A, B>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -995,6 +1010,7 @@ const ctxWithEnv: <A, B>(
     >;
     format: Option<(a: Expr) => Option<Expr>>;
     dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
@@ -1030,6 +1046,7 @@ const ctxWithEnv: <A, B>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1076,6 +1093,7 @@ const ctxWithLets: <A, B, C>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1105,6 +1123,7 @@ const ctxWithLets: <A, B, C>(
     >;
     format: Option<(a: Expr) => Option<Expr>>;
     dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
   letOwner: C;
@@ -1140,6 +1159,7 @@ const ctxWithLets: <A, B, C>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1187,6 +1207,7 @@ const ctxWithLoop: <A, B, C>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1217,6 +1238,7 @@ const ctxWithLoop: <A, B, C>(
     >;
     format: Option<(a: Expr) => Option<Expr>>;
     dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
   letOwner: C;
@@ -1252,6 +1274,7 @@ const ctxWithLoop: <A, B, C>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1300,6 +1323,7 @@ const inferLoopParamsFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1342,6 +1366,7 @@ const inferLoopParamsFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1410,6 +1435,7 @@ const unifyRecurArgsFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1450,6 +1476,7 @@ const unifyRecurArgsFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1508,6 +1535,7 @@ const inferRecur: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1547,6 +1575,7 @@ const inferRecur: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1667,6 +1696,7 @@ const labFieldsFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1708,6 +1738,7 @@ const labFieldsFrom: <A>(
           >;
           format: Option<(a: Expr) => Option<Expr>>;
           dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[];
         loopStack: Ty[][];
         letOwner: Map<string, SpanAt>;
@@ -1899,6 +1930,7 @@ const inferCallArgs: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1939,6 +1971,7 @@ const inferCallArgs: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2021,6 +2054,7 @@ const inferNormalCall: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2060,6 +2094,7 @@ const inferNormalCall: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2132,6 +2167,7 @@ const inferTernary: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2172,6 +2208,7 @@ const inferTernary: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2232,6 +2269,7 @@ const inferBindBody: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2274,6 +2312,7 @@ const inferBindBody: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2332,6 +2371,7 @@ const inferTwoSlotBind: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2375,6 +2415,7 @@ const inferTwoSlotBind: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2433,6 +2474,7 @@ const inferQuestionBind: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2476,6 +2518,7 @@ const inferQuestionBind: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2563,6 +2606,7 @@ const inferLetBind: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2606,6 +2650,7 @@ const inferLetBind: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2656,6 +2701,7 @@ const inferRecordRow: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2694,6 +2740,7 @@ const inferRecordRow: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2785,6 +2832,7 @@ const inferFieldAccess: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2826,6 +2874,7 @@ const inferFieldAccess: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2896,6 +2945,7 @@ const inferDuckField: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2936,6 +2986,7 @@ const inferDuckField: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2982,6 +3033,7 @@ const inferNsField: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3022,6 +3074,7 @@ const inferNsField: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3071,6 +3124,7 @@ const inferInterpParts: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3109,6 +3163,7 @@ const inferInterpParts: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3180,6 +3235,7 @@ const inferTupleElems: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3218,6 +3274,7 @@ const inferTupleElems: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3288,6 +3345,7 @@ const inferSeqSlotsElems: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3328,6 +3386,7 @@ const inferSeqSlotsElems: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3401,6 +3460,7 @@ const inferSeqSlots: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3440,6 +3500,7 @@ const inferSeqSlots: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3484,6 +3545,7 @@ const inferMapEntries: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3524,6 +3586,7 @@ const inferMapEntries: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3598,6 +3661,7 @@ const inferMapExpr: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3636,6 +3700,7 @@ const inferMapExpr: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3734,6 +3799,7 @@ const inferArms: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3774,6 +3840,7 @@ const inferArms: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3861,6 +3928,7 @@ const inferMatch: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3900,6 +3968,7 @@ const inferMatch: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3953,6 +4022,7 @@ const inferExpr: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3991,6 +4061,7 @@ const inferExpr: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4033,6 +4104,7 @@ const inferExprRaw: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4071,6 +4143,7 @@ const inferExprRaw: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4350,6 +4423,7 @@ const inferDo: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4388,6 +4462,7 @@ const inferDo: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4453,6 +4528,7 @@ const inferPatRecordFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4493,6 +4569,7 @@ const inferPatRecordFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4562,6 +4639,7 @@ const inferPatRecord: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4600,6 +4678,7 @@ const inferPatRecord: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4644,6 +4723,7 @@ const inferPatCtorArgs: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4686,6 +4766,7 @@ const inferPatCtorArgs: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4773,6 +4854,7 @@ const inferPatTupleFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4811,6 +4893,7 @@ const inferPatTupleFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4886,6 +4969,7 @@ const inferPatTuple: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4924,6 +5008,7 @@ const inferPatTuple: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4967,6 +5052,7 @@ const inferSeqPatElems: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5006,6 +5092,7 @@ const inferSeqPatElems: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5079,6 +5166,7 @@ const inferSeqPat: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5119,6 +5207,7 @@ const inferSeqPat: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5190,6 +5279,7 @@ const inferPat: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5228,6 +5318,7 @@ const inferPat: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5274,6 +5365,7 @@ const inferPatRaw: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5312,6 +5404,7 @@ const inferPatRaw: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5443,6 +5536,7 @@ const unifyOrPatBinding: <A, B>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5484,6 +5578,7 @@ const unifyOrPatBinding: <A, B>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5534,6 +5629,7 @@ const unifyOrPatBindings: <A, B>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5575,6 +5671,7 @@ const unifyOrPatBindings: <A, B>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5632,6 +5729,7 @@ const inferOrPatAlts: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5673,6 +5771,7 @@ const inferOrPatAlts: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5738,6 +5837,7 @@ const inferOrPat: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5777,6 +5877,7 @@ const inferOrPat: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -6762,6 +6863,7 @@ const inferGroupFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -6800,6 +6902,7 @@ const inferGroupFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -7017,6 +7120,7 @@ const processGroupsFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -7055,6 +7159,7 @@ const processGroupsFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -7094,6 +7199,7 @@ const processGroupsFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -7169,6 +7275,7 @@ const inferExprStmtsFrom: <A>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -7207,6 +7314,7 @@ const inferExprStmtsFrom: <A>(
         >;
         format: Option<(a: Expr) => Option<Expr>>;
         dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -7663,6 +7771,7 @@ const runInferImports: <A, B, C>(
       >;
       format: Option<(a: Expr) => Option<Expr>>;
       dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[] = resolvePluginsDefault(pluginsOpt);
     const st0: St = mkSt(1000);
     const env0: Map<string, Scheme> = seedBuiltins(builtins, new Map<string, Scheme>(), st0);

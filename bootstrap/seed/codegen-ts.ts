@@ -15,7 +15,7 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
-import type { LocTok, QualAliasInfo } from "./infer";
+import type { LocTok, QualAliasInfo, TsApi } from "./infer";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 
@@ -106,11 +106,13 @@ import { typeExprToType, collect, emptyVarSets } from "./schemes";
 import { builtinTypeDecls, keysOf } from "./ctors";
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "./infer";
+import { bindingHooksFor, runBindingHooks } from "./extensions";
 import {
   genericNames,
   letterAt,
   plainEnv,
   recsEnv,
+  rowAliasName,
   rowShapeKey,
   schemeRender,
   tsEnv,
@@ -820,8 +822,32 @@ const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
  * A non-function polymorphic binding has nowhere to bind generics, so its
  * escaped vars fall back to `unknown` — except variables the alias pin
  * resolved, which print as that concrete text.
+ * A plugin `bindingType` hook (ADR 0055) may replace the whole type first.
  */
 export const bindingTsType: <A>(
+  sc: { ty: Ty; vars: number[]; rvars: number[] } & A,
+  value: Expr,
+  recs: Map<string, string>,
+  bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
+) => string = _curry(
+  4,
+  <A>(
+    sc: { ty: Ty; vars: number[]; rvars: number[] } & A,
+    value: Expr,
+    recs: Map<string, string>,
+    bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
+  ) => {
+    const api: TsApi = {
+      tsType: (t: Ty) => tsOf(t, recsEnv(recs)),
+      aliasOf: (row: Row) => rowAliasName(row, recs),
+    };
+    return match(runBindingHooks(bindingHooks, value, sc.ty, api))
+      .with({ _tag: "Some" }, ({ value: ts }) => ts)
+      .with({ _tag: "None" }, () => coreBindingTsType(sc, value, recs))
+      .exhaustive();
+  },
+);
+const coreBindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   value: Expr,
   recs: Map<string, string>,
@@ -1705,14 +1731,16 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
   types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
   letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
   aliases: Map<string, AliasInfo>,
+  bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
 ) => GenOpts = _curry(
-  5,
+  6,
   <A, B, C, D, E, F, G, H, I>(
     stmts: Stmt[],
     env: Map<string, { vars: number[]; rvars: number[]; ty: Ty } & E>,
     types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[],
     letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[],
     aliases: Map<string, AliasInfo>,
+    bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   ) => {
     const typeAt: Map<string, Ty> = typeAtTable(types);
     const letParamAt: Map<string, Ty> = typeAtTable(letParams);
@@ -1752,7 +1780,7 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
                     .with(
                       { _tag: "Some" },
                       ({ value: sc }) =>
-                        Some(`: ${bindingTsType(sc, value, recs)}`) as Option<string>,
+                        Some(`: ${bindingTsType(sc, value, recs, bindingHooks)}`) as Option<string>,
                     )
                     .with({ _tag: "None" }, () => None as Option<string>)
                     .exhaustive(),
@@ -1965,8 +1993,9 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
   runtimeDeps: Map<string, string[]>,
   runtimeImport: string,
   docs: boolean,
+  bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
 ) => string = _curry(
-  12,
+  13,
   <A, B, C, D, E, F, G, H, I>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>,
@@ -1980,6 +2009,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
     runtimeDeps: Map<string, string[]>,
     runtimeImport: string,
     docs: boolean,
+    bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   ) => {
     const declared: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
@@ -1990,7 +2020,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
     );
     const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
     const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {
-      ...tsGenOpts(stmts, env, types, letParams, aliases),
+      ...tsGenOpts(stmts, env, types, letParams, aliases, bindingHooks),
       docs: docs,
     });
     const deps0: string[] = runtimeDepNames(stmts, imported, ns, jsDefs, runtimeDeps);
@@ -2105,6 +2135,7 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
       runtimeDeps,
       runtimeImport,
       true,
+      bindingHooksFor(None),
     ),
 );
 /**

@@ -448,4 +448,5 @@ export const preactPlugin = {
   inferCall: Some(inferPreactCall),
   format: None,
   dtsBinding: None,
+  bindingType: None,
 };

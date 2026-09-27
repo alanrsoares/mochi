@@ -21,15 +21,18 @@ import {
   Ok,
   Some,
   _Array_append,
+  _Array_find,
   _Array_get,
   _Map_get,
   _Map_keys,
   _Option_exists,
+  _Option_isSome,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
   _Str_codeAt,
   _Str_contains,
+  _Str_join,
   _Str_length,
   _Str_slice,
   _Str_split,
@@ -42,6 +45,7 @@ import {
   length,
   lt,
   map,
+  not,
   or,
   sub,
 } from "@mochi/compiler/runtime";
@@ -1289,10 +1293,164 @@ export const inferJsxCallHook: <A, B>(
       )
       .exhaustive(),
 );
+/**
+ * The final return of an arrow is `VNode`.
+ */
+const returnsVNode: (t: Ty) => boolean = (t: Ty) =>
+  match(t)
+    .with({ _tag: "TyFn" }, ({ to: toT }) => returnsVNode(toT))
+    .with({ _tag: "TyCon", name: "VNode" }, () => true)
+    .otherwise(() => false);
+const isComponentType: (t: Ty) => boolean = (t: Ty) =>
+  match(t)
+    .with({ _tag: "TyFn" }, ({ to: toT }) => returnsVNode(toT))
+    .otherwise(() => false);
+/**
+ * A lambda whose body is parser-synthesized JSX (ADR 0011 §5), for a binding
+ * whose return has not pinned to `VNode` yet.
+ */
+const jsxBodied: (body: Expr) => boolean = (body: Expr) =>
+  match(body)
+    .with({ _tag: "ELambda" }, ({ body: inner }) => jsxBodied(inner))
+    .with(
+      (
+        _v,
+      ): _v is Extract<Expr, { _tag: "ECall" }> & {
+        origin: Extract<Extract<Expr, { _tag: "ECall" }>["origin"], { _tag: "Some" }>;
+      } => {
+        const _g: any = _v;
+        return _g._tag === "ECall" && _g.origin._tag === "Some" && _g.origin.value === "jsx";
+      },
+      () => true,
+    )
+    .otherwise(() => false);
+const isJsxComponentLambda: (value: Expr) => boolean = (value: Expr) =>
+  match(value)
+    .with({ _tag: "ELambda" }, ({ body }) => jsxBodied(body))
+    .otherwise(() => false);
+const isHandlerLabel: (label: string) => boolean = (label: string) => {
+  const third: boolean = _Option_exists(
+    (n: number) => and(n >= 65, n <= 90),
+    _Str_codeAt(2, label),
+  );
+  return and(_Str_startsWith("on", label), third);
+};
+const componentPropFieldTs: <A>(
+  label: string,
+  t: Ty,
+  api: { tsType: (a: Ty) => string } & A,
+) => string = _curry(3, <A>(label: string, t: Ty, api: { tsType: (a: Ty) => string } & A) =>
+  match(t)
+    .with({ _tag: "TyVar" }, () => (isHandlerLabel(label) ? "() => void" : "unknown"))
+    .with({ _tag: "TyCon", name: "VNode" }, () => "unknown")
+    .otherwise(() => api.tsType(t)),
+);
+const propFieldsFrom: <A>(
+  row: Row,
+  api: { tsType: (a: Ty) => string } & A,
+  acc: string[],
+) => [string[], boolean] = _curry(
+  3,
+  <A>(row: Row, api: { tsType: (a: Ty) => string } & A, acc: string[]) =>
+    match(row)
+      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
+        propFieldsFrom(
+          rest,
+          api,
+          _Array_append(`${label}: ${componentPropFieldTs(label, fieldType, api)}`, acc),
+        ),
+      )
+      .with({ _tag: "RowVar" }, () => _tuple(acc, true))
+      .otherwise(() => _tuple(acc, false)),
+);
+const hasField: _Curry<[fields: string[], name: string], boolean> = _curry(
+  2,
+  (fields: string[], name: string) =>
+    _Option_isSome(_Array_find((f: string) => _Str_startsWith(`${name}:`, f), fields)),
+);
+/**
+ * An open prop row takes the conventional host extras rather than an index
+ * signature, which would fight `onX: () => void` under `--strict`.
+ */
+const componentPropsTs: <A>(row: Row, api: { tsType: (a: Ty) => string } & A) => string = _curry(
+  2,
+  <A>(row: Row, api: { tsType: (a: Ty) => string } & A) =>
+    (([fields0, open]: [string[], boolean]) => {
+      const fields1: string[] = and(open, not(hasField(fields0, "children")))
+        ? _Array_append("children?: any", fields0)
+        : fields0;
+      const fields: string[] = and(open, not(hasField(fields1, "className")))
+        ? _Array_append("className?: string", fields1)
+        : fields1;
+      return eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
+    })(propFieldsFrom(row, api, [] as string[])),
+);
+const componentSig: <A>(
+  t: Ty,
+  api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
+) => string = _curry(
+  2,
+  <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
+    match(t)
+      .with(
+        (
+          _v,
+        ): _v is Extract<Ty, { _tag: "TyFn" }> & {
+          from: Extract<Extract<Ty, { _tag: "TyFn" }>["from"], { _tag: "TyRecord" }>;
+        } => {
+          const _g: any = _v;
+          return _g._tag === "TyFn" && _g.from._tag === "TyRecord";
+        },
+        ({ from: { row } }) =>
+          match(api.aliasOf(row))
+            .with({ _tag: "Some" }, ({ value: name }) => `(props: ${name}) => any`)
+            .with({ _tag: "None" }, () => `(props: ${componentPropsTs(row, api)}) => any`)
+            .exhaustive(),
+      )
+      .with(
+        (
+          _v,
+        ): _v is Extract<Ty, { _tag: "TyFn" }> & {
+          from: Extract<Extract<Ty, { _tag: "TyFn" }>["from"], { _tag: "TyVar" }>;
+        } => {
+          const _g: any = _v;
+          return _g._tag === "TyFn" && _g.from._tag === "TyVar";
+        },
+        () => "(props: Record<string, unknown>) => any",
+      )
+      .with({ _tag: "TyFn" }, ({ from: fromT }) => `(props: ${api.tsType(fromT)}) => any`)
+      .otherwise(() => "(props: Record<string, unknown>) => any"),
+);
+export const componentBindingTs: <A>(
+  value: Expr,
+  t: Ty,
+  api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
+) => Option<string> = _curry(
+  3,
+  <A>(
+    value: Expr,
+    t: Ty,
+    api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
+  ) =>
+    match(t)
+      .with(
+        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
+          const _g: any = _v;
+          return _g._tag === "TyCon" && _g.name === "VNode" && _g.args.length === 0;
+        },
+        () => Some("any") as Option<string>,
+      )
+      .otherwise(() =>
+        or(isComponentType(t), isJsxComponentLambda(value))
+          ? (Some(componentSig(t, api)) as Option<string>)
+          : (None as Option<string>),
+      ),
+);
 export const jsxPlugin = {
   name: "jsx",
   parse: Some(parseJsxAtom),
   inferCall: Some(inferJsxCallHook),
   format: None,
   dtsBinding: None,
+  bindingType: Some(componentBindingTs),
 };

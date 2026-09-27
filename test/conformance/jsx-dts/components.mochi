@@ -1,0 +1,14 @@
+"use open"
+
+type Props = { title: string }
+
+export let el = <div />
+
+export let Card : Props -> VNode = props => <div>{props.title}</div>
+
+export let Inline = p => <span title={p.label}>{show(p.count)}</span>
+
+export let Free = props =>
+  <button onClick={props.onPress}>{props.children}</button>
+
+export let plain = (a: number) => a + 1
