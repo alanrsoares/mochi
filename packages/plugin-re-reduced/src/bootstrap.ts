@@ -239,10 +239,19 @@ const unifyPatch = (s: Solver, patch: Ty | null, state: Ty, span: Span): Step<nu
   let row = patch.row;
   while (row._tag === "RowExtend") {
     const field = rowField(state.row, row.label);
-    if (field) {
-      const uni = unifyIn(s, row.fieldType, field, span);
-      if (isErr(uni)) return uni;
-    }
+    if (!field)
+      return {
+        _tag: "Err",
+        error: {
+          message: `action patch field '${row.label}' is not in the container state`,
+          start: span.start,
+          end: span.end,
+          help: none,
+          suggestions: [],
+        },
+      };
+    const uni = unifyIn(s, row.fieldType, field, span);
+    if (isErr(uni)) return uni;
     row = row.rest;
   }
   return ok(null);

@@ -53,7 +53,7 @@ import {
   tString,
   tUnit,
 } from "@mochi/compiler/types";
-import { isErr, ok, type Result } from "@onrails/result";
+import { err, isErr, ok, type Result } from "@onrails/result";
 
 const HOST = 'import("@re-reduced/preact")';
 
@@ -177,9 +177,11 @@ const storeFieldOr = (store: Type, label: string, api: InferCallApi): Type => {
 // ---------------------------------------------------------------------------
 
 /**
- * Unify each label a patch mentions with that field of the state. Labels the
- * state does not have are left to the host's `Partial<S>` check; an open patch
- * row (a reducer that spreads) simply contributes nothing.
+ * Unify each label a patch mentions with that field of the state. A label the
+ * state does not have is an error here: the host's `Partial<S>` only rejects a
+ * patch with *no* state field in common, so `{ count, cout }` would slip past
+ * `tsc`, and JS output has no check at all. An open patch row (a reducer that
+ * spreads) simply contributes nothing.
  */
 const unifyPatch = (
   patch: Type | null,
@@ -191,10 +193,15 @@ const unifyPatch = (
   let row: Row = patch.row;
   while (row.kind === "extend") {
     const field = rowField(state.row, row.label);
-    if (field) {
-      const uni = api.unify(row.type, field, span);
-      if (isErr(uni)) return uni;
+    if (!field) {
+      return err({
+        kind: "type",
+        message: `action patch field '${row.label}' is not in the container state`,
+        span,
+      });
     }
+    const uni = api.unify(row.type, field, span);
+    if (isErr(uni)) return uni;
     row = row.rest;
   }
   return null;

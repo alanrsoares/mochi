@@ -31,7 +31,8 @@
       "re-reduced-config-dts",
       "re-reduced-bad-payload",
       "re-reduced-bad-on-action",
-      "re-reduced-bad-query"
+      "re-reduced-bad-query",
+      "re-reduced-bad-patch-label"
     ],
     "pending": []
   },
@@ -251,6 +252,15 @@
       "kind": "diagnostic",
       "source": "re-reduced/bad-query.mochi",
       "expect": "re-reduced-bad-query.expect.json",
+      "plugins": [
+        "re-reduced"
+      ]
+    },
+    {
+      "id": "re-reduced-bad-patch-label",
+      "kind": "diagnostic",
+      "source": "re-reduced/bad-patch-label.mochi",
+      "expect": "re-reduced-bad-patch-label.expect.json",
       "plugins": [
         "re-reduced"
       ]
