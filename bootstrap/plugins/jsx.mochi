@@ -694,10 +694,124 @@ export let inferJsxCallHook = (_fn, args, origin, st, api) => switch origin {
   | None => Ok(None)
 }
 
+// --- binding type (ADR 0055) -------------------------------------------------
+// `VNode` is this plugin's vocabulary, declared nowhere, so it must never reach
+// TS output. A component binding declares as `(props: P) => any` in both the
+// `.d.ts` writer and the TS backend: free prop fields print `unknown` (event
+// handlers `() => void`), and the return is `any`, not a host `FC`.
+
+/// The final return of an arrow is `VNode`.
+let returnsVNode = t => switch t {
+  | TyFn(_, toT) => returnsVNode(toT)
+  | TyCon("VNode", _) => true
+  | _ => false
+}
+
+let isComponentType = t => switch t {
+  | TyFn(_, toT) => returnsVNode(toT)
+  | _ => false
+}
+
+/// A lambda whose body is parser-synthesized JSX (ADR 0011 §5), for a binding
+/// whose return has not pinned to `VNode` yet.
+let jsxBodied = body => switch body {
+  | Ast.ELambda(_, inner, _) => jsxBodied(inner)
+  | Ast.ECall(_, _, Some("jsx"), _) => true
+  | _ => false
+}
+
+let isJsxComponentLambda = value => switch value {
+  | Ast.ELambda(_, body, _) => jsxBodied(body)
+  | _ => false
+}
+
+let isHandlerLabel = label =>
+  let third = Str.codeAt(2, label) |> Option.exists(n => n >= 65 && n <= 90) in
+    Str.startsWith("on", label) && third
+
+let componentPropFieldTs = (label, t, api) => switch t {
+  | TyVar(_) => isHandlerLabel(label) ? "() => void" : "unknown"
+  | TyCon("VNode", _) => "unknown"
+  | _ => api.tsType(t)
+}
+
+let propFieldsFrom = (row, api, acc) => switch row {
+  | RowExtend(label, fieldType, _, rest) => propFieldsFrom(
+      rest,
+      api,
+      Array.append(
+        "${label}: ${componentPropFieldTs(label, fieldType, api)}",
+        acc
+      )
+    )
+  | RowVar(_) => (acc, true)
+  | _ => (acc, false)
+}
+
+let hasField = (fields, name) =>
+  Array.find(f => Str.startsWith("${name}:", f), fields) |> Option.isSome
+
+/// An open prop row takes the conventional host extras rather than an index
+/// signature, which would fight `onX: () => void` under `--strict`.
+let componentPropsTs = (row, api) =>
+  let (fields0, open) = propFieldsFrom(row, api, []) in
+  let fields1 = open && !hasField(fields0, "children")
+    ? Array.append("children?: any", fields0)
+    : fields0 in
+  let fields = open && !hasField(fields1, "className")
+    ? Array.append("className?: string", fields1)
+    : fields1 in
+    Array.length(fields) == 0 ? "{}" : "{ ${Str.join("; ", fields)} }"
+
+let componentPropsParamTs = (t, api) => switch t {
+  | TyRecord(row) => switch api.aliasOf(row) {
+      | Some(name) => name
+      | None => componentPropsTs(row, api)
+    }
+  | TyVar(_) => "Record<string, unknown>"
+  | _ => api.tsType(t)
+}
+
+let extraParamTs = (t, api) => switch t {
+  | TyVar(_) => "unknown"
+  | TyCon("VNode", _) => "any"
+  | _ => api.tsType(t)
+}
+
+/// Params after `props`, for a component that takes more than one.
+let extraParamsFrom = (t, api, i, acc) => switch t {
+  | TyFn(fromT, toT) => extraParamsFrom(
+      toT,
+      api,
+      i + 1,
+      Array.append("_${show(i)}: ${extraParamTs(fromT, api)}", acc)
+    )
+  | _ => acc
+}
+
+/// A multi-param component is `_curry`'d like any other function, so it takes
+/// the core's `_Curry` form (ADR 0093) with `any` standing in for `VNode`.
+let componentSig = (t, api) => switch t {
+  | TyFn(fromT, toT) => let props = "props: ${componentPropsParamTs(fromT, api)}" in
+    let extras = extraParamsFrom(toT, api, 1, []) in
+      Array.length(extras) == 0
+        ? "(${props}) => any"
+        : "_Curry<[${Str.join(", ", Array.concat([props], extras))}], any>"
+  | _ => "(props: Record<string, unknown>) => any"
+}
+
+export let componentBindingTs = (value, t, api) => switch t {
+  | TyCon("VNode", []) => Some("any")
+  | _ => isComponentType(t) || isJsxComponentLambda(value)
+      ? Some(componentSig(t, api))
+      : None
+}
+
 export let jsxPlugin = {
   name: "jsx",
   parse: Some(parseJsxAtom),
   inferCall: Some(inferJsxCallHook),
   format: None,
-  dtsBinding: None
+  dtsBinding: None,
+  bindingType: Some(componentBindingTs)
 }

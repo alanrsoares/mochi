@@ -318,7 +318,8 @@ test("a concrete function binding gets a curry-compatible type", () =>
         ty: tArrow(tPrim("number"), tArrow(tPrim("number"), tPrim("number")))
       },
       lam(["a", "b"], unitE),
-      #{}
+      #{},
+      []
     )
   ))
 
@@ -328,7 +329,8 @@ test("a generic function binding keeps the nested arrow", () =>
     bindingTsType(
       { vars: [1], rvars: [], ty: tArrow(tVar(1), tVar(1)) },
       lam(["value"], unitE),
-      #{}
+      #{},
+      []
     )
   ))
 
@@ -338,7 +340,8 @@ test("a non-function binding renders its type directly", () =>
     bindingTsType(
       { vars: [], rvars: [], ty: tCon("Array", [tPrim("number")]) },
       unitE,
-      #{}
+      #{},
+      []
     )
   ))
 
@@ -348,7 +351,8 @@ test("a zero-param lambda consumes the erased unit arrow", () =>
     bindingTsType(
       { vars: [], rvars: [], ty: tArrow(tPrim("unit"), tPrim("number")) },
       Ast.ELambda([], unitE, sp),
-      #{}
+      #{},
+      []
     )
   ))
 

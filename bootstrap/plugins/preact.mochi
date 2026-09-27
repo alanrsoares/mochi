@@ -243,5 +243,6 @@ export let preactPlugin = {
   parse: None,
   inferCall: Some(inferPreactCall),
   format: None,
-  dtsBinding: None
+  dtsBinding: None,
+  bindingType: None
 }

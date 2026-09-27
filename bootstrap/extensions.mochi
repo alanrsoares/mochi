@@ -1,5 +1,6 @@
 // bootstrap/extensions.mochi — thin LanguagePlugin seam for the self-host
-// (Wave 8 / ADR 0011 §6, ADR 0109). Parse, inferCall, format and dtsBinding.
+// (Wave 8 / ADR 0011 §6, ADR 0109). Parse, inferCall, format, dtsBinding and
+// bindingType.
 // Hooks are Result/(toks, pos) shaped — not an imperative ParserApi.
 //
 // resolvePlugins mirrors src/extensions.ts:
@@ -111,5 +112,25 @@ export let runDtsHooks = (hooks, name, value) => switch hooks {
   | [hook, ...rest] => switch hook(name, value) {
       | Some(ts) => Some(ts)
       | None => rest->runDtsHooks(name, value)
+    }
+}
+
+let bindingHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
+  | None => acc
+  | Some(p) => switch p.bindingType {
+      | Some(hook) => plugins->bindingHooksFrom(i + 1, Array.append(hook, acc))
+      | None => plugins->bindingHooksFrom(i + 1, acc)
+    }
+}
+
+export let bindingHooksFor = pluginsOpt =>
+  resolvePluginsDefault(pluginsOpt)->bindingHooksFrom(0, [])
+
+/// First hook to claim wins: `Some(ts)` replaces the binding's TS type.
+export let runBindingHooks = (hooks, value, ty, api) => switch hooks {
+  | [] => None
+  | [hook, ...rest] => switch hook(value, ty, api) {
+      | Some(ts) => Some(ts)
+      | None => rest->runBindingHooks(value, ty, api)
     }
 }

@@ -24,7 +24,7 @@ import { showType, tVar } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
 import { index } from "./symbols.mochi"
 import { emitDtsFromTypedWith, emitDtsText, qualifierMapOf } from "./dts.mochi"
-import { dtsHooksFor } from "./extensions.mochi"
+import { bindingHooksFor, dtsHooksFor } from "./extensions.mochi"
 import { openMode } from "./compile.mochi"
 
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
@@ -989,7 +989,8 @@ let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(l
               preludeJsDefs,
               runtimeDeps,
               ctx.runtimeImport,
-              opts.docs
+              opts.docs,
+              bindingHooksFor(opts.plugins)
             ) in
             let lines = crossModuleTypeImports(
               body,
@@ -1132,7 +1133,8 @@ let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.
                     qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
                     ctx.runtimeImport,
                     opts.docs,
-                    dtsHooksFor(opts.plugins)
+                    dtsHooksFor(opts.plugins),
+                    bindingHooksFor(opts.plugins)
                   )
                   : ctx.dts
               }

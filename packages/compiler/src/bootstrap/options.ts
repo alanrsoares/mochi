@@ -81,6 +81,8 @@ export type SeedPlugin = {
   inferCall: BootstrapOption<BootstrapInferCallHook>;
   format: BootstrapOption<(expr: Expr) => BootstrapOption<Expr>>;
   dtsBinding: BootstrapOption<(name: string, value: Expr) => BootstrapOption<string>>;
+  /** Builtin-only for now (the JSX plugin's ADR 0055 rendering); hosts pass none. */
+  bindingType: { _tag: "None" };
 };
 
 /** The options record as the seed reads it: `plugins` is an `Option`. */
@@ -105,6 +107,7 @@ const toSeedPlugin = (plugin: BootstrapPlugin): SeedPlugin => ({
   inferCall: optionOf(plugin.inferCall),
   format: optionOf(plugin.format && nullable(plugin.format)),
   dtsBinding: optionOf(plugin.dtsBinding && nullable(plugin.dtsBinding)),
+  bindingType: none,
 });
 
 /** The seed's `pluginsOpt`: omitted = builtins, `[]` = hard opt-out. */

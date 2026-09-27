@@ -18,7 +18,7 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { SpanAt, St, Ty } from "./types";
+import type { Row, SpanAt, St, Ty } from "./types";
 import type { BoundErr } from "./plugins/jsx";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
@@ -4166,7 +4166,7 @@ const stmtsLoop: _Curry<
  * The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
  * tooling that wants the partial tree calls this and says so.
  */
-export const parseRecovering: <A, B, C, D>(
+export const parseRecovering: <A, B, C, D, E>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4192,11 +4192,18 @@ export const parseRecovering: <A, B, C, D>(
       >;
       format: Option<B>;
       dtsBinding: Option<C>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+        ) => Option<string>
+      >;
     }[]
   >,
 ) => { stmts: Stmt[]; diagnostics: PErr[] } = _curry(
   2,
-  <A, B, C, D>(
+  <A, B, C, D, E>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4222,6 +4229,13 @@ export const parseRecovering: <A, B, C, D>(
         >;
         format: Option<B>;
         dtsBinding: Option<C>;
+        bindingType: Option<
+          (
+            a: Expr,
+            b: Ty,
+            c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+          ) => Option<string>
+        >;
       }[]
     >,
   ) => {
@@ -4249,7 +4263,7 @@ export const parse: (toks: LocTok[]) => Result<Stmt[], PErr> = (toks: LocTok[]) 
  * this reports the first diagnostic in source order.
  * `pluginsOpt`: None = default builtins (JSX on); Some([]) = hard opt-out.
  */
-export const parseWith: <A, B, C, D>(
+export const parseWith: <A, B, C, D, E>(
   toks: LocTok[],
   pluginsOpt: Option<
     {
@@ -4275,11 +4289,18 @@ export const parseWith: <A, B, C, D>(
       >;
       format: Option<B>;
       dtsBinding: Option<C>;
+      bindingType: Option<
+        (
+          a: Expr,
+          b: Ty,
+          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+        ) => Option<string>
+      >;
     }[]
   >,
 ) => Result<Stmt[], PErr> = _curry(
   2,
-  <A, B, C, D>(
+  <A, B, C, D, E>(
     toks: LocTok[],
     pluginsOpt: Option<
       {
@@ -4305,6 +4326,13 @@ export const parseWith: <A, B, C, D>(
         >;
         format: Option<B>;
         dtsBinding: Option<C>;
+        bindingType: Option<
+          (
+            a: Expr,
+            b: Ty,
+            c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+          ) => Option<string>
+        >;
       }[]
     >,
   ) => {

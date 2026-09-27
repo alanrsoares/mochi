@@ -15,6 +15,7 @@
       "module-cycle",
       "multiple-graph-check-errors",
       "dts",
+      "jsx-dts",
       "format",
       "typed-ts",
       "typed-ts-graph",
@@ -23,11 +24,10 @@
       "styled-cva-unknown-tag",
       "styled-cva-format",
       "styled-cva-format-paths",
-      "styled-cva-format-comments"
-    ],
-    "pending": [
+      "styled-cva-format-comments",
       "styled-cva-dts"
-    ]
+    ],
+    "pending": []
   },
   "cases": [
     {
@@ -107,6 +107,12 @@
       "kind": "dts",
       "entry": "dts.mochi",
       "expect": "dts.expect.txt"
+    },
+    {
+      "id": "jsx-dts",
+      "kind": "dts",
+      "entry": "jsx-dts/components.mochi",
+      "expect": "jsx-dts.expect.txt"
     },
     {
       "id": "format",

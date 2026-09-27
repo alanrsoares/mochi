@@ -2106,6 +2106,13 @@ type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }
 /// inline record is not a legal type argument here.
 type HookErr = { message: string, start: number, end: number }
 
+/// What a `bindingType` hook renders with (ADR 0055): the TS text of a type,
+/// and the record alias a closed row prints as, if the module declared one.
+type TsApi = {
+  tsType: Types.Ty -> string,
+  aliasOf: Types.Row -> Option<string>
+}
+
 /// A plugin as every pass sees it (ADR 0011, 0109). `format` rewrites a node
 /// before the printer lays it out; `dtsBinding` supplies a binding's `.d.ts`
 /// type text. The parse hook is written INLINE rather than
@@ -2116,7 +2123,8 @@ type Plugin<t> = {
   parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
   format: Option<Ast.Expr -> Option<Ast.Expr> >,
-  dtsBinding: Option<string -> Ast.Expr -> Option<string> >
+  dtsBinding: Option<string -> Ast.Expr -> Option<string> >,
+  bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string> >
 }
 
 /// `Plugin` at the lexer's token type: the list a host hands the compile and
@@ -2127,7 +2135,8 @@ export type HostPlugin = {
   parse: Option<[LocTok<Lexer.Tok>] -> number -> ([LocTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
   format: Option<Ast.Expr -> Option<Ast.Expr> >,
-  dtsBinding: Option<string -> Ast.Expr -> Option<string> >
+  dtsBinding: Option<string -> Ast.Expr -> Option<string> >,
+  bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string> >
 }
 
 /// The context threaded through Algorithm W. Declared and annotated at every

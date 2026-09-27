@@ -12,6 +12,7 @@ import { inferProgramWith, inferProgramTypesWith } from "./infer.mochi"
 import { codegenWith, jsGenOpts } from "./codegen.mochi"
 import * as Infer from "./infer.mochi"
 import { emitTsModuleWith } from "./codegen-ts.mochi"
+import { bindingHooksFor } from "./extensions.mochi"
 import { showType } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
 
@@ -229,7 +230,8 @@ export let compileTsWith = (src, runtimeImport, opts: Opts) =>
           preludeJsDefs,
           runtimeDeps,
           runtimeImport,
-          opts.docs
+          opts.docs,
+          bindingHooksFor(opts.plugins)
         ))
       |> Result.mapErr(e => [stampType(e)])
 

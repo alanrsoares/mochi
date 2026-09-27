@@ -1,0 +1,8 @@
+import type { _Curry } from "@mochi/runtime";
+export type Props = { title: string };
+export declare const el: any;
+export declare const Card: (props: Props) => any;
+export declare const Inline: (props: { label: string; count: unknown; children?: any; className?: string }) => any;
+export declare const Free: (props: { onPress: () => void; children: unknown; className?: string }) => any;
+export declare const plain: (a: number) => number;
+export declare const Row: _Curry<[props: Record<string, unknown>, _1: number], any>;

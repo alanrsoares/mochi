@@ -31,11 +31,13 @@ import { typeExprToType, collect, emptyVarSets } from "./schemes.mochi"
 import { builtinTypeDecls, keysOf } from "./ctors.mochi"
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
 import { inferProgramTypes, exprSpan } from "./infer.mochi"
+import { bindingHooksFor, runBindingHooks } from "./extensions.mochi"
 import {
   genericNames,
   letterAt,
   plainEnv,
   recsEnv,
+  rowAliasName,
   rowShapeKey,
   schemeRender,
   tsEnv,
@@ -442,7 +444,18 @@ let declType = (t, value, env) => switch value {
 /// A non-function polymorphic binding has nowhere to bind generics, so its
 /// escaped vars fall back to `unknown` — except variables the alias pin
 /// resolved, which print as that concrete text.
-export let bindingTsType = (sc, value, recs) =>
+/// A plugin `bindingType` hook (ADR 0055) may replace the whole type first.
+export let bindingTsType = (sc, value, recs, bindingHooks) =>
+  let api = {
+    tsType: t => tsOf(t, recsEnv(recs)),
+    aliasOf: row => rowAliasName(row, recs)
+  } in
+    switch runBindingHooks(bindingHooks, value, sc.ty, api) {
+      | Some(ts) => ts
+      | None => coreBindingTsType(sc, value, recs)
+    }
+
+let coreBindingTsType = (sc, value, recs) =>
   let rendered = schemeRender(sc, recs) in
     switch value {
       | Ast.ELambda(_, _, _) => rendered.head == ""
@@ -958,7 +971,7 @@ let scopedNamesFrom = (stmts, env, recs: Map<string, string>, i, acc) => switch 
 
 /// The TS-backend options: every hook resolved against this module's inference
 /// metadata. This is where `inferProgramTypes` and `codegenWith` actually meet.
-export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>) =>
+export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, bindingHooks) =>
   let typeAt = typeAtTable(types) in
   let letParamAt = typeAtTable(letParams) in
   let genericLams = genericLambdasFrom(stmts, env, 0, #{}) in
@@ -982,7 +995,9 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
           ? None
           : switch value {
             | Ast.ELambda(_, _, _) => switch Map.get(name, env) {
-                | Some(sc) => Some(": ${bindingTsType(sc, value, recs)}")
+                | Some(sc) => Some(
+                    ": ${bindingTsType(sc, value, recs, bindingHooks)}"
+                  )
                 | None => None
               }
             | _ =>
@@ -1125,7 +1140,7 @@ let hasJsxStmts = stmts =>
 /// single file passes `#{}` / `[]`, a module in a graph passes its deps' ctor
 /// field keys (so destructuring an imported ctor emits the right names) and the
 /// `import type { … }` lines its driver computed from the emitted text.
-export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs) =>
+export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string, AliasInfo>, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, docs, bindingHooks) =>
   let declared = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let wanted = referencedCons(stmts, env, 0, Set.fromArray([])) in
   let recs = withoutAmbiguousAlias(
@@ -1141,7 +1156,7 @@ export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string
     ns,
     jsDefs,
     runtimeDeps,
-    { ...tsGenOpts(stmts, env, types, letParams, aliases), docs }
+    { ...tsGenOpts(stmts, env, types, letParams, aliases, bindingHooks), docs }
   ) in
   // `_tuple` is a TS-emit device with no AST reference for the dep scan to
   // find (ADR 0036), so pull it in from the emitted text.
@@ -1188,7 +1203,8 @@ export let emitTsModule = (stmts, env, types, letParams, aliases: Map<string, Al
     jsDefs,
     runtimeDeps,
     runtimeImport,
-    true
+    true,
+    bindingHooksFor(None)
   )
 
 // ---- extern host declarations (ADR 0026 / 0064) ----------------------------
