@@ -2115,7 +2115,7 @@ type TsApi = {
 
 /// A plugin as every pass sees it (ADR 0011, 0109). `format` rewrites a node
 /// before the printer lays it out; `dtsBinding` supplies a binding's `.d.ts`
-/// type text. The parse hook is written INLINE rather than
+/// type text from its name, value, and inferred type. The parse hook is written INLINE rather than
 /// behind its own alias: a parameterized alias whose body is an arrow emits as
 /// an opaque brand, not a transparent type.
 type Plugin<t> = {
@@ -2123,7 +2123,7 @@ type Plugin<t> = {
   parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
   format: Option<Ast.Expr -> Option<Ast.Expr> >,
-  dtsBinding: Option<string -> Ast.Expr -> Option<string> >,
+  dtsBinding: Option<string -> Ast.Expr -> Types.Ty -> TsApi -> Option<string> >,
   bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string> >
 }
 
@@ -2135,7 +2135,7 @@ export type HostPlugin = {
   parse: Option<[LocTok<Lexer.Tok>] -> number -> ([LocTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
   format: Option<Ast.Expr -> Option<Ast.Expr> >,
-  dtsBinding: Option<string -> Ast.Expr -> Option<string> >,
+  dtsBinding: Option<string -> Ast.Expr -> Types.Ty -> TsApi -> Option<string> >,
   bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string> >
 }
 

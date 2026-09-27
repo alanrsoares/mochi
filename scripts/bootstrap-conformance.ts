@@ -19,6 +19,7 @@ import {
   compileTsBootstrapSyncWith,
 } from "@mochi/compiler/bootstrap/sync";
 import { formatBootstrap } from "@mochi/compiler/bootstrap/syntax";
+import { reReducedBootstrap } from "@mochi/plugin-re-reduced/bootstrap";
 import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 import { match } from "@onrails/pattern";
 
@@ -74,6 +75,7 @@ const baseOptions: BootstrapOptions = {
  * naming one missing from here fails.
  */
 const conformancePlugins: Record<string, BootstrapPlugin> = {
+  "re-reduced": reReducedBootstrap,
   "styled-cva": styledCvaBootstrap,
 };
 

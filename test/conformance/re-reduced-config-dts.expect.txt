@@ -1,0 +1,3 @@
+export declare const config: { state: { profile: { name: string }; active: boolean }; actions: (a: (a: (a: { active: boolean }) => { active: boolean }) => unknown) => { toggle: unknown } };
+export declare const profile: import("@re-reduced/preact").ContainerDef<{ profile: { name: string }; active: boolean }, { toggle: import("@re-reduced/preact").ActionSpec<{ profile: { name: string }; active: boolean }, void> }, Record<string, never>, never> & { name: string };
+export declare const counter: import("@re-reduced/preact").ContainerDef<{ count: number }, { increment: import("@re-reduced/preact").ActionSpec<{ count: number }, void>; decrement: import("@re-reduced/preact").ActionSpec<{ count: number }, void> }, Record<string, never>, never> & { name: string };

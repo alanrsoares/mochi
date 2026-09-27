@@ -1,0 +1,20 @@
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+
+let config = {
+  state: { profile: { name: "Ada" }, active: true },
+  actions: on => { toggle: on(s => { active: !s.active }) }
+}
+
+export let profile = defineContainer("profile", config)
+
+export let counter = defineContainer(
+  "counter",
+  {
+    state: { count: 0 },
+    actions: on =>
+      {
+        increment: on(s => { count: s.count + 1 }),
+        decrement: on(s => { count: s.count - 1 })
+      }
+  }
+)

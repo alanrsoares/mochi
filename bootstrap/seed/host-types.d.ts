@@ -160,6 +160,7 @@ export type Row =
 export type TypeAt = { span: SpanAt; ty: Ty };
 export type SpanAt = { start: number; end: number };
 export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
+export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };
 export type Tok =
   | { _tag: "TLet" }
   | { _tag: "TType" }

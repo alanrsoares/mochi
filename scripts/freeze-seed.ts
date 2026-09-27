@@ -131,7 +131,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "./types.ts";\n',
+  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tRecord, tUnion, zonk } from "./types.ts";\n',
 );
 execFileSync(
   "bun",
@@ -158,7 +158,7 @@ writeFileSync(
   join(tmp, "host-types.d.ts"),
   hostTypesDts(tmp, [
     { file: "ast.ts", names: ["Expr", "Field", "Pattern", "Span", "Stmt", "TypeExpr"] },
-    { file: "infer.ts", names: ["IErr", "InferApi", "LocTok"] },
+    { file: "infer.ts", names: ["IErr", "InferApi", "LocTok", "TsApi"] },
     { file: "lexer.ts", names: ["Tok"] },
     { file: "types.ts", names: ["Row", "St", "Ty"] },
   ]),

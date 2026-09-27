@@ -58,6 +58,7 @@ import {
   withoutAmbiguousAlias,
   opaqueTypeDecl,
   recordAliasDecl,
+  tsApiFor,
   typeDecl,
   withoutOwnShape,
 } from "./codegen-ts";
@@ -407,7 +408,7 @@ const bindingDeclsFrom: <A>(
   recs: Map<string, string>,
   qualify: Map<string, string>,
   docs: boolean,
-  dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+  dtsHooks: ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
   bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   i: number,
 ) => string[] = _curry(
@@ -418,7 +419,7 @@ const bindingDeclsFrom: <A>(
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
-    dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+    dtsHooks: ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
     bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
     i: number,
   ) =>
@@ -441,20 +442,21 @@ const bindingDeclsFrom: <A>(
                 : match(_Map_get(name, env))
                     .with({ _tag: "None" }, () => rest)
                     .with({ _tag: "Some" }, ({ value: sc }) =>
-                      _Array_prepend(
-                        decl(
-                          _Option_unwrapOr(
-                            bindingTsType(
-                              { vars: sc.vars, rvars: sc.rvars, ty: qualifyTy(sc.ty, qualify) },
-                              value,
-                              recs,
-                              bindingHooks,
+                      ((ty: Ty) =>
+                        _Array_prepend(
+                          decl(
+                            _Option_unwrapOr(
+                              bindingTsType(
+                                { vars: sc.vars, rvars: sc.rvars, ty: ty },
+                                value,
+                                recs,
+                                bindingHooks,
+                              ),
+                              runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs)),
                             ),
-                            runDtsHooks(dtsHooks, name, value),
                           ),
-                        ),
-                        rest,
-                      ),
+                          rest,
+                        ))(qualifyTy(sc.ty, qualify)),
                     )
                     .exhaustive())(
               (ts: string) => `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`,
@@ -632,7 +634,7 @@ export const emitDtsFromTypedWith: <A>(
   qualify: Map<string, string>,
   runtimeImport: string,
   docs: boolean,
-  dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+  dtsHooks: ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
   bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
 ) => string = _curry(
   8,
@@ -643,7 +645,7 @@ export const emitDtsFromTypedWith: <A>(
     qualify: Map<string, string>,
     runtimeImport: string,
     docs: boolean,
-    dtsHooks: ((a: string, b: Expr) => Option<string>)[],
+    dtsHooks: ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
     bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   ) => {
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
@@ -781,7 +783,7 @@ export const emitDtsFromTyped: <A>(
       qualify,
       runtimeImport,
       true,
-      [] as ((a: string, b: Expr) => Option<string>)[],
+      [] as ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
       bindingHooksFor(None),
     ),
 );
@@ -818,7 +820,7 @@ export const emitDtsTextWith: _Curry<
             ) => Result<Option<[Ty, St]>, IErr>
           >;
           format: Option<(a: Expr) => Option<Expr>>;
-          dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
@@ -859,7 +861,7 @@ export const emitDtsTextWith: _Curry<
             ) => Result<Option<[Ty, St]>, IErr>
           >;
           format: Option<(a: Expr) => Option<Expr>>;
-          dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;

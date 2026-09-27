@@ -18,6 +18,7 @@ export type {
   St,
   Stmt,
   Tok,
+  TsApi,
   Ty,
   TypeExpr,
 } from "../../../../bootstrap/seed/host-types";
@@ -33,6 +34,7 @@ type SeedTypes = {
   rExtend: (label: string, fieldType: Ty, rest: Row) => Row;
   freshVar: (st: St) => [Ty, St];
   freshRowVar: (st: St) => [Row, St];
+  zonk: (t: Ty, st: St) => Ty;
 };
 
 const seed = loadSeed<SeedTypes>("syntax.bundle.cjs");
@@ -45,3 +47,5 @@ export const tUnion = seed.tUnion;
 export const rExtend = seed.rExtend;
 export const freshVar = seed.freshVar;
 export const freshRowVar = seed.freshRowVar;
+/** A type with every solved variable in `st` substituted through. */
+export const zonk = seed.zonk;

@@ -1,4 +1,4 @@
-import type { Expr, IErr, InferApi, LocTok, St, Tok, Ty } from "./types.ts";
+import type { Expr, IErr, InferApi, LocTok, St, Tok, TsApi, Ty } from "./types.ts";
 
 /**
  * The knobs the self-hosted core takes: `open` selects open-world inference (a
@@ -59,8 +59,16 @@ export type BootstrapInferCallHook = (
 /** A rewritten node for the printer to lay out, or `null` to leave it alone. */
 export type BootstrapFormatHook = (expr: Expr) => Expr | null;
 
-/** A binding's `.d.ts` type text, or `null` for the inferred one. */
-export type BootstrapDtsBindingHook = (name: string, value: Expr) => string | null;
+/**
+ * A binding's `.d.ts` type text, or `null` for the inferred one. `ty` is the
+ * binding's inferred type; `api` renders a type as the core would.
+ */
+export type BootstrapDtsBindingHook = (
+  name: string,
+  value: Expr,
+  ty: Ty,
+  api: TsApi,
+) => string | null;
 
 /**
  * A host plugin over the self-hosted core (ADR 0109). Every hook is optional;
@@ -80,7 +88,9 @@ export type SeedPlugin = {
   parse: BootstrapOption<BootstrapParseHook>;
   inferCall: BootstrapOption<BootstrapInferCallHook>;
   format: BootstrapOption<(expr: Expr) => BootstrapOption<Expr>>;
-  dtsBinding: BootstrapOption<(name: string, value: Expr) => BootstrapOption<string>>;
+  dtsBinding: BootstrapOption<
+    (name: string, value: Expr, ty: Ty, api: TsApi) => BootstrapOption<string>
+  >;
   /** Builtin-only for now (the JSX plugin's ADR 0055 rendering); hosts pass none. */
   bindingType: { _tag: "None" };
 };

@@ -19,6 +19,7 @@ import {
   withoutAmbiguousAlias,
   opaqueTypeDecl,
   recordAliasDecl,
+  tsApiFor,
   typeDecl,
   withoutOwnShape
 } from "./codegen-ts.mochi"
@@ -256,24 +257,21 @@ let bindingDeclsFrom = (stmts, env, recs, qualify, docs, dtsHooks, bindingHooks,
         ? rest
         : switch Map.get(name, env) {
           | None => rest
-          | Some(sc) => Array.prepend(
-              decl(
-                runDtsHooks(dtsHooks, name, value)
-                  |> Option.unwrapOr(
-                    bindingTsType(
-                      {
-                        vars: sc.vars,
-                        rvars: sc.rvars,
-                        ty: qualifyTy(sc.ty, qualify)
-                      },
-                      value,
-                      recs,
-                      bindingHooks
+          | Some(sc) => let ty = qualifyTy(sc.ty, qualify) in
+              Array.prepend(
+                decl(
+                  runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs))
+                    |> Option.unwrapOr(
+                      bindingTsType(
+                        { vars: sc.vars, rvars: sc.rvars, ty },
+                        value,
+                        recs,
+                        bindingHooks
+                      )
                     )
-                  )
-              ),
-              rest
-            )
+                ),
+                rest
+              )
         }
   | Some(_) => bindingDeclsFrom(
       stmts,

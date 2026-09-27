@@ -58,7 +58,7 @@ export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<str
 /**
  * A plugin as every pass sees it (ADR 0011, 0109). `format` rewrites a node
  * before the printer lays it out; `dtsBinding` supplies a binding's `.d.ts`
- * type text. The parse hook is written INLINE rather than
+ * type text from its name, value, and inferred type. The parse hook is written INLINE rather than
  * behind its own alias: a parameterized alias whose body is an arrow emits as
  * an opaque brand, not a transparent type.
  */
@@ -78,7 +78,7 @@ export type Plugin<A> = {
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
   format: Option<(a: Expr) => Option<Expr>>;
-  dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+  dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
 /**
@@ -102,7 +102,7 @@ export type HostPlugin = {
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
   format: Option<(a: Expr) => Option<Expr>>;
-  dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+  dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
 /**
@@ -133,7 +133,7 @@ export type Ctx<A> = {
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
-    dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
@@ -508,7 +508,7 @@ const u: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -549,7 +549,7 @@ const u: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -601,7 +601,7 @@ const checkFits: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -642,7 +642,7 @@ const checkFits: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -794,7 +794,7 @@ const constrainParamAnnotsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -835,7 +835,7 @@ const constrainParamAnnotsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -980,7 +980,7 @@ const ctxWithEnv: <A, B>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1009,7 +1009,7 @@ const ctxWithEnv: <A, B>(
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
-    dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
@@ -1045,7 +1045,7 @@ const ctxWithEnv: <A, B>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -1092,7 +1092,7 @@ const ctxWithLets: <A, B, C>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1122,7 +1122,7 @@ const ctxWithLets: <A, B, C>(
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
-    dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
@@ -1158,7 +1158,7 @@ const ctxWithLets: <A, B, C>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -1206,7 +1206,7 @@ const ctxWithLoop: <A, B, C>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1237,7 +1237,7 @@ const ctxWithLoop: <A, B, C>(
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
-    dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
   loopStack: Ty[][];
@@ -1273,7 +1273,7 @@ const ctxWithLoop: <A, B, C>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -1322,7 +1322,7 @@ const inferLoopParamsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1365,7 +1365,7 @@ const inferLoopParamsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -1434,7 +1434,7 @@ const unifyRecurArgsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1475,7 +1475,7 @@ const unifyRecurArgsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -1534,7 +1534,7 @@ const inferRecur: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1574,7 +1574,7 @@ const inferRecur: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -1695,7 +1695,7 @@ const labFieldsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1737,7 +1737,7 @@ const labFieldsFrom: <A>(
             ) => Result<Option<[Ty, St]>, IErr>
           >;
           format: Option<(a: Expr) => Option<Expr>>;
-          dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[];
         loopStack: Ty[][];
@@ -1929,7 +1929,7 @@ const inferCallArgs: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -1970,7 +1970,7 @@ const inferCallArgs: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2053,7 +2053,7 @@ const inferNormalCall: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2093,7 +2093,7 @@ const inferNormalCall: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2166,7 +2166,7 @@ const inferTernary: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2207,7 +2207,7 @@ const inferTernary: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2268,7 +2268,7 @@ const inferBindBody: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2311,7 +2311,7 @@ const inferBindBody: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2370,7 +2370,7 @@ const inferTwoSlotBind: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2414,7 +2414,7 @@ const inferTwoSlotBind: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2473,7 +2473,7 @@ const inferQuestionBind: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2517,7 +2517,7 @@ const inferQuestionBind: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2605,7 +2605,7 @@ const inferLetBind: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2649,7 +2649,7 @@ const inferLetBind: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2700,7 +2700,7 @@ const inferRecordRow: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2739,7 +2739,7 @@ const inferRecordRow: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2831,7 +2831,7 @@ const inferFieldAccess: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2873,7 +2873,7 @@ const inferFieldAccess: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -2944,7 +2944,7 @@ const inferDuckField: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -2985,7 +2985,7 @@ const inferDuckField: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3032,7 +3032,7 @@ const inferNsField: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3073,7 +3073,7 @@ const inferNsField: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3123,7 +3123,7 @@ const inferInterpParts: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3162,7 +3162,7 @@ const inferInterpParts: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3234,7 +3234,7 @@ const inferTupleElems: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3273,7 +3273,7 @@ const inferTupleElems: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3344,7 +3344,7 @@ const inferSeqSlotsElems: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3385,7 +3385,7 @@ const inferSeqSlotsElems: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3459,7 +3459,7 @@ const inferSeqSlots: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3499,7 +3499,7 @@ const inferSeqSlots: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3544,7 +3544,7 @@ const inferMapEntries: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3585,7 +3585,7 @@ const inferMapEntries: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3660,7 +3660,7 @@ const inferMapExpr: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3699,7 +3699,7 @@ const inferMapExpr: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3798,7 +3798,7 @@ const inferArms: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3839,7 +3839,7 @@ const inferArms: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -3927,7 +3927,7 @@ const inferMatch: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -3967,7 +3967,7 @@ const inferMatch: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4021,7 +4021,7 @@ const inferExpr: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4060,7 +4060,7 @@ const inferExpr: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4103,7 +4103,7 @@ const inferExprRaw: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4142,7 +4142,7 @@ const inferExprRaw: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4422,7 +4422,7 @@ const inferDo: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4461,7 +4461,7 @@ const inferDo: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4527,7 +4527,7 @@ const inferPatRecordFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4568,7 +4568,7 @@ const inferPatRecordFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4638,7 +4638,7 @@ const inferPatRecord: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4677,7 +4677,7 @@ const inferPatRecord: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4722,7 +4722,7 @@ const inferPatCtorArgs: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4765,7 +4765,7 @@ const inferPatCtorArgs: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4853,7 +4853,7 @@ const inferPatTupleFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -4892,7 +4892,7 @@ const inferPatTupleFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -4968,7 +4968,7 @@ const inferPatTuple: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5007,7 +5007,7 @@ const inferPatTuple: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5051,7 +5051,7 @@ const inferSeqPatElems: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5091,7 +5091,7 @@ const inferSeqPatElems: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5165,7 +5165,7 @@ const inferSeqPat: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5206,7 +5206,7 @@ const inferSeqPat: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5278,7 +5278,7 @@ const inferPat: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5317,7 +5317,7 @@ const inferPat: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5364,7 +5364,7 @@ const inferPatRaw: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5403,7 +5403,7 @@ const inferPatRaw: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5535,7 +5535,7 @@ const unifyOrPatBinding: <A, B>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5577,7 +5577,7 @@ const unifyOrPatBinding: <A, B>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5628,7 +5628,7 @@ const unifyOrPatBindings: <A, B>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5670,7 +5670,7 @@ const unifyOrPatBindings: <A, B>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5728,7 +5728,7 @@ const inferOrPatAlts: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5770,7 +5770,7 @@ const inferOrPatAlts: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -5836,7 +5836,7 @@ const inferOrPat: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -5876,7 +5876,7 @@ const inferOrPat: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -6862,7 +6862,7 @@ const inferGroupFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -6901,7 +6901,7 @@ const inferGroupFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -7119,7 +7119,7 @@ const processGroupsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -7158,7 +7158,7 @@ const processGroupsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -7198,7 +7198,7 @@ const processGroupsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -7274,7 +7274,7 @@ const inferExprStmtsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
     loopStack: Ty[][];
@@ -7313,7 +7313,7 @@ const inferExprStmtsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
-        dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
       loopStack: Ty[][];
@@ -7770,7 +7770,7 @@ const runInferImports: <A, B, C>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
-      dtsBinding: Option<(a: string, b: Expr) => Option<string>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[] = resolvePluginsDefault(pluginsOpt);
     const st0: St = mkSt(1000);

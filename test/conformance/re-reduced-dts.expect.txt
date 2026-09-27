@@ -1,0 +1,6 @@
+export declare const game: import("@re-reduced/preact").ContainerDef<{ count: number; name: string }, { bump: import("@re-reduced/preact").ActionSpec<{ count: number; name: string }, void>; setName: import("@re-reduced/preact").ActionSpec<{ count: number; name: string }, string> }, { doubled: () => number }, import("@re-reduced/preact").BuiltinIntent> & { name: string };
+export declare const doubled: () => number;
+export declare const count: () => number;
+export declare const watched: () => undefined;
+export declare const rename: () => undefined;
+export declare const score: Intent;

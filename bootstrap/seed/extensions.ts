@@ -483,27 +483,37 @@ export const runFormatHooks: <A, B>(hooks: ((a: A) => Option<B>)[], e: A) => Opt
 /**
  * First hook to claim wins: `Some(ts)` is the binding's declared type text.
  */
-export const runDtsHooks: <A, B, C>(
-  hooks: ((a: A, b: B) => Option<C>)[],
+export const runDtsHooks: <A, B, C, D, E>(
+  hooks: ((a: A, b: B, c: C, d: D) => Option<E>)[],
   name: A,
   value: B,
-) => Option<C> = _curry(3, <A, B, C>(hooks: ((a: A, b: B) => Option<C>)[], name: A, value: B) =>
-  match(hooks)
-    .with(
-      (_v) => _v.length === 0,
-      () => None,
-    )
-    .with(
-      (_v) => _v.length >= 1,
-      ([hook, ...rest]) =>
-        match(hook(name, value))
-          .with({ _tag: "Some" }, ({ value: ts }) => Some(ts))
-          .with({ _tag: "None" }, () => runDtsHooks(rest, name, value))
-          .exhaustive(),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ty: C,
+  api: D,
+) => Option<E> = _curry(
+  5,
+  <A, B, C, D, E>(
+    hooks: ((a: A, b: B, c: C, d: D) => Option<E>)[],
+    name: A,
+    value: B,
+    ty: C,
+    api: D,
+  ) =>
+    match(hooks)
+      .with(
+        (_v) => _v.length === 0,
+        () => None,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([hook, ...rest]) =>
+          match(hook(name, value, ty, api))
+            .with({ _tag: "Some" }, ({ value: ts }) => Some(ts))
+            .with({ _tag: "None" }, () => runDtsHooks(rest, name, value, ty, api))
+            .exhaustive(),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const bindingHooksFrom: <A, B>(
   plugins: ({ bindingType: Option<A> } & B)[],
