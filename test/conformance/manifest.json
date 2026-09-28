@@ -32,7 +32,12 @@
       "re-reduced-bad-payload",
       "re-reduced-bad-on-action",
       "re-reduced-bad-query",
-      "re-reduced-bad-patch-label"
+      "re-reduced-bad-patch-label",
+      "preact-dts",
+      "preact-bad-setter",
+      "preact-bad-lazy",
+      "preact-bad-ref",
+      "preact-bad-memo"
     ],
     "pending": []
   },
@@ -263,6 +268,51 @@
       "expect": "re-reduced-bad-patch-label.expect.json",
       "plugins": [
         "re-reduced"
+      ]
+    },
+    {
+      "id": "preact-dts",
+      "kind": "dts",
+      "expect": "preact-dts.expect.txt",
+      "plugins": [
+        "preact"
+      ],
+      "entry": "preact/full.mochi"
+    },
+    {
+      "id": "preact-bad-setter",
+      "kind": "diagnostic",
+      "source": "preact/bad-setter.mochi",
+      "expect": "preact-bad-setter.expect.json",
+      "plugins": [
+        "preact"
+      ]
+    },
+    {
+      "id": "preact-bad-lazy",
+      "kind": "diagnostic",
+      "source": "preact/bad-lazy.mochi",
+      "expect": "preact-bad-lazy.expect.json",
+      "plugins": [
+        "preact"
+      ]
+    },
+    {
+      "id": "preact-bad-ref",
+      "kind": "diagnostic",
+      "source": "preact/bad-ref.mochi",
+      "expect": "preact-bad-ref.expect.json",
+      "plugins": [
+        "preact"
+      ]
+    },
+    {
+      "id": "preact-bad-memo",
+      "kind": "diagnostic",
+      "source": "preact/bad-memo.mochi",
+      "expect": "preact-bad-memo.expect.json",
+      "plugins": [
+        "preact"
       ]
     }
   ]

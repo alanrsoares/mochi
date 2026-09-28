@@ -1,0 +1,25 @@
+export extern useState<A, B> : A -> (A, A -> B) = "preact/hooks" "useState"
+export extern useLazyState<A, B> : (() -> A) -> (A, A -> B) = "preact/hooks" "useState"
+export extern useEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useEffect"
+export extern useCallback<A, B> : A -> B -> A = "preact/hooks" "useCallback"
+export extern useLayoutEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useLayoutEffect"
+export extern useRef<A, B> : A -> B = "preact/hooks" "useRef"
+export extern useMemo<A, B> : (() -> A) -> B -> A = "preact/hooks" "useMemo"
+export extern hookDeps2<A, B, C> : A -> B -> C = "./runtime" "hookDeps2"
+export extern hookDeps1<A, B> : A -> B = "./runtime" "hookDeps1"
+export extern hookDeps0<A> : () -> A = "./runtime" "hookDeps0"
+
+export let counter = (step: number) =>
+  let (n, setN) = useState(0) in
+  let (label, setLabel) = useLazyState(() => "count") in
+  let box = useRef(n) in
+    do {
+      useEffect(() => setN(x => x + step))(hookDeps1(step));
+      useLayoutEffect(() => (), hookDeps0());
+      let bump = useCallback(() => setN(x => x + 1), hookDeps2(n, step)) in
+      let doubled = useMemo(() => box.current * 2, hookDeps1(n)) in
+        do {
+          setLabel(l => l ++ "!");
+          { n, label, bump, doubled }
+        }
+    }

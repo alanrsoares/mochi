@@ -240,6 +240,7 @@ export type SeedTypeCtors = {
   tCon: _Curry<[name: string, args: Ty[]], Ty>;
   tArrow: _Curry<[fromT: Ty, toT: Ty], Ty>;
   tRecord: (row: Row) => Ty;
+  tTuple: (elems: Ty[]) => Ty;
   tLit: (value: string) => Ty;
   tUnion: (members: Ty[]) => Ty;
   tPrim: (name: string) => Ty;

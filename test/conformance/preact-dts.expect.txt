@@ -1,0 +1,1 @@
+export declare const counter: (step: number) => { n: number; label: string; bump: () => undefined; doubled: number };

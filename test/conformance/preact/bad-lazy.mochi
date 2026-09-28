@@ -1,0 +1,12 @@
+export extern useState<A, B> : A -> (A, A -> B) = "preact/hooks" "useState"
+export extern useLazyState<A, B> : (() -> A) -> (A, A -> B) = "preact/hooks" "useState"
+export extern useEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useEffect"
+export extern useCallback<A, B> : A -> B -> A = "preact/hooks" "useCallback"
+export extern useLayoutEffect<C, D, E> : (() -> C) -> D -> E = "preact/hooks" "useLayoutEffect"
+export extern useRef<A, B> : A -> B = "preact/hooks" "useRef"
+export extern useMemo<A, B> : (() -> A) -> B -> A = "preact/hooks" "useMemo"
+export extern hookDeps2<A, B, C> : A -> B -> C = "./runtime" "hookDeps2"
+export extern hookDeps1<A, B> : A -> B = "./runtime" "hookDeps1"
+export extern hookDeps0<A> : () -> A = "./runtime" "hookDeps0"
+
+export let counter = () => let (n, _setN) = useLazyState(0) in n

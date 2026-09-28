@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./bootstrap": "./src/bootstrap.ts",
     "./hooks": "./hooks.mochi",
     "./runtime": "./src/runtime.ts"
   },

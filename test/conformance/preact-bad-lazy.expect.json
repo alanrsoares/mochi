@@ -1,0 +1,7 @@
+[
+  {
+    "message": "cannot unify number with () -> 't1031 — a function (() -> 't1031) was used where a number was expected; a call may be missing an argument",
+    "start": 819,
+    "end": 820
+  }
+]

@@ -12200,6 +12200,7 @@ export {
   tPrim,
   tRecord,
   tString,
+  tTuple,
   tUnion,
   zonk
 };
