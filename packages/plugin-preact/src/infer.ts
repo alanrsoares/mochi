@@ -11,6 +11,7 @@ import type { InferCallApi, InferCallHook } from "@mochi/compiler/extensions";
 // import, so Node/Vite's config loader must resolve it without a bundler.
 import type { CallExpr } from "@mochi/compiler/plugin-kit";
 import { inferArgs, isRefCall } from "@mochi/compiler/plugin-kit";
+import { widenLits } from "@mochi/compiler/schemes";
 import type { Type } from "@mochi/compiler/types";
 import {
   rEmpty,
@@ -33,7 +34,7 @@ const inferUseState: InferCallHook = (e, api) => {
   if (!isRefCall(e, "useState") || e.args.length !== 1) return null;
   const initR = api.infer(e.args[0]!);
   if (isErr(initR)) return initR;
-  const stateT = api.zonk(initR.value);
+  const stateT = widenLits(api.zonk(initR.value));
   const setterT = tArrow(setStateDomain(stateT), tUnit);
   return ok(tTuple([stateT, setterT]));
 };
@@ -46,7 +47,7 @@ const inferUseLazyState: InferCallHook = (e, api) => {
   if (isErr(thunkR)) return thunkR;
   const uni = api.unify(thunkR.value, tArrow(tUnit, stateT), e.args[0]!.span);
   if (isErr(uni)) return uni;
-  const state = api.zonk(stateT);
+  const state = widenLits(api.zonk(stateT));
   return ok(tTuple([state, tArrow(setStateDomain(state), tUnit)]));
 };
 

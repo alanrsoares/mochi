@@ -232,6 +232,15 @@ let t : Tone = "rose"`;
   expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
 });
 
+test("a tuple let types its names from the value before the body", () => {
+  // `let (a, b) = v in body` is `((a, b) => body)(v)`; the body must not fix a
+  // union-domain name before `v` supplies its type.
+  const src = `let apply = (arg: number | (number -> number)) => 1
+let pair = (n: number) =>
+  let (m, set) = (n, apply) in set(x => x + m) + set(m + 1)`;
+  expect(isErr(compile(src))).toBe(false);
+});
+
 test("an optional record field may be omitted and reads as Option (ADR 0098)", () => {
   const src = `type Props = { id?: string, n: number }
 let ok : Props = { n: 1 }

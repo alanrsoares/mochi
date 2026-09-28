@@ -252,4 +252,5 @@ export type SeedTypeCtors = {
   tNumber: Ty;
   tString: Ty;
   tBool: Ty;
+  widenLits: (t: Ty) => Ty;
 };

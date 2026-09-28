@@ -452,7 +452,7 @@ const absorbParams: _Curry<
     fills: { labVar: string; labs: LamParam[] }[],
     labN: number,
   ) =>
-    (([positional, labeled]: [LamParam[], LamParam[]]) => {
+    (([positional, labeled]) => {
       const acc1: LamParam[] = _Array_concat(acc, positional);
       return match(labeled)
         .with(
@@ -490,7 +490,7 @@ const collapseLambdaFrom: _Curry<
     fills: { labVar: string; labs: LamParam[] }[],
     labN: number,
   ) =>
-    (([acc1, fills1, labN1]: [LamParam[], { labVar: string; labs: LamParam[] }[], number]) =>
+    (([acc1, fills1, labN1]) =>
       match(body)
         .with({ _tag: "ELambda" }, ({ params: params2, body: body2 }) =>
           collapseLambdaFrom(params2, body2, acc1, fills1, labN1),
@@ -717,7 +717,7 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
         .exhaustive(),
     )
     .with({ _tag: "ELambda" }, ({ params, body, span: sp }) =>
-      (([cparams, cbody, fills]: [LamParam[], Expr, { labs: LamParam[]; labVar: string }[]]) => {
+      (([cparams, cbody, fills]) => {
         const bound: Set<string> = fillNames(
           fills,
           paramNameSet(cparams, 0, _Set_fromArray([] as string[])),
@@ -1361,7 +1361,7 @@ const letBlockLoop: _Curry<
 );
 const genLambdaBodyIn: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>, prefix: string], string> =
   _curry(4, (ctx: GCtx, e: Expr, bound: Set<string>, prefix: string) =>
-    (([decls, rest, seen]: [string[], Expr, Set<string>]) =>
+    (([decls, rest, seen]) =>
       eq(length(decls), 0)
         ? match(e)
             .with({ _tag: "ELoop" }, ({ params, body }) =>
@@ -1650,7 +1650,7 @@ const listArmBinds: _Curry<[ctx: GCtx, elems: Pattern[], i: number], [string[], 
     match(_Array_get(i, elems))
       .with({ _tag: "None" }, () => _tuple([] as string[], [] as string[]))
       .with({ _tag: "Some" }, ({ value: el }) =>
-        (([restParams, restArgs]: [string[], string[]]) => {
+        (([restParams, restArgs]) => {
           const slot: string = patSlot(ctx, el);
           return eq(slot, "")
             ? _tuple(restParams, restArgs)
@@ -1668,8 +1668,8 @@ const genListArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr], string> = _curry(
           ((guards: string[]) =>
             ((head: string) =>
               ((cond: string) =>
-                (([params0, args0]: [string[], string[]]) =>
-                  (([params, args]: [string[], string[]]) =>
+                (([params0, args0]) =>
+                  (([params, args]) =>
                     `  if (${cond}) return ((${_Str_join(", ", params)}) => ${genLambdaBody(ctx, body)})(${_Str_join(", ", args)});`)(
                     match(rest)
                       .with(
@@ -1707,7 +1707,7 @@ const listMatchLoop: _Curry<[ctx: GCtx, arms: MatchArm[], i: number], [string[],
       )
       .with({ _tag: "Some" }, ({ value: a }) =>
         and(isPList(a.pattern), not(isCatchAll(a.pattern)))
-          ? (([restLines, fallback]: [string[], string]) =>
+          ? (([restLines, fallback]) =>
               _tuple(_Array_prepend(genListArm(ctx, a.pattern, a.body), restLines), fallback))(
               listMatchLoop(ctx, arms, i + 1),
             )
@@ -1763,7 +1763,7 @@ const listMatchLoop: _Curry<[ctx: GCtx, arms: MatchArm[], i: number], [string[],
 const genListMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
   3,
   (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
-    (([armLines, fallback]: [string[], string]) =>
+    (([armLines, fallback]) =>
       concat(
         concat(
           concat(
@@ -1797,7 +1797,7 @@ const matchArmsLoop: _Curry<
   match(_Array_get(i, arms))
     .with({ _tag: "None" }, () => _tuple([] as string[], None as Option<[Pattern, Expr]>))
     .with({ _tag: "Some" }, ({ value: a }) =>
-      (([restLines, restCatch]: [string[], Option<[Pattern, Expr]>]) =>
+      (([restLines, restCatch]) =>
         match(a.guard)
           .with({ _tag: "Some" }, ({ value: g }) =>
             _tuple(
@@ -1839,7 +1839,7 @@ const genMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> =
     isListMatch(arms)
       ? genListMatch(ctx, scrutinee, arms)
       : ((base: Option<string>) =>
-          (([armLines, catchAll]: [string[], Option<[Pattern, Expr]>]) => {
+          (([armLines, catchAll]) => {
             const tail: string = match(catchAll)
               .with(
                 (_v): _v is Extract<Option<[Pattern, Expr]>, { _tag: "Some" }> => {
@@ -2113,7 +2113,7 @@ const ctorArgParts: _Curry<
   match(_Array_get(i, args))
     .with({ _tag: "None" }, () => _tuple([] as string[], [] as string[]))
     .with({ _tag: "Some" }, ({ value: a }) =>
-      (([restBinds, restLits]: [string[], string[]]) => {
+      (([restBinds, restLits]) => {
         const key: string = keyAt(ctx, ctor, i);
         return match(a)
           .with({ _tag: "PBind" }, ({ name }) =>
@@ -2154,7 +2154,7 @@ const genWithArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr, base: Option<string
       )
       .with({ _tag: "PCtor" }, ({ ctor, args }) =>
         allOf(isFlatSub, args)
-          ? (([binds, litFields]: [string[], string[]]) => {
+          ? (([binds, litFields]) => {
               const patObj: string = _Str_join(
                 ", ",
                 _Array_prepend(`_tag: ${jsStringLit(ctor)}`, litFields),
@@ -2649,7 +2649,7 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
         exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc)),
       )
       .with({ _tag: "ELambda" }, ({ params, body }) =>
-        (([cparams, cbody, fills]: [LamParam[], Expr, { labs: LamParam[]; labVar: string }[]]) => {
+        (([cparams, cbody, fills]) => {
           const acc2: Set<string> = length(cparams) >= 2 ? _Set_add("_curry", acc) : acc;
           const acc3: Set<string> = reduce(
             _curry(2, (a: Set<string>, g: { labs: LamParam[]; labVar: string }) =>
@@ -2955,7 +2955,7 @@ const closeRefsFrom: <A>(queue: A[], i: number, refs: Set<A>, runtimeDeps: Map<A
       .with({ _tag: "None" }, () => refs)
       .with({ _tag: "Some" }, ({ value: r }) =>
         ((deps) =>
-          (([refs2, queue2]: [Set<A>, A[]]) => closeRefsFrom(queue2, i + 1, refs2, runtimeDeps))(
+          (([refs2, queue2]) => closeRefsFrom(queue2, i + 1, refs2, runtimeDeps))(
             addDepsFrom(deps, 0, refs, queue),
           ))(_Option_unwrapOr([] as A[], _Map_get(r, runtimeDeps))),
       )

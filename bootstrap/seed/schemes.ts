@@ -303,7 +303,7 @@ const instMapFrom: <A>(vars: A[], acc: Map<A, Ty>, st: St) => [Map<A, Ty>, St] =
       .with(
         (_v) => _v.length >= 1,
         ([v, ...rest]) =>
-          (([fv, st1]: [Ty, St]) => instMapFrom(rest, _Map_set(v, fv, acc), st1))(freshVar(st)),
+          (([fv, st1]) => instMapFrom(rest, _Map_set(v, fv, acc), st1))(freshVar(st)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -320,9 +320,7 @@ const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, 
       .with(
         (_v) => _v.length >= 1,
         ([v, ...rest]) =>
-          (([fr, st1]: [Row, St]) => instRowMapFrom(rest, _Map_set(v, fr, acc), st1))(
-            freshRowVar(st),
-          ),
+          (([fr, st1]) => instRowMapFrom(rest, _Map_set(v, fr, acc), st1))(freshRowVar(st)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -361,11 +359,11 @@ const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row
       .exhaustive(),
 );
 export const instantiate: <A>(
-  sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
+  sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   st: St,
-) => [Ty, St] = _curry(2, <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A, st: St) =>
-  (([tmap, st1]: [Map<number, Ty>, St]) =>
-    (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
+) => [Ty, St] = _curry(2, <A>(sc: { vars: number[]; rvars: number[]; ty: Ty } & A, st: St) =>
+  (([tmap, st1]) =>
+    (([rmap, st2]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
       instRowMapFrom(sc.rvars, new Map<number, Row>(), st1),
     ))(instMapFrom(sc.vars, new Map<number, Ty>(), st)),
 );
@@ -407,9 +405,8 @@ export const typeExprListToType: _Curry<
           return _g.length >= 1;
         },
         ([te, ...rest]) =>
-          (([t, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, St]) =>
-              _tuple(_Array_prepend(t, restTs), vars2, st2))(
+          (([t, vars1, st1]) =>
+            (([restTs, vars2, st2]) => _tuple(_Array_prepend(t, restTs), vars2, st2))(
               typeExprListToType(rest, vars1, st1, aliases, expanding),
             ))(typeExprToType(te, vars, st, aliases, expanding)),
       )
@@ -446,14 +443,14 @@ export const typeExprName: _Curry<
           .with({ _tag: "None" }, () =>
             match(_Map_get(name, aliases))
               .with({ _tag: "Some" }, ({ value: info }) =>
-                (([t, st1]: [Ty, St]) => _tuple(t, vars, st1))(
+                (([t, st1]) => _tuple(t, vars, st1))(
                   aliasRow(name, info, [] as Ty[], st, aliases, expanding),
                 ),
               )
               .with({ _tag: "None" }, () =>
                 isUpperStart(name)
                   ? _tuple(tPrim(name), vars, st)
-                  : (([v, st1]: [Ty, St]) => _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
+                  : (([v, st1]) => _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
               )
               .exhaustive(),
           )
@@ -485,17 +482,16 @@ export const typeExprToType: _Curry<
   ) =>
     match(te)
       .with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe }) =>
-        (([fromT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-          (([toT, vars2, st2]: [Ty, Map<string, Ty>, St]) =>
-            _tuple(tArrow(fromT, toT), vars2, st2))(
+        (([fromT, vars1, st1]) =>
+          (([toT, vars2, st2]) => _tuple(tArrow(fromT, toT), vars2, st2))(
             typeExprToType(toTe, vars1, st1, aliases, expanding),
           ))(typeExprToType(fromTe, vars, st, aliases, expanding)),
       )
       .with({ _tag: "TyApp" }, ({ ctor, args: argTes }) =>
-        (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+        (([args, vars1, st1]) =>
           match(_Map_get(ctor, aliases))
             .with({ _tag: "Some" }, ({ value: info }) =>
-              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
+              (([t, st2]) => _tuple(t, vars1, st2))(
                 aliasRow(ctor, info, args, st1, aliases, expanding),
               ),
             )
@@ -503,22 +499,21 @@ export const typeExprToType: _Curry<
             .exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding)),
       )
       .with({ _tag: "TyTuple" }, ({ elems: elemTes }) =>
-        (([elems, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tTuple(elems), vars1, st1))(
+        (([elems, vars1, st1]) => _tuple(tTuple(elems), vars1, st1))(
           typeExprListToType(elemTes, vars, st, aliases, expanding),
         ),
       )
       .with({ _tag: "TyList" }, ({ elem: elemTe }) =>
-        (([elemT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-          _tuple(tCon("Array", [elemT]), vars1, st1))(
+        (([elemT, vars1, st1]) => _tuple(tCon("Array", [elemT]), vars1, st1))(
           typeExprToType(elemTe, vars, st, aliases, expanding),
         ),
       )
       .with({ _tag: "TyName" }, ({ name }) => typeExprName(name, vars, st, aliases, expanding))
       .with({ _tag: "TyQual" }, ({ alias, name, args: argTes }) =>
-        (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+        (([args, vars1, st1]) =>
           match(_Map_get(`${alias}.${name}`, aliases))
             .with({ _tag: "Some" }, ({ value: info }) =>
-              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
+              (([t, st2]) => _tuple(t, vars1, st2))(
                 aliasRow(name, info, args, st1, aliases, expanding),
               ),
             )
@@ -527,7 +522,7 @@ export const typeExprToType: _Curry<
       )
       .with({ _tag: "TyLit" }, ({ value }) => _tuple(tLit(value), vars, st))
       .with({ _tag: "TyUnion" }, ({ members }) =>
-        (([ts, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tUnion(ts), vars1, st1))(
+        (([ts, vars1, st1]) => _tuple(tUnion(ts), vars1, st1))(
           typeExprListToType(members, vars, st, aliases, expanding),
         ),
       )
@@ -551,7 +546,7 @@ const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, S
                 return _g.length >= 1;
               },
               ([a, ...restArgs]) =>
-                (([restMap, st1]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, a, restMap), st1))(
+                (([restMap, st1]) => _tuple(_Map_set(p, a, restMap), st1))(
                   aliasLocalVarsFrom(restParams, restArgs, st),
                 ),
             )
@@ -561,8 +556,8 @@ const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, S
                 return _g.length === 0;
               },
               () =>
-                (([v, st1]: [Ty, St]) =>
-                  (([restMap, st2]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, v, restMap), st2))(
+                (([v, st1]) =>
+                  (([restMap, st2]) => _tuple(_Map_set(p, v, restMap), st2))(
                     aliasLocalVarsFrom(restParams, [] as Ty[], st1),
                   ))(freshVar(st)),
             )
@@ -606,9 +601,8 @@ const aliasFieldsFrom: _Curry<
           return _g.length >= 1;
         },
         ([fld, ...rest]) =>
-          (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restRow, st2]: [Row, St]) =>
-              _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
+          (([ft, vars1, st1]) =>
+            (([restRow, st2]) => _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
               aliasFieldsFrom(rest, vars1, st1, aliases, expanding),
             ))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)),
       )
@@ -647,15 +641,15 @@ export const aliasRow: _Curry<
       ? _tuple(tCon(name, args), st)
       : match(info.expr)
           .with({ _tag: "Some" }, ({ value: te }) =>
-            (([local, st1]: [Map<string, Ty>, St]) =>
-              (([t, _, st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
+            (([local, st1]) =>
+              (([t, _, st2]) => _tuple(t, st2))(
                 typeExprToType(te, local, st1, aliases, _Set_add(name, expanding)),
               ))(aliasLocalVarsFrom(info.params, args, st)),
           )
           .with({ _tag: "None" }, () =>
-            (([local, st1]: [Map<string, Ty>, St]) => {
+            (([local, st1]) => {
               const next: Set<string> = _Set_add(name, expanding);
-              return (([row, st2]: [Row, St]) => _tuple(tRecord(row), st2))(
+              return (([row, st2]) => _tuple(tRecord(row), st2))(
                 aliasFieldsFrom(info.fields, local, st1, aliases, next),
               );
             })(aliasLocalVarsFrom(info.params, args, st)),
@@ -673,8 +667,8 @@ const pvarsFrom: <A>(params: A[], st: St) => [Map<A, Ty>, Ty[], St] = _curry(
       .with(
         (_v) => _v.length >= 1,
         ([p, ...rest]) =>
-          (([v, st1]: [Ty, St]) =>
-            (([restMap, restVars, st2]: [Map<A, Ty>, Ty[], St]) =>
+          (([v, st1]) =>
+            (([restMap, restVars, st2]) =>
               _tuple(_Map_set(p, v, restMap), _Array_prepend(v, restVars), st2))(
               pvarsFrom(rest, st1),
             ))(freshVar(st)),
@@ -715,8 +709,8 @@ const ctorFieldsArrowFrom: _Curry<
           return _g.length >= 1;
         },
         ([fld, ...rest]) =>
-          (([ft, _, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
+          (([ft, _, st1]) =>
+            (([restT, st2]) => _tuple(tArrow(ft, restT), st2))(
               ctorFieldsArrowFrom(rest, pvars, st1, aliases, result),
             ))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[]))),
       )
@@ -746,9 +740,9 @@ export const ctorScheme: <A>(
     st: St,
     aliases: Map<string, AliasInfo>,
   ) =>
-    (([pvars, pvarTypes, st1]: [Map<string, Ty>, Ty[], St]) => {
+    (([pvars, pvarTypes, st1]) => {
       const result: Ty = tCon(typeName, pvarTypes);
-      return (([ty, st2]: [Ty, St]) => {
+      return (([ty, st2]) => {
         const sets: VarSets = collect(ty, emptyVarSets);
         return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty: ty }, st2);
       })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));

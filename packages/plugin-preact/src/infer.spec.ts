@@ -55,6 +55,17 @@ let test = _ =>
   expect(isErr(r)).toBe(true);
 });
 
+test("useState widens a literal initial state to its base type", () => {
+  const src = `${HOOKS}
+let test = _ =>
+  let (tab, setTab) = useState("js") in
+  let _ = setTab("ts") in tab
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
+  expect(isErr(r)).toBe(false);
+  expect(showScheme(unwrapOk(r).res.env.get("test")!, unwrapOk(r).res.aliases)).toContain("string");
+});
+
 test("useState allows functional updater", () => {
   const src = `${HOOKS}
 let test = _ =>

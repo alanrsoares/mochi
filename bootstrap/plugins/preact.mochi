@@ -17,6 +17,7 @@ import {
   zonk,
   freshVar
 } from "../types.mochi"
+import { widenLits } from "../schemes.mochi"
 
 let arrOf = elem => tCon("Array", [elem])
 
@@ -66,15 +67,12 @@ let inferUseState = (fn, args, st, api) =>
       | None => Ok(None)
       | Some(init) => api.inferExpr(init, st)
           |> Result.map(((state, st1)) =>
-            Some((
-              tTuple(
-                [
-                  zonk(state, st1),
-                  tArrow(setStateDomain(zonk(state, st1)), tUnit)
-                ]
-              ),
-              st1
-            )))
+            // `useState("js")` holds any string, as in TypeScript.
+            let value = widenLits(zonk(state, st1)) in
+              Some((
+                tTuple([value, tArrow(setStateDomain(value), tUnit)]),
+                st1
+              )))
     }
     : Ok(None)
 
@@ -87,7 +85,7 @@ let inferUseLazyState = (fn, args, st, api) =>
             |> Result.flatMap(((thunkT, st2)) =>
               api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk))
                 |> Result.map(st3 =>
-                  let value = zonk(state, st3) in
+                  let value = widenLits(zonk(state, st3)) in
                     Some((
                       tTuple([value, tArrow(setStateDomain(value), tUnit)]),
                       st3

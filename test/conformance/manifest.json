@@ -10,6 +10,7 @@
       "multiple-check-errors",
       "runtime",
       "runtime-variant",
+      "runtime-tuple-let-union",
       "module-graph",
       "transitive-alias",
       "module-cycle",
@@ -89,6 +90,12 @@
       "kind": "runtime",
       "source": "runtime-variant.mochi",
       "expect": "runtime-variant.expect.json"
+    },
+    {
+      "id": "runtime-tuple-let-union",
+      "kind": "runtime",
+      "source": "runtime-tuple-let-union.mochi",
+      "expect": "runtime-tuple-let-union.expect.json"
     },
     {
       "id": "module-graph",

@@ -167,7 +167,7 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
       .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
       .with({ _tag: "RowVar" }, ({ id }) => _tuple([] as string[], Some(id) as Option<number>))
       .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-        (([fields, tail]: [string[], Option<number>]) =>
+        (([fields, tail]) =>
           _tuple(
             _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields),
             tail,
@@ -310,7 +310,7 @@ const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: 
   match(aliasNameFor(row, env))
     .with({ _tag: "Some" }, ({ value: alias }) => alias)
     .with({ _tag: "None" }, () =>
-      (([fields, tail]: [string[], Option<number>]) => {
+      (([fields, tail]) => {
         const body: string = eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
         return match(tail)
           .with({ _tag: "None" }, () => body)

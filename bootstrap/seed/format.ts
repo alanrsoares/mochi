@@ -1631,7 +1631,7 @@ const flattenCallSpine: _Curry<[ctx: Ctx, e: Expr], Option<Expr>> = _curry(2, (c
         return _g._tag === "Some";
       },
       ({ value: [head, groups] }) =>
-        (([callee, allGroups]: [Expr, Expr[][]]) =>
+        (([callee, allGroups]) =>
           or(length(allGroups) < 2, anyEmptyGroup(allGroups))
             ? (None as Option<Expr>)
             : match(calleeArity(ctx, callee))
@@ -2203,7 +2203,7 @@ const ternaryRestParts: _Curry<[cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i
  * at one indent — a flat chain, not a nested pyramid.
  */
 const ternaryD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
-  (([arms, elseE]: [{ cond: Expr; thenE: Expr }[], Expr]) =>
+  (([arms, elseE]) =>
     match(_Array_get(0, arms))
       .with({ _tag: "None" }, () => txt(""))
       .with({ _tag: "Some" }, ({ value: first }) =>
@@ -2957,7 +2957,7 @@ const tailParts: _Curry<[tail: Comment[], src: string, prevEnd: Option<number>],
 const programDoc: _Curry<[cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]], Doc> = _curry(
   4,
   (cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]) =>
-    (([parts, prevEnd]: [Doc[], Option<number>]) =>
+    (([parts, prevEnd]) =>
       cat(_Array_concat(_Array_concat(parts, tailParts(tail, src, prevEnd)), [hardline])))(
       stmtParts(cts, stmts, 0, src, None as Option<number>, [] as Doc[]),
     ),

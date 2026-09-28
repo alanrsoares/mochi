@@ -46,3 +46,5 @@ export const freshVar = seed.freshVar;
 export const freshRowVar = seed.freshRowVar;
 /** A type with every solved variable in `st` substituted through. */
 export const zonk = seed.zonk;
+/** Literal types widened to their base (`"js"` → `string`); literal unions stay. */
+export const widenLits = seed.widenLits;

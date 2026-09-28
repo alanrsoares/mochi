@@ -532,6 +532,25 @@ function inferLocalLambdaGroup(first: LetInExpr, ctx: Ctx): Result<Type, Diagnos
   return infer(tail, { ...ctx, env });
 }
 
+/**
+ * `let (a, b) = v in body` parses as `((a, b) => body)(v)`. Infer `v` before
+ * the body so the names start at its type: a body use would otherwise fix a
+ * fresh name first, which breaks a union-domain setter used both ways.
+ */
+function inferTupleLet(
+  param: LamParam,
+  body: Expr,
+  value: Expr,
+  ctx: Ctx,
+): Result<Type, Diagnostic> {
+  const valueT = infer(value, ctx);
+  if (isErr(valueT)) return valueT;
+  const bodyEnv: Env = new Map(ctx.env);
+  const paramT = bindParam(param, bodyEnv, ctx);
+  const uni = u(paramT, valueT.value, ctx, value.span);
+  return isErr(uni) ? uni : infer(body, { ...ctx, env: bodyEnv });
+}
+
 function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
   // Sugar/kit calls belong to plugins (builtin JSX, vendor `tw.*`, …); core only
   // knows how to apply a function to its arguments (ADR 0011).
@@ -545,6 +564,10 @@ function inferCall(e: CallExpr, ctx: Ctx): Result<Type, Diagnostic> {
   };
   const hooked = runInferCallHooks(ctx.inferCallHooks, e, api);
   if (hooked !== null) return hooked;
+  if (e.fn.kind === "lambda" && e.fn.params.length === 1 && e.args.length === 1) {
+    const param = e.fn.params[0]!;
+    if (param.kind === "ptuple") return inferTupleLet(param, e.fn.body, e.args[0]!, ctx);
+  }
 
   const fnT = infer(e.fn, ctx);
   if (isErr(fnT)) return fnT;

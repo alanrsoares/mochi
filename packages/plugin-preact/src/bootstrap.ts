@@ -20,6 +20,7 @@ import {
   tTuple,
   tUnion,
   tUnit,
+  widenLits,
   zonk,
 } from "@mochi/compiler/bootstrap/types";
 import { isErr, ok, type Result } from "@onrails/result";
@@ -71,7 +72,7 @@ const inferUseState: Hook = (s, fn, args) => {
   if (!isRef(fn, "useState") || args.length !== 1) return null;
   const initR = inferIn(s, args[0]!);
   if (isErr(initR)) return initR;
-  const stateT = solved(s, initR.value);
+  const stateT = widenLits(solved(s, initR.value));
   return ok(tTuple([stateT, tArrow(setStateDomain(stateT), tUnit)]));
 };
 
@@ -83,7 +84,7 @@ const inferUseLazyState: Hook = (s, fn, args) => {
   if (isErr(thunkR)) return thunkR;
   const uni = unifyIn(s, thunkR.value, tArrow(tUnit, stateT), args[0]!.span);
   if (isErr(uni)) return uni;
-  const state = solved(s, stateT);
+  const state = widenLits(solved(s, stateT));
   return ok(tTuple([state, tArrow(setStateDomain(state), tUnit)]));
 };
 

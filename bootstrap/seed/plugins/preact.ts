@@ -33,6 +33,7 @@ import {
   zonk,
   freshVar,
 } from "../types";
+import { widenLits } from "../schemes";
 const arrOf: (elem: Ty) => Ty = (elem: Ty) => tCon("Array", [elem]);
 const setStateDomain: (state: Ty) => Ty = (state: Ty) => tUnion([state, tArrow(state, state)]);
 const isRef: _Curry<[fn: Expr, name: string], boolean> = _curry(2, (fn: Expr, name: string) =>
@@ -108,13 +109,12 @@ const inferUseState: <A, B, C, D>(
           .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
           .with({ _tag: "Some" }, ({ value: init }) =>
             _Result_map(
-              ([state, st1]: [Ty, St]) =>
-                Some(
-                  _tuple(
-                    tTuple([zonk(state, st1), tArrow(setStateDomain(zonk(state, st1)), tUnit)]),
-                    st1,
-                  ),
-                ) as Option<[Ty, St]>,
+              ([state, st1]: [Ty, St]) => {
+                const value: Ty = widenLits(zonk(state, st1));
+                return Some(
+                  _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st1),
+                ) as Option<[Ty, St]>;
+              },
               api.inferExpr(init, st),
             ),
           )
@@ -144,12 +144,12 @@ const inferUseLazyState: <A, B, C, D, E>(
       ? match(_Array_get(0, args))
           .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
           .with({ _tag: "Some" }, ({ value: thunk }) =>
-            (([state, st1]: [Ty, { next: number } & D]) =>
+            (([state, st1]) =>
               _Result_flatMap(
                 ([thunkT, st2]: [A, B]) =>
                   _Result_map(
                     (st3: St) => {
-                      const value: Ty = zonk(state, st3);
+                      const value: Ty = widenLits(zonk(state, st3));
                       return Some(
                         _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3),
                       ) as Option<[Ty, St]>;
@@ -215,14 +215,15 @@ const inferEffectLike: <A, B, C, D>(
       ? match(_Array_get(0, args))
           .with({ _tag: "None" }, () => Ok(None))
           .with({ _tag: "Some" }, ({ value: effect }) =>
-            (([cleanup, st1]: [Ty, { next: number } & C]) =>
+            (([cleanup, st1]) =>
               _Result_flatMap(
                 ([effectT, st2]: [A, { next: number } & C]) =>
                   _Result_flatMap(
                     (st3: { next: number } & C) =>
                       eq(length(args), 1)
-                        ? (([dep, st4]: [Ty, { next: number } & C]) =>
-                            Ok(Some(_tuple(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3))
+                        ? (([dep, st4]) => Ok(Some(_tuple(tArrow(arrOf(dep), tUnit), st4))))(
+                            freshVar(st3),
+                          )
                         : _Result_map(
                             (st4: { next: number } & C) => Some(_tuple(tUnit, st4)),
                             inferArgs(_Array_drop(1, args), st3, api.inferExpr),
@@ -255,7 +256,7 @@ const inferUseCallback: <A, B, C>(
             _Result_flatMap(
               ([callbackT, st1]: [Ty, St]) =>
                 eq(length(args), 1)
-                  ? (([dep, st2]: [Ty, St]) =>
+                  ? (([dep, st2]) =>
                       Ok(
                         Some(_tuple(tArrow(arrOf(dep), zonk(callbackT, st2)), st2)) as Option<
                           [Ty, St]
@@ -294,13 +295,13 @@ const inferUseMemo: <A, B, C>(
       ? match(_Array_get(0, args))
           .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
           .with({ _tag: "Some" }, ({ value: thunk }) =>
-            (([value, st1]: [Ty, St]) =>
+            (([value, st1]) =>
               _Result_flatMap(
                 ([thunkT, st2]: [A, St]) =>
                   _Result_flatMap(
                     (st3: St) =>
                       eq(length(args), 1)
-                        ? (([dep, st4]: [Ty, St]) =>
+                        ? (([dep, st4]) =>
                             Ok(
                               Some(_tuple(tArrow(arrOf(dep), zonk(value, st4)), st4)) as Option<
                                 [Ty, St]
@@ -345,9 +346,7 @@ const inferHookDeps: <A, B, C, D, E>(
         eq(length(args), n)
           ? _Result_map(
               (st1: { next: number } & D) =>
-                (([elem, st2]: [Ty, { next: number } & D]) => Some(_tuple(arrOf(elem), st2)))(
-                  freshVar(st1),
-                ),
+                (([elem, st2]) => Some(_tuple(arrOf(elem), st2)))(freshVar(st1)),
               inferArgs(args, st, api.inferExpr),
             )
           : Ok(None),

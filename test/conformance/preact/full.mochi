@@ -12,14 +12,16 @@ export extern hookDeps0<A> : () -> A = "./runtime" "hookDeps0"
 export let counter = (step: number) =>
   let (n, setN) = useState(0) in
   let (label, setLabel) = useLazyState(() => "count") in
+  let (tab, setTab) = useState("js") in
   let box = useRef(n) in
     do {
       useEffect(() => setN(x => x + step))(hookDeps1(step));
       useLayoutEffect(() => (), hookDeps0());
-      let bump = useCallback(() => setN(x => x + 1), hookDeps2(n, step)) in
+      let bump = useCallback(() => setN(n + 1), hookDeps2(n, step)) in
       let doubled = useMemo(() => box.current * 2, hookDeps1(n)) in
         do {
           setLabel(l => l ++ "!");
-          { n, label, bump, doubled }
+          setTab("ts");
+          { n, label, tab, bump, doubled }
         }
     }
