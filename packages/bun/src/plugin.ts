@@ -10,7 +10,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { bootstrapSeedId, buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
 import { isErr } from "@onrails/result";
@@ -57,12 +57,18 @@ const readSource = (path: string): string | null => {
   }
 };
 
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.values(value).every((item) => typeof item === "string");
+
 /** A corrupt or foreign entry is a miss, not an error: the compile rewrites it. */
 const parseEntry = (raw: string): GraphCacheEntry | null => {
   try {
     const entry = JSON.parse(raw) as Partial<GraphCacheEntry> | null;
-    return typeof entry?.sources === "object" && typeof entry.outputs === "object"
-      ? (entry as GraphCacheEntry)
+    return isStringRecord(entry?.sources) && isStringRecord(entry?.outputs)
+      ? { sources: entry.sources, outputs: entry.outputs }
       : null;
   } catch {
     return null;
@@ -80,7 +86,11 @@ const readCached = (file: string): MochiJsByPath | null => {
   return new Map(Object.entries(entry.outputs));
 };
 
-/** Write then rename, so a parallel reader never sees a half-written entry. */
+/**
+ * Write then rename, so a parallel reader never sees a half-written entry.
+ * Best effort: an unwritable cache dir costs the next run a recompile, never
+ * this one its output.
+ */
 const writeCached = (dir: string, file: string, graph: MochiJsByPath): void => {
   const sources: Record<string, string> = {};
   for (const path of graph.keys()) {
@@ -89,10 +99,17 @@ const writeCached = (dir: string, file: string, graph: MochiJsByPath): void => {
     sources[path] = sha256(src);
   }
   const entry: GraphCacheEntry = { sources, outputs: Object.fromEntries(graph) };
-  mkdirSync(dir, { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(entry));
-  renameSync(tmp, file);
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(tmp, JSON.stringify(entry));
+    renameSync(tmp, file);
+  } catch {
+    // Cleanup can fail the same way the write did (a file where a dir should be).
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+  }
 };
 
 /** Compile `entry` and every reachable `.mochi` module, reusing a disk entry when current. */
