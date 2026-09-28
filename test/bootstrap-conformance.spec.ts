@@ -3,13 +3,20 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  bootstrapConformanceCaseIds,
   freezeBootstrapConformance,
+  manifestConformanceErrors,
   pendingBootstrapConformance,
-  runBootstrapConformance,
+  runBootstrapConformanceCase,
 } from "../scripts/bootstrap-conformance.ts";
 
-test("the shipped bootstrap compiler conforms to its reviewed corpus", () => {
-  expect(runBootstrapConformance()).toEqual([]);
+test("the conformance manifest is well formed", () => {
+  expect(manifestConformanceErrors()).toEqual([]);
+});
+
+// One test per case: each gets its own timeout, and a failure names its case.
+test.each(bootstrapConformanceCaseIds())("the shipped bootstrap compiler conforms: %s", (id) => {
+  expect(runBootstrapConformanceCase(id)).toBeNull();
 });
 
 test("no case is left pending", () => {
@@ -22,7 +29,7 @@ test("candidate freeze writes a separate review tree", () => {
   const dir = mkdtempSync(join(tmpdir(), "mochi-conformance-candidate-"));
   try {
     const paths = freezeBootstrapConformance(dir);
-    expect(paths).toHaveLength(31);
+    expect(paths).toHaveLength(38);
     expect(readFileSync(join(dir, "single-js.expect.js"), "utf8")).toContain("const answer");
   } finally {
     rmSync(dir, { recursive: true, force: true });

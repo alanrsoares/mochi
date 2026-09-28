@@ -1,0 +1,4 @@
+let apply = (arg: number | (number -> number)) => 1
+let pair = (n: number) =>
+  let (m, set) = (n, apply) in set(x => x + m) + set(m + 1)
+let answer = pair(2)

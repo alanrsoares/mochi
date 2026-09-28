@@ -11,6 +11,7 @@ import type { InferCallApi, InferCallHook } from "@mochi/compiler/extensions";
 // import, so Node/Vite's config loader must resolve it without a bundler.
 import type { CallExpr } from "@mochi/compiler/plugin-kit";
 import { inferArgs, isRefCall } from "@mochi/compiler/plugin-kit";
+import { widenLits } from "@mochi/compiler/schemes";
 import type { Type } from "@mochi/compiler/types";
 import {
   rEmpty,
@@ -22,7 +23,7 @@ import {
   tUnion,
   tUnit,
 } from "@mochi/compiler/types";
-import { isErr, ok, type Result } from "@onrails/result";
+import { err, isErr, ok, type Result } from "@onrails/result";
 
 const arrOf = (elem: Type): Type => tCon("Array", [elem]);
 
@@ -33,7 +34,7 @@ const inferUseState: InferCallHook = (e, api) => {
   if (!isRefCall(e, "useState") || e.args.length !== 1) return null;
   const initR = api.infer(e.args[0]!);
   if (isErr(initR)) return initR;
-  const stateT = api.zonk(initR.value);
+  const stateT = widenLits(api.zonk(initR.value));
   const setterT = tArrow(setStateDomain(stateT), tUnit);
   return ok(tTuple([stateT, setterT]));
 };
@@ -46,7 +47,7 @@ const inferUseLazyState: InferCallHook = (e, api) => {
   if (isErr(thunkR)) return thunkR;
   const uni = api.unify(thunkR.value, tArrow(tUnit, stateT), e.args[0]!.span);
   if (isErr(uni)) return uni;
-  const state = api.zonk(stateT);
+  const state = widenLits(api.zonk(stateT));
   return ok(tTuple([state, tArrow(setStateDomain(state), tUnit)]));
 };
 
@@ -56,6 +57,25 @@ const inferUseRef: InferCallHook = (e, api) => {
   if (isErr(initR)) return initR;
   const stateT = api.zonk(initR.value);
   return ok(tRecord(rExtend("current", stateT, rEmpty)));
+};
+
+/**
+ * The dependency list after a hook's callback: one array, as Preact takes it.
+ * A claimed call skips core application, so nothing else would reject
+ * `useEffect(fn, 42)` or a surplus argument.
+ */
+const inferDeps = (e: CallExpr, api: InferCallApi, name: string): Result<null, Diagnostic> => {
+  if (e.args.length > 2)
+    return err({
+      kind: "type",
+      message: `${name} takes one dependency array after its callback`,
+      span: e.args[2]!.span,
+    });
+  const deps = e.args[1]!;
+  const depsR = api.infer(deps);
+  if (isErr(depsR)) return depsR;
+  const uni = api.unify(depsR.value, arrOf(api.freshVar()), deps.span);
+  return isErr(uni) ? uni : ok(null);
 };
 
 const inferEffectLike = (
@@ -73,8 +93,8 @@ const inferEffectLike = (
     // Curried: `useEffect(fn)(hookDeps…)` — deps come in a second call.
     return ok(tArrow(arrOf(api.freshVar()), tUnit));
   }
-  const restR = inferArgs(e.args.slice(1), api);
-  return isErr(restR) ? restR : ok(tUnit);
+  const depsR = inferDeps(e, api, name);
+  return isErr(depsR) ? depsR : ok(tUnit);
 };
 
 const inferUseCallback: InferCallHook = (e, api) => {
@@ -83,8 +103,8 @@ const inferUseCallback: InferCallHook = (e, api) => {
   if (isErr(fnR)) return fnR;
   const fnT = api.zonk(fnR.value);
   if (e.args.length === 1) return ok(tArrow(arrOf(api.freshVar()), fnT));
-  const restR = inferArgs(e.args.slice(1), api);
-  return isErr(restR) ? restR : ok(fnT);
+  const depsR = inferDeps(e, api, "useCallback");
+  return isErr(depsR) ? depsR : ok(fnT);
 };
 
 const inferUseMemo: InferCallHook = (e, api) => {
@@ -95,8 +115,8 @@ const inferUseMemo: InferCallHook = (e, api) => {
   const uni = api.unify(thunkR.value, tArrow(tUnit, resultT), e.args[0]!.span);
   if (isErr(uni)) return uni;
   if (e.args.length === 1) return ok(tArrow(arrOf(api.freshVar()), api.zonk(resultT)));
-  const restR = inferArgs(e.args.slice(1), api);
-  return isErr(restR) ? restR : ok(api.zonk(resultT));
+  const depsR = inferDeps(e, api, "useMemo");
+  return isErr(depsR) ? depsR : ok(api.zonk(resultT));
 };
 
 /** Pack heterogeneous deps — element type stays opaque at the seam. */

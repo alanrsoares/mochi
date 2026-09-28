@@ -16,8 +16,8 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty, TypeAt } from "./types";
-import type { PErr } from "./parser";
 import type { Scheme, VarSets } from "./schemes";
+import type { PErr } from "./parser";
 import type { TSt } from "./scc";
 
 export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
@@ -340,13 +340,13 @@ const lastSeg: (name: string) => string = (name: string) => {
   return _Option_unwrapOr(name, _Array_get(length(parts) - 1, parts));
 };
 const aliasRowFrom: <A>(
-  fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & A)[],
+  fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & A)[],
   aliases: Map<string, QualAliasInfo>,
   i: number,
 ) => Row = _curry(
   3,
   <A>(
-    fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & A)[],
+    fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & A)[],
     aliases: Map<string, QualAliasInfo>,
     i: number,
   ) =>
@@ -370,7 +370,7 @@ const shownOfAlias: <A, B, C, D>(
   info: {
     params: A[];
     expr: Option<B>;
-    fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & C)[];
+    fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & C)[];
   } & D,
   aliases: Map<string, QualAliasInfo>,
 ) => Option<string> = _curry(
@@ -379,7 +379,7 @@ const shownOfAlias: <A, B, C, D>(
     info: {
       params: A[];
       expr: Option<B>;
-      fields: ({ name: string; optional: boolean; fieldType: TypeExpr } & C)[];
+      fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & C)[];
     } & D,
     aliases: Map<string, QualAliasInfo>,
   ) =>
@@ -2025,7 +2025,113 @@ const inferCallArgs: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferNormalCall: <A>(
+const isTupleParam: (p: LamParam) => boolean = (p: LamParam) =>
+  match(p)
+    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isTupleParam(inner))
+    .with({ _tag: "LPTuple" }, () => true)
+    .otherwise(() => false);
+const inferTupleLet: <A>(
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: {
+      name: string;
+      parse: Option<
+        (
+          a: { tok: A; start: number; end: number; doc: Option<string> }[],
+          b: number,
+          c: (
+            a: { tok: A; start: number; end: number; doc: Option<string> }[],
+            b: number,
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
+      >;
+      inferCall: Option<
+        (
+          a: Expr,
+          b: Expr[],
+          c: Option<string>,
+          d: St,
+          e: InferApi,
+        ) => Result<Option<[Ty, St]>, IErr>
+      >;
+      format: Option<(a: Expr) => Option<Expr>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
+    }[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+  },
+  param: LamParam,
+  body: Expr,
+  lamSpan: SpanAt,
+  value: Expr,
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
+  6,
+  <A>(
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: {
+        name: string;
+        parse: Option<
+          (
+            a: { tok: A; start: number; end: number; doc: Option<string> }[],
+            b: number,
+            c: (
+              a: { tok: A; start: number; end: number; doc: Option<string> }[],
+              b: number,
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
+        >;
+        inferCall: Option<
+          (
+            a: Expr,
+            b: Expr[],
+            c: Option<string>,
+            d: St,
+            e: InferApi,
+          ) => Result<Option<[Ty, St]>, IErr>
+        >;
+        format: Option<(a: Expr) => Option<Expr>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
+      }[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    body: Expr,
+    lamSpan: SpanAt,
+    value: Expr,
+    st: St,
+  ) =>
+    _Result_flatMap(
+      ([valueT, st1]) =>
+        (([paramT, bodyEnv, st2]: [Ty, Map<string, Scheme>, St]) =>
+          _Result_flatMap(
+            (st3) =>
+              _Result_flatMap(
+                ([bodyT, st4]) =>
+                  Ok(_tuple(bodyT, recordAt(lamSpan, tArrow(paramT, bodyT), st4))) as Result<
+                    [Ty, St],
+                    IErr
+                  >,
+                inferExpr(ctxWithEnv(ctx, bodyEnv), body, st3),
+              ),
+            u(ctx, paramT, valueT, st2, exprSpan(value)),
+          ))(bindParam(param, ctx.env, st1)),
+      inferExpr(ctx, value, st),
+    ),
+);
+const inferApplied: <A>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2137,6 +2243,105 @@ const inferNormalCall: <A>(
           .otherwise(() => inferCallArgs(ctx, fnT, args, st1, exprSpan(fn))),
       inferExpr(ctx, fn, st),
     ),
+);
+const inferNormalCall: <A>(
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: {
+      name: string;
+      parse: Option<
+        (
+          a: { tok: A; start: number; end: number; doc: Option<string> }[],
+          b: number,
+          c: (
+            a: { tok: A; start: number; end: number; doc: Option<string> }[],
+            b: number,
+          ) => Result<[Expr, number], PErr>,
+        ) => Result<Option<[Expr, number]>, PErr>
+      >;
+      inferCall: Option<
+        (
+          a: Expr,
+          b: Expr[],
+          c: Option<string>,
+          d: St,
+          e: InferApi,
+        ) => Result<Option<[Ty, St]>, IErr>
+      >;
+      format: Option<(a: Expr) => Option<Expr>>;
+      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
+      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
+    }[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+  },
+  fn: Expr,
+  args: Expr[],
+  st: St,
+) => Result<[Ty, St], IErr> = _curry(
+  4,
+  <A>(
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: {
+        name: string;
+        parse: Option<
+          (
+            a: { tok: A; start: number; end: number; doc: Option<string> }[],
+            b: number,
+            c: (
+              a: { tok: A; start: number; end: number; doc: Option<string> }[],
+              b: number,
+            ) => Result<[Expr, number], PErr>,
+          ) => Result<Option<[Expr, number]>, PErr>
+        >;
+        inferCall: Option<
+          (
+            a: Expr,
+            b: Expr[],
+            c: Option<string>,
+            d: St,
+            e: InferApi,
+          ) => Result<Option<[Ty, St]>, IErr>
+        >;
+        format: Option<(a: Expr) => Option<Expr>>;
+        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
+        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
+      }[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fn: Expr,
+    args: Expr[],
+    st: St,
+  ) =>
+    match(_tuple(fn, args))
+      .with(
+        (_v): _v is [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]] => {
+          const _g: any = _v;
+          return _g[0]._tag === "ELambda" && _g[0].params.length === 1 && _g[1].length === 1;
+        },
+        ([
+          {
+            params: [param],
+            body,
+            span: lamSpan,
+          },
+          [value],
+        ]) =>
+          isTupleParam(param)
+            ? inferTupleLet(ctx, param, body, lamSpan, value, st)
+            : inferApplied(ctx, fn, args, st),
+      )
+      .otherwise(() => inferApplied(ctx, fn, args, st)),
 );
 const inferTernary: <A>(
   ctx: {
@@ -6477,7 +6682,7 @@ const aliasMapFrom: _Curry<
     }),
 );
 const registerCtorsFrom: <A, B>(
-  ctors: ({ name: A; fields: CtorField[] } & B)[],
+  ctors: ({ fields: CtorField[]; name: A } & B)[],
   typeName: string,
   params: string[],
   aliasMap: Map<string, QualAliasInfo>,
@@ -6486,7 +6691,7 @@ const registerCtorsFrom: <A, B>(
 ) => [Map<A, Scheme>, St] = _curry(
   6,
   <A, B>(
-    ctors: ({ name: A; fields: CtorField[] } & B)[],
+    ctors: ({ fields: CtorField[]; name: A } & B)[],
     typeName: string,
     params: string[],
     aliasMap: Map<string, QualAliasInfo>,

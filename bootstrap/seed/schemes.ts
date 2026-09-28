@@ -361,9 +361,9 @@ const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row
       .exhaustive(),
 );
 export const instantiate: <A>(
-  sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
+  sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   st: St,
-) => [Ty, St] = _curry(2, <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A, st: St) =>
+) => [Ty, St] = _curry(2, <A>(sc: { vars: number[]; rvars: number[]; ty: Ty } & A, st: St) =>
   (([tmap, st1]: [Map<number, Ty>, St]) =>
     (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
       instRowMapFrom(sc.rvars, new Map<number, Row>(), st1),

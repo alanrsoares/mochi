@@ -3,10 +3,11 @@
 
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { compile } from "@mochi/compiler/compile";
+import { compile, toTypedProgram } from "@mochi/compiler/compile";
 import { compileTargets } from "@mochi/compiler/compile-targets";
 import { emitDts } from "@mochi/compiler/dts";
 import { buildModules } from "@mochi/compiler/module";
+import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { compileAndEval, readRepo, repoPath } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
@@ -230,6 +231,25 @@ test("a string-literal union synonym accepts a member (ADR 0081)", () => {
 let t : Tone = "rose"`;
   expect(isErr(compile(src))).toBe(false);
   expect(isErr(compile(`type Tone = "rose" | "amber"\nlet t : Tone = "taupe"`))).toBe(true);
+});
+
+test("a tuple let types its names from the value before the body", () => {
+  // `let (a, b) = v in body` is `((a, b) => body)(v)`; the body must not fix a
+  // union-domain name before `v` supplies its type.
+  const src = `let apply = (arg: number | (number -> number)) => 1
+let pair = (n: number) =>
+  let (m, set) = (n, apply) in set(x => x + m) + set(m + 1)`;
+  expect(isErr(compile(src))).toBe(false);
+});
+
+test("a tuple let still records its lambda's type at the lambda span", () => {
+  // Hover and the TS backend's parameter annotations read the arrow from there.
+  const src = "let pair = (n: number) =>\n  let (m, k) = (n, 1) in m + k";
+  const r = toTypedProgram(src, { namespaces: preludeNamespaces });
+  expect(isErr(r)).toBe(false);
+  const lamStart = src.indexOf("(m, k)");
+  const hit = unwrapOk(r).res.types.find((t) => t.span.start === lamStart);
+  expect(hit?.type.kind).toBe("arrow");
 });
 
 test("an optional record field may be omitted and reads as Option (ADR 0098)", () => {

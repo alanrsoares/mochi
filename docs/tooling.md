@@ -37,6 +37,10 @@ Three pieces, one per phase ([ADR 0108](adr/0108-bun-mochi-loader.md)):
 
 - **Run** — bunfig `preload = ["@mochi/bun/preload"]` (or `bun --preload
   @mochi/bun/preload`) compiles every `.mochi` import, direct or via a package export.
+  Each entry's compiled graph is cached in `node_modules/.cache/mochi-bun`, keyed by
+  the frozen seed and checked against every module's source hash, so isolated
+  processes (`bun test --parallel`) stop recompiling shared imports.
+  `MOCHI_BUN_CACHE_DIR` moves it; `MOCHI_BUN_CACHE=0` turns it off.
 - **Type-check** — `mochi dts --write src` writes an `X.d.mochi.ts` sidecar beside each
   module; with `allowArbitraryExtensions: true`, `tsc` checks `import … from "./X.mochi"`
   against Mochi's inferred types. Rerun it after editing a `.mochi` export.

@@ -162,8 +162,8 @@ var go = _curry2(6, (src, i, doc, nlRun, lineTok, toks) => match2(_Str_get2(i, s
   return _g._tag === "Some" && _g.value === "/" && _Option_contains2("/", _Str_get2(i + 1, src));
 }, () => match2(scanComment(src, i, lineTok)).with({ _tag: "Trailing" }, ({ stop }) => go(src, stop, doc, nlRun, lineTok, toks)).with({ _tag: "PlainOwn" }, ({ stop }) => go(src, stop, [], 0, lineTok, toks)).with({ _tag: "DocLine" }, ({ text, stop }) => go(src, stop, _Array_append(text, doc), 0, lineTok, toks)).exhaustive()).with({ _tag: "Some" }, ({ value: c }) => eq2(_Str_slice(i, i + 3, src), "...") ? emit(src, TSpread, i, i + 3, doc, toks) : match2(digraphTok(_Str_slice(i, i + 2, src))).with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, i + 2, doc, toks)).with({ _tag: "None" }, () => eq2(c, '"') ? lexString(src, i, doc, toks) : numStart(src, i, c) ? ((j) => ((raw) => emit(src, TNum(numValue(raw), raw), i, j, doc, toks))(_Str_slice(i, j, src)))(scanWhile(isNumChar, src, i + 1)) : match2(punctTok(c)).with({ _tag: "Some" }, ({ value: t }) => emit(src, t, i, i + 1, doc, toks)).with({ _tag: "None" }, () => isIdStart(c) ? ((j) => emit(src, identTok(_Str_slice(i, j, src)), i, j, doc, toks))(scanWhile(isIdChar, src, i + 1)) : lexError(`unexpected char '${c}'`, i, i + 1)).exhaustive()).exhaustive()).exhaustive());
 var lex = (src) => go(src, 0, [], 0, false, []);
-import { Err as Err5, None as None8, Ok as Ok6, Some as Some8, _Array_append as _Array_append6, _Array_concat as _Array_concat3, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Option_exists as _Option_exists3, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _Str_codeAt as _Str_codeAt4, _curry as _curry9, _done as _done3, _recur as _recur3, _tuple as _tuple5, and as and6, eq as eq8, length as length6, map as map3, not as not5, or as or5, show as show3 } from "@mochi/compiler/runtime";
-import { match as match8 } from "@onrails/pattern";
+import { Err as Err7, None as None10, Ok as Ok7, Some as Some10, _Array_append as _Array_append6, _Array_concat as _Array_concat3, _Array_get as _Array_get7, _Array_prepend as _Array_prepend4, _Option_exists as _Option_exists3, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap5, _Result_map as _Result_map5, _Str_codeAt as _Str_codeAt5, _curry as _curry11, _done as _done4, _recur as _recur4, _tuple as _tuple6, and as and7, eq as eq10, length as length7, map as map5, not as not6, or as or5, show as show4 } from "@mochi/compiler/runtime";
+import { match as match10 } from "@onrails/pattern";
 
 import { _curry as _curry3 } from "@mochi/compiler/runtime";
 var LPName = _curry3(2, (name, annot) => ({ _tag: "LPName", name, annot }));
@@ -227,8 +227,8 @@ var SImportNs = _curry3(3, (alias, from, span) => ({ _tag: "SImportNs", alias, f
 var SExpr = _curry3(2, (value, span) => ({ _tag: "SExpr", value, span }));
 var SError = (span) => ({ _tag: "SError", span });
 
-import { Err as Err4, None as None7, Ok as Ok5, Some as Some7, _Array_append as _Array_append5, _Array_concat as _Array_concat2, _Array_get as _Array_get5, _curry as _curry8, eq as eq7, length as length5 } from "@mochi/compiler/runtime";
-import { match as match7 } from "@onrails/pattern";
+import { Err as Err6, None as None9, Ok as Ok6, Some as Some9, _Array_append as _Array_append5, _Array_concat as _Array_concat2, _Array_get as _Array_get6, _curry as _curry10, eq as eq9, length as length6 } from "@mochi/compiler/runtime";
+import { match as match9 } from "@onrails/pattern";
 
 import { Err as Err3, None as None5, Ok as Ok3, Some as Some5, _Array_append as _Array_append4, _Array_concat, _Array_find, _Array_get as _Array_get3, _Map_get as _Map_get2, _Map_keys as _Map_keys2, _Option_exists as _Option_exists2, _Option_isSome, _Option_unwrapOr as _Option_unwrapOr2, _Result_flatMap as _Result_flatMap2, _Result_map as _Result_map2, _Str_codeAt as _Str_codeAt3, _Str_contains, _Str_join as _Str_join3, _Str_length as _Str_length3, _Str_slice as _Str_slice2, _Str_split, _Str_startsWith as _Str_startsWith2, _curry as _curry6, _tuple as _tuple3, and as and4, eq as eq5, length as length3, map as map2, not as not4, or as or4, show as show2 } from "@mochi/compiler/runtime";
 import { match as match5 } from "@onrails/pattern";
@@ -6440,123 +6440,287 @@ var componentBindingTs = _curry6(3, (value, t, api) => match5(t).with((_v) => {
 }, () => Some5("any")).otherwise(() => or4(isComponentType(t), isJsxComponentLambda(value)) ? Some5(componentSig(t, api)) : None5));
 var jsxPlugin = { name: "jsx", parse: Some5(parseJsxAtom), inferCall: Some5(inferJsxCallHook), format: None5, dtsBinding: None5, bindingType: Some5(componentBindingTs) };
 
-import { None as None6, Ok as Ok4, Some as Some6, _Array_drop, _Array_get as _Array_get4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry7, _tuple as _tuple4, and as and5, eq as eq6, length as length4 } from "@mochi/compiler/runtime";
+import { Err as Err5, None as None8, Ok as Ok5, Some as Some8, _Array_get as _Array_get5, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _curry as _curry9, _tuple as _tuple5, and as and6, eq as eq8, length as length5 } from "@mochi/compiler/runtime";
+import { match as match8 } from "@onrails/pattern";
+
+import { _Array_contains, _Array_prepend as _Array_prepend3, _Map_get as _Map_get3, _Map_getOr, _Map_set as _Map_set3, _Map_values, _Set_add, _Set_diff, _Set_fromArray, _Set_has, _Set_toArray, _Str_codeAt as _Str_codeAt4, _curry as _curry8, _tuple as _tuple4, and as and5, map as map4 } from "@mochi/compiler/runtime";
+import { match as match7 } from "@onrails/pattern";
+
+import { Err as Err4, Ok as Ok4, Some as Some6, _Array_get as _Array_get4, _Array_prepend as _Array_prepend2, _Map_has, _Map_set as _Map_set2, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry7, _done as _done3, _recur as _recur3, eq as eq6, filter, length as length4, map as map3, not as not5, show as show3 } from "@mochi/compiler/runtime";
 import { match as match6 } from "@onrails/pattern";
+var emptyRegistry = { ctors: new Map, types: new Map };
+var primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
+var keysOfFrom = _curry7(2, (fields, i) => match6(_Array_get4(i, fields)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: f }) => _Array_prepend2(_Option_unwrapOr3(`_${show3(i)}`, f.name), keysOfFrom(fields, i + 1))).exhaustive());
+var keysOf = (fields) => keysOfFrom(fields, 0);
+var builtinSpan = { start: 0, end: 0 };
+var builtinTypeDecls = [{ name: "Option", params: ["a"], ctors: [{ name: "Some", fields: [{ name: Some6("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "None", fields: [], span: builtinSpan }] }, { name: "Result", params: ["a", "e"], ctors: [{ name: "Ok", fields: [{ name: Some6("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "Err", fields: [{ name: Some6("error"), fieldType: TyName("e", builtinSpan) }], span: builtinSpan }] }];
+var declaresType = _curry7(3, (stmts, i, name) => match6(_Array_get4(i, stmts)).with({ _tag: "None" }, () => false).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType";
+}, ({ value: { name: n } }) => eq6(n, name) ? true : declaresType(stmts, i + 1, name)).with({ _tag: "Some" }, () => declaresType(stmts, i + 1, name)).exhaustive());
+var builtinDeclsFor = (stmts) => filter((bt) => not5(declaresType(stmts, 0, bt.name)), builtinTypeDecls);
+var seedRegCtorsFrom = _curry7(4, (ctors, i, owner, acc) => match6(_Array_get4(i, ctors)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => seedRegCtorsFrom(ctors, i + 1, owner, _Map_has(c.name, acc) ? acc : _Map_set2(c.name, { owner, arity: length4(c.fields) }, acc))).exhaustive());
+var seedRegDeclsFrom = _curry7(3, (decls, i, reg) => match6(_Array_get4(i, decls)).with({ _tag: "None" }, () => reg).with({ _tag: "Some" }, ({ value: bt }) => seedRegDeclsFrom(decls, i + 1, { ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors), types: _Map_set2(bt.name, map3((c) => c.name, bt.ctors), reg.types) })).exhaustive());
+var ctorErr = _curry7(2, (message, sp) => ({ message, start: sp.start, end: sp.end }));
+var ctorsInto = _curry7(5, (ctors, i, owner, sp, acc) => match6(_Array_get4(i, ctors)).with({ _tag: "None" }, () => Ok4(acc)).with({ _tag: "Some" }, ({ value: c }) => _Map_has(c.name, acc) ? Err4(ctorErr(`duplicate constructor '${c.name}'`, sp)) : ctorsInto(ctors, i + 1, owner, sp, _Map_set2(c.name, { owner, arity: length4(c.fields) }, acc))).exhaustive());
+var buildLoop = _curry7(3, (stmts, i, reg) => match6(_Array_get4(i, stmts)).with({ _tag: "None" }, () => Ok4(reg)).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType";
+}, ({ value: { name, ctors, span: sp } }) => _Map_has(name, reg.types) ? Err4(ctorErr(`duplicate type '${name}'`, sp)) : _Result_flatMap3((cs) => buildLoop(stmts, i + 1, { ctors: cs, types: _Map_set2(name, map3((c) => c.name, ctors), reg.types) }), ctorsInto(ctors, 0, name, sp, reg.ctors))).with({ _tag: "Some" }, () => buildLoop(stmts, i + 1, reg)).exhaustive());
+var exportedRegLoop = _curry7(3, (stmts, i0, reg0) => {
+  let i = i0;
+  let reg = reg0;
+  while (true) {
+    const _step = match6(_Array_get4(i, stmts)).with({ _tag: "None" }, () => _done3(reg)).with((_v) => {
+      const _g = _v;
+      return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+    }, ({ value: { name, ctors } }) => _recur3(i + 1, { ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors), types: _Map_set2(name, map3((c) => c.name, ctors), reg.types) })).with({ _tag: "Some" }, () => _recur3(i + 1, reg)).exhaustive();
+    if (_step._tag === "recur") {
+      [i, reg] = _step.args;
+      continue;
+    }
+    return _step.value;
+  }
+});
+var ctorKeysInto = _curry7(3, (ctors, i, m) => match6(_Array_get4(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => ctorKeysInto(ctors, i + 1, _Map_set2(name, keysOf(fields), m))).exhaustive());
+var ctorKeysFrom = _curry7(3, (stmts, i, m) => match6(_Array_get4(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType";
+}, ({ value: { ctors } }) => ctorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => ctorKeysFrom(stmts, i + 1, m)).exhaustive());
+var ctorKeysFromStmts = _curry7(2, (stmts, m) => ctorKeysFrom(stmts, 0, m));
+var seedKeyCtorsFrom = _curry7(3, (ctors, i, m) => match6(_Array_get4(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => seedKeyCtorsFrom(ctors, i + 1, _Map_has(name, m) ? m : _Map_set2(name, keysOf(fields), m))).exhaustive());
+var seedKeyDeclsFrom = _curry7(3, (decls, i, m) => match6(_Array_get4(i, decls)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { ctors } }) => seedKeyDeclsFrom(decls, i + 1, seedKeyCtorsFrom(ctors, 0, m))).exhaustive());
+var seedBuiltinCtorKeys = _curry7(2, (stmts, m) => seedKeyDeclsFrom(builtinDeclsFor(stmts), 0, m));
+var exportedCtorKeysFrom = _curry7(3, (stmts, i, m) => match6(_Array_get4(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
+  const _g = _v;
+  return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
+}, ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m)).exhaustive());
+
+var tNumber = tPrim("number");
+var tBool = tPrim("bool");
+var tString = tPrim("string");
+var primType = (name) => match7(name).with("float", () => tNumber).with("int", () => tNumber).with("string", () => tString).with("bool", () => tBool).otherwise(() => tPrim(name));
+var emptyVarSets = { tv: _Set_fromArray([]), rv: _Set_fromArray([]) };
+var diffVarSets = _curry8(2, (a, b) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }));
+var collect = _curry8(2, (t, acc) => match7(t).with({ _tag: "TyVar" }, ({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv })).with({ _tag: "TyCon" }, ({ args }) => collectArgs(args, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc))).with({ _tag: "TyRecord" }, ({ row }) => collectRow(row, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => collectArgs(members, acc)).exhaustive());
+var collectArgs = _curry8(2, (args, acc) => match7(args).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => acc).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([a, ...rest]) => collectArgs(rest, collect(a, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var collectRow = _curry8(2, (row, acc) => match7(row).with({ _tag: "RowVar" }, ({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) })).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectRow(rest, collect(fieldType, acc))).with({ _tag: "RowEmpty" }, () => acc).exhaustive());
+var freeInType = (t) => collect(t, emptyVarSets);
+var collectFree = _curry8(4, (t, bound, st, acc) => match7(t).with({ _tag: "TyVar" }, ({ id }) => _Set_has(id, bound.tv) ? acc : match7(_Map_get3(id, st.tv)).with({ _tag: "Some" }, ({ value: next }) => collectFree(next, bound, st, acc)).with({ _tag: "None" }, () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv })).exhaustive()).with({ _tag: "TyCon" }, ({ args }) => collectFreeArgs(args, bound, st, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collectFree(toT, bound, st, collectFree(fromT, bound, st, acc))).with({ _tag: "TyRecord" }, ({ row }) => collectFreeRow(row, bound, st, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => collectFreeArgs(members, bound, st, acc)).exhaustive());
+var collectFreeArgs = _curry8(4, (args, bound, st, acc) => match7(args).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => acc).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var collectFreeRow = _curry8(4, (row, bound, st, acc) => match7(row).with({ _tag: "RowVar" }, ({ id }) => _Set_has(id, bound.rv) ? acc : match7(_Map_get3(id, st.rv)).with({ _tag: "Some" }, ({ value: next }) => collectFreeRow(next, bound, st, acc)).with({ _tag: "None" }, () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) })).exhaustive()).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc))).with({ _tag: "RowEmpty" }, () => acc).exhaustive());
+var freeInScheme = _curry8(3, (sc, st, acc) => collectFree(sc.ty, { tv: _Set_fromArray(sc.vars), rv: _Set_fromArray(sc.rvars) }, st, acc));
+var freeInEnvFrom = _curry8(3, (schemes, st, acc) => match7(schemes).with((_v) => _v.length === 0, () => acc).with((_v) => _v.length >= 1, ([sc, ...rest]) => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var freeInEnv = _curry8(2, (env, st) => freeInEnvFrom(_Map_values(env), st, emptyVarSets));
+var generalize = _curry8(4, (env, t, st, widen) => {
+  const zt = widen ? widenLits(zonk(t, st)) : zonk(t, st);
+  const free = diffVarSets(freeInType(zt), freeInEnv(env, st));
+  return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
+});
+var widenLits = (t) => match7(t).with({ _tag: "TySingleton", base: "string" }, () => tString).with({ _tag: "TySingleton" }, () => tNumber).with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map4((m) => match7(m).with({ _tag: "TySingleton" }, () => m).otherwise(() => widenLits(m)), members))).with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map4(widenLits, args))).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(widenLits(fromT), widenLits(toT))).with({ _tag: "TyRecord" }, ({ row }) => tRecord(widenRow(row))).with({ _tag: "TyVar" }, () => t).exhaustive();
+var widenRow = (row) => match7(row).with({ _tag: "RowEmpty" }, () => row).with({ _tag: "RowVar" }, () => row).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => rField(label, widenLits(fieldType), widenRow(rest), optional)).exhaustive();
+var instMapFrom = _curry8(3, (vars, acc, st) => match7(vars).with((_v) => _v.length === 0, () => _tuple4(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fv, st1]) => instMapFrom(rest, _Map_set3(v, fv, acc), st1))(freshVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var instRowMapFrom = _curry8(3, (vars, acc, st) => match7(vars).with((_v) => _v.length === 0, () => _tuple4(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fr, st1]) => instRowMapFrom(rest, _Map_set3(v, fr, acc), st1))(freshRowVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var instSub = _curry8(3, (t, tmap, rmap) => match7(t).with({ _tag: "TyVar" }, ({ id }) => _Map_getOr(t, id, tmap)).with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map4((a) => instSub(a, tmap, rmap), args))).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap))).with({ _tag: "TyRecord" }, ({ row }) => tRecord(instSubRow(row, tmap, rmap))).with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value)).with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map4((m) => instSub(m, tmap, rmap), members))).exhaustive());
+var instSubRow = _curry8(3, (row, tmap, rmap) => match7(row).with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap)).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => rField(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap), optional)).with({ _tag: "RowEmpty" }, () => row).exhaustive());
+var instantiate = _curry8(2, (sc, st) => (([tmap, st1]) => (([rmap, st2]) => _tuple4(instSub(sc.ty, tmap, rmap), st2))(instRowMapFrom(sc.rvars, new Map, st1)))(instMapFrom(sc.vars, new Map, st)));
+var isUpperStart = (s) => match7(_Str_codeAt4(0, s)).with({ _tag: "Some" }, ({ value: c }) => and5(c >= 65, c <= 90)).with({ _tag: "None" }, () => false).exhaustive();
+var typeExprListToType = _curry8(5, (tes, vars, st, aliases, expanding) => match7(tes).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => _tuple4([], vars, st)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([te, ...rest]) => (([t, vars1, st1]) => (([restTs, vars2, st2]) => _tuple4(_Array_prepend3(t, restTs), vars2, st2))(typeExprListToType(rest, vars1, st1, aliases, expanding)))(typeExprToType(te, vars, st, aliases, expanding))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var typeExprName = _curry8(5, (name, vars, st, aliases, expanding) => _Array_contains(name, primTypeNames) ? _tuple4(primType(name), vars, st) : match7(_Map_get3(name, vars)).with({ _tag: "Some" }, ({ value: v }) => _tuple4(v, vars, st)).with({ _tag: "None" }, () => match7(_Map_get3(name, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st1]) => _tuple4(t, vars, st1))(aliasRow(name, info, [], st, aliases, expanding))).with({ _tag: "None" }, () => isUpperStart(name) ? _tuple4(tPrim(name), vars, st) : (([v, st1]) => _tuple4(v, _Map_set3(name, v, vars), st1))(freshVar(st))).exhaustive()).exhaustive());
+var typeExprToType = _curry8(5, (te, vars, st, aliases, expanding) => match7(te).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe }) => (([fromT, vars1, st1]) => (([toT, vars2, st2]) => _tuple4(tArrow(fromT, toT), vars2, st2))(typeExprToType(toTe, vars1, st1, aliases, expanding)))(typeExprToType(fromTe, vars, st, aliases, expanding))).with({ _tag: "TyApp" }, ({ ctor, args: argTes }) => (([args, vars1, st1]) => match7(_Map_get3(ctor, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st2]) => _tuple4(t, vars1, st2))(aliasRow(ctor, info, args, st1, aliases, expanding))).with({ _tag: "None" }, () => _tuple4(tCon(ctor, args), vars1, st1)).exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding))).with({ _tag: "TyTuple" }, ({ elems: elemTes }) => (([elems, vars1, st1]) => _tuple4(tTuple(elems), vars1, st1))(typeExprListToType(elemTes, vars, st, aliases, expanding))).with({ _tag: "TyList" }, ({ elem: elemTe }) => (([elemT, vars1, st1]) => _tuple4(tCon("Array", [elemT]), vars1, st1))(typeExprToType(elemTe, vars, st, aliases, expanding))).with({ _tag: "TyName" }, ({ name }) => typeExprName(name, vars, st, aliases, expanding)).with({ _tag: "TyQual" }, ({ alias, name, args: argTes }) => (([args, vars1, st1]) => match7(_Map_get3(`${alias}.${name}`, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st2]) => _tuple4(t, vars1, st2))(aliasRow(name, info, args, st1, aliases, expanding))).with({ _tag: "None" }, () => _tuple4(tCon(name, args), vars1, st1)).exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding))).with({ _tag: "TyLit" }, ({ value }) => _tuple4(tLit(value), vars, st)).with({ _tag: "TyUnion" }, ({ members }) => (([ts, vars1, st1]) => _tuple4(tUnion(ts), vars1, st1))(typeExprListToType(members, vars, st, aliases, expanding))).exhaustive());
+var aliasLocalVarsFrom = _curry8(3, (params, args, st) => match7(params).with((_v) => _v.length === 0, () => _tuple4(new Map, st)).with((_v) => _v.length >= 1, ([p, ...restParams]) => match7(args).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([a, ...restArgs]) => (([restMap, st1]) => _tuple4(_Map_set3(p, a, restMap), st1))(aliasLocalVarsFrom(restParams, restArgs, st))).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => (([v, st1]) => (([restMap, st2]) => _tuple4(_Map_set3(p, v, restMap), st2))(aliasLocalVarsFrom(restParams, [], st1)))(freshVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+})).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var aliasFieldsFrom = _curry8(5, (fields, vars, st, aliases, expanding) => match7(fields).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => _tuple4(RowEmpty, st)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([fld, ...rest]) => (([ft, vars1, st1]) => (([restRow, st2]) => _tuple4(rField(fld.name, ft, restRow, fld.optional), st2))(aliasFieldsFrom(rest, vars1, st1, aliases, expanding)))(typeExprToType(fld.fieldType, vars, st, aliases, expanding))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var aliasRow = _curry8(6, (name, info, args, st, aliases, expanding) => _Set_has(name, expanding) ? _tuple4(tCon(name, args), st) : match7(info.expr).with({ _tag: "Some" }, ({ value: te }) => (([local, st1]) => (([t, _, st2]) => _tuple4(t, st2))(typeExprToType(te, local, st1, aliases, _Set_add(name, expanding))))(aliasLocalVarsFrom(info.params, args, st))).with({ _tag: "None" }, () => (([local, st1]) => {
+  const next = _Set_add(name, expanding);
+  return (([row, st2]) => _tuple4(tRecord(row), st2))(aliasFieldsFrom(info.fields, local, st1, aliases, next));
+})(aliasLocalVarsFrom(info.params, args, st))).exhaustive());
+var pvarsFrom = _curry8(2, (params, st) => match7(params).with((_v) => _v.length === 0, () => _tuple4(new Map, [], st)).with((_v) => _v.length >= 1, ([p, ...rest]) => (([v, st1]) => (([restMap, restVars, st2]) => _tuple4(_Map_set3(p, v, restMap), _Array_prepend3(v, restVars), st2))(pvarsFrom(rest, st1)))(freshVar(st))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var ctorFieldsArrowFrom = _curry8(5, (fields, pvars, st, aliases, result) => match7(fields).with((_v) => {
+  const _g = _v;
+  return _g.length === 0;
+}, () => _tuple4(result, st)).with((_v) => {
+  const _g = _v;
+  return _g.length >= 1;
+}, ([fld, ...rest]) => (([ft, _, st1]) => (([restT, st2]) => _tuple4(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([])))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var ctorScheme = _curry8(5, (typeName, params, c, st, aliases) => (([pvars, pvarTypes, st1]) => {
+  const result = tCon(typeName, pvarTypes);
+  return (([ty, st2]) => {
+    const sets = collect(ty, emptyVarSets);
+    return _tuple4({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty }, st2);
+  })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
+})(pvarsFrom(params, st)));
+
 var arrOf = (elem) => tCon("Array", [elem]);
 var setStateDomain = (state) => tUnion([state, tArrow(state, state)]);
-var isRef = _curry7(2, (fn, name) => match6(fn).with({ _tag: "ERef" }, ({ name: actual }) => eq6(actual, name)).otherwise(() => false));
-var preactSpan = (e) => match6(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
-var inferArgs = _curry7(3, (args, st, inferExpr) => match6(args).with((_v) => _v.length === 0, () => Ok4(st)).with((_v) => _v.length >= 1, ([arg, ...rest]) => _Result_flatMap3(([_, st1]) => inferArgs(rest, st1, inferExpr), inferExpr(arg, st))).otherwise(() => {
+var isRef = _curry9(2, (fn, name) => match8(fn).with({ _tag: "ERef" }, ({ name: actual }) => eq8(actual, name)).otherwise(() => false));
+var preactSpan = (e) => match8(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
+var inferArgs = _curry9(3, (args, st, inferExpr) => match8(args).with((_v) => _v.length === 0, () => Ok5(st)).with((_v) => _v.length >= 1, ([arg, ...rest]) => _Result_flatMap4(([_, st1]) => inferArgs(rest, st1, inferExpr), inferExpr(arg, st))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var inferUseState = _curry7(4, (fn, args, st, api) => and5(isRef(fn, "useState"), eq6(length4(args), 1)) ? match6(_Array_get4(0, args)).with({ _tag: "None" }, () => Ok4(None6)).with({ _tag: "Some" }, ({ value: init }) => _Result_map3(([state, st1]) => Some6(_tuple4(tTuple([zonk(state, st1), tArrow(setStateDomain(zonk(state, st1)), tUnit)]), st1)), api.inferExpr(init, st))).exhaustive() : Ok4(None6));
-var inferUseLazyState = _curry7(4, (fn, args, st, api) => and5(isRef(fn, "useLazyState"), eq6(length4(args), 1)) ? match6(_Array_get4(0, args)).with({ _tag: "None" }, () => Ok4(None6)).with({ _tag: "Some" }, ({ value: thunk }) => (([state, st1]) => _Result_flatMap3(([thunkT, st2]) => _Result_map3((st3) => {
-  const value = zonk(state, st3);
-  return Some6(_tuple4(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3));
-}, api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk))), api.inferExpr(thunk, st1)))(freshVar(st))).exhaustive() : Ok4(None6));
-var inferUseRef = _curry7(4, (fn, args, st, api) => and5(isRef(fn, "useRef"), eq6(length4(args), 1)) ? match6(_Array_get4(0, args)).with({ _tag: "None" }, () => Ok4(None6)).with({ _tag: "Some" }, ({ value: init }) => _Result_map3(([state, st1]) => Some6(_tuple4(tRecord(rExtend("current", zonk(state, st1), RowEmpty)), st1)), api.inferExpr(init, st))).exhaustive() : Ok4(None6));
-var inferEffectLike = _curry7(5, (fn, args, st, api, name) => and5(isRef(fn, name), length4(args) >= 1) ? match6(_Array_get4(0, args)).with({ _tag: "None" }, () => Ok4(None6)).with({ _tag: "Some" }, ({ value: effect }) => (([cleanup, st1]) => _Result_flatMap3(([effectT, st2]) => _Result_flatMap3((st3) => eq6(length4(args), 1) ? (([dep, st4]) => Ok4(Some6(_tuple4(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3)) : _Result_map3((st4) => Some6(_tuple4(tUnit, st4)), inferArgs(_Array_drop(1, args), st3, api.inferExpr)), api.unify(effectT, tArrow(tUnit, cleanup), st2, preactSpan(effect))), api.inferExpr(effect, st1)))(freshVar(st))).exhaustive() : Ok4(None6));
-var inferUseCallback = _curry7(4, (fn, args, st, api) => and5(isRef(fn, "useCallback"), length4(args) >= 1) ? match6(_Array_get4(0, args)).with({ _tag: "None" }, () => Ok4(None6)).with({ _tag: "Some" }, ({ value: callback }) => _Result_flatMap3(([callbackT, st1]) => eq6(length4(args), 1) ? (([dep, st2]) => Ok4(Some6(_tuple4(tArrow(arrOf(dep), zonk(callbackT, st2)), st2))))(freshVar(st1)) : _Result_map3((st2) => Some6(_tuple4(zonk(callbackT, st2), st2)), inferArgs(_Array_drop(1, args), st1, api.inferExpr)), api.inferExpr(callback, st))).exhaustive() : Ok4(None6));
-var inferUseMemo = _curry7(4, (fn, args, st, api) => and5(isRef(fn, "useMemo"), length4(args) >= 1) ? match6(_Array_get4(0, args)).with({ _tag: "None" }, () => Ok4(None6)).with({ _tag: "Some" }, ({ value: thunk }) => (([value, st1]) => _Result_flatMap3(([thunkT, st2]) => _Result_flatMap3((st3) => eq6(length4(args), 1) ? (([dep, st4]) => Ok4(Some6(_tuple4(tArrow(arrOf(dep), zonk(value, st4)), st4))))(freshVar(st3)) : _Result_map3((st4) => Some6(_tuple4(zonk(value, st4), st4)), inferArgs(_Array_drop(1, args), st3, api.inferExpr)), api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk))), api.inferExpr(thunk, st1)))(freshVar(st))).exhaustive() : Ok4(None6));
-var inferHookDeps = _curry7(4, (fn, args, st, api) => {
-  const expected = isRef(fn, "hookDeps0") ? Some6(0) : isRef(fn, "hookDeps1") ? Some6(1) : isRef(fn, "hookDeps2") ? Some6(2) : isRef(fn, "hookDeps") ? Some6(3) : None6;
-  return match6(expected).with({ _tag: "Some" }, ({ value: n }) => eq6(length4(args), n) ? _Result_map3((st1) => (([elem, st2]) => Some6(_tuple4(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok4(None6)).with({ _tag: "None" }, () => Ok4(None6)).exhaustive();
+var inferUseState = _curry9(4, (fn, args, st, api) => and6(isRef(fn, "useState"), eq8(length5(args), 1)) ? match8(_Array_get5(0, args)).with({ _tag: "None" }, () => Ok5(None8)).with({ _tag: "Some" }, ({ value: init }) => _Result_map4(([state, st1]) => {
+  const value = widenLits(zonk(state, st1));
+  return Some8(_tuple5(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st1));
+}, api.inferExpr(init, st))).exhaustive() : Ok5(None8));
+var inferUseLazyState = _curry9(4, (fn, args, st, api) => and6(isRef(fn, "useLazyState"), eq8(length5(args), 1)) ? match8(_Array_get5(0, args)).with({ _tag: "None" }, () => Ok5(None8)).with({ _tag: "Some" }, ({ value: thunk }) => (([state, st1]) => _Result_flatMap4(([thunkT, st2]) => _Result_map4((st3) => {
+  const value = widenLits(zonk(state, st3));
+  return Some8(_tuple5(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3));
+}, api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk))), api.inferExpr(thunk, st1)))(freshVar(st))).exhaustive() : Ok5(None8));
+var inferUseRef = _curry9(4, (fn, args, st, api) => and6(isRef(fn, "useRef"), eq8(length5(args), 1)) ? match8(_Array_get5(0, args)).with({ _tag: "None" }, () => Ok5(None8)).with({ _tag: "Some" }, ({ value: init }) => _Result_map4(([state, st1]) => Some8(_tuple5(tRecord(rExtend("current", zonk(state, st1), RowEmpty)), st1)), api.inferExpr(init, st))).exhaustive() : Ok5(None8));
+var inferDeps = _curry9(4, (args, st, api, name) => match8(_Array_get5(2, args)).with({ _tag: "Some" }, ({ value: surplus }) => ((sp) => Err5({ message: `${name} takes one dependency array after its callback`, start: sp.start, end: sp.end, help: None8, suggestions: [] }))(preactSpan(surplus))).with({ _tag: "None" }, () => match8(_Array_get5(1, args)).with({ _tag: "None" }, () => Ok5(st)).with({ _tag: "Some" }, ({ value: deps }) => _Result_flatMap4(([depsT, st1]) => (([elem, st2]) => api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)), api.inferExpr(deps, st))).exhaustive()).exhaustive());
+var inferEffectLike = _curry9(5, (fn, args, st, api, name) => and6(isRef(fn, name), length5(args) >= 1) ? match8(_Array_get5(0, args)).with({ _tag: "None" }, () => Ok5(None8)).with({ _tag: "Some" }, ({ value: effect }) => (([cleanup, st1]) => _Result_flatMap4(([effectT, st2]) => _Result_flatMap4((st3) => eq8(length5(args), 1) ? (([dep, st4]) => Ok5(Some8(_tuple5(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3)) : _Result_map4((st4) => Some8(_tuple5(tUnit, st4)), inferDeps(args, st3, api, name)), api.unify(effectT, tArrow(tUnit, cleanup), st2, preactSpan(effect))), api.inferExpr(effect, st1)))(freshVar(st))).exhaustive() : Ok5(None8));
+var inferUseCallback = _curry9(4, (fn, args, st, api) => and6(isRef(fn, "useCallback"), length5(args) >= 1) ? match8(_Array_get5(0, args)).with({ _tag: "None" }, () => Ok5(None8)).with({ _tag: "Some" }, ({ value: callback }) => _Result_flatMap4(([callbackT, st1]) => eq8(length5(args), 1) ? (([dep, st2]) => Ok5(Some8(_tuple5(tArrow(arrOf(dep), zonk(callbackT, st2)), st2))))(freshVar(st1)) : _Result_map4((st2) => Some8(_tuple5(zonk(callbackT, st2), st2)), inferDeps(args, st1, api, "useCallback")), api.inferExpr(callback, st))).exhaustive() : Ok5(None8));
+var inferUseMemo = _curry9(4, (fn, args, st, api) => and6(isRef(fn, "useMemo"), length5(args) >= 1) ? match8(_Array_get5(0, args)).with({ _tag: "None" }, () => Ok5(None8)).with({ _tag: "Some" }, ({ value: thunk }) => (([value, st1]) => _Result_flatMap4(([thunkT, st2]) => _Result_flatMap4((st3) => eq8(length5(args), 1) ? (([dep, st4]) => Ok5(Some8(_tuple5(tArrow(arrOf(dep), zonk(value, st4)), st4))))(freshVar(st3)) : _Result_map4((st4) => Some8(_tuple5(zonk(value, st4), st4)), inferDeps(args, st3, api, "useMemo")), api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk))), api.inferExpr(thunk, st1)))(freshVar(st))).exhaustive() : Ok5(None8));
+var inferHookDeps = _curry9(4, (fn, args, st, api) => {
+  const expected = isRef(fn, "hookDeps0") ? Some8(0) : isRef(fn, "hookDeps1") ? Some8(1) : isRef(fn, "hookDeps2") ? Some8(2) : isRef(fn, "hookDeps") ? Some8(3) : None8;
+  return match8(expected).with({ _tag: "Some" }, ({ value: n }) => eq8(length5(args), n) ? _Result_map4((st1) => (([elem, st2]) => Some8(_tuple5(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok5(None8)).with({ _tag: "None" }, () => Ok5(None8)).exhaustive();
 });
-var inferPreactCall = _curry7(5, (fn, args, _origin, st, api) => _Result_flatMap3((first) => match6(first).with({ _tag: "Some" }, () => Ok4(first)).with({ _tag: "None" }, () => _Result_flatMap3((lazy) => match6(lazy).with({ _tag: "Some" }, () => Ok4(lazy)).with({ _tag: "None" }, () => _Result_flatMap3((ref) => match6(ref).with({ _tag: "Some" }, () => Ok4(ref)).with({ _tag: "None" }, () => _Result_flatMap3((effect) => match6(effect).with({ _tag: "Some" }, () => Ok4(effect)).with({ _tag: "None" }, () => _Result_flatMap3((layout) => match6(layout).with({ _tag: "Some" }, () => Ok4(layout)).with({ _tag: "None" }, () => _Result_flatMap3((callback) => match6(callback).with({ _tag: "Some" }, () => Ok4(callback)).with({ _tag: "None" }, () => _Result_flatMap3((memo) => match6(memo).with({ _tag: "Some" }, () => Ok4(memo)).with({ _tag: "None" }, () => inferHookDeps(fn, args, st, api)).exhaustive(), inferUseMemo(fn, args, st, api))).exhaustive(), inferUseCallback(fn, args, st, api))).exhaustive(), inferEffectLike(fn, args, st, api, "useLayoutEffect"))).exhaustive(), inferEffectLike(fn, args, st, api, "useEffect"))).exhaustive(), inferUseRef(fn, args, st, api))).exhaustive(), inferUseLazyState(fn, args, st, api))).exhaustive(), inferUseState(fn, args, st, api)));
-var preactPlugin = { name: "preact", parse: None6, inferCall: Some6(inferPreactCall), format: None6, dtsBinding: None6, bindingType: None6 };
+var inferPreactCall = _curry9(5, (fn, args, _origin, st, api) => _Result_flatMap4((first) => match8(first).with({ _tag: "Some" }, () => Ok5(first)).with({ _tag: "None" }, () => _Result_flatMap4((lazy) => match8(lazy).with({ _tag: "Some" }, () => Ok5(lazy)).with({ _tag: "None" }, () => _Result_flatMap4((ref) => match8(ref).with({ _tag: "Some" }, () => Ok5(ref)).with({ _tag: "None" }, () => _Result_flatMap4((effect) => match8(effect).with({ _tag: "Some" }, () => Ok5(effect)).with({ _tag: "None" }, () => _Result_flatMap4((layout) => match8(layout).with({ _tag: "Some" }, () => Ok5(layout)).with({ _tag: "None" }, () => _Result_flatMap4((callback) => match8(callback).with({ _tag: "Some" }, () => Ok5(callback)).with({ _tag: "None" }, () => _Result_flatMap4((memo) => match8(memo).with({ _tag: "Some" }, () => Ok5(memo)).with({ _tag: "None" }, () => inferHookDeps(fn, args, st, api)).exhaustive(), inferUseMemo(fn, args, st, api))).exhaustive(), inferUseCallback(fn, args, st, api))).exhaustive(), inferEffectLike(fn, args, st, api, "useLayoutEffect"))).exhaustive(), inferEffectLike(fn, args, st, api, "useEffect"))).exhaustive(), inferUseRef(fn, args, st, api))).exhaustive(), inferUseLazyState(fn, args, st, api))).exhaustive(), inferUseState(fn, args, st, api)));
+var preactPlugin = { name: "preact", parse: None8, inferCall: Some8(inferPreactCall), format: None8, dtsBinding: None8, bindingType: None8 };
 
 var DEFAULT_PLUGINS = [jsxPlugin];
-var resolvePlugins = _curry8(2, (pluginsOpt, builtins) => match7(pluginsOpt).with({ _tag: "None" }, () => builtins).with({ _tag: "Some" }, ({ value: ps }) => eq7(length5(ps), 0) ? [] : _Array_concat2(builtins, ps)).exhaustive());
+var resolvePlugins = _curry10(2, (pluginsOpt, builtins) => match9(pluginsOpt).with({ _tag: "None" }, () => builtins).with({ _tag: "Some" }, ({ value: ps }) => eq9(length6(ps), 0) ? [] : _Array_concat2(builtins, ps)).exhaustive());
 var resolvePluginsDefault = (pluginsOpt) => resolvePlugins(pluginsOpt, DEFAULT_PLUGINS);
-var parseHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with((_v) => _v._tag === "Some", ({ value: { parse } }) => match7(parse).with({ _tag: "Some" }, ({ value: hook }) => parseHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => parseHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var parseHooksFrom = _curry10(3, (plugins, i, acc) => match9(_Array_get6(i, plugins)).with({ _tag: "None" }, () => acc).with((_v) => _v._tag === "Some", ({ value: { parse } }) => match9(parse).with({ _tag: "Some" }, ({ value: hook }) => parseHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => parseHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
 var parseHooksOf = (plugins) => parseHooksFrom(plugins, 0, []);
-var inferHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.inferCall).with({ _tag: "Some" }, ({ value: hook }) => inferHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => inferHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
-var runParseHooks = _curry8(4, (hooks, toks, pos, parseExpr) => match7(hooks).with((_v) => _v.length === 0, () => Ok5(None7)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(toks, pos, parseExpr)).with({ _tag: "Err" }, ({ error: e }) => Err4(e)).with({ _tag: "Ok" }, ({ value: v }) => match7(v).with({ _tag: "None" }, () => runParseHooks(rest, toks, pos, parseExpr)).with({ _tag: "Some" }, ({ value: claim }) => Ok5(Some7(claim))).exhaustive()).exhaustive()).otherwise(() => {
+var inferHooksFrom = _curry10(3, (plugins, i, acc) => match9(_Array_get6(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match9(p.inferCall).with({ _tag: "Some" }, ({ value: hook }) => inferHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => inferHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var runParseHooks = _curry10(4, (hooks, toks, pos, parseExpr) => match9(hooks).with((_v) => _v.length === 0, () => Ok6(None9)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match9(hook(toks, pos, parseExpr)).with({ _tag: "Err" }, ({ error: e }) => Err6(e)).with({ _tag: "Ok" }, ({ value: v }) => match9(v).with({ _tag: "None" }, () => runParseHooks(rest, toks, pos, parseExpr)).with({ _tag: "Some" }, ({ value: claim }) => Ok6(Some9(claim))).exhaustive()).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var runInferCallHooks = _curry8(6, (hooks, fn, args, origin, st, api) => match7(hooks).with((_v) => _v.length === 0, () => Ok5(None7)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(fn, args, origin, st, api)).with({ _tag: "Err" }, ({ error: e }) => Err4(e)).with({ _tag: "Ok" }, ({ value: v }) => match7(v).with({ _tag: "None" }, () => runInferCallHooks(rest, fn, args, origin, st, api)).with({ _tag: "Some" }, ({ value: claim }) => Ok5(Some7(claim))).exhaustive()).exhaustive()).otherwise(() => {
+var runInferCallHooks = _curry10(6, (hooks, fn, args, origin, st, api) => match9(hooks).with((_v) => _v.length === 0, () => Ok6(None9)).with((_v) => _v.length >= 1, ([hook, ...rest]) => match9(hook(fn, args, origin, st, api)).with({ _tag: "Err" }, ({ error: e }) => Err6(e)).with({ _tag: "Ok" }, ({ value: v }) => match9(v).with({ _tag: "None" }, () => runInferCallHooks(rest, fn, args, origin, st, api)).with({ _tag: "Some" }, ({ value: claim }) => Ok6(Some9(claim))).exhaustive()).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var formatHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.format).with({ _tag: "Some" }, ({ value: hook }) => formatHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => formatHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var formatHooksFrom = _curry10(3, (plugins, i, acc) => match9(_Array_get6(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match9(p.format).with({ _tag: "Some" }, ({ value: hook }) => formatHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => formatHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
 var formatHooksOf = (plugins) => formatHooksFrom(plugins, 0, []);
 var formatHooksFor = (pluginsOpt) => formatHooksOf(resolvePluginsDefault(pluginsOpt));
-var dtsHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.dtsBinding).with({ _tag: "Some" }, ({ value: hook }) => dtsHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => dtsHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
-var runFormatHooks = _curry8(2, (hooks, e) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(e)).with({ _tag: "Some" }, ({ value: out }) => Some7(out)).with({ _tag: "None" }, () => runFormatHooks(rest, e)).exhaustive()).otherwise(() => {
+var dtsHooksFrom = _curry10(3, (plugins, i, acc) => match9(_Array_get6(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match9(p.dtsBinding).with({ _tag: "Some" }, ({ value: hook }) => dtsHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => dtsHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var runFormatHooks = _curry10(2, (hooks, e) => match9(hooks).with((_v) => _v.length === 0, () => None9).with((_v) => _v.length >= 1, ([hook, ...rest]) => match9(hook(e)).with({ _tag: "Some" }, ({ value: out }) => Some9(out)).with({ _tag: "None" }, () => runFormatHooks(rest, e)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var runDtsHooks = _curry8(5, (hooks, name, value, ty, api) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(name, value, ty, api)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value, ty, api)).exhaustive()).otherwise(() => {
+var runDtsHooks = _curry10(5, (hooks, name, value, ty, api) => match9(hooks).with((_v) => _v.length === 0, () => None9).with((_v) => _v.length >= 1, ([hook, ...rest]) => match9(hook(name, value, ty, api)).with({ _tag: "Some" }, ({ value: ts }) => Some9(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value, ty, api)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var bindingHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.bindingType).with({ _tag: "Some" }, ({ value: hook }) => bindingHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => bindingHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
-var runBindingHooks = _curry8(4, (hooks, value, ty, api) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(value, ty, api)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runBindingHooks(rest, value, ty, api)).exhaustive()).otherwise(() => {
+var bindingHooksFrom = _curry10(3, (plugins, i, acc) => match9(_Array_get6(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match9(p.bindingType).with({ _tag: "Some" }, ({ value: hook }) => bindingHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => bindingHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
+var runBindingHooks = _curry10(4, (hooks, value, ty, api) => match9(hooks).with((_v) => _v.length === 0, () => None9).with((_v) => _v.length >= 1, ([hook, ...rest]) => match9(hook(value, ty, api)).with({ _tag: "Some" }, ({ value: ts }) => Some9(ts)).with({ _tag: "None" }, () => runBindingHooks(rest, value, ty, api)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 
-var tokName = (t) => match8(t).with({ _tag: "TLet" }, () => "let").with({ _tag: "TType" }, () => "type").with({ _tag: "TExtern" }, () => "extern").with({ _tag: "TSwitch" }, () => "switch").with({ _tag: "TLoop" }, () => "loop").with({ _tag: "TRecur" }, () => "recur").with({ _tag: "TDo" }, () => "do").with({ _tag: "TImport" }, () => "import").with({ _tag: "TExport" }, () => "export").with({ _tag: "TEq" }, () => "eq").with({ _tag: "TArrow" }, () => "arrow").with({ _tag: "TTarrow" }, () => "tarrow").with({ _tag: "TPipe" }, () => "pipe").with({ _tag: "TCompose" }, () => "compose").with({ _tag: "TConcat" }, () => "concat").with({ _tag: "TBar" }, () => "bar").with({ _tag: "TLparen" }, () => "lparen").with({ _tag: "TRparen" }, () => "rparen").with({ _tag: "TLbrace" }, () => "lbrace").with({ _tag: "TRbrace" }, () => "rbrace").with({ _tag: "TLbracket" }, () => "lbracket").with({ _tag: "TRbracket" }, () => "rbracket").with({ _tag: "TSpread" }, () => "spread").with({ _tag: "TPlus" }, () => "plus").with({ _tag: "TMinus" }, () => "minus").with({ _tag: "TStar" }, () => "star").with({ _tag: "TSlash" }, () => "slash").with({ _tag: "TPercent" }, () => "percent").with({ _tag: "TAt" }, () => "at").with({ _tag: "THash" }, () => "hash").with({ _tag: "TTilde" }, () => "tilde").with({ _tag: "TDot" }, () => "dot").with({ _tag: "TColon" }, () => "colon").with({ _tag: "TQuestion" }, () => "question").with({ _tag: "TEqeq" }, () => "eqeq").with({ _tag: "TNeq" }, () => "neq").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGte" }, () => "gte").with({ _tag: "TLt" }, () => "lt").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TAndand" }, () => "andand").with({ _tag: "TOror" }, () => "oror").with({ _tag: "TBang" }, () => "bang").with({ _tag: "TBacktick" }, () => "backtick").with({ _tag: "TComma" }, () => "comma").with({ _tag: "TSemi" }, () => "semi").with({ _tag: "TNum" }, () => "num").with({ _tag: "TBool" }, () => "bool").with({ _tag: "TStr" }, () => "str").with({ _tag: "TTmplStart" }, () => "tmplstart").with({ _tag: "TTmplMid" }, () => "tmplmid").with({ _tag: "TTmplEnd" }, () => "tmplend").with({ _tag: "TId" }, () => "id").with({ _tag: "TEof" }, () => "eof").exhaustive();
-var eofTok = { tok: TEof, start: 0, end: 0, doc: None8 };
-var tokAt = _curry9(2, (toks, i) => _Option_unwrapOr3(eofTok, _Array_get6(i, toks)));
+var tokName = (t) => match10(t).with({ _tag: "TLet" }, () => "let").with({ _tag: "TType" }, () => "type").with({ _tag: "TExtern" }, () => "extern").with({ _tag: "TSwitch" }, () => "switch").with({ _tag: "TLoop" }, () => "loop").with({ _tag: "TRecur" }, () => "recur").with({ _tag: "TDo" }, () => "do").with({ _tag: "TImport" }, () => "import").with({ _tag: "TExport" }, () => "export").with({ _tag: "TEq" }, () => "eq").with({ _tag: "TArrow" }, () => "arrow").with({ _tag: "TTarrow" }, () => "tarrow").with({ _tag: "TPipe" }, () => "pipe").with({ _tag: "TCompose" }, () => "compose").with({ _tag: "TConcat" }, () => "concat").with({ _tag: "TBar" }, () => "bar").with({ _tag: "TLparen" }, () => "lparen").with({ _tag: "TRparen" }, () => "rparen").with({ _tag: "TLbrace" }, () => "lbrace").with({ _tag: "TRbrace" }, () => "rbrace").with({ _tag: "TLbracket" }, () => "lbracket").with({ _tag: "TRbracket" }, () => "rbracket").with({ _tag: "TSpread" }, () => "spread").with({ _tag: "TPlus" }, () => "plus").with({ _tag: "TMinus" }, () => "minus").with({ _tag: "TStar" }, () => "star").with({ _tag: "TSlash" }, () => "slash").with({ _tag: "TPercent" }, () => "percent").with({ _tag: "TAt" }, () => "at").with({ _tag: "THash" }, () => "hash").with({ _tag: "TTilde" }, () => "tilde").with({ _tag: "TDot" }, () => "dot").with({ _tag: "TColon" }, () => "colon").with({ _tag: "TQuestion" }, () => "question").with({ _tag: "TEqeq" }, () => "eqeq").with({ _tag: "TNeq" }, () => "neq").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGte" }, () => "gte").with({ _tag: "TLt" }, () => "lt").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TAndand" }, () => "andand").with({ _tag: "TOror" }, () => "oror").with({ _tag: "TBang" }, () => "bang").with({ _tag: "TBacktick" }, () => "backtick").with({ _tag: "TComma" }, () => "comma").with({ _tag: "TSemi" }, () => "semi").with({ _tag: "TNum" }, () => "num").with({ _tag: "TBool" }, () => "bool").with({ _tag: "TStr" }, () => "str").with({ _tag: "TTmplStart" }, () => "tmplstart").with({ _tag: "TTmplMid" }, () => "tmplmid").with({ _tag: "TTmplEnd" }, () => "tmplend").with({ _tag: "TId" }, () => "id").with({ _tag: "TEof" }, () => "eof").exhaustive();
+var eofTok = { tok: TEof, start: 0, end: 0, doc: None10 };
+var tokAt = _curry11(2, (toks, i) => _Option_unwrapOr4(eofTok, _Array_get7(i, toks)));
 var spanOf = (lt) => ({ start: lt.start, end: lt.end });
-var spanning = _curry9(2, (a, b) => ({ start: a.start, end: b.end }));
-var toEnd = _curry9(3, (start, toks, pos) => ({ start: start.start, end: tokAt(toks, pos - 1).end }));
-var errAt = _curry9(2, (message, lt) => Err5({ message, start: lt.start, end: lt.end }));
-var expectTok = _curry9(3, (t, toks, pos) => {
+var spanning = _curry11(2, (a, b) => ({ start: a.start, end: b.end }));
+var toEnd = _curry11(3, (start, toks, pos) => ({ start: start.start, end: tokAt(toks, pos - 1).end }));
+var errAt = _curry11(2, (message, lt) => Err7({ message, start: lt.start, end: lt.end }));
+var expectTok = _curry11(3, (t, toks, pos) => {
   const lt = tokAt(toks, pos);
-  return eq8(lt.tok, t) ? Ok6(pos + 1) : errAt(`expected ${tokName(t)}, got ${tokName(lt.tok)}`, lt);
+  return eq10(lt.tok, t) ? Ok7(pos + 1) : errAt(`expected ${tokName(t)}, got ${tokName(lt.tok)}`, lt);
 });
-var expectId = _curry9(2, (toks, pos) => {
+var expectId = _curry11(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
-  return match8(lt.tok).with({ _tag: "TId" }, ({ value: name }) => Ok6(_tuple5({ name, span: spanOf(lt) }, pos + 1))).otherwise((t) => errAt(`expected id, got ${tokName(t)}`, lt));
+  return match10(lt.tok).with({ _tag: "TId" }, ({ value: name }) => Ok7(_tuple6({ name, span: spanOf(lt) }, pos + 1))).otherwise((t) => errAt(`expected id, got ${tokName(t)}`, lt));
 });
-var keywordText = (t) => match8(t).with({ _tag: "TLet" }, () => Some8("let")).with({ _tag: "TType" }, () => Some8("type")).with({ _tag: "TExtern" }, () => Some8("extern")).with({ _tag: "TSwitch" }, () => Some8("switch")).with({ _tag: "TLoop" }, () => Some8("loop")).with({ _tag: "TRecur" }, () => Some8("recur")).with({ _tag: "TDo" }, () => Some8("do")).with({ _tag: "TImport" }, () => Some8("import")).with({ _tag: "TExport" }, () => Some8("export")).otherwise(() => None8);
-var expectLabel = _curry9(2, (toks, pos) => {
+var keywordText = (t) => match10(t).with({ _tag: "TLet" }, () => Some10("let")).with({ _tag: "TType" }, () => Some10("type")).with({ _tag: "TExtern" }, () => Some10("extern")).with({ _tag: "TSwitch" }, () => Some10("switch")).with({ _tag: "TLoop" }, () => Some10("loop")).with({ _tag: "TRecur" }, () => Some10("recur")).with({ _tag: "TDo" }, () => Some10("do")).with({ _tag: "TImport" }, () => Some10("import")).with({ _tag: "TExport" }, () => Some10("export")).otherwise(() => None10);
+var expectLabel = _curry11(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
-  return match8(keywordText(lt.tok)).with({ _tag: "Some" }, ({ value: name }) => Ok6(_tuple5({ name, span: spanOf(lt) }, pos + 1))).with({ _tag: "None" }, () => expectId(toks, pos)).exhaustive();
+  return match10(keywordText(lt.tok)).with({ _tag: "Some" }, ({ value: name }) => Ok7(_tuple6({ name, span: spanOf(lt) }, pos + 1))).with({ _tag: "None" }, () => expectId(toks, pos)).exhaustive();
 });
-var expectStr = _curry9(2, (toks, pos) => {
+var expectStr = _curry11(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
-  return match8(lt.tok).with({ _tag: "TStr" }, ({ value }) => Ok6(_tuple5(value, pos + 1))).otherwise((t) => errAt(`expected str, got ${tokName(t)}`, lt));
+  return match10(lt.tok).with({ _tag: "TStr" }, ({ value }) => Ok7(_tuple6(value, pos + 1))).otherwise((t) => errAt(`expected str, got ${tokName(t)}`, lt));
 });
-var expectIn = _curry9(2, (toks, pos) => _Result_flatMap4(([kw, p]) => eq8(kw.name, "in") ? Ok6(p) : errAt(`expected 'in' after let binding, got '${kw.name}'`, tokAt(toks, p)), expectId(toks, pos)));
-var isUpper = (s) => _Option_exists3((n) => and6(n >= 65, n <= 90), _Str_codeAt4(0, s));
-var sepBy = _curry9(4, (parseItem, toks, pos, acc) => _Result_flatMap4(([item, p]) => {
+var expectIn = _curry11(2, (toks, pos) => _Result_flatMap5(([kw, p]) => eq10(kw.name, "in") ? Ok7(p) : errAt(`expected 'in' after let binding, got '${kw.name}'`, tokAt(toks, p)), expectId(toks, pos)));
+var isUpper = (s) => _Option_exists3((n) => and7(n >= 65, n <= 90), _Str_codeAt5(0, s));
+var sepBy = _curry11(4, (parseItem, toks, pos, acc) => _Result_flatMap5(([item, p]) => {
   const items = _Array_append6(item, acc);
-  return eq8(tokAt(toks, p).tok, TComma) ? sepBy(parseItem, toks, p + 1, items) : Ok6(_tuple5(items, p));
+  return eq10(tokAt(toks, p).tok, TComma) ? sepBy(parseItem, toks, p + 1, items) : Ok7(_tuple6(items, p));
 }, parseItem(toks, pos)));
-var sepByH = _curry9(5, (parseItem, toks, pos, acc, hooks) => _Result_flatMap4(([item, p]) => {
+var sepByH = _curry11(5, (parseItem, toks, pos, acc, hooks) => _Result_flatMap5(([item, p]) => {
   const items = _Array_append6(item, acc);
-  return eq8(tokAt(toks, p).tok, TComma) ? sepByH(parseItem, toks, p + 1, items, hooks) : Ok6(_tuple5(items, p));
+  return eq10(tokAt(toks, p).tok, TComma) ? sepByH(parseItem, toks, p + 1, items, hooks) : Ok7(_tuple6(items, p));
 }, parseItem(toks, pos, hooks)));
-var listUntil = _curry9(4, (close, parseItem, toks, pos) => eq8(tokAt(toks, pos).tok, close) ? Ok6(_tuple5([], pos)) : sepBy(parseItem, toks, pos, []));
-var listUntilH = _curry9(5, (close, parseItem, toks, pos, hooks) => eq8(tokAt(toks, pos).tok, close) ? Ok6(_tuple5([], pos)) : sepByH(parseItem, toks, pos, [], hooks));
-var scanLambdaDepth = _curry9(3, (toks, k, depth) => match8(tokAt(toks, k).tok).with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, k + 1, depth + 1)).with({ _tag: "TRparen" }, () => eq8(depth, 1) ? eq8(tokAt(toks, k + 1).tok, TArrow) : scanLambdaDepth(toks, k + 1, depth - 1)).with({ _tag: "TEof" }, () => false).otherwise(() => scanLambdaDepth(toks, k + 1, depth)));
-var looksLikeLambda = _curry9(2, (toks, pos) => match8(tokAt(toks, pos).tok).with({ _tag: "TId" }, () => eq8(tokAt(toks, pos + 1).tok, TArrow)).with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, pos, 0)).otherwise(() => false));
-var exprSpan = (e) => match8(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
-var tySpan = (t) => match8(t).with({ _tag: "TyName" }, ({ span: sp }) => sp).with({ _tag: "TyArrow" }, ({ span: sp }) => sp).with({ _tag: "TyApp" }, ({ span: sp }) => sp).with({ _tag: "TyTuple" }, ({ span: sp }) => sp).with({ _tag: "TyList" }, ({ span: sp }) => sp).with({ _tag: "TyQual" }, ({ span: sp }) => sp).with({ _tag: "TyLit" }, ({ span: sp }) => sp).with({ _tag: "TyUnion" }, ({ span: sp }) => sp).exhaustive();
-var parseParam = _curry9(2, (toks, pos) => match8(tokAt(toks, pos).tok).with({ _tag: "TLbrace" }, () => _Result_flatMap4(([fields, p]) => _Result_flatMap4((p2) => Ok6(_tuple5(LPSpanned(LPRecord(map3((f) => f.name, fields)), map3((f) => f.span, fields)), p2)), expectTok(TRbrace, toks, p)), listUntil(TRbrace, expectId, toks, pos + 1))).with({ _tag: "TLparen" }, () => _Result_flatMap4(([names, p]) => _Result_flatMap4((p2) => Ok6(match8(names).with((_v) => {
+var listUntil = _curry11(4, (close, parseItem, toks, pos) => eq10(tokAt(toks, pos).tok, close) ? Ok7(_tuple6([], pos)) : sepBy(parseItem, toks, pos, []));
+var listUntilH = _curry11(5, (close, parseItem, toks, pos, hooks) => eq10(tokAt(toks, pos).tok, close) ? Ok7(_tuple6([], pos)) : sepByH(parseItem, toks, pos, [], hooks));
+var scanLambdaDepth = _curry11(3, (toks, k, depth) => match10(tokAt(toks, k).tok).with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, k + 1, depth + 1)).with({ _tag: "TRparen" }, () => eq10(depth, 1) ? eq10(tokAt(toks, k + 1).tok, TArrow) : scanLambdaDepth(toks, k + 1, depth - 1)).with({ _tag: "TEof" }, () => false).otherwise(() => scanLambdaDepth(toks, k + 1, depth)));
+var looksLikeLambda = _curry11(2, (toks, pos) => match10(tokAt(toks, pos).tok).with({ _tag: "TId" }, () => eq10(tokAt(toks, pos + 1).tok, TArrow)).with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, pos, 0)).otherwise(() => false));
+var exprSpan = (e) => match10(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
+var tySpan = (t) => match10(t).with({ _tag: "TyName" }, ({ span: sp }) => sp).with({ _tag: "TyArrow" }, ({ span: sp }) => sp).with({ _tag: "TyApp" }, ({ span: sp }) => sp).with({ _tag: "TyTuple" }, ({ span: sp }) => sp).with({ _tag: "TyList" }, ({ span: sp }) => sp).with({ _tag: "TyQual" }, ({ span: sp }) => sp).with({ _tag: "TyLit" }, ({ span: sp }) => sp).with({ _tag: "TyUnion" }, ({ span: sp }) => sp).exhaustive();
+var parseParam = _curry11(2, (toks, pos) => match10(tokAt(toks, pos).tok).with({ _tag: "TLbrace" }, () => _Result_flatMap5(([fields, p]) => _Result_flatMap5((p2) => Ok7(_tuple6(LPSpanned(LPRecord(map5((f) => f.name, fields)), map5((f) => f.span, fields)), p2)), expectTok(TRbrace, toks, p)), listUntil(TRbrace, expectId, toks, pos + 1))).with({ _tag: "TLparen" }, () => _Result_flatMap5(([names, p]) => _Result_flatMap5((p2) => Ok7(match10(names).with((_v) => {
   const _g = _v;
   return _g.length === 1;
-}, ([single]) => _tuple5(LPSpanned(LPName(single.name, None8), [single.span]), p2)).otherwise((many) => _tuple5(LPSpanned(LPTuple(map3((n) => n.name, many)), map3((n) => n.span, many)), p2))), expectTok(TRparen, toks, p)), sepBy(expectId, toks, pos + 1, []))).otherwise(() => _Result_flatMap4(([nm, p]) => eq8(tokAt(toks, p).tok, TColon) ? _Result_map4(([annot, p2]) => _tuple5(LPSpanned(LPName(nm.name, Some8(annot)), [nm.span]), p2), parseTypeExpr(toks, p + 1)) : Ok6(_tuple5(LPSpanned(LPName(nm.name, None8), [nm.span]), p)), expectId(toks, pos))));
-var parseLabeledParam = _curry9(3, (toks, pos, hooks) => _Result_flatMap4((p0) => _Result_flatMap4(([nm, p1]) => ((optional) => ((p2) => _Result_flatMap4(([annot, p3]) => eq8(tokAt(toks, p3).tok, TEq) ? _Result_map4(([d, k]) => _tuple5(LPSpanned(LPLabeled(nm.name, annot, optional, Some8(d)), [nm.span]), k), parseExpr(toks, p3 + 1, hooks)) : Ok6(_tuple5(LPSpanned(LPLabeled(nm.name, annot, optional, None8), [nm.span]), p3)), eq8(tokAt(toks, p2).tok, TColon) ? _Result_map4(([t, k]) => _tuple5(Some8(t), k), parseTypeExpr(toks, p2 + 1)) : Ok6(_tuple5(None8, p2))))(optional ? p1 + 1 : p1))(eq8(tokAt(toks, p1).tok, TQuestion)), expectLabel(toks, p0)), expectTok(TTilde, toks, pos)));
-var parseLamParam = _curry9(3, (toks, pos, hooks) => eq8(tokAt(toks, pos).tok, TTilde) ? parseLabeledParam(toks, pos, hooks) : parseParam(toks, pos));
-var isLabeledParam = (p) => match8(p).with({ _tag: "LPLabeled" }, () => true).with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner)).otherwise(() => false);
-var labeledTrailing = _curry9(2, (params, seen) => match8(params).with((_v) => {
+}, ([single]) => _tuple6(LPSpanned(LPName(single.name, None10), [single.span]), p2)).otherwise((many) => _tuple6(LPSpanned(LPTuple(map5((n) => n.name, many)), map5((n) => n.span, many)), p2))), expectTok(TRparen, toks, p)), sepBy(expectId, toks, pos + 1, []))).otherwise(() => _Result_flatMap5(([nm, p]) => eq10(tokAt(toks, p).tok, TColon) ? _Result_map5(([annot, p2]) => _tuple6(LPSpanned(LPName(nm.name, Some10(annot)), [nm.span]), p2), parseTypeExpr(toks, p + 1)) : Ok7(_tuple6(LPSpanned(LPName(nm.name, None10), [nm.span]), p)), expectId(toks, pos))));
+var parseLabeledParam = _curry11(3, (toks, pos, hooks) => _Result_flatMap5((p0) => _Result_flatMap5(([nm, p1]) => ((optional) => ((p2) => _Result_flatMap5(([annot, p3]) => eq10(tokAt(toks, p3).tok, TEq) ? _Result_map5(([d, k]) => _tuple6(LPSpanned(LPLabeled(nm.name, annot, optional, Some10(d)), [nm.span]), k), parseExpr(toks, p3 + 1, hooks)) : Ok7(_tuple6(LPSpanned(LPLabeled(nm.name, annot, optional, None10), [nm.span]), p3)), eq10(tokAt(toks, p2).tok, TColon) ? _Result_map5(([t, k]) => _tuple6(Some10(t), k), parseTypeExpr(toks, p2 + 1)) : Ok7(_tuple6(None10, p2))))(optional ? p1 + 1 : p1))(eq10(tokAt(toks, p1).tok, TQuestion)), expectLabel(toks, p0)), expectTok(TTilde, toks, pos)));
+var parseLamParam = _curry11(3, (toks, pos, hooks) => eq10(tokAt(toks, pos).tok, TTilde) ? parseLabeledParam(toks, pos, hooks) : parseParam(toks, pos));
+var isLabeledParam = (p) => match10(p).with({ _tag: "LPLabeled" }, () => true).with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner)).otherwise(() => false);
+var labeledTrailing = _curry11(2, (params, seen) => match10(params).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => true).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([p, ...rest]) => isLabeledParam(p) ? labeledTrailing(rest, true) : and6(not5(seen), labeledTrailing(rest, false))).otherwise(() => {
+}, ([p, ...rest]) => isLabeledParam(p) ? labeledTrailing(rest, true) : and7(not6(seen), labeledTrailing(rest, false))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var parseLambda = _curry9(3, (toks, pos, hooks) => {
+var parseLambda = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return match8(tokAt(toks, pos).tok).with({ _tag: "TId" }, ({ value: name }) => _Result_flatMap4((p) => _Result_flatMap4(([body, p2]) => Ok6(_tuple5(ELambda([LPSpanned(LPName(name, None8), [spanOf(tokAt(toks, pos))])], body, toEnd(start, toks, p2)), p2)), parseLambdaBody(toks, p, hooks)), expectTok(TArrow, toks, pos + 1))).otherwise(() => _Result_flatMap4((p) => _Result_flatMap4(([params, p2]) => _Result_flatMap4((p3) => labeledTrailing(params, false) ? _Result_flatMap4((p4) => _Result_flatMap4(([body, p5]) => Ok6(_tuple5(ELambda(params, body, toEnd(start, toks, p5)), p5)), parseLambdaBody(toks, p4, hooks)), expectTok(TArrow, toks, p3)) : errAt("labeled parameters must be a trailing group", tokAt(toks, p)), expectTok(TRparen, toks, p2)), listUntilH(TRparen, parseLamParam, toks, p, hooks)), expectTok(TLparen, toks, pos)));
+  return match10(tokAt(toks, pos).tok).with({ _tag: "TId" }, ({ value: name }) => _Result_flatMap5((p) => _Result_flatMap5(([body, p2]) => Ok7(_tuple6(ELambda([LPSpanned(LPName(name, None10), [spanOf(tokAt(toks, pos))])], body, toEnd(start, toks, p2)), p2)), parseLambdaBody(toks, p, hooks)), expectTok(TArrow, toks, pos + 1))).otherwise(() => _Result_flatMap5((p) => _Result_flatMap5(([params, p2]) => _Result_flatMap5((p3) => labeledTrailing(params, false) ? _Result_flatMap5((p4) => _Result_flatMap5(([body, p5]) => Ok7(_tuple6(ELambda(params, body, toEnd(start, toks, p5)), p5)), parseLambdaBody(toks, p4, hooks)), expectTok(TArrow, toks, p3)) : errAt("labeled parameters must be a trailing group", tokAt(toks, p)), expectTok(TRparen, toks, p2)), listUntilH(TRparen, parseLamParam, toks, p, hooks)), expectTok(TLparen, toks, pos)));
 });
-var parseLambdaBody = _curry9(3, (toks, pos, hooks) => and6(eq8(tokAt(toks, pos).tok, TLbrace), arrowBodyIsDoBlock(toks, pos, 0)) ? parseDoBlock(toks, pos, hooks) : parseExpr(toks, pos, hooks));
-var arrowBodyIsDoBlock = _curry9(3, (toks, pos, depth) => match8(tokAt(toks, pos).tok).with({ _tag: "TLbrace" }, () => arrowBodyIsDoBlock(toks, pos + 1, depth + 1)).with({ _tag: "TRbrace" }, () => eq8(depth, 1) ? false : arrowBodyIsDoBlock(toks, pos + 1, depth - 1)).with({ _tag: "TSemi" }, () => or5(eq8(depth, 1), arrowBodyIsDoBlock(toks, pos + 1, depth))).with({ _tag: "TEof" }, () => false).otherwise(() => arrowBodyIsDoBlock(toks, pos + 1, depth)));
-var parseLetIn = _curry9(3, (toks, pos, hooks) => {
+var parseLambdaBody = _curry11(3, (toks, pos, hooks) => and7(eq10(tokAt(toks, pos).tok, TLbrace), arrowBodyIsDoBlock(toks, pos, 0)) ? parseDoBlock(toks, pos, hooks) : parseExpr(toks, pos, hooks));
+var arrowBodyIsDoBlock = _curry11(3, (toks, pos, depth) => match10(tokAt(toks, pos).tok).with({ _tag: "TLbrace" }, () => arrowBodyIsDoBlock(toks, pos + 1, depth + 1)).with({ _tag: "TRbrace" }, () => eq10(depth, 1) ? false : arrowBodyIsDoBlock(toks, pos + 1, depth - 1)).with({ _tag: "TSemi" }, () => or5(eq10(depth, 1), arrowBodyIsDoBlock(toks, pos + 1, depth))).with({ _tag: "TEof" }, () => false).otherwise(() => arrowBodyIsDoBlock(toks, pos + 1, depth)));
+var parseLetIn = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => or5(eq8(tokAt(toks, p).tok, TQuestion), eq8(tokAt(toks, p).tok, TBang)) ? ((monad) => ((paramSpan) => _Result_flatMap4(([param, p1]) => _Result_flatMap4((p2) => _Result_flatMap4(([value, p3]) => _Result_flatMap4((p4) => _Result_flatMap4(([body, p5]) => Ok6(_tuple5(ELetBind(param, paramSpan, monad, value, body, toEnd(start, toks, p5)), p5)), parseExpr(toks, p4, hooks)), expectIn(toks, p3)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, p1)), parseParam(toks, p + 1)))(spanOf(tokAt(toks, p + 1))))(eq8(tokAt(toks, p).tok, TQuestion) ? "Result" : "Task") : eq8(tokAt(toks, p).tok, TLparen) ? ((paramStart) => _Result_flatMap4(([param, p1]) => _Result_flatMap4((p2) => _Result_flatMap4(([value, p3]) => _Result_flatMap4((p4) => _Result_flatMap4(([body, p5]) => ((fn) => Ok6(_tuple5(ECall(fn, [value], None8, toEnd(start, toks, p5)), p5)))(ELambda([param], body, toEnd(paramStart, toks, p5))), parseExpr(toks, p4, hooks)), expectIn(toks, p3)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, p1)), parseParam(toks, p)))(spanOf(tokAt(toks, p))) : _Result_flatMap4(([nm, p1]) => _Result_flatMap4(([annot, pA]) => _Result_flatMap4((p2) => _Result_flatMap4(([value, p3]) => _Result_flatMap4((p4) => _Result_flatMap4(([body, p5]) => Ok6(_tuple5(ELetIn(nm.name, nm.span, annot, value, body, toEnd(start, toks, p5)), p5)), parseExpr(toks, p4, hooks)), expectIn(toks, p3)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, pA)), eq8(tokAt(toks, p1).tok, TColon) ? _Result_map4(([ty, k]) => _tuple5(Some8(ty), k), parseTypeExpr(toks, p1 + 1)) : Ok6(_tuple5(None8, p1))), expectId(toks, p)), expectTok(TLet, toks, pos));
+  return _Result_flatMap5((p) => or5(eq10(tokAt(toks, p).tok, TQuestion), eq10(tokAt(toks, p).tok, TBang)) ? ((monad) => ((paramSpan) => _Result_flatMap5(([param, p1]) => _Result_flatMap5((p2) => _Result_flatMap5(([value, p3]) => _Result_flatMap5((p4) => _Result_flatMap5(([body, p5]) => Ok7(_tuple6(ELetBind(param, paramSpan, monad, value, body, toEnd(start, toks, p5)), p5)), parseExpr(toks, p4, hooks)), expectIn(toks, p3)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, p1)), parseParam(toks, p + 1)))(spanOf(tokAt(toks, p + 1))))(eq10(tokAt(toks, p).tok, TQuestion) ? "Result" : "Task") : eq10(tokAt(toks, p).tok, TLparen) ? ((paramStart) => _Result_flatMap5(([param, p1]) => _Result_flatMap5((p2) => _Result_flatMap5(([value, p3]) => _Result_flatMap5((p4) => _Result_flatMap5(([body, p5]) => ((fn) => Ok7(_tuple6(ECall(fn, [value], None10, toEnd(start, toks, p5)), p5)))(ELambda([param], body, toEnd(paramStart, toks, p5))), parseExpr(toks, p4, hooks)), expectIn(toks, p3)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, p1)), parseParam(toks, p)))(spanOf(tokAt(toks, p))) : _Result_flatMap5(([nm, p1]) => _Result_flatMap5(([annot, pA]) => _Result_flatMap5((p2) => _Result_flatMap5(([value, p3]) => _Result_flatMap5((p4) => _Result_flatMap5(([body, p5]) => Ok7(_tuple6(ELetIn(nm.name, nm.span, annot, value, body, toEnd(start, toks, p5)), p5)), parseExpr(toks, p4, hooks)), expectIn(toks, p3)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, pA)), eq10(tokAt(toks, p1).tok, TColon) ? _Result_map5(([ty, k]) => _tuple6(Some10(ty), k), parseTypeExpr(toks, p1 + 1)) : Ok7(_tuple6(None10, p1))), expectId(toks, p)), expectTok(TLet, toks, pos));
 });
 var PIPE_BP = 5;
 var COMPOSE_BP = 6;
@@ -6568,51 +6732,51 @@ var ADD_BP = 10;
 var BACKTICK_BP = 15;
 var MUL_BP = 20;
 var FAST_PIPE_BP = 21;
-var mkBinCall = _curry9(4, (fnName, opSpan, left, right) => ECall(ERef(fnName, opSpan), [left, right], None8, spanning(exprSpan(left), exprSpan(right))));
-var opFnName = (t) => match8(t).with({ _tag: "TPlus" }, () => "add").with({ _tag: "TMinus" }, () => "sub").with({ _tag: "TStar" }, () => "mul").with({ _tag: "TSlash" }, () => "div").with({ _tag: "TPercent" }, () => "mod").with({ _tag: "TAndand" }, () => "and").with({ _tag: "TOror" }, () => "or").with({ _tag: "TConcat" }, () => "concat").with({ _tag: "TEqeq" }, () => "eq").with({ _tag: "TLt" }, () => "lt").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TGte" }, () => "gte").otherwise(() => "eq");
-var isSectionOp = (t) => match8(t).with({ _tag: "TPlus" }, () => true).with({ _tag: "TMinus" }, () => true).with({ _tag: "TStar" }, () => true).with({ _tag: "TSlash" }, () => true).with({ _tag: "TPercent" }, () => true).with({ _tag: "TAndand" }, () => true).with({ _tag: "TOror" }, () => true).with({ _tag: "TConcat" }, () => true).with({ _tag: "TEqeq" }, () => true).with({ _tag: "TNeq" }, () => true).with({ _tag: "TLt" }, () => true).with({ _tag: "TLte" }, () => true).with({ _tag: "TGt" }, () => true).with({ _tag: "TGte" }, () => true).otherwise(() => false);
-var sectionBody = _curry9(4, (opTok, x, y, opSpan) => {
+var mkBinCall = _curry11(4, (fnName, opSpan, left, right) => ECall(ERef(fnName, opSpan), [left, right], None10, spanning(exprSpan(left), exprSpan(right))));
+var opFnName = (t) => match10(t).with({ _tag: "TPlus" }, () => "add").with({ _tag: "TMinus" }, () => "sub").with({ _tag: "TStar" }, () => "mul").with({ _tag: "TSlash" }, () => "div").with({ _tag: "TPercent" }, () => "mod").with({ _tag: "TAndand" }, () => "and").with({ _tag: "TOror" }, () => "or").with({ _tag: "TConcat" }, () => "concat").with({ _tag: "TEqeq" }, () => "eq").with({ _tag: "TLt" }, () => "lt").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TGte" }, () => "gte").otherwise(() => "eq");
+var isSectionOp = (t) => match10(t).with({ _tag: "TPlus" }, () => true).with({ _tag: "TMinus" }, () => true).with({ _tag: "TStar" }, () => true).with({ _tag: "TSlash" }, () => true).with({ _tag: "TPercent" }, () => true).with({ _tag: "TAndand" }, () => true).with({ _tag: "TOror" }, () => true).with({ _tag: "TConcat" }, () => true).with({ _tag: "TEqeq" }, () => true).with({ _tag: "TNeq" }, () => true).with({ _tag: "TLt" }, () => true).with({ _tag: "TLte" }, () => true).with({ _tag: "TGt" }, () => true).with({ _tag: "TGte" }, () => true).otherwise(() => false);
+var sectionBody = _curry11(4, (opTok, x, y, opSpan) => {
   const full = spanning(exprSpan(x), exprSpan(y));
-  return eq8(opTok, TNeq) ? ECall(ERef("not", opSpan), [mkBinCall("eq", opSpan, x, y)], None8, full) : mkBinCall(opFnName(opTok), opSpan, x, y);
+  return eq10(opTok, TNeq) ? ECall(ERef("not", opSpan), [mkBinCall("eq", opSpan, x, y)], None10, full) : mkBinCall(opFnName(opTok), opSpan, x, y);
 });
-var sectionLeft = _curry9(2, (provided, opLt) => {
+var sectionLeft = _curry11(2, (provided, opLt) => {
   const opSpan = spanOf(opLt);
   const paramRef = ERef("$s", opSpan);
-  return ELambda([LPName("$s", None8)], sectionBody(opLt.tok, provided, paramRef, opSpan), spanning(exprSpan(provided), opSpan));
+  return ELambda([LPName("$s", None10)], sectionBody(opLt.tok, provided, paramRef, opSpan), spanning(exprSpan(provided), opSpan));
 });
-var parseRightSection = _curry9(4, (toks, lparenSpan, pos, hooks) => {
+var parseRightSection = _curry11(4, (toks, lparenSpan, pos, hooks) => {
   const lt = tokAt(toks, pos);
-  return _Result_flatMap4(([y, p1]) => _Result_flatMap4((p2) => ((paramRef) => Ok6(_tuple5(ELambda([LPName("$s", None8)], sectionBody(lt.tok, paramRef, y, spanOf(lt)), toEnd(lparenSpan, toks, p2)), p2)))(ERef("$s", spanOf(lt))), expectTok(TRparen, toks, p1)), parseExpr(toks, pos + 1, hooks));
+  return _Result_flatMap5(([y, p1]) => _Result_flatMap5((p2) => ((paramRef) => Ok7(_tuple6(ELambda([LPName("$s", None10)], sectionBody(lt.tok, paramRef, y, spanOf(lt)), toEnd(lparenSpan, toks, p2)), p2)))(ERef("$s", spanOf(lt))), expectTok(TRparen, toks, p1)), parseExpr(toks, pos + 1, hooks));
 });
-var binCallOrLeftSection = _curry9(7, (toks, left, lt, pos, bp, fnName, hooks) => eq8(tokAt(toks, pos + 1).tok, TRparen) ? Ok6({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) : _Result_flatMap4(([right, p]) => Ok6({ left: mkBinCall(fnName, spanOf(lt), left, right), p, matched: true }), parseExprBp(toks, bp + 1, pos + 1, hooks)));
-var isCmpTok = (t) => match8(t).with({ _tag: "TEqeq" }, () => true).with({ _tag: "TNeq" }, () => true).with({ _tag: "TLt" }, () => true).with({ _tag: "TLte" }, () => true).with({ _tag: "TGt" }, () => true).with({ _tag: "TGte" }, () => true).otherwise(() => false);
-var cmpFnName = (t) => match8(t).with({ _tag: "TLt" }, () => "lt").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TGte" }, () => "gte").otherwise(() => "eq");
-var parseInfix = _curry9(5, (toks, minBp, left, pos, hooks) => {
+var binCallOrLeftSection = _curry11(7, (toks, left, lt, pos, bp, fnName, hooks) => eq10(tokAt(toks, pos + 1).tok, TRparen) ? Ok7({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) : _Result_flatMap5(([right, p]) => Ok7({ left: mkBinCall(fnName, spanOf(lt), left, right), p, matched: true }), parseExprBp(toks, bp + 1, pos + 1, hooks)));
+var isCmpTok = (t) => match10(t).with({ _tag: "TEqeq" }, () => true).with({ _tag: "TNeq" }, () => true).with({ _tag: "TLt" }, () => true).with({ _tag: "TLte" }, () => true).with({ _tag: "TGt" }, () => true).with({ _tag: "TGte" }, () => true).otherwise(() => false);
+var cmpFnName = (t) => match10(t).with({ _tag: "TLt" }, () => "lt").with({ _tag: "TLte" }, () => "lte").with({ _tag: "TGt" }, () => "gt").with({ _tag: "TGte" }, () => "gte").otherwise(() => "eq");
+var parseInfix = _curry11(5, (toks, minBp, left, pos, hooks) => {
   const lt = tokAt(toks, pos);
-  return and6(eq8(lt.tok, TPipe), PIPE_BP >= minBp) ? _Result_flatMap4(([right, p]) => Ok6({ left: EPipe(left, right, false, spanning(exprSpan(left), exprSpan(right))), p, matched: true }), parseAtomOrCall(toks, pos + 1, hooks)) : and6(eq8(lt.tok, TTarrow), FAST_PIPE_BP >= minBp) ? _Result_flatMap4(([right, p]) => match8(right).with({ _tag: "ECall" }, ({ span: rightSpan }) => Ok6({ left: EPipe(left, right, true, spanning(exprSpan(left), rightSpan)), p, matched: true })).otherwise(() => errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt)), parseAtomOrCall(toks, pos + 1, hooks)) : and6(eq8(lt.tok, TCompose), COMPOSE_BP >= minBp) ? _Result_flatMap4(([right, p]) => ((opSpan) => ((xRef) => ((innerCall) => ((outerCall) => ((fn) => Ok6({ left: fn, p, matched: true }))(ELambda([LPName("$x", None8)], outerCall, spanning(exprSpan(left), exprSpan(right)))))(ECall(right, [innerCall], None8, spanning(exprSpan(left), exprSpan(right)))))(ECall(left, [xRef], None8, exprSpan(left))))(ERef("$x", opSpan)))(spanOf(lt)), parseExprBp(toks, COMPOSE_BP + 1, pos + 1, hooks)) : and6(isCmpTok(lt.tok), CMP_BP >= minBp) ? eq8(tokAt(toks, pos + 1).tok, TRparen) ? Ok6({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) : _Result_flatMap4(([right, p]) => ((opSpan) => ((inner) => ((result) => Ok6({ left: result, p, matched: true }))(eq8(lt.tok, TNeq) ? ECall(ERef("not", opSpan), [inner], None8, spanning(exprSpan(left), exprSpan(right))) : inner))(mkBinCall(cmpFnName(lt.tok), opSpan, left, right)))(spanOf(lt)), parseExprBp(toks, CMP_BP + 1, pos + 1, hooks)) : and6(or5(eq8(lt.tok, TAndand), eq8(lt.tok, TOror)), (eq8(lt.tok, TAndand) ? AND_BP : OR_BP) >= minBp) ? ((bp) => ((fnName) => binCallOrLeftSection(toks, left, lt, pos, bp, fnName, hooks))(eq8(lt.tok, TAndand) ? "and" : "or"))(eq8(lt.tok, TAndand) ? AND_BP : OR_BP) : and6(eq8(lt.tok, TConcat), CONCAT_BP >= minBp) ? binCallOrLeftSection(toks, left, lt, pos, CONCAT_BP, "concat", hooks) : and6(eq8(lt.tok, TBacktick), BACKTICK_BP >= minBp) ? _Result_flatMap4(([fnExpr, p1]) => _Result_flatMap4((p2) => _Result_flatMap4(([right, p3]) => Ok6({ left: ECall(fnExpr, [left, right], None8, spanning(exprSpan(left), exprSpan(right))), p: p3, matched: true }), parseExprBp(toks, BACKTICK_BP + 1, p2, hooks)), expectTok(TBacktick, toks, p1)), parseAtomOrCall(toks, pos + 1, hooks)) : and6(or5(eq8(lt.tok, TPlus), eq8(lt.tok, TMinus)), ADD_BP >= minBp) ? ((fnName) => binCallOrLeftSection(toks, left, lt, pos, ADD_BP, fnName, hooks))(eq8(lt.tok, TPlus) ? "add" : "sub") : and6(or5(eq8(lt.tok, TStar), or5(eq8(lt.tok, TSlash), eq8(lt.tok, TPercent))), MUL_BP >= minBp) ? ((fnName) => binCallOrLeftSection(toks, left, lt, pos, MUL_BP, fnName, hooks))(eq8(lt.tok, TStar) ? "mul" : eq8(lt.tok, TSlash) ? "div" : "mod") : Ok6({ left, p: pos, matched: false });
+  return and7(eq10(lt.tok, TPipe), PIPE_BP >= minBp) ? _Result_flatMap5(([right, p]) => Ok7({ left: EPipe(left, right, false, spanning(exprSpan(left), exprSpan(right))), p, matched: true }), parseAtomOrCall(toks, pos + 1, hooks)) : and7(eq10(lt.tok, TTarrow), FAST_PIPE_BP >= minBp) ? _Result_flatMap5(([right, p]) => match10(right).with({ _tag: "ECall" }, ({ span: rightSpan }) => Ok7({ left: EPipe(left, right, true, spanning(exprSpan(left), rightSpan)), p, matched: true })).otherwise(() => errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt)), parseAtomOrCall(toks, pos + 1, hooks)) : and7(eq10(lt.tok, TCompose), COMPOSE_BP >= minBp) ? _Result_flatMap5(([right, p]) => ((opSpan) => ((xRef) => ((innerCall) => ((outerCall) => ((fn) => Ok7({ left: fn, p, matched: true }))(ELambda([LPName("$x", None10)], outerCall, spanning(exprSpan(left), exprSpan(right)))))(ECall(right, [innerCall], None10, spanning(exprSpan(left), exprSpan(right)))))(ECall(left, [xRef], None10, exprSpan(left))))(ERef("$x", opSpan)))(spanOf(lt)), parseExprBp(toks, COMPOSE_BP + 1, pos + 1, hooks)) : and7(isCmpTok(lt.tok), CMP_BP >= minBp) ? eq10(tokAt(toks, pos + 1).tok, TRparen) ? Ok7({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) : _Result_flatMap5(([right, p]) => ((opSpan) => ((inner) => ((result) => Ok7({ left: result, p, matched: true }))(eq10(lt.tok, TNeq) ? ECall(ERef("not", opSpan), [inner], None10, spanning(exprSpan(left), exprSpan(right))) : inner))(mkBinCall(cmpFnName(lt.tok), opSpan, left, right)))(spanOf(lt)), parseExprBp(toks, CMP_BP + 1, pos + 1, hooks)) : and7(or5(eq10(lt.tok, TAndand), eq10(lt.tok, TOror)), (eq10(lt.tok, TAndand) ? AND_BP : OR_BP) >= minBp) ? ((bp) => ((fnName) => binCallOrLeftSection(toks, left, lt, pos, bp, fnName, hooks))(eq10(lt.tok, TAndand) ? "and" : "or"))(eq10(lt.tok, TAndand) ? AND_BP : OR_BP) : and7(eq10(lt.tok, TConcat), CONCAT_BP >= minBp) ? binCallOrLeftSection(toks, left, lt, pos, CONCAT_BP, "concat", hooks) : and7(eq10(lt.tok, TBacktick), BACKTICK_BP >= minBp) ? _Result_flatMap5(([fnExpr, p1]) => _Result_flatMap5((p2) => _Result_flatMap5(([right, p3]) => Ok7({ left: ECall(fnExpr, [left, right], None10, spanning(exprSpan(left), exprSpan(right))), p: p3, matched: true }), parseExprBp(toks, BACKTICK_BP + 1, p2, hooks)), expectTok(TBacktick, toks, p1)), parseAtomOrCall(toks, pos + 1, hooks)) : and7(or5(eq10(lt.tok, TPlus), eq10(lt.tok, TMinus)), ADD_BP >= minBp) ? ((fnName) => binCallOrLeftSection(toks, left, lt, pos, ADD_BP, fnName, hooks))(eq10(lt.tok, TPlus) ? "add" : "sub") : and7(or5(eq10(lt.tok, TStar), or5(eq10(lt.tok, TSlash), eq10(lt.tok, TPercent))), MUL_BP >= minBp) ? ((fnName) => binCallOrLeftSection(toks, left, lt, pos, MUL_BP, fnName, hooks))(eq10(lt.tok, TStar) ? "mul" : eq10(lt.tok, TSlash) ? "div" : "mod") : Ok7({ left, p: pos, matched: false });
 });
-var infixLoop = _curry9(5, (toks, minBp, left, pos, hooks) => _Result_flatMap4((res) => res.matched ? infixLoop(toks, minBp, res.left, res.p, hooks) : Ok6(_tuple5(res.left, res.p)), parseInfix(toks, minBp, left, pos, hooks)));
-var ternaryTail = _curry9(4, (toks, cond, pos, hooks) => eq8(tokAt(toks, pos).tok, TQuestion) ? _Result_flatMap4(([thenE, p1]) => _Result_flatMap4((p2) => _Result_flatMap4(([elseE, p3]) => Ok6(_tuple5(ETernary(cond, thenE, elseE, spanning(exprSpan(cond), exprSpan(elseE))), p3)), parseExpr(toks, p2, hooks)), expectTok(TColon, toks, p1)), parseExpr(toks, pos + 1, hooks)) : Ok6(_tuple5(cond, pos)));
-var parseExprBp = _curry9(4, (toks, minBp, pos, hooks) => match8(tokAt(toks, pos).tok).with({ _tag: "TLet" }, () => parseLetIn(toks, pos, hooks)).otherwise(() => and6(eq8(minBp, 0), looksLikeLambda(toks, pos)) ? parseLambda(toks, pos, hooks) : _Result_flatMap4(([left, p]) => _Result_flatMap4(([left2, p2]) => eq8(minBp, 0) ? ternaryTail(toks, left2, p2, hooks) : Ok6(_tuple5(left2, p2)), infixLoop(toks, minBp, left, p, hooks)), parseAtomOrCall(toks, pos, hooks))));
-var parseExpr = _curry9(3, (toks, pos, hooks) => parseExprBp(toks, 0, pos, hooks));
+var infixLoop = _curry11(5, (toks, minBp, left, pos, hooks) => _Result_flatMap5((res) => res.matched ? infixLoop(toks, minBp, res.left, res.p, hooks) : Ok7(_tuple6(res.left, res.p)), parseInfix(toks, minBp, left, pos, hooks)));
+var ternaryTail = _curry11(4, (toks, cond, pos, hooks) => eq10(tokAt(toks, pos).tok, TQuestion) ? _Result_flatMap5(([thenE, p1]) => _Result_flatMap5((p2) => _Result_flatMap5(([elseE, p3]) => Ok7(_tuple6(ETernary(cond, thenE, elseE, spanning(exprSpan(cond), exprSpan(elseE))), p3)), parseExpr(toks, p2, hooks)), expectTok(TColon, toks, p1)), parseExpr(toks, pos + 1, hooks)) : Ok7(_tuple6(cond, pos)));
+var parseExprBp = _curry11(4, (toks, minBp, pos, hooks) => match10(tokAt(toks, pos).tok).with({ _tag: "TLet" }, () => parseLetIn(toks, pos, hooks)).otherwise(() => and7(eq10(minBp, 0), looksLikeLambda(toks, pos)) ? parseLambda(toks, pos, hooks) : _Result_flatMap5(([left, p]) => _Result_flatMap5(([left2, p2]) => eq10(minBp, 0) ? ternaryTail(toks, left2, p2, hooks) : Ok7(_tuple6(left2, p2)), infixLoop(toks, minBp, left, p, hooks)), parseAtomOrCall(toks, pos, hooks))));
+var parseExpr = _curry11(3, (toks, pos, hooks) => parseExprBp(toks, 0, pos, hooks));
 var CPPos = (value) => ({ _tag: "CPPos", value });
-var CPLab = _curry9(3, (name, value, labelSpan) => ({ _tag: "CPLab", name, value, labelSpan }));
-var parseCallPart = _curry9(3, (toks, pos, hooks) => eq8(tokAt(toks, pos).tok, TTilde) ? _Result_flatMap4(([nm, p]) => eq8(tokAt(toks, p).tok, TEq) ? _Result_map4(([v, k]) => _tuple5(CPLab(nm.name, v, nm.span), k), parseExpr(toks, p + 1, hooks)) : Ok6(_tuple5(CPLab(nm.name, ERef(nm.name, nm.span), nm.span), p)), expectLabel(toks, pos + 1)) : _Result_map4(([v, k]) => _tuple5(CPPos(v), k), parseExpr(toks, pos, hooks)));
-var callPartSpan = (p) => match8(p).with({ _tag: "CPPos" }, ({ value }) => exprSpan(value)).with({ _tag: "CPLab" }, ({ value, labelSpan }) => spanning(labelSpan, exprSpan(value))).exhaustive();
-var splitCallParts = _curry9(3, (parts, positional, labeled) => match8(parts).with((_v) => {
+var CPLab = _curry11(3, (name, value, labelSpan) => ({ _tag: "CPLab", name, value, labelSpan }));
+var parseCallPart = _curry11(3, (toks, pos, hooks) => eq10(tokAt(toks, pos).tok, TTilde) ? _Result_flatMap5(([nm, p]) => eq10(tokAt(toks, p).tok, TEq) ? _Result_map5(([v, k]) => _tuple6(CPLab(nm.name, v, nm.span), k), parseExpr(toks, p + 1, hooks)) : Ok7(_tuple6(CPLab(nm.name, ERef(nm.name, nm.span), nm.span), p)), expectLabel(toks, pos + 1)) : _Result_map5(([v, k]) => _tuple6(CPPos(v), k), parseExpr(toks, pos, hooks)));
+var callPartSpan = (p) => match10(p).with({ _tag: "CPPos" }, ({ value }) => exprSpan(value)).with({ _tag: "CPLab" }, ({ value, labelSpan }) => spanning(labelSpan, exprSpan(value))).exhaustive();
+var splitCallParts = _curry11(3, (parts, positional, labeled) => match10(parts).with((_v) => {
   const _g = _v;
   return _g.length === 0;
-}, () => Ok6(_tuple5(positional, labeled))).with((_v) => {
+}, () => Ok7(_tuple6(positional, labeled))).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([p, ...rest]) => match8(p).with({ _tag: "CPLab" }, () => splitCallParts(rest, positional, _Array_append6(p, labeled))).with({ _tag: "CPPos" }, ({ value }) => match8(labeled).with((_v) => {
+}, ([p, ...rest]) => match10(p).with({ _tag: "CPLab" }, () => splitCallParts(rest, positional, _Array_append6(p, labeled))).with({ _tag: "CPPos" }, ({ value }) => match10(labeled).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => splitCallParts(rest, _Array_append6(value, positional), labeled)).otherwise(() => errAt("labeled arguments must be a trailing group", callPartSpan(p)))).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var labeledField = (p) => match8(p).with({ _tag: "CPLab" }, ({ name, value }) => ({ name, value })).with({ _tag: "CPPos" }, ({ value }) => ({ name: "", value })).exhaustive();
-var unionSpans = _curry9(2, (parts, acc) => match8(parts).with((_v) => {
+var labeledField = (p) => match10(p).with({ _tag: "CPLab" }, ({ name, value }) => ({ name, value })).with({ _tag: "CPPos" }, ({ value }) => ({ name: "", value })).exhaustive();
+var unionSpans = _curry11(2, (parts, acc) => match10(parts).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => acc).with((_v) => {
@@ -6621,202 +6785,202 @@ var unionSpans = _curry9(2, (parts, acc) => match8(parts).with((_v) => {
 }, ([p, ...rest]) => unionSpans(rest, spanning(acc, callPartSpan(p)))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var callArgsOf = (parts) => _Result_map4(([positional, labeled]) => match8(labeled).with((_v) => {
+var callArgsOf = (parts) => _Result_map5(([positional, labeled]) => match10(labeled).with((_v) => {
   const _g = _v;
   return _g.length === 0;
-}, () => _tuple5(positional, None8)).with((_v) => {
+}, () => _tuple6(positional, None10)).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([first, ...rest]) => _tuple5(_Array_append6(ERecord(map3(labeledField, labeled), None8, unionSpans(rest, callPartSpan(first))), positional), Some8("labeled"))).otherwise(() => {
+}, ([first, ...rest]) => _tuple6(_Array_append6(ERecord(map5(labeledField, labeled), None10, unionSpans(rest, callPartSpan(first))), positional), Some10("labeled"))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }), splitCallParts(parts, [], []));
-var postfixLoop = _curry9(4, (toks, e, pos, hooks) => match8(tokAt(toks, pos).tok).with({ _tag: "TLparen" }, () => _Result_flatMap4(([parts, p]) => _Result_flatMap4((p2) => _Result_flatMap4(([args, origin]) => postfixLoop(toks, ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)), p2, hooks), callArgsOf(parts)), expectTok(TRparen, toks, p)), listUntilH(TRparen, parseCallPart, toks, pos + 1, hooks))).with({ _tag: "TDot" }, () => _Result_flatMap4(([id, p]) => postfixLoop(toks, EField(e, id.name, false, spanning(exprSpan(e), id.span)), p, hooks), expectLabel(toks, pos + 1))).otherwise(() => Ok6(_tuple5(e, pos))));
-var parseAtomOrCall = _curry9(3, (toks, pos, hooks) => {
+var postfixLoop = _curry11(4, (toks, e, pos, hooks) => match10(tokAt(toks, pos).tok).with({ _tag: "TLparen" }, () => _Result_flatMap5(([parts, p]) => _Result_flatMap5((p2) => _Result_flatMap5(([args, origin]) => postfixLoop(toks, ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)), p2, hooks), callArgsOf(parts)), expectTok(TRparen, toks, p)), listUntilH(TRparen, parseCallPart, toks, pos + 1, hooks))).with({ _tag: "TDot" }, () => _Result_flatMap5(([id, p]) => postfixLoop(toks, EField(e, id.name, false, spanning(exprSpan(e), id.span)), p, hooks), expectLabel(toks, pos + 1))).otherwise(() => Ok7(_tuple6(e, pos))));
+var parseAtomOrCall = _curry11(3, (toks, pos, hooks) => {
   const lt = tokAt(toks, pos);
-  return or5(eq8(lt.tok, TMinus), eq8(lt.tok, TBang)) ? _Result_flatMap4(([operand, p]) => ((fnName) => Ok6(_tuple5(ECall(ERef(fnName, spanOf(lt)), [operand], None8, spanning(spanOf(lt), exprSpan(operand))), p)))(eq8(lt.tok, TMinus) ? "negate" : "not"), parseAtomOrCall(toks, pos + 1, hooks)) : _Result_flatMap4(([e, p]) => postfixLoop(toks, e, p, hooks), parseAtom(toks, pos, hooks));
+  return or5(eq10(lt.tok, TMinus), eq10(lt.tok, TBang)) ? _Result_flatMap5(([operand, p]) => ((fnName) => Ok7(_tuple6(ECall(ERef(fnName, spanOf(lt)), [operand], None10, spanning(spanOf(lt), exprSpan(operand))), p)))(eq10(lt.tok, TMinus) ? "negate" : "not"), parseAtomOrCall(toks, pos + 1, hooks)) : _Result_flatMap5(([e, p]) => postfixLoop(toks, e, p, hooks), parseAtom(toks, pos, hooks));
 });
-var parseAtom = _curry9(3, (toks, pos, hooks) => {
+var parseAtom = _curry11(3, (toks, pos, hooks) => {
   const lt = tokAt(toks, pos);
   const sp = spanOf(lt);
-  return match8(lt.tok).with({ _tag: "TSwitch" }, () => parseMatch(toks, pos, hooks)).with({ _tag: "TDo" }, () => parseDo(toks, pos, hooks)).with({ _tag: "TLoop" }, () => parseLoop(toks, pos, hooks)).with({ _tag: "TRecur" }, () => parseRecur(toks, pos, hooks)).with({ _tag: "TLbrace" }, () => parseRecord(toks, pos, hooks)).with({ _tag: "TLbracket" }, () => parseArr(toks, pos, hooks)).with({ _tag: "TAt" }, () => parseList(toks, pos, hooks)).with({ _tag: "THash" }, () => parseHash(toks, pos, hooks)).with({ _tag: "TTmplStart" }, () => parseInterp(toks, pos, hooks)).otherwise(() => _Result_flatMap4((claimed) => match8(claimed).with((_v) => {
+  return match10(lt.tok).with({ _tag: "TSwitch" }, () => parseMatch(toks, pos, hooks)).with({ _tag: "TDo" }, () => parseDo(toks, pos, hooks)).with({ _tag: "TLoop" }, () => parseLoop(toks, pos, hooks)).with({ _tag: "TRecur" }, () => parseRecur(toks, pos, hooks)).with({ _tag: "TLbrace" }, () => parseRecord(toks, pos, hooks)).with({ _tag: "TLbracket" }, () => parseArr(toks, pos, hooks)).with({ _tag: "TAt" }, () => parseList(toks, pos, hooks)).with({ _tag: "THash" }, () => parseHash(toks, pos, hooks)).with({ _tag: "TTmplStart" }, () => parseInterp(toks, pos, hooks)).otherwise(() => _Result_flatMap5((claimed) => match10(claimed).with((_v) => {
     const _g = _v;
     return _g._tag === "Some";
-  }, ({ value: [e, p] }) => Ok6(_tuple5(e, p))).with({ _tag: "None" }, () => match8(lt.tok).with({ _tag: "TNum" }, ({ value, raw }) => Ok6(_tuple5(ENum(value, raw, sp), pos + 1))).with({ _tag: "TBool" }, ({ value }) => Ok6(_tuple5(EBool(value, sp), pos + 1))).with({ _tag: "TStr" }, ({ value }) => Ok6(_tuple5(EStr(value, sp), pos + 1))).with({ _tag: "TId" }, ({ value: name }) => Ok6(_tuple5(ERef(name, sp), pos + 1))).with({ _tag: "TLparen" }, () => ((nxt) => eq8(nxt.tok, TRparen) ? Ok6(_tuple5(EUnit(toEnd(sp, toks, pos + 2)), pos + 2)) : and6(isSectionOp(nxt.tok), not5(eq8(nxt.tok, TMinus))) ? parseRightSection(toks, sp, pos + 1, hooks) : _Result_flatMap4(([first, p]) => eq8(tokAt(toks, p).tok, TComma) ? _Result_flatMap4(([elements, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5(ETuple(elements, toEnd(sp, toks, p3)), p3)), expectTok(TRparen, toks, p2)), sepByH(parseExpr, toks, p + 1, [first], hooks)) : _Result_map4((p2) => _tuple5(first, p2), expectTok(TRparen, toks, p)), parseExpr(toks, pos + 1, hooks)))(tokAt(toks, pos + 1))).otherwise((t) => errAt(`unexpected token ${tokName(t)}`, lt))).exhaustive(), runParseHooks(hooks, toks, pos, _curry9(2, (t, p) => parseExpr(t, p, hooks)))));
+  }, ({ value: [e, p] }) => Ok7(_tuple6(e, p))).with({ _tag: "None" }, () => match10(lt.tok).with({ _tag: "TNum" }, ({ value, raw }) => Ok7(_tuple6(ENum(value, raw, sp), pos + 1))).with({ _tag: "TBool" }, ({ value }) => Ok7(_tuple6(EBool(value, sp), pos + 1))).with({ _tag: "TStr" }, ({ value }) => Ok7(_tuple6(EStr(value, sp), pos + 1))).with({ _tag: "TId" }, ({ value: name }) => Ok7(_tuple6(ERef(name, sp), pos + 1))).with({ _tag: "TLparen" }, () => ((nxt) => eq10(nxt.tok, TRparen) ? Ok7(_tuple6(EUnit(toEnd(sp, toks, pos + 2)), pos + 2)) : and7(isSectionOp(nxt.tok), not6(eq10(nxt.tok, TMinus))) ? parseRightSection(toks, sp, pos + 1, hooks) : _Result_flatMap5(([first, p]) => eq10(tokAt(toks, p).tok, TComma) ? _Result_flatMap5(([elements, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6(ETuple(elements, toEnd(sp, toks, p3)), p3)), expectTok(TRparen, toks, p2)), sepByH(parseExpr, toks, p + 1, [first], hooks)) : _Result_map5((p2) => _tuple6(first, p2), expectTok(TRparen, toks, p)), parseExpr(toks, pos + 1, hooks)))(tokAt(toks, pos + 1))).otherwise((t) => errAt(`unexpected token ${tokName(t)}`, lt))).exhaustive(), runParseHooks(hooks, toks, pos, _curry11(2, (t, p) => parseExpr(t, p, hooks)))));
 });
-var parseInterpLoop = _curry9(5, (toks, pos, start, acc, hooks) => _Result_flatMap4(([holeExpr, p]) => ((acc2) => ((lt) => match8(lt.tok).with({ _tag: "TTmplMid" }, ({ value }) => parseInterpLoop(toks, p + 1, start, _Array_append6(IPLit(value), acc2), hooks)).with({ _tag: "TTmplEnd" }, ({ value }) => Ok6(_tuple5(EInterp(_Array_append6(IPLit(value), acc2), toEnd(start, toks, p + 1)), p + 1))).otherwise((t) => errAt(`expected \${...} to close, got ${tokName(t)}`, lt)))(tokAt(toks, p)))(_Array_append6(IPExpr(holeExpr), acc)), parseExpr(toks, pos, hooks)));
-var parseInterp = _curry9(3, (toks, pos, hooks) => {
+var parseInterpLoop = _curry11(5, (toks, pos, start, acc, hooks) => _Result_flatMap5(([holeExpr, p]) => ((acc2) => ((lt) => match10(lt.tok).with({ _tag: "TTmplMid" }, ({ value }) => parseInterpLoop(toks, p + 1, start, _Array_append6(IPLit(value), acc2), hooks)).with({ _tag: "TTmplEnd" }, ({ value }) => Ok7(_tuple6(EInterp(_Array_append6(IPLit(value), acc2), toEnd(start, toks, p + 1)), p + 1))).otherwise((t) => errAt(`expected \${...} to close, got ${tokName(t)}`, lt)))(tokAt(toks, p)))(_Array_append6(IPExpr(holeExpr), acc)), parseExpr(toks, pos, hooks)));
+var parseInterp = _curry11(3, (toks, pos, hooks) => {
   const lt = tokAt(toks, pos);
-  return match8(lt.tok).with({ _tag: "TTmplStart" }, ({ value }) => parseInterpLoop(toks, pos + 1, spanOf(lt), [IPLit(value)], hooks)).otherwise((t) => errAt(`expected tmplstart, got ${tokName(t)}`, lt));
+  return match10(lt.tok).with({ _tag: "TTmplStart" }, ({ value }) => parseInterpLoop(toks, pos + 1, spanOf(lt), [IPLit(value)], hooks)).otherwise((t) => errAt(`expected tmplstart, got ${tokName(t)}`, lt));
 });
-var parseField = _curry9(3, (toks, pos, hooks) => {
+var parseField = _curry11(3, (toks, pos, hooks) => {
   const lt = tokAt(toks, pos);
-  return _Result_flatMap4(([nm, p]) => eq8(tokAt(toks, p).tok, TColon) ? _Result_flatMap4(([value, p2]) => Ok6(_tuple5({ name: nm.name, value }, p2)), parseExpr(toks, p + 1, hooks)) : not5(eq8(keywordText(lt.tok), None8)) ? errAt(`'${nm.name}' is a keyword \u2014 write '${nm.name}: <expr>'`, lt) : Ok6(_tuple5({ name: nm.name, value: ERef(nm.name, nm.span) }, p)), expectLabel(toks, pos));
+  return _Result_flatMap5(([nm, p]) => eq10(tokAt(toks, p).tok, TColon) ? _Result_flatMap5(([value, p2]) => Ok7(_tuple6({ name: nm.name, value }, p2)), parseExpr(toks, p + 1, hooks)) : not6(eq10(keywordText(lt.tok), None10)) ? errAt(`'${nm.name}' is a keyword \u2014 write '${nm.name}: <expr>'`, lt) : Ok7(_tuple6({ name: nm.name, value: ERef(nm.name, nm.span) }, p)), expectLabel(toks, pos));
 });
-var parseRecord = _curry9(3, (toks, pos, hooks) => {
+var parseRecord = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => eq8(tokAt(toks, p).tok, TSpread) ? _Result_flatMap4(([spreadExpr, p1]) => _Result_flatMap4((p2) => _Result_flatMap4(([fields, p3]) => _Result_flatMap4((p4) => Ok6(_tuple5(ERecord(fields, Some8(spreadExpr), toEnd(start, toks, p4)), p4)), expectTok(TRbrace, toks, p3)), listUntilH(TRbrace, parseField, toks, p2, hooks)), eq8(tokAt(toks, p1).tok, TRbrace) ? Ok6(p1) : expectTok(TComma, toks, p1)), parseExpr(toks, p + 1, hooks)) : _Result_flatMap4(([fields, p1]) => _Result_flatMap4((p2) => Ok6(_tuple5(ERecord(fields, None8, toEnd(start, toks, p2)), p2)), expectTok(TRbrace, toks, p1)), listUntilH(TRbrace, parseField, toks, p, hooks)), expectTok(TLbrace, toks, pos));
+  return _Result_flatMap5((p) => eq10(tokAt(toks, p).tok, TSpread) ? _Result_flatMap5(([spreadExpr, p1]) => _Result_flatMap5((p2) => _Result_flatMap5(([fields, p3]) => _Result_flatMap5((p4) => Ok7(_tuple6(ERecord(fields, Some10(spreadExpr), toEnd(start, toks, p4)), p4)), expectTok(TRbrace, toks, p3)), listUntilH(TRbrace, parseField, toks, p2, hooks)), eq10(tokAt(toks, p1).tok, TRbrace) ? Ok7(p1) : expectTok(TComma, toks, p1)), parseExpr(toks, p + 1, hooks)) : _Result_flatMap5(([fields, p1]) => _Result_flatMap5((p2) => Ok7(_tuple6(ERecord(fields, None10, toEnd(start, toks, p2)), p2)), expectTok(TRbrace, toks, p1)), listUntilH(TRbrace, parseField, toks, p, hooks)), expectTok(TLbrace, toks, pos));
 });
-var parseSeqElem = _curry9(3, (toks, pos, hooks) => eq8(tokAt(toks, pos).tok, TSpread) ? _Result_flatMap4(([ex, p]) => Ok6(_tuple5(SESpread(ex), p)), parseExpr(toks, pos + 1, hooks)) : _Result_flatMap4(([ex, p]) => Ok6(_tuple5(SEExpr(ex), p)), parseExpr(toks, pos, hooks)));
-var parseArr = _curry9(3, (toks, pos, hooks) => {
+var parseSeqElem = _curry11(3, (toks, pos, hooks) => eq10(tokAt(toks, pos).tok, TSpread) ? _Result_flatMap5(([ex, p]) => Ok7(_tuple6(SESpread(ex), p)), parseExpr(toks, pos + 1, hooks)) : _Result_flatMap5(([ex, p]) => Ok7(_tuple6(SEExpr(ex), p)), parseExpr(toks, pos, hooks)));
+var parseArr = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4(([elements, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5(EArr(elements, toEnd(start, toks, p3)), p3)), expectTok(TRbracket, toks, p2)), listUntilH(TRbracket, parseSeqElem, toks, p, hooks)), expectTok(TLbracket, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5(([elements, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6(EArr(elements, toEnd(start, toks, p3)), p3)), expectTok(TRbracket, toks, p2)), listUntilH(TRbracket, parseSeqElem, toks, p, hooks)), expectTok(TLbracket, toks, pos));
 });
-var parseList = _curry9(3, (toks, pos, hooks) => {
+var parseList = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4((p1) => _Result_flatMap4(([elements, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5(EList(elements, toEnd(start, toks, p3)), p3)), expectTok(TRbrace, toks, p2)), listUntilH(TRbrace, parseSeqElem, toks, p1, hooks)), expectTok(TLbrace, toks, p)), expectTok(TAt, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5((p1) => _Result_flatMap5(([elements, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6(EList(elements, toEnd(start, toks, p3)), p3)), expectTok(TRbrace, toks, p2)), listUntilH(TRbrace, parseSeqElem, toks, p1, hooks)), expectTok(TLbrace, toks, p)), expectTok(TAt, toks, pos));
 });
-var parseMapEntry = _curry9(3, (toks, pos, hooks) => _Result_flatMap4(([key, p]) => _Result_flatMap4((p2) => _Result_flatMap4(([value, p3]) => Ok6(_tuple5({ key, value }, p3)), parseExpr(toks, p2, hooks)), expectTok(TColon, toks, p)), parseExpr(toks, pos, hooks)));
-var parseHash = _curry9(3, (toks, pos, hooks) => {
+var parseMapEntry = _curry11(3, (toks, pos, hooks) => _Result_flatMap5(([key, p]) => _Result_flatMap5((p2) => _Result_flatMap5(([value, p3]) => Ok7(_tuple6({ key, value }, p3)), parseExpr(toks, p2, hooks)), expectTok(TColon, toks, p)), parseExpr(toks, pos, hooks)));
+var parseHash = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4((p1) => eq8(tokAt(toks, p1).tok, TRbrace) ? _Result_flatMap4((p2) => Ok6(_tuple5(EMap([], toEnd(start, toks, p2)), p2)), expectTok(TRbrace, toks, p1)) : eq8(tokAt(toks, p1).tok, TSpread) ? _Result_flatMap4(([elements, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5(ESet(elements, toEnd(start, toks, p3)), p3)), expectTok(TRbrace, toks, p2)), listUntilH(TRbrace, parseSeqElem, toks, p1, hooks)) : _Result_flatMap4(([first, p2]) => eq8(tokAt(toks, p2).tok, TColon) ? _Result_flatMap4((p3) => _Result_flatMap4(([value, p4]) => _Result_flatMap4(([rest, p5]) => _Result_flatMap4((p6) => Ok6(_tuple5(EMap(_Array_prepend2({ key: first, value }, rest), toEnd(start, toks, p6)), p6)), expectTok(TRbrace, toks, p5)), eq8(tokAt(toks, p4).tok, TComma) ? listUntilH(TRbrace, parseMapEntry, toks, p4 + 1, hooks) : Ok6(_tuple5([], p4))), parseExpr(toks, p3, hooks)), expectTok(TColon, toks, p2)) : _Result_flatMap4(([rest, p3]) => _Result_flatMap4((p4) => Ok6(_tuple5(ESet(_Array_prepend2(SEExpr(first), rest), toEnd(start, toks, p4)), p4)), expectTok(TRbrace, toks, p3)), eq8(tokAt(toks, p2).tok, TComma) ? listUntilH(TRbrace, parseSeqElem, toks, p2 + 1, hooks) : Ok6(_tuple5([], p2))), parseExpr(toks, p1, hooks)), expectTok(TLbrace, toks, p)), expectTok(THash, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5((p1) => eq10(tokAt(toks, p1).tok, TRbrace) ? _Result_flatMap5((p2) => Ok7(_tuple6(EMap([], toEnd(start, toks, p2)), p2)), expectTok(TRbrace, toks, p1)) : eq10(tokAt(toks, p1).tok, TSpread) ? _Result_flatMap5(([elements, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6(ESet(elements, toEnd(start, toks, p3)), p3)), expectTok(TRbrace, toks, p2)), listUntilH(TRbrace, parseSeqElem, toks, p1, hooks)) : _Result_flatMap5(([first, p2]) => eq10(tokAt(toks, p2).tok, TColon) ? _Result_flatMap5((p3) => _Result_flatMap5(([value, p4]) => _Result_flatMap5(([rest, p5]) => _Result_flatMap5((p6) => Ok7(_tuple6(EMap(_Array_prepend4({ key: first, value }, rest), toEnd(start, toks, p6)), p6)), expectTok(TRbrace, toks, p5)), eq10(tokAt(toks, p4).tok, TComma) ? listUntilH(TRbrace, parseMapEntry, toks, p4 + 1, hooks) : Ok7(_tuple6([], p4))), parseExpr(toks, p3, hooks)), expectTok(TColon, toks, p2)) : _Result_flatMap5(([rest, p3]) => _Result_flatMap5((p4) => Ok7(_tuple6(ESet(_Array_prepend4(SEExpr(first), rest), toEnd(start, toks, p4)), p4)), expectTok(TRbrace, toks, p3)), eq10(tokAt(toks, p2).tok, TComma) ? listUntilH(TRbrace, parseSeqElem, toks, p2 + 1, hooks) : Ok7(_tuple6([], p2))), parseExpr(toks, p1, hooks)), expectTok(TLbrace, toks, p)), expectTok(THash, toks, pos));
 });
-var parseGuard = _curry9(3, (toks, pos, hooks) => match8(tokAt(toks, pos).tok).with({ _tag: "TId", value: "when" }, () => _Result_map4(([g, p]) => _tuple5(Some8(g), p), parseExpr(toks, pos + 1, hooks))).otherwise(() => Ok6(_tuple5(None8, pos))));
-var patSpan = (p) => match8(p).with({ _tag: "PWild" }, ({ span: sp }) => sp).with({ _tag: "PUnit" }, ({ span: sp }) => sp).with({ _tag: "PBind" }, ({ span: sp }) => sp).with({ _tag: "PAs" }, ({ span: sp }) => sp).with({ _tag: "PLit" }, ({ span: sp }) => sp).with({ _tag: "PBool" }, ({ span: sp }) => sp).with({ _tag: "PStr" }, ({ span: sp }) => sp).with({ _tag: "PTuple" }, ({ span: sp }) => sp).with({ _tag: "PRecord" }, ({ span: sp }) => sp).with({ _tag: "PCtor" }, ({ span: sp }) => sp).with({ _tag: "PArr" }, ({ span: sp }) => sp).with({ _tag: "PList" }, ({ span: sp }) => sp).with({ _tag: "POr" }, ({ span: sp }) => sp).exhaustive();
-var altsLoop = _curry9(4, (toks, pos, acc, lastSpan) => eq8(tokAt(toks, pos).tok, TBar) ? _Result_flatMap4(([alt, p1]) => altsLoop(toks, p1, _Array_append6(alt, acc), patSpan(alt)), parsePattern(toks, pos + 1)) : Ok6(_tuple5(acc, pos, lastSpan)));
-var armsLoop = _curry9(4, (toks, pos, acc, hooks) => eq8(tokAt(toks, pos).tok, TBar) ? _Result_flatMap4(([first, p1]) => _Result_flatMap4(([alts, p2, lastSpan]) => ((pattern) => _Result_flatMap4(([guard, p3]) => _Result_flatMap4((p4) => _Result_flatMap4(([body, p5]) => armsLoop(toks, p5, _Array_append6({ pattern, guard, body }, acc), hooks), parseExpr(toks, p4, hooks)), expectTok(TArrow, toks, p3)), parseGuard(toks, p2, hooks)))(eq8(length6(alts), 1) ? first : POr(alts, spanning(patSpan(first), lastSpan))), altsLoop(toks, p1, [first], patSpan(first))), parsePattern(toks, pos + 1)) : Ok6(_tuple5(acc, pos)));
-var parseDo = _curry9(3, (toks, pos, hooks) => {
+var parseGuard = _curry11(3, (toks, pos, hooks) => match10(tokAt(toks, pos).tok).with({ _tag: "TId", value: "when" }, () => _Result_map5(([g, p]) => _tuple6(Some10(g), p), parseExpr(toks, pos + 1, hooks))).otherwise(() => Ok7(_tuple6(None10, pos))));
+var patSpan = (p) => match10(p).with({ _tag: "PWild" }, ({ span: sp }) => sp).with({ _tag: "PUnit" }, ({ span: sp }) => sp).with({ _tag: "PBind" }, ({ span: sp }) => sp).with({ _tag: "PAs" }, ({ span: sp }) => sp).with({ _tag: "PLit" }, ({ span: sp }) => sp).with({ _tag: "PBool" }, ({ span: sp }) => sp).with({ _tag: "PStr" }, ({ span: sp }) => sp).with({ _tag: "PTuple" }, ({ span: sp }) => sp).with({ _tag: "PRecord" }, ({ span: sp }) => sp).with({ _tag: "PCtor" }, ({ span: sp }) => sp).with({ _tag: "PArr" }, ({ span: sp }) => sp).with({ _tag: "PList" }, ({ span: sp }) => sp).with({ _tag: "POr" }, ({ span: sp }) => sp).exhaustive();
+var altsLoop = _curry11(4, (toks, pos, acc, lastSpan) => eq10(tokAt(toks, pos).tok, TBar) ? _Result_flatMap5(([alt, p1]) => altsLoop(toks, p1, _Array_append6(alt, acc), patSpan(alt)), parsePattern(toks, pos + 1)) : Ok7(_tuple6(acc, pos, lastSpan)));
+var armsLoop = _curry11(4, (toks, pos, acc, hooks) => eq10(tokAt(toks, pos).tok, TBar) ? _Result_flatMap5(([first, p1]) => _Result_flatMap5(([alts, p2, lastSpan]) => ((pattern) => _Result_flatMap5(([guard, p3]) => _Result_flatMap5((p4) => _Result_flatMap5(([body, p5]) => armsLoop(toks, p5, _Array_append6({ pattern, guard, body }, acc), hooks), parseExpr(toks, p4, hooks)), expectTok(TArrow, toks, p3)), parseGuard(toks, p2, hooks)))(eq10(length7(alts), 1) ? first : POr(alts, spanning(patSpan(first), lastSpan))), altsLoop(toks, p1, [first], patSpan(first))), parsePattern(toks, pos + 1)) : Ok7(_tuple6(acc, pos)));
+var parseDo = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => parseDoBlockFrom(toks, start, p, hooks), expectTok(TDo, toks, pos));
+  return _Result_flatMap5((p) => parseDoBlockFrom(toks, start, p, hooks), expectTok(TDo, toks, pos));
 });
-var parseDoBlock = _curry9(3, (toks, pos, hooks) => parseDoBlockFrom(toks, spanOf(tokAt(toks, pos)), pos, hooks));
-var parseDoBlockFrom = _curry9(4, (toks, start, pos, hooks) => _Result_flatMap4((p1) => eq8(tokAt(toks, p1).tok, TRbrace) ? errAt("do block needs a final expression", tokAt(toks, p1)) : _Result_flatMap4(([exprs, p2]) => eq8(tokAt(toks, p2).tok, TSemi) ? errAt("do block cannot end with a semicolon", tokAt(toks, p2)) : _Result_flatMap4((p3) => Ok6(_tuple5(EDo(exprs, toEnd(start, toks, p3)), p3)), expectTok(TRbrace, toks, p2)), parseDoExprs(toks, p1, [], hooks)), expectTok(TLbrace, toks, pos)));
-var parseDoExprs = _curry9(4, (toks, pos, acc, hooks) => _Result_flatMap4(([expr, p]) => ((next) => eq8(tokAt(toks, p).tok, TSemi) ? parseDoExprs(toks, p + 1, next, hooks) : Ok6(_tuple5(next, p)))(_Array_append6(expr, acc)), parseExpr(toks, pos, hooks)));
-var parseLoop = _curry9(3, (toks, pos, hooks) => {
+var parseDoBlock = _curry11(3, (toks, pos, hooks) => parseDoBlockFrom(toks, spanOf(tokAt(toks, pos)), pos, hooks));
+var parseDoBlockFrom = _curry11(4, (toks, start, pos, hooks) => _Result_flatMap5((p1) => eq10(tokAt(toks, p1).tok, TRbrace) ? errAt("do block needs a final expression", tokAt(toks, p1)) : _Result_flatMap5(([exprs, p2]) => eq10(tokAt(toks, p2).tok, TSemi) ? errAt("do block cannot end with a semicolon", tokAt(toks, p2)) : _Result_flatMap5((p3) => Ok7(_tuple6(EDo(exprs, toEnd(start, toks, p3)), p3)), expectTok(TRbrace, toks, p2)), parseDoExprs(toks, p1, [], hooks)), expectTok(TLbrace, toks, pos)));
+var parseDoExprs = _curry11(4, (toks, pos, acc, hooks) => _Result_flatMap5(([expr, p]) => ((next) => eq10(tokAt(toks, p).tok, TSemi) ? parseDoExprs(toks, p + 1, next, hooks) : Ok7(_tuple6(next, p)))(_Array_append6(expr, acc)), parseExpr(toks, pos, hooks)));
+var parseLoop = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4((p1) => _Result_flatMap4(([params, p2]) => _Result_flatMap4((p3) => _Result_flatMap4((p4) => _Result_flatMap4(([body, p5]) => _Result_map4((p6) => _tuple5(ELoop(params, body, toEnd(start, toks, p6)), p6), expectTok(TRbrace, toks, p5)), parseExpr(toks, p4, hooks)), expectTok(TLbrace, toks, p3)), expectTok(TRparen, toks, p2)), loopParamsLoop(toks, p1, [], hooks)), expectTok(TLparen, toks, p)), expectTok(TLoop, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5((p1) => _Result_flatMap5(([params, p2]) => _Result_flatMap5((p3) => _Result_flatMap5((p4) => _Result_flatMap5(([body, p5]) => _Result_map5((p6) => _tuple6(ELoop(params, body, toEnd(start, toks, p6)), p6), expectTok(TRbrace, toks, p5)), parseExpr(toks, p4, hooks)), expectTok(TLbrace, toks, p3)), expectTok(TRparen, toks, p2)), loopParamsLoop(toks, p1, [], hooks)), expectTok(TLparen, toks, p)), expectTok(TLoop, toks, pos));
 });
-var loopParamsLoop = _curry9(4, (toks, pos, acc, hooks) => _Result_flatMap4(([id, pid]) => _Result_flatMap4((p) => _Result_flatMap4(([init, p1]) => ((next) => match8(tokAt(toks, p1).tok).with({ _tag: "TComma" }, () => loopParamsLoop(toks, p1 + 1, next, hooks)).otherwise(() => Ok6(_tuple5(next, p1))))(_Array_append6({ name: id.name, nameSpan: id.span, init }, acc)), parseExpr(toks, p, hooks)), expectTok(TEq, toks, pid)), expectId(toks, pos)));
-var parseRecur = _curry9(3, (toks, pos, hooks) => {
+var loopParamsLoop = _curry11(4, (toks, pos, acc, hooks) => _Result_flatMap5(([id, pid]) => _Result_flatMap5((p) => _Result_flatMap5(([init, p1]) => ((next) => match10(tokAt(toks, p1).tok).with({ _tag: "TComma" }, () => loopParamsLoop(toks, p1 + 1, next, hooks)).otherwise(() => Ok7(_tuple6(next, p1))))(_Array_append6({ name: id.name, nameSpan: id.span, init }, acc)), parseExpr(toks, p, hooks)), expectTok(TEq, toks, pid)), expectId(toks, pos)));
+var parseRecur = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4((p1) => match8(tokAt(toks, p1).tok).with({ _tag: "TRparen" }, () => Ok6(_tuple5(ERecur([], toEnd(start, toks, p1 + 1)), p1 + 1))).otherwise(() => _Result_flatMap4(([args, p2]) => _Result_map4((p3) => _tuple5(ERecur(args, toEnd(start, toks, p3)), p3), expectTok(TRparen, toks, p2)), sepByH(parseExpr, toks, p1, [], hooks))), expectTok(TLparen, toks, p)), expectTok(TRecur, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5((p1) => match10(tokAt(toks, p1).tok).with({ _tag: "TRparen" }, () => Ok7(_tuple6(ERecur([], toEnd(start, toks, p1 + 1)), p1 + 1))).otherwise(() => _Result_flatMap5(([args, p2]) => _Result_map5((p3) => _tuple6(ERecur(args, toEnd(start, toks, p3)), p3), expectTok(TRparen, toks, p2)), sepByH(parseExpr, toks, p1, [], hooks))), expectTok(TLparen, toks, p)), expectTok(TRecur, toks, pos));
 });
-var parseMatch = _curry9(3, (toks, pos, hooks) => {
+var parseMatch = _curry11(3, (toks, pos, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4(([scrutinee, p1]) => _Result_flatMap4((p2) => _Result_flatMap4(([arms, p3]) => match8(length6(arms)).with(0, () => errAt("switch needs at least one | arm", tokAt(toks, p3))).otherwise(() => _Result_map4((p4) => _tuple5(EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4), expectTok(TRbrace, toks, p3))), armsLoop(toks, p2, [], hooks)), expectTok(TLbrace, toks, p1)), parseExpr(toks, p, hooks)), expectTok(TSwitch, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5(([scrutinee, p1]) => _Result_flatMap5((p2) => _Result_flatMap5(([arms, p3]) => match10(length7(arms)).with(0, () => errAt("switch needs at least one | arm", tokAt(toks, p3))).otherwise(() => _Result_map5((p4) => _tuple6(EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4), expectTok(TRbrace, toks, p3))), armsLoop(toks, p2, [], hooks)), expectTok(TLbrace, toks, p1)), parseExpr(toks, p, hooks)), expectTok(TSwitch, toks, pos));
 });
-var parseCtorArgs = _curry9(5, (toks, ctor, ns, nameSpan, pos) => eq8(tokAt(toks, pos).tok, TLparen) ? _Result_flatMap4(([args, p]) => _Result_flatMap4((p2) => Ok6(_tuple5(PCtor(ctor, args, ns, toEnd(nameSpan, toks, p2)), p2)), expectTok(TRparen, toks, p)), listUntil(TRparen, parsePattern, toks, pos + 1)) : Ok6(_tuple5(PCtor(ctor, [], ns, toEnd(nameSpan, toks, pos)), pos)));
-var parsePatternAtom = _curry9(2, (toks, pos) => {
+var parseCtorArgs = _curry11(5, (toks, ctor, ns, nameSpan, pos) => eq10(tokAt(toks, pos).tok, TLparen) ? _Result_flatMap5(([args, p]) => _Result_flatMap5((p2) => Ok7(_tuple6(PCtor(ctor, args, ns, toEnd(nameSpan, toks, p2)), p2)), expectTok(TRparen, toks, p)), listUntil(TRparen, parsePattern, toks, pos + 1)) : Ok7(_tuple6(PCtor(ctor, [], ns, toEnd(nameSpan, toks, pos)), pos)));
+var parsePatternAtom = _curry11(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
   const sp = spanOf(lt);
-  return match8(lt.tok).with({ _tag: "TNum" }, ({ value, raw }) => Ok6(_tuple5(PLit2(value, raw, sp), pos + 1))).with({ _tag: "TBool" }, ({ value }) => Ok6(_tuple5(PBool(value, sp), pos + 1))).with({ _tag: "TStr" }, ({ value }) => Ok6(_tuple5(PStr(value, sp), pos + 1))).with({ _tag: "TLparen" }, () => eq8(tokAt(toks, pos + 1).tok, TRparen) ? Ok6(_tuple5(PUnit(toEnd(sp, toks, pos + 2)), pos + 2)) : _Result_flatMap4(([elems, p]) => _Result_flatMap4((p2) => Ok6(match8(elems).with((_v) => {
+  return match10(lt.tok).with({ _tag: "TNum" }, ({ value, raw }) => Ok7(_tuple6(PLit2(value, raw, sp), pos + 1))).with({ _tag: "TBool" }, ({ value }) => Ok7(_tuple6(PBool(value, sp), pos + 1))).with({ _tag: "TStr" }, ({ value }) => Ok7(_tuple6(PStr(value, sp), pos + 1))).with({ _tag: "TLparen" }, () => eq10(tokAt(toks, pos + 1).tok, TRparen) ? Ok7(_tuple6(PUnit(toEnd(sp, toks, pos + 2)), pos + 2)) : _Result_flatMap5(([elems, p]) => _Result_flatMap5((p2) => Ok7(match10(elems).with((_v) => {
     const _g = _v;
     return _g.length === 1;
-  }, ([single]) => _tuple5(single, p2)).otherwise((many) => _tuple5(PTuple(many, toEnd(sp, toks, p2)), p2))), expectTok(TRparen, toks, p)), sepBy(parsePattern, toks, pos + 1, []))).with({ _tag: "TLbrace" }, () => _Result_flatMap4(([fields, p]) => _Result_flatMap4((p2) => Ok6(_tuple5(PRecord(fields, toEnd(sp, toks, p2)), p2)), expectTok(TRbrace, toks, p)), listUntil(TRbrace, parsePatField, toks, pos + 1))).with({ _tag: "TLbracket" }, () => parseArrPattern(toks, pos)).with({ _tag: "TAt" }, () => parseListPattern(toks, pos)).with({ _tag: "TId", value: "_" }, () => Ok6(_tuple5(PWild(sp), pos + 1))).with({ _tag: "TId" }, ({ value: name }) => eq8(tokAt(toks, pos + 1).tok, TDot) ? _Result_flatMap4(([c, p1]) => isUpper(c.name) ? parseCtorArgs(toks, c.name, Some8(name), sp, p1) : errAt(`expected constructor after '${name}.', got '${c.name}'`, tokAt(toks, p1)), expectId(toks, pos + 2)) : isUpper(name) ? parseCtorArgs(toks, name, None8, sp, pos + 1) : Ok6(_tuple5(PBind(name, sp), pos + 1))).otherwise((t) => errAt(`unexpected token in pattern: ${tokName(t)}`, lt));
+  }, ([single]) => _tuple6(single, p2)).otherwise((many) => _tuple6(PTuple(many, toEnd(sp, toks, p2)), p2))), expectTok(TRparen, toks, p)), sepBy(parsePattern, toks, pos + 1, []))).with({ _tag: "TLbrace" }, () => _Result_flatMap5(([fields, p]) => _Result_flatMap5((p2) => Ok7(_tuple6(PRecord(fields, toEnd(sp, toks, p2)), p2)), expectTok(TRbrace, toks, p)), listUntil(TRbrace, parsePatField, toks, pos + 1))).with({ _tag: "TLbracket" }, () => parseArrPattern(toks, pos)).with({ _tag: "TAt" }, () => parseListPattern(toks, pos)).with({ _tag: "TId", value: "_" }, () => Ok7(_tuple6(PWild(sp), pos + 1))).with({ _tag: "TId" }, ({ value: name }) => eq10(tokAt(toks, pos + 1).tok, TDot) ? _Result_flatMap5(([c, p1]) => isUpper(c.name) ? parseCtorArgs(toks, c.name, Some10(name), sp, p1) : errAt(`expected constructor after '${name}.', got '${c.name}'`, tokAt(toks, p1)), expectId(toks, pos + 2)) : isUpper(name) ? parseCtorArgs(toks, name, None10, sp, pos + 1) : Ok7(_tuple6(PBind(name, sp), pos + 1))).otherwise((t) => errAt(`unexpected token in pattern: ${tokName(t)}`, lt));
 });
-var parsePattern = _curry9(2, (toks, pos) => _Result_flatMap4(([pat, p]) => match8(tokAt(toks, p).tok).with({ _tag: "TId", value: "as" }, () => _Result_flatMap4(([nm, p2]) => Ok6(_tuple5(PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)), p2)), expectId(toks, p + 1))).otherwise(() => Ok6(_tuple5(pat, p))), parsePatternAtom(toks, pos)));
-var restOk = (rest) => match8(rest).with({ _tag: "None" }, () => true).with((_v) => {
+var parsePattern = _curry11(2, (toks, pos) => _Result_flatMap5(([pat, p]) => match10(tokAt(toks, p).tok).with({ _tag: "TId", value: "as" }, () => _Result_flatMap5(([nm, p2]) => Ok7(_tuple6(PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)), p2)), expectId(toks, p + 1))).otherwise(() => Ok7(_tuple6(pat, p))), parsePatternAtom(toks, pos)));
+var restOk = (rest) => match10(rest).with({ _tag: "None" }, () => true).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "PBind";
 }, () => true).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "PWild";
 }, () => true).with({ _tag: "Some" }, () => false).exhaustive();
-var patElemsLoop = _curry9(3, (toks, pos, acc) => match8(tokAt(toks, pos).tok).with({ _tag: "TSpread" }, () => _Result_flatMap4(([rest, p]) => Ok6(_tuple5(acc, Some8(rest), p)), parsePattern(toks, pos + 1))).otherwise(() => _Result_flatMap4(([pat, p]) => ((elems) => eq8(tokAt(toks, p).tok, TComma) ? patElemsLoop(toks, p + 1, elems) : Ok6(_tuple5(elems, None8, p)))(_Array_append6(pat, acc)), parsePattern(toks, pos))));
-var parseArrPattern = _curry9(2, (toks, pos) => {
+var patElemsLoop = _curry11(3, (toks, pos, acc) => match10(tokAt(toks, pos).tok).with({ _tag: "TSpread" }, () => _Result_flatMap5(([rest, p]) => Ok7(_tuple6(acc, Some10(rest), p)), parsePattern(toks, pos + 1))).otherwise(() => _Result_flatMap5(([pat, p]) => ((elems) => eq10(tokAt(toks, p).tok, TComma) ? patElemsLoop(toks, p + 1, elems) : Ok7(_tuple6(elems, None10, p)))(_Array_append6(pat, acc)), parsePattern(toks, pos))));
+var parseArrPattern = _curry11(2, (toks, pos) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => eq8(tokAt(toks, p).tok, TRbracket) ? Ok6(_tuple5(PArr([], None8, toEnd(start, toks, p + 1)), p + 1)) : _Result_flatMap4(([elems, rest, p2]) => restOk(rest) ? _Result_map4((p3) => _tuple5(PArr(elems, rest, toEnd(start, toks, p3)), p3), expectTok(TRbracket, toks, p2)) : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2)), patElemsLoop(toks, p, [])), expectTok(TLbracket, toks, pos));
+  return _Result_flatMap5((p) => eq10(tokAt(toks, p).tok, TRbracket) ? Ok7(_tuple6(PArr([], None10, toEnd(start, toks, p + 1)), p + 1)) : _Result_flatMap5(([elems, rest, p2]) => restOk(rest) ? _Result_map5((p3) => _tuple6(PArr(elems, rest, toEnd(start, toks, p3)), p3), expectTok(TRbracket, toks, p2)) : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2)), patElemsLoop(toks, p, [])), expectTok(TLbracket, toks, pos));
 });
-var parseListPattern = _curry9(2, (toks, pos) => {
+var parseListPattern = _curry11(2, (toks, pos) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4((p1) => eq8(tokAt(toks, p1).tok, TRbrace) ? Ok6(_tuple5(PList([], None8, toEnd(start, toks, p1 + 1)), p1 + 1)) : _Result_flatMap4(([elems, rest, p2]) => restOk(rest) ? _Result_map4((p3) => _tuple5(PList(elems, rest, toEnd(start, toks, p3)), p3), expectTok(TRbrace, toks, p2)) : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2)), patElemsLoop(toks, p1, [])), expectTok(TLbrace, toks, p)), expectTok(TAt, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5((p1) => eq10(tokAt(toks, p1).tok, TRbrace) ? Ok7(_tuple6(PList([], None10, toEnd(start, toks, p1 + 1)), p1 + 1)) : _Result_flatMap5(([elems, rest, p2]) => restOk(rest) ? _Result_map5((p3) => _tuple6(PList(elems, rest, toEnd(start, toks, p3)), p3), expectTok(TRbrace, toks, p2)) : errAt("list `...` rest must bind a name or `_`", tokAt(toks, p2)), patElemsLoop(toks, p1, [])), expectTok(TLbrace, toks, p)), expectTok(TAt, toks, pos));
 });
-var parsePatField = _curry9(2, (toks, pos) => {
+var parsePatField = _curry11(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
-  return _Result_flatMap4(([nm, p]) => eq8(tokAt(toks, p).tok, TColon) ? _Result_flatMap4(([pat, p2]) => Ok6(_tuple5({ label: nm.name, pat }, p2)), parsePattern(toks, p + 1)) : not5(eq8(keywordText(lt.tok), None8)) ? errAt(`'${nm.name}' is a keyword \u2014 write '${nm.name}: <pattern>'`, lt) : Ok6(_tuple5({ label: nm.name, pat: PBind(nm.name, nm.span) }, p)), expectLabel(toks, pos));
+  return _Result_flatMap5(([nm, p]) => eq10(tokAt(toks, p).tok, TColon) ? _Result_flatMap5(([pat, p2]) => Ok7(_tuple6({ label: nm.name, pat }, p2)), parsePattern(toks, p + 1)) : not6(eq10(keywordText(lt.tok), None10)) ? errAt(`'${nm.name}' is a keyword \u2014 write '${nm.name}: <pattern>'`, lt) : Ok7(_tuple6({ label: nm.name, pat: PBind(nm.name, nm.span) }, p)), expectLabel(toks, pos));
 });
-var parseTypeAtom = _curry9(2, (toks, pos) => {
+var parseTypeAtom = _curry11(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
   const sp = spanOf(lt);
-  return match8(lt.tok).with({ _tag: "TLparen" }, () => eq8(tokAt(toks, pos + 1).tok, TRparen) ? Ok6(_tuple5(TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2)) : _Result_flatMap4(([inner, p]) => eq8(tokAt(toks, p).tok, TComma) ? _Result_flatMap4(([elems, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5(TyTuple(elems, toEnd(sp, toks, p3)), p3)), expectTok(TRparen, toks, p2)), sepBy(parseTypeExpr, toks, p + 1, [inner])) : _Result_map4((p2) => _tuple5(inner, p2), expectTok(TRparen, toks, p)), parseTypeExpr(toks, pos + 1))).with({ _tag: "TLbracket" }, () => _Result_flatMap4(([elem, p]) => _Result_flatMap4((p2) => Ok6(_tuple5(TyList(elem, toEnd(sp, toks, p2)), p2)), expectTok(TRbracket, toks, p)), parseTypeExpr(toks, pos + 1))).with({ _tag: "TStr" }, ({ value }) => Ok6(_tuple5(TyLit(value, sp), pos + 1))).otherwise(() => _Result_flatMap4(([nm, p]) => and6(isUpper(nm.name), eq8(tokAt(toks, p).tok, TDot)) ? _Result_flatMap4(([q, p2]) => isUpper(q.name) ? Ok6(_tuple5(TyQual(nm.name, q.name, q.span, [], spanning(nm.span, q.span)), p2)) : errAt(`a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'`, tokAt(toks, p2)), expectId(toks, p + 1)) : Ok6(_tuple5(TyName(nm.name, nm.span), p)), expectId(toks, pos)));
+  return match10(lt.tok).with({ _tag: "TLparen" }, () => eq10(tokAt(toks, pos + 1).tok, TRparen) ? Ok7(_tuple6(TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2)) : _Result_flatMap5(([inner, p]) => eq10(tokAt(toks, p).tok, TComma) ? _Result_flatMap5(([elems, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6(TyTuple(elems, toEnd(sp, toks, p3)), p3)), expectTok(TRparen, toks, p2)), sepBy(parseTypeExpr, toks, p + 1, [inner])) : _Result_map5((p2) => _tuple6(inner, p2), expectTok(TRparen, toks, p)), parseTypeExpr(toks, pos + 1))).with({ _tag: "TLbracket" }, () => _Result_flatMap5(([elem, p]) => _Result_flatMap5((p2) => Ok7(_tuple6(TyList(elem, toEnd(sp, toks, p2)), p2)), expectTok(TRbracket, toks, p)), parseTypeExpr(toks, pos + 1))).with({ _tag: "TStr" }, ({ value }) => Ok7(_tuple6(TyLit(value, sp), pos + 1))).otherwise(() => _Result_flatMap5(([nm, p]) => and7(isUpper(nm.name), eq10(tokAt(toks, p).tok, TDot)) ? _Result_flatMap5(([q, p2]) => isUpper(q.name) ? Ok7(_tuple6(TyQual(nm.name, q.name, q.span, [], spanning(nm.span, q.span)), p2)) : errAt(`a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'`, tokAt(toks, p2)), expectId(toks, p + 1)) : Ok7(_tuple6(TyName(nm.name, nm.span), p)), expectId(toks, pos)));
 });
-var startsTypeAtom = (t) => match8(t).with({ _tag: "TId" }, () => true).with({ _tag: "TLparen" }, () => true).with({ _tag: "TLbracket" }, () => true).with({ _tag: "TStr" }, () => true).otherwise(() => false);
-var legacyTypeArgsLoop = _curry9(4, (toks, pos, acc, lastSp) => startsTypeAtom(tokAt(toks, pos).tok) ? _Result_flatMap4(([a, p]) => legacyTypeArgsLoop(toks, p, _Array_append6(a, acc), Some8(tySpan(a))), parseTypeAtom(toks, pos)) : Ok6(_tuple5(acc, lastSp, pos)));
-var parseTypeApp = _curry9(2, (toks, pos) => _Result_flatMap4(([head, p]) => match8(head).with((_v) => {
+var startsTypeAtom = (t) => match10(t).with({ _tag: "TId" }, () => true).with({ _tag: "TLparen" }, () => true).with({ _tag: "TLbracket" }, () => true).with({ _tag: "TStr" }, () => true).otherwise(() => false);
+var legacyTypeArgsLoop = _curry11(4, (toks, pos, acc, lastSp) => startsTypeAtom(tokAt(toks, pos).tok) ? _Result_flatMap5(([a, p]) => legacyTypeArgsLoop(toks, p, _Array_append6(a, acc), Some10(tySpan(a))), parseTypeAtom(toks, pos)) : Ok7(_tuple6(acc, lastSp, pos)));
+var parseTypeApp = _curry11(2, (toks, pos) => _Result_flatMap5(([head, p]) => match10(head).with((_v) => {
   const _g = _v;
   return _g._tag === "TyName" && (({ name, span: sp }) => isUpper(name))(_g);
-}, ({ name, span: sp }) => eq8(tokAt(toks, p).tok, TLt) ? _Result_flatMap4(([args, p1]) => _Result_flatMap4((p2) => Ok6(_tuple5(TyApp(name, args, toEnd(sp, toks, p2)), p2)), expectTok(TGt, toks, p1)), listUntil(TGt, parseTypeExpr, toks, p + 1)) : _Result_flatMap4(([args, lastSp, p2]) => Ok6(match8(lastSp).with({ _tag: "None" }, () => _tuple5(head, p2)).with({ _tag: "Some" }, ({ value: ls }) => _tuple5(TyApp(name, args, spanning(sp, ls)), p2)).exhaustive()), legacyTypeArgsLoop(toks, p, [], None8))).with({ _tag: "TyQual" }, ({ alias, name: nm, nameSpan, span: sp }) => eq8(tokAt(toks, p).tok, TLt) ? _Result_flatMap4(([args, p1]) => _Result_flatMap4((p2) => Ok6(_tuple5(TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)), p2)), expectTok(TGt, toks, p1)), listUntil(TGt, parseTypeExpr, toks, p + 1)) : _Result_flatMap4(([args, lastSp, p2]) => Ok6(match8(lastSp).with({ _tag: "None" }, () => _tuple5(head, p2)).with({ _tag: "Some" }, ({ value: ls }) => _tuple5(TyQual(alias, nm, nameSpan, args, spanning(sp, ls)), p2)).exhaustive()), legacyTypeArgsLoop(toks, p, [], None8))).otherwise(() => Ok6(_tuple5(head, p))), parseTypeAtom(toks, pos)));
-var parseTypeUnionRest = _curry9(4, (toks, pos, acc, lastSp) => eq8(tokAt(toks, pos).tok, TBar) ? _Result_flatMap4(([m, p]) => parseTypeUnionRest(toks, p, _Array_append6(m, acc), tySpan(m)), parseTypeApp(toks, pos + 1)) : Ok6(_tuple5(acc, lastSp, pos)));
-var parseTypeUnion = _curry9(2, (toks, pos) => _Result_flatMap4(([first, p]) => eq8(tokAt(toks, p).tok, TBar) ? _Result_flatMap4(([members, lastSp, p2]) => Ok6(_tuple5(TyUnion(members, spanning(tySpan(first), lastSp)), p2)), parseTypeUnionRest(toks, p, [first], tySpan(first))) : Ok6(_tuple5(first, p)), parseTypeApp(toks, pos)));
-var parseTypeExpr = _curry9(2, (toks, pos) => _Result_flatMap4(([from, p]) => eq8(tokAt(toks, p).tok, TTarrow) ? _Result_flatMap4(([to, p2]) => Ok6(_tuple5(TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2)), parseTypeExpr(toks, p + 1)) : Ok6(_tuple5(from, p)), parseTypeUnion(toks, pos)));
-var parseCtorField = _curry9(2, (toks, pos) => {
-  const isLabel = match8(tokAt(toks, pos).tok).with({ _tag: "TId" }, () => eq8(tokAt(toks, pos + 1).tok, TColon)).otherwise(() => false);
-  return isLabel ? _Result_flatMap4(([nm, p]) => _Result_flatMap4(([t, p2]) => Ok6(_tuple5({ name: Some8(nm.name), fieldType: t }, p2)), parseTypeExpr(toks, p + 1)), expectId(toks, pos)) : _Result_map4(([t, p]) => _tuple5({ name: None8, fieldType: t }, p), parseTypeExpr(toks, pos));
+}, ({ name, span: sp }) => eq10(tokAt(toks, p).tok, TLt) ? _Result_flatMap5(([args, p1]) => _Result_flatMap5((p2) => Ok7(_tuple6(TyApp(name, args, toEnd(sp, toks, p2)), p2)), expectTok(TGt, toks, p1)), listUntil(TGt, parseTypeExpr, toks, p + 1)) : _Result_flatMap5(([args, lastSp, p2]) => Ok7(match10(lastSp).with({ _tag: "None" }, () => _tuple6(head, p2)).with({ _tag: "Some" }, ({ value: ls }) => _tuple6(TyApp(name, args, spanning(sp, ls)), p2)).exhaustive()), legacyTypeArgsLoop(toks, p, [], None10))).with({ _tag: "TyQual" }, ({ alias, name: nm, nameSpan, span: sp }) => eq10(tokAt(toks, p).tok, TLt) ? _Result_flatMap5(([args, p1]) => _Result_flatMap5((p2) => Ok7(_tuple6(TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)), p2)), expectTok(TGt, toks, p1)), listUntil(TGt, parseTypeExpr, toks, p + 1)) : _Result_flatMap5(([args, lastSp, p2]) => Ok7(match10(lastSp).with({ _tag: "None" }, () => _tuple6(head, p2)).with({ _tag: "Some" }, ({ value: ls }) => _tuple6(TyQual(alias, nm, nameSpan, args, spanning(sp, ls)), p2)).exhaustive()), legacyTypeArgsLoop(toks, p, [], None10))).otherwise(() => Ok7(_tuple6(head, p))), parseTypeAtom(toks, pos)));
+var parseTypeUnionRest = _curry11(4, (toks, pos, acc, lastSp) => eq10(tokAt(toks, pos).tok, TBar) ? _Result_flatMap5(([m, p]) => parseTypeUnionRest(toks, p, _Array_append6(m, acc), tySpan(m)), parseTypeApp(toks, pos + 1)) : Ok7(_tuple6(acc, lastSp, pos)));
+var parseTypeUnion = _curry11(2, (toks, pos) => _Result_flatMap5(([first, p]) => eq10(tokAt(toks, p).tok, TBar) ? _Result_flatMap5(([members, lastSp, p2]) => Ok7(_tuple6(TyUnion(members, spanning(tySpan(first), lastSp)), p2)), parseTypeUnionRest(toks, p, [first], tySpan(first))) : Ok7(_tuple6(first, p)), parseTypeApp(toks, pos)));
+var parseTypeExpr = _curry11(2, (toks, pos) => _Result_flatMap5(([from, p]) => eq10(tokAt(toks, p).tok, TTarrow) ? _Result_flatMap5(([to, p2]) => Ok7(_tuple6(TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2)), parseTypeExpr(toks, p + 1)) : Ok7(_tuple6(from, p)), parseTypeUnion(toks, pos)));
+var parseCtorField = _curry11(2, (toks, pos) => {
+  const isLabel = match10(tokAt(toks, pos).tok).with({ _tag: "TId" }, () => eq10(tokAt(toks, pos + 1).tok, TColon)).otherwise(() => false);
+  return isLabel ? _Result_flatMap5(([nm, p]) => _Result_flatMap5(([t, p2]) => Ok7(_tuple6({ name: Some10(nm.name), fieldType: t }, p2)), parseTypeExpr(toks, p + 1)), expectId(toks, pos)) : _Result_map5(([t, p]) => _tuple6({ name: None10, fieldType: t }, p), parseTypeExpr(toks, pos));
 });
-var parseCtor = _curry9(2, (toks, pos) => _Result_flatMap4(([nm, p]) => eq8(tokAt(toks, p).tok, TLparen) ? _Result_flatMap4(([fields, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5({ name: nm.name, fields, span: toEnd(nm.span, toks, p3) }, p3)), expectTok(TRparen, toks, p2)), listUntil(TRparen, parseCtorField, toks, p + 1)) : Ok6(_tuple5({ name: nm.name, fields: [], span: nm.span }, p)), expectId(toks, pos)));
-var ctorsLoop = _curry9(3, (toks, pos, acc) => _Result_flatMap4(([c, p]) => ((cs) => eq8(tokAt(toks, p).tok, TBar) ? ctorsLoop(toks, p + 1, cs) : Ok6(_tuple5(cs, p)))(_Array_append6(c, acc)), parseCtor(toks, pos)));
-var parseAliasField = _curry9(2, (toks, pos) => _Result_flatMap4(([nm, p]) => ((optional) => ((p1) => _Result_flatMap4((p2) => _Result_flatMap4(([t, p3]) => Ok6(_tuple5({ name: nm.name, fieldType: t, optional }, p3)), parseTypeExpr(toks, p2)), expectTok(TColon, toks, p1)))(optional ? p + 1 : p))(eq8(tokAt(toks, p).tok, TQuestion)), expectLabel(toks, pos)));
-var parseAliasBody = _curry9(2, (toks, pos) => _Result_flatMap4((p) => _Result_flatMap4(([fields, p2]) => _Result_flatMap4((p3) => Ok6(_tuple5(fields, p3)), expectTok(TRbrace, toks, p2)), listUntil(TRbrace, parseAliasField, toks, p)), expectTok(TLbrace, toks, pos)));
-var typeParamsLoop = _curry9(3, (toks, pos, acc) => match8(tokAt(toks, pos).tok).with({ _tag: "TId" }, ({ value: name }) => typeParamsLoop(toks, pos + 1, _Array_append6(name, acc))).otherwise(() => Ok6(_tuple5(acc, pos))));
-var parseTypeParams = _curry9(2, (toks, pos) => eq8(tokAt(toks, pos).tok, TLt) ? _Result_flatMap4(([names, p]) => _Result_map4((p2) => _tuple5(map3((n) => n.name, names), p2), expectTok(TGt, toks, p)), listUntil(TGt, expectId, toks, pos + 1)) : typeParamsLoop(toks, pos, []));
-var startsTypeSynonym = (t) => match8(t).with({ _tag: "TStr" }, () => true).with({ _tag: "TLparen" }, () => true).with({ _tag: "TLbracket" }, () => true).otherwise(() => false);
-var parseType = _curry9(2, (toks, pos) => {
+var parseCtor = _curry11(2, (toks, pos) => _Result_flatMap5(([nm, p]) => eq10(tokAt(toks, p).tok, TLparen) ? _Result_flatMap5(([fields, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6({ name: nm.name, fields, span: toEnd(nm.span, toks, p3) }, p3)), expectTok(TRparen, toks, p2)), listUntil(TRparen, parseCtorField, toks, p + 1)) : Ok7(_tuple6({ name: nm.name, fields: [], span: nm.span }, p)), expectId(toks, pos)));
+var ctorsLoop = _curry11(3, (toks, pos, acc) => _Result_flatMap5(([c, p]) => ((cs) => eq10(tokAt(toks, p).tok, TBar) ? ctorsLoop(toks, p + 1, cs) : Ok7(_tuple6(cs, p)))(_Array_append6(c, acc)), parseCtor(toks, pos)));
+var parseAliasField = _curry11(2, (toks, pos) => _Result_flatMap5(([nm, p]) => ((optional) => ((p1) => _Result_flatMap5((p2) => _Result_flatMap5(([t, p3]) => Ok7(_tuple6({ name: nm.name, fieldType: t, optional }, p3)), parseTypeExpr(toks, p2)), expectTok(TColon, toks, p1)))(optional ? p + 1 : p))(eq10(tokAt(toks, p).tok, TQuestion)), expectLabel(toks, pos)));
+var parseAliasBody = _curry11(2, (toks, pos) => _Result_flatMap5((p) => _Result_flatMap5(([fields, p2]) => _Result_flatMap5((p3) => Ok7(_tuple6(fields, p3)), expectTok(TRbrace, toks, p2)), listUntil(TRbrace, parseAliasField, toks, p)), expectTok(TLbrace, toks, pos)));
+var typeParamsLoop = _curry11(3, (toks, pos, acc) => match10(tokAt(toks, pos).tok).with({ _tag: "TId" }, ({ value: name }) => typeParamsLoop(toks, pos + 1, _Array_append6(name, acc))).otherwise(() => Ok7(_tuple6(acc, pos))));
+var parseTypeParams = _curry11(2, (toks, pos) => eq10(tokAt(toks, pos).tok, TLt) ? _Result_flatMap5(([names, p]) => _Result_map5((p2) => _tuple6(map5((n) => n.name, names), p2), expectTok(TGt, toks, p)), listUntil(TGt, expectId, toks, pos + 1)) : typeParamsLoop(toks, pos, []));
+var startsTypeSynonym = (t) => match10(t).with({ _tag: "TStr" }, () => true).with({ _tag: "TLparen" }, () => true).with({ _tag: "TLbracket" }, () => true).otherwise(() => false);
+var parseType = _curry11(2, (toks, pos) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4(([nm, p1]) => _Result_flatMap4(([params, p2]) => _Result_flatMap4((p3) => eq8(tokAt(toks, p3).tok, TLbrace) ? _Result_map4(([alias, p4]) => _tuple5(SType(nm.name, params, [], Some8(alias), None8, false, None8, toEnd(start, toks, p4)), p4), parseAliasBody(toks, p3)) : startsTypeSynonym(tokAt(toks, p3).tok) ? _Result_flatMap4(([te, p4]) => Ok6(_tuple5(SType(nm.name, params, [], None8, Some8(te), false, None8, toEnd(start, toks, p4)), p4)), parseTypeExpr(toks, p3)) : ((afterBar) => _Result_map4(([ctors, p4]) => _tuple5(SType(nm.name, params, ctors, None8, None8, false, None8, toEnd(start, toks, p4)), p4), ctorsLoop(toks, afterBar, [])))(eq8(tokAt(toks, p3).tok, TBar) ? p3 + 1 : p3), expectTok(TEq, toks, p2)), parseTypeParams(toks, p1)), expectId(toks, p)), expectTok(TType, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5(([nm, p1]) => _Result_flatMap5(([params, p2]) => _Result_flatMap5((p3) => eq10(tokAt(toks, p3).tok, TLbrace) ? _Result_map5(([alias, p4]) => _tuple6(SType(nm.name, params, [], Some10(alias), None10, false, None10, toEnd(start, toks, p4)), p4), parseAliasBody(toks, p3)) : startsTypeSynonym(tokAt(toks, p3).tok) ? _Result_flatMap5(([te, p4]) => Ok7(_tuple6(SType(nm.name, params, [], None10, Some10(te), false, None10, toEnd(start, toks, p4)), p4)), parseTypeExpr(toks, p3)) : ((afterBar) => _Result_map5(([ctors, p4]) => _tuple6(SType(nm.name, params, ctors, None10, None10, false, None10, toEnd(start, toks, p4)), p4), ctorsLoop(toks, afterBar, [])))(eq10(tokAt(toks, p3).tok, TBar) ? p3 + 1 : p3), expectTok(TEq, toks, p2)), parseTypeParams(toks, p1)), expectId(toks, p)), expectTok(TType, toks, pos));
 });
-var parseExtern = _curry9(2, (toks, pos) => {
+var parseExtern = _curry11(2, (toks, pos) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => eq8(tokAt(toks, p).tok, TType) ? _Result_flatMap4((p1) => _Result_flatMap4(([nm, p2]) => Ok6(_tuple5(SType(nm.name, [], [], None8, None8, false, None8, toEnd(start, toks, p2)), p2)), expectId(toks, p1)), expectTok(TType, toks, p)) : _Result_flatMap4(([nm, p1]) => _Result_flatMap4(([params, p2]) => _Result_flatMap4((p3) => _Result_flatMap4(([t, p4]) => _Result_flatMap4((p5) => ((isCurried) => ((pConv) => ((nextTok) => or5(or5(or5(or5(eq8(nextTok, TId("global")), eq8(nextTok, TId("send"))), eq8(nextTok, TId("get"))), eq8(nextTok, TId("set"))), eq8(nextTok, TId("new"))) ? isCurried ? errAt("'curried' applies to a module extern, not a JS convention \u2014 give the host's module and export instead", tokAt(toks, pConv)) : _Result_flatMap4(([convention, p6]) => _Result_flatMap4(([first, p7]) => ((hasSecond) => _Result_flatMap4(([second, p8]) => Ok6(_tuple5(SExtern(nm.name, nm.span, params, t, `mochi:${convention.name}:${first}`, second, false, false, None8, toEnd(start, toks, p8)), p8)), hasSecond ? expectStr(toks, p7) : Ok6(_tuple5("", p7))))(match8(tokAt(toks, p7).tok).with({ _tag: "TStr" }, () => or5(eq8(convention.name, "global"), eq8(convention.name, "new"))).otherwise(() => false)), expectStr(toks, p6)), expectId(toks, pConv)) : _Result_flatMap4(([moduleName, p6]) => _Result_flatMap4(([importedName, p7]) => Ok6(_tuple5(SExtern(nm.name, nm.span, params, t, moduleName, importedName, isCurried, false, None8, toEnd(start, toks, p7)), p7)), expectStr(toks, p6)), expectStr(toks, pConv)))(tokAt(toks, pConv).tok))(isCurried ? p5 + 1 : p5))(eq8(tokAt(toks, p5).tok, TId("curried"))), expectTok(TEq, toks, p4)), parseTypeExpr(toks, p3)), expectTok(TColon, toks, p2)), eq8(tokAt(toks, p1).tok, TLt) ? _Result_flatMap4(([names, pParams]) => _Result_flatMap4((pAfter) => Ok6(_tuple5(map3((n) => n.name, names), pAfter)), expectTok(TGt, toks, pParams)), listUntil(TGt, expectId, toks, p1 + 1)) : Ok6(_tuple5([], p1))), expectId(toks, p)), expectTok(TExtern, toks, pos));
+  return _Result_flatMap5((p) => eq10(tokAt(toks, p).tok, TType) ? _Result_flatMap5((p1) => _Result_flatMap5(([nm, p2]) => Ok7(_tuple6(SType(nm.name, [], [], None10, None10, false, None10, toEnd(start, toks, p2)), p2)), expectId(toks, p1)), expectTok(TType, toks, p)) : _Result_flatMap5(([nm, p1]) => _Result_flatMap5(([params, p2]) => _Result_flatMap5((p3) => _Result_flatMap5(([t, p4]) => _Result_flatMap5((p5) => ((isCurried) => ((pConv) => ((nextTok) => or5(or5(or5(or5(eq10(nextTok, TId("global")), eq10(nextTok, TId("send"))), eq10(nextTok, TId("get"))), eq10(nextTok, TId("set"))), eq10(nextTok, TId("new"))) ? isCurried ? errAt("'curried' applies to a module extern, not a JS convention \u2014 give the host's module and export instead", tokAt(toks, pConv)) : _Result_flatMap5(([convention, p6]) => _Result_flatMap5(([first, p7]) => ((hasSecond) => _Result_flatMap5(([second, p8]) => Ok7(_tuple6(SExtern(nm.name, nm.span, params, t, `mochi:${convention.name}:${first}`, second, false, false, None10, toEnd(start, toks, p8)), p8)), hasSecond ? expectStr(toks, p7) : Ok7(_tuple6("", p7))))(match10(tokAt(toks, p7).tok).with({ _tag: "TStr" }, () => or5(eq10(convention.name, "global"), eq10(convention.name, "new"))).otherwise(() => false)), expectStr(toks, p6)), expectId(toks, pConv)) : _Result_flatMap5(([moduleName, p6]) => _Result_flatMap5(([importedName, p7]) => Ok7(_tuple6(SExtern(nm.name, nm.span, params, t, moduleName, importedName, isCurried, false, None10, toEnd(start, toks, p7)), p7)), expectStr(toks, p6)), expectStr(toks, pConv)))(tokAt(toks, pConv).tok))(isCurried ? p5 + 1 : p5))(eq10(tokAt(toks, p5).tok, TId("curried"))), expectTok(TEq, toks, p4)), parseTypeExpr(toks, p3)), expectTok(TColon, toks, p2)), eq10(tokAt(toks, p1).tok, TLt) ? _Result_flatMap5(([names, pParams]) => _Result_flatMap5((pAfter) => Ok7(_tuple6(map5((n) => n.name, names), pAfter)), expectTok(TGt, toks, pParams)), listUntil(TGt, expectId, toks, p1 + 1)) : Ok7(_tuple6([], p1))), expectId(toks, p)), expectTok(TExtern, toks, pos));
 });
-var parseImportNs = _curry9(3, (toks, start, pos) => _Result_flatMap4(([asKw, p1]) => eq8(asKw.name, "as") ? _Result_flatMap4(([alias, p2]) => _Result_flatMap4(([kw, p3]) => eq8(kw.name, "from") ? _Result_map4(([path, p4]) => _tuple5(SImportNs(alias, path, toEnd(start, toks, p4)), p4), expectStr(toks, p3)) : errAt(`expected 'from' in import, got '${kw.name}'`, tokAt(toks, p3)), expectId(toks, p2)), expectId(toks, p1)) : errAt(`expected 'as' in namespace import, got '${asKw.name}'`, tokAt(toks, p1)), expectId(toks, pos)));
-var parseImport = _curry9(2, (toks, pos) => {
+var parseImportNs = _curry11(3, (toks, start, pos) => _Result_flatMap5(([asKw, p1]) => eq10(asKw.name, "as") ? _Result_flatMap5(([alias, p2]) => _Result_flatMap5(([kw, p3]) => eq10(kw.name, "from") ? _Result_map5(([path, p4]) => _tuple6(SImportNs(alias, path, toEnd(start, toks, p4)), p4), expectStr(toks, p3)) : errAt(`expected 'from' in import, got '${kw.name}'`, tokAt(toks, p3)), expectId(toks, p2)), expectId(toks, p1)) : errAt(`expected 'as' in namespace import, got '${asKw.name}'`, tokAt(toks, p1)), expectId(toks, pos)));
+var parseImport = _curry11(2, (toks, pos) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => eq8(tokAt(toks, p).tok, TStar) ? _Result_flatMap4((p1) => parseImportNs(toks, start, p1), expectTok(TStar, toks, p)) : _Result_flatMap4((p1) => _Result_flatMap4(([names, p2]) => _Result_flatMap4((p3) => _Result_flatMap4(([kw, p4]) => eq8(kw.name, "from") ? _Result_map4(([path, p5]) => _tuple5(SImport(names, path, toEnd(start, toks, p5)), p5), expectStr(toks, p4)) : errAt(`expected 'from' in import, got '${kw.name}'`, tokAt(toks, p4)), expectId(toks, p3)), expectTok(TRbrace, toks, p2)), listUntil(TRbrace, expectId, toks, p1)), expectTok(TLbrace, toks, p)), expectTok(TImport, toks, pos));
+  return _Result_flatMap5((p) => eq10(tokAt(toks, p).tok, TStar) ? _Result_flatMap5((p1) => parseImportNs(toks, start, p1), expectTok(TStar, toks, p)) : _Result_flatMap5((p1) => _Result_flatMap5(([names, p2]) => _Result_flatMap5((p3) => _Result_flatMap5(([kw, p4]) => eq10(kw.name, "from") ? _Result_map5(([path, p5]) => _tuple6(SImport(names, path, toEnd(start, toks, p5)), p5), expectStr(toks, p4)) : errAt(`expected 'from' in import, got '${kw.name}'`, tokAt(toks, p4)), expectId(toks, p3)), expectTok(TRbrace, toks, p2)), listUntil(TRbrace, expectId, toks, p1)), expectTok(TLbrace, toks, p)), expectTok(TImport, toks, pos));
 });
-var parseRecordDestructure = _curry9(5, (toks, start, pos, tmp, hooks) => {
+var parseRecordDestructure = _curry11(5, (toks, start, pos, tmp, hooks) => {
   const openSp = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => _Result_flatMap4(([fields, p1]) => ((closeSp) => _Result_flatMap4((p2) => _Result_flatMap4((p3) => _Result_flatMap4(([value, p4]) => ((whole) => ((patSpan) => ((tmpName) => ((header) => ((access) => Ok6(_tuple5(_Array_prepend2(header, map3(access, fields)), p4, tmp + 1)))((f) => SLet(f.name, f.span, None8, EField(ERef(tmpName, f.span), f.name, false, f.span), false, None8, f.span)))(SLet(tmpName, patSpan, None8, value, false, None8, whole)))(`$d${show3(tmp)}`))(spanning(openSp, closeSp)))(toEnd(start, toks, p4)), parseExpr(toks, p3, hooks)), expectTok(TEq, toks, p2)), expectTok(TRbrace, toks, p1)))(spanOf(tokAt(toks, p1))), listUntil(TRbrace, expectId, toks, p)), expectTok(TLbrace, toks, pos));
+  return _Result_flatMap5((p) => _Result_flatMap5(([fields, p1]) => ((closeSp) => _Result_flatMap5((p2) => _Result_flatMap5((p3) => _Result_flatMap5(([value, p4]) => ((whole) => ((patSpan) => ((tmpName) => ((header) => ((access) => Ok7(_tuple6(_Array_prepend4(header, map5(access, fields)), p4, tmp + 1)))((f) => SLet(f.name, f.span, None10, EField(ERef(tmpName, f.span), f.name, false, f.span), false, None10, f.span)))(SLet(tmpName, patSpan, None10, value, false, None10, whole)))(`$d${show4(tmp)}`))(spanning(openSp, closeSp)))(toEnd(start, toks, p4)), parseExpr(toks, p3, hooks)), expectTok(TEq, toks, p2)), expectTok(TRbrace, toks, p1)))(spanOf(tokAt(toks, p1))), listUntil(TRbrace, expectId, toks, p)), expectTok(TLbrace, toks, pos));
 });
-var parseLet = _curry9(4, (toks, pos, tmp, hooks) => {
+var parseLet = _curry11(4, (toks, pos, tmp, hooks) => {
   const start = spanOf(tokAt(toks, pos));
-  return _Result_flatMap4((p) => eq8(tokAt(toks, p).tok, TLbrace) ? parseRecordDestructure(toks, start, p, tmp, hooks) : _Result_flatMap4(([nm, p1]) => _Result_flatMap4(([annot, pA]) => _Result_flatMap4((p2) => _Result_flatMap4(([value, p3]) => Ok6(_tuple5([SLet(nm.name, nm.span, annot, value, false, None8, toEnd(start, toks, p3))], p3, tmp)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, pA)), eq8(tokAt(toks, p1).tok, TColon) ? _Result_map4(([ty, p]) => _tuple5(Some8(ty), p), parseTypeExpr(toks, p1 + 1)) : Ok6(_tuple5(None8, p1))), expectId(toks, p)), expectTok(TLet, toks, pos));
+  return _Result_flatMap5((p) => eq10(tokAt(toks, p).tok, TLbrace) ? parseRecordDestructure(toks, start, p, tmp, hooks) : _Result_flatMap5(([nm, p1]) => _Result_flatMap5(([annot, pA]) => _Result_flatMap5((p2) => _Result_flatMap5(([value, p3]) => Ok7(_tuple6([SLet(nm.name, nm.span, annot, value, false, None10, toEnd(start, toks, p3))], p3, tmp)), parseExpr(toks, p2, hooks)), expectTok(TEq, toks, pA)), eq10(tokAt(toks, p1).tok, TColon) ? _Result_map5(([ty, p]) => _tuple6(Some10(ty), p), parseTypeExpr(toks, p1 + 1)) : Ok7(_tuple6(None10, p1))), expectId(toks, p)), expectTok(TLet, toks, pos));
 });
-var setLetMeta = _curry9(3, (exported, doc, s) => match8(s).with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, span }) => SLet(name, nameSpan, annot, value, exported, doc, span)).otherwise((other) => other));
-var setTypeMeta = _curry9(3, (exported, doc, s) => match8(s).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, span)).otherwise((other) => other));
-var setExternMeta = _curry9(3, (exported, doc, s) => match8(s).with({ _tag: "SExtern" }, ({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) => SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span)).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, span)).otherwise((other) => other));
-var parseExprStmt = _curry9(4, (toks, pos, tmp, hooks) => {
+var setLetMeta = _curry11(3, (exported, doc, s) => match10(s).with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, span }) => SLet(name, nameSpan, annot, value, exported, doc, span)).otherwise((other) => other));
+var setTypeMeta = _curry11(3, (exported, doc, s) => match10(s).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, span)).otherwise((other) => other));
+var setExternMeta = _curry11(3, (exported, doc, s) => match10(s).with({ _tag: "SExtern" }, ({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) => SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span)).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, span)).otherwise((other) => other));
+var parseExprStmt = _curry11(4, (toks, pos, tmp, hooks) => {
   const start = tokAt(toks, pos);
-  return _Result_flatMap4(([value, p]) => ((p2) => Ok6(_tuple5([SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp)))(eq8(tokAt(toks, p).tok, TSemi) ? p + 1 : p), parseExpr(toks, pos, hooks));
+  return _Result_flatMap5(([value, p]) => ((p2) => Ok7(_tuple6([SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp)))(eq10(tokAt(toks, p).tok, TSemi) ? p + 1 : p), parseExpr(toks, pos, hooks));
 });
-var parseStmt = _curry9(4, (toks, pos, tmp, hooks) => {
+var parseStmt = _curry11(4, (toks, pos, tmp, hooks) => {
   const lt = tokAt(toks, pos);
   const doc = lt.doc;
-  return match8(lt.tok).with({ _tag: "TImport" }, () => _Result_map4(([s, p]) => _tuple5([s], p, tmp), parseImport(toks, pos))).with({ _tag: "TExport" }, () => ((exportSp) => match8(tokAt(toks, pos + 1).tok).with({ _tag: "TType" }, () => _Result_map4(([s, p]) => _tuple5([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp), parseType(toks, pos + 1))).with({ _tag: "TExtern" }, () => _Result_map4(([s, p]) => _tuple5([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp), parseExtern(toks, pos + 1))).with({ _tag: "TLet" }, () => _Result_map4(([stmts, p, tmp2]) => _tuple5(widenHeadToExport(exportSp, map3(setLetMeta(true, doc), stmts)), p, tmp2), parseLet(toks, pos + 1, tmp, hooks))).otherwise(() => errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1))))(spanOf(lt))).with({ _tag: "TType" }, () => _Result_map4(([s, p]) => _tuple5([setTypeMeta(false, doc, s)], p, tmp), parseType(toks, pos))).with({ _tag: "TExtern" }, () => _Result_map4(([s, p]) => _tuple5([setExternMeta(false, doc, s)], p, tmp), parseExtern(toks, pos))).with({ _tag: "TLet" }, () => _Result_map4(([stmts, p, tmp2]) => _tuple5(map3(setLetMeta(false, doc), stmts), p, tmp2), parseLet(toks, pos, tmp, hooks))).otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
+  return match10(lt.tok).with({ _tag: "TImport" }, () => _Result_map5(([s, p]) => _tuple6([s], p, tmp), parseImport(toks, pos))).with({ _tag: "TExport" }, () => ((exportSp) => match10(tokAt(toks, pos + 1).tok).with({ _tag: "TType" }, () => _Result_map5(([s, p]) => _tuple6([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp), parseType(toks, pos + 1))).with({ _tag: "TExtern" }, () => _Result_map5(([s, p]) => _tuple6([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp), parseExtern(toks, pos + 1))).with({ _tag: "TLet" }, () => _Result_map5(([stmts, p, tmp2]) => _tuple6(widenHeadToExport(exportSp, map5(setLetMeta(true, doc), stmts)), p, tmp2), parseLet(toks, pos + 1, tmp, hooks))).otherwise(() => errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1))))(spanOf(lt))).with({ _tag: "TType" }, () => _Result_map5(([s, p]) => _tuple6([setTypeMeta(false, doc, s)], p, tmp), parseType(toks, pos))).with({ _tag: "TExtern" }, () => _Result_map5(([s, p]) => _tuple6([setExternMeta(false, doc, s)], p, tmp), parseExtern(toks, pos))).with({ _tag: "TLet" }, () => _Result_map5(([stmts, p, tmp2]) => _tuple6(map5(setLetMeta(false, doc), stmts), p, tmp2), parseLet(toks, pos, tmp, hooks))).otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
 });
-var widenToExport = _curry9(2, (start, s) => match8(s).with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, exported, doc, span }) => SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span))).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported, doc, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, spanning(start, span))).with({ _tag: "SExtern" }, ({ name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span }) => SExtern(name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, spanning(start, span))).otherwise((other) => other));
-var widenHeadToExport = _curry9(2, (start, stmts) => match8(stmts).with((_v) => {
+var widenToExport = _curry11(2, (start, s) => match10(s).with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, exported, doc, span }) => SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span))).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported, doc, span }) => SType(name, params, ctors, alias, aliasType, exported, doc, spanning(start, span))).with({ _tag: "SExtern" }, ({ name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span }) => SExtern(name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, spanning(start, span))).otherwise((other) => other));
+var widenHeadToExport = _curry11(2, (start, stmts) => match10(stmts).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([head, ...rest]) => _Array_prepend2(widenToExport(start, head), rest)).otherwise(() => stmts));
-var isSyncTok = (t) => match8(t).with({ _tag: "TLet" }, () => true).with({ _tag: "TType" }, () => true).with({ _tag: "TExtern" }, () => true).with({ _tag: "TImport" }, () => true).with({ _tag: "TExport" }, () => true).otherwise(() => false);
-var isOpener = (t) => or5(or5(eq8(t, TLparen), eq8(t, TLbrace)), eq8(t, TLbracket));
-var isCloser = (t) => or5(or5(eq8(t, TRparen), eq8(t, TRbrace)), eq8(t, TRbracket));
+}, ([head, ...rest]) => _Array_prepend4(widenToExport(start, head), rest)).otherwise(() => stmts));
+var isSyncTok = (t) => match10(t).with({ _tag: "TLet" }, () => true).with({ _tag: "TType" }, () => true).with({ _tag: "TExtern" }, () => true).with({ _tag: "TImport" }, () => true).with({ _tag: "TExport" }, () => true).otherwise(() => false);
+var isOpener = (t) => or5(or5(eq10(t, TLparen), eq10(t, TLbrace)), eq10(t, TLbracket));
+var isCloser = (t) => or5(or5(eq10(t, TRparen), eq10(t, TRbrace)), eq10(t, TRbracket));
 var maxParseErrors = 100;
-var resumeAt = _curry9(3, (toks, pos, at) => and6(pos + 1 < length6(toks), tokAt(toks, pos).start < at) ? resumeAt(toks, pos + 1, at) : pos);
-var skipToSync = _curry9(3, (toks, pos, depth) => {
+var resumeAt = _curry11(3, (toks, pos, at) => and7(pos + 1 < length7(toks), tokAt(toks, pos).start < at) ? resumeAt(toks, pos + 1, at) : pos);
+var skipToSync = _curry11(3, (toks, pos, depth) => {
   const t = tokAt(toks, pos).tok;
-  return or5(eq8(t, TEof), and6(eq8(depth, 0), isSyncTok(t))) ? pos : skipToSync(toks, pos + 1, isOpener(t) ? depth + 1 : and6(isCloser(t), depth > 0) ? depth - 1 : depth);
+  return or5(eq10(t, TEof), and7(eq10(depth, 0), isSyncTok(t))) ? pos : skipToSync(toks, pos + 1, isOpener(t) ? depth + 1 : and7(isCloser(t), depth > 0) ? depth - 1 : depth);
 });
-var recoverFrom = _curry9(4, (toks, before, failedAt, at) => {
+var recoverFrom = _curry11(4, (toks, before, failedAt, at) => {
   const resume = resumeAt(toks, before, at);
-  const start = eq8(resume, before) ? before + 1 : resume;
+  const start = eq10(resume, before) ? before + 1 : resume;
   const final = skipToSync(toks, start, 0);
   return { node: SError({ start: failedAt.start, end: tokAt(toks, final - 1).end }), pos: final };
 });
-var stmtsLoop = _curry9(6, (toks, pos0, tmp0, acc0, diags0, hooks) => {
+var stmtsLoop = _curry11(6, (toks, pos0, tmp0, acc0, diags0, hooks) => {
   let pos = pos0;
   let tmp = tmp0;
   let acc = acc0;
   let diags = diags0;
   while (true) {
-    if (eq8(tokAt(toks, pos).tok, TEof)) {
+    if (eq10(tokAt(toks, pos).tok, TEof)) {
       return { stmts: acc, diagnostics: diags };
     } else {
       {
         const failedAt = tokAt(toks, pos);
-        const _step = match8(parseStmt(toks, pos, tmp, hooks)).with((_v) => {
+        const _step = match10(parseStmt(toks, pos, tmp, hooks)).with((_v) => {
           const _g = _v;
           return _g._tag === "Ok";
-        }, ({ value: [stmts, p, tmp2] }) => eq8(p, pos) ? ((r) => _recur3(r.pos, tmp, _Array_append6(r.node, acc), _Array_append6({ message: `unexpected token ${tokName(failedAt.tok)}`, start: failedAt.start, end: failedAt.end }, diags)))(recoverFrom(toks, pos, failedAt, failedAt.start)) : _recur3(p, tmp2, _Array_concat3(acc, stmts), diags)).with({ _tag: "Err" }, ({ error: d }) => ((ds) => length6(ds) >= maxParseErrors ? _done3({ stmts: _Array_append6(SError({ start: failedAt.start, end: tokAt(toks, length6(toks) - 1).end }), acc), diagnostics: _Array_append6({ message: "too many parse errors; stopping", start: failedAt.start, end: failedAt.end }, ds) }) : ((r) => _recur3(r.pos, tmp, _Array_append6(r.node, acc), ds))(recoverFrom(toks, pos, failedAt, d.start)))(_Array_append6(d, diags))).exhaustive();
+        }, ({ value: [stmts, p, tmp2] }) => eq10(p, pos) ? ((r) => _recur4(r.pos, tmp, _Array_append6(r.node, acc), _Array_append6({ message: `unexpected token ${tokName(failedAt.tok)}`, start: failedAt.start, end: failedAt.end }, diags)))(recoverFrom(toks, pos, failedAt, failedAt.start)) : _recur4(p, tmp2, _Array_concat3(acc, stmts), diags)).with({ _tag: "Err" }, ({ error: d }) => ((ds) => length7(ds) >= maxParseErrors ? _done4({ stmts: _Array_append6(SError({ start: failedAt.start, end: tokAt(toks, length7(toks) - 1).end }), acc), diagnostics: _Array_append6({ message: "too many parse errors; stopping", start: failedAt.start, end: failedAt.end }, ds) }) : ((r) => _recur4(r.pos, tmp, _Array_append6(r.node, acc), ds))(recoverFrom(toks, pos, failedAt, d.start)))(_Array_append6(d, diags))).exhaustive();
         if (_step._tag === "recur") {
           [pos, tmp, acc, diags] = _step.args;
           continue;
@@ -6826,23 +6990,23 @@ var stmtsLoop = _curry9(6, (toks, pos0, tmp0, acc0, diags0, hooks) => {
     }
   }
 });
-var parseRecovering = _curry9(2, (toks, pluginsOpt) => {
+var parseRecovering = _curry11(2, (toks, pluginsOpt) => {
   const hooks = parseHooksOf(resolvePluginsDefault(pluginsOpt));
-  return stmtsLoop(toks, match8(tokAt(toks, 0).tok).with({ _tag: "TStr" }, ({ value }) => eq8(value, "use open") ? 1 : 0).otherwise(() => 0), 0, [], [], hooks);
+  return stmtsLoop(toks, match10(tokAt(toks, 0).tok).with({ _tag: "TStr" }, ({ value }) => eq10(value, "use open") ? 1 : 0).otherwise(() => 0), 0, [], [], hooks);
 });
-var parse = (toks) => parseWith(toks, None8);
-var parseWith = _curry9(2, (toks, pluginsOpt) => {
+var parse = (toks) => parseWith(toks, None10);
+var parseWith = _curry11(2, (toks, pluginsOpt) => {
   const r = parseRecovering(toks, pluginsOpt);
-  return match8(_Array_get6(0, r.diagnostics)).with({ _tag: "Some" }, ({ value: d }) => Err5(d)).with({ _tag: "None" }, () => Ok6(r.stmts)).exhaustive();
+  return match10(_Array_get7(0, r.diagnostics)).with({ _tag: "Some" }, ({ value: d }) => Err7(d)).with({ _tag: "None" }, () => Ok7(r.stmts)).exhaustive();
 });
-import { None as None10, Some as Some10, _Array_append as _Array_append8, _Array_concat as _Array_concat4, _Array_find as _Array_find2, _Array_flatMap, _Array_get as _Array_get8, _Array_prepend as _Array_prepend3, _Array_sortBy, _Array_take, _Map_delete, _Map_get as _Map_get3, _Map_keys as _Map_keys3, _Map_set as _Map_set2, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome2, _Option_unwrapOr as _Option_unwrapOr5, _Set_fromArray, _Set_has, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt5, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split3, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry12, _tuple as _tuple6, and as and8, concat, eq as eq11, filter, length as length9, map as map5, not as not7, or as or7, reduce, show as show4 } from "@mochi/compiler/runtime";
-import { match as match11 } from "@onrails/pattern";
+import { None as None12, Some as Some12, _Array_append as _Array_append8, _Array_concat as _Array_concat4, _Array_find as _Array_find2, _Array_flatMap, _Array_get as _Array_get9, _Array_prepend as _Array_prepend5, _Array_sortBy, _Array_take, _Map_delete, _Map_get as _Map_get4, _Map_keys as _Map_keys3, _Map_set as _Map_set4, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome2, _Option_unwrapOr as _Option_unwrapOr6, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt6, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split3, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry14, _tuple as _tuple7, and as and9, concat, eq as eq13, filter as filter2, length as length10, map as map7, not as not8, or as or7, reduce, show as show5 } from "@mochi/compiler/runtime";
+import { match as match13 } from "@onrails/pattern";
 
-import { _Array_append as _Array_append7, _Array_get as _Array_get7, _Option_unwrapOr as _Option_unwrapOr4, _Str_length as _Str_length4, _Str_split as _Str_split2, _curry as _curry10, _done as _done4, _recur as _recur4, and as and7, eq as eq9, length as length7, not as not6, or as or6 } from "@mochi/compiler/runtime";
-import { match as match9 } from "@onrails/pattern";
+import { _Array_append as _Array_append7, _Array_get as _Array_get8, _Option_unwrapOr as _Option_unwrapOr5, _Str_length as _Str_length4, _Str_split as _Str_split2, _curry as _curry12, _done as _done5, _recur as _recur5, and as and8, eq as eq11, length as length8, not as not7, or as or6 } from "@mochi/compiler/runtime";
+import { match as match11 } from "@onrails/pattern";
 var DText = (s) => ({ _tag: "DText", s });
 var DVerbatim = (s) => ({ _tag: "DVerbatim", s });
-var DLine = _curry10(2, (hard, soft) => ({ _tag: "DLine", hard, soft }));
+var DLine = _curry12(2, (hard, soft) => ({ _tag: "DLine", hard, soft }));
 var DCat = (parts) => ({ _tag: "DCat", parts });
 var DIndent = (doc) => ({ _tag: "DIndent", doc });
 var DGroup = (doc) => ({ _tag: "DGroup", doc });
@@ -6859,18 +7023,18 @@ var breakParent = DBreakParent;
 var indent = (doc) => DIndent(doc);
 var group = (doc) => DGroup(doc);
 var lineSuffix = (doc) => DLineSuffix(doc);
-var joinFrom = _curry10(4, (sep, parts, i, acc) => match9(_Array_get7(i, parts)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => joinFrom(sep, parts, i + 1, eq9(i, 0) ? _Array_append7(p, acc) : _Array_append7(p, _Array_append7(sep, acc)))).exhaustive());
-var join = _curry10(2, (sep, parts) => DCat(joinFrom(sep, parts, 0, [])));
+var joinFrom = _curry12(4, (sep, parts, i, acc) => match11(_Array_get8(i, parts)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => joinFrom(sep, parts, i + 1, eq11(i, 0) ? _Array_append7(p, acc) : _Array_append7(p, _Array_append7(sep, acc)))).exhaustive());
+var join = _curry12(2, (sep, parts) => DCat(joinFrom(sep, parts, 0, [])));
 var WNil = { _tag: "WNil" };
-var WCons = _curry10(2, (head, tail) => ({ _tag: "WCons", head, tail }));
-var consParts = _curry10(4, (parts, i, m, tail) => {
-  let k = length7(parts) - 1;
+var WCons = _curry12(2, (head, tail) => ({ _tag: "WCons", head, tail }));
+var consParts = _curry12(4, (parts, i, m, tail) => {
+  let k = length8(parts) - 1;
   let w = tail;
   while (true) {
     if (k < 0) {
       return w;
     } else {
-      const _step = match9(_Array_get7(k, parts)).with({ _tag: "None" }, () => _done4(w)).with({ _tag: "Some" }, ({ value: d }) => _recur4(k - 1, WCons({ i, m, d }, w))).exhaustive();
+      const _step = match11(_Array_get8(k, parts)).with({ _tag: "None" }, () => _done5(w)).with({ _tag: "Some" }, ({ value: d }) => _recur5(k - 1, WCons({ i, m, d }, w))).exhaustive();
       if (_step._tag === "recur") {
         [k, w] = _step.args;
         continue;
@@ -6879,17 +7043,17 @@ var consParts = _curry10(4, (parts, i, m, tail) => {
     }
   }
 });
-var fits2 = _curry10(2, (width, start) => {
+var fits2 = _curry12(2, (width, start) => {
   let rem = width;
   let work = start;
   while (true) {
     if (rem < 0) {
       return false;
     } else {
-      const _step = match9(work).with({ _tag: "WNil" }, () => _done4(true)).with((_v) => {
+      const _step = match11(work).with({ _tag: "WNil" }, () => _done5(true)).with((_v) => {
         const _g = _v;
         return _g._tag === "WCons";
-      }, ({ head: { i, m, d }, tail }) => match9(d).with({ _tag: "DText" }, ({ s }) => _recur4(rem - _Str_length4(s), tail)).with({ _tag: "DVerbatim" }, () => _done4(true)).with({ _tag: "DCat" }, ({ parts }) => _recur4(rem, consParts(parts, i, m, tail))).with({ _tag: "DIndent" }, ({ doc: inner }) => _recur4(rem, WCons({ i: i + INDENT, m, d: inner }, tail))).with({ _tag: "DGroup" }, ({ doc: inner }) => _recur4(rem, WCons({ i, m: "flat", d: inner }, tail))).with({ _tag: "DLine" }, ({ hard, soft }) => or6(hard, eq9(m, "break")) ? _done4(true) : _recur4(rem - (soft ? 0 : 1), tail)).with({ _tag: "DLineSuffix" }, ({ doc: inner }) => _recur4(rem, WCons({ i, m, d: inner }, tail))).with({ _tag: "DBreakParent" }, () => _recur4(rem, tail)).exhaustive()).exhaustive();
+      }, ({ head: { i, m, d }, tail }) => match11(d).with({ _tag: "DText" }, ({ s }) => _recur5(rem - _Str_length4(s), tail)).with({ _tag: "DVerbatim" }, () => _done5(true)).with({ _tag: "DCat" }, ({ parts }) => _recur5(rem, consParts(parts, i, m, tail))).with({ _tag: "DIndent" }, ({ doc: inner }) => _recur5(rem, WCons({ i: i + INDENT, m, d: inner }, tail))).with({ _tag: "DGroup" }, ({ doc: inner }) => _recur5(rem, WCons({ i, m: "flat", d: inner }, tail))).with({ _tag: "DLine" }, ({ hard, soft }) => or6(hard, eq11(m, "break")) ? _done5(true) : _recur5(rem - (soft ? 0 : 1), tail)).with({ _tag: "DLineSuffix" }, ({ doc: inner }) => _recur5(rem, WCons({ i, m, d: inner }, tail))).with({ _tag: "DBreakParent" }, () => _recur5(rem, tail)).exhaustive()).exhaustive();
       if (_step._tag === "recur") {
         [rem, work] = _step.args;
         continue;
@@ -6898,8 +7062,8 @@ var fits2 = _curry10(2, (width, start) => {
     }
   }
 });
-var anyForcesBreak = _curry10(2, (parts, i) => match9(_Array_get7(i, parts)).with({ _tag: "None" }, () => false).with({ _tag: "Some" }, ({ value: p }) => or6(forcesBreak(p), anyForcesBreak(parts, i + 1))).exhaustive());
-var forcesBreak = (d) => match9(d).with({ _tag: "DBreakParent" }, () => true).with({ _tag: "DVerbatim" }, () => true).with({ _tag: "DLine" }, ({ hard }) => hard).with({ _tag: "DCat" }, ({ parts }) => anyForcesBreak(parts, 0)).with({ _tag: "DIndent" }, ({ doc: inner }) => forcesBreak(inner)).with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner)).with({ _tag: "DLineSuffix" }, () => false).with({ _tag: "DText" }, () => false).exhaustive();
+var anyForcesBreak = _curry12(2, (parts, i) => match11(_Array_get8(i, parts)).with({ _tag: "None" }, () => false).with({ _tag: "Some" }, ({ value: p }) => or6(forcesBreak(p), anyForcesBreak(parts, i + 1))).exhaustive());
+var forcesBreak = (d) => match11(d).with({ _tag: "DBreakParent" }, () => true).with({ _tag: "DVerbatim" }, () => true).with({ _tag: "DLine" }, ({ hard }) => hard).with({ _tag: "DCat" }, ({ parts }) => anyForcesBreak(parts, 0)).with({ _tag: "DIndent" }, ({ doc: inner }) => forcesBreak(inner)).with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner)).with({ _tag: "DLineSuffix" }, () => false).with({ _tag: "DText" }, () => false).exhaustive();
 var spaces = (n) => {
   let k = n;
   let acc = "";
@@ -6912,19 +7076,19 @@ var spaces = (n) => {
     }
   }
 };
-var posAfter = _curry10(2, (pos, s) => {
+var posAfter = _curry12(2, (pos, s) => {
   const parts = _Str_split2(`
 `, s);
-  return eq9(length7(parts), 1) ? pos + _Str_length4(s) : _Str_length4(_Option_unwrapOr4("", _Array_get7(length7(parts) - 1, parts)));
+  return eq11(length8(parts), 1) ? pos + _Str_length4(s) : _Str_length4(_Option_unwrapOr5("", _Array_get8(length8(parts) - 1, parts)));
 });
-var consItems = _curry10(2, (items, tail) => {
-  let k = length7(items) - 1;
+var consItems = _curry12(2, (items, tail) => {
+  let k = length8(items) - 1;
   let w = tail;
   while (true) {
     if (k < 0) {
       return w;
     } else {
-      const _step = match9(_Array_get7(k, items)).with({ _tag: "None" }, () => _done4(w)).with({ _tag: "Some" }, ({ value: it }) => _recur4(k - 1, WCons(it, w))).exhaustive();
+      const _step = match11(_Array_get8(k, items)).with({ _tag: "None" }, () => _done5(w)).with({ _tag: "Some" }, ({ value: it }) => _recur5(k - 1, WCons(it, w))).exhaustive();
       if (_step._tag === "recur") {
         [k, w] = _step.args;
         continue;
@@ -6933,17 +7097,17 @@ var consItems = _curry10(2, (items, tail) => {
     }
   }
 });
-var render = _curry10(2, (root, width) => {
+var render = _curry12(2, (root, width) => {
   let out = "";
   let pos = 0;
   let work = WCons({ i: 0, m: "break", d: root }, WNil);
   let sfx = [];
   while (true) {
-    const _step = match9(work).with({ _tag: "WNil" }, () => eq9(length7(sfx), 0) ? _done4(out) : _recur4(out, pos, consItems(sfx, WNil), [])).with((_v) => {
+    const _step = match11(work).with({ _tag: "WNil" }, () => eq11(length8(sfx), 0) ? _done5(out) : _recur5(out, pos, consItems(sfx, WNil), [])).with((_v) => {
       const _g = _v;
       return _g._tag === "WCons";
-    }, ({ head: { i, m, d }, tail }) => match9(d).with({ _tag: "DText" }, ({ s }) => _recur4(`${out}${s}`, pos + _Str_length4(s), tail, sfx)).with({ _tag: "DVerbatim" }, ({ s }) => _recur4(`${out}${s}`, posAfter(pos, s), tail, sfx)).with({ _tag: "DCat" }, ({ parts }) => _recur4(out, pos, consParts(parts, i, m, tail), sfx)).with({ _tag: "DIndent" }, ({ doc: inner }) => _recur4(out, pos, WCons({ i: i + INDENT, m, d: inner }, tail), sfx)).with({ _tag: "DLine" }, ({ hard, soft }) => and7(eq9(m, "flat"), not6(hard)) ? ((s) => _recur4(`${out}${s}`, pos + _Str_length4(s), tail, sfx))(soft ? "" : " ") : eq9(length7(sfx), 0) ? _recur4(`${out}
-${spaces(i)}`, i, tail, []) : _recur4(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [])).with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner) ? _recur4(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx) : ((cand) => fits2(width - pos, cand) ? _recur4(out, pos, cand, sfx) : _recur4(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx))(WCons({ i, m: "flat", d: inner }, tail))).with({ _tag: "DLineSuffix" }, ({ doc: inner }) => _recur4(out, pos, tail, _Array_append7({ i, m, d: inner }, sfx))).with({ _tag: "DBreakParent" }, () => _recur4(out, pos, tail, sfx)).exhaustive()).exhaustive();
+    }, ({ head: { i, m, d }, tail }) => match11(d).with({ _tag: "DText" }, ({ s }) => _recur5(`${out}${s}`, pos + _Str_length4(s), tail, sfx)).with({ _tag: "DVerbatim" }, ({ s }) => _recur5(`${out}${s}`, posAfter(pos, s), tail, sfx)).with({ _tag: "DCat" }, ({ parts }) => _recur5(out, pos, consParts(parts, i, m, tail), sfx)).with({ _tag: "DIndent" }, ({ doc: inner }) => _recur5(out, pos, WCons({ i: i + INDENT, m, d: inner }, tail), sfx)).with({ _tag: "DLine" }, ({ hard, soft }) => and8(eq11(m, "flat"), not7(hard)) ? ((s) => _recur5(`${out}${s}`, pos + _Str_length4(s), tail, sfx))(soft ? "" : " ") : eq11(length8(sfx), 0) ? _recur5(`${out}
+${spaces(i)}`, i, tail, []) : _recur5(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [])).with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner) ? _recur5(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx) : ((cand) => fits2(width - pos, cand) ? _recur5(out, pos, cand, sfx) : _recur5(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx))(WCons({ i, m: "flat", d: inner }, tail))).with({ _tag: "DLineSuffix" }, ({ doc: inner }) => _recur5(out, pos, tail, _Array_append7({ i, m, d: inner }, sfx))).with({ _tag: "DBreakParent" }, () => _recur5(out, pos, tail, sfx)).exhaustive()).exhaustive();
     if (_step._tag === "recur") {
       [out, pos, work, sfx] = _step.args;
       continue;
@@ -6953,18 +7117,18 @@ ${spaces(i)}`, i, tail, []) : _recur4(out, pos, consItems(sfx, WCons({ i, m, d }
 });
 var flat = (d) => render(d, 1e9);
 
-import { _Str_chars, _Str_endsWith, _Str_join as _Str_join4, _curry as _curry11, eq as eq10, length as length8, map as map4 } from "@mochi/compiler/runtime";
-import { match as match10 } from "@onrails/pattern";
-var escChar2 = (c) => match10(c).with("\\", () => "\\\\").with('"', () => "\\\"").with(`
+import { _Str_chars, _Str_endsWith, _Str_join as _Str_join4, _curry as _curry13, eq as eq12, length as length9, map as map6 } from "@mochi/compiler/runtime";
+import { match as match12 } from "@onrails/pattern";
+var escChar2 = (c) => match12(c).with("\\", () => "\\\\").with('"', () => "\\\"").with(`
 `, () => "\\n").with("\t", () => "\\t").otherwise(() => c);
-var strLit = (s) => `"${_Str_join4("", map4(escChar2, _Str_chars(s)))}"`;
+var strLit = (s) => `"${_Str_join4("", map6(escChar2, _Str_chars(s)))}"`;
 var typeArg = (te) => {
   const shown = showTypeExpr(te);
   return _Str_endsWith(">", shown) ? `${shown} ` : shown;
 };
-var joinWith = _curry11(3, (f, sep, tes) => _Str_join4(sep, map4(f, tes)));
-var showTypeExpr = (te) => match10(te).with({ _tag: "TyName" }, ({ name }) => eq10(name, "unit") ? "()" : name).with({ _tag: "TyApp" }, ({ ctor, args }) => `${ctor}<${joinWith(typeArg, ", ", args)}>`).with({ _tag: "TyTuple" }, ({ elems }) => `(${joinWith(showTypeExpr, ", ", elems)})`).with({ _tag: "TyList" }, ({ elem }) => `[${showTypeExpr(elem)}]`).with({ _tag: "TyQual" }, ({ alias, name, args }) => ((head) => eq10(length8(args), 0) ? head : `${head}<${joinWith(typeArg, ", ", args)}>`)(`${alias}.${name}`)).with({ _tag: "TyLit" }, ({ value }) => strLit(value)).with({ _tag: "TyUnion" }, ({ members }) => joinWith(parenArrow, " | ", members)).with({ _tag: "TyArrow" }, ({ from, to }) => `${parenArrow(from)} -> ${showTypeExpr(to)}`).exhaustive();
-var parenArrow = (te) => match10(te).with({ _tag: "TyArrow" }, () => `(${showTypeExpr(te)})`).otherwise(() => showTypeExpr(te));
+var joinWith = _curry13(3, (f, sep, tes) => _Str_join4(sep, map6(f, tes)));
+var showTypeExpr = (te) => match12(te).with({ _tag: "TyName" }, ({ name }) => eq12(name, "unit") ? "()" : name).with({ _tag: "TyApp" }, ({ ctor, args }) => `${ctor}<${joinWith(typeArg, ", ", args)}>`).with({ _tag: "TyTuple" }, ({ elems }) => `(${joinWith(showTypeExpr, ", ", elems)})`).with({ _tag: "TyList" }, ({ elem }) => `[${showTypeExpr(elem)}]`).with({ _tag: "TyQual" }, ({ alias, name, args }) => ((head) => eq12(length9(args), 0) ? head : `${head}<${joinWith(typeArg, ", ", args)}>`)(`${alias}.${name}`)).with({ _tag: "TyLit" }, ({ value }) => strLit(value)).with({ _tag: "TyUnion" }, ({ members }) => joinWith(parenArrow, " | ", members)).with({ _tag: "TyArrow" }, ({ from, to }) => `${parenArrow(from)} -> ${showTypeExpr(to)}`).exhaustive();
+var parenArrow = (te) => match12(te).with({ _tag: "TyArrow" }, () => `(${showTypeExpr(te)})`).otherwise(() => showTypeExpr(te));
 
 var _builtins = {
   add: {
@@ -11643,544 +11807,386 @@ var namespaceRuntime = _mapmap(_namespaceRuntime);
 var preludeJsDefs = _map(_preludeJsDefs);
 var runtimeDeps = _map(_runtimeDeps);
 
-var escChar3 = (c) => match11(c).with("\\", () => "\\\\").with('"', () => "\\\"").with(`
+var escChar3 = (c) => match13(c).with("\\", () => "\\\\").with('"', () => "\\\"").with(`
 `, () => "\\n").with("\t", () => "\\t").otherwise(() => c);
-var escFrom = _curry12(3, (chars, i, acc) => match11(_Array_get8(i, chars)).with({ _tag: "None" }, () => acc).with((_v) => {
+var escFrom = _curry14(3, (chars, i, acc) => match13(_Array_get9(i, chars)).with({ _tag: "None" }, () => acc).with((_v) => {
   const _g = _v;
-  return _g._tag === "Some" && _g.value === "$" && _Option_contains3("{", _Array_get8(i + 1, chars));
+  return _g._tag === "Some" && _g.value === "$" && _Option_contains3("{", _Array_get9(i + 1, chars));
 }, () => escFrom(chars, i + 2, `${acc}\\\${`)).with({ _tag: "Some" }, ({ value: c }) => escFrom(chars, i + 1, `${acc}${escChar3(c)}`)).exhaustive());
 var escStrBody = (s) => escFrom(_Str_chars2(s), 0, "");
 var strLit2 = (s) => `"${escStrBody(s)}"`;
 var WIDTH = 80;
-var commaJoin = _curry12(2, (f, xs) => _Str_join5(", ", map5(f, xs)));
-var patField = (f) => match11(f.pat).with((_v) => {
+var commaJoin = _curry14(2, (f, xs) => _Str_join5(", ", map7(f, xs)));
+var patField = (f) => match13(f.pat).with((_v) => {
   const _g = _v;
-  return _g._tag === "PBind" && (({ name }) => eq11(name, f.label))(_g);
+  return _g._tag === "PBind" && (({ name }) => eq13(name, f.label))(_g);
 }, ({ name }) => f.label).otherwise(() => `${f.label}: ${pattern(f.pat)}`);
-var restOf = (rest) => match11(rest).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: p }) => [`...${pattern(p)}`]).exhaustive();
-var pattern = (p) => match11(p).with({ _tag: "PAs" }, ({ pat: inner, name }) => `${pattern(inner)} as ${name}`).with({ _tag: "PWild" }, () => "_").with({ _tag: "PUnit" }, () => "()").with({ _tag: "PBind" }, ({ name }) => name).with({ _tag: "PLit" }, ({ raw }) => raw).with({ _tag: "PBool" }, ({ value }) => show4(value)).with({ _tag: "PStr" }, ({ value }) => strLit2(value)).with({ _tag: "PRecord" }, ({ fields }) => `{ ${commaJoin(patField, fields)} }`).with({ _tag: "PTuple" }, ({ elems }) => `(${commaJoin(pattern, elems)})`).with({ _tag: "PCtor" }, ({ ctor: ctorName, args, ns }) => ((head) => eq11(length9(args), 0) ? head : `${head}(${commaJoin(pattern, args)})`)(match11(ns).with({ _tag: "None" }, () => ctorName).with({ _tag: "Some" }, ({ value: alias }) => `${alias}.${ctorName}`).exhaustive())).with({ _tag: "PArr" }, ({ elems, rest }) => `[${_Str_join5(", ", _Array_concat4(map5(pattern, elems), restOf(rest)))}]`).with({ _tag: "PList" }, ({ elems, rest }) => `@{${_Str_join5(", ", _Array_concat4(map5(pattern, elems), restOf(rest)))}}`).with({ _tag: "POr" }, ({ alts }) => _Str_join5(" | ", map5(pattern, alts))).exhaustive();
-var ctorField = (f) => match11(f.name).with({ _tag: "None" }, () => showTypeExpr(f.fieldType)).with({ _tag: "Some" }, ({ value: name }) => `${name}: ${showTypeExpr(f.fieldType)}`).exhaustive();
-var ctorText = (c) => eq11(length9(c.fields), 0) ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
-var generics = (params) => eq11(length9(params), 0) ? "" : `<${_Str_join5(", ", params)}>`;
-var conventionOf = (module) => _Array_get8(0, filter((c) => _Str_startsWith3(`mochi:${c}:`, module), ["global", "send", "get", "set", "new"]));
-var externStmt = _curry12(6, (name, params, typeExpr, module, imported, curried) => {
+var restOf = (rest) => match13(rest).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: p }) => [`...${pattern(p)}`]).exhaustive();
+var pattern = (p) => match13(p).with({ _tag: "PAs" }, ({ pat: inner, name }) => `${pattern(inner)} as ${name}`).with({ _tag: "PWild" }, () => "_").with({ _tag: "PUnit" }, () => "()").with({ _tag: "PBind" }, ({ name }) => name).with({ _tag: "PLit" }, ({ raw }) => raw).with({ _tag: "PBool" }, ({ value }) => show5(value)).with({ _tag: "PStr" }, ({ value }) => strLit2(value)).with({ _tag: "PRecord" }, ({ fields }) => `{ ${commaJoin(patField, fields)} }`).with({ _tag: "PTuple" }, ({ elems }) => `(${commaJoin(pattern, elems)})`).with({ _tag: "PCtor" }, ({ ctor: ctorName, args, ns }) => ((head) => eq13(length10(args), 0) ? head : `${head}(${commaJoin(pattern, args)})`)(match13(ns).with({ _tag: "None" }, () => ctorName).with({ _tag: "Some" }, ({ value: alias }) => `${alias}.${ctorName}`).exhaustive())).with({ _tag: "PArr" }, ({ elems, rest }) => `[${_Str_join5(", ", _Array_concat4(map7(pattern, elems), restOf(rest)))}]`).with({ _tag: "PList" }, ({ elems, rest }) => `@{${_Str_join5(", ", _Array_concat4(map7(pattern, elems), restOf(rest)))}}`).with({ _tag: "POr" }, ({ alts }) => _Str_join5(" | ", map7(pattern, alts))).exhaustive();
+var ctorField = (f) => match13(f.name).with({ _tag: "None" }, () => showTypeExpr(f.fieldType)).with({ _tag: "Some" }, ({ value: name }) => `${name}: ${showTypeExpr(f.fieldType)}`).exhaustive();
+var ctorText = (c) => eq13(length10(c.fields), 0) ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
+var generics = (params) => eq13(length10(params), 0) ? "" : `<${_Str_join5(", ", params)}>`;
+var conventionOf = (module) => _Array_get9(0, filter2((c) => _Str_startsWith3(`mochi:${c}:`, module), ["global", "send", "get", "set", "new"]));
+var externStmt = _curry14(6, (name, params, typeExpr, module, imported, curried) => {
   const head = `extern ${name}${generics(params)} : ${showTypeExpr(typeExpr)} = `;
-  return match11(conventionOf(module)).with({ _tag: "None" }, () => `${head}${curried ? "curried " : ""}${strLit2(module)} ${strLit2(imported)}`).with({ _tag: "Some" }, ({ value: convention }) => ((first) => ((second) => `${head}${convention} ${strLit2(first)}${second}`)(eq11(imported, "") ? "" : ` ${strLit2(imported)}`))(_Str_slice3(_Str_length5(`mochi:${convention}:`), _Str_length5(module), module))).exhaustive();
+  return match13(conventionOf(module)).with({ _tag: "None" }, () => `${head}${curried ? "curried " : ""}${strLit2(module)} ${strLit2(imported)}`).with({ _tag: "Some" }, ({ value: convention }) => ((first) => ((second) => `${head}${convention} ${strLit2(first)}${second}`)(eq13(imported, "") ? "" : ` ${strLit2(imported)}`))(_Str_slice3(_Str_length5(`mochi:${convention}:`), _Str_length5(module), module))).exhaustive();
 });
 var sepLine = cat([txt(","), line]);
-var bracketed = _curry12(3, (open, close, items) => eq11(length9(items), 0) ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([softline, join(sepLine, items)])), softline, txt(close)])));
-var braced = _curry12(3, (open, close, items) => eq11(length9(items), 0) ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)])));
-var parenIf = _curry12(2, (cond, d) => cond ? cat([txt("("), d, txt(")")]) : d);
-var loosePrefix = _curry12(2, (cts, e) => match11(e).with({ _tag: "ETernary" }, () => true).with({ _tag: "EPipe" }, () => true).otherwise(() => printsAsLambda(cts, e)));
-var unspan = (p) => match11(p).with({ _tag: "LPSpanned" }, ({ param: inner }) => inner).otherwise(() => p);
-var exprSpan2 = (e) => match11(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
-var noComments = { leading: new Map, trailing: new Map, flatArity: new Map, shadowed: _Set_fromArray([]), etaSkip: false, formatHooks: [], commentStarts: [] };
-var spanKey = _curry12(2, (kind, sp) => `${kind}:${show4(sp.start)}:${show4(sp.end)}`);
+var bracketed = _curry14(3, (open, close, items) => eq13(length10(items), 0) ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([softline, join(sepLine, items)])), softline, txt(close)])));
+var braced = _curry14(3, (open, close, items) => eq13(length10(items), 0) ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)])));
+var parenIf = _curry14(2, (cond, d) => cond ? cat([txt("("), d, txt(")")]) : d);
+var loosePrefix = _curry14(2, (cts, e) => match13(e).with({ _tag: "ETernary" }, () => true).with({ _tag: "EPipe" }, () => true).otherwise(() => printsAsLambda(cts, e)));
+var unspan = (p) => match13(p).with({ _tag: "LPSpanned" }, ({ param: inner }) => inner).otherwise(() => p);
+var exprSpan2 = (e) => match13(e).with({ _tag: "ENum" }, ({ span: sp }) => sp).with({ _tag: "EUnit" }, ({ span: sp }) => sp).with({ _tag: "EBool" }, ({ span: sp }) => sp).with({ _tag: "EStr" }, ({ span: sp }) => sp).with({ _tag: "ERef" }, ({ span: sp }) => sp).with({ _tag: "ECall" }, ({ span: sp }) => sp).with({ _tag: "ELambda" }, ({ span: sp }) => sp).with({ _tag: "ELetIn" }, ({ span: sp }) => sp).with({ _tag: "ELetBind" }, ({ span: sp }) => sp).with({ _tag: "EPipe" }, ({ span: sp }) => sp).with({ _tag: "EDo" }, ({ span: sp }) => sp).with({ _tag: "ETernary" }, ({ span: sp }) => sp).with({ _tag: "EMatch" }, ({ span: sp }) => sp).with({ _tag: "ERecord" }, ({ span: sp }) => sp).with({ _tag: "EField" }, ({ span: sp }) => sp).with({ _tag: "ETuple" }, ({ span: sp }) => sp).with({ _tag: "EArr" }, ({ span: sp }) => sp).with({ _tag: "EList" }, ({ span: sp }) => sp).with({ _tag: "ESet" }, ({ span: sp }) => sp).with({ _tag: "EMap" }, ({ span: sp }) => sp).with({ _tag: "ELoop" }, ({ span: sp }) => sp).with({ _tag: "ERecur" }, ({ span: sp }) => sp).with({ _tag: "EInterp" }, ({ span: sp }) => sp).exhaustive();
+var noComments = { leading: new Map, trailing: new Map, flatArity: new Map, shadowed: _Set_fromArray2([]), etaSkip: false, formatHooks: [], commentStarts: [] };
+var spanKey = _curry14(2, (kind, sp) => `${kind}:${show5(sp.start)}:${show5(sp.end)}`);
 var STMT = "s";
 var EXPR = "e";
 var CTOR = "c";
-var atKey = _curry12(2, (table, key) => match11(_Map_get3(key, table)).with({ _tag: "Some" }, ({ value: cs }) => cs).with({ _tag: "None" }, () => []).exhaustive());
-var pushAt = _curry12(3, (key, c, table) => _Map_set2(key, _Array_append8(c, atKey(table, key)), table));
-var lineEndFrom = _curry12(2, (src, i) => match11(_Str_get4(i, src)).with({ _tag: "None" }, () => i).with({ _tag: "Some", value: `
+var atKey = _curry14(2, (table, key) => match13(_Map_get4(key, table)).with({ _tag: "Some" }, ({ value: cs }) => cs).with({ _tag: "None" }, () => []).exhaustive());
+var pushAt = _curry14(3, (key, c, table) => _Map_set4(key, _Array_append8(c, atKey(table, key)), table));
+var lineEndFrom = _curry14(2, (src, i) => match13(_Str_get4(i, src)).with({ _tag: "None" }, () => i).with({ _tag: "Some", value: `
 ` }, () => i).with({ _tag: "Some" }, () => lineEndFrom(src, i + 1)).exhaustive());
-var trimEndFrom = _curry12(2, (s, n) => eq11(n, 0) ? "" : match11(_Str_codeAt5(n - 1, s)).with({ _tag: "Some", value: 32 }, () => trimEndFrom(s, n - 1)).with({ _tag: "Some", value: 9 }, () => trimEndFrom(s, n - 1)).with({ _tag: "Some", value: 13 }, () => trimEndFrom(s, n - 1)).otherwise(() => _Str_slice3(0, n, s)));
+var trimEndFrom = _curry14(2, (s, n) => eq13(n, 0) ? "" : match13(_Str_codeAt6(n - 1, s)).with({ _tag: "Some", value: 32 }, () => trimEndFrom(s, n - 1)).with({ _tag: "Some", value: 9 }, () => trimEndFrom(s, n - 1)).with({ _tag: "Some", value: 13 }, () => trimEndFrom(s, n - 1)).otherwise(() => _Str_slice3(0, n, s)));
 var trimEnd = (s) => trimEndFrom(s, _Str_length5(s));
-var commentAt = _curry12(3, (src, i, end) => {
+var commentAt = _curry14(3, (src, i, end) => {
   const lineEnd = lineEndFrom(src, end + 1);
-  return { start: i, end, text: trimEnd(_Str_slice3(i, end, src)), blankAfter: eq11(_Str_trim(_Str_slice3(end + 1, lineEnd, src)), ""), trailing: false };
+  return { start: i, end, text: trimEnd(_Str_slice3(i, end, src)), blankAfter: eq13(_Str_trim(_Str_slice3(end + 1, lineEnd, src)), ""), trailing: false };
 });
-var scanComments = _curry12(4, (src, i, lineHasToken, acc) => match11(_Str_get4(i, src)).with({ _tag: "None" }, () => acc).with({ _tag: "Some", value: `
+var scanComments = _curry14(4, (src, i, lineHasToken, acc) => match13(_Str_get4(i, src)).with({ _tag: "None" }, () => acc).with({ _tag: "Some", value: `
 ` }, () => scanComments(src, i + 1, false, acc)).with({ _tag: "Some", value: " " }, () => scanComments(src, i + 1, lineHasToken, acc)).with({ _tag: "Some", value: "\t" }, () => scanComments(src, i + 1, lineHasToken, acc)).with((_v) => {
   const _g = _v;
-  return _g._tag === "Some" && eq11(_Str_codeAt5(i, src), Some10(13));
-}, () => scanComments(src, i + 1, lineHasToken, acc)).with({ _tag: "Some", value: '"' }, () => match11(skipStringLiteral(src, i)).with({ _tag: "Some" }, ({ value: end }) => scanComments(src, end, true, acc)).with({ _tag: "None" }, () => scanComments(src, i + 1, true, acc)).exhaustive()).with({ _tag: "Some", value: "/" }, () => eq11(_Str_get4(i + 1, src), Some10("/")) ? ((end) => ((c) => scanComments(src, end, lineHasToken, _Array_append8({ ...c, trailing: lineHasToken }, acc)))(commentAt(src, i, end)))(lineEndFrom(src, i)) : scanComments(src, i + 1, true, acc)).with({ _tag: "Some" }, () => scanComments(src, i + 1, true, acc)).exhaustive());
+  return _g._tag === "Some" && eq13(_Str_codeAt6(i, src), Some12(13));
+}, () => scanComments(src, i + 1, lineHasToken, acc)).with({ _tag: "Some", value: '"' }, () => match13(skipStringLiteral(src, i)).with({ _tag: "Some" }, ({ value: end }) => scanComments(src, end, true, acc)).with({ _tag: "None" }, () => scanComments(src, i + 1, true, acc)).exhaustive()).with({ _tag: "Some", value: "/" }, () => eq13(_Str_get4(i + 1, src), Some12("/")) ? ((end) => ((c) => scanComments(src, end, lineHasToken, _Array_append8({ ...c, trailing: lineHasToken }, acc)))(commentAt(src, i, end)))(lineEndFrom(src, i)) : scanComments(src, i + 1, true, acc)).with({ _tag: "Some" }, () => scanComments(src, i + 1, true, acc)).exhaustive());
 var collectComments = (src) => scanComments(src, 0, false, []);
-var seqElemExpr2 = (el) => match11(el).with({ _tag: "SEExpr" }, ({ expr: e }) => e).with({ _tag: "SESpread" }, ({ expr: e }) => e).exhaustive();
-var exprAnchors = (e) => _Array_append8({ kind: EXPR, sp: exprSpan2(e) }, match11(e).with({ _tag: "ECall" }, ({ fn, args }) => _Array_concat4(exprAnchors(fn), _Array_flatMap(exprAnchors, args))).with({ _tag: "ELambda" }, ({ params, body }) => _Array_concat4(exprAnchors(body), _Array_flatMap((p) => match11(unspan(p)).with((_v) => {
+var seqElemExpr2 = (el) => match13(el).with({ _tag: "SEExpr" }, ({ expr: e }) => e).with({ _tag: "SESpread" }, ({ expr: e }) => e).exhaustive();
+var exprAnchors = (e) => _Array_append8({ kind: EXPR, sp: exprSpan2(e) }, match13(e).with({ _tag: "ECall" }, ({ fn, args }) => _Array_concat4(exprAnchors(fn), _Array_flatMap(exprAnchors, args))).with({ _tag: "ELambda" }, ({ params, body }) => _Array_concat4(exprAnchors(body), _Array_flatMap((p) => match13(unspan(p)).with((_v) => {
   const _g = _v;
   return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
-}, ({ defaultValue: { value: d } }) => exprAnchors(d)).otherwise(() => []), params))).with({ _tag: "ELetIn" }, ({ value, body }) => _Array_concat4(exprAnchors(value), exprAnchors(body))).with({ _tag: "ELetBind" }, ({ value, body }) => _Array_concat4(exprAnchors(value), exprAnchors(body))).with({ _tag: "EPipe" }, ({ left, right }) => _Array_concat4(exprAnchors(left), exprAnchors(right))).with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(exprAnchors, exprs)).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => _Array_concat4(exprAnchors(cond), _Array_concat4(exprAnchors(thenE), exprAnchors(elseE)))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => _Array_concat4(exprAnchors(scrutinee), _Array_flatMap((a) => _Array_concat4(match11(a.guard).with({ _tag: "Some" }, ({ value: g }) => exprAnchors(g)).with({ _tag: "None" }, () => []).exhaustive(), exprAnchors(a.body)), arms))).with({ _tag: "ERecord" }, ({ fields, spread }) => _Array_concat4(match11(spread).with({ _tag: "Some" }, ({ value: sp }) => exprAnchors(sp)).with({ _tag: "None" }, () => []).exhaustive(), _Array_flatMap((f) => exprAnchors(f.value), fields))).with({ _tag: "EField" }, ({ target }) => exprAnchors(target)).with({ _tag: "ELoop" }, ({ params, body }) => _Array_concat4(_Array_flatMap((prm) => exprAnchors(prm.init), params), exprAnchors(body))).with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(exprAnchors, args)).with({ _tag: "ETuple" }, ({ elements }) => _Array_flatMap(exprAnchors, elements)).with({ _tag: "EArr" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "EList" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "ESet" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "EMap" }, ({ entries }) => _Array_flatMap((en) => _Array_concat4(exprAnchors(en.key), exprAnchors(en.value)), entries)).with({ _tag: "EInterp" }, ({ parts }) => _Array_flatMap((prt) => match11(prt).with({ _tag: "IPLit" }, () => []).with({ _tag: "IPExpr" }, ({ expr: ex }) => exprAnchors(ex)).exhaustive(), parts)).otherwise(() => []));
+}, ({ defaultValue: { value: d } }) => exprAnchors(d)).otherwise(() => []), params))).with({ _tag: "ELetIn" }, ({ value, body }) => _Array_concat4(exprAnchors(value), exprAnchors(body))).with({ _tag: "ELetBind" }, ({ value, body }) => _Array_concat4(exprAnchors(value), exprAnchors(body))).with({ _tag: "EPipe" }, ({ left, right }) => _Array_concat4(exprAnchors(left), exprAnchors(right))).with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(exprAnchors, exprs)).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => _Array_concat4(exprAnchors(cond), _Array_concat4(exprAnchors(thenE), exprAnchors(elseE)))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => _Array_concat4(exprAnchors(scrutinee), _Array_flatMap((a) => _Array_concat4(match13(a.guard).with({ _tag: "Some" }, ({ value: g }) => exprAnchors(g)).with({ _tag: "None" }, () => []).exhaustive(), exprAnchors(a.body)), arms))).with({ _tag: "ERecord" }, ({ fields, spread }) => _Array_concat4(match13(spread).with({ _tag: "Some" }, ({ value: sp }) => exprAnchors(sp)).with({ _tag: "None" }, () => []).exhaustive(), _Array_flatMap((f) => exprAnchors(f.value), fields))).with({ _tag: "EField" }, ({ target }) => exprAnchors(target)).with({ _tag: "ELoop" }, ({ params, body }) => _Array_concat4(_Array_flatMap((prm) => exprAnchors(prm.init), params), exprAnchors(body))).with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(exprAnchors, args)).with({ _tag: "ETuple" }, ({ elements }) => _Array_flatMap(exprAnchors, elements)).with({ _tag: "EArr" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "EList" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "ESet" }, ({ elements }) => _Array_flatMap((el) => exprAnchors(seqElemExpr2(el)), elements)).with({ _tag: "EMap" }, ({ entries }) => _Array_flatMap((en) => _Array_concat4(exprAnchors(en.key), exprAnchors(en.value)), entries)).with({ _tag: "EInterp" }, ({ parts }) => _Array_flatMap((prt) => match13(prt).with({ _tag: "IPLit" }, () => []).with({ _tag: "IPExpr" }, ({ expr: ex }) => exprAnchors(ex)).exhaustive(), parts)).otherwise(() => []));
 var SPAN_SCALE = 1e7;
 var anchorKey = (a) => a.sp.start * SPAN_SCALE - a.sp.end;
 var sortAnchors = _Array_sortBy(anchorKey);
-var trailedByFrom = _curry12(5, (anchors, i, c, src, best) => match11(_Array_get8(i, anchors)).with({ _tag: "None" }, () => best).with({ _tag: "Some" }, ({ value: a }) => ((fits) => ((better) => trailedByFrom(anchors, i + 1, c, src, better ? Some10(a) : best))(and8(fits, match11(best).with({ _tag: "None" }, () => true).with({ _tag: "Some" }, ({ value: b }) => a.sp.end > b.sp.end).exhaustive())))(and8(a.sp.end <= c.start, not7(_Str_contains2(`
+var trailedByFrom = _curry14(5, (anchors, i, c, src, best) => match13(_Array_get9(i, anchors)).with({ _tag: "None" }, () => best).with({ _tag: "Some" }, ({ value: a }) => ((fits) => ((better) => trailedByFrom(anchors, i + 1, c, src, better ? Some12(a) : best))(and9(fits, match13(best).with({ _tag: "None" }, () => true).with({ _tag: "Some" }, ({ value: b }) => a.sp.end > b.sp.end).exhaustive())))(and9(a.sp.end <= c.start, not8(_Str_contains2(`
 `, _Str_slice3(a.sp.end, c.start, src)))))).exhaustive());
-var trailedBy = _curry12(3, (anchors, c, src) => trailedByFrom(anchors, 0, c, src, None10));
-var leadTargetFrom = _curry12(3, (anchors, i, c) => match11(_Array_get8(i, anchors)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: a }) => a.sp.start >= c.end ? Some10(a) : leadTargetFrom(anchors, i + 1, c)).exhaustive());
-var leadTarget = _curry12(2, (anchors, c) => leadTargetFrom(anchors, 0, c));
-var attachOne = _curry12(4, (anchors, src, c, tbl) => {
-  const trailed = c.trailing ? trailedBy(anchors, c, src) : None10;
-  return match11(trailed).with({ _tag: "Some" }, ({ value: a }) => Some10({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) })).with({ _tag: "None" }, () => match11(leadTarget(anchors, c)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: a }) => Some10({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) })).exhaustive()).exhaustive();
+var trailedBy = _curry14(3, (anchors, c, src) => trailedByFrom(anchors, 0, c, src, None12));
+var leadTargetFrom = _curry14(3, (anchors, i, c) => match13(_Array_get9(i, anchors)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: a }) => a.sp.start >= c.end ? Some12(a) : leadTargetFrom(anchors, i + 1, c)).exhaustive());
+var leadTarget = _curry14(2, (anchors, c) => leadTargetFrom(anchors, 0, c));
+var attachOne = _curry14(4, (anchors, src, c, tbl) => {
+  const trailed = c.trailing ? trailedBy(anchors, c, src) : None12;
+  return match13(trailed).with({ _tag: "Some" }, ({ value: a }) => Some12({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) })).with({ _tag: "None" }, () => match13(leadTarget(anchors, c)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: a }) => Some12({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) })).exhaustive()).exhaustive();
 });
-var attachFrom = _curry12(5, (comments, i, anchors, src, acc) => match11(_Array_get8(i, comments)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => attachFrom(comments, i + 1, anchors, src, match11(attachOne(anchors, src, c, acc.table)).with({ _tag: "Some" }, ({ value: table }) => ({ table, tail: acc.tail })).with({ _tag: "None" }, () => ({ table: acc.table, tail: _Array_append8(c, acc.tail) })).exhaustive())).exhaustive());
-var commentsForExpr = _curry12(2, (src, e) => attachFrom(collectComments(src), 0, sortAnchors(exprAnchors(e)), src, { table: noComments, tail: [] }).table);
-var leadingDocs = _curry12(3, (cts, kind, sp) => _Array_flatMap((c) => c.blankAfter ? [txt(c.text), hardline, hardline] : [txt(c.text), hardline], atKey(cts.leading, spanKey(kind, sp))));
-var trailingDocs = _curry12(3, (cts, kind, sp) => _Array_flatMap((c) => [lineSuffix(txt(` ${c.text}`)), breakParent], atKey(cts.trailing, spanKey(kind, sp))));
-var hasLead = _curry12(3, (cts, kind, sp) => length9(atKey(cts.leading, spanKey(kind, sp))) > 0);
-var withComments = _curry12(4, (cts, kind, sp, doc) => {
+var attachFrom = _curry14(5, (comments, i, anchors, src, acc) => match13(_Array_get9(i, comments)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => attachFrom(comments, i + 1, anchors, src, match13(attachOne(anchors, src, c, acc.table)).with({ _tag: "Some" }, ({ value: table }) => ({ table, tail: acc.tail })).with({ _tag: "None" }, () => ({ table: acc.table, tail: _Array_append8(c, acc.tail) })).exhaustive())).exhaustive());
+var commentsForExpr = _curry14(2, (src, e) => attachFrom(collectComments(src), 0, sortAnchors(exprAnchors(e)), src, { table: noComments, tail: [] }).table);
+var leadingDocs = _curry14(3, (cts, kind, sp) => _Array_flatMap((c) => c.blankAfter ? [txt(c.text), hardline, hardline] : [txt(c.text), hardline], atKey(cts.leading, spanKey(kind, sp))));
+var trailingDocs = _curry14(3, (cts, kind, sp) => _Array_flatMap((c) => [lineSuffix(txt(` ${c.text}`)), breakParent], atKey(cts.trailing, spanKey(kind, sp))));
+var hasLead = _curry14(3, (cts, kind, sp) => length10(atKey(cts.leading, spanKey(kind, sp))) > 0);
+var withComments = _curry14(4, (cts, kind, sp, doc) => {
   const lead = leadingDocs(cts, kind, sp);
   const trail = trailingDocs(cts, kind, sp);
-  return and8(eq11(length9(lead), 0), eq11(length9(trail), 0)) ? doc : cat([...lead, doc, ...trail]);
+  return and9(eq13(length10(lead), 0), eq13(length10(trail), 0)) ? doc : cat([...lead, doc, ...trail]);
 });
-var curryArityFrom = _curry12(3, (def, i, acc) => match11(_Str_codeAt5(i, def)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: code }) => and8(code >= 48, code <= 57) ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode2(code)}`) : acc).exhaustive());
-var commaCountFrom = _curry12(3, (s, i, acc) => match11(_Str_get4(i, s)).with({ _tag: "None" }, () => acc).with({ _tag: "Some", value: "," }, () => commaCountFrom(s, i + 1, acc + 1)).with({ _tag: "Some" }, () => commaCountFrom(s, i + 1, acc)).exhaustive());
-var indexOfFrom = _curry12(3, (needle, s, i) => i + _Str_length5(needle) > _Str_length5(s) ? -1 : eq11(_Str_slice3(i, i + _Str_length5(needle), s), needle) ? i : indexOfFrom(needle, s, i + 1));
+var curryArityFrom = _curry14(3, (def, i, acc) => match13(_Str_codeAt6(i, def)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: code }) => and9(code >= 48, code <= 57) ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode2(code)}`) : acc).exhaustive());
+var commaCountFrom = _curry14(3, (s, i, acc) => match13(_Str_get4(i, s)).with({ _tag: "None" }, () => acc).with({ _tag: "Some", value: "," }, () => commaCountFrom(s, i + 1, acc + 1)).with({ _tag: "Some" }, () => commaCountFrom(s, i + 1, acc)).exhaustive());
+var indexOfFrom = _curry14(3, (needle, s, i) => i + _Str_length5(needle) > _Str_length5(s) ? -1 : eq13(_Str_slice3(i, i + _Str_length5(needle), s), needle) ? i : indexOfFrom(needle, s, i + 1));
 var arityOfDef = (def) => {
   const curried = indexOfFrom("_curry(", def, 0);
-  return curried >= 0 ? ((digits) => eq11(_Str_length5(digits), 0) ? 0 : _Option_unwrapOr5(0, _Str_toNumber2(digits)))(curryArityFrom(def, curried + 7, "")) : ((open) => open < 0 ? 0 : ((close) => close < 0 ? 0 : ((params) => eq11(_Str_length5(params), 0) ? 0 : commaCountFrom(params, 0, 1))(_Str_trim(_Str_slice3(open + 3, close, def))))(indexOfFrom(") =>", def, open)))(indexOfFrom("= (", def, 0));
+  return curried >= 0 ? ((digits) => eq13(_Str_length5(digits), 0) ? 0 : _Option_unwrapOr6(0, _Str_toNumber2(digits)))(curryArityFrom(def, curried + 7, "")) : ((open) => open < 0 ? 0 : ((close) => close < 0 ? 0 : ((params) => eq13(_Str_length5(params), 0) ? 0 : commaCountFrom(params, 0, 1))(_Str_trim(_Str_slice3(open + 3, close, def))))(indexOfFrom(") =>", def, open)))(indexOfFrom("= (", def, 0));
 };
-var runtimeArityOf = (jsId) => match11(_Map_get3(jsId, preludeJsDefs)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: def }) => ((n) => n >= 2 ? Some10(n) : None10)(arityOfDef(def))).exhaustive();
-var namespaceArity = _curry12(3, (shadowed, target, member) => match11(target).with({ _tag: "ERef" }, ({ name: nsName }) => _Set_has(nsName, shadowed) ? None10 : match11(_Map_get3(nsName, namespaceRuntime)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: members }) => match11(_Map_get3(member, members)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: jsId }) => runtimeArityOf(jsId)).exhaustive()).exhaustive()).otherwise(() => None10));
-var labeledCount = (params) => length9(filter((p) => match11(unspan(p)).with({ _tag: "LPLabeled" }, () => true).otherwise(() => false), params));
+var runtimeArityOf = (jsId) => match13(_Map_get4(jsId, preludeJsDefs)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: def }) => ((n) => n >= 2 ? Some12(n) : None12)(arityOfDef(def))).exhaustive();
+var namespaceArity = _curry14(3, (shadowed, target, member) => match13(target).with({ _tag: "ERef" }, ({ name: nsName }) => _Set_has2(nsName, shadowed) ? None12 : match13(_Map_get4(nsName, namespaceRuntime)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: members }) => match13(_Map_get4(member, members)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: jsId }) => runtimeArityOf(jsId)).exhaustive()).exhaustive()).otherwise(() => None12));
+var labeledCount = (params) => length10(filter2((p) => match13(unspan(p)).with({ _tag: "LPLabeled" }, () => true).otherwise(() => false), params));
 var jsArity = (params) => {
   const labs = labeledCount(params);
-  return length9(params) - labs + (labs > 0 ? 1 : 0);
+  return length10(params) - labs + (labs > 0 ? 1 : 0);
 };
-var collapsedArity = (e) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => jsArity(params) + collapsedArity(body)).otherwise(() => 0);
-var patNames = (p) => match11(p).with({ _tag: "PBind" }, ({ name }) => [name]).with({ _tag: "PAs" }, ({ pat: inner, name }) => _Array_append8(name, patNames(inner))).with({ _tag: "PTuple" }, ({ elems }) => _Array_flatMap(patNames, elems)).with({ _tag: "PRecord" }, ({ fields }) => _Array_flatMap((f) => patNames(f.pat), fields)).with({ _tag: "PCtor" }, ({ args }) => _Array_flatMap(patNames, args)).with({ _tag: "PArr" }, ({ elems, rest }) => _Array_concat4(_Array_flatMap(patNames, elems), match11(rest).with({ _tag: "Some" }, ({ value: r }) => patNames(r)).with({ _tag: "None" }, () => []).exhaustive())).with({ _tag: "PList" }, ({ elems, rest }) => _Array_concat4(_Array_flatMap(patNames, elems), match11(rest).with({ _tag: "Some" }, ({ value: r }) => patNames(r)).with({ _tag: "None" }, () => []).exhaustive())).with({ _tag: "POr" }, ({ alts }) => _Array_flatMap(patNames, alts)).otherwise(() => []);
-var paramNames = (p) => match11(unspan(p)).with({ _tag: "LPName" }, ({ name }) => [name]).with({ _tag: "LPLabeled" }, ({ name }) => [name]).with({ _tag: "LPTuple" }, ({ names }) => names).with({ _tag: "LPRecord" }, ({ fields }) => fields).otherwise(() => []);
-var innerNames = (e) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => _Array_concat4(_Array_flatMap(paramNames, params), _Array_concat4(innerNames(body), _Array_flatMap((p) => match11(unspan(p)).with((_v) => {
+var collapsedArity = (e) => match13(e).with({ _tag: "ELambda" }, ({ params, body }) => jsArity(params) + collapsedArity(body)).otherwise(() => 0);
+var patNames = (p) => match13(p).with({ _tag: "PBind" }, ({ name }) => [name]).with({ _tag: "PAs" }, ({ pat: inner, name }) => _Array_append8(name, patNames(inner))).with({ _tag: "PTuple" }, ({ elems }) => _Array_flatMap(patNames, elems)).with({ _tag: "PRecord" }, ({ fields }) => _Array_flatMap((f) => patNames(f.pat), fields)).with({ _tag: "PCtor" }, ({ args }) => _Array_flatMap(patNames, args)).with({ _tag: "PArr" }, ({ elems, rest }) => _Array_concat4(_Array_flatMap(patNames, elems), match13(rest).with({ _tag: "Some" }, ({ value: r }) => patNames(r)).with({ _tag: "None" }, () => []).exhaustive())).with({ _tag: "PList" }, ({ elems, rest }) => _Array_concat4(_Array_flatMap(patNames, elems), match13(rest).with({ _tag: "Some" }, ({ value: r }) => patNames(r)).with({ _tag: "None" }, () => []).exhaustive())).with({ _tag: "POr" }, ({ alts }) => _Array_flatMap(patNames, alts)).otherwise(() => []);
+var paramNames = (p) => match13(unspan(p)).with({ _tag: "LPName" }, ({ name }) => [name]).with({ _tag: "LPLabeled" }, ({ name }) => [name]).with({ _tag: "LPTuple" }, ({ names }) => names).with({ _tag: "LPRecord" }, ({ fields }) => fields).otherwise(() => []);
+var innerNames = (e) => match13(e).with({ _tag: "ELambda" }, ({ params, body }) => _Array_concat4(_Array_flatMap(paramNames, params), _Array_concat4(innerNames(body), _Array_flatMap((p) => match13(unspan(p)).with((_v) => {
   const _g = _v;
   return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
-}, ({ defaultValue: { value: d } }) => innerNames(d)).otherwise(() => []), params)))).with({ _tag: "ELetIn" }, ({ name, value, body }) => _Array_append8(name, _Array_concat4(innerNames(value), innerNames(body)))).with({ _tag: "ELetBind" }, ({ param, value, body }) => _Array_concat4(paramNames(param), _Array_concat4(innerNames(value), innerNames(body)))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => _Array_concat4(innerNames(scrutinee), _Array_flatMap((a) => _Array_concat4(patNames(a.pattern), _Array_concat4(match11(a.guard).with({ _tag: "Some" }, ({ value: g }) => innerNames(g)).with({ _tag: "None" }, () => []).exhaustive(), innerNames(a.body))), arms))).with({ _tag: "ELoop" }, ({ params, body }) => _Array_concat4(map5((p) => p.name, params), _Array_concat4(_Array_flatMap((p) => innerNames(p.init), params), innerNames(body)))).with({ _tag: "ECall" }, ({ fn, args }) => _Array_concat4(innerNames(fn), _Array_flatMap(innerNames, args))).with({ _tag: "EPipe" }, ({ left: l, right: r }) => _Array_concat4(innerNames(l), innerNames(r))).with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(innerNames, exprs)).with({ _tag: "ETernary" }, ({ cond: c, thenE: t, elseE: f }) => _Array_concat4(innerNames(c), _Array_concat4(innerNames(t), innerNames(f)))).with({ _tag: "ERecord" }, ({ fields, spread }) => _Array_concat4(match11(spread).with({ _tag: "Some" }, ({ value: s }) => innerNames(s)).with({ _tag: "None" }, () => []).exhaustive(), _Array_flatMap((f) => innerNames(f.value), fields))).with({ _tag: "EField" }, ({ target }) => innerNames(target)).with({ _tag: "ETuple" }, ({ elements: els }) => _Array_flatMap(innerNames, els)).with({ _tag: "EArr" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "EList" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "ESet" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "EMap" }, ({ entries }) => _Array_flatMap((en) => _Array_concat4(innerNames(en.key), innerNames(en.value)), entries)).with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(innerNames, args)).with({ _tag: "EInterp" }, ({ parts }) => _Array_flatMap((p) => match11(p).with({ _tag: "IPLit" }, () => []).with({ _tag: "IPExpr" }, ({ expr: ex }) => innerNames(ex)).exhaustive(), parts)).otherwise(() => []);
-var stmtInnerNames = (s) => match11(s).with({ _tag: "SLet" }, ({ value }) => innerNames(value)).with({ _tag: "SExpr" }, ({ value }) => innerNames(value)).with({ _tag: "SImport" }, ({ names }) => map5((n) => n.name, names)).with({ _tag: "SImportNs" }, ({ alias }) => [alias.name]).otherwise(() => []);
-var topLevelNames = (stmts) => _Array_flatMap((s) => match11(s).with({ _tag: "SLet" }, ({ name }) => [name]).with({ _tag: "SExtern" }, ({ name }) => [name]).otherwise(() => []), stmts);
-var preludeArity = (innerBound) => reduce(_curry12(2, (acc, name) => _Set_has(name, innerBound) ? acc : match11(runtimeArityOf(name)).with({ _tag: "Some" }, ({ value: n }) => _Map_set2(name, n, acc)).with({ _tag: "None" }, () => acc).exhaustive()), new Map, _Map_keys3(preludeJsDefs));
-var withLetArities = _curry12(3, (stmts, innerBound, base) => reduce(_curry12(2, (acc, s) => match11(s).with({ _tag: "SLet" }, ({ name, value }) => _Set_has(name, innerBound) ? _Map_delete(name, acc) : ((n) => n >= 2 ? _Map_set2(name, n, acc) : _Map_delete(name, acc))(collapsedArity(value))).with({ _tag: "SExtern" }, ({ name }) => _Map_delete(name, acc)).otherwise(() => acc)), base, stmts));
-var buildFlatArity = _curry12(2, (stmts, innerBound) => withLetArities(stmts, innerBound, preludeArity(innerBound)));
-var isInert = (e) => match11(e).with({ _tag: "ERef" }, () => true).with({ _tag: "ENum" }, () => true).with({ _tag: "EBool" }, () => true).with({ _tag: "EStr" }, () => true).with({ _tag: "EUnit" }, () => true).with({ _tag: "EField" }, ({ target }) => isInert(target)).otherwise(() => false);
-var mentionsRef = _curry12(2, (e, name) => match11(e).with({ _tag: "ERef" }, ({ name: n }) => eq11(n, name)).with({ _tag: "EField" }, ({ target }) => mentionsRef(target, name)).otherwise(() => false));
-var calleeArity = _curry12(2, (ctx, fn) => match11(fn).with({ _tag: "ERef" }, ({ name }) => _Map_get3(name, ctx.flatArity)).with({ _tag: "EField" }, ({ target, name: member }) => namespaceArity(ctx.shadowed, target, member)).otherwise(() => None10));
-var etaCalleeArity = _curry12(2, (ctx, fn) => match11(fn).with({ _tag: "ERef" }, ({ name }) => _Set_has(name, ctx.shadowed) ? None10 : runtimeArityOf(name)).with({ _tag: "EField" }, ({ target, name: member }) => namespaceArity(ctx.shadowed, target, member)).otherwise(() => None10));
+}, ({ defaultValue: { value: d } }) => innerNames(d)).otherwise(() => []), params)))).with({ _tag: "ELetIn" }, ({ name, value, body }) => _Array_append8(name, _Array_concat4(innerNames(value), innerNames(body)))).with({ _tag: "ELetBind" }, ({ param, value, body }) => _Array_concat4(paramNames(param), _Array_concat4(innerNames(value), innerNames(body)))).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => _Array_concat4(innerNames(scrutinee), _Array_flatMap((a) => _Array_concat4(patNames(a.pattern), _Array_concat4(match13(a.guard).with({ _tag: "Some" }, ({ value: g }) => innerNames(g)).with({ _tag: "None" }, () => []).exhaustive(), innerNames(a.body))), arms))).with({ _tag: "ELoop" }, ({ params, body }) => _Array_concat4(map7((p) => p.name, params), _Array_concat4(_Array_flatMap((p) => innerNames(p.init), params), innerNames(body)))).with({ _tag: "ECall" }, ({ fn, args }) => _Array_concat4(innerNames(fn), _Array_flatMap(innerNames, args))).with({ _tag: "EPipe" }, ({ left: l, right: r }) => _Array_concat4(innerNames(l), innerNames(r))).with({ _tag: "EDo" }, ({ exprs }) => _Array_flatMap(innerNames, exprs)).with({ _tag: "ETernary" }, ({ cond: c, thenE: t, elseE: f }) => _Array_concat4(innerNames(c), _Array_concat4(innerNames(t), innerNames(f)))).with({ _tag: "ERecord" }, ({ fields, spread }) => _Array_concat4(match13(spread).with({ _tag: "Some" }, ({ value: s }) => innerNames(s)).with({ _tag: "None" }, () => []).exhaustive(), _Array_flatMap((f) => innerNames(f.value), fields))).with({ _tag: "EField" }, ({ target }) => innerNames(target)).with({ _tag: "ETuple" }, ({ elements: els }) => _Array_flatMap(innerNames, els)).with({ _tag: "EArr" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "EList" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "ESet" }, ({ elements: els }) => _Array_flatMap((el) => innerNames(seqElemExpr2(el)), els)).with({ _tag: "EMap" }, ({ entries }) => _Array_flatMap((en) => _Array_concat4(innerNames(en.key), innerNames(en.value)), entries)).with({ _tag: "ERecur" }, ({ args }) => _Array_flatMap(innerNames, args)).with({ _tag: "EInterp" }, ({ parts }) => _Array_flatMap((p) => match13(p).with({ _tag: "IPLit" }, () => []).with({ _tag: "IPExpr" }, ({ expr: ex }) => innerNames(ex)).exhaustive(), parts)).otherwise(() => []);
+var stmtInnerNames = (s) => match13(s).with({ _tag: "SLet" }, ({ value }) => innerNames(value)).with({ _tag: "SExpr" }, ({ value }) => innerNames(value)).with({ _tag: "SImport" }, ({ names }) => map7((n) => n.name, names)).with({ _tag: "SImportNs" }, ({ alias }) => [alias.name]).otherwise(() => []);
+var topLevelNames = (stmts) => _Array_flatMap((s) => match13(s).with({ _tag: "SLet" }, ({ name }) => [name]).with({ _tag: "SExtern" }, ({ name }) => [name]).otherwise(() => []), stmts);
+var preludeArity = (innerBound) => reduce(_curry14(2, (acc, name) => _Set_has2(name, innerBound) ? acc : match13(runtimeArityOf(name)).with({ _tag: "Some" }, ({ value: n }) => _Map_set4(name, n, acc)).with({ _tag: "None" }, () => acc).exhaustive()), new Map, _Map_keys3(preludeJsDefs));
+var withLetArities = _curry14(3, (stmts, innerBound, base) => reduce(_curry14(2, (acc, s) => match13(s).with({ _tag: "SLet" }, ({ name, value }) => _Set_has2(name, innerBound) ? _Map_delete(name, acc) : ((n) => n >= 2 ? _Map_set4(name, n, acc) : _Map_delete(name, acc))(collapsedArity(value))).with({ _tag: "SExtern" }, ({ name }) => _Map_delete(name, acc)).otherwise(() => acc)), base, stmts));
+var buildFlatArity = _curry14(2, (stmts, innerBound) => withLetArities(stmts, innerBound, preludeArity(innerBound)));
+var isInert = (e) => match13(e).with({ _tag: "ERef" }, () => true).with({ _tag: "ENum" }, () => true).with({ _tag: "EBool" }, () => true).with({ _tag: "EStr" }, () => true).with({ _tag: "EUnit" }, () => true).with({ _tag: "EField" }, ({ target }) => isInert(target)).otherwise(() => false);
+var mentionsRef = _curry14(2, (e, name) => match13(e).with({ _tag: "ERef" }, ({ name: n }) => eq13(n, name)).with({ _tag: "EField" }, ({ target }) => mentionsRef(target, name)).otherwise(() => false));
+var calleeArity = _curry14(2, (ctx, fn) => match13(fn).with({ _tag: "ERef" }, ({ name }) => _Map_get4(name, ctx.flatArity)).with({ _tag: "EField" }, ({ target, name: member }) => namespaceArity(ctx.shadowed, target, member)).otherwise(() => None12));
+var etaCalleeArity = _curry14(2, (ctx, fn) => match13(fn).with({ _tag: "ERef" }, ({ name }) => _Set_has2(name, ctx.shadowed) ? None12 : runtimeArityOf(name)).with({ _tag: "EField" }, ({ target, name: member }) => namespaceArity(ctx.shadowed, target, member)).otherwise(() => None12));
 var PIPE_PREC = 5;
 var FAST_PIPE_PREC = 21;
 var NEQ_PREC = 8;
 var CONCAT_PREC = 10;
-var binOpInfo = (name) => match11(name).with("or", () => Some10({ symbol: "||", prec: 7 })).with("and", () => Some10({ symbol: "&&", prec: 7 })).with("eq", () => Some10({ symbol: "==", prec: 8 })).with("lt", () => Some10({ symbol: "<", prec: 8 })).with("lte", () => Some10({ symbol: "<=", prec: 8 })).with("gt", () => Some10({ symbol: ">", prec: 8 })).with("gte", () => Some10({ symbol: ">=", prec: 8 })).with("concat", () => Some10({ symbol: "++", prec: 10 })).with("add", () => Some10({ symbol: "+", prec: 10 })).with("sub", () => Some10({ symbol: "-", prec: 10 })).with("mul", () => Some10({ symbol: "*", prec: 20 })).with("div", () => Some10({ symbol: "/", prec: 20 })).with("mod", () => Some10({ symbol: "%", prec: 20 })).otherwise(() => None10);
-var isLambdaExpr = (e) => match11(e).with({ _tag: "ELambda" }, () => true).otherwise(() => false);
-var printsAsLambda = _curry12(2, (cts, e) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => or7(cts.etaSkip, _Option_isNone(etaPartial(cts, params, body)))).otherwise(() => false));
-var isLambdaOrTernary = _curry12(2, (cts, e) => match11(e).with({ _tag: "ETernary" }, () => true).otherwise(() => printsAsLambda(cts, e)));
-var binOpFor = _curry12(2, (fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+var binOpInfo = (name) => match13(name).with("or", () => Some12({ symbol: "||", prec: 7 })).with("and", () => Some12({ symbol: "&&", prec: 7 })).with("eq", () => Some12({ symbol: "==", prec: 8 })).with("lt", () => Some12({ symbol: "<", prec: 8 })).with("lte", () => Some12({ symbol: "<=", prec: 8 })).with("gt", () => Some12({ symbol: ">", prec: 8 })).with("gte", () => Some12({ symbol: ">=", prec: 8 })).with("concat", () => Some12({ symbol: "++", prec: 10 })).with("add", () => Some12({ symbol: "+", prec: 10 })).with("sub", () => Some12({ symbol: "-", prec: 10 })).with("mul", () => Some12({ symbol: "*", prec: 20 })).with("div", () => Some12({ symbol: "/", prec: 20 })).with("mod", () => Some12({ symbol: "%", prec: 20 })).otherwise(() => None12);
+var isLambdaExpr = (e) => match13(e).with({ _tag: "ELambda" }, () => true).otherwise(() => false);
+var printsAsLambda = _curry14(2, (cts, e) => match13(e).with({ _tag: "ELambda" }, ({ params, body }) => or7(cts.etaSkip, _Option_isNone(etaPartial(cts, params, body)))).otherwise(() => false));
+var isLambdaOrTernary = _curry14(2, (cts, e) => match13(e).with({ _tag: "ETernary" }, () => true).otherwise(() => printsAsLambda(cts, e)));
+var binOpFor = _curry14(2, (fn, args) => match13(_tuple7(fn, args)).with((_v) => {
   const _g = _v;
   return _g[0]._tag === "ERef" && _g[1].length === 2;
-}, ([{ name }]) => binOpInfo(name)).otherwise(() => None10));
-var binOpOf = (e) => match11(e).with({ _tag: "ECall" }, ({ fn, args }) => binOpFor(fn, args)).otherwise(() => None10);
-var unaryOpOf = (name) => match11(name).with("not", () => Some10("!")).with("negate", () => Some10("-")).otherwise(() => None10);
-var pipePrecOf = (e) => match11(e).with({ _tag: "EPipe" }, ({ fast }) => Some10(fast ? FAST_PIPE_PREC : PIPE_PREC)).otherwise(() => None10);
-var neqFor = _curry12(2, (fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+}, ([{ name }]) => binOpInfo(name)).otherwise(() => None12));
+var binOpOf = (e) => match13(e).with({ _tag: "ECall" }, ({ fn, args }) => binOpFor(fn, args)).otherwise(() => None12);
+var unaryOpOf = (name) => match13(name).with("not", () => Some12("!")).with("negate", () => Some12("-")).otherwise(() => None12);
+var pipePrecOf = (e) => match13(e).with({ _tag: "EPipe" }, ({ fast }) => Some12(fast ? FAST_PIPE_PREC : PIPE_PREC)).otherwise(() => None12);
+var neqFor = _curry14(2, (fn, args) => match13(_tuple7(fn, args)).with((_v) => {
   const _g = _v;
   return _g[0]._tag === "ERef" && _g[0].name === "not" && _g[1].length === 1 && _g[1][0]._tag === "ECall" && _g[1][0].fn._tag === "ERef" && _g[1][0].fn.name === "eq" && _g[1][0].args.length === 2;
-}, ([, [{ args: [l, r] }]]) => Some10(_tuple6(l, r))).otherwise(() => None10));
-var neqOperands = (e) => match11(e).with({ _tag: "ECall" }, ({ fn, args }) => neqFor(fn, args)).otherwise(() => None10);
-var infixPrec = (e) => match11(pipePrecOf(e)).with({ _tag: "Some" }, ({ value: p }) => Some10(p)).with({ _tag: "None" }, () => match11(binOpOf(e)).with({ _tag: "Some" }, ({ value: info }) => Some10(info.prec)).with({ _tag: "None" }, () => match11(neqOperands(e)).with({ _tag: "Some" }, () => Some10(NEQ_PREC)).with({ _tag: "None" }, () => None10).exhaustive()).exhaustive()).exhaustive();
-var binOperandD = _curry12(4, (cts, e, parentPrec, isRight) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : match11(infixPrec(e)).with({ _tag: "Some" }, ({ value: prec }) => parenIf(isRight ? prec <= parentPrec : prec < parentPrec, exprD(cts, e))).with({ _tag: "None" }, () => exprD(cts, e)).exhaustive());
-var pipeLeftD = _curry12(3, (cts, e, parentPrec) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : match11(infixPrec(e)).with({ _tag: "Some" }, ({ value: prec }) => parenIf(prec < parentPrec, exprD(cts, e))).with({ _tag: "None" }, () => exprD(cts, e)).exhaustive());
-var concatSegmentsFrom = _curry12(2, (e, acc) => match11(e).with((_v) => {
+}, ([, [{ args: [l, r] }]]) => Some12(_tuple7(l, r))).otherwise(() => None12));
+var neqOperands = (e) => match13(e).with({ _tag: "ECall" }, ({ fn, args }) => neqFor(fn, args)).otherwise(() => None12);
+var infixPrec = (e) => match13(pipePrecOf(e)).with({ _tag: "Some" }, ({ value: p }) => Some12(p)).with({ _tag: "None" }, () => match13(binOpOf(e)).with({ _tag: "Some" }, ({ value: info }) => Some12(info.prec)).with({ _tag: "None" }, () => match13(neqOperands(e)).with({ _tag: "Some" }, () => Some12(NEQ_PREC)).with({ _tag: "None" }, () => None12).exhaustive()).exhaustive()).exhaustive();
+var binOperandD = _curry14(4, (cts, e, parentPrec, isRight) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : match13(infixPrec(e)).with({ _tag: "Some" }, ({ value: prec }) => parenIf(isRight ? prec <= parentPrec : prec < parentPrec, exprD(cts, e))).with({ _tag: "None" }, () => exprD(cts, e)).exhaustive());
+var pipeLeftD = _curry14(3, (cts, e, parentPrec) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : match13(infixPrec(e)).with({ _tag: "Some" }, ({ value: prec }) => parenIf(prec < parentPrec, exprD(cts, e))).with({ _tag: "None" }, () => exprD(cts, e)).exhaustive());
+var concatSegmentsFrom = _curry14(2, (e, acc) => match13(e).with((_v) => {
   const _g = _v;
   return _g._tag === "ECall" && _g.fn._tag === "ERef" && _g.fn.name === "concat" && _g.args.length === 2;
-}, ({ args: [l, r] }) => concatSegmentsFrom(l, _Array_prepend3(r, acc))).otherwise(() => _Array_prepend3(e, acc)));
-var concatD = _curry12(3, (cts, l, r) => match11(concatSegmentsFrom(l, [r])).with((_v) => {
+}, ({ args: [l, r] }) => concatSegmentsFrom(l, _Array_prepend5(r, acc))).otherwise(() => _Array_prepend5(e, acc)));
+var concatD = _curry14(3, (cts, l, r) => match13(concatSegmentsFrom(l, [r])).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => txt("")).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([head, ...rest]) => group(cat([binOperandD(cts, head, CONCAT_PREC, false), indent(cat(map5((s) => cat([line, txt("++ "), binOperandD(cts, s, CONCAT_PREC, true)]), rest)))]))).otherwise(() => {
+}, ([head, ...rest]) => group(cat([binOperandD(cts, head, CONCAT_PREC, false), indent(cat(map7((s) => cat([line, txt("++ "), binOperandD(cts, s, CONCAT_PREC, true)]), rest)))]))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var binaryD = _curry12(3, (cts, fn, args) => match11(neqFor(fn, args)).with((_v) => {
+var binaryD = _curry14(3, (cts, fn, args) => match13(neqFor(fn, args)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some";
-}, ({ value: [l, r] }) => Some10(group(cat([binOperandD(cts, l, NEQ_PREC, false), txt(" != "), binOperandD(cts, r, NEQ_PREC, true)])))).with({ _tag: "None" }, () => match11(binOpFor(fn, args)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: info }) => match11(args).with((_v) => {
+}, ({ value: [l, r] }) => Some12(group(cat([binOperandD(cts, l, NEQ_PREC, false), txt(" != "), binOperandD(cts, r, NEQ_PREC, true)])))).with({ _tag: "None" }, () => match13(binOpFor(fn, args)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: info }) => match13(args).with((_v) => {
   const _g = _v;
   return _g.length === 2;
-}, ([l, r]) => eq11(info.symbol, "++") ? Some10(concatD(cts, l, r)) : Some10(group(cat([binOperandD(cts, l, info.prec, false), txt(` ${info.symbol} `), binOperandD(cts, r, info.prec, true)])))).otherwise(() => None10)).exhaustive()).exhaustive());
-var unaryD = _curry12(3, (cts, fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+}, ([l, r]) => eq13(info.symbol, "++") ? Some12(concatD(cts, l, r)) : Some12(group(cat([binOperandD(cts, l, info.prec, false), txt(` ${info.symbol} `), binOperandD(cts, r, info.prec, true)])))).otherwise(() => None12)).exhaustive()).exhaustive());
+var unaryD = _curry14(3, (cts, fn, args) => match13(_tuple7(fn, args)).with((_v) => {
   const _g = _v;
   return _g[0]._tag === "ERef" && _g[1].length === 1;
-}, ([{ name }, [operand]]) => match11(unaryOpOf(name)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: symbol }) => ((forced) => Some10(cat([txt(symbol), parenIf(forced, exprD(cts, operand))])))(or7(or7(loosePrefix(cts, operand), _Option_isSome2(binOpOf(operand))), _Option_isSome2(neqOperands(operand))))).exhaustive()).otherwise(() => None10));
-var etaPartial = _curry12(3, (ctx, params, body) => match11(params).with((_v) => {
+}, ([{ name }, [operand]]) => match13(unaryOpOf(name)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: symbol }) => ((forced) => Some12(cat([txt(symbol), parenIf(forced, exprD(cts, operand))])))(or7(or7(loosePrefix(cts, operand), _Option_isSome2(binOpOf(operand))), _Option_isSome2(neqOperands(operand))))).exhaustive()).otherwise(() => None12));
+var etaPartial = _curry14(3, (ctx, params, body) => match13(params).with((_v) => {
   const _g = _v;
   return _g.length === 1;
-}, ([only]) => match11(unspan(only)).with((_v) => {
+}, ([only]) => match13(unspan(only)).with((_v) => {
   const _g = _v;
   return _g._tag === "LPName" && _g.annot._tag === "None";
-}, ({ name }) => _Str_startsWith3("$", name) ? None10 : match11(body).with({ _tag: "ECall" }, () => ((flat) => match11(flat).with((_v) => {
+}, ({ name }) => _Str_startsWith3("$", name) ? None12 : match13(body).with({ _tag: "ECall" }, () => ((flat) => match13(flat).with((_v) => {
   const _g = _v;
   return _g._tag === "ECall" && _g.origin._tag === "None";
-}, ({ fn, args, span: sp }) => ((n) => eq11(n, 0) ? None10 : match11(_Array_get8(n - 1, args)).with((_v) => {
+}, ({ fn, args, span: sp }) => ((n) => eq13(n, 0) ? None12 : match13(_Array_get9(n - 1, args)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "ERef";
-}, ({ value: { name: lastName } }) => not7(eq11(lastName, name)) ? None10 : ((prefix) => and8(and8(and8(isInert(fn), allInert(prefix)), not7(mentionsRef(fn, name))), not7(anyMentions(prefix, name))) ? match11(etaCalleeArity(ctx, fn)).with({ _tag: "Some" }, ({ value: arity }) => eq11(n, arity) ? Some10(ECall(fn, prefix, None10, sp)) : None10).with({ _tag: "None" }, () => None10).exhaustive() : None10)(_Array_take(n - 1, args))).otherwise(() => None10))(length9(args))).otherwise(() => None10))(match11(flattenCallSpine(ctx, body)).with({ _tag: "Some" }, ({ value: f }) => f).with({ _tag: "None" }, () => body).exhaustive())).otherwise(() => None10)).otherwise(() => None10)).otherwise(() => None10));
-var allInert = (args) => eq11(length9(filter((a) => not7(isInert(a)), args)), 0);
-var anyMentions = _curry12(2, (args, name) => length9(filter((a) => mentionsRef(a, name), args)) > 0);
-var spineGroups = _curry12(2, (e, acc) => match11(e).with((_v) => {
+}, ({ value: { name: lastName } }) => not8(eq13(lastName, name)) ? None12 : ((prefix) => and9(and9(and9(isInert(fn), allInert(prefix)), not8(mentionsRef(fn, name))), not8(anyMentions(prefix, name))) ? match13(etaCalleeArity(ctx, fn)).with({ _tag: "Some" }, ({ value: arity }) => eq13(n, arity) ? Some12(ECall(fn, prefix, None12, sp)) : None12).with({ _tag: "None" }, () => None12).exhaustive() : None12)(_Array_take(n - 1, args))).otherwise(() => None12))(length10(args))).otherwise(() => None12))(match13(flattenCallSpine(ctx, body)).with({ _tag: "Some" }, ({ value: f }) => f).with({ _tag: "None" }, () => body).exhaustive())).otherwise(() => None12)).otherwise(() => None12)).otherwise(() => None12));
+var allInert = (args) => eq13(length10(filter2((a) => not8(isInert(a)), args)), 0);
+var anyMentions = _curry14(2, (args, name) => length10(filter2((a) => mentionsRef(a, name), args)) > 0);
+var spineGroups = _curry14(2, (e, acc) => match13(e).with((_v) => {
   const _g = _v;
   return _g._tag === "ECall" && _g.origin._tag === "Some";
-}, () => None10).with((_v) => {
+}, () => None12).with((_v) => {
   const _g = _v;
   return _g._tag === "ECall" && _g.origin._tag === "None";
-}, ({ fn, args }) => spineGroups(fn, _Array_prepend3(args, acc))).otherwise(() => Some10(_tuple6(e, acc))));
-var flattenCallSpine = _curry12(2, (ctx, e) => match11(spineGroups(e, [])).with({ _tag: "None" }, () => None10).with((_v) => {
+}, ({ fn, args }) => spineGroups(fn, _Array_prepend5(args, acc))).otherwise(() => Some12(_tuple7(e, acc))));
+var flattenCallSpine = _curry14(2, (ctx, e) => match13(spineGroups(e, [])).with({ _tag: "None" }, () => None12).with((_v) => {
   const _g = _v;
   return _g._tag === "Some";
-}, ({ value: [head, groups] }) => (([callee, allGroups]) => or7(length9(allGroups) < 2, anyEmptyGroup(allGroups)) ? None10 : match11(calleeArity(ctx, callee)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: arity }) => ((args) => or7(length9(args) > arity, anyUnit(args)) ? None10 : Some10(ECall(callee, args, None10, exprSpan2(e))))(_Array_flatMap((g) => g, allGroups))).exhaustive())(match11(head).with({ _tag: "ELambda" }, ({ params, body: lbody }) => match11(etaPartial(ctx, params, lbody)).with((_v) => {
+}, ({ value: [head, groups] }) => (([callee, allGroups]) => or7(length10(allGroups) < 2, anyEmptyGroup(allGroups)) ? None12 : match13(calleeArity(ctx, callee)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: arity }) => ((args) => or7(length10(args) > arity, anyUnit(args)) ? None12 : Some12(ECall(callee, args, None12, exprSpan2(e))))(_Array_flatMap((g) => g, allGroups))).exhaustive())(match13(head).with({ _tag: "ELambda" }, ({ params, body: lbody }) => match13(etaPartial(ctx, params, lbody)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "ECall";
-}, ({ value: { fn: efn, args: eargs } }) => _tuple6(efn, _Array_prepend3(eargs, groups))).otherwise(() => _tuple6(head, groups))).otherwise(() => _tuple6(head, groups)))).exhaustive());
-var anyEmptyGroup = (groups) => length9(filter((g) => eq11(length9(g), 0), groups)) > 0;
-var anyUnit = (args) => length9(filter((a) => match11(a).with({ _tag: "EUnit" }, () => true).otherwise(() => false), args)) > 0;
-var isSectionParam = (p) => match11(unspan(p)).with({ _tag: "LPName", name: "$s" }, () => true).otherwise(() => false);
-var isRef2 = _curry12(2, (e, name) => match11(e).with({ _tag: "ERef" }, ({ name: n }) => eq11(n, name)).otherwise(() => false));
-var sectionParts = (body) => match11(neqOperands(body)).with((_v) => {
+}, ({ value: { fn: efn, args: eargs } }) => _tuple7(efn, _Array_prepend5(eargs, groups))).otherwise(() => _tuple7(head, groups))).otherwise(() => _tuple7(head, groups)))).exhaustive());
+var anyEmptyGroup = (groups) => length10(filter2((g) => eq13(length10(g), 0), groups)) > 0;
+var anyUnit = (args) => length10(filter2((a) => match13(a).with({ _tag: "EUnit" }, () => true).otherwise(() => false), args)) > 0;
+var isSectionParam = (p) => match13(unspan(p)).with({ _tag: "LPName", name: "$s" }, () => true).otherwise(() => false);
+var isRef2 = _curry14(2, (e, name) => match13(e).with({ _tag: "ERef" }, ({ name: n }) => eq13(n, name)).otherwise(() => false));
+var sectionParts = (body) => match13(neqOperands(body)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some";
-}, ({ value: [l, r] }) => Some10(_tuple6({ symbol: "!=", prec: NEQ_PREC }, l, r))).with({ _tag: "None" }, () => match11(binOpOf(body)).with({ _tag: "None" }, () => None10).with({ _tag: "Some" }, ({ value: info }) => match11(body).with((_v) => {
+}, ({ value: [l, r] }) => Some12(_tuple7({ symbol: "!=", prec: NEQ_PREC }, l, r))).with({ _tag: "None" }, () => match13(binOpOf(body)).with({ _tag: "None" }, () => None12).with({ _tag: "Some" }, ({ value: info }) => match13(body).with((_v) => {
   const _g = _v;
   return _g._tag === "ECall" && _g.args.length === 2;
-}, ({ args: [l, r] }) => Some10(_tuple6(info, l, r))).otherwise(() => None10)).exhaustive()).exhaustive();
-var sectionOf = _curry12(3, (cts, params, body) => match11(params).with((_v) => {
+}, ({ args: [l, r] }) => Some12(_tuple7(info, l, r))).otherwise(() => None12)).exhaustive()).exhaustive();
+var sectionOf = _curry14(3, (cts, params, body) => match13(params).with((_v) => {
   const _g = _v;
   return _g.length === 1;
-}, ([only]) => isSectionParam(only) ? match11(sectionParts(body)).with({ _tag: "None" }, () => None10).with((_v) => {
+}, ([only]) => isSectionParam(only) ? match13(sectionParts(body)).with({ _tag: "None" }, () => None12).with((_v) => {
   const _g = _v;
   return _g._tag === "Some";
-}, ({ value: [info, l, r] }) => ((lIsParam) => ((rIsParam) => eq11(lIsParam, rIsParam) ? None10 : lIsParam ? Some10(cat([txt(`(${info.symbol} `), binOperandD(cts, r, info.prec, true), txt(")")])) : Some10(cat([txt("("), binOperandD(cts, l, info.prec, false), txt(` ${info.symbol})`)])))(isRef2(r, "$s")))(isRef2(l, "$s"))).exhaustive() : None10).otherwise(() => None10));
-var composeParts = _curry12(2, (params, body) => match11(_tuple6(params, body)).with((_v) => {
+}, ({ value: [info, l, r] }) => ((lIsParam) => ((rIsParam) => eq13(lIsParam, rIsParam) ? None12 : lIsParam ? Some12(cat([txt(`(${info.symbol} `), binOperandD(cts, r, info.prec, true), txt(")")])) : Some12(cat([txt("("), binOperandD(cts, l, info.prec, false), txt(` ${info.symbol})`)])))(isRef2(r, "$s")))(isRef2(l, "$s"))).exhaustive() : None12).otherwise(() => None12));
+var composeParts = _curry14(2, (params, body) => match13(_tuple7(params, body)).with((_v) => {
   const _g = _v;
   return _g[0].length === 1 && _g[1]._tag === "ECall" && _g[1].args.length === 1 && _g[1].args[0]._tag === "ECall" && _g[1].args[0].args.length === 1;
-}, ([[p], { fn: right, args: [{ fn: left, args: [inner] }] }]) => match11(unspan(p)).with({ _tag: "LPName", name: "$x" }, () => isRef2(inner, "$x") ? Some10(_tuple6(left, right)) : None10).otherwise(() => None10)).otherwise(() => None10));
-var composeSegmentsFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "ELambda" }, ({ params, body }) => match11(composeParts(params, body)).with((_v) => {
+}, ([[p], { fn: right, args: [{ fn: left, args: [inner] }] }]) => match13(unspan(p)).with({ _tag: "LPName", name: "$x" }, () => isRef2(inner, "$x") ? Some12(_tuple7(left, right)) : None12).otherwise(() => None12)).otherwise(() => None12));
+var composeSegmentsFrom = _curry14(2, (e, acc) => match13(e).with({ _tag: "ELambda" }, ({ params, body }) => match13(composeParts(params, body)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some";
-}, ({ value: [left, right] }) => composeSegmentsFrom(left, _Array_prepend3(right, acc))).with({ _tag: "None" }, () => _Array_prepend3(e, acc)).exhaustive()).otherwise(() => _Array_prepend3(e, acc)));
-var destructureLetD = _curry12(3, (cts, fn, args) => match11(_tuple6(fn, args)).with((_v) => {
+}, ({ value: [left, right] }) => composeSegmentsFrom(left, _Array_prepend5(right, acc))).with({ _tag: "None" }, () => _Array_prepend5(e, acc)).exhaustive()).otherwise(() => _Array_prepend5(e, acc)));
+var destructureLetD = _curry14(3, (cts, fn, args) => match13(_tuple7(fn, args)).with((_v) => {
   const _g = _v;
   return _g[0]._tag === "ELambda" && _g[0].params.length === 1 && _g[1].length === 1;
-}, ([{ params: [p], body: lbody }, [value]]) => match11(unspan(p)).with({ _tag: "LPName" }, () => None10).otherwise(() => Some10(letLikeD(cts, `let ${paramText(cts, p)}`, value, lbody)))).otherwise(() => None10));
-var refoldCall = _curry12(3, (cts, fn, args) => match11(destructureLetD(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => Some10(d)).with({ _tag: "None" }, () => match11(binaryD(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => Some10(d)).with({ _tag: "None" }, () => unaryD(cts, fn, args)).exhaustive()).exhaustive());
-var labeledFieldD = _curry12(2, (cts, f) => match11(f.value).with((_v) => {
+}, ([{ params: [p], body: lbody }, [value]]) => match13(unspan(p)).with({ _tag: "LPName" }, () => None12).otherwise(() => Some12(letLikeD(cts, `let ${paramText(cts, p)}`, value, lbody)))).otherwise(() => None12));
+var refoldCall = _curry14(3, (cts, fn, args) => match13(destructureLetD(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => Some12(d)).with({ _tag: "None" }, () => match13(binaryD(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => Some12(d)).with({ _tag: "None" }, () => unaryD(cts, fn, args)).exhaustive()).exhaustive());
+var labeledFieldD = _curry14(2, (cts, f) => match13(f.value).with((_v) => {
   const _g = _v;
-  return _g._tag === "ERef" && (({ name }) => eq11(name, f.name))(_g);
+  return _g._tag === "ERef" && (({ name }) => eq13(name, f.name))(_g);
 }, ({ name }) => txt(`~${f.name}`)).otherwise(() => cat([txt(`~${f.name}=`), exprD(cts, f.value)])));
-var callArgDocs = _curry12(3, (cts, args, origin) => match11(origin).with({ _tag: "Some", value: "labeled" }, () => match11(_Array_get8(length9(args) - 1, args)).with((_v) => {
+var callArgDocs = _curry14(3, (cts, args, origin) => match13(origin).with({ _tag: "Some", value: "labeled" }, () => match13(_Array_get9(length10(args) - 1, args)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "ERecord" && _g.value.spread._tag === "None";
-}, ({ value: { fields } }) => _Array_concat4(map5((x) => exprD(cts, x), _Array_take(length9(args) - 1, args)), map5((f) => labeledFieldD(cts, f), fields))).otherwise(() => map5((x) => exprD(cts, x), args))).otherwise(() => map5((x) => exprD(cts, x), args)));
-var labeledParamText = _curry12(5, (cts, name, annot, optional, defaultValue) => {
-  const ann = match11(annot).with({ _tag: "Some" }, ({ value: te }) => `: ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive();
-  const def = match11(defaultValue).with({ _tag: "Some" }, ({ value: d }) => ` = ${flat(exprD(cts, d))}`).with({ _tag: "None" }, () => "").exhaustive();
+}, ({ value: { fields } }) => _Array_concat4(map7((x) => exprD(cts, x), _Array_take(length10(args) - 1, args)), map7((f) => labeledFieldD(cts, f), fields))).otherwise(() => map7((x) => exprD(cts, x), args))).otherwise(() => map7((x) => exprD(cts, x), args)));
+var labeledParamText = _curry14(5, (cts, name, annot, optional, defaultValue) => {
+  const ann = match13(annot).with({ _tag: "Some" }, ({ value: te }) => `: ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive();
+  const def = match13(defaultValue).with({ _tag: "Some" }, ({ value: d }) => ` = ${flat(exprD(cts, d))}`).with({ _tag: "None" }, () => "").exhaustive();
   return `~${name}${optional ? "?" : ""}${ann}${def}`;
 });
-var paramText = _curry12(2, (cts, p) => match11(unspan(p)).with({ _tag: "LPName" }, ({ name, annot }) => match11(annot).with({ _tag: "Some" }, ({ value: te }) => `${name}: ${showTypeExpr(te)}`).with({ _tag: "None" }, () => name).exhaustive()).with({ _tag: "LPTuple" }, ({ names }) => `(${_Str_join5(", ", names)})`).with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join5(", ", fields)} }`).with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) => labeledParamText(cts, name, annot, optional, defaultValue)).with({ _tag: "LPSpanned" }, () => "").exhaustive());
-var paramsText = _curry12(2, (cts, ps) => match11(ps).with((_v) => {
+var paramText = _curry14(2, (cts, p) => match13(unspan(p)).with({ _tag: "LPName" }, ({ name, annot }) => match13(annot).with({ _tag: "Some" }, ({ value: te }) => `${name}: ${showTypeExpr(te)}`).with({ _tag: "None" }, () => name).exhaustive()).with({ _tag: "LPTuple" }, ({ names }) => `(${_Str_join5(", ", names)})`).with({ _tag: "LPRecord" }, ({ fields }) => `{ ${_Str_join5(", ", fields)} }`).with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) => labeledParamText(cts, name, annot, optional, defaultValue)).with({ _tag: "LPSpanned" }, () => "").exhaustive());
+var paramsText = _curry14(2, (cts, ps) => match13(ps).with((_v) => {
   const _g = _v;
   return _g.length === 1;
-}, ([only]) => match11(unspan(only)).with((_v) => {
+}, ([only]) => match13(unspan(only)).with((_v) => {
   const _g = _v;
   return _g._tag === "LPName" && _g.annot._tag === "None";
 }, ({ name }) => name).otherwise(() => `(${commaJoin((p) => paramText(cts, p), ps)})`)).otherwise(() => `(${commaJoin((p) => paramText(cts, p), ps)})`));
 var quoted = (body) => concat(concat('"', body), '"');
-var interpText = _curry12(2, (cts, parts) => {
+var interpText = _curry14(2, (cts, parts) => {
   const hole = (ex) => concat(concat(concat("$", "{"), flat(exprD(cts, ex))), "}");
-  return quoted(_Str_join5("", map5((p) => match11(p).with({ _tag: "IPLit" }, ({ value }) => escStrBody(value)).with({ _tag: "IPExpr" }, ({ expr: ex }) => hole(ex)).exhaustive(), parts)));
+  return quoted(_Str_join5("", map7((p) => match13(p).with({ _tag: "IPLit" }, ({ value }) => escStrBody(value)).with({ _tag: "IPExpr" }, ({ expr: ex }) => hole(ex)).exhaustive(), parts)));
 });
-var discardedFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "ELetIn", name: "_" }, ({ value, body }) => discardedFrom(body, _Array_append8(value, acc))).otherwise(() => eq11(length9(acc), 0) ? None10 : Some10(_Array_append8(e, acc))));
+var discardedFrom = _curry14(2, (e, acc) => match13(e).with({ _tag: "ELetIn", name: "_" }, ({ value, body }) => discardedFrom(body, _Array_append8(value, acc))).otherwise(() => eq13(length10(acc), 0) ? None12 : Some12(_Array_append8(e, acc))));
 var discardedLetExprs = (e) => discardedFrom(e, []);
-var doBlockD = _curry12(2, (cts, exprs) => cat([txt("{"), indent(cat([hardline, join(cat([txt(";"), hardline]), map5((x) => exprD(cts, x), exprs))])), hardline, txt("}")]));
-var doD = _curry12(2, (cts, exprs) => cat([txt("do "), doBlockD(cts, exprs)]));
-var lambdaD = _curry12(3, (cts, params, body) => match11(sectionOf(cts, params, body)).with({ _tag: "Some" }, ({ value: section }) => section).with({ _tag: "None" }, () => match11(cts.etaSkip ? None10 : etaPartial(cts, params, body)).with({ _tag: "Some" }, ({ value: eta }) => exprD(cts, eta)).with({ _tag: "None" }, () => match11(composeParts(params, body)).with({ _tag: "Some" }, () => match11(composeSegmentsFrom(ELambda(params, body, { start: 0, end: 0 }), [])).with((_v) => {
+var doBlockD = _curry14(2, (cts, exprs) => cat([txt("{"), indent(cat([hardline, join(cat([txt(";"), hardline]), map7((x) => exprD(cts, x), exprs))])), hardline, txt("}")]));
+var doD = _curry14(2, (cts, exprs) => cat([txt("do "), doBlockD(cts, exprs)]));
+var lambdaD = _curry14(3, (cts, params, body) => match13(sectionOf(cts, params, body)).with({ _tag: "Some" }, ({ value: section }) => section).with({ _tag: "None" }, () => match13(cts.etaSkip ? None12 : etaPartial(cts, params, body)).with({ _tag: "Some" }, ({ value: eta }) => exprD(cts, eta)).with({ _tag: "None" }, () => match13(composeParts(params, body)).with({ _tag: "Some" }, () => match13(composeSegmentsFrom(ELambda(params, body, { start: 0, end: 0 }), [])).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => txt("")).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([head, ...rest]) => group(cat([operandD(cts, head), indent(cat(map5((s) => cat([line, txt(">> "), operandD(cts, s)]), rest)))]))).otherwise(() => {
+}, ([head, ...rest]) => group(cat([operandD(cts, head), indent(cat(map7((s) => cat([line, txt(">> "), operandD(cts, s)]), rest)))]))).otherwise(() => {
   throw new Error("non-exhaustive match");
 })).with({ _tag: "None" }, () => plainLambdaD({ ...cts, etaSkip: isLambdaExpr(body) }, params, body)).exhaustive()).exhaustive()).exhaustive());
-var plainLambdaD = _curry12(3, (cts, params, body) => {
+var plainLambdaD = _curry14(3, (cts, params, body) => {
   const head = txt(`${paramsText(cts, params)} =>`);
-  return match11(body).with({ _tag: "EDo" }, ({ exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)])).otherwise(() => match11(discardedLetExprs(body)).with({ _tag: "Some" }, ({ value: exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)])).with({ _tag: "None" }, () => match11(body).with((_v) => {
+  return match13(body).with({ _tag: "EDo" }, ({ exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)])).otherwise(() => match13(discardedLetExprs(body)).with({ _tag: "Some" }, ({ value: exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)])).with({ _tag: "None" }, () => match13(body).with((_v) => {
     const _g = _v;
-    return _g._tag === "EMatch" && not7(hasLead(cts, EXPR, exprSpan2(body)));
+    return _g._tag === "EMatch" && not8(hasLead(cts, EXPR, exprSpan2(body)));
   }, () => cat([head, txt(" "), exprD(cts, body)])).otherwise(() => group(cat([head, indent(cat([line, exprD(cts, body)]))])))).exhaustive());
 });
-var condD = _curry12(2, (cts, c) => match11(c).with({ _tag: "ETernary" }, () => cat([txt("("), exprD(cts, c), txt(")")])).otherwise(() => exprD(cts, c)));
-var branchD = _curry12(3, (cts, marker, e) => hasLead(cts, EXPR, exprSpan2(e)) ? cat([txt(marker), indent(cat([hardline, exprD(cts, e)]))]) : cat([txt(`${marker} `), exprD(cts, e)]));
-var ternaryArmsFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => ternaryArmsFrom(elseE, _Array_append8({ cond, thenE }, acc))).otherwise(() => _tuple6(acc, e)));
-var ternaryRestParts = _curry12(3, (cts, arms, i) => match11(_Array_get8(i, arms)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: a }) => [line, hasLead(cts, EXPR, exprSpan2(a.cond)) ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))]) : cat([txt(": "), condD(cts, a.cond)]), line, branchD(cts, "?", a.thenE), ...ternaryRestParts(cts, arms, i + 1)]).exhaustive());
-var ternaryD = _curry12(2, (cts, e) => (([arms, elseE]) => match11(_Array_get8(0, arms)).with({ _tag: "None" }, () => txt("")).with({ _tag: "Some" }, ({ value: first }) => group(cat([condD(cts, first.cond), indent(cat([line, branchD(cts, "?", first.thenE), ...ternaryRestParts(cts, arms, 1), line, branchD(cts, ":", elseE)]))]))).exhaustive())(ternaryArmsFrom(e, [])));
-var printsAsLet = (e) => match11(e).with({ _tag: "ELetIn" }, () => _Option_isNone(discardedLetExprs(e))).with({ _tag: "ELetBind" }, () => true).with((_v) => {
+var condD = _curry14(2, (cts, c) => match13(c).with({ _tag: "ETernary" }, () => cat([txt("("), exprD(cts, c), txt(")")])).otherwise(() => exprD(cts, c)));
+var branchD = _curry14(3, (cts, marker, e) => hasLead(cts, EXPR, exprSpan2(e)) ? cat([txt(marker), indent(cat([hardline, exprD(cts, e)]))]) : cat([txt(`${marker} `), exprD(cts, e)]));
+var ternaryArmsFrom = _curry14(2, (e, acc) => match13(e).with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) => ternaryArmsFrom(elseE, _Array_append8({ cond, thenE }, acc))).otherwise(() => _tuple7(acc, e)));
+var ternaryRestParts = _curry14(3, (cts, arms, i) => match13(_Array_get9(i, arms)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: a }) => [line, hasLead(cts, EXPR, exprSpan2(a.cond)) ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))]) : cat([txt(": "), condD(cts, a.cond)]), line, branchD(cts, "?", a.thenE), ...ternaryRestParts(cts, arms, i + 1)]).exhaustive());
+var ternaryD = _curry14(2, (cts, e) => (([arms, elseE]) => match13(_Array_get9(0, arms)).with({ _tag: "None" }, () => txt("")).with({ _tag: "Some" }, ({ value: first }) => group(cat([condD(cts, first.cond), indent(cat([line, branchD(cts, "?", first.thenE), ...ternaryRestParts(cts, arms, 1), line, branchD(cts, ":", elseE)]))]))).exhaustive())(ternaryArmsFrom(e, [])));
+var printsAsLet = (e) => match13(e).with({ _tag: "ELetIn" }, () => _Option_isNone(discardedLetExprs(e))).with({ _tag: "ELetBind" }, () => true).with((_v) => {
   const _g = _v;
   return _g._tag === "ECall" && _g.fn._tag === "ELambda" && _g.fn.params.length === 1 && _g.args.length === 1;
-}, ({ fn: { params: [p] } }) => match11(unspan(p)).with({ _tag: "LPName" }, () => false).otherwise(() => true)).otherwise(() => false);
-var letLikeD = _curry12(4, (cts, head, value, body) => {
+}, ({ fn: { params: [p] } }) => match13(unspan(p)).with({ _tag: "LPName" }, () => false).otherwise(() => true)).otherwise(() => false);
+var letLikeD = _curry14(4, (cts, head, value, body) => {
   const cont = printsAsLet(body) ? cat([line, exprD(cts, body)]) : indent(cat([line, exprD(cts, body)]));
   return group(cat([txt(`${head} = `), ...leadingDocs(cts, EXPR, exprSpan2(value)), exprRaw(cts, value), txt(" in"), ...trailingDocs(cts, EXPR, exprSpan2(value)), cont]));
 });
-var recordFieldD = _curry12(2, (cts, f) => match11(f.value).with((_v) => {
+var recordFieldD = _curry14(2, (cts, f) => match13(f.value).with((_v) => {
   const _g = _v;
-  return _g._tag === "ERef" && (({ name }) => eq11(name, f.name))(_g);
+  return _g._tag === "ERef" && (({ name }) => eq13(name, f.name))(_g);
 }, ({ name }) => exprD(cts, f.value)).otherwise(() => cat([txt(`${f.name}: `), exprD(cts, f.value)])));
-var recordD = _curry12(3, (cts, fields, spread) => {
-  const fieldDocs = map5((f) => recordFieldD(cts, f), fields);
-  return braced("{", "}", match11(spread).with({ _tag: "Some" }, ({ value: s }) => _Array_prepend3(cat([txt("..."), exprD(cts, s)]), fieldDocs)).with({ _tag: "None" }, () => fieldDocs).exhaustive());
+var recordD = _curry14(3, (cts, fields, spread) => {
+  const fieldDocs = map7((f) => recordFieldD(cts, f), fields);
+  return braced("{", "}", match13(spread).with({ _tag: "Some" }, ({ value: s }) => _Array_prepend5(cat([txt("..."), exprD(cts, s)]), fieldDocs)).with({ _tag: "None" }, () => fieldDocs).exhaustive());
 });
-var seqElemD = _curry12(2, (cts, el) => match11(el).with({ _tag: "SEExpr" }, ({ expr: e }) => exprD(cts, e)).with({ _tag: "SESpread" }, ({ expr: e }) => cat([txt("..."), exprD(cts, e)])).exhaustive());
-var pipeSegmentsFrom = _curry12(2, (e, acc) => match11(e).with({ _tag: "EPipe", fast: false }, ({ left, right }) => pipeSegmentsFrom(left, _Array_prepend3(right, acc))).otherwise(() => _Array_prepend3(e, acc)));
-var matchArmD = _curry12(2, (cts, a) => {
-  const guard = match11(a.guard).with({ _tag: "Some" }, ({ value: g }) => ` when ${flat(exprD(cts, g))}`).with({ _tag: "None" }, () => "").exhaustive();
+var seqElemD = _curry14(2, (cts, el) => match13(el).with({ _tag: "SEExpr" }, ({ expr: e }) => exprD(cts, e)).with({ _tag: "SESpread" }, ({ expr: e }) => cat([txt("..."), exprD(cts, e)])).exhaustive());
+var pipeSegmentsFrom = _curry14(2, (e, acc) => match13(e).with({ _tag: "EPipe", fast: false }, ({ left, right }) => pipeSegmentsFrom(left, _Array_prepend5(right, acc))).otherwise(() => _Array_prepend5(e, acc)));
+var matchArmD = _curry14(2, (cts, a) => {
+  const guard = match13(a.guard).with({ _tag: "Some" }, ({ value: g }) => ` when ${flat(exprD(cts, g))}`).with({ _tag: "None" }, () => "").exhaustive();
   const head = txt(`| ${pattern(a.pattern)}${guard} =>`);
   return hasLead(cts, EXPR, exprSpan2(a.body)) ? cat([head, indent(cat([hardline, exprD(cts, a.body)]))]) : cat([head, txt(" "), indent(exprD(cts, a.body))]);
 });
-var matchD = _curry12(3, (cts, scrutinee, arms) => group(cat([txt(`switch ${flat(exprD(cts, scrutinee))} {`), indent(cat(map5((a) => cat([line, matchArmD(cts, a)]), arms))), line, txt("}")])));
-var loopD = _curry12(3, (cts, params, body) => group(cat([txt("loop ("), join(txt(", "), map5((p) => cat([txt(`${p.name} = `), exprD(cts, p.init)]), params)), txt(") {"), indent(cat([line, exprD(cts, body)])), line, txt("}")])));
-var lastArgHugs = (body) => match11(body).with({ _tag: "EMatch" }, () => true).with({ _tag: "ELoop" }, () => true).with({ _tag: "EDo" }, () => true).otherwise(() => _Option_isSome2(discardedLetExprs(body)));
-var callArgsD = _curry12(5, (cts, fn, args, origin, asCallee) => match11(refoldCall(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => d).with({ _tag: "None" }, () => match11(flattenCallSpine(cts, ECall(fn, args, origin, { start: 0, end: 0 }))).with((_v) => {
+var matchD = _curry14(3, (cts, scrutinee, arms) => group(cat([txt(`switch ${flat(exprD(cts, scrutinee))} {`), indent(cat(map7((a) => cat([line, matchArmD(cts, a)]), arms))), line, txt("}")])));
+var loopD = _curry14(3, (cts, params, body) => group(cat([txt("loop ("), join(txt(", "), map7((p) => cat([txt(`${p.name} = `), exprD(cts, p.init)]), params)), txt(") {"), indent(cat([line, exprD(cts, body)])), line, txt("}")])));
+var lastArgHugs = (body) => match13(body).with({ _tag: "EMatch" }, () => true).with({ _tag: "ELoop" }, () => true).with({ _tag: "EDo" }, () => true).otherwise(() => _Option_isSome2(discardedLetExprs(body)));
+var callArgsD = _curry14(5, (cts, fn, args, origin, asCallee) => match13(refoldCall(cts, fn, args)).with({ _tag: "Some" }, ({ value: d }) => d).with({ _tag: "None" }, () => match13(flattenCallSpine(cts, ECall(fn, args, origin, { start: 0, end: 0 }))).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "ECall";
 }, ({ value: { fn: ffn, args: fargs, origin: forigin } }) => plainCallD(cts, ffn, fargs, forigin, asCallee)).otherwise(() => plainCallD(cts, fn, args, origin, asCallee))).exhaustive());
-var plainCallD = _curry12(5, (cts, fn, args, origin, asCallee) => {
+var plainCallD = _curry14(5, (cts, fn, args, origin, asCallee) => {
   const fnD = calleeD(cts, fn);
-  return match11(args).with((_v) => {
+  return match13(args).with((_v) => {
     const _g = _v;
     return _g.length === 0;
   }, () => cat([fnD, txt("()")])).with((_v) => {
     const _g = _v;
     return _g.length === 1 && _g[0]._tag === "ETuple";
-  }, ([{ elements, span: tsp }]) => group(cat([fnD, txt("("), exprD(cts, ETuple(elements, tsp)), txt(")")]))).otherwise(() => ((argDocs) => match11(_Array_get8(length9(args) - 1, args)).with((_v) => {
+  }, ([{ elements, span: tsp }]) => group(cat([fnD, txt("("), exprD(cts, ETuple(elements, tsp)), txt(")")]))).otherwise(() => ((argDocs) => match13(_Array_get9(length10(args) - 1, args)).with((_v) => {
     const _g = _v;
     return _g._tag === "Some" && _g.value._tag === "ELambda";
-  }, ({ value: { body: lbody } }) => group(cat([fnD, txt("("), join(txt(", "), argDocs), or7(lastArgHugs(lbody), not7(asCallee)) ? txt(")") : cat([softline, txt(")")])]))).otherwise(() => cat([fnD, group(cat([txt("("), indent(cat([softline, join(cat([txt(","), line]), argDocs)])), softline, txt(")")]))])))(callArgDocs(cts, args, origin)));
+  }, ({ value: { body: lbody } }) => group(cat([fnD, txt("("), join(txt(", "), argDocs), or7(lastArgHugs(lbody), not8(asCallee)) ? txt(")") : cat([softline, txt(")")])]))).otherwise(() => cat([fnD, group(cat([txt("("), indent(cat([softline, join(cat([txt(","), line]), argDocs)])), softline, txt(")")]))])))(callArgDocs(cts, args, origin)));
 });
-var callD = _curry12(4, (cts, fn, args, origin) => callArgsD(cts, fn, args, origin, false));
-var calleeD = _curry12(2, (cts, e) => match11(hooked(cts, e)).with({ _tag: "ECall" }, ({ fn, args, origin }) => callArgsD(cts, fn, args, origin, true)).otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))));
-var operandD = _curry12(2, (cts, e) => parenIf(loosePrefix(cts, e), exprD(cts, e)));
-var memberD = _curry12(2, (cts, e) => match11(e).with({ _tag: "ERecord" }, () => cat([txt("("), exprD(cts, e), txt(")")])).otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))));
-var pipeD = _curry12(2, (cts, e) => match11(e).with((_v) => {
+var callD = _curry14(4, (cts, fn, args, origin) => callArgsD(cts, fn, args, origin, false));
+var calleeD = _curry14(2, (cts, e) => match13(hooked(cts, e)).with({ _tag: "ECall" }, ({ fn, args, origin }) => callArgsD(cts, fn, args, origin, true)).otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))));
+var operandD = _curry14(2, (cts, e) => parenIf(loosePrefix(cts, e), exprD(cts, e)));
+var memberD = _curry14(2, (cts, e) => match13(e).with({ _tag: "ERecord" }, () => cat([txt("("), exprD(cts, e), txt(")")])).otherwise(() => parenIf(loosePrefix(cts, e), exprD(cts, e))));
+var pipeD = _curry14(2, (cts, e) => match13(e).with((_v) => {
   const _g = _v;
   return _g._tag === "EPipe" && _g.right._tag === "ECall" && _g.fast === true;
-}, ({ left, right: { fn: rfn, args: rargs, origin: rorigin } }) => cat([pipeLeftD(cts, left, FAST_PIPE_PREC), txt("->"), callD(cts, rfn, rargs, rorigin)])).otherwise(() => ((segments) => match11(segments).with((_v) => {
+}, ({ left, right: { fn: rfn, args: rargs, origin: rorigin } }) => cat([pipeLeftD(cts, left, FAST_PIPE_PREC), txt("->"), callD(cts, rfn, rargs, rorigin)])).otherwise(() => ((segments) => match13(segments).with((_v) => {
   const _g = _v;
   return _g.length === 0;
 }, () => txt("")).with((_v) => {
   const _g = _v;
   return _g.length >= 1;
-}, ([head, ...rest]) => group(cat([pipeLeftD(cts, head, PIPE_PREC), indent(cat(map5((s) => cat([line, txt("|> "), operandD(cts, s)]), rest)))]))).otherwise(() => {
+}, ([head, ...rest]) => group(cat([pipeLeftD(cts, head, PIPE_PREC), indent(cat(map7((s) => cat([line, txt("|> "), operandD(cts, s)]), rest)))]))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }))(pipeSegmentsFrom(e, []))));
-var letBindHead = _curry12(3, (cts, monad, param) => `let${eq11(monad, "Task") ? "!" : "?"} ${paramText(cts, param)}`);
-var hooked = _curry12(2, (cts, e) => eq11(length9(cts.formatHooks), 0) ? e : ((sp) => _Option_isSome2(_Array_find2((s) => and8(s > sp.start, s < sp.end), cts.commentStarts)) ? e : _Option_unwrapOr5(e, runFormatHooks(cts.formatHooks, e)))(exprSpan2(e)));
-var exprRaw = _curry12(2, (cts, e) => exprRawOf(cts, hooked(cts, e)));
-var exprRawOf = _curry12(2, (cts, e) => match11(e).with({ _tag: "ENum" }, ({ raw }) => txt(raw)).with({ _tag: "EUnit" }, () => txt("()")).with({ _tag: "EBool" }, ({ value }) => txt(show4(value))).with({ _tag: "EStr" }, ({ value }) => txt(strLit2(value))).with({ _tag: "EInterp" }, ({ parts }) => txt(interpText(cts, parts))).with({ _tag: "ERef" }, ({ name }) => txt(name)).with({ _tag: "ECall" }, ({ fn, args, origin }) => callD(cts, fn, args, origin)).with({ _tag: "ELambda" }, ({ params, body }) => lambdaD(cts, params, body)).with({ _tag: "EPipe" }, () => pipeD(cts, e)).with({ _tag: "EDo" }, ({ exprs }) => doD(cts, exprs)).with({ _tag: "ETernary" }, () => ternaryD(cts, e)).with({ _tag: "ERecord" }, ({ fields, spread }) => recordD(cts, fields, spread)).with({ _tag: "EField" }, ({ target, name }) => cat([memberD(cts, target), txt(`.${name}`)])).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => matchD(cts, scrutinee, arms)).with({ _tag: "ELetIn" }, ({ name, annot, value, body }) => match11(discardedLetExprs(e)).with({ _tag: "Some" }, ({ value: exprs }) => doD(cts, exprs)).with({ _tag: "None" }, () => ((ann) => letLikeD(cts, `let ${name}${ann}`, value, body))(match11(annot).with({ _tag: "Some" }, ({ value: te }) => ` : ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive())).exhaustive()).with({ _tag: "ELetBind" }, ({ param, monad, value, body }) => letLikeD(cts, letBindHead(cts, monad, param), value, body)).with({ _tag: "ELoop" }, ({ params, body }) => loopD(cts, params, body)).with({ _tag: "ERecur" }, ({ args }) => cat([txt("recur"), bracketed("(", ")", map5((x) => exprD(cts, x), args))])).with({ _tag: "ETuple" }, ({ elements }) => bracketed("(", ")", map5((x) => exprD(cts, x), elements))).with({ _tag: "EArr" }, ({ elements }) => bracketed("[", "]", map5((el) => seqElemD(cts, el), elements))).with({ _tag: "EList" }, ({ elements }) => bracketed("@{", "}", map5((el) => seqElemD(cts, el), elements))).with({ _tag: "ESet" }, ({ elements }) => bracketed("#{", "}", map5((el) => seqElemD(cts, el), elements))).with({ _tag: "EMap" }, ({ entries }) => braced("#{", "}", map5((en) => cat([exprD(cts, en.key), txt(": "), exprD(cts, en.value)]), entries))).exhaustive());
+var letBindHead = _curry14(3, (cts, monad, param) => `let${eq13(monad, "Task") ? "!" : "?"} ${paramText(cts, param)}`);
+var hooked = _curry14(2, (cts, e) => eq13(length10(cts.formatHooks), 0) ? e : ((sp) => _Option_isSome2(_Array_find2((s) => and9(s > sp.start, s < sp.end), cts.commentStarts)) ? e : _Option_unwrapOr6(e, runFormatHooks(cts.formatHooks, e)))(exprSpan2(e)));
+var exprRaw = _curry14(2, (cts, e) => exprRawOf(cts, hooked(cts, e)));
+var exprRawOf = _curry14(2, (cts, e) => match13(e).with({ _tag: "ENum" }, ({ raw }) => txt(raw)).with({ _tag: "EUnit" }, () => txt("()")).with({ _tag: "EBool" }, ({ value }) => txt(show5(value))).with({ _tag: "EStr" }, ({ value }) => txt(strLit2(value))).with({ _tag: "EInterp" }, ({ parts }) => txt(interpText(cts, parts))).with({ _tag: "ERef" }, ({ name }) => txt(name)).with({ _tag: "ECall" }, ({ fn, args, origin }) => callD(cts, fn, args, origin)).with({ _tag: "ELambda" }, ({ params, body }) => lambdaD(cts, params, body)).with({ _tag: "EPipe" }, () => pipeD(cts, e)).with({ _tag: "EDo" }, ({ exprs }) => doD(cts, exprs)).with({ _tag: "ETernary" }, () => ternaryD(cts, e)).with({ _tag: "ERecord" }, ({ fields, spread }) => recordD(cts, fields, spread)).with({ _tag: "EField" }, ({ target, name }) => cat([memberD(cts, target), txt(`.${name}`)])).with({ _tag: "EMatch" }, ({ scrutinee, arms }) => matchD(cts, scrutinee, arms)).with({ _tag: "ELetIn" }, ({ name, annot, value, body }) => match13(discardedLetExprs(e)).with({ _tag: "Some" }, ({ value: exprs }) => doD(cts, exprs)).with({ _tag: "None" }, () => ((ann) => letLikeD(cts, `let ${name}${ann}`, value, body))(match13(annot).with({ _tag: "Some" }, ({ value: te }) => ` : ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive())).exhaustive()).with({ _tag: "ELetBind" }, ({ param, monad, value, body }) => letLikeD(cts, letBindHead(cts, monad, param), value, body)).with({ _tag: "ELoop" }, ({ params, body }) => loopD(cts, params, body)).with({ _tag: "ERecur" }, ({ args }) => cat([txt("recur"), bracketed("(", ")", map7((x) => exprD(cts, x), args))])).with({ _tag: "ETuple" }, ({ elements }) => bracketed("(", ")", map7((x) => exprD(cts, x), elements))).with({ _tag: "EArr" }, ({ elements }) => bracketed("[", "]", map7((el) => seqElemD(cts, el), elements))).with({ _tag: "EList" }, ({ elements }) => bracketed("@{", "}", map7((el) => seqElemD(cts, el), elements))).with({ _tag: "ESet" }, ({ elements }) => bracketed("#{", "}", map7((el) => seqElemD(cts, el), elements))).with({ _tag: "EMap" }, ({ entries }) => braced("#{", "}", map7((en) => cat([exprD(cts, en.key), txt(": "), exprD(cts, en.value)]), entries))).exhaustive());
 var aliasFieldText = (f) => `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
-var ctorArms = _curry12(3, (cts, ctors, i) => match11(_Array_get8(i, ctors)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: c }) => _Array_prepend3(cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]), ctorArms(cts, ctors, i + 1))).exhaustive());
-var typeStmtD = _curry12(6, (cts, name, params, ctors, alias, aliasType) => {
+var ctorArms = _curry14(3, (cts, ctors, i) => match13(_Array_get9(i, ctors)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: c }) => _Array_prepend5(cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]), ctorArms(cts, ctors, i + 1))).exhaustive());
+var typeStmtD = _curry14(6, (cts, name, params, ctors, alias, aliasType) => {
   const head = `type ${name}${generics(params)}`;
-  return match11(alias).with({ _tag: "Some" }, ({ value: fields }) => cat([txt(`${head} = `), braced("{", "}", map5((f) => txt(aliasFieldText(f)), fields))])).with({ _tag: "None" }, () => match11(aliasType).with({ _tag: "Some" }, ({ value: te }) => txt(`${head} = ${showTypeExpr(te)}`)).with({ _tag: "None" }, () => eq11(length9(ctors), 0) ? txt(`extern ${head}`) : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))])).exhaustive()).exhaustive();
+  return match13(alias).with({ _tag: "Some" }, ({ value: fields }) => cat([txt(`${head} = `), braced("{", "}", map7((f) => txt(aliasFieldText(f)), fields))])).with({ _tag: "None" }, () => match13(aliasType).with({ _tag: "Some" }, ({ value: te }) => txt(`${head} = ${showTypeExpr(te)}`)).with({ _tag: "None" }, () => eq13(length10(ctors), 0) ? txt(`extern ${head}`) : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))])).exhaustive()).exhaustive();
 });
-var importStmtD = _curry12(2, (names, from) => group(cat([txt("import "), braced("{", "}", map5((n) => txt(n.name), names)), txt(` from ${strLit2(from)}`)])));
-var importNsStmtD = _curry12(2, (alias, from) => txt(`import * as ${alias} from ${strLit2(from)}`));
-var exprD = _curry12(2, (cts, e) => withComments(cts, EXPR, exprSpan2(e), exprRaw(cts, e)));
+var importStmtD = _curry14(2, (names, from) => group(cat([txt("import "), braced("{", "}", map7((n) => txt(n.name), names)), txt(` from ${strLit2(from)}`)])));
+var importNsStmtD = _curry14(2, (alias, from) => txt(`import * as ${alias} from ${strLit2(from)}`));
+var exprD = _curry14(2, (cts, e) => withComments(cts, EXPR, exprSpan2(e), exprRaw(cts, e)));
 var expPrefix = (exported) => exported ? "export " : "";
-var fieldOf = _curry12(2, (e, tmp) => match11(e).with((_v) => {
+var fieldOf = _curry14(2, (e, tmp) => match13(e).with((_v) => {
   const _g = _v;
   return _g._tag === "EField" && _g.target._tag === "ERef";
-}, ({ target: { name: target }, name }) => eq11(target, tmp) ? Some10(name) : None10).otherwise(() => None10));
-var destructureFieldsFrom = _curry12(4, (stmts, j, tmp, acc) => match11(_Array_get8(j, stmts)).with((_v) => {
+}, ({ target: { name: target }, name }) => eq13(target, tmp) ? Some12(name) : None12).otherwise(() => None12));
+var destructureFieldsFrom = _curry14(4, (stmts, j, tmp, acc) => match13(_Array_get9(j, stmts)).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SLet";
-}, ({ value: { name, value } }) => match11(fieldOf(value, tmp)).with({ _tag: "Some" }, ({ value: f }) => eq11(f, name) ? destructureFieldsFrom(stmts, j + 1, tmp, _Array_append8(f, acc)) : acc).with({ _tag: "None" }, () => acc).exhaustive()).otherwise(() => acc));
-var stmtDoc = _curry12(4, (cts, stmts, i, src) => match11(_Array_get8(i, stmts)).with({ _tag: "None" }, () => ({ doc: txt(""), consumed: 1 })).with({ _tag: "Some" }, ({ value: s }) => match11(s).with({ _tag: "SImport" }, ({ names, from }) => ({ doc: importStmtD(names, from), consumed: 1 })).with({ _tag: "SImportNs" }, ({ alias, from }) => ({ doc: importNsStmtD(alias.name, from), consumed: 1 })).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported }) => ({ doc: cat([txt(expPrefix(exported)), typeStmtD(cts, name, params, ctors, alias, aliasType)]), consumed: 1 })).with({ _tag: "SExtern" }, ({ name, params, typeExpr: te, module, imported, curried, exported }) => ({ doc: txt(`${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`), consumed: 1 })).with({ _tag: "SError" }, ({ span: sp }) => ({ doc: verbatim(_Str_slice3(sp.start, sp.end, src)), consumed: 1 })).with({ _tag: "SExpr" }, ({ value }) => ({ doc: exprD(cts, value), consumed: 1 })).with({ _tag: "SLet" }, ({ name, annot, value, exported }) => _Str_startsWith3("$", name) ? ((fields) => ({ doc: cat([txt(`${expPrefix(exported)}let { ${_Str_join5(", ", fields)} } = `), exprD(cts, value)]), consumed: length9(fields) + 1 }))(destructureFieldsFrom(stmts, i + 1, name, [])) : ((ann) => ({ doc: cat([txt(`${expPrefix(exported)}let ${name}${ann} = `), exprD(cts, value)]), consumed: 1 }))(match11(annot).with({ _tag: "Some" }, ({ value: te }) => ` : ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive())).exhaustive()).exhaustive());
-var stmtSpan = (s) => match11(s).with({ _tag: "SLet" }, ({ span: sp }) => sp).with({ _tag: "SType" }, ({ span: sp }) => sp).with({ _tag: "SExtern" }, ({ span: sp }) => sp).with({ _tag: "SImport" }, ({ span: sp }) => sp).with({ _tag: "SImportNs" }, ({ span: sp }) => sp).with({ _tag: "SExpr" }, ({ span: sp }) => sp).with({ _tag: "SError" }, ({ span: sp }) => sp).exhaustive();
-var blankBetweenFrom = _curry12(3, (s, i, seenNl) => match11(_Str_get4(i, s)).with({ _tag: "None" }, () => false).with({ _tag: "Some", value: `
+}, ({ value: { name, value } }) => match13(fieldOf(value, tmp)).with({ _tag: "Some" }, ({ value: f }) => eq13(f, name) ? destructureFieldsFrom(stmts, j + 1, tmp, _Array_append8(f, acc)) : acc).with({ _tag: "None" }, () => acc).exhaustive()).otherwise(() => acc));
+var stmtDoc = _curry14(4, (cts, stmts, i, src) => match13(_Array_get9(i, stmts)).with({ _tag: "None" }, () => ({ doc: txt(""), consumed: 1 })).with({ _tag: "Some" }, ({ value: s }) => match13(s).with({ _tag: "SImport" }, ({ names, from }) => ({ doc: importStmtD(names, from), consumed: 1 })).with({ _tag: "SImportNs" }, ({ alias, from }) => ({ doc: importNsStmtD(alias.name, from), consumed: 1 })).with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported }) => ({ doc: cat([txt(expPrefix(exported)), typeStmtD(cts, name, params, ctors, alias, aliasType)]), consumed: 1 })).with({ _tag: "SExtern" }, ({ name, params, typeExpr: te, module, imported, curried, exported }) => ({ doc: txt(`${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`), consumed: 1 })).with({ _tag: "SError" }, ({ span: sp }) => ({ doc: verbatim(_Str_slice3(sp.start, sp.end, src)), consumed: 1 })).with({ _tag: "SExpr" }, ({ value }) => ({ doc: exprD(cts, value), consumed: 1 })).with({ _tag: "SLet" }, ({ name, annot, value, exported }) => _Str_startsWith3("$", name) ? ((fields) => ({ doc: cat([txt(`${expPrefix(exported)}let { ${_Str_join5(", ", fields)} } = `), exprD(cts, value)]), consumed: length10(fields) + 1 }))(destructureFieldsFrom(stmts, i + 1, name, [])) : ((ann) => ({ doc: cat([txt(`${expPrefix(exported)}let ${name}${ann} = `), exprD(cts, value)]), consumed: 1 }))(match13(annot).with({ _tag: "Some" }, ({ value: te }) => ` : ${showTypeExpr(te)}`).with({ _tag: "None" }, () => "").exhaustive())).exhaustive()).exhaustive());
+var stmtSpan = (s) => match13(s).with({ _tag: "SLet" }, ({ span: sp }) => sp).with({ _tag: "SType" }, ({ span: sp }) => sp).with({ _tag: "SExtern" }, ({ span: sp }) => sp).with({ _tag: "SImport" }, ({ span: sp }) => sp).with({ _tag: "SImportNs" }, ({ span: sp }) => sp).with({ _tag: "SExpr" }, ({ span: sp }) => sp).with({ _tag: "SError" }, ({ span: sp }) => sp).exhaustive();
+var blankBetweenFrom = _curry14(3, (s, i, seenNl) => match13(_Str_get4(i, s)).with({ _tag: "None" }, () => false).with({ _tag: "Some", value: `
 ` }, () => or7(seenNl, blankBetweenFrom(s, i + 1, true))).with({ _tag: "Some", value: " " }, () => blankBetweenFrom(s, i + 1, seenNl)).with({ _tag: "Some", value: "\t" }, () => blankBetweenFrom(s, i + 1, seenNl)).with({ _tag: "Some", value: "r" }, () => blankBetweenFrom(s, i + 1, seenNl)).with({ _tag: "Some" }, () => blankBetweenFrom(s, i + 1, false)).exhaustive());
 var blankBetween = (gap) => blankBetweenFrom(gap, 0, false);
-var anchorStart = _curry12(2, (cts, s) => {
+var anchorStart = _curry14(2, (cts, s) => {
   const sp = stmtSpan(s);
-  return match11(_Array_get8(0, atKey(cts.leading, spanKey(STMT, sp)))).with({ _tag: "Some" }, ({ value: c }) => c.start).with({ _tag: "None" }, () => sp.start).exhaustive();
+  return match13(_Array_get9(0, atKey(cts.leading, spanKey(STMT, sp)))).with({ _tag: "Some" }, ({ value: c }) => c.start).with({ _tag: "None" }, () => sp.start).exhaustive();
 });
-var stmtParts = _curry12(6, (cts, stmts, i, src, prevEnd, acc) => match11(_Array_get8(i, stmts)).with({ _tag: "None" }, () => _tuple6(acc, prevEnd)).with({ _tag: "Some" }, ({ value: cur }) => ((sep) => ((printed) => ((lastIdx) => ((end) => stmtParts(cts, stmts, i + printed.consumed, src, Some10(end), _Array_concat4(acc, _Array_append8(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep))))(match11(_Array_get8(lastIdx, stmts)).with({ _tag: "Some" }, ({ value: last }) => stmtSpan(last).end).with({ _tag: "None" }, () => 0).exhaustive()))(i + printed.consumed - 1))(stmtDoc(cts, stmts, i, src)))(match11(prevEnd).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: pe }) => blankBetween(_Str_slice3(pe, anchorStart(cts, cur), src)) ? [hardline, hardline] : [hardline]).exhaustive())).exhaustive());
-var tailParts = _curry12(3, (tail, src, prevEnd) => match11(_Array_get8(0, tail)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: first }) => ((sep) => _Array_append8(join(hardline, map5((c) => txt(c.text), tail)), sep))(match11(prevEnd).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: pe }) => blankBetween(_Str_slice3(pe, first.start, src)) ? [hardline, hardline] : [hardline]).exhaustive())).exhaustive());
-var programDoc = _curry12(4, (cts, stmts, src, tail) => (([parts, prevEnd]) => cat(_Array_concat4(_Array_concat4(parts, tailParts(tail, src, prevEnd)), [hardline])))(stmtParts(cts, stmts, 0, src, None10, [])));
-var stmtAnchors = (s) => _Array_append8({ kind: STMT, sp: stmtSpan(s) }, match11(s).with({ _tag: "SLet" }, ({ value }) => exprAnchors(value)).with({ _tag: "SExpr" }, ({ value }) => exprAnchors(value)).with({ _tag: "SType" }, ({ ctors }) => map5((c) => ({ kind: CTOR, sp: c.span }), ctors)).otherwise(() => []));
-var inErrorSpanFrom = _curry12(3, (stmts, i, c) => match11(_Array_get8(i, stmts)).with({ _tag: "None" }, () => false).with((_v) => {
+var stmtParts = _curry14(6, (cts, stmts, i, src, prevEnd, acc) => match13(_Array_get9(i, stmts)).with({ _tag: "None" }, () => _tuple7(acc, prevEnd)).with({ _tag: "Some" }, ({ value: cur }) => ((sep) => ((printed) => ((lastIdx) => ((end) => stmtParts(cts, stmts, i + printed.consumed, src, Some12(end), _Array_concat4(acc, _Array_append8(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep))))(match13(_Array_get9(lastIdx, stmts)).with({ _tag: "Some" }, ({ value: last }) => stmtSpan(last).end).with({ _tag: "None" }, () => 0).exhaustive()))(i + printed.consumed - 1))(stmtDoc(cts, stmts, i, src)))(match13(prevEnd).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: pe }) => blankBetween(_Str_slice3(pe, anchorStart(cts, cur), src)) ? [hardline, hardline] : [hardline]).exhaustive())).exhaustive());
+var tailParts = _curry14(3, (tail, src, prevEnd) => match13(_Array_get9(0, tail)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: first }) => ((sep) => _Array_append8(join(hardline, map7((c) => txt(c.text), tail)), sep))(match13(prevEnd).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: pe }) => blankBetween(_Str_slice3(pe, first.start, src)) ? [hardline, hardline] : [hardline]).exhaustive())).exhaustive());
+var programDoc = _curry14(4, (cts, stmts, src, tail) => (([parts, prevEnd]) => cat(_Array_concat4(_Array_concat4(parts, tailParts(tail, src, prevEnd)), [hardline])))(stmtParts(cts, stmts, 0, src, None12, [])));
+var stmtAnchors = (s) => _Array_append8({ kind: STMT, sp: stmtSpan(s) }, match13(s).with({ _tag: "SLet" }, ({ value }) => exprAnchors(value)).with({ _tag: "SExpr" }, ({ value }) => exprAnchors(value)).with({ _tag: "SType" }, ({ ctors }) => map7((c) => ({ kind: CTOR, sp: c.span }), ctors)).otherwise(() => []));
+var inErrorSpanFrom = _curry14(3, (stmts, i, c) => match13(_Array_get9(i, stmts)).with({ _tag: "None" }, () => false).with((_v) => {
   const _g = _v;
   return _g._tag === "Some" && _g.value._tag === "SError";
-}, ({ value: { span: sp } }) => or7(and8(c.start >= sp.start, c.start < sp.end), inErrorSpanFrom(stmts, i + 1, c))).with({ _tag: "Some" }, () => inErrorSpanFrom(stmts, i + 1, c)).exhaustive());
-var inErrorSpan = _curry12(2, (stmts, c) => inErrorSpanFrom(stmts, 0, c));
-var hasOpenDirective = (src) => match11(_Array_get8(0, _Str_split3(`
-`, _Str_trim(src)))).with({ _tag: "Some" }, ({ value: first }) => eq11(_Str_trim(first), '"use open"')).with({ _tag: "None" }, () => false).exhaustive();
-var formatProgram = _curry12(2, (stmts, src) => formatProgramWith(stmts, src, []));
-var formatProgramWith = _curry12(3, (stmts, src, formatHooks) => {
-  const innerBound = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
-  const shadowed = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
-  const comments = filter((c) => not7(inErrorSpan(stmts, c)), collectComments(src));
-  const base = { ...noComments, flatArity: buildFlatArity(stmts, innerBound), shadowed, formatHooks, commentStarts: map5((c) => c.start, comments) };
+}, ({ value: { span: sp } }) => or7(and9(c.start >= sp.start, c.start < sp.end), inErrorSpanFrom(stmts, i + 1, c))).with({ _tag: "Some" }, () => inErrorSpanFrom(stmts, i + 1, c)).exhaustive());
+var inErrorSpan = _curry14(2, (stmts, c) => inErrorSpanFrom(stmts, 0, c));
+var hasOpenDirective = (src) => match13(_Array_get9(0, _Str_split3(`
+`, _Str_trim(src)))).with({ _tag: "Some" }, ({ value: first }) => eq13(_Str_trim(first), '"use open"')).with({ _tag: "None" }, () => false).exhaustive();
+var formatProgram = _curry14(2, (stmts, src) => formatProgramWith(stmts, src, []));
+var formatProgramWith = _curry14(3, (stmts, src, formatHooks) => {
+  const innerBound = _Set_fromArray2(_Array_flatMap(stmtInnerNames, stmts));
+  const shadowed = _Set_union(innerBound, _Set_fromArray2(topLevelNames(stmts)));
+  const comments = filter2((c) => not8(inErrorSpan(stmts, c)), collectComments(src));
+  const base = { ...noComments, flatArity: buildFlatArity(stmts, innerBound), shadowed, formatHooks, commentStarts: map7((c) => c.start, comments) };
   const attached = attachFrom(comments, 0, sortAnchors(_Array_flatMap(stmtAnchors, stmts)), src, { table: base, tail: [] });
   const body = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
   return hasOpenDirective(src) ? `"use open"
 
 ${body}` : body;
 });
-import { _Array_contains, _Array_prepend as _Array_prepend5, _Map_get as _Map_get4, _Map_getOr, _Map_set as _Map_set4, _Map_values, _Set_add, _Set_diff, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_toArray, _Str_codeAt as _Str_codeAt6, _curry as _curry14, _tuple as _tuple7, and as and9, map as map7 } from "@mochi/compiler/runtime";
-import { match as match13 } from "@onrails/pattern";
-
-import { Err as Err6, Ok as Ok7, Some as Some11, _Array_get as _Array_get9, _Array_prepend as _Array_prepend4, _Map_has, _Map_set as _Map_set3, _Option_unwrapOr as _Option_unwrapOr6, _Result_flatMap as _Result_flatMap5, _Result_map as _Result_map5, _curry as _curry13, _done as _done5, _recur as _recur5, eq as eq12, filter as filter2, length as length10, map as map6, not as not8, show as show5 } from "@mochi/compiler/runtime";
-import { match as match12 } from "@onrails/pattern";
-var emptyRegistry = { ctors: new Map, types: new Map };
-var primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
-var keysOfFrom = _curry13(2, (fields, i) => match12(_Array_get9(i, fields)).with({ _tag: "None" }, () => []).with({ _tag: "Some" }, ({ value: f }) => _Array_prepend4(_Option_unwrapOr6(`_${show5(i)}`, f.name), keysOfFrom(fields, i + 1))).exhaustive());
-var keysOf = (fields) => keysOfFrom(fields, 0);
-var builtinSpan = { start: 0, end: 0 };
-var builtinTypeDecls = [{ name: "Option", params: ["a"], ctors: [{ name: "Some", fields: [{ name: Some11("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "None", fields: [], span: builtinSpan }] }, { name: "Result", params: ["a", "e"], ctors: [{ name: "Ok", fields: [{ name: Some11("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "Err", fields: [{ name: Some11("error"), fieldType: TyName("e", builtinSpan) }], span: builtinSpan }] }];
-var declaresType = _curry13(3, (stmts, i, name) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => false).with((_v) => {
-  const _g = _v;
-  return _g._tag === "Some" && _g.value._tag === "SType";
-}, ({ value: { name: n } }) => eq12(n, name) ? true : declaresType(stmts, i + 1, name)).with({ _tag: "Some" }, () => declaresType(stmts, i + 1, name)).exhaustive());
-var builtinDeclsFor = (stmts) => filter2((bt) => not8(declaresType(stmts, 0, bt.name)), builtinTypeDecls);
-var seedRegCtorsFrom = _curry13(4, (ctors, i, owner, acc) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: c }) => seedRegCtorsFrom(ctors, i + 1, owner, _Map_has(c.name, acc) ? acc : _Map_set3(c.name, { owner, arity: length10(c.fields) }, acc))).exhaustive());
-var seedRegDeclsFrom = _curry13(3, (decls, i, reg) => match12(_Array_get9(i, decls)).with({ _tag: "None" }, () => reg).with({ _tag: "Some" }, ({ value: bt }) => seedRegDeclsFrom(decls, i + 1, { ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors), types: _Map_set3(bt.name, map6((c) => c.name, bt.ctors), reg.types) })).exhaustive());
-var ctorErr = _curry13(2, (message, sp) => ({ message, start: sp.start, end: sp.end }));
-var ctorsInto = _curry13(5, (ctors, i, owner, sp, acc) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => Ok7(acc)).with({ _tag: "Some" }, ({ value: c }) => _Map_has(c.name, acc) ? Err6(ctorErr(`duplicate constructor '${c.name}'`, sp)) : ctorsInto(ctors, i + 1, owner, sp, _Map_set3(c.name, { owner, arity: length10(c.fields) }, acc))).exhaustive());
-var buildLoop = _curry13(3, (stmts, i, reg) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => Ok7(reg)).with((_v) => {
-  const _g = _v;
-  return _g._tag === "Some" && _g.value._tag === "SType";
-}, ({ value: { name, ctors, span: sp } }) => _Map_has(name, reg.types) ? Err6(ctorErr(`duplicate type '${name}'`, sp)) : _Result_flatMap5((cs) => buildLoop(stmts, i + 1, { ctors: cs, types: _Map_set3(name, map6((c) => c.name, ctors), reg.types) }), ctorsInto(ctors, 0, name, sp, reg.ctors))).with({ _tag: "Some" }, () => buildLoop(stmts, i + 1, reg)).exhaustive());
-var exportedRegLoop = _curry13(3, (stmts, i0, reg0) => {
-  let i = i0;
-  let reg = reg0;
-  while (true) {
-    const _step = match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => _done5(reg)).with((_v) => {
-      const _g = _v;
-      return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
-    }, ({ value: { name, ctors } }) => _recur5(i + 1, { ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors), types: _Map_set3(name, map6((c) => c.name, ctors), reg.types) })).with({ _tag: "Some" }, () => _recur5(i + 1, reg)).exhaustive();
-    if (_step._tag === "recur") {
-      [i, reg] = _step.args;
-      continue;
-    }
-    return _step.value;
-  }
-});
-var ctorKeysInto = _curry13(3, (ctors, i, m) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => ctorKeysInto(ctors, i + 1, _Map_set3(name, keysOf(fields), m))).exhaustive());
-var ctorKeysFrom = _curry13(3, (stmts, i, m) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
-  const _g = _v;
-  return _g._tag === "Some" && _g.value._tag === "SType";
-}, ({ value: { ctors } }) => ctorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => ctorKeysFrom(stmts, i + 1, m)).exhaustive());
-var ctorKeysFromStmts = _curry13(2, (stmts, m) => ctorKeysFrom(stmts, 0, m));
-var seedKeyCtorsFrom = _curry13(3, (ctors, i, m) => match12(_Array_get9(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields } }) => seedKeyCtorsFrom(ctors, i + 1, _Map_has(name, m) ? m : _Map_set3(name, keysOf(fields), m))).exhaustive());
-var seedKeyDeclsFrom = _curry13(3, (decls, i, m) => match12(_Array_get9(i, decls)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { ctors } }) => seedKeyDeclsFrom(decls, i + 1, seedKeyCtorsFrom(ctors, 0, m))).exhaustive());
-var seedBuiltinCtorKeys = _curry13(2, (stmts, m) => seedKeyDeclsFrom(builtinDeclsFor(stmts), 0, m));
-var exportedCtorKeysFrom = _curry13(3, (stmts, i, m) => match12(_Array_get9(i, stmts)).with({ _tag: "None" }, () => m).with((_v) => {
-  const _g = _v;
-  return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
-}, ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m))).with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m)).exhaustive());
-
-var tNumber = tPrim("number");
-var tBool = tPrim("bool");
-var tString = tPrim("string");
-var primType = (name) => match13(name).with("float", () => tNumber).with("int", () => tNumber).with("string", () => tString).with("bool", () => tBool).otherwise(() => tPrim(name));
-var emptyVarSets = { tv: _Set_fromArray2([]), rv: _Set_fromArray2([]) };
-var diffVarSets = _curry14(2, (a, b) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }));
-var collect = _curry14(2, (t, acc) => match13(t).with({ _tag: "TyVar" }, ({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv })).with({ _tag: "TyCon" }, ({ args }) => collectArgs(args, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc))).with({ _tag: "TyRecord" }, ({ row }) => collectRow(row, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => collectArgs(members, acc)).exhaustive());
-var collectArgs = _curry14(2, (args, acc) => match13(args).with((_v) => {
-  const _g = _v;
-  return _g.length === 0;
-}, () => acc).with((_v) => {
-  const _g = _v;
-  return _g.length >= 1;
-}, ([a, ...rest]) => collectArgs(rest, collect(a, acc))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var collectRow = _curry14(2, (row, acc) => match13(row).with({ _tag: "RowVar" }, ({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) })).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectRow(rest, collect(fieldType, acc))).with({ _tag: "RowEmpty" }, () => acc).exhaustive());
-var freeInType = (t) => collect(t, emptyVarSets);
-var collectFree = _curry14(4, (t, bound, st, acc) => match13(t).with({ _tag: "TyVar" }, ({ id }) => _Set_has2(id, bound.tv) ? acc : match13(_Map_get4(id, st.tv)).with({ _tag: "Some" }, ({ value: next }) => collectFree(next, bound, st, acc)).with({ _tag: "None" }, () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv })).exhaustive()).with({ _tag: "TyCon" }, ({ args }) => collectFreeArgs(args, bound, st, acc)).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collectFree(toT, bound, st, collectFree(fromT, bound, st, acc))).with({ _tag: "TyRecord" }, ({ row }) => collectFreeRow(row, bound, st, acc)).with({ _tag: "TySingleton" }, () => acc).with({ _tag: "TyOneOf" }, ({ members }) => collectFreeArgs(members, bound, st, acc)).exhaustive());
-var collectFreeArgs = _curry14(4, (args, bound, st, acc) => match13(args).with((_v) => {
-  const _g = _v;
-  return _g.length === 0;
-}, () => acc).with((_v) => {
-  const _g = _v;
-  return _g.length >= 1;
-}, ([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var collectFreeRow = _curry14(4, (row, bound, st, acc) => match13(row).with({ _tag: "RowVar" }, ({ id }) => _Set_has2(id, bound.rv) ? acc : match13(_Map_get4(id, st.rv)).with({ _tag: "Some" }, ({ value: next }) => collectFreeRow(next, bound, st, acc)).with({ _tag: "None" }, () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) })).exhaustive()).with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc))).with({ _tag: "RowEmpty" }, () => acc).exhaustive());
-var freeInScheme = _curry14(3, (sc, st, acc) => collectFree(sc.ty, { tv: _Set_fromArray2(sc.vars), rv: _Set_fromArray2(sc.rvars) }, st, acc));
-var freeInEnvFrom = _curry14(3, (schemes, st, acc) => match13(schemes).with((_v) => _v.length === 0, () => acc).with((_v) => _v.length >= 1, ([sc, ...rest]) => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var freeInEnv = _curry14(2, (env, st) => freeInEnvFrom(_Map_values(env), st, emptyVarSets));
-var generalize = _curry14(4, (env, t, st, widen) => {
-  const zt = widen ? widenLits(zonk(t, st)) : zonk(t, st);
-  const free = diffVarSets(freeInType(zt), freeInEnv(env, st));
-  return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
-});
-var widenLits = (t) => match13(t).with({ _tag: "TySingleton", base: "string" }, () => tString).with({ _tag: "TySingleton" }, () => tNumber).with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map7((m) => match13(m).with({ _tag: "TySingleton" }, () => m).otherwise(() => widenLits(m)), members))).with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map7(widenLits, args))).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(widenLits(fromT), widenLits(toT))).with({ _tag: "TyRecord" }, ({ row }) => tRecord(widenRow(row))).with({ _tag: "TyVar" }, () => t).exhaustive();
-var widenRow = (row) => match13(row).with({ _tag: "RowEmpty" }, () => row).with({ _tag: "RowVar" }, () => row).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => rField(label, widenLits(fieldType), widenRow(rest), optional)).exhaustive();
-var instMapFrom = _curry14(3, (vars, acc, st) => match13(vars).with((_v) => _v.length === 0, () => _tuple7(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fv, st1]) => instMapFrom(rest, _Map_set4(v, fv, acc), st1))(freshVar(st))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var instRowMapFrom = _curry14(3, (vars, acc, st) => match13(vars).with((_v) => _v.length === 0, () => _tuple7(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fr, st1]) => instRowMapFrom(rest, _Map_set4(v, fr, acc), st1))(freshRowVar(st))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var instSub = _curry14(3, (t, tmap, rmap) => match13(t).with({ _tag: "TyVar" }, ({ id }) => _Map_getOr(t, id, tmap)).with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map7((a) => instSub(a, tmap, rmap), args))).with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap))).with({ _tag: "TyRecord" }, ({ row }) => tRecord(instSubRow(row, tmap, rmap))).with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value)).with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map7((m) => instSub(m, tmap, rmap), members))).exhaustive());
-var instSubRow = _curry14(3, (row, tmap, rmap) => match13(row).with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap)).with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) => rField(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap), optional)).with({ _tag: "RowEmpty" }, () => row).exhaustive());
-var instantiate = _curry14(2, (sc, st) => (([tmap, st1]) => (([rmap, st2]) => _tuple7(instSub(sc.ty, tmap, rmap), st2))(instRowMapFrom(sc.rvars, new Map, st1)))(instMapFrom(sc.vars, new Map, st)));
-var isUpperStart = (s) => match13(_Str_codeAt6(0, s)).with({ _tag: "Some" }, ({ value: c }) => and9(c >= 65, c <= 90)).with({ _tag: "None" }, () => false).exhaustive();
-var typeExprListToType = _curry14(5, (tes, vars, st, aliases, expanding) => match13(tes).with((_v) => {
-  const _g = _v;
-  return _g.length === 0;
-}, () => _tuple7([], vars, st)).with((_v) => {
-  const _g = _v;
-  return _g.length >= 1;
-}, ([te, ...rest]) => (([t, vars1, st1]) => (([restTs, vars2, st2]) => _tuple7(_Array_prepend5(t, restTs), vars2, st2))(typeExprListToType(rest, vars1, st1, aliases, expanding)))(typeExprToType(te, vars, st, aliases, expanding))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var typeExprName = _curry14(5, (name, vars, st, aliases, expanding) => _Array_contains(name, primTypeNames) ? _tuple7(primType(name), vars, st) : match13(_Map_get4(name, vars)).with({ _tag: "Some" }, ({ value: v }) => _tuple7(v, vars, st)).with({ _tag: "None" }, () => match13(_Map_get4(name, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st1]) => _tuple7(t, vars, st1))(aliasRow(name, info, [], st, aliases, expanding))).with({ _tag: "None" }, () => isUpperStart(name) ? _tuple7(tPrim(name), vars, st) : (([v, st1]) => _tuple7(v, _Map_set4(name, v, vars), st1))(freshVar(st))).exhaustive()).exhaustive());
-var typeExprToType = _curry14(5, (te, vars, st, aliases, expanding) => match13(te).with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe }) => (([fromT, vars1, st1]) => (([toT, vars2, st2]) => _tuple7(tArrow(fromT, toT), vars2, st2))(typeExprToType(toTe, vars1, st1, aliases, expanding)))(typeExprToType(fromTe, vars, st, aliases, expanding))).with({ _tag: "TyApp" }, ({ ctor, args: argTes }) => (([args, vars1, st1]) => match13(_Map_get4(ctor, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st2]) => _tuple7(t, vars1, st2))(aliasRow(ctor, info, args, st1, aliases, expanding))).with({ _tag: "None" }, () => _tuple7(tCon(ctor, args), vars1, st1)).exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding))).with({ _tag: "TyTuple" }, ({ elems: elemTes }) => (([elems, vars1, st1]) => _tuple7(tTuple(elems), vars1, st1))(typeExprListToType(elemTes, vars, st, aliases, expanding))).with({ _tag: "TyList" }, ({ elem: elemTe }) => (([elemT, vars1, st1]) => _tuple7(tCon("Array", [elemT]), vars1, st1))(typeExprToType(elemTe, vars, st, aliases, expanding))).with({ _tag: "TyName" }, ({ name }) => typeExprName(name, vars, st, aliases, expanding)).with({ _tag: "TyQual" }, ({ alias, name, args: argTes }) => (([args, vars1, st1]) => match13(_Map_get4(`${alias}.${name}`, aliases)).with({ _tag: "Some" }, ({ value: info }) => (([t, st2]) => _tuple7(t, vars1, st2))(aliasRow(name, info, args, st1, aliases, expanding))).with({ _tag: "None" }, () => _tuple7(tCon(name, args), vars1, st1)).exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding))).with({ _tag: "TyLit" }, ({ value }) => _tuple7(tLit(value), vars, st)).with({ _tag: "TyUnion" }, ({ members }) => (([ts, vars1, st1]) => _tuple7(tUnion(ts), vars1, st1))(typeExprListToType(members, vars, st, aliases, expanding))).exhaustive());
-var aliasLocalVarsFrom = _curry14(3, (params, args, st) => match13(params).with((_v) => _v.length === 0, () => _tuple7(new Map, st)).with((_v) => _v.length >= 1, ([p, ...restParams]) => match13(args).with((_v) => {
-  const _g = _v;
-  return _g.length >= 1;
-}, ([a, ...restArgs]) => (([restMap, st1]) => _tuple7(_Map_set4(p, a, restMap), st1))(aliasLocalVarsFrom(restParams, restArgs, st))).with((_v) => {
-  const _g = _v;
-  return _g.length === 0;
-}, () => (([v, st1]) => (([restMap, st2]) => _tuple7(_Map_set4(p, v, restMap), st2))(aliasLocalVarsFrom(restParams, [], st1)))(freshVar(st))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-})).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var aliasFieldsFrom = _curry14(5, (fields, vars, st, aliases, expanding) => match13(fields).with((_v) => {
-  const _g = _v;
-  return _g.length === 0;
-}, () => _tuple7(RowEmpty, st)).with((_v) => {
-  const _g = _v;
-  return _g.length >= 1;
-}, ([fld, ...rest]) => (([ft, vars1, st1]) => (([restRow, st2]) => _tuple7(rField(fld.name, ft, restRow, fld.optional), st2))(aliasFieldsFrom(rest, vars1, st1, aliases, expanding)))(typeExprToType(fld.fieldType, vars, st, aliases, expanding))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var aliasRow = _curry14(6, (name, info, args, st, aliases, expanding) => _Set_has2(name, expanding) ? _tuple7(tCon(name, args), st) : match13(info.expr).with({ _tag: "Some" }, ({ value: te }) => (([local, st1]) => (([t, _, st2]) => _tuple7(t, st2))(typeExprToType(te, local, st1, aliases, _Set_add(name, expanding))))(aliasLocalVarsFrom(info.params, args, st))).with({ _tag: "None" }, () => (([local, st1]) => {
-  const next = _Set_add(name, expanding);
-  return (([row, st2]) => _tuple7(tRecord(row), st2))(aliasFieldsFrom(info.fields, local, st1, aliases, next));
-})(aliasLocalVarsFrom(info.params, args, st))).exhaustive());
-var pvarsFrom = _curry14(2, (params, st) => match13(params).with((_v) => _v.length === 0, () => _tuple7(new Map, [], st)).with((_v) => _v.length >= 1, ([p, ...rest]) => (([v, st1]) => (([restMap, restVars, st2]) => _tuple7(_Map_set4(p, v, restMap), _Array_prepend5(v, restVars), st2))(pvarsFrom(rest, st1)))(freshVar(st))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var ctorFieldsArrowFrom = _curry14(5, (fields, pvars, st, aliases, result) => match13(fields).with((_v) => {
-  const _g = _v;
-  return _g.length === 0;
-}, () => _tuple7(result, st)).with((_v) => {
-  const _g = _v;
-  return _g.length >= 1;
-}, ([fld, ...rest]) => (([ft, _, st1]) => (([restT, st2]) => _tuple7(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray2([])))).otherwise(() => {
-  throw new Error("non-exhaustive match");
-}));
-var ctorScheme = _curry14(5, (typeName, params, c, st, aliases) => (([pvars, pvarTypes, st1]) => {
-  const result = tCon(typeName, pvarTypes);
-  return (([ty, st2]) => {
-    const sets = collect(ty, emptyVarSets);
-    return _tuple7({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty }, st2);
-  })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
-})(pvarsFrom(params, st)));
 export {
   UNIT,
   formatHooksFor,
@@ -12200,6 +12206,8 @@ export {
   tPrim,
   tRecord,
   tString,
+  tTuple,
   tUnion,
+  widenLits,
   zonk
 };

@@ -6,6 +6,7 @@ import {
   BOOTSTRAP_CLI,
   BOOTSTRAP_DIR,
   BOOTSTRAP_SEED,
+  clip,
   createTerminalStyles,
   duration,
   fileSha256,
@@ -94,8 +95,16 @@ test("terminal helpers format durations, meters, and text clipping", () => {
   expect(bar).toContain("[COLOR]");
   expect(bar).toContain("[RESET]");
 
-  expect(fit("short", 20)).toBe("short");
-  expect(fit("this is a very long string that should be clipped", 10)).toBe("this is …");
+  expect(clip("short", 20)).toBe("short");
+  expect(clip("this is a very long string that should be clipped", 10)).toBe("this is …");
+  // Wide glyphs count two columns: the result must still fit `cols - 1`.
+  const wide = clip("界界界界界界", 10);
+  expect(wide).toBe("界界界界…");
+  expect(Bun.stringWidth(wide)).toBeLessThanOrEqual(9);
+  // `.map(fit)` passes an index; it must not become the width (live status block).
+  expect(["a status row that fits any terminal"].map(fit)).toEqual([
+    "a status row that fits any terminal",
+  ]);
 
   const styles = createTerminalStyles(false);
   expect(styles.RESET).toBe("");

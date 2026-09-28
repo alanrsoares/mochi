@@ -131,7 +131,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, tRecord, tUnion, UNIT, zonk } from "./types.ts";\nexport { tBool, tNumber, tString } from "./schemes.ts";\n',
+  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, tRecord, tTuple, tUnion, UNIT, zonk } from "./types.ts";\nexport { tBool, tNumber, tString, widenLits } from "./schemes.ts";\n',
 );
 execFileSync(
   "bun",
@@ -174,6 +174,7 @@ writeFileSync(
               "tCon",
               "tArrow",
               "tRecord",
+              "tTuple",
               "tLit",
               "tUnion",
               "tPrim",
@@ -184,7 +185,7 @@ writeFileSync(
               "zonk",
             ],
           },
-          { file: "schemes.ts", names: ["tNumber", "tString", "tBool"] },
+          { file: "schemes.ts", names: ["tNumber", "tString", "tBool", "widenLits"] },
         ],
       },
     ],

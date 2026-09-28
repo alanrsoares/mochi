@@ -15,6 +15,11 @@ test("useState pins the setter's state type", () => switch typecheck("extern use
   | Ok(_) => false |> ok
 })
 
+test("useState widens a literal initial state", () => switch typecheck("extern useState : a -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (tab, setTab) = useState(\"js\") in setTab(\"ts\")\n", [preactPlugin]) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
+})
+
 test("without the plugin, the loose useRef extern remains unpinned", () => switch typecheck("extern useRef : a -> b = \"preact/hooks\" \"useRef\"\nlet r = useRef(\"x\")\nlet n : number = r.current\n", []) {
   | Err(_) => false |> ok
   | Ok(_) => true |> ok
@@ -33,4 +38,19 @@ test("useLazyState requires an initializer thunk", () => switch typecheck("exter
 test("useMemo returns its thunk result", () => switch typecheck("extern useMemo : (() -> a) -> b -> a = \"preact/hooks\" \"useMemo\"\nlet value = useMemo(() => \"x\", [])\nlet n : number = value\n", [preactPlugin]) {
   | Err(_) => true |> ok
   | Ok(_) => false |> ok
+})
+
+test("useEffect rejects a non-array dependency list", () => switch typecheck("extern useEffect : (() -> c) -> d -> e = \"preact/hooks\" \"useEffect\"\nlet x = useEffect(() => (), 42)\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useMemo rejects a surplus argument", () => switch typecheck("extern useMemo : (() -> a) -> b -> a = \"preact/hooks\" \"useMemo\"\nlet x = useMemo(() => 1, [], 2)\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useEffect accepts an array dependency list", () => switch typecheck("extern useEffect : (() -> c) -> d -> e = \"preact/hooks\" \"useEffect\"\nlet x = useEffect(() => (), [])\n", [preactPlugin]) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
 })

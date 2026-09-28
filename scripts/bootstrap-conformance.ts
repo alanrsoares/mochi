@@ -19,6 +19,7 @@ import {
   compileTsBootstrapSyncWith,
 } from "@mochi/compiler/bootstrap/sync";
 import { formatBootstrap } from "@mochi/compiler/bootstrap/syntax";
+import { preactBootstrap } from "@mochi/plugin-preact/bootstrap";
 import { reReducedBootstrap } from "@mochi/plugin-re-reduced/bootstrap";
 import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 import { match } from "@onrails/pattern";
@@ -75,6 +76,7 @@ const baseOptions: BootstrapOptions = {
  * naming one missing from here fails.
  */
 const conformancePlugins: Record<string, BootstrapPlugin> = {
+  preact: preactBootstrap,
   "re-reduced": reReducedBootstrap,
   "styled-cva": styledCvaBootstrap,
 };
@@ -390,21 +392,37 @@ export const pendingBootstrapConformance = (): PendingStatus[] => {
 };
 
 /** Execute every checked-in case. `null` means the corpus conforms. */
+const readManifest = (): Manifest => JSON.parse(text("manifest.json")) as Manifest;
+
+/** Manifest-level failures: version and coverage, before any case runs. */
+export const manifestConformanceErrors = (): string[] => {
+  const manifest = readManifest();
+  return manifest.version !== 1
+    ? [`unsupported conformance manifest version ${manifest.version}`]
+    : coverageErrorsFor(manifest);
+};
+
+/** Every case id, in manifest order — one test each keeps a timeout per case. */
+export const bootstrapConformanceCaseIds = (): string[] => readManifest().cases.map((c) => c.id);
+
+/** One case's failure, or null. A pending case that conforms is itself a failure. */
+export const runBootstrapConformanceCase = (id: string): string | null => {
+  const manifest = readManifest();
+  const test = manifest.cases.find((c) => c.id === id);
+  if (test === undefined) return resultError(id, "no such case");
+  const failure = runCase(test);
+  if (!(manifest.coverage.pending ?? []).includes(id)) return failure;
+  return failure
+    ? null
+    : resultError(id, "pending case now conforms; move it to coverage.required");
+};
+
 export const runBootstrapConformance = (): string[] => {
-  const manifest = JSON.parse(text("manifest.json")) as Manifest;
-  if (manifest.version !== 1)
-    return [`unsupported conformance manifest version ${manifest.version}`];
-  const pending = new Set(manifest.coverage.pending ?? []);
+  const errors = manifestConformanceErrors();
+  if (readManifest().version !== 1) return errors;
   return [
-    ...coverageErrorsFor(manifest),
-    ...manifest.cases.flatMap((test) => {
-      const failure = runCase(test);
-      if (pending.has(test.id))
-        return failure
-          ? []
-          : [resultError(test.id, "pending case now conforms; move it to coverage.required")];
-      return failure ? [failure] : [];
-    }),
+    ...errors,
+    ...bootstrapConformanceCaseIds().flatMap((id) => runBootstrapConformanceCase(id) ?? []),
   ];
 };
 

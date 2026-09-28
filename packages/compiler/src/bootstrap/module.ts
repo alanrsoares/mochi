@@ -53,6 +53,8 @@ type SeedModule = {
   ) => BootstrapResult<string, BootstrapDiagnostic>;
 };
 
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   type BootstrapOptions,
   defaultBootstrapOptions,
@@ -60,7 +62,7 @@ import {
   type SeedOptions,
   toSeedOptions,
 } from "./options.ts";
-import { loadSeed } from "./seed-path.ts";
+import { loadSeed, seedPath } from "./seed-path.ts";
 
 export type { BootstrapOptions };
 export { defaultBootstrapOptions, editorBootstrapOptions };
@@ -73,6 +75,15 @@ export type BootstrapGraphRecovery = {
 };
 
 const seed = loadSeed<SeedModule>("module.bundle.cjs");
+
+/**
+ * Identifies the frozen seed: a hash of its manifest, which already hashes every
+ * seed file. Output caches key on it so a refreeze invalidates them.
+ */
+export const bootstrapSeedId = (): string =>
+  createHash("sha256")
+    .update(readFileSync(seedPath("manifest.json")))
+    .digest("hex");
 
 export const buildModulesBootstrapWith = (
   entry: string,

@@ -55,6 +55,17 @@ let test = _ =>
   expect(isErr(r)).toBe(true);
 });
 
+test("useState widens a literal initial state to its base type", () => {
+  const src = `${HOOKS}
+let test = _ =>
+  let (tab, setTab) = useState("js") in
+  let _ = setTab("ts") in tab
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
+  expect(isErr(r)).toBe(false);
+  expect(showScheme(unwrapOk(r).res.env.get("test")!, unwrapOk(r).res.aliases)).toContain("string");
+});
+
 test("useState allows functional updater", () => {
   const src = `${HOOKS}
 let test = _ =>
@@ -128,4 +139,26 @@ let test = _ =>
 `;
   const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
   expect(isErr(r)).toBe(true);
+});
+
+test.each([
+  ["a non-array dependency list", "useEffect(() => (), 42)"],
+  ["a surplus argument", "useMemo(() => 1, [], 2)"],
+])("hooks reject %s", (_, call) => {
+  const src = `${HOOKS}
+let test = _ =>
+  let _ = ${call} in 0
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
+  expect(isErr(r)).toBe(true);
+});
+
+test("hooks accept an array dependency list", () => {
+  const src = `${HOOKS}
+let test = _ =>
+  let _ = useEffect(() => (), []) in
+  useCallback(x => x, [1])
+`;
+  const r = toTypedProgram(src, { open: true, namespaces: preludeNamespaces, plugins });
+  expect(isErr(r)).toBe(false);
 });

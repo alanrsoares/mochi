@@ -1,13 +1,14 @@
 import type { Expr } from "../ast";
 import type { Row, SpanAt, St, Ty } from "../types";
+import type { BoundErr } from "./jsx";
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
+  Err,
   None,
   Ok,
   Some,
-  _Array_drop,
   _Array_get,
   _Result_flatMap,
   _Result_map,
@@ -33,6 +34,7 @@ import {
   zonk,
   freshVar,
 } from "../types";
+import { widenLits } from "../schemes";
 const arrOf: (elem: Ty) => Ty = (elem: Ty) => tCon("Array", [elem]);
 const setStateDomain: (state: Ty) => Ty = (state: Ty) => tUnion([state, tArrow(state, state)]);
 const isRef: _Curry<[fn: Expr, name: string], boolean> = _curry(2, (fn: Expr, name: string) =>
@@ -108,13 +110,12 @@ const inferUseState: <A, B, C, D>(
           .with({ _tag: "None" }, () => Ok(None as Option<[Ty, St]>))
           .with({ _tag: "Some" }, ({ value: init }) =>
             _Result_map(
-              ([state, st1]: [Ty, St]) =>
-                Some(
-                  _tuple(
-                    tTuple([zonk(state, st1), tArrow(setStateDomain(zonk(state, st1)), tUnit)]),
-                    st1,
-                  ),
-                ) as Option<[Ty, St]>,
+              ([state, st1]: [Ty, St]) => {
+                const value: Ty = widenLits(zonk(state, st1));
+                return Some(
+                  _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st1),
+                ) as Option<[Ty, St]>;
+              },
               api.inferExpr(init, st),
             ),
           )
@@ -149,7 +150,7 @@ const inferUseLazyState: <A, B, C, D, E>(
                 ([thunkT, st2]: [A, B]) =>
                   _Result_map(
                     (st3: St) => {
-                      const value: Ty = zonk(state, st3);
+                      const value: Ty = widenLits(zonk(state, st3));
                       return Some(
                         _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3),
                       ) as Option<[Ty, St]>;
@@ -190,42 +191,97 @@ const inferUseRef: <A, B, C, D>(
           .exhaustive()
       : Ok(None as Option<[Ty, St]>),
 );
-const inferEffectLike: <A, B, C, D>(
+const inferDeps: <A, B, E, F>(
+  args: Expr[],
+  st: A,
+  api: {
+    unify: (a: B, b: Ty, c: { next: number } & E, d: SpanAt) => Result<A, BoundErr>;
+    inferExpr: (a: Expr, b: A) => Result<[B, { next: number } & E], BoundErr>;
+  } & F,
+  name: string,
+) => Result<A, BoundErr> = _curry(
+  4,
+  <A, B, E, F>(
+    args: Expr[],
+    st: A,
+    api: {
+      unify: (a: B, b: Ty, c: { next: number } & E, d: SpanAt) => Result<A, BoundErr>;
+      inferExpr: (a: Expr, b: A) => Result<[B, { next: number } & E], BoundErr>;
+    } & F,
+    name: string,
+  ) =>
+    match(_Array_get(2, args))
+      .with({ _tag: "Some" }, ({ value: surplus }) =>
+        ((sp: SpanAt) =>
+          Err({
+            message: `${name} takes one dependency array after its callback`,
+            start: sp.start,
+            end: sp.end,
+            help: None,
+            suggestions: [] as { end: number; replaceWith: string; start: number; title: string }[],
+          }))(preactSpan(surplus)),
+      )
+      .with({ _tag: "None" }, () =>
+        match(_Array_get(1, args))
+          .with({ _tag: "None" }, () => Ok(st))
+          .with({ _tag: "Some" }, ({ value: deps }) =>
+            _Result_flatMap(
+              ([depsT, st1]: [B, { next: number } & E]) =>
+                (([elem, st2]: [Ty, { next: number } & E]) =>
+                  api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
+              api.inferExpr(deps, st),
+            ),
+          )
+          .exhaustive(),
+      )
+      .exhaustive(),
+);
+const inferEffectLike: <A, D, E, F>(
   fn: Expr,
   args: Expr[],
-  st: { next: number } & C,
+  st: { next: number } & D,
   api: {
-    inferExpr: (a: Expr, b: { next: number } & C) => Result<[A, { next: number } & C], B>;
-    unify: (a: A, b: Ty, c: { next: number } & C, d: SpanAt) => Result<{ next: number } & C, B>;
-  } & D,
+    unify: (
+      a: A,
+      b: Ty,
+      c: { next: number } & E,
+      d: SpanAt,
+    ) => Result<{ next: number } & D, BoundErr>;
+    inferExpr: (a: Expr, b: { next: number } & D) => Result<[A, { next: number } & E], BoundErr>;
+  } & F,
   name: string,
-) => Result<Option<[Ty, { next: number } & C]>, B> = _curry(
+) => Result<Option<[Ty, { next: number } & D]>, BoundErr> = _curry(
   5,
-  <A, B, C, D>(
+  <A, D, E, F>(
     fn: Expr,
     args: Expr[],
-    st: { next: number } & C,
+    st: { next: number } & D,
     api: {
-      inferExpr: (a: Expr, b: { next: number } & C) => Result<[A, { next: number } & C], B>;
-      unify: (a: A, b: Ty, c: { next: number } & C, d: SpanAt) => Result<{ next: number } & C, B>;
-    } & D,
+      unify: (
+        a: A,
+        b: Ty,
+        c: { next: number } & E,
+        d: SpanAt,
+      ) => Result<{ next: number } & D, BoundErr>;
+      inferExpr: (a: Expr, b: { next: number } & D) => Result<[A, { next: number } & E], BoundErr>;
+    } & F,
     name: string,
   ) =>
     and(isRef(fn, name), length(args) >= 1)
       ? match(_Array_get(0, args))
           .with({ _tag: "None" }, () => Ok(None))
           .with({ _tag: "Some" }, ({ value: effect }) =>
-            (([cleanup, st1]: [Ty, { next: number } & C]) =>
+            (([cleanup, st1]: [Ty, { next: number } & D]) =>
               _Result_flatMap(
-                ([effectT, st2]: [A, { next: number } & C]) =>
+                ([effectT, st2]: [A, { next: number } & E]) =>
                   _Result_flatMap(
-                    (st3: { next: number } & C) =>
+                    (st3: { next: number } & D) =>
                       eq(length(args), 1)
-                        ? (([dep, st4]: [Ty, { next: number } & C]) =>
+                        ? (([dep, st4]: [Ty, { next: number } & D]) =>
                             Ok(Some(_tuple(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3))
                         : _Result_map(
-                            (st4: { next: number } & C) => Some(_tuple(tUnit, st4)),
-                            inferArgs(_Array_drop(1, args), st3, api.inferExpr),
+                            (st4: { next: number } & D) => Some(_tuple(tUnit, st4)),
+                            inferDeps(args, st3, api, name),
                           ),
                     api.unify(effectT, tArrow(tUnit, cleanup), st2, preactSpan(effect)),
                   ),
@@ -235,18 +291,24 @@ const inferEffectLike: <A, B, C, D>(
           .exhaustive()
       : Ok(None),
 );
-const inferUseCallback: <A, B, C>(
+const inferUseCallback: <C>(
   fn: Expr,
-  args: A[],
+  args: Expr[],
   st: St,
-  api: { inferExpr: (a: A, b: St) => Result<[Ty, St], B> } & C,
-) => Result<Option<[Ty, St]>, B> = _curry(
+  api: {
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+  } & C,
+) => Result<Option<[Ty, St]>, BoundErr> = _curry(
   4,
-  <A, B, C>(
+  <C>(
     fn: Expr,
-    args: A[],
+    args: Expr[],
     st: St,
-    api: { inferExpr: (a: A, b: St) => Result<[Ty, St], B> } & C,
+    api: {
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+    } & C,
   ) =>
     and(isRef(fn, "useCallback"), length(args) >= 1)
       ? match(_Array_get(0, args))
@@ -263,7 +325,7 @@ const inferUseCallback: <A, B, C>(
                       ))(freshVar(st1))
                   : _Result_map(
                       (st2: St) => Some(_tuple(zonk(callbackT, st2), st2)) as Option<[Ty, St]>,
-                      inferArgs(_Array_drop(1, args), st1, api.inferExpr),
+                      inferDeps(args, st1, api, "useCallback"),
                     ),
               api.inferExpr(callback, st),
             ),
@@ -271,24 +333,24 @@ const inferUseCallback: <A, B, C>(
           .exhaustive()
       : Ok(None as Option<[Ty, St]>),
 );
-const inferUseMemo: <A, B, C>(
+const inferUseMemo: <A, D, E>(
   fn: Expr,
   args: Expr[],
   st: St,
   api: {
-    inferExpr: (a: Expr, b: St) => Result<[A, St], B>;
-    unify: (a: A, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-  } & C,
-) => Result<Option<[Ty, St]>, B> = _curry(
+    unify: (a: A, b: Ty, c: { next: number } & D, d: SpanAt) => Result<St, BoundErr>;
+    inferExpr: (a: Expr, b: St) => Result<[A, { next: number } & D], BoundErr>;
+  } & E,
+) => Result<Option<[Ty, St]>, BoundErr> = _curry(
   4,
-  <A, B, C>(
+  <A, D, E>(
     fn: Expr,
     args: Expr[],
     st: St,
     api: {
-      inferExpr: (a: Expr, b: St) => Result<[A, St], B>;
-      unify: (a: A, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-    } & C,
+      unify: (a: A, b: Ty, c: { next: number } & D, d: SpanAt) => Result<St, BoundErr>;
+      inferExpr: (a: Expr, b: St) => Result<[A, { next: number } & D], BoundErr>;
+    } & E,
   ) =>
     and(isRef(fn, "useMemo"), length(args) >= 1)
       ? match(_Array_get(0, args))
@@ -296,7 +358,7 @@ const inferUseMemo: <A, B, C>(
           .with({ _tag: "Some" }, ({ value: thunk }) =>
             (([value, st1]: [Ty, St]) =>
               _Result_flatMap(
-                ([thunkT, st2]: [A, St]) =>
+                ([thunkT, st2]: [A, { next: number } & D]) =>
                   _Result_flatMap(
                     (st3: St) =>
                       eq(length(args), 1)
@@ -308,7 +370,7 @@ const inferUseMemo: <A, B, C>(
                             ))(freshVar(st3))
                         : _Result_map(
                             (st4: St) => Some(_tuple(zonk(value, st4), st4)) as Option<[Ty, St]>,
-                            inferArgs(_Array_drop(1, args), st3, api.inferExpr),
+                            inferDeps(args, st3, api, "useMemo"),
                           ),
                     api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk)),
                   ),
@@ -356,26 +418,26 @@ const inferHookDeps: <A, B, C, D, E>(
       .exhaustive();
   },
 );
-export const inferPreactCall: <A, B, C>(
+export const inferPreactCall: <A, D>(
   fn: Expr,
   args: Expr[],
   _origin: A,
   st: St,
   api: {
-    inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-  } & C,
-) => Result<Option<[Ty, St]>, B> = _curry(
+    inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+    unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+  } & D,
+) => Result<Option<[Ty, St]>, BoundErr> = _curry(
   5,
-  <A, B, C>(
+  <A, D>(
     fn: Expr,
     args: Expr[],
     _origin: A,
     st: St,
     api: {
-      inferExpr: (a: Expr, b: St) => Result<[Ty, St], B>;
-      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, B>;
-    } & C,
+      inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
+      unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
+    } & D,
   ) =>
     _Result_flatMap(
       (first) =>

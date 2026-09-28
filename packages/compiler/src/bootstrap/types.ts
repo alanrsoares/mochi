@@ -33,6 +33,7 @@ const seed = loadSeed<SeedTypeCtors>("syntax.bundle.cjs");
 export const tCon = seed.tCon;
 export const tArrow = seed.tArrow;
 export const tRecord = seed.tRecord;
+export const tTuple = seed.tTuple;
 export const tLit = seed.tLit;
 export const tUnion = seed.tUnion;
 /** The core's primitive types; build one by name only through these. */
@@ -45,3 +46,5 @@ export const freshVar = seed.freshVar;
 export const freshRowVar = seed.freshRowVar;
 /** A type with every solved variable in `st` substituted through. */
 export const zonk = seed.zonk;
+/** Literal types widened to their base (`"js"` → `string`); literal unions stay. */
+export const widenLits = seed.widenLits;

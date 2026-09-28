@@ -717,7 +717,7 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
         .exhaustive(),
     )
     .with({ _tag: "ELambda" }, ({ params, body, span: sp }) =>
-      (([cparams, cbody, fills]: [LamParam[], Expr, { labs: LamParam[]; labVar: string }[]]) => {
+      (([cparams, cbody, fills]: [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]) => {
         const bound: Set<string> = fillNames(
           fills,
           paramNameSet(cparams, 0, _Set_fromArray([] as string[])),
@@ -2649,7 +2649,7 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
         exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc)),
       )
       .with({ _tag: "ELambda" }, ({ params, body }) =>
-        (([cparams, cbody, fills]: [LamParam[], Expr, { labs: LamParam[]; labVar: string }[]]) => {
+        (([cparams, cbody, fills]: [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]) => {
           const acc2: Set<string> = length(cparams) >= 2 ? _Set_add("_curry", acc) : acc;
           const acc3: Set<string> = reduce(
             _curry(2, (a: Set<string>, g: { labs: LamParam[]; labVar: string }) =>
