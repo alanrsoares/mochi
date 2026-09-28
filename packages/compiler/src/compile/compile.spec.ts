@@ -101,7 +101,7 @@ test("pattern-only local ctors omit factories", () => {
   );
   expect(out).not.toContain("const Red");
   expect(out).not.toContain("const Green");
-  expect(out).toContain(`.with({ _tag: "Red" }`);
+  expect(out).toContain(`((_v) => _v._tag === "Red"`);
 });
 
 test("exported variant keeps unused ctor factories", () => {
@@ -119,25 +119,24 @@ test("unused payload ctors do not seed _curry", () => {
   expect(out).not.toContain("_curry");
 });
 
-test("exhaustive switch → @onrails/pattern .exhaustive()", () => {
+test("exhaustive switch → a ternary chain over the scrutinee (ADR 0113)", () => {
   const out = js(
     "type Shape = | Circle(float) | Rect(float, float)\n" +
       "let area = shape => switch shape { | Circle(r) => square(r) | Rect(w, h) => mul(w, h) }",
   );
-  expect(out).toContain(`import { match } from "@onrails/pattern";`);
-  expect(out).toContain("const area = (shape) => match(shape)");
-  expect(out).toContain(`.with({ _tag: "Circle" }, ({ _0: r }) => square(r))`);
-  expect(out).toContain(`.with({ _tag: "Rect" }, ({ _0: w, _1: h }) => mul(w, h))`);
-  expect(out).toContain(".exhaustive()");
+  expect(out).not.toContain("@onrails/pattern");
+  expect(out).toContain(`const area = (shape) => ((_v) => _v._tag === "Circle"`);
+  expect(out).toContain(`? (({ _0: r }) => (square(r)))(_v)`);
+  expect(out).toContain(`? (({ _0: w, _1: h }) => (mul(w, h)))(_v)`);
+  expect(out).toContain(`(() => { throw new Error("non-exhaustive match"); })())(shape)`);
 });
 
-test("wildcard arm → .otherwise()", () => {
+test("wildcard arm → the chain's last branch", () => {
   const out = js(
     "type Shape = | Circle(float) | Rect(float, float)\n" +
       "let name = shape => switch shape { | Circle(r) => circle | _ => other }",
   );
-  expect(out).toContain(`.with({ _tag: "Circle" }, ({ _0: r }) => circle)`);
-  expect(out).toContain(".otherwise(() => other)");
+  expect(out).toContain(`? (({ _0: r }) => (circle))(_v)\n    : (other))(shape)`);
 });
 
 test("non-exhaustive switch is a compile error naming the missing ctor", () => {
@@ -287,7 +286,7 @@ test("a negative number literal lexes and emits as a signed value", () => {
 });
 
 test("a negative literal works as a match pattern", () => {
-  expect(js("let f = n => switch n { | -1 => 0 | _ => n }")).toContain(".with(-1, () => 0)");
+  expect(js("let f = n => switch n { | -1 => 0 | _ => n }")).toContain("_v === -1\n    ? (0)");
 });
 
 test("a float literal keeps its form (no int coercion) in the output", () => {

@@ -76,12 +76,16 @@ export const tString: Ty = tPrim("string");
  * (used by typeExprToType, further down, for extern signatures)
  */
 export const primType: (name: string) => Ty = (name: string) =>
-  match(name)
-    .with("float", () => tNumber)
-    .with("int", () => tNumber)
-    .with("string", () => tString)
-    .with("bool", () => tBool)
-    .otherwise(() => tPrim(name));
+  ((_v) =>
+    _v === "float"
+      ? tNumber
+      : _v === "int"
+        ? tNumber
+        : _v === "string"
+          ? tString
+          : _v === "bool"
+            ? tBool
+            : tPrim(name))(name);
 
 export const emptyVarSets: VarSets = { tv: _Set_fromArray([]), rv: _Set_fromArray([]) };
 const diffVarSets: <C, D>(
@@ -95,43 +99,46 @@ const diffVarSets: <C, D>(
   ) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }),
 );
 export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, (t: Ty, acc: VarSets) =>
-  match(t)
-    .with({ _tag: "TyVar" }, ({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }))
-    .with({ _tag: "TyCon" }, ({ args }) => collectArgs(args, acc))
-    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc)))
-    .with({ _tag: "TyRecord" }, ({ row }) => collectRow(row, acc))
-    .with({ _tag: "TySingleton" }, () => acc)
-    .with({ _tag: "TyOneOf" }, ({ members }) => collectArgs(members, acc))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id }) => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }))(_v)
+      : _v._tag === "TyCon"
+        ? (({ args }) => collectArgs(args, acc))(_v)
+        : _v._tag === "TyFn"
+          ? (({ from: fromT, to: toT }) => collect(toT, collect(fromT, acc)))(_v)
+          : _v._tag === "TyRecord"
+            ? (({ row }) => collectRow(row, acc))(_v)
+            : _v._tag === "TySingleton"
+              ? acc
+              : _v._tag === "TyOneOf"
+                ? (({ members }) => collectArgs(members, acc))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(t),
 );
 const collectArgs: _Curry<[args: Ty[], acc: VarSets], VarSets> = _curry(
   2,
   (args: Ty[], acc: VarSets) =>
-    match(args)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => acc,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([a, ...rest]) => collectArgs(rest, collect(a, acc)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? acc
+        : _v.length >= 1
+          ? (([a, ...rest]) => collectArgs(rest, collect(a, acc)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(args),
 );
 const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, (row: Row, acc: VarSets) =>
-  match(row)
-    .with({ _tag: "RowVar" }, ({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }))
-    .with({ _tag: "RowExtend" }, ({ fieldType, rest }) => collectRow(rest, collect(fieldType, acc)))
-    .with({ _tag: "RowEmpty" }, () => acc)
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "RowVar"
+      ? (({ id }) => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }))(_v)
+      : _v._tag === "RowExtend"
+        ? (({ fieldType, rest }) => collectRow(rest, collect(fieldType, acc)))(_v)
+        : _v._tag === "RowEmpty"
+          ? acc
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(row),
 );
 export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets);
 /**
@@ -146,63 +153,70 @@ export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets
 const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
   (t: Ty, bound: VarSets, st: St, acc: VarSets) =>
-    match(t)
-      .with({ _tag: "TyVar" }, ({ id }) =>
-        _Set_has(id, bound.tv)
-          ? acc
-          : match(_Map_get(id, st.tv))
-              .with({ _tag: "Some" }, ({ value: next }) => collectFree(next, bound, st, acc))
-              .with({ _tag: "None" }, () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }))
-              .exhaustive(),
-      )
-      .with({ _tag: "TyCon" }, ({ args }) => collectFreeArgs(args, bound, st, acc))
-      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-        collectFree(toT, bound, st, collectFree(fromT, bound, st, acc)),
-      )
-      .with({ _tag: "TyRecord" }, ({ row }) => collectFreeRow(row, bound, st, acc))
-      .with({ _tag: "TySingleton" }, () => acc)
-      .with({ _tag: "TyOneOf" }, ({ members }) => collectFreeArgs(members, bound, st, acc))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "TyVar"
+        ? (({ id }) =>
+            _Set_has(id, bound.tv)
+              ? acc
+              : ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: next }) => collectFree(next, bound, st, acc))(_v)
+                    : _v._tag === "None"
+                      ? { tv: _Set_add(id, acc.tv), rv: acc.rv }
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(id, st.tv)))(_v)
+        : _v._tag === "TyCon"
+          ? (({ args }) => collectFreeArgs(args, bound, st, acc))(_v)
+          : _v._tag === "TyFn"
+            ? (({ from: fromT, to: toT }) =>
+                collectFree(toT, bound, st, collectFree(fromT, bound, st, acc)))(_v)
+            : _v._tag === "TyRecord"
+              ? (({ row }) => collectFreeRow(row, bound, st, acc))(_v)
+              : _v._tag === "TySingleton"
+                ? acc
+                : _v._tag === "TyOneOf"
+                  ? (({ members }) => collectFreeArgs(members, bound, st, acc))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(t),
 );
 const collectFreeArgs: _Curry<[args: Ty[], bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
   (args: Ty[], bound: VarSets, st: St, acc: VarSets) =>
-    match(args)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => acc,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? acc
+        : _v.length >= 1
+          ? (([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(args),
 );
 const collectFreeRow: _Curry<[row: Row, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
   (row: Row, bound: VarSets, st: St, acc: VarSets) =>
-    match(row)
-      .with({ _tag: "RowVar" }, ({ id }) =>
-        _Set_has(id, bound.rv)
-          ? acc
-          : match(_Map_get(id, st.rv))
-              .with({ _tag: "Some" }, ({ value: next }) => collectFreeRow(next, bound, st, acc))
-              .with({ _tag: "None" }, () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }))
-              .exhaustive(),
-      )
-      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
-        collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc)),
-      )
-      .with({ _tag: "RowEmpty" }, () => acc)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "RowVar"
+        ? (({ id }) =>
+            _Set_has(id, bound.rv)
+              ? acc
+              : ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: next }) => collectFreeRow(next, bound, st, acc))(_v)
+                    : _v._tag === "None"
+                      ? { tv: acc.tv, rv: _Set_add(id, acc.rv) }
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(id, st.rv)))(_v)
+        : _v._tag === "RowExtend"
+          ? (({ fieldType, rest }) =>
+              collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc)))(_v)
+          : _v._tag === "RowEmpty"
+            ? acc
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(row),
 );
 const freeInScheme: <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
@@ -265,33 +279,42 @@ export const generalize: <A, B>(
  * pass so `"hi"` stays `"hi"` (ADR 0081). Finite unions of lits stay precise.
  */
 export const widenLits: (t: Ty) => Ty = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TySingleton", base: "string" }, () => tString)
-    .with({ _tag: "TySingleton" }, () => tNumber)
-    .with({ _tag: "TyOneOf" }, ({ members }) =>
-      tUnion(
-        map(
-          (m: Ty) =>
-            match(m)
-              .with({ _tag: "TySingleton" }, () => m)
-              .otherwise(() => widenLits(m)),
-          members,
-        ),
-      ),
-    )
-    .with({ _tag: "TyCon" }, ({ name, args }) => tCon(name, map(widenLits, args)))
-    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tArrow(widenLits(fromT), widenLits(toT)))
-    .with({ _tag: "TyRecord" }, ({ row }) => tRecord(widenRow(row)))
-    .with({ _tag: "TyVar" }, () => t)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "TySingleton" && _v.base === "string"
+      ? tString
+      : _v._tag === "TySingleton"
+        ? tNumber
+        : _v._tag === "TyOneOf"
+          ? (({ members }) =>
+              tUnion(
+                map(
+                  (m: Ty) => ((_v) => (_v._tag === "TySingleton" ? m : widenLits(m)))(m),
+                  members,
+                ),
+              ))(_v)
+          : _v._tag === "TyCon"
+            ? (({ name, args }) => tCon(name, map(widenLits, args)))(_v)
+            : _v._tag === "TyFn"
+              ? (({ from: fromT, to: toT }) => tArrow(widenLits(fromT), widenLits(toT)))(_v)
+              : _v._tag === "TyRecord"
+                ? (({ row }) => tRecord(widenRow(row)))(_v)
+                : _v._tag === "TyVar"
+                  ? t
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(t);
 const widenRow: (row: Row) => Row = (row: Row) =>
-  match(row)
-    .with({ _tag: "RowEmpty" }, () => row)
-    .with({ _tag: "RowVar" }, () => row)
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-      rField(label, widenLits(fieldType), widenRow(rest), optional),
-    )
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "RowEmpty"
+      ? row
+      : _v._tag === "RowVar"
+        ? row
+        : _v._tag === "RowExtend"
+          ? (({ label, fieldType, optional, rest }) =>
+              rField(label, widenLits(fieldType), widenRow(rest), optional))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(row);
 const instMapFrom: <A>(vars: A[], acc: Map<A, Ty>, st: St) => [Map<A, Ty>, St] = _curry(
   3,
   <A>(vars: A[], acc: Map<A, Ty>, st: St) =>
@@ -331,34 +354,47 @@ const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, 
 const instSub: _Curry<[t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>], Ty> = _curry(
   3,
   (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
-    match(t)
-      .with({ _tag: "TyVar" }, ({ id }) => _Map_getOr(t, id, tmap))
-      .with({ _tag: "TyCon" }, ({ name, args }) =>
-        tCon(
-          name,
-          map((a: Ty) => instSub(a, tmap, rmap), args),
-        ),
-      )
-      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-        tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap)),
-      )
-      .with({ _tag: "TyRecord" }, ({ row }) => tRecord(instSubRow(row, tmap, rmap)))
-      .with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value))
-      .with({ _tag: "TyOneOf" }, ({ members }) =>
-        tUnion(map((m: Ty) => instSub(m, tmap, rmap), members)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "TyVar"
+        ? (({ id }) => _Map_getOr(t, id, tmap))(_v)
+        : _v._tag === "TyCon"
+          ? (({ name, args }) =>
+              tCon(
+                name,
+                map((a: Ty) => instSub(a, tmap, rmap), args),
+              ))(_v)
+          : _v._tag === "TyFn"
+            ? (({ from: fromT, to: toT }) =>
+                tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap)))(_v)
+            : _v._tag === "TyRecord"
+              ? (({ row }) => tRecord(instSubRow(row, tmap, rmap)))(_v)
+              : _v._tag === "TySingleton"
+                ? (({ base, value }) => TySingleton(base, value))(_v)
+                : _v._tag === "TyOneOf"
+                  ? (({ members }) => tUnion(map((m: Ty) => instSub(m, tmap, rmap), members)))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(t),
 );
 const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>], Row> = _curry(
   3,
   (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>) =>
-    match(row)
-      .with({ _tag: "RowVar" }, ({ id }) => _Map_getOr(row, id, rmap))
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-        rField(label, instSub(fieldType, tmap, rmap), instSubRow(rest, tmap, rmap), optional),
-      )
-      .with({ _tag: "RowEmpty" }, () => row)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "RowVar"
+        ? (({ id }) => _Map_getOr(row, id, rmap))(_v)
+        : _v._tag === "RowExtend"
+          ? (({ label, fieldType, optional, rest }) =>
+              rField(
+                label,
+                instSub(fieldType, tmap, rmap),
+                instSubRow(rest, tmap, rmap),
+                optional,
+              ))(_v)
+          : _v._tag === "RowEmpty"
+            ? row
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(row),
 );
 export const instantiate: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -370,10 +406,14 @@ export const instantiate: <A>(
     ))(instMapFrom(sc.vars, new Map<number, Ty>(), st)),
 );
 export const isUpperStart: (s: string) => boolean = (s: string) =>
-  match(_Str_codeAt(0, s))
-    .with({ _tag: "Some" }, ({ value: c }) => and(c >= 65, c <= 90))
-    .with({ _tag: "None" }, () => false)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: c }) => and(c >= 65, c <= 90))(_v)
+      : _v._tag === "None"
+        ? false
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Str_codeAt(0, s));
 
 export const typeExprListToType: _Curry<
   [
@@ -393,29 +433,19 @@ export const typeExprListToType: _Curry<
     aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
-    match(tes)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple([] as Ty[], vars, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([te, ...rest]) =>
-          (([t, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, St]) =>
-              _tuple(_Array_prepend(t, restTs), vars2, st2))(
-              typeExprListToType(rest, vars1, st1, aliases, expanding),
-            ))(typeExprToType(te, vars, st, aliases, expanding)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? _tuple([] as Ty[], vars, st)
+        : _v.length >= 1
+          ? (([te, ...rest]) =>
+              (([t, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, St]) =>
+                  _tuple(_Array_prepend(t, restTs), vars2, st2))(
+                  typeExprListToType(rest, vars1, st1, aliases, expanding),
+                ))(typeExprToType(te, vars, st, aliases, expanding)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(tes),
 );
 /**
  * `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which the
@@ -441,23 +471,28 @@ export const typeExprName: _Curry<
   ) =>
     _Array_contains(name, primTypeNames)
       ? _tuple(primType(name), vars, st)
-      : match(_Map_get(name, vars))
-          .with({ _tag: "Some" }, ({ value: v }) => _tuple(v, vars, st))
-          .with({ _tag: "None" }, () =>
-            match(_Map_get(name, aliases))
-              .with({ _tag: "Some" }, ({ value: info }) =>
-                (([t, st1]: [Ty, St]) => _tuple(t, vars, st1))(
-                  aliasRow(name, info, [] as Ty[], st, aliases, expanding),
-                ),
-              )
-              .with({ _tag: "None" }, () =>
-                isUpperStart(name)
-                  ? _tuple(tPrim(name), vars, st)
-                  : (([v, st1]: [Ty, St]) => _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: v }) => _tuple(v, vars, st))(_v)
+            : _v._tag === "None"
+              ? ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: info }) =>
+                        (([t, st1]: [Ty, St]) => _tuple(t, vars, st1))(
+                          aliasRow(name, info, [] as Ty[], st, aliases, expanding),
+                        ))(_v)
+                    : _v._tag === "None"
+                      ? isUpperStart(name)
+                        ? _tuple(tPrim(name), vars, st)
+                        : (([v, st1]: [Ty, St]) => _tuple(v, _Map_set(name, v, vars), st1))(
+                            freshVar(st),
+                          )
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(name, aliases))
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Map_get(name, vars)),
 );
 /**
  * surface type-expr -> HM type. Prim names map to their type; Uppercase names
@@ -483,55 +518,71 @@ export const typeExprToType: _Curry<
     aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
-    match(te)
-      .with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe }) =>
-        (([fromT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-          (([toT, vars2, st2]: [Ty, Map<string, Ty>, St]) =>
-            _tuple(tArrow(fromT, toT), vars2, st2))(
-            typeExprToType(toTe, vars1, st1, aliases, expanding),
-          ))(typeExprToType(fromTe, vars, st, aliases, expanding)),
-      )
-      .with({ _tag: "TyApp" }, ({ ctor, args: argTes }) =>
-        (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
-          match(_Map_get(ctor, aliases))
-            .with({ _tag: "Some" }, ({ value: info }) =>
-              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
-                aliasRow(ctor, info, args, st1, aliases, expanding),
-              ),
-            )
-            .with({ _tag: "None" }, () => _tuple(tCon(ctor, args), vars1, st1))
-            .exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding)),
-      )
-      .with({ _tag: "TyTuple" }, ({ elems: elemTes }) =>
-        (([elems, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tTuple(elems), vars1, st1))(
-          typeExprListToType(elemTes, vars, st, aliases, expanding),
-        ),
-      )
-      .with({ _tag: "TyList" }, ({ elem: elemTe }) =>
-        (([elemT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-          _tuple(tCon("Array", [elemT]), vars1, st1))(
-          typeExprToType(elemTe, vars, st, aliases, expanding),
-        ),
-      )
-      .with({ _tag: "TyName" }, ({ name }) => typeExprName(name, vars, st, aliases, expanding))
-      .with({ _tag: "TyQual" }, ({ alias, name, args: argTes }) =>
-        (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
-          match(_Map_get(`${alias}.${name}`, aliases))
-            .with({ _tag: "Some" }, ({ value: info }) =>
-              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
-                aliasRow(name, info, args, st1, aliases, expanding),
-              ),
-            )
-            .with({ _tag: "None" }, () => _tuple(tCon(name, args), vars1, st1))
-            .exhaustive())(typeExprListToType(argTes, vars, st, aliases, expanding)),
-      )
-      .with({ _tag: "TyLit" }, ({ value }) => _tuple(tLit(value), vars, st))
-      .with({ _tag: "TyUnion" }, ({ members }) =>
-        (([ts, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tUnion(ts), vars1, st1))(
-          typeExprListToType(members, vars, st, aliases, expanding),
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "TyArrow"
+        ? (({ from: fromTe, to: toTe }) =>
+            (([fromT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+              (([toT, vars2, st2]: [Ty, Map<string, Ty>, St]) =>
+                _tuple(tArrow(fromT, toT), vars2, st2))(
+                typeExprToType(toTe, vars1, st1, aliases, expanding),
+              ))(typeExprToType(fromTe, vars, st, aliases, expanding)))(_v)
+        : _v._tag === "TyApp"
+          ? (({ ctor, args: argTes }) =>
+              (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: info }) =>
+                        (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
+                          aliasRow(ctor, info, args, st1, aliases, expanding),
+                        ))(_v)
+                    : _v._tag === "None"
+                      ? _tuple(tCon(ctor, args), vars1, st1)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(ctor, aliases)))(
+                typeExprListToType(argTes, vars, st, aliases, expanding),
+              ))(_v)
+          : _v._tag === "TyTuple"
+            ? (({ elems: elemTes }) =>
+                (([elems, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+                  _tuple(tTuple(elems), vars1, st1))(
+                  typeExprListToType(elemTes, vars, st, aliases, expanding),
+                ))(_v)
+            : _v._tag === "TyList"
+              ? (({ elem: elemTe }) =>
+                  (([elemT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                    _tuple(tCon("Array", [elemT]), vars1, st1))(
+                    typeExprToType(elemTe, vars, st, aliases, expanding),
+                  ))(_v)
+              : _v._tag === "TyName"
+                ? (({ name }) => typeExprName(name, vars, st, aliases, expanding))(_v)
+                : _v._tag === "TyQual"
+                  ? (({ alias, name, args: argTes }) =>
+                      (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+                        ((_v) =>
+                          _v._tag === "Some"
+                            ? (({ value: info }) =>
+                                (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
+                                  aliasRow(name, info, args, st1, aliases, expanding),
+                                ))(_v)
+                            : _v._tag === "None"
+                              ? _tuple(tCon(name, args), vars1, st1)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(_Map_get(`${alias}.${name}`, aliases)))(
+                        typeExprListToType(argTes, vars, st, aliases, expanding),
+                      ))(_v)
+                  : _v._tag === "TyLit"
+                    ? (({ value }) => _tuple(tLit(value), vars, st))(_v)
+                    : _v._tag === "TyUnion"
+                      ? (({ members }) =>
+                          (([ts, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+                            _tuple(tUnion(ts), vars1, st1))(
+                            typeExprListToType(members, vars, st, aliases, expanding),
+                          ))(_v)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(te),
 );
 const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, St] = _curry(
   3,
@@ -544,31 +595,20 @@ const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, S
       .with(
         (_v) => _v.length >= 1,
         ([p, ...restParams]) =>
-          match(args)
-            .with(
-              (_v) => {
-                const _g: any = _v;
-                return _g.length >= 1;
-              },
-              ([a, ...restArgs]) =>
-                (([restMap, st1]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, a, restMap), st1))(
-                  aliasLocalVarsFrom(restParams, restArgs, st),
-                ),
-            )
-            .with(
-              (_v) => {
-                const _g: any = _v;
-                return _g.length === 0;
-              },
-              () =>
-                (([v, st1]: [Ty, St]) =>
-                  (([restMap, st2]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, v, restMap), st2))(
-                    aliasLocalVarsFrom(restParams, [] as Ty[], st1),
-                  ))(freshVar(st)),
-            )
-            .otherwise(() => {
-              throw new Error("non-exhaustive match");
-            }),
+          ((_v) =>
+            _v.length >= 1
+              ? (([a, ...restArgs]) =>
+                  (([restMap, st1]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, a, restMap), st1))(
+                    aliasLocalVarsFrom(restParams, restArgs, st),
+                  ))(_v)
+              : _v.length === 0
+                ? (([v, st1]: [Ty, St]) =>
+                    (([restMap, st2]: [Map<A, Ty>, St]) => _tuple(_Map_set(p, v, restMap), st2))(
+                      aliasLocalVarsFrom(restParams, [] as Ty[], st1),
+                    ))(freshVar(st))
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(args),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -592,29 +632,19 @@ const aliasFieldsFrom: _Curry<
     aliases: Map<string, AliasInfo>,
     expanding: Set<string>,
   ) =>
-    match(fields)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(RowEmpty as Row, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([fld, ...rest]) =>
-          (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restRow, st2]: [Row, St]) =>
-              _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
-              aliasFieldsFrom(rest, vars1, st1, aliases, expanding),
-            ))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? _tuple(RowEmpty as Row, st)
+        : _v.length >= 1
+          ? (([fld, ...rest]) =>
+              (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                (([restRow, st2]: [Row, St]) =>
+                  _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
+                  aliasFieldsFrom(rest, vars1, st1, aliases, expanding),
+                ))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(fields),
 );
 /**
  * Expand a record alias to its structural row. `args` binds its type params
@@ -645,22 +675,23 @@ export const aliasRow: _Curry<
   ) =>
     _Set_has(name, expanding)
       ? _tuple(tCon(name, args), st)
-      : match(info.expr)
-          .with({ _tag: "Some" }, ({ value: te }) =>
-            (([local, st1]: [Map<string, Ty>, St]) =>
-              (([t, _, st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
-                typeExprToType(te, local, st1, aliases, _Set_add(name, expanding)),
-              ))(aliasLocalVarsFrom(info.params, args, st)),
-          )
-          .with({ _tag: "None" }, () =>
-            (([local, st1]: [Map<string, Ty>, St]) => {
-              const next: Set<string> = _Set_add(name, expanding);
-              return (([row, st2]: [Row, St]) => _tuple(tRecord(row), st2))(
-                aliasFieldsFrom(info.fields, local, st1, aliases, next),
-              );
-            })(aliasLocalVarsFrom(info.params, args, st)),
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: te }) =>
+                (([local, st1]: [Map<string, Ty>, St]) =>
+                  (([t, _, st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
+                    typeExprToType(te, local, st1, aliases, _Set_add(name, expanding)),
+                  ))(aliasLocalVarsFrom(info.params, args, st)))(_v)
+            : _v._tag === "None"
+              ? (([local, st1]: [Map<string, Ty>, St]) => {
+                  const next: Set<string> = _Set_add(name, expanding);
+                  return (([row, st2]: [Row, St]) => _tuple(tRecord(row), st2))(
+                    aliasFieldsFrom(info.fields, local, st1, aliases, next),
+                  );
+                })(aliasLocalVarsFrom(info.params, args, st))
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(info.expr),
 );
 const pvarsFrom: <A>(params: A[], st: St) => [Map<A, Ty>, Ty[], St] = _curry(
   2,
@@ -701,28 +732,20 @@ const ctorFieldsArrowFrom: _Curry<
     aliases: Map<string, AliasInfo>,
     result: Ty,
   ) =>
-    match(fields)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(result, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([fld, ...rest]) =>
-          (([ft, _, st1]: [Ty, Map<string, Ty>, St]) =>
-            (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
-              ctorFieldsArrowFrom(rest, pvars, st1, aliases, result),
-            ))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[]))),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? _tuple(result, st)
+        : _v.length >= 1
+          ? (([fld, ...rest]) =>
+              (([ft, _, st1]: [Ty, Map<string, Ty>, St]) =>
+                (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
+                  ctorFieldsArrowFrom(rest, pvars, st1, aliases, result),
+                ))(
+                typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[])),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(fields),
 );
 /**
  * A variant's constructors become curried functions into that variant type,

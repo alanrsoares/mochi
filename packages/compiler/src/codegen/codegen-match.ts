@@ -1,4 +1,4 @@
-/** Codegen for `switch`/`match`: lowers each arm to either an @onrails/pattern `.with()` (flat matcher-object form) or a guard predicate (nested patterns, arrays/tuples/or-patterns), plus the bounded-pull IIFE for lazy-List arms. */
+/** Codegen for `switch`/`match`: a ternary chain over the scrutinee (ADR 0113), the bounded-pull IIFE for lazy-List arms, and the @onrails/pattern chain the TS backend keeps for the matches it could not type as ternaries. */
 import { match } from "@onrails/pattern";
 import type { Expr, ListPat, LitPat, MatchArm, MatchExpr, Pattern } from "../ast/ast";
 import { type GenCtx, genExpr, genLambdaBody } from "./codegen-core";
@@ -207,12 +207,94 @@ const genListMatch = (m: MatchExpr, ctx: GenCtx): string => {
   );
 };
 
+/**
+ * Does TypeScript's own narrowing on `_v` type this arm's bindings? A
+ * discriminant or literal test on `_v` itself does; a test on a nested field
+ * narrows only that field, so a destructuring that reaches past it needs the
+ * arm's `patTarget` (ADR 0031).
+ */
+const isShallowPat = (p: Pattern): boolean =>
+  p.kind === "pctor"
+    ? p.args.every(isFlatSub)
+    : p.kind === "precord"
+      ? p.fields.every((f) => isFlatSub(f.pat))
+      : p.kind === "plit" || p.kind === "pbool" || p.kind === "pstr" || isCatchAll(p);
+
+const isShallowArm = (p: Pattern, ctx: GenCtx): boolean =>
+  p.kind === "pas" ? isShallowPat(p.pat) : isShallowPat(p) || patSlot(p, ctx) === "";
+
+/**
+ * `_v` as an arm's bindings see it: cast to the arm's narrowed type when the
+ * tests do not narrow it themselves and that type refines the base. The tests just proved the cast, as they
+ * prove the `_v is T` predicate of the `match()` form.
+ */
+const armView = (p: Pattern, base: string | null, ctx: GenCtx): string => {
+  if (base === null || isShallowArm(p, ctx)) return "_v";
+  // Only a refining target: `_v as base` would close a row-polymorphic
+  // `{…} & R` scrutinee and lose `R` (ADR 0034).
+  const target = patTarget(p, base, ctx);
+  return target === base ? "_v" : `(_v as ${target})`;
+};
+
+/** Run `body` under the pattern's bindings, destructured from `view`. */
+const underBinds = (p: Pattern, view: string, body: string, ctx: GenCtx): string => {
+  if (p.kind === "pas") {
+    const slot = patSlot(p.pat, ctx);
+    return slot === ""
+      ? `((${p.name}) => ${body})(${view})`
+      : `((${p.name}) => ((${slot}) => ${body})(${p.name}))(${view})`;
+  }
+  const slot = patSlot(p, ctx);
+  return slot === "" ? body : `((${slot}) => ${body})(${view})`;
+};
+
+const ternArmTest = (arm: MatchArm, base: string | null, ctx: GenCtx): string => {
+  const conds = patConds(arm.pattern, "_v", ctx);
+  if (arm.guard)
+    conds.push(
+      underBinds(arm.pattern, armView(arm.pattern, base, ctx), `(${genExpr(arm.guard, ctx)})`, ctx),
+    );
+  return conds.length ? conds.join(" && ") : "true";
+};
+
+const ternArms = (
+  arms: readonly MatchArm[],
+  i: number,
+  base: string | null,
+  ctx: GenCtx,
+): string => {
+  const a = arms[i];
+  if (!a) return `(() => { throw new Error("non-exhaustive match"); })()`;
+  const body = `(${genLambdaBody(a.body, ctx)})`;
+  if (!a.guard && isCatchAll(a.pattern)) {
+    const param = catchAllParam(a.pattern, ctx);
+    return param === "()" ? body : `(${param} => ${body})(_v)`;
+  }
+  const bound = underBinds(a.pattern, armView(a.pattern, base, ctx), body, ctx);
+  return `${ternArmTest(a, base, ctx)}\n    ? ${bound}\n    : ${ternArms(arms, i + 1, base, ctx)}`;
+};
+
+/**
+ * A match lowers to a ternary chain over `_v` (ADR 0113), except where the
+ * TypeScript backend could not type an arm's bindings: a nested pattern on a
+ * scrutinee whose type it cannot name keeps the `match()` form.
+ */
+export const ternaryTypes = (m: MatchExpr, base: string | null, ctx: GenCtx): boolean =>
+  ctx.guardBaseType === null || base !== null || m.arms.every((a) => isShallowArm(a.pattern, ctx));
+
 export const genMatch = (m: MatchExpr, ctx: GenCtx): string => {
   if (isListMatch(m)) return genListMatch(m, ctx);
-  const parts = [`match(${genExpr(m.scrutinee, ctx)})`];
-  // TS backend (ADR 0031): the concrete scrutinee type each guard-form arm
-  // narrows FROM. null in JS mode / for generic scrutinees → the bare guard form.
+  // TS backend (ADR 0031): the concrete scrutinee type a narrowed arm casts
+  // FROM. null in JS mode / for generic scrutinees.
   const base = ctx.guardBaseType?.(m.scrutinee) ?? null;
+  return ternaryTypes(m, base, ctx)
+    ? `((_v) => ${ternArms(m.arms, 0, base, ctx)})(${genExpr(m.scrutinee, ctx)})`
+    : genMatchChain(m, base, ctx);
+};
+
+/** The `@onrails/pattern` chain, for the matches `ternaryTypes` rules out. */
+const genMatchChain = (m: MatchExpr, base: string | null, ctx: GenCtx): string => {
+  const parts = [`match(${genExpr(m.scrutinee, ctx)})`];
   let catchAll: MatchArm | undefined;
   for (const arm of m.arms) {
     // A guarded arm narrows regardless of its pattern (the guard can be

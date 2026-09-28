@@ -51,19 +51,22 @@ testEach("codegen emits runtime forms", [
   | Err(_) => false |> ok
 })
 
-testEach("codegen emits match support only when needed", [
+testEach("the JS backend lowers every match without @onrails/pattern", [
   {
     label: "variant switch",
     src: "type Light = Red | Green\nlet show = light => switch light { | Red => 1 | Green => 2 }",
-    want: "import { match } from \"@onrails/pattern\";"
+    want: "((_v) => _v._tag === \"Red\"\n    ? (1)\n    : _v._tag === \"Green\"\n    ? (2)"
+  },
+  {
+    label: "nested pattern",
+    src: "type Box = Full(value: Option<number>) | Empty\nlet f = b => switch b { | Full(Some(n)) => n | _ => 0 }",
+    want: "_v._tag === \"Full\" && _v.value._tag === \"Some\"\n    ? (({ value: { value: n } }) => (n))(_v)\n    : (0)"
   },
   { label: "plain binding", src: "let value = 1", want: "const value = 1;" }
 ], row => switch genSrc(row.src) {
-  | Ok(js) => row.label == "variant switch"
-      ? js |> Str.contains(row.want) |> ok
-      : js |> Str.contains("import { match } from \"@onrails/pattern\";")
-      ? false |> ok
-      : js |> Str.contains(row.want) |> ok
+  | Ok(js) => ok(
+      Str.contains(row.want, js) && !Str.contains("@onrails/pattern", js)
+    )
   | Err(_) => false |> ok
 })
 
@@ -237,46 +240,44 @@ testEach("the JS backend leaves ctor factories untyped", [
   }
 ], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
 
-testEach("guardBaseType turns refining arms into type predicates", [
+testEach("guardBaseType casts an arm its own tests do not narrow", [
   {
-    label: "nested ctor arm narrows via Extract",
+    label: "nested ctor arm casts to its Extract target",
     src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(Wrap(inner)) => inner | Wrap(x) => x | Dot => Dot }",
-    want: "_v is Extract<Shape, { _tag: \"Wrap\" }> & { \"value\": Extract<Extract<Shape, { _tag: \"Wrap\" }>[\"value\"], { _tag: \"Wrap\" }> }"
+    want: "(({ value: { value: inner } }) => (inner))((_v as Extract<Shape, { _tag: \"Wrap\" }> & { \"value\": Extract<Extract<Shape, { _tag: \"Wrap\" }>[\"value\"], { _tag: \"Wrap\" }> }))"
   },
   {
-    label: "guard body tests the widened copy",
-    src: "type Shape = Dot | Line\nlet f = s => switch s { | Dot when true => 1 | _ => 2 }",
-    want: "const _g: any = _v;"
+    label: "a discriminant test narrows on its own",
+    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(x) => x | Dot => Dot }",
+    want: "? (({ value: x }) => (x))(_v)"
   },
   {
-    label: "non-refining whole-value arm stays a plain boolean guard",
-    src: "type Shape = Dot | Line\nlet f = s => switch s { | _ when true => 1 | _ => 2 }",
-    want: ".with((_v) => { const _g: any = _v; return (true); }"
+    label: "a guard runs under the same view as the body",
+    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(Wrap(inner)) when true => inner | _ => s }",
+    want: "&& (({ value: { value: inner } }) => (true))((_v as Extract<Shape"
   },
   {
-    label: "eager-array match closes with a throwing otherwise (ADR 0038)",
+    label: "eager-array match closes with a throw check.mochi proved dead (ADR 0038)",
     src: "let f = xs => switch xs { | [] => 0 | [h, ...t] => h }",
-    want: ".otherwise(() => { throw new Error(\"non-exhaustive match\"); })"
+    want: ": (() => { throw new Error(\"non-exhaustive match\"); })())(xs)"
   }
 ], row => emitted(guardOpts, row.src) |> Str.contains(row.want) |> ok)
 
-testEach("the JS backend emits bare boolean guards", [
+/// A scrutinee whose type the backend cannot name.
+let genericOpts = { ...jsGenOpts, guardBaseType: Some(_ => None) }
+
+testEach("a nested arm on an unnamed scrutinee type keeps the match() chain", [
   {
-    label: "no type predicate",
-    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(Wrap(inner)) => inner | Wrap(x) => x | Dot => Dot }",
-    want: ".with((_v) => _v._tag === \"Wrap\""
+    label: "nested arm falls back",
+    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(Wrap(inner)) => inner | _ => s }",
+    want: "import { match } from \"@onrails/pattern\";"
   },
   {
-    label: "no widened copy",
-    src: "type Shape = Dot | Line\nlet f = s => switch s { | Dot when true => 1 | _ => 2 }",
-    want: ".with((_v) => _v._tag === \"Dot\""
-  },
-  {
-    label: "eager-array match keeps .exhaustive()",
-    src: "let f = xs => switch xs { | [] => 0 | [h, ...t] => h }",
-    want: ".exhaustive()"
+    label: "shallow arms stay ternaries",
+    src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(x) => x | Dot => Dot }",
+    want: "((_v) => _v._tag === \"Wrap\""
   }
-], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
+], row => emitted(genericOpts, row.src) |> Str.contains(row.want) |> ok)
 
 test("guardBaseType leaves the JS scrutinee root untouched", () =>
   assertEq(

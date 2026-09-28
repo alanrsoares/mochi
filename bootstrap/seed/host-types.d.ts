@@ -248,7 +248,7 @@ export type Doc =
   | { _tag: "DLine"; hard: boolean; soft: boolean }
   | { _tag: "DCat"; parts: Doc[] }
   | { _tag: "DIndent"; doc: Doc }
-  | { _tag: "DGroup"; doc: Doc }
+  | { _tag: "DGroup"; doc: Doc; breaks: boolean }
   | { _tag: "DLineSuffix"; doc: Doc }
   | { _tag: "DBreakParent" };
 export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };

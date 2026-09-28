@@ -460,60 +460,93 @@ let anchorKey = a => a.sp.start * SPAN_SCALE - a.sp.end
 /// is what decides which of the two a leading comment attaches to.
 let sortAnchors = Array.sortBy(anchorKey)
 
+type Anchor = { kind: string, sp: Ast.Span }
+
+/// The anchors twice over: by start (`sortAnchors`) for leading comments, and
+/// stably by end for trailing ones. Both lookups bisect. The linear scans they
+/// replace also sliced the source once per anchor, and were most of the
+/// printer's time on a large file.
+type AnchorIndex = { byStart: [Anchor], byEnd: [Anchor] }
+
+let anchorIndex = (sorted: [Anchor]) =>
+  { byStart: sorted, byEnd: Array.sortBy(a => a.sp.end, sorted) }
+
+/// The first index in `[lo, hi)` whose anchor has `key(a) >= target`, for a
+/// `key` that `anchors` is sorted by; `hi` when there is none.
+let lowerBound = (anchors: [Anchor], key, target, lo, hi) =>
+  lo >= hi
+    ? lo
+    : let mid = floor((lo + hi) / 2) in
+      switch Array.get(mid, anchors) {
+        | Some(a) when key(a) < target => lowerBound(
+            anchors,
+            key,
+            target,
+            mid + 1,
+            hi
+          )
+        | _ => lowerBound(anchors, key, target, lo, mid)
+      }
+
+let startOf = (a: Anchor) => a.sp.start
+let endOf = (a: Anchor) => a.sp.end
+
+/// Where the line holding offset `i` starts.
+let lineStartOf = (src, i) =>
+  i <= 0
+    ? 0
+    : Str.get(i - 1, src) |> Option.contains("\n")
+    ? i
+    : lineStartOf(src, i - 1)
+
 /// The node a trailing comment most tightly follows ON ITS OWN LINE: the
 /// largest `end` at or before the comment's start, with no newline between.
-/// Index-based, not `[head, ...rest]`: a rest pattern copies the tail, which
-/// turns one linear scan into a quadratic one.
-let trailedByFrom = (anchors, i, c: Comment, src, best) => switch Array.get(i, anchors) {
-  | None => best
-  | Some(a) => let fits = a.sp.end <= c.start && !Str.contains(
-      "\n",
-      Str.slice(a.sp.end, c.start, src)
-    ) in
-    let better = fits && switch best {
-      | None => true
-      | Some(b) => a.sp.end > b.sp.end
-    } in
-      trailedByFrom(anchors, i + 1, c, src, better ? Some(a) : best)
-}
-
-let trailedBy = (anchors, c: Comment, src) =>
-  trailedByFrom(anchors, 0, c, src, None)
+/// Among anchors sharing that end, the first in `byStart` order wins; the
+/// stable sort keeps that order within `byEnd`.
+let trailedBy = (idx: AnchorIndex, c: Comment, src) =>
+  let n = Array.length(idx.byEnd) in
+  let past = lowerBound(idx.byEnd, endOf, c.start + 1, 0, n) in
+    switch Array.get(past - 1, idx.byEnd) {
+      | Some(last) when last.sp.end >= lineStartOf(src, c.start) => Array.get(
+          lowerBound(idx.byEnd, endOf, last.sp.end, 0, n),
+          idx.byEnd
+        )
+      | _ => None
+    }
 
 /// The node an own-line comment most tightly precedes: the first anchor
 /// starting at or after the comment ends (the sort puts outermost first).
-let leadTargetFrom = (anchors, i, c: Comment) => switch Array.get(i, anchors) {
-  | None => None
-  | Some(a) => a.sp.start >= c.end ? Some(a) : leadTargetFrom(anchors, i + 1, c)
-}
-
-let leadTarget = (anchors, c: Comment) => leadTargetFrom(anchors, 0, c)
+let leadTarget = (idx: AnchorIndex, c: Comment) =>
+  Array.get(
+    lowerBound(idx.byStart, startOf, c.end, 0, Array.length(idx.byStart)),
+    idx.byStart
+  )
 
 type Attached = { table: Ctx, tail: [Comment] }
 
 /// `None` when the comment has no anchor at all (it sits past the last node) —
 /// the program printer emits those after the final statement.
-let attachOne = (anchors, src, c: Comment, tbl: Ctx) =>
-  let trailed = c.trailing ? trailedBy(anchors, c, src) : None in
+let attachOne = (idx: AnchorIndex, src, c: Comment, tbl: Ctx) =>
+  let trailed = c.trailing ? trailedBy(idx, c, src) : None in
     switch trailed {
       | Some(a) => Some(
           { ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) }
         )
-      | None => switch leadTarget(anchors, c) {
+      | None => switch leadTarget(idx, c) {
           | None => None
           | Some(a) => Some(
               { ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) }
             )
         }
     }
-let attachFrom = (comments, i, anchors, src, acc: Attached) => switch Array.get(i, comments) {
+let attachFrom = (comments, i, idx: AnchorIndex, src, acc: Attached) => switch Array.get(i, comments) {
   | None => acc
   | Some(c) => attachFrom(
       comments,
       i + 1,
-      anchors,
+      idx,
       src,
-      switch attachOne(anchors, src, c, acc.table) {
+      switch attachOne(idx, src, c, acc.table) {
         | Some(table) => { table, tail: acc.tail }
         | None => { table: acc.table, tail: Array.append(c, acc.tail) }
       }
@@ -524,7 +557,7 @@ export let commentsForExpr = (src, e) =>
   attachFrom(
     collectComments(src),
     0,
-    sortAnchors(exprAnchors(e)),
+    anchorIndex(sortAnchors(exprAnchors(e))),
     src,
     { table: noComments, tail: [] }
   ).table
@@ -2109,7 +2142,7 @@ export let formatProgramWith = (stmts, src, hooks: FormatHooks) =>
   let attached = attachFrom(
     comments,
     0,
-    sortAnchors(Array.flatMap(stmtAnchors, stmts)),
+    anchorIndex(sortAnchors(Array.flatMap(stmtAnchors, stmts))),
     src,
     { table: base, tail: [] }
   ) in

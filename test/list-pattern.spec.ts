@@ -59,7 +59,7 @@ test("a literal element narrows via an index guard", () => {
 
 test("empty-list arm lowers to a length-zero guard", () => {
   expect(js("let f = xs => switch xs { | [] => 0 | _ => 1 }")).toContain(
-    ".with((_v) => _v.length === 0",
+    "((_v) => _v.length === 0",
   );
 });
 

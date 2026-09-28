@@ -55,8 +55,6 @@ import {
   or,
 } from "@mochi/compiler/runtime";
 
-import { match } from "@onrails/pattern";
-
 import { lex } from "./lexer";
 import { parseRecovering } from "./parser";
 import { checkAll } from "./check";
@@ -88,10 +86,12 @@ export const defaultOpts: Opts = {
 const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(
   2,
   (s: string, i: number) =>
-    match(_Str_get(i, s))
-      .with({ _tag: "Some", value: " " }, () => afterBlanks(s, i + 1))
-      .with({ _tag: "Some", value: "\t" }, () => afterBlanks(s, i + 1))
-      .otherwise((other) => other),
+    ((_v) =>
+      _v._tag === "Some" && _v.value === " "
+        ? afterBlanks(s, i + 1)
+        : _v._tag === "Some" && _v.value === "\t"
+          ? afterBlanks(s, i + 1)
+          : ((other) => other)(_v))(_Str_get(i, s)),
 );
 /**
  * The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
@@ -102,11 +102,14 @@ export const openDirective: (src: string) => boolean = (src: string) => {
   const t: string = _Str_trim(src);
   return and(
     _Str_startsWith('"use open"', t),
-    match(afterBlanks(t, 10))
-      .with({ _tag: "None" }, () => true)
-      .with({ _tag: "Some", value: "\n" }, () => true)
-      .with({ _tag: "Some", value: "r" }, () => true)
-      .otherwise(() => false),
+    ((_v) =>
+      _v._tag === "None"
+        ? true
+        : _v._tag === "Some" && _v.value === "\n"
+          ? true
+          : _v._tag === "Some" && _v.value === "r"
+            ? true
+            : false)(afterBlanks(t, 10)),
   );
 };
 /**
@@ -170,31 +173,26 @@ const frontend: _Curry<
   [src: string, plugins: Option<HostPlugin[]>],
   Result<Stmt[], Stamped[]>
 > = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
-  match(lex(src))
-    .with(
-      { _tag: "Err" },
-      ({ error: e }) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
-    )
-    .with({ _tag: "Ok" }, ({ value: tokens }) =>
-      ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
-        match(parsed.diagnostics)
-          .with(
-            (_v) => {
-              const _g: any = _v;
-              return _g.length === 0;
-            },
-            () =>
-              _Result_mapErr(
-                (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
-                checkAll(parsed.stmts),
-              ),
-          )
-          .otherwise(
-            (ds) =>
-              Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>,
-          ))(parseRecovering(tokens, plugins)),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "Err"
+      ? (({ error: e }) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>)(_v)
+      : _v._tag === "Ok"
+        ? (({ value: tokens }) =>
+            ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
+              ((_v) =>
+                _v.length === 0
+                  ? _Result_mapErr(
+                      (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+                      checkAll(parsed.stmts),
+                    )
+                  : ((ds) =>
+                      Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<
+                        Stmt[],
+                        Stamped[]
+                      >)(_v))(parsed.diagnostics))(parseRecovering(tokens, plugins)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(lex(src)),
 );
 const pipelineWith: _Curry<
   [src: string, open: boolean, plugins: Option<HostPlugin[]>],

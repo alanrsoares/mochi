@@ -1,6 +1,6 @@
+import type { HostPlugin, LocTok, Plugin } from "./infer";
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
-import type { HostPlugin, LocTok, Plugin } from "./infer";
 import type { Scheme } from "./schemes";
 import type { StageErr, Stamped } from "./compile";
 import type { Occurrence } from "./symbols";
@@ -151,58 +151,53 @@ const exportedOriginsFrom: _Curry<
   [stmts: Stmt[], i: number, origins: ExportOrigins],
   ExportOrigins
 > = _curry(3, (stmts: Stmt[], i: number, origins: ExportOrigins) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => origins)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SLet" && _g.value.exported === true;
-      },
-      ({ value: { name, nameSpan } }) =>
-        exportedOriginsFrom(stmts, i + 1, {
-          values: _Map_set(name, nameSpan, origins.values),
-          types: origins.types,
-          ctors: origins.ctors,
-        }),
-    )
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SExtern" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SExtern" && _g.value.exported === true;
-      },
-      ({ value: { name, nameSpan } }) =>
-        exportedOriginsFrom(stmts, i + 1, {
-          values: _Map_set(name, nameSpan, origins.values),
-          types: origins.types,
-          ctors: origins.ctors,
-        }),
-    )
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
-      },
-      ({ value: { name, ctors, span } }) =>
-        exportedOriginsFrom(stmts, i + 1, {
-          values: origins.values,
-          types: _Map_set(name, span, origins.types),
-          ctors: addCtorOrigins(ctors, span, origins.ctors),
-        }),
-    )
-    .with({ _tag: "Some" }, () => exportedOriginsFrom(stmts, i + 1, origins))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? origins
+      : _v._tag === "Some" && _v.value._tag === "SLet" && _v.value.exported === true
+        ? (({ value: { name, nameSpan } }) =>
+            exportedOriginsFrom(stmts, i + 1, {
+              values: _Map_set(name, nameSpan, origins.values),
+              types: origins.types,
+              ctors: origins.ctors,
+            }))(
+            _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+              value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
+            },
+          )
+        : _v._tag === "Some" && _v.value._tag === "SExtern" && _v.value.exported === true
+          ? (({ value: { name, nameSpan } }) =>
+              exportedOriginsFrom(stmts, i + 1, {
+                values: _Map_set(name, nameSpan, origins.values),
+                types: origins.types,
+                ctors: origins.ctors,
+              }))(
+              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                value: Extract<
+                  Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                  { _tag: "SExtern" }
+                >;
+              },
+            )
+          : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true
+            ? (({ value: { name, ctors, span } }) =>
+                exportedOriginsFrom(stmts, i + 1, {
+                  values: origins.values,
+                  types: _Map_set(name, span, origins.types),
+                  ctors: addCtorOrigins(ctors, span, origins.ctors),
+                }))(
+                _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                  value: Extract<
+                    Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                    { _tag: "SType" }
+                  >;
+                },
+              )
+            : _v._tag === "Some"
+              ? exportedOriginsFrom(stmts, i + 1, origins)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Array_get(i, stmts)),
 );
 export const exportedOrigins: (stmts: Stmt[]) => ExportOrigins = (stmts: Stmt[]) =>
   exportedOriginsFrom(stmts, 0, {
@@ -241,19 +236,20 @@ const parseModule: _Curry<
 const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
   3,
   (stmts: Stmt[], i: number, acc: string[]) =>
-    match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: s }) =>
-        match(s)
-          .with({ _tag: "SImport" }, ({ from }) =>
-            importFromsFrom(stmts, i + 1, _Array_append(from, acc)),
-          )
-          .with({ _tag: "SImportNs" }, ({ from }) =>
-            importFromsFrom(stmts, i + 1, _Array_append(from, acc)),
-          )
-          .otherwise(() => importFromsFrom(stmts, i + 1, acc)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: s }) =>
+              ((_v) =>
+                _v._tag === "SImport"
+                  ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
+                  : _v._tag === "SImportNs"
+                    ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
+                    : importFromsFrom(stmts, i + 1, acc))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, stmts)),
 );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
   importFromsFrom(stmts, 0, [] as string[]);
@@ -262,66 +258,69 @@ const visit: _Curry<
   [path: string, acc: Acc, plugins: Option<HostPlugin[]>],
   Result<Acc, StageErr>
 > = _curry(3, (path: string, acc: Acc, plugins: Option<HostPlugin[]>) =>
-  match(_Map_get(path, acc.state))
-    .with({ _tag: "Some", value: "done" }, () => Ok(acc) as Result<Acc, StageErr>)
-    .with(
-      { _tag: "Some", value: "loading" },
-      () => Err(mErr(`import cycle through '${path}'`)) as Result<Acc, StageErr>,
-    )
-    .otherwise(() =>
-      ((acc1: Acc) =>
-        match(readFile(path))
-          .with(
-            { _tag: "Err" },
-            () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, StageErr>,
-          )
-          .with({ _tag: "Ok" }, ({ value: src }) =>
-            match(parseModule(src, plugins))
-              .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
-              .with({ _tag: "Ok" }, ({ value: stmts }) =>
-                match(visitAll(importFroms(stmts), path, acc1, plugins))
-                  .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
-                  .with(
-                    { _tag: "Ok" },
-                    ({ value: acc2 }) =>
-                      Ok({
-                        state: _Map_set(path, "done", acc2.state),
-                        order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
-                      }) as Result<Acc, StageErr>,
-                  )
-                  .exhaustive(),
-              )
-              .exhaustive(),
-          )
-          .exhaustive())({ state: _Map_set(path, "loading", acc.state), order: acc.order }),
-    ),
+  ((_v) =>
+    _v._tag === "Some" && _v.value === "done"
+      ? (Ok(acc) as Result<Acc, StageErr>)
+      : _v._tag === "Some" && _v.value === "loading"
+        ? (Err(mErr(`import cycle through '${path}'`)) as Result<Acc, StageErr>)
+        : ((acc1: Acc) =>
+            ((_v) =>
+              _v._tag === "Err"
+                ? (Err(mErr(`cannot read module '${path}'`)) as Result<Acc, StageErr>)
+                : _v._tag === "Ok"
+                  ? (({ value: src }) =>
+                      ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) => Err(e) as Result<Acc, StageErr>)(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: stmts }) =>
+                                ((_v) =>
+                                  _v._tag === "Err"
+                                    ? (({ error: e }) => Err(e) as Result<Acc, StageErr>)(_v)
+                                    : _v._tag === "Ok"
+                                      ? (({ value: acc2 }) =>
+                                          Ok({
+                                            state: _Map_set(path, "done", acc2.state),
+                                            order: _Array_append(
+                                              { path: path, src: src, stmts: stmts },
+                                              acc2.order,
+                                            ),
+                                          }) as Result<Acc, StageErr>)(_v)
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(visitAll(importFroms(stmts), path, acc1, plugins)))(
+                                _v,
+                              )
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(parseModule(src, plugins)))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(readFile(path)))({
+            state: _Map_set(path, "loading", acc.state),
+            order: acc.order,
+          }))(_Map_get(path, acc.state)),
 );
 const visitAll: _Curry<
   [froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>],
   Result<Acc, StageErr>
 > = _curry(4, (froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>) =>
-  match(froms)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => Ok(acc) as Result<Acc, StageErr>,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([from, ...rest]) =>
-        match(visit(resolveImport(importer, from), acc, plugins))
-          .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<Acc, StageErr>)
-          .with({ _tag: "Ok" }, ({ value: acc1 }) => visitAll(rest, importer, acc1, plugins))
-          .exhaustive(),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(acc) as Result<Acc, StageErr>)
+      : _v.length >= 1
+        ? (([from, ...rest]) =>
+            ((_v) =>
+              _v._tag === "Err"
+                ? (({ error: e }) => Err(e) as Result<Acc, StageErr>)(_v)
+                : _v._tag === "Ok"
+                  ? (({ value: acc1 }) => visitAll(rest, importer, acc1, plugins))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(visit(resolveImport(importer, from), acc, plugins)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(froms),
 );
 /**
  * loadGraphWith : string -> Option [Plugin] -> Result [Loaded] MErr
@@ -361,10 +360,14 @@ const mergeInto: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A, B
           mergeInto(
             rest,
             from,
-            match(_Map_get(k, from))
-              .with({ _tag: "Some" }, ({ value: v }) => _Map_set(k, v, into))
-              .with({ _tag: "None" }, () => into)
-              .exhaustive(),
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: v }) => _Map_set(k, v, into))(_v)
+                : _v._tag === "None"
+                  ? into
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(_Map_get(k, from)),
           ),
       )
       .otherwise(() => {
@@ -379,45 +382,47 @@ const exportedTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   _Set_fromArray(
     _Array_flatMap(
       (s: Stmt) =>
-        match(s)
-          .with({ _tag: "SType", exported: true }, ({ name }) => [name])
-          .otherwise(() => [] as string[]),
+        ((_v) =>
+          _v._tag === "SType" && _v.exported === true
+            ? (({ name }) => [name])(_v)
+            : ([] as string[]))(s),
       stmts,
     ),
   );
 const aliasesOf: (stmts: Stmt[]) => Map<string, RecoveryAliasInfo> = (stmts: Stmt[]) =>
   reduce(
     _curry(2, (acc: Map<string, RecoveryAliasInfo>, s: Stmt) =>
-      match(s)
-        .with(
-          (
-            _v,
-          ): _v is Extract<Stmt, { _tag: "SType" }> & {
-            alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "SType" && _g.alias._tag === "Some";
-          },
-          ({ name, params, alias: { value: fields } }) =>
-            _Map_set(name, { params: params, fields: fields, expr: None as Option<TypeExpr> }, acc),
-        )
-        .with(
-          (
-            _v,
-          ): _v is Extract<Stmt, { _tag: "SType" }> & {
-            aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "SType" && _g.aliasType._tag === "Some";
-          },
-          ({ name, params, aliasType: { value: te } }) =>
-            _Map_set(
-              name,
-              { params: params, fields: [] as AliasField[], expr: Some(te) as Option<TypeExpr> },
-              acc,
-            ),
-        )
-        .otherwise(() => acc),
+      ((_v) =>
+        _v._tag === "SType" && _v.alias._tag === "Some"
+          ? (({ name, params, alias: { value: fields } }) =>
+              _Map_set(
+                name,
+                { params: params, fields: fields, expr: None as Option<TypeExpr> },
+                acc,
+              ))(
+              _v as Extract<Stmt, { _tag: "SType" }> & {
+                alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
+              },
+            )
+          : _v._tag === "SType" && _v.aliasType._tag === "Some"
+            ? (({ name, params, aliasType: { value: te } }) =>
+                _Map_set(
+                  name,
+                  {
+                    params: params,
+                    fields: [] as AliasField[],
+                    expr: Some(te) as Option<TypeExpr>,
+                  },
+                  acc,
+                ))(
+                _v as Extract<Stmt, { _tag: "SType" }> & {
+                  aliasType: Extract<
+                    Extract<Stmt, { _tag: "SType" }>["aliasType"],
+                    { _tag: "Some" }
+                  >;
+                },
+              )
+            : acc)(s),
     ),
     new Map<string, RecoveryAliasInfo>(),
     stmts,
@@ -493,15 +498,23 @@ const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
     nsImports: res.nsImports,
     reg: {
       ctors: _Map_set(name, info, res.reg.ctors),
-      types: match(_Map_get(info.owner, depReg.types))
-        .with({ _tag: "Some" }, ({ value: cs }) => _Map_set(info.owner, cs, res.reg.types))
-        .with({ _tag: "None" }, () => res.reg.types)
-        .exhaustive(),
+      types: ((_v) =>
+        _v._tag === "Some"
+          ? (({ value: cs }) => _Map_set(info.owner, cs, res.reg.types))(_v)
+          : _v._tag === "None"
+            ? res.reg.types
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(_Map_get(info.owner, depReg.types)),
     },
-    keys: match(_Map_get(name, depKeys))
-      .with({ _tag: "Some" }, ({ value: ks }) => _Map_set(name, ks, res.keys))
-      .with({ _tag: "None" }, () => res.keys)
-      .exhaustive(),
+    keys: ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: ks }) => _Map_set(name, ks, res.keys))(_v)
+        : _v._tag === "None"
+          ? res.keys
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(name, depKeys)),
     quals: res.quals,
   }),
 );
@@ -541,23 +554,29 @@ const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
       imports: H;
     },
   ) =>
-    match(_Map_get(name, depReg.ctors))
-      .with({ _tag: "None" }, () => Ok(res))
-      .with({ _tag: "Some" }, ({ value: info }) =>
-        match(_Map_get(name, res.reg.ctors))
-          .with({ _tag: "Some" }, ({ value: prior }) =>
-            not(eq(prior.owner, info.owner))
-              ? Err({
-                  message: `duplicate constructor '${name}'`,
-                  start: span.start,
-                  end: span.end,
-                })
-              : Ok(withNamedCtor(name, info, depReg, depKeys, res)),
-          )
-          .with({ _tag: "None" }, () => Ok(withNamedCtor(name, info, depReg, depKeys, res)))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? Ok(res)
+        : _v._tag === "Some"
+          ? (({ value: info }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: prior }) =>
+                      not(eq(prior.owner, info.owner))
+                        ? Err({
+                            message: `duplicate constructor '${name}'`,
+                            start: span.start,
+                            end: span.end,
+                          })
+                        : Ok(withNamedCtor(name, info, depReg, depKeys, res)))(_v)
+                  : _v._tag === "None"
+                    ? Ok(withNamedCtor(name, info, depReg, depKeys, res))
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(name, res.reg.ctors)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(name, depReg.ctors)),
 );
 const prefixCtorsInto: <A>(
   keys: string[],
@@ -567,33 +586,27 @@ const prefixCtorsInto: <A>(
 ) => Map<string, A> = _curry(
   4,
   <A>(keys: string[], alias: string, from: Map<string, A>, into: Map<string, A>) =>
-    match(keys)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => into,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([k, ...rest]) =>
-          prefixCtorsInto(
-            rest,
-            alias,
-            from,
-            match(_Map_get(k, from))
-              .with({ _tag: "Some" }, ({ value: v }) => _Map_set(`${alias}.${k}`, v, into))
-              .with({ _tag: "None" }, () => into)
-              .exhaustive(),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? into
+        : _v.length >= 1
+          ? (([k, ...rest]) =>
+              prefixCtorsInto(
+                rest,
+                alias,
+                from,
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: v }) => _Map_set(`${alias}.${k}`, v, into))(_v)
+                    : _v._tag === "None"
+                      ? into
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(k, from)),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(keys),
 );
 const resolveNames: <D, E, F, G, H, I, J, K, L>(
   names: ({ name: string; span: { end: number; start: number } & I } & J)[],
@@ -643,9 +656,9 @@ const resolveNames: <D, E, F, G, H, I, J, K, L>(
       .with(
         (_v) => _v.length >= 1,
         ([n, ...rest]) =>
-          match(_Map_get(n.name, depExports))
-            .with({ _tag: "None" }, () =>
-              recovering
+          ((_v) =>
+            _v._tag === "None"
+              ? recovering
                 ? resolveNames(
                     rest,
                     from,
@@ -665,25 +678,37 @@ const resolveNames: <D, E, F, G, H, I, J, K, L>(
                     message: `'${from}' has no export '${n.name}'`,
                     start: n.span.start,
                     end: n.span.end,
-                  }),
-            )
-            .with({ _tag: "Some" }, ({ value: sc }) =>
-              match(
-                takeNamedCtor(n.name, n.span, depReg, depKeys, {
-                  imports: _Map_set(n.name, sc, res.imports),
-                  nsImports: res.nsImports,
-                  reg: res.reg,
-                  keys: res.keys,
-                  quals: res.quals,
-                }),
-              )
-                .with({ _tag: "Err" }, ({ error: e }) => Err(e))
-                .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                  resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering),
-                )
-                .exhaustive(),
-            )
-            .exhaustive(),
+                  })
+              : _v._tag === "Some"
+                ? (({ value: sc }) =>
+                    ((_v) =>
+                      _v._tag === "Err"
+                        ? (({ error: e }) => Err(e))(_v)
+                        : _v._tag === "Ok"
+                          ? (({ value: res1 }) =>
+                              resolveNames(
+                                rest,
+                                from,
+                                depExports,
+                                depReg,
+                                depKeys,
+                                res1,
+                                recovering,
+                              ))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(
+                      takeNamedCtor(n.name, n.span, depReg, depKeys, {
+                        imports: _Map_set(n.name, sc, res.imports),
+                        nsImports: res.nsImports,
+                        reg: res.reg,
+                        keys: res.keys,
+                        quals: res.quals,
+                      }),
+                    ))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(n.name, depExports)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -737,81 +762,88 @@ const resolveImportsFrom: <B, C, D>(
     },
     recovering: boolean,
   ) =>
-    match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => Ok(res))
-      .with(
-        (
-          _v,
-        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SImport" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SImport";
-        },
-        ({ value: { names, from } }) =>
-          ((dp: string) =>
-            ((depExports) =>
-              ((depReg: Registry) =>
-                ((depKeys) =>
-                  match(resolveNames(names, from, depExports, depReg, depKeys, res, recovering))
-                    .with({ _tag: "Err" }, ({ error: e }) => Err(e))
-                    .with({ _tag: "Ok" }, ({ value: res1 }) =>
-                      resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
-                    )
-                    .exhaustive())(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
-                _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
-            resolveImport(path, from),
-          ),
-      )
-      .with(
-        (
-          _v,
-        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SImportNs" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SImportNs";
-        },
-        ({ value: { alias, from } }) =>
-          ((dp: string) =>
-            ((depExports) =>
-              ((depReg: Registry) =>
-                ((depKeys) =>
-                  resolveImportsFrom(
-                    ctx,
-                    stmts,
-                    i + 1,
-                    path,
-                    {
-                      imports: res.imports,
-                      nsImports: _Map_set(alias.name, depExports, res.nsImports),
-                      reg: {
-                        ctors: prefixCtorsInto(
-                          _Map_keys(depReg.ctors),
-                          alias.name,
-                          depReg.ctors,
-                          res.reg.ctors,
-                        ),
-                        types: mergeMap(depReg.types, res.reg.types),
-                      },
-                      keys: mergeMap(depKeys, res.keys),
-                      quals: match(_Map_get(dp, ctx.qualsByPath))
-                        .with({ _tag: "Some" }, ({ value: q }) =>
-                          _Map_set(alias.name, q, res.quals),
-                        )
-                        .with({ _tag: "None" }, () => res.quals)
-                        .exhaustive(),
-                    },
-                    recovering,
-                  ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
-                _Map_getOr(emptyReg, dp, ctx.regByPath),
-              ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
-            resolveImport(path, from),
-          ),
-      )
-      .with({ _tag: "Some" }, () => resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? Ok(res)
+        : _v._tag === "Some" && _v.value._tag === "SImport"
+          ? (({ value: { names, from } }) =>
+              ((dp: string) =>
+                ((depExports) =>
+                  ((depReg: Registry) =>
+                    ((depKeys) =>
+                      ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) => Err(e))(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: res1 }) =>
+                                resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering))(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(
+                        resolveNames(names, from, depExports, depReg, depKeys, res, recovering),
+                      ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                    _Map_getOr(emptyReg, dp, ctx.regByPath),
+                  ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
+                resolveImport(path, from),
+              ))(
+              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                value: Extract<
+                  Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                  { _tag: "SImport" }
+                >;
+              },
+            )
+          : _v._tag === "Some" && _v.value._tag === "SImportNs"
+            ? (({ value: { alias, from } }) =>
+                ((dp: string) =>
+                  ((depExports) =>
+                    ((depReg: Registry) =>
+                      ((depKeys) =>
+                        resolveImportsFrom(
+                          ctx,
+                          stmts,
+                          i + 1,
+                          path,
+                          {
+                            imports: res.imports,
+                            nsImports: _Map_set(alias.name, depExports, res.nsImports),
+                            reg: {
+                              ctors: prefixCtorsInto(
+                                _Map_keys(depReg.ctors),
+                                alias.name,
+                                depReg.ctors,
+                                res.reg.ctors,
+                              ),
+                              types: mergeMap(depReg.types, res.reg.types),
+                            },
+                            keys: mergeMap(depKeys, res.keys),
+                            quals: ((_v) =>
+                              _v._tag === "Some"
+                                ? (({ value: q }) => _Map_set(alias.name, q, res.quals))(_v)
+                                : _v._tag === "None"
+                                  ? res.quals
+                                  : (() => {
+                                      throw new Error("non-exhaustive match");
+                                    })())(_Map_get(dp, ctx.qualsByPath)),
+                          },
+                          recovering,
+                        ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                      _Map_getOr(emptyReg, dp, ctx.regByPath),
+                    ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
+                  resolveImport(path, from),
+                ))(
+                _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                  value: Extract<
+                    Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                    { _tag: "SImportNs" }
+                  >;
+                },
+              )
+            : _v._tag === "Some"
+              ? resolveImportsFrom(ctx, stmts, i + 1, path, res, recovering)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Array_get(i, stmts)),
 );
 const openFor: _Curry<[loaded: Loaded, isEntry: boolean, opts: Opts], boolean> = _curry(
   3,
@@ -845,7 +877,76 @@ const compileOne: <A>(
     isEntry: boolean,
     opts: Opts,
   ) =>
-    match(
+    ((_v) =>
+      _v._tag === "Err"
+        ? (({ error: e }) => Err(atPath(loaded.path, e)) as Result<RecoveryCtx, StageErr>)(_v)
+        : _v._tag === "Ok"
+          ? (({ value: res }) =>
+              ((_v) =>
+                _v._tag === "Err"
+                  ? (({ error: e }) =>
+                      Err(atPath(loaded.path, e)) as Result<RecoveryCtx, StageErr>)(_v)
+                  : _v._tag === "Ok"
+                    ? ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) =>
+                              Err(atPath(loaded.path, e)) as Result<RecoveryCtx, StageErr>)(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: env }) =>
+                                ((js: string) =>
+                                  Ok({
+                                    exportsByPath: _Map_set(
+                                      loaded.path,
+                                      exportedSchemes(loaded.stmts, env),
+                                      ctx.exportsByPath,
+                                    ),
+                                    regByPath: _Map_set(
+                                      loaded.path,
+                                      exportedRegistry(loaded.stmts),
+                                      ctx.regByPath,
+                                    ),
+                                    keysByPath: _Map_set(
+                                      loaded.path,
+                                      exportedCtorKeys(loaded.stmts),
+                                      ctx.keysByPath,
+                                    ),
+                                    qualsByPath: _Map_set(
+                                      loaded.path,
+                                      qualScopeOf(loaded.stmts, res.quals),
+                                      ctx.qualsByPath,
+                                    ),
+                                    outputs: [...ctx.outputs, { path: loaded.path, js: js }],
+                                  }) as Result<RecoveryCtx, StageErr>)(
+                                  codegenWith(
+                                    loaded.stmts,
+                                    res.keys,
+                                    opts.runtime,
+                                    namespaceRuntime,
+                                    preludeJsDefs,
+                                    runtimeDeps,
+                                    { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
+                                  ),
+                                ))(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(
+                        inferProgramImports(
+                          loaded.stmts,
+                          builtins,
+                          namespaces,
+                          openFor(loaded, isEntry, opts),
+                          res.imports,
+                          res.nsImports,
+                          res.quals,
+                          opts.plugins,
+                        ),
+                      )
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -860,98 +961,28 @@ const compileOne: <A>(
         },
         recovering,
       ),
-    )
-      .with(
-        { _tag: "Err" },
-        ({ error: e }) => Err(atPath(loaded.path, e)) as Result<RecoveryCtx, StageErr>,
-      )
-      .with({ _tag: "Ok" }, ({ value: res }) =>
-        match(checkWith(loaded.stmts, res.reg, res.quals))
-          .with(
-            { _tag: "Err" },
-            ({ error: e }) => Err(atPath(loaded.path, e)) as Result<RecoveryCtx, StageErr>,
-          )
-          .with({ _tag: "Ok" }, () =>
-            match(
-              inferProgramImports(
-                loaded.stmts,
-                builtins,
-                namespaces,
-                openFor(loaded, isEntry, opts),
-                res.imports,
-                res.nsImports,
-                res.quals,
-                opts.plugins,
-              ),
-            )
-              .with(
-                { _tag: "Err" },
-                ({ error: e }) => Err(atPath(loaded.path, e)) as Result<RecoveryCtx, StageErr>,
-              )
-              .with({ _tag: "Ok" }, ({ value: env }) =>
-                ((js: string) =>
-                  Ok({
-                    exportsByPath: _Map_set(
-                      loaded.path,
-                      exportedSchemes(loaded.stmts, env),
-                      ctx.exportsByPath,
-                    ),
-                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
-                    keysByPath: _Map_set(
-                      loaded.path,
-                      exportedCtorKeys(loaded.stmts),
-                      ctx.keysByPath,
-                    ),
-                    qualsByPath: _Map_set(
-                      loaded.path,
-                      qualScopeOf(loaded.stmts, res.quals),
-                      ctx.qualsByPath,
-                    ),
-                    outputs: [...ctx.outputs, { path: loaded.path, js: js }],
-                  }) as Result<RecoveryCtx, StageErr>)(
-                  codegenWith(
-                    loaded.stmts,
-                    res.keys,
-                    opts.runtime,
-                    namespaceRuntime,
-                    preludeJsDefs,
-                    runtimeDeps,
-                    { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
-                  ),
-                ),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ),
 );
 const compileAll: _Curry<
   [ctx: RecoveryCtx, graph: Loaded[], opts: Opts],
   Result<ModuleOutput[], StageErr>
 > = _curry(3, (ctx: RecoveryCtx, graph: Loaded[], opts: Opts) =>
-  match(graph)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => Ok(ctx.outputs) as Result<ModuleOutput[], StageErr>,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([m, ...rest]) =>
-        match(compileOne(ctx, m, false, eq(length(rest), 0), opts))
-          .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<ModuleOutput[], StageErr>)
-          .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAll(ctx1, rest, opts))
-          .exhaustive(),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(ctx.outputs) as Result<ModuleOutput[], StageErr>)
+      : _v.length >= 1
+        ? (([m, ...rest]) =>
+            ((_v) =>
+              _v._tag === "Err"
+                ? (({ error: e }) => Err(e) as Result<ModuleOutput[], StageErr>)(_v)
+                : _v._tag === "Ok"
+                  ? (({ value: ctx1 }) => compileAll(ctx1, rest, opts))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(compileOne(ctx, m, false, eq(length(rest), 0), opts)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(graph),
 );
 /**
  * compileGraph : [Loaded] -> Result [ModuleOutput] MErr
@@ -986,25 +1017,27 @@ const depsPublished: <A, B>(
 ) => boolean = _curry(
   4,
   <A, B>(ctx: { exportsByPath: Map<string, A> } & B, stmts: Stmt[], i: number, path: string) =>
-    match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => true)
-      .with(
-        (
-          _v,
-        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SImport" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SImport";
-        },
-        ({ value: { from } }) =>
-          and(
-            _Map_has(resolveImport(path, from), ctx.exportsByPath),
-            depsPublished(ctx, stmts, i + 1, path),
-          ),
-      )
-      .with({ _tag: "Some" }, () => depsPublished(ctx, stmts, i + 1, path))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? true
+        : _v._tag === "Some" && _v.value._tag === "SImport"
+          ? (({ value: { from } }) =>
+              and(
+                _Map_has(resolveImport(path, from), ctx.exportsByPath),
+                depsPublished(ctx, stmts, i + 1, path),
+              ))(
+              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                value: Extract<
+                  Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                  { _tag: "SImport" }
+                >;
+              },
+            )
+          : _v._tag === "Some"
+            ? depsPublished(ctx, stmts, i + 1, path)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(_Array_get(i, stmts)),
 );
 const checkErrorsRecovering: <B, C, D>(
   ctx: {
@@ -1026,7 +1059,14 @@ const checkErrorsRecovering: <B, C, D>(
     loaded: Loaded,
   ) => {
     const importErrors: StageErr[] = depsPublished(ctx, loaded.stmts, 0, loaded.path)
-      ? match(
+      ? ((_v) =>
+          _v._tag === "Err"
+            ? (({ error: e }) => [atPath(loaded.path, e)])(_v)
+            : _v._tag === "Ok"
+              ? ([] as StageErr[])
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(
           resolveImportsFrom(
             ctx,
             loaded.stmts,
@@ -1042,11 +1082,27 @@ const checkErrorsRecovering: <B, C, D>(
             false,
           ),
         )
-          .with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)])
-          .with({ _tag: "Ok" }, () => [] as StageErr[])
-          .exhaustive()
       : ([] as StageErr[]);
-    return match(
+    return ((_v) =>
+      _v._tag === "Err"
+        ? (({ error: e }) => [atPath(loaded.path, e)])(_v)
+        : _v._tag === "Ok"
+          ? (({ value: res }) =>
+              ((_v) =>
+                _v._tag === "Err"
+                  ? (({ error: es }) =>
+                      _Array_concat(
+                        importErrors,
+                        map((e: StageErr) => atPath(loaded.path, e), es),
+                      ))(_v)
+                  : _v._tag === "Ok"
+                    ? importErrors
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(checkAllWith(loaded.stmts, res.reg, res.quals)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -1061,20 +1117,7 @@ const checkErrorsRecovering: <B, C, D>(
         },
         true,
       ),
-    )
-      .with({ _tag: "Err" }, ({ error: e }) => [atPath(loaded.path, e)])
-      .with({ _tag: "Ok" }, ({ value: res }) =>
-        match(checkAllWith(loaded.stmts, res.reg, res.quals))
-          .with({ _tag: "Err" }, ({ error: es }) =>
-            _Array_concat(
-              importErrors,
-              map((e: StageErr) => atPath(loaded.path, e), es),
-            ),
-          )
-          .with({ _tag: "Ok" }, () => importErrors)
-          .exhaustive(),
-      )
-      .exhaustive();
+    );
   },
 );
 const sameErr: _Curry<[a: StageErr, b: StageErr], boolean> = _curry(2, (a: StageErr, b: StageErr) =>
@@ -1091,41 +1134,34 @@ const recoverOne: _Curry<
   [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: StageErr[], opts: Opts],
   RecoveryGraphState
 > = _curry(5, (ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: StageErr[], opts: Opts) =>
-  match(compileOne(ctx, m, true, isEntry, opts))
-    .with({ _tag: "Err" }, ({ error: e }) =>
-      ((checks: StageErr[]) => ({
-        ctx: ctx,
-        errors: _Array_concat(errors, mergeRecovered(e, checks)),
-      }))(checkErrorsRecovering(ctx, m)),
-    )
-    .with({ _tag: "Ok" }, ({ value: ctx1 }) => ({ ctx: ctx1, errors: errors }))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "Err"
+      ? (({ error: e }) =>
+          ((checks: StageErr[]) => ({
+            ctx: ctx,
+            errors: _Array_concat(errors, mergeRecovered(e, checks)),
+          }))(checkErrorsRecovering(ctx, m)))(_v)
+      : _v._tag === "Ok"
+        ? (({ value: ctx1 }) => ({ ctx: ctx1, errors: errors }))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(compileOne(ctx, m, true, isEntry, opts)),
 );
 const compileAllRecovering: _Curry<
   [ctx: RecoveryCtx, graph: Loaded[], errors: StageErr[], opts: Opts],
   RecoveryGraphState
 > = _curry(4, (ctx: RecoveryCtx, graph: Loaded[], errors: StageErr[], opts: Opts) =>
-  match(graph)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => ({ ctx: ctx, errors: errors }),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([m, ...rest]) =>
-        ((next: RecoveryGraphState) => compileAllRecovering(next.ctx, rest, next.errors, opts))(
-          recoverOne(ctx, m, eq(length(rest), 0), errors, opts),
-        ),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? { ctx: ctx, errors: errors }
+      : _v.length >= 1
+        ? (([m, ...rest]) =>
+            ((next: RecoveryGraphState) => compileAllRecovering(next.ctx, rest, next.errors, opts))(
+              recoverOne(ctx, m, eq(length(rest), 0), errors, opts),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(graph),
 );
 /**
  * freshRecoveryGraphState : unit -> RecoveryGraphState
@@ -1178,12 +1214,14 @@ export const recoverModuleWith: _Curry<
 const keepOnly: <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => Map<A, B> = _curry(
   4,
   <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) =>
-    match(_Array_get(i, keys))
-      .with({ _tag: "None" }, () => m)
-      .with({ _tag: "Some" }, ({ value: k }) =>
-        keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? m
+        : _v._tag === "Some"
+          ? (({ value: k }) => keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, keys)),
 );
 const onlyAt: <A, B>(key: A, m: Map<A, B>) => Map<A, B> = _curry(2, <A, B>(key: A, m: Map<A, B>) =>
   keepOnly(key, _Map_keys(m), 0, m),
@@ -1281,7 +1319,137 @@ const inferOne: <A, B>(
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
   ) =>
-    match(
+    ((_v) =>
+      _v._tag === "Err"
+        ? (({ error: e }) =>
+            Err(atPath(loaded.path, e)) as Result<
+              {
+                exportsByPath: Map<string, Map<string, Scheme>>;
+                regByPath: Map<string, Registry>;
+                keysByPath: Map<string, Map<string, string[]>>;
+                qualsByPath: Map<string, RecoveryQualScope>;
+                aliases: Map<string, RecoveryAliasInfo>;
+                outputs: {
+                  path: string;
+                  types: { span: SpanAt; ty: Ty; display: string }[];
+                  aliases: Map<string, RecoveryAliasInfo>;
+                }[];
+              },
+              StageErr
+            >)(_v)
+        : _v._tag === "Ok"
+          ? (({ value: res }) =>
+              ((_v) =>
+                _v._tag === "Err"
+                  ? (({ error: e }) =>
+                      Err(atPath(loaded.path, e)) as Result<
+                        {
+                          exportsByPath: Map<string, Map<string, Scheme>>;
+                          regByPath: Map<string, Registry>;
+                          keysByPath: Map<string, Map<string, string[]>>;
+                          qualsByPath: Map<string, RecoveryQualScope>;
+                          aliases: Map<string, RecoveryAliasInfo>;
+                          outputs: {
+                            path: string;
+                            types: { span: SpanAt; ty: Ty; display: string }[];
+                            aliases: Map<string, RecoveryAliasInfo>;
+                          }[];
+                        },
+                        StageErr
+                      >)(_v)
+                  : _v._tag === "Ok"
+                    ? ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) =>
+                              Err(atPath(loaded.path, e)) as Result<
+                                {
+                                  exportsByPath: Map<string, Map<string, Scheme>>;
+                                  regByPath: Map<string, Registry>;
+                                  keysByPath: Map<string, Map<string, string[]>>;
+                                  qualsByPath: Map<string, RecoveryQualScope>;
+                                  aliases: Map<string, RecoveryAliasInfo>;
+                                  outputs: {
+                                    path: string;
+                                    types: { span: SpanAt; ty: Ty; display: string }[];
+                                    aliases: Map<string, RecoveryAliasInfo>;
+                                  }[];
+                                },
+                                StageErr
+                              >)(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: r }) =>
+                                Ok({
+                                  exportsByPath: _Map_set(
+                                    loaded.path,
+                                    exportedSchemes(loaded.stmts, r.env),
+                                    ctx.exportsByPath,
+                                  ),
+                                  regByPath: _Map_set(
+                                    loaded.path,
+                                    exportedRegistry(loaded.stmts),
+                                    ctx.regByPath,
+                                  ),
+                                  keysByPath: _Map_set(
+                                    loaded.path,
+                                    exportedCtorKeys(loaded.stmts),
+                                    ctx.keysByPath,
+                                  ),
+                                  qualsByPath: _Map_set(
+                                    loaded.path,
+                                    qualScopeOf(loaded.stmts, res.quals),
+                                    ctx.qualsByPath,
+                                  ),
+                                  aliases: mergeMap(r.aliases, ctx.aliases),
+                                  outputs: [
+                                    ...ctx.outputs,
+                                    {
+                                      path: loaded.path,
+                                      types: map(
+                                        (hit: TypeAt) => ({
+                                          span: hit.span,
+                                          ty: hit.ty,
+                                          display: showType(widenLits(hit.ty)),
+                                        }),
+                                        r.types,
+                                      ),
+                                      aliases: mergeMap(r.aliases, ctx.aliases),
+                                    },
+                                  ],
+                                }) as Result<
+                                  {
+                                    exportsByPath: Map<string, Map<string, Scheme>>;
+                                    regByPath: Map<string, Registry>;
+                                    keysByPath: Map<string, Map<string, string[]>>;
+                                    qualsByPath: Map<string, RecoveryQualScope>;
+                                    aliases: Map<string, RecoveryAliasInfo>;
+                                    outputs: {
+                                      path: string;
+                                      types: { span: SpanAt; ty: Ty; display: string }[];
+                                      aliases: Map<string, RecoveryAliasInfo>;
+                                    }[];
+                                  },
+                                  StageErr
+                                >)(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(
+                        inferProgramImportsTypes(
+                          loaded.stmts,
+                          builtins,
+                          namespaces,
+                          openMode(loaded.src, opts.open),
+                          res.imports,
+                          res.nsImports,
+                          res.quals,
+                          opts.plugins,
+                        ),
+                      )
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -1296,136 +1464,7 @@ const inferOne: <A, B>(
         },
         false,
       ),
-    )
-      .with(
-        { _tag: "Err" },
-        ({ error: e }) =>
-          Err(atPath(loaded.path, e)) as Result<
-            {
-              exportsByPath: Map<string, Map<string, Scheme>>;
-              regByPath: Map<string, Registry>;
-              keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, RecoveryQualScope>;
-              aliases: Map<string, RecoveryAliasInfo>;
-              outputs: {
-                path: string;
-                types: { span: SpanAt; ty: Ty; display: string }[];
-                aliases: Map<string, RecoveryAliasInfo>;
-              }[];
-            },
-            StageErr
-          >,
-      )
-      .with({ _tag: "Ok" }, ({ value: res }) =>
-        match(checkWith(loaded.stmts, res.reg, res.quals))
-          .with(
-            { _tag: "Err" },
-            ({ error: e }) =>
-              Err(atPath(loaded.path, e)) as Result<
-                {
-                  exportsByPath: Map<string, Map<string, Scheme>>;
-                  regByPath: Map<string, Registry>;
-                  keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, RecoveryQualScope>;
-                  aliases: Map<string, RecoveryAliasInfo>;
-                  outputs: {
-                    path: string;
-                    types: { span: SpanAt; ty: Ty; display: string }[];
-                    aliases: Map<string, RecoveryAliasInfo>;
-                  }[];
-                },
-                StageErr
-              >,
-          )
-          .with({ _tag: "Ok" }, () =>
-            match(
-              inferProgramImportsTypes(
-                loaded.stmts,
-                builtins,
-                namespaces,
-                openMode(loaded.src, opts.open),
-                res.imports,
-                res.nsImports,
-                res.quals,
-                opts.plugins,
-              ),
-            )
-              .with(
-                { _tag: "Err" },
-                ({ error: e }) =>
-                  Err(atPath(loaded.path, e)) as Result<
-                    {
-                      exportsByPath: Map<string, Map<string, Scheme>>;
-                      regByPath: Map<string, Registry>;
-                      keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, RecoveryAliasInfo>;
-                      outputs: {
-                        path: string;
-                        types: { span: SpanAt; ty: Ty; display: string }[];
-                        aliases: Map<string, RecoveryAliasInfo>;
-                      }[];
-                    },
-                    StageErr
-                  >,
-              )
-              .with(
-                { _tag: "Ok" },
-                ({ value: r }) =>
-                  Ok({
-                    exportsByPath: _Map_set(
-                      loaded.path,
-                      exportedSchemes(loaded.stmts, r.env),
-                      ctx.exportsByPath,
-                    ),
-                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
-                    keysByPath: _Map_set(
-                      loaded.path,
-                      exportedCtorKeys(loaded.stmts),
-                      ctx.keysByPath,
-                    ),
-                    qualsByPath: _Map_set(
-                      loaded.path,
-                      qualScopeOf(loaded.stmts, res.quals),
-                      ctx.qualsByPath,
-                    ),
-                    aliases: mergeMap(r.aliases, ctx.aliases),
-                    outputs: [
-                      ...ctx.outputs,
-                      {
-                        path: loaded.path,
-                        types: map(
-                          (hit: TypeAt) => ({
-                            span: hit.span,
-                            ty: hit.ty,
-                            display: showType(widenLits(hit.ty)),
-                          }),
-                          r.types,
-                        ),
-                        aliases: mergeMap(r.aliases, ctx.aliases),
-                      },
-                    ],
-                  }) as Result<
-                    {
-                      exportsByPath: Map<string, Map<string, Scheme>>;
-                      regByPath: Map<string, Registry>;
-                      keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, RecoveryAliasInfo>;
-                      outputs: {
-                        path: string;
-                        types: { span: SpanAt; ty: Ty; display: string }[];
-                        aliases: Map<string, RecoveryAliasInfo>;
-                      }[];
-                    },
-                    StageErr
-                  >,
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ),
 );
 const inferAll: <A>(
   ctx: {
@@ -1497,28 +1536,29 @@ const inferAll: <A>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          match(inferOne(ctx, m, opts))
-            .with(
-              { _tag: "Err" },
-              ({ error: e }) =>
-                Err(e) as Result<
-                  {
-                    exportsByPath: Map<string, Map<string, Scheme>>;
-                    regByPath: Map<string, Registry>;
-                    keysByPath: Map<string, Map<string, string[]>>;
-                    qualsByPath: Map<string, RecoveryQualScope>;
-                    outputs: {
-                      path: string;
-                      types: { span: SpanAt; ty: Ty; display: string }[];
+          ((_v) =>
+            _v._tag === "Err"
+              ? (({ error: e }) =>
+                  Err(e) as Result<
+                    {
+                      exportsByPath: Map<string, Map<string, Scheme>>;
+                      regByPath: Map<string, Registry>;
+                      keysByPath: Map<string, Map<string, string[]>>;
+                      qualsByPath: Map<string, RecoveryQualScope>;
+                      outputs: {
+                        path: string;
+                        types: { span: SpanAt; ty: Ty; display: string }[];
+                        aliases: Map<string, RecoveryAliasInfo>;
+                      }[];
                       aliases: Map<string, RecoveryAliasInfo>;
-                    }[];
-                    aliases: Map<string, RecoveryAliasInfo>;
-                  },
-                  StageErr
-                >,
-            )
-            .with({ _tag: "Ok" }, ({ value: ctx1 }) => inferAll(ctx1, rest, opts))
-            .exhaustive(),
+                    },
+                    StageErr
+                  >)(_v)
+              : _v._tag === "Ok"
+                ? (({ value: ctx1 }) => inferAll(ctx1, rest, opts))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(inferOne(ctx, m, opts)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -1792,17 +1832,20 @@ export const buildModulesWith: _Curry<
   [entry: string, opts: Opts],
   Result<ModuleOutput[], StageErr[]>
 > = _curry(2, (entry: string, opts: Opts) =>
-  match(loadGraphWith(entry, opts.plugins))
-    .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<ModuleOutput[], StageErr[]>)
-    .with({ _tag: "Ok" }, ({ value: graph }) =>
-      ((recovered: GraphRecovery) =>
-        eq(length(recovered.errors), 0)
-          ? _Result_mapErr((e: StageErr) => [e], compileGraphWith(graph, opts))
-          : (Err(recovered.errors) as Result<ModuleOutput[], StageErr[]>))(
-        compileGraphRecoveringWith(graph, opts),
-      ),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "Err"
+      ? (({ error: e }) => Err([e]) as Result<ModuleOutput[], StageErr[]>)(_v)
+      : _v._tag === "Ok"
+        ? (({ value: graph }) =>
+            ((recovered: GraphRecovery) =>
+              eq(length(recovered.errors), 0)
+                ? _Result_mapErr((e: StageErr) => [e], compileGraphWith(graph, opts))
+                : (Err(recovered.errors) as Result<ModuleOutput[], StageErr[]>))(
+              compileGraphRecoveringWith(graph, opts),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(loadGraphWith(entry, opts.plugins)),
 );
 export const buildModules: (entry: string) => Result<ModuleOutput[], StageErr[]> = (
   entry: string,
@@ -1812,15 +1855,21 @@ const relSpec = _curry(2, $relSpec);
 import { externDtsPath as $externDtsPath } from "./host.mjs";
 const externDtsPath = _curry(2, $externDtsPath);
 const isIdentChar: (c: string) => boolean = (c: string) =>
-  match(_Str_codeAt(0, c))
-    .with({ _tag: "None" }, () => false)
-    .with({ _tag: "Some" }, ({ value: n }) =>
-      or(
-        or(or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)), eq(n, 95)),
-        eq(n, 36),
-      ),
-    )
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "None"
+      ? false
+      : _v._tag === "Some"
+        ? (({ value: n }) =>
+            or(
+              or(
+                or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)),
+                eq(n, 95),
+              ),
+              eq(n, 36),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Str_codeAt(0, c));
 const endsAtBoundary: (part: string) => boolean = (part: string) =>
   eq(_Str_length(part), 0)
     ? true
@@ -1830,14 +1879,20 @@ const startsAtBoundary: (part: string) => boolean = (part: string) =>
 const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
   2,
   (parts: string[], i: number) =>
-    match(_Array_get(i, parts))
-      .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: after }) =>
-        and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
-          ? true
-          : occursAsWordFrom(parts, i + 1),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? false
+        : _v._tag === "Some"
+          ? (({ value: after }) =>
+              and(
+                _Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)),
+                startsAtBoundary(after),
+              )
+                ? true
+                : occursAsWordFrom(parts, i + 1))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, parts)),
 );
 const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(
   2,
@@ -1850,21 +1905,27 @@ const importedBinding: (spec: string) => string = (spec: string) => {
 const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
   2,
   (line: string, acc: Set<string>) =>
-    match(_Array_get(1, _Str_split("{", line)))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: rest }) =>
-        match(_Array_get(0, _Str_split("}", rest)))
-          .with({ _tag: "None" }, () => acc)
-          .with({ _tag: "Some" }, ({ value: names }) =>
-            reduce(
-              _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
-              acc,
-              _Str_split(",", names),
-            ),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: rest }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? acc
+                  : _v._tag === "Some"
+                    ? (({ value: names }) =>
+                        reduce(
+                          _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
+                          acc,
+                          _Str_split(",", names),
+                        ))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Array_get(0, _Str_split("}", rest))))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(1, _Str_split("{", line))),
 );
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
@@ -1885,17 +1946,21 @@ const ownTypesInto: <A>(
   ) =>
     reduce(
       _curry(2, (a: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] }, s: Stmt) =>
-        match(s)
-          .with({ _tag: "SType" }, ({ name }) =>
-            _Map_has(name, a.owner)
-              ? {
-                  owner: _Map_set(name, path, a.owner),
-                  dups: _Set_add(name, a.dups),
-                  dupNames: _Set_has(name, a.dups) ? a.dupNames : _Array_append(name, a.dupNames),
-                }
-              : { owner: _Map_set(name, path, a.owner), dups: a.dups, dupNames: a.dupNames },
-          )
-          .otherwise(() => a),
+        ((_v) =>
+          _v._tag === "SType"
+            ? (({ name }) =>
+                _Map_has(name, a.owner)
+                  ? {
+                      owner: _Map_set(name, path, a.owner),
+                      dups: _Set_add(name, a.dups),
+                      dupNames: _Set_has(name, a.dups)
+                        ? a.dupNames
+                        : _Array_append(name, a.dupNames),
+                    }
+                  : { owner: _Map_set(name, path, a.owner), dups: a.dups, dupNames: a.dupNames })(
+                _v,
+              )
+            : a)(s),
       ),
       acc,
       stmts,
@@ -1927,12 +1992,14 @@ const nullaryDeclared: <A, B, C, D>(
   name: A,
   local: Map<A, { params: B[]; fields: C[] } & D>,
 ) => boolean = _curry(2, <A, B, C, D>(name: A, local: Map<A, { params: B[]; fields: C[] } & D>) =>
-  match(_Map_get(name, local))
-    .with({ _tag: "None" }, () => false)
-    .with({ _tag: "Some" }, ({ value: info }) =>
-      and(eq(length(info.params), 0), length(info.fields) > 0),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? false
+      : _v._tag === "Some"
+        ? (({ value: info }) => and(eq(length(info.params), 0), length(info.fields) > 0))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Map_get(name, local)),
 );
 /**
  * A synthetic parameterised homonym makes `withoutAmbiguousAlias` blank the
@@ -1952,27 +2019,30 @@ const addDupMarkers: <A, B, E>(
     acc: Map<string, RecoveryAliasInfo>,
     i: number,
   ) =>
-    match(_Array_get(i, names))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: name }) =>
-        addDupMarkers(
-          names,
-          local,
-          nullaryDeclared(name, local)
-            ? acc
-            : _Map_set(
-                `dup.${name}`,
-                {
-                  params: ["_"],
-                  fields: [] as { fieldType: TypeExpr; name: string; optional: boolean }[],
-                  expr: None,
-                },
-                acc,
-              ),
-          i + 1,
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: name }) =>
+              addDupMarkers(
+                names,
+                local,
+                nullaryDeclared(name, local)
+                  ? acc
+                  : _Map_set(
+                      `dup.${name}`,
+                      {
+                        params: ["_"],
+                        fields: [] as { fieldType: TypeExpr; name: string; optional: boolean }[],
+                        expr: None,
+                      },
+                      acc,
+                    ),
+                i + 1,
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, names)),
 );
 const aliasesForTs: <C, D, E>(
   merged: Map<string, RecoveryAliasInfo>,
@@ -1990,9 +2060,7 @@ const localTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   _Set_fromArray(
     _Array_flatMap(
       (s: Stmt) =>
-        match(s)
-          .with({ _tag: "SType" }, ({ name }) => [name])
-          .otherwise(() => [] as string[]),
+        ((_v) => (_v._tag === "SType" ? (({ name }) => [name])(_v) : ([] as string[])))(s),
       stmts,
     ),
   );
@@ -2077,30 +2145,33 @@ const externBindingsInto: <A>(
   ) =>
     reduce(
       _curry(2, (a: Map<string, { imported: string; scheme: A; curried: boolean }[]>, s: Stmt) =>
-        match(s)
-          .with({ _tag: "SExtern" }, ({ name, module: hostModule, imported, curried }) =>
-            _Str_startsWith("mochi:", hostModule)
-              ? a
-              : match(_Map_get(name, env))
-                  .with({ _tag: "None" }, () => a)
-                  .with({ _tag: "Some" }, ({ value: sc }) =>
-                    ((dp: string) =>
-                      _Map_set(
-                        dp,
-                        _Array_append(
-                          { imported: imported, scheme: sc, curried: curried },
-                          _Map_getOr(
-                            [] as { imported: string; scheme: A; curried: boolean }[],
-                            dp,
-                            a,
-                          ),
-                        ),
-                        a,
-                      ))(externDtsPath(path, hostModule)),
-                  )
-                  .exhaustive(),
-          )
-          .otherwise(() => a),
+        ((_v) =>
+          _v._tag === "SExtern"
+            ? (({ name, module: hostModule, imported, curried }) =>
+                _Str_startsWith("mochi:", hostModule)
+                  ? a
+                  : ((_v) =>
+                      _v._tag === "None"
+                        ? a
+                        : _v._tag === "Some"
+                          ? (({ value: sc }) =>
+                              ((dp: string) =>
+                                _Map_set(
+                                  dp,
+                                  _Array_append(
+                                    { imported: imported, scheme: sc, curried: curried },
+                                    _Map_getOr(
+                                      [] as { imported: string; scheme: A; curried: boolean }[],
+                                      dp,
+                                      a,
+                                    ),
+                                  ),
+                                  a,
+                                ))(externDtsPath(path, hostModule)))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(_Map_get(name, env)))(_v)
+            : a)(s),
       ),
       acc,
       stmts,
@@ -2153,129 +2224,30 @@ const compileOneTs: <A, B>(
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
   ) =>
-    match(
-      resolveImportsFrom(
-        ctx,
-        loaded.stmts,
-        0,
-        loaded.path,
-        {
-          imports: new Map<string, Scheme>(),
-          nsImports: new Map<string, Map<string, Scheme>>(),
-          reg: emptyReg,
-          keys: new Map<string, string[]>(),
-          quals: new Map<string, RecoveryQualScope>(),
-        },
-        false,
-      ),
-    )
-      .with(
-        { _tag: "Err" },
-        ({ error: e }) =>
-          Err(atPath(loaded.path, e)) as Result<
-            {
-              exportsByPath: Map<string, Map<string, Scheme>>;
-              regByPath: Map<string, Registry>;
-              keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, RecoveryQualScope>;
-              aliases: Map<string, RecoveryAliasInfo>;
-              typeOwner: Map<string, string>;
-              dupNames: string[];
-              runtimeImport: string;
-              externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-              outputs: ModuleOutput[];
-            },
-            StageErr
-          >,
-      )
-      .with({ _tag: "Ok" }, ({ value: res }) =>
-        match(checkWith(loaded.stmts, res.reg, res.quals))
-          .with(
-            { _tag: "Err" },
-            ({ error: e }) =>
-              Err(atPath(loaded.path, e)) as Result<
-                {
-                  exportsByPath: Map<string, Map<string, Scheme>>;
-                  regByPath: Map<string, Registry>;
-                  keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, RecoveryQualScope>;
-                  aliases: Map<string, RecoveryAliasInfo>;
-                  typeOwner: Map<string, string>;
-                  dupNames: string[];
-                  runtimeImport: string;
-                  externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-                  outputs: ModuleOutput[];
-                },
-                StageErr
-              >,
-          )
-          .with({ _tag: "Ok" }, () =>
-            match(
-              inferProgramImportsTypes(
-                loaded.stmts,
-                builtins,
-                namespaces,
-                openMode(loaded.src, opts.open),
-                res.imports,
-                res.nsImports,
-                res.quals,
-                opts.plugins,
-              ),
-            )
-              .with(
-                { _tag: "Err" },
-                ({ error: e }) =>
-                  Err(atPath(loaded.path, e)) as Result<
-                    {
-                      exportsByPath: Map<string, Map<string, Scheme>>;
-                      regByPath: Map<string, Registry>;
-                      keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, RecoveryAliasInfo>;
-                      typeOwner: Map<string, string>;
-                      dupNames: string[];
-                      runtimeImport: string;
-                      externs: Map<
-                        string,
-                        { imported: string; scheme: Scheme; curried: boolean }[]
-                      >;
-                      outputs: ModuleOutput[];
-                    },
-                    StageErr
-                  >,
-              )
-              .with({ _tag: "Ok" }, ({ value: r }) =>
-                ((body: string) =>
-                  ((lines: string[]) =>
-                    ((ts: string) =>
-                      Ok({
-                        exportsByPath: _Map_set(
-                          loaded.path,
-                          exportedSchemes(loaded.stmts, r.env),
-                          ctx.exportsByPath,
-                        ),
-                        regByPath: _Map_set(
-                          loaded.path,
-                          exportedRegistry(loaded.stmts),
-                          ctx.regByPath,
-                        ),
-                        keysByPath: _Map_set(
-                          loaded.path,
-                          exportedCtorKeys(loaded.stmts),
-                          ctx.keysByPath,
-                        ),
-                        qualsByPath: _Map_set(
-                          loaded.path,
-                          qualScopeOf(loaded.stmts, res.quals),
-                          ctx.qualsByPath,
-                        ),
-                        aliases: mergeMap(r.aliases, ctx.aliases),
-                        typeOwner: ctx.typeOwner,
-                        dupNames: ctx.dupNames,
-                        runtimeImport: ctx.runtimeImport,
-                        externs: externBindingsInto(loaded.stmts, loaded.path, r.env, ctx.externs),
-                        outputs: [...ctx.outputs, { path: loaded.path, js: ts }],
-                      }) as Result<
+    ((_v) =>
+      _v._tag === "Err"
+        ? (({ error: e }) =>
+            Err(atPath(loaded.path, e)) as Result<
+              {
+                exportsByPath: Map<string, Map<string, Scheme>>;
+                regByPath: Map<string, Registry>;
+                keysByPath: Map<string, Map<string, string[]>>;
+                qualsByPath: Map<string, RecoveryQualScope>;
+                aliases: Map<string, RecoveryAliasInfo>;
+                typeOwner: Map<string, string>;
+                dupNames: string[];
+                runtimeImport: string;
+                externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
+                outputs: ModuleOutput[];
+              },
+              StageErr
+            >)(_v)
+        : _v._tag === "Ok"
+          ? (({ value: res }) =>
+              ((_v) =>
+                _v._tag === "Err"
+                  ? (({ error: e }) =>
+                      Err(atPath(loaded.path, e)) as Result<
                         {
                           exportsByPath: Map<string, Map<string, Scheme>>;
                           regByPath: Map<string, Registry>;
@@ -2292,46 +2264,152 @@ const compileOneTs: <A, B>(
                           outputs: ModuleOutput[];
                         },
                         StageErr
-                      >)(
-                      eq(length(lines), 0)
-                        ? body
-                        : `${_Str_join("\n", lines)}
+                      >)(_v)
+                  : _v._tag === "Ok"
+                    ? ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) =>
+                              Err(atPath(loaded.path, e)) as Result<
+                                {
+                                  exportsByPath: Map<string, Map<string, Scheme>>;
+                                  regByPath: Map<string, Registry>;
+                                  keysByPath: Map<string, Map<string, string[]>>;
+                                  qualsByPath: Map<string, RecoveryQualScope>;
+                                  aliases: Map<string, RecoveryAliasInfo>;
+                                  typeOwner: Map<string, string>;
+                                  dupNames: string[];
+                                  runtimeImport: string;
+                                  externs: Map<
+                                    string,
+                                    { imported: string; scheme: Scheme; curried: boolean }[]
+                                  >;
+                                  outputs: ModuleOutput[];
+                                },
+                                StageErr
+                              >)(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: r }) =>
+                                ((body: string) =>
+                                  ((lines: string[]) =>
+                                    ((ts: string) =>
+                                      Ok({
+                                        exportsByPath: _Map_set(
+                                          loaded.path,
+                                          exportedSchemes(loaded.stmts, r.env),
+                                          ctx.exportsByPath,
+                                        ),
+                                        regByPath: _Map_set(
+                                          loaded.path,
+                                          exportedRegistry(loaded.stmts),
+                                          ctx.regByPath,
+                                        ),
+                                        keysByPath: _Map_set(
+                                          loaded.path,
+                                          exportedCtorKeys(loaded.stmts),
+                                          ctx.keysByPath,
+                                        ),
+                                        qualsByPath: _Map_set(
+                                          loaded.path,
+                                          qualScopeOf(loaded.stmts, res.quals),
+                                          ctx.qualsByPath,
+                                        ),
+                                        aliases: mergeMap(r.aliases, ctx.aliases),
+                                        typeOwner: ctx.typeOwner,
+                                        dupNames: ctx.dupNames,
+                                        runtimeImport: ctx.runtimeImport,
+                                        externs: externBindingsInto(
+                                          loaded.stmts,
+                                          loaded.path,
+                                          r.env,
+                                          ctx.externs,
+                                        ),
+                                        outputs: [...ctx.outputs, { path: loaded.path, js: ts }],
+                                      }) as Result<
+                                        {
+                                          exportsByPath: Map<string, Map<string, Scheme>>;
+                                          regByPath: Map<string, Registry>;
+                                          keysByPath: Map<string, Map<string, string[]>>;
+                                          qualsByPath: Map<string, RecoveryQualScope>;
+                                          aliases: Map<string, RecoveryAliasInfo>;
+                                          typeOwner: Map<string, string>;
+                                          dupNames: string[];
+                                          runtimeImport: string;
+                                          externs: Map<
+                                            string,
+                                            { imported: string; scheme: Scheme; curried: boolean }[]
+                                          >;
+                                          outputs: ModuleOutput[];
+                                        },
+                                        StageErr
+                                      >)(
+                                      eq(length(lines), 0)
+                                        ? body
+                                        : `${_Str_join("\n", lines)}
 
 ${body}`,
-                    ))(
-                    crossModuleTypeImports(
-                      body,
-                      loaded.path,
-                      localTypeNames(loaded.stmts),
-                      ctx.typeOwner,
-                    ),
-                  ))(
-                  emitTsModuleWith(
-                    loaded.stmts,
-                    r.env,
-                    r.types,
-                    r.letParams,
-                    aliasesForTs(
-                      mergeMap(r.aliases, ctx.aliases),
-                      aliasesOf(loaded.stmts),
-                      ctx.dupNames,
-                    ),
-                    res.keys,
-                    [] as string[],
-                    namespaceRuntime,
-                    preludeJsDefs,
-                    runtimeDeps,
-                    ctx.runtimeImport,
-                    opts.docs,
-                    bindingHooksFor(opts.plugins),
-                  ),
-                ),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+                                    ))(
+                                    crossModuleTypeImports(
+                                      body,
+                                      loaded.path,
+                                      localTypeNames(loaded.stmts),
+                                      ctx.typeOwner,
+                                    ),
+                                  ))(
+                                  emitTsModuleWith(
+                                    loaded.stmts,
+                                    r.env,
+                                    r.types,
+                                    r.letParams,
+                                    aliasesForTs(
+                                      mergeMap(r.aliases, ctx.aliases),
+                                      aliasesOf(loaded.stmts),
+                                      ctx.dupNames,
+                                    ),
+                                    res.keys,
+                                    [] as string[],
+                                    namespaceRuntime,
+                                    preludeJsDefs,
+                                    runtimeDeps,
+                                    ctx.runtimeImport,
+                                    opts.docs,
+                                    bindingHooksFor(opts.plugins),
+                                  ),
+                                ))(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(
+                        inferProgramImportsTypes(
+                          loaded.stmts,
+                          builtins,
+                          namespaces,
+                          openMode(loaded.src, opts.open),
+                          res.imports,
+                          res.nsImports,
+                          res.quals,
+                          opts.plugins,
+                        ),
+                      )
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, RecoveryQualScope>(),
+        },
+        false,
+      ),
+    ),
 );
 const noAliases: Map<string, RecoveryAliasInfo> = aliasesOf([] as Stmt[]);
 const externOutputs: <B, C>(
@@ -2398,10 +2476,14 @@ const compileAllTs: <A>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          match(compileOneTs(ctx, m, opts))
-            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<ModuleOutput[], StageErr>)
-            .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllTs(ctx1, rest, opts))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Err"
+              ? (({ error: e }) => Err(e) as Result<ModuleOutput[], StageErr>)(_v)
+              : _v._tag === "Ok"
+                ? (({ value: ctx1 }) => compileAllTs(ctx1, rest, opts))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(compileOneTs(ctx, m, opts)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -2493,7 +2575,128 @@ const dtsOne: <A, B>(
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
   ) =>
-    match(
+    ((_v) =>
+      _v._tag === "Err"
+        ? (({ error: e }) =>
+            Err(atPath(loaded.path, e)) as Result<
+              {
+                exportsByPath: Map<string, Map<string, Scheme>>;
+                regByPath: Map<string, Registry>;
+                keysByPath: Map<string, Map<string, string[]>>;
+                qualsByPath: Map<string, RecoveryQualScope>;
+                aliases: Map<string, RecoveryAliasInfo>;
+                runtimeImport: string;
+                target: string;
+                dts: string;
+              },
+              StageErr
+            >)(_v)
+        : _v._tag === "Ok"
+          ? (({ value: res }) =>
+              ((_v) =>
+                _v._tag === "Err"
+                  ? (({ error: e }) =>
+                      Err(atPath(loaded.path, e)) as Result<
+                        {
+                          exportsByPath: Map<string, Map<string, Scheme>>;
+                          regByPath: Map<string, Registry>;
+                          keysByPath: Map<string, Map<string, string[]>>;
+                          qualsByPath: Map<string, RecoveryQualScope>;
+                          aliases: Map<string, RecoveryAliasInfo>;
+                          runtimeImport: string;
+                          target: string;
+                          dts: string;
+                        },
+                        StageErr
+                      >)(_v)
+                  : _v._tag === "Ok"
+                    ? ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) =>
+                              Err(atPath(loaded.path, e)) as Result<
+                                {
+                                  exportsByPath: Map<string, Map<string, Scheme>>;
+                                  regByPath: Map<string, Registry>;
+                                  keysByPath: Map<string, Map<string, string[]>>;
+                                  qualsByPath: Map<string, RecoveryQualScope>;
+                                  aliases: Map<string, RecoveryAliasInfo>;
+                                  runtimeImport: string;
+                                  target: string;
+                                  dts: string;
+                                },
+                                StageErr
+                              >)(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: r }) =>
+                                Ok({
+                                  exportsByPath: _Map_set(
+                                    loaded.path,
+                                    exportedSchemes(loaded.stmts, r.env),
+                                    ctx.exportsByPath,
+                                  ),
+                                  regByPath: _Map_set(
+                                    loaded.path,
+                                    exportedRegistry(loaded.stmts),
+                                    ctx.regByPath,
+                                  ),
+                                  keysByPath: _Map_set(
+                                    loaded.path,
+                                    exportedCtorKeys(loaded.stmts),
+                                    ctx.keysByPath,
+                                  ),
+                                  qualsByPath: _Map_set(
+                                    loaded.path,
+                                    qualScopeOf(loaded.stmts, res.quals),
+                                    ctx.qualsByPath,
+                                  ),
+                                  aliases: mergeMap(r.aliases, ctx.aliases),
+                                  runtimeImport: ctx.runtimeImport,
+                                  target: ctx.target,
+                                  dts: eq(loaded.path, ctx.target)
+                                    ? emitDtsFromTypedWith(
+                                        loaded.stmts,
+                                        r.env,
+                                        mergeMap(r.aliases, ctx.aliases),
+                                        qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
+                                        ctx.runtimeImport,
+                                        opts.docs,
+                                        dtsHooksFor(opts.plugins),
+                                        bindingHooksFor(opts.plugins),
+                                      )
+                                    : ctx.dts,
+                                }) as Result<
+                                  {
+                                    exportsByPath: Map<string, Map<string, Scheme>>;
+                                    regByPath: Map<string, Registry>;
+                                    keysByPath: Map<string, Map<string, string[]>>;
+                                    qualsByPath: Map<string, RecoveryQualScope>;
+                                    aliases: Map<string, RecoveryAliasInfo>;
+                                    runtimeImport: string;
+                                    target: string;
+                                    dts: string;
+                                  },
+                                  StageErr
+                                >)(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(
+                        inferProgramImportsTypes(
+                          loaded.stmts,
+                          builtins,
+                          namespaces,
+                          openMode(loaded.src, opts.open),
+                          res.imports,
+                          res.nsImports,
+                          res.quals,
+                          opts.plugins,
+                        ),
+                      )
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -2508,127 +2711,7 @@ const dtsOne: <A, B>(
         },
         false,
       ),
-    )
-      .with(
-        { _tag: "Err" },
-        ({ error: e }) =>
-          Err(atPath(loaded.path, e)) as Result<
-            {
-              exportsByPath: Map<string, Map<string, Scheme>>;
-              regByPath: Map<string, Registry>;
-              keysByPath: Map<string, Map<string, string[]>>;
-              qualsByPath: Map<string, RecoveryQualScope>;
-              aliases: Map<string, RecoveryAliasInfo>;
-              runtimeImport: string;
-              target: string;
-              dts: string;
-            },
-            StageErr
-          >,
-      )
-      .with({ _tag: "Ok" }, ({ value: res }) =>
-        match(checkWith(loaded.stmts, res.reg, res.quals))
-          .with(
-            { _tag: "Err" },
-            ({ error: e }) =>
-              Err(atPath(loaded.path, e)) as Result<
-                {
-                  exportsByPath: Map<string, Map<string, Scheme>>;
-                  regByPath: Map<string, Registry>;
-                  keysByPath: Map<string, Map<string, string[]>>;
-                  qualsByPath: Map<string, RecoveryQualScope>;
-                  aliases: Map<string, RecoveryAliasInfo>;
-                  runtimeImport: string;
-                  target: string;
-                  dts: string;
-                },
-                StageErr
-              >,
-          )
-          .with({ _tag: "Ok" }, () =>
-            match(
-              inferProgramImportsTypes(
-                loaded.stmts,
-                builtins,
-                namespaces,
-                openMode(loaded.src, opts.open),
-                res.imports,
-                res.nsImports,
-                res.quals,
-                opts.plugins,
-              ),
-            )
-              .with(
-                { _tag: "Err" },
-                ({ error: e }) =>
-                  Err(atPath(loaded.path, e)) as Result<
-                    {
-                      exportsByPath: Map<string, Map<string, Scheme>>;
-                      regByPath: Map<string, Registry>;
-                      keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, RecoveryAliasInfo>;
-                      runtimeImport: string;
-                      target: string;
-                      dts: string;
-                    },
-                    StageErr
-                  >,
-              )
-              .with(
-                { _tag: "Ok" },
-                ({ value: r }) =>
-                  Ok({
-                    exportsByPath: _Map_set(
-                      loaded.path,
-                      exportedSchemes(loaded.stmts, r.env),
-                      ctx.exportsByPath,
-                    ),
-                    regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
-                    keysByPath: _Map_set(
-                      loaded.path,
-                      exportedCtorKeys(loaded.stmts),
-                      ctx.keysByPath,
-                    ),
-                    qualsByPath: _Map_set(
-                      loaded.path,
-                      qualScopeOf(loaded.stmts, res.quals),
-                      ctx.qualsByPath,
-                    ),
-                    aliases: mergeMap(r.aliases, ctx.aliases),
-                    runtimeImport: ctx.runtimeImport,
-                    target: ctx.target,
-                    dts: eq(loaded.path, ctx.target)
-                      ? emitDtsFromTypedWith(
-                          loaded.stmts,
-                          r.env,
-                          mergeMap(r.aliases, ctx.aliases),
-                          qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
-                          ctx.runtimeImport,
-                          opts.docs,
-                          dtsHooksFor(opts.plugins),
-                          bindingHooksFor(opts.plugins),
-                        )
-                      : ctx.dts,
-                  }) as Result<
-                    {
-                      exportsByPath: Map<string, Map<string, Scheme>>;
-                      regByPath: Map<string, Registry>;
-                      keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<string, RecoveryQualScope>;
-                      aliases: Map<string, RecoveryAliasInfo>;
-                      runtimeImport: string;
-                      target: string;
-                      dts: string;
-                    },
-                    StageErr
-                  >,
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ),
 );
 const dtsAll: <A>(
   ctx: {
@@ -2667,10 +2750,14 @@ const dtsAll: <A>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          match(dtsOne(ctx, m, opts))
-            .with({ _tag: "Err" }, ({ error: e }) => Err(e) as Result<string, StageErr>)
-            .with({ _tag: "Ok" }, ({ value: ctx1 }) => dtsAll(ctx1, rest, opts))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Err"
+              ? (({ error: e }) => Err(e) as Result<string, StageErr>)(_v)
+              : _v._tag === "Ok"
+                ? (({ value: ctx1 }) => dtsAll(ctx1, rest, opts))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(dtsOne(ctx, m, opts)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -2718,17 +2805,23 @@ export const buildModulesTsWith: _Curry<
   [entry: string, runtimeImport: string, opts: Opts],
   Result<ModuleOutput[], StageErr[]>
 > = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
-  match(loadGraphWith(entry, opts.plugins))
-    .with({ _tag: "Err" }, ({ error: e }) => Err([e]) as Result<ModuleOutput[], StageErr[]>)
-    .with({ _tag: "Ok" }, ({ value: graph }) =>
-      ((recovered: GraphRecovery) =>
-        eq(length(recovered.errors), 0)
-          ? _Result_mapErr((e: StageErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
-          : (Err(recovered.errors) as Result<ModuleOutput[], StageErr[]>))(
-        compileGraphRecoveringWith(graph, { ...opts, strictEntry: false }),
-      ),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "Err"
+      ? (({ error: e }) => Err([e]) as Result<ModuleOutput[], StageErr[]>)(_v)
+      : _v._tag === "Ok"
+        ? (({ value: graph }) =>
+            ((recovered: GraphRecovery) =>
+              eq(length(recovered.errors), 0)
+                ? _Result_mapErr(
+                    (e: StageErr) => [e],
+                    compileGraphTsWith(graph, runtimeImport, opts),
+                  )
+                : (Err(recovered.errors) as Result<ModuleOutput[], StageErr[]>))(
+              compileGraphRecoveringWith(graph, { ...opts, strictEntry: false }),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(loadGraphWith(entry, opts.plugins)),
 );
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],

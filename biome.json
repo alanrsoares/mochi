@@ -157,6 +157,7 @@
           },
           "complexity": {
             "noUselessContinue": "off",
+            "noUselessTernary": "off",
             "noExcessiveCognitiveComplexity": "off",
             "useLiteralKeys": "off"
           }

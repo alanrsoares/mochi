@@ -42,10 +42,10 @@ test("a boolean switch missing a case is non-exhaustive", () => {
   expect(isErr(compile("let f = b => switch b { | true => 1 }"))).toBe(true);
 });
 
-test("boolean arms lower to literal .with(true/false, ...)", () => {
+test("boolean arms lower to `_v === true/false` tests", () => {
   const out = js("let f = b => switch b { | true => 1 | false => 0 }");
-  expect(out).toContain(".with(true, () => 1)");
-  expect(out).toContain(".with(false, () => 0)");
+  expect(out).toContain("_v === true\n    ? (1)");
+  expect(out).toContain("_v === false\n    ? (0)");
 });
 
 test("a predicate-driven branch runs", () => {

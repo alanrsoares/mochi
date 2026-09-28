@@ -259,61 +259,111 @@ import { stronglyConnected } from "./scc";
  * Exported for the TS backend: hooks look node types up by span.
  */
 export const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  match(e)
-    .with({ _tag: "ENum" }, ({ span: sp }) => sp)
-    .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
-    .with({ _tag: "EBool" }, ({ span: sp }) => sp)
-    .with({ _tag: "EStr" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERef" }, ({ span: sp }) => sp)
-    .with({ _tag: "ECall" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELambda" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELetIn" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELetBind" }, ({ span: sp }) => sp)
-    .with({ _tag: "EPipe" }, ({ span: sp }) => sp)
-    .with({ _tag: "EDo" }, ({ span: sp }) => sp)
-    .with({ _tag: "ETernary" }, ({ span: sp }) => sp)
-    .with({ _tag: "EMatch" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELoop" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERecur" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERecord" }, ({ span: sp }) => sp)
-    .with({ _tag: "EField" }, ({ span: sp }) => sp)
-    .with({ _tag: "ETuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "EArr" }, ({ span: sp }) => sp)
-    .with({ _tag: "EList" }, ({ span: sp }) => sp)
-    .with({ _tag: "ESet" }, ({ span: sp }) => sp)
-    .with({ _tag: "EMap" }, ({ span: sp }) => sp)
-    .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "ENum"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "EUnit"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "EBool"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "EStr"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "ERef"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "ECall"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "ELambda"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "ELetIn"
+                    ? (({ span: sp }) => sp)(_v)
+                    : _v._tag === "ELetBind"
+                      ? (({ span: sp }) => sp)(_v)
+                      : _v._tag === "EPipe"
+                        ? (({ span: sp }) => sp)(_v)
+                        : _v._tag === "EDo"
+                          ? (({ span: sp }) => sp)(_v)
+                          : _v._tag === "ETernary"
+                            ? (({ span: sp }) => sp)(_v)
+                            : _v._tag === "EMatch"
+                              ? (({ span: sp }) => sp)(_v)
+                              : _v._tag === "ELoop"
+                                ? (({ span: sp }) => sp)(_v)
+                                : _v._tag === "ERecur"
+                                  ? (({ span: sp }) => sp)(_v)
+                                  : _v._tag === "ERecord"
+                                    ? (({ span: sp }) => sp)(_v)
+                                    : _v._tag === "EField"
+                                      ? (({ span: sp }) => sp)(_v)
+                                      : _v._tag === "ETuple"
+                                        ? (({ span: sp }) => sp)(_v)
+                                        : _v._tag === "EArr"
+                                          ? (({ span: sp }) => sp)(_v)
+                                          : _v._tag === "EList"
+                                            ? (({ span: sp }) => sp)(_v)
+                                            : _v._tag === "ESet"
+                                              ? (({ span: sp }) => sp)(_v)
+                                              : _v._tag === "EMap"
+                                                ? (({ span: sp }) => sp)(_v)
+                                                : _v._tag === "EInterp"
+                                                  ? (({ span: sp }) => sp)(_v)
+                                                  : (() => {
+                                                      throw new Error("non-exhaustive match");
+                                                    })())(e);
 const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
-  match(p)
-    .with({ _tag: "PWild" }, ({ span: sp }) => sp)
-    .with({ _tag: "PUnit" }, ({ span: sp }) => sp)
-    .with({ _tag: "PBind" }, ({ span: sp }) => sp)
-    .with({ _tag: "PAs" }, ({ span: sp }) => sp)
-    .with({ _tag: "PLit" }, ({ span: sp }) => sp)
-    .with({ _tag: "PBool" }, ({ span: sp }) => sp)
-    .with({ _tag: "PStr" }, ({ span: sp }) => sp)
-    .with({ _tag: "PTuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "PRecord" }, ({ span: sp }) => sp)
-    .with({ _tag: "PCtor" }, ({ span: sp }) => sp)
-    .with({ _tag: "PArr" }, ({ span: sp }) => sp)
-    .with({ _tag: "PList" }, ({ span: sp }) => sp)
-    .with({ _tag: "POr" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "PWild"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "PUnit"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "PBind"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "PAs"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "PLit"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "PBool"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "PStr"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "PTuple"
+                    ? (({ span: sp }) => sp)(_v)
+                    : _v._tag === "PRecord"
+                      ? (({ span: sp }) => sp)(_v)
+                      : _v._tag === "PCtor"
+                        ? (({ span: sp }) => sp)(_v)
+                        : _v._tag === "PArr"
+                          ? (({ span: sp }) => sp)(_v)
+                          : _v._tag === "PList"
+                            ? (({ span: sp }) => sp)(_v)
+                            : _v._tag === "POr"
+                              ? (({ span: sp }) => sp)(_v)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(p);
 
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
 const annotSpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) =>
-  match(t)
-    .with({ _tag: "TyName" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyArrow" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyApp" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyTuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyList" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyQual" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyLit" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyUnion" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "TyName"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "TyArrow"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "TyApp"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "TyTuple"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "TyList"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "TyQual"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "TyLit"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "TyUnion"
+                    ? (({ span: sp }) => sp)(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(t);
 const typeErr: _Curry<[msg: string, sp: SpanAt], IErr> = _curry(2, (msg: string, sp: SpanAt) => ({
   message: msg,
   start: sp.start,
@@ -358,21 +408,24 @@ const aliasRowFrom: <A>(
     aliases: Map<string, QualAliasInfo>,
     i: number,
   ) =>
-    match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => RowEmpty as Row)
-      .with({ _tag: "Some" }, ({ value: f }) =>
-        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-          rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
-          typeExprToType(
-            f.fieldType,
-            new Map<string, Ty>(),
-            mkSt(0),
-            aliases,
-            _Set_fromArray([] as string[]),
-          ),
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? (RowEmpty as Row)
+        : _v._tag === "Some"
+          ? (({ value: f }) =>
+              (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+                rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
+                typeExprToType(
+                  f.fieldType,
+                  new Map<string, Ty>(),
+                  mkSt(0),
+                  aliases,
+                  _Set_fromArray([] as string[]),
+                ),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, fields)),
 );
 const shownOfAlias: <A, B, C, D>(
   info: {
@@ -393,14 +446,16 @@ const shownOfAlias: <A, B, C, D>(
   ) =>
     not(eq(length(info.params), 0))
       ? (None as Option<string>)
-      : match(info.expr)
-          .with({ _tag: "Some" }, () => None as Option<string>)
-          .with({ _tag: "None" }, () =>
-            eq(length(info.fields), 0)
-              ? (None as Option<string>)
-              : (Some(showType(tRecord(aliasRowFrom(info.fields, aliases, 0)))) as Option<string>),
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "Some"
+            ? (None as Option<string>)
+            : _v._tag === "None"
+              ? eq(length(info.fields), 0)
+                ? (None as Option<string>)
+                : (Some(showType(tRecord(aliasRowFrom(info.fields, aliases, 0)))) as Option<string>)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(info.expr),
 );
 const longerPrint: <A, B>(p: { shown: string } & A, q: { shown: string } & B) => boolean = _curry(
   2,
@@ -443,27 +498,36 @@ const printsFrom: _Curry<
     i: number,
     acc: { shown: string; name: string }[],
   ) =>
-    match(_Array_get(i, keys))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: key }) =>
-        match(_Map_get(key, aliases))
-          .with({ _tag: "None" }, () => printsFrom(keys, aliases, i + 1, acc))
-          .with({ _tag: "Some" }, ({ value: info }) =>
-            match(shownOfAlias(info, aliases))
-              .with({ _tag: "None" }, () => printsFrom(keys, aliases, i + 1, acc))
-              .with({ _tag: "Some" }, ({ value: shown }) =>
-                printsFrom(
-                  keys,
-                  aliases,
-                  i + 1,
-                  insertPrint({ shown: shown, name: lastSeg(key) }, acc),
-                ),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: key }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? printsFrom(keys, aliases, i + 1, acc)
+                  : _v._tag === "Some"
+                    ? (({ value: info }) =>
+                        ((_v) =>
+                          _v._tag === "None"
+                            ? printsFrom(keys, aliases, i + 1, acc)
+                            : _v._tag === "Some"
+                              ? (({ value: shown }) =>
+                                  printsFrom(
+                                    keys,
+                                    aliases,
+                                    i + 1,
+                                    insertPrint({ shown: shown, name: lastSeg(key) }, acc),
+                                  ))(_v)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(shownOfAlias(info, aliases)))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(key, aliases)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, keys)),
 );
 const applyPrints: <A>(
   msg: string,
@@ -472,12 +536,14 @@ const applyPrints: <A>(
 ) => string = _curry(
   3,
   <A>(msg: string, prints: ({ shown: string; name: string } & A)[], i: number) =>
-    match(_Array_get(i, prints))
-      .with({ _tag: "None" }, () => msg)
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? msg
+        : _v._tag === "Some"
+          ? (({ value: p }) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, prints)),
 );
 const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], string> = _curry(
   2,
@@ -488,80 +554,33 @@ const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], st
       0,
     ),
 );
-const u: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  left: Ty,
-  right: Ty,
-  st: St,
-  sp: SpanAt,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const u: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    left: Ty,
+    right: Ty,
+    st: St,
+    sp: SpanAt,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -571,92 +590,46 @@ const u: <A>(
     st: St,
     sp: SpanAt,
   ) =>
-    match(unify(left, right, st))
-      .with({ _tag: "Ok" }, ({ value: newSt }) => Ok(newSt) as Result<St, IErr>)
-      .with(
-        { _tag: "Err" },
-        ({ error: e }) =>
-          Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Ok"
+        ? (({ value: newSt }) => Ok(newSt) as Result<St, IErr>)(_v)
+        : _v._tag === "Err"
+          ? (({ error: e }) =>
+              Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>)(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(unify(left, right, st)),
 );
 /**
  * `actual` may be used as `expected` (ADR 0098 optional fields).
  */
-const checkFits: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  actual: Ty,
-  expected: Ty,
-  st: St,
-  sp: SpanAt,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const checkFits: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    actual: Ty,
+    expected: Ty,
+    st: St,
+    sp: SpanAt,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -666,14 +639,15 @@ const checkFits: <A>(
     st: St,
     sp: SpanAt,
   ) =>
-    match(fits(actual, expected, st))
-      .with({ _tag: "Ok" }, ({ value: newSt }) => Ok(newSt) as Result<St, IErr>)
-      .with(
-        { _tag: "Err" },
-        ({ error: e }) =>
-          Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Ok"
+        ? (({ value: newSt }) => Ok(newSt) as Result<St, IErr>)(_v)
+        : _v._tag === "Err"
+          ? (({ error: e }) =>
+              Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>)(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(fits(actual, expected, st)),
 );
 const bindParamNamesFrom: <A>(
   names: A[],
@@ -702,156 +676,96 @@ const bindParamFieldsFrom: _Curry<
   [fields: string[], env: Map<string, Scheme>, row: Row, st: St],
   [Row, Map<string, Scheme>, St]
 > = _curry(4, (fields: string[], env: Map<string, Scheme>, row: Row, st: St) =>
-  match(fields)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple(row, env, st),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([f, ...rest]) =>
-        (([ft, st1]: [Ty, St]) =>
-          bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
-          freshVar(st),
-        ),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(row, env, st)
+      : _v.length >= 1
+        ? (([f, ...rest]) =>
+            (([ft, st1]: [Ty, St]) =>
+              bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
+              freshVar(st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(fields),
 );
 const bindParam: _Curry<
   [p: LamParam, env: Map<string, Scheme>, st: St],
   [Ty, Map<string, Scheme>, St]
 > = _curry(3, (p: LamParam, env: Map<string, Scheme>, st: St) =>
-  match(p)
-    .with({ _tag: "LPSpanned" }, ({ param: inner }) => bindParam(inner, env, st))
-    .with({ _tag: "LPName" }, ({ name }) =>
-      (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
-    )
-    .with({ _tag: "LPTuple" }, ({ names }) =>
-      (([elems, env1, st1]: [Ty[], Map<string, Scheme>, St]) => _tuple(tTuple(elems), env1, st1))(
-        bindParamNamesFrom(names, env, st),
-      ),
-    )
-    .with({ _tag: "LPRecord" }, ({ fields }) =>
-      (([rowBase, st1]: [Row, St]) =>
-        (([row, env1, st2]: [Row, Map<string, Scheme>, St]) => _tuple(tRecord(row), env1, st2))(
-          bindParamFieldsFrom(fields, env, rowBase, st1),
-        ))(freshRowVar(st)),
-    )
-    .with({ _tag: "LPLabeled" }, ({ name }) =>
-      (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "LPSpanned"
+      ? (({ param: inner }) => bindParam(inner, env, st))(_v)
+      : _v._tag === "LPName"
+        ? (({ name }) =>
+            (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)))(
+            _v,
+          )
+        : _v._tag === "LPTuple"
+          ? (({ names }) =>
+              (([elems, env1, st1]: [Ty[], Map<string, Scheme>, St]) =>
+                _tuple(tTuple(elems), env1, st1))(bindParamNamesFrom(names, env, st)))(_v)
+          : _v._tag === "LPRecord"
+            ? (({ fields }) =>
+                (([rowBase, st1]: [Row, St]) =>
+                  (([row, env1, st2]: [Row, Map<string, Scheme>, St]) =>
+                    _tuple(tRecord(row), env1, st2))(
+                    bindParamFieldsFrom(fields, env, rowBase, st1),
+                  ))(freshRowVar(st)))(_v)
+            : _v._tag === "LPLabeled"
+              ? (({ name }) =>
+                  (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(
+                    freshVar(st),
+                  ))(_v)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(p),
 );
 const bindParamsFrom: _Curry<
   [params: LamParam[], env: Map<string, Scheme>, st: St],
   [Ty[], Map<string, Scheme>, St]
 > = _curry(3, (params: LamParam[], env: Map<string, Scheme>, st: St) =>
-  match(params)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple([] as Ty[], env, st),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([p, ...rest]) =>
-        (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
-          (([restTs, env2, st2]: [Ty[], Map<string, Scheme>, St]) =>
-            _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
-          bindParam(p, env, st),
-        ),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? _tuple([] as Ty[], env, st)
+      : _v.length >= 1
+        ? (([p, ...rest]) =>
+            (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
+              (([restTs, env2, st2]: [Ty[], Map<string, Scheme>, St]) =>
+                _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
+              bindParam(p, env, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(params),
 );
-const constrainParamAnnotsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  params: LamParam[],
-  paramTypes: Ty[],
-  vars: Map<string, Ty>,
-  st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  5,
-  <A>(
+const constrainParamAnnotsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    params: LamParam[],
+    paramTypes: Ty[],
+    vars: Map<string, Ty>,
+    st: St,
+  ],
+  Result<[Map<string, Ty>, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -861,143 +775,83 @@ const constrainParamAnnotsFrom: <A>(
     vars: Map<string, Ty>,
     st: St,
   ) =>
-    match(params)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([param, ...rest]) =>
-          match(paramTypes)
-            .with(
-              (_v) => {
-                const _g: any = _v;
-                return _g.length === 0;
-              },
-              () => Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>,
-            )
-            .with(
-              (_v) => {
-                const _g: any = _v;
-                return _g.length >= 1;
-              },
-              ([paramT, ...restTypes]) =>
-                match(param)
-                  .with(
-                    (
-                      _v,
-                    ): _v is Extract<LamParam, { _tag: "LPSpanned" }> & {
-                      param: Extract<
-                        Extract<LamParam, { _tag: "LPSpanned" }>["param"],
-                        { _tag: "LPName" }
-                      > & {
-                        annot: Extract<
-                          Extract<
-                            Extract<LamParam, { _tag: "LPSpanned" }>["param"],
-                            { _tag: "LPName" }
-                          >["annot"],
-                          { _tag: "Some" }
-                        >;
-                      };
-                    } => {
-                      const _g: any = _v;
-                      return (
-                        _g._tag === "LPSpanned" &&
-                        _g.param._tag === "LPName" &&
-                        _g.param.annot._tag === "Some"
-                      );
-                    },
-                    ({
-                      param: {
-                        annot: { value: te },
-                      },
-                    }) =>
-                      (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                        _Result_flatMap(
-                          (st2) => constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
-                          checkFits(ctx, paramT, annotT, st1, annotSpan(te)),
-                        ))(
-                        typeExprToType(te, vars, st, ctx.aliasMap, _Set_fromArray([] as string[])),
-                      ),
-                  )
-                  .otherwise(() => constrainParamAnnotsFrom(ctx, rest, restTypes, vars, st)),
-            )
-            .otherwise(() => {
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>)
+        : _v.length >= 1
+          ? (([param, ...rest]) =>
+              ((_v) =>
+                _v.length === 0
+                  ? (Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>)
+                  : _v.length >= 1
+                    ? (([paramT, ...restTypes]) =>
+                        ((_v) =>
+                          _v._tag === "LPSpanned" &&
+                          _v.param._tag === "LPName" &&
+                          _v.param.annot._tag === "Some"
+                            ? (({
+                                param: {
+                                  annot: { value: te },
+                                },
+                              }) =>
+                                (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                                  _Result_flatMap(
+                                    (st2) =>
+                                      constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
+                                    checkFits(ctx, paramT, annotT, st1, annotSpan(te)),
+                                  ))(
+                                  typeExprToType(
+                                    te,
+                                    vars,
+                                    st,
+                                    ctx.aliasMap,
+                                    _Set_fromArray([] as string[]),
+                                  ),
+                                ))(
+                                _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
+                                  param: Extract<
+                                    Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                                    { _tag: "LPName" }
+                                  > & {
+                                    annot: Extract<
+                                      Extract<
+                                        Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                                        { _tag: "LPName" }
+                                      >["annot"],
+                                      { _tag: "Some" }
+                                    >;
+                                  };
+                                },
+                              )
+                            : constrainParamAnnotsFrom(ctx, rest, restTypes, vars, st))(param))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(paramTypes))(_v)
+          : (() => {
               throw new Error("non-exhaustive match");
-            }),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+            })())(params),
 );
 const arrowChain: _Curry<[paramTypes: Ty[], resultT: Ty], Ty> = _curry(
   2,
   (paramTypes: Ty[], resultT: Ty) =>
-    match(paramTypes)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => tArrow(tUnit, resultT),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 1;
-        },
-        ([p]) => tArrow(p, resultT),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([p, ...rest]) => tArrow(p, arrowChain(rest, resultT)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? tArrow(tUnit, resultT)
+        : _v.length === 1
+          ? (([p]) => tArrow(p, resultT))(_v)
+          : _v.length >= 1
+            ? (([p, ...rest]) => tArrow(p, arrowChain(rest, resultT)))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(paramTypes),
 );
-const ctxWithEnv: <A, B>(
+const ctxWithEnv: <B>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -1008,63 +862,19 @@ const ctxWithEnv: <A, B>(
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
   aliasMap: Map<string, QualAliasInfo>;
-  plugins: {
-    name: string;
-    parse: Option<
-      (
-        a: { tok: A; start: number; end: number; doc: Option<string> }[],
-        b: number,
-        c: (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-        ) => Result<[Expr, number], PErr>,
-      ) => Result<Option<[Expr, number]>, PErr>
-    >;
-    inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
-    >;
-    format: Option<(a: Expr) => Option<Expr>>;
-    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-  }[];
+  plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
   localNames: Set<string>;
 } = _curry(
   2,
-  <A, B>(
+  <B>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1081,38 +891,13 @@ const ctxWithEnv: <A, B>(
     localNames: ctx.localNames,
   }),
 );
-const ctxWithLets: <A, B, C>(
+const ctxWithLets: <B, C>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -1124,63 +909,19 @@ const ctxWithLets: <A, B, C>(
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
   aliasMap: Map<string, QualAliasInfo>;
-  plugins: {
-    name: string;
-    parse: Option<
-      (
-        a: { tok: A; start: number; end: number; doc: Option<string> }[],
-        b: number,
-        c: (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-        ) => Result<[Expr, number], PErr>,
-      ) => Result<Option<[Expr, number]>, PErr>
-    >;
-    inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
-    >;
-    format: Option<(a: Expr) => Option<Expr>>;
-    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-  }[];
+  plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: C;
   localNames: Set<string>;
 } = _curry(
   3,
-  <A, B, C>(
+  <B, C>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1198,38 +939,13 @@ const ctxWithLets: <A, B, C>(
     localNames: ctx.localNames,
   }),
 );
-const ctxWithLoop: <A, B, C>(
+const ctxWithLoop: <B, C>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -1242,63 +958,19 @@ const ctxWithLoop: <A, B, C>(
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
   aliasMap: Map<string, QualAliasInfo>;
-  plugins: {
-    name: string;
-    parse: Option<
-      (
-        a: { tok: A; start: number; end: number; doc: Option<string> }[],
-        b: number,
-        c: (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-        ) => Result<[Expr, number], PErr>,
-      ) => Result<Option<[Expr, number]>, PErr>
-    >;
-    inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
-    >;
-    format: Option<(a: Expr) => Option<Expr>>;
-    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-  }[];
+  plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: C;
   localNames: Set<string>;
 } = _curry(
   4,
-  <A, B, C>(
+  <B, C>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1317,82 +989,35 @@ const ctxWithLoop: <A, B, C>(
     localNames: ctx.localNames,
   }),
 );
-const inferLoopParamsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  params: LoopParam[],
-  i: number,
-  envAcc: Map<string, Scheme>,
-  frameAcc: Ty[],
-  ownerAcc: Map<string, SpanAt>,
-  st: St,
-) => Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr> = _curry(
-  7,
-  <A>(
+const inferLoopParamsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    params: LoopParam[],
+    i: number,
+    envAcc: Map<string, Scheme>,
+    frameAcc: Ty[],
+    ownerAcc: Map<string, SpanAt>,
+    st: St,
+  ],
+  Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr>
+> = _curry(
+  7,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1404,107 +1029,59 @@ const inferLoopParamsFrom: <A>(
     ownerAcc: Map<string, SpanAt>,
     st: St,
   ) =>
-    match(_Array_get(i, params))
-      .with(
-        { _tag: "None" },
-        () =>
-          Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
+    ((_v) =>
+      _v._tag === "None"
+        ? (Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
             [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
             IErr
-          >,
-      )
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        _Result_flatMap(
-          ([t, st1]) =>
-            ((sp: SpanAt) =>
-              inferLoopParamsFrom(
-                ctx,
-                params,
-                i + 1,
-                _Map_set(p.name, mono(t), envAcc),
-                _Array_append(t, frameAcc),
-                _Map_set(p.name, sp, ownerAcc),
-                noteLet(sp, st1),
-              ))(exprSpan(p.init)),
-          inferExpr(ctx, p.init, st),
-        ),
-      )
-      .exhaustive(),
+          >)
+        : _v._tag === "Some"
+          ? (({ value: p }) =>
+              _Result_flatMap(
+                ([t, st1]) =>
+                  ((sp: SpanAt) =>
+                    inferLoopParamsFrom(
+                      ctx,
+                      params,
+                      i + 1,
+                      _Map_set(p.name, mono(t), envAcc),
+                      _Array_append(t, frameAcc),
+                      _Map_set(p.name, sp, ownerAcc),
+                      noteLet(sp, st1),
+                    ))(exprSpan(p.init)),
+                inferExpr(ctx, p.init, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, params)),
 );
-const unifyRecurArgsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  args: Expr[],
-  frame: Ty[],
-  i: number,
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const unifyRecurArgsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    args: Expr[],
+    frame: Ty[],
+    i: number,
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1514,98 +1091,57 @@ const unifyRecurArgsFrom: <A>(
     i: number,
     st: St,
   ) =>
-    match(_Array_get(i, args))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        _Result_flatMap(
-          ([at, st1]) =>
-            match(_Array_get(i, frame))
-              .with({ _tag: "None" }, () => unifyRecurArgsFrom(ctx, args, frame, i + 1, st1))
-              .with({ _tag: "Some" }, ({ value: pt }) =>
-                _Result_flatMap(
-                  (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
-                  u(ctx, at, pt, st1, exprSpan(a)),
-                ),
-              )
-              .exhaustive(),
-          inferExpr(ctx, a, st),
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? (Ok(st) as Result<St, IErr>)
+        : _v._tag === "Some"
+          ? (({ value: a }) =>
+              _Result_flatMap(
+                ([at, st1]) =>
+                  ((_v) =>
+                    _v._tag === "None"
+                      ? unifyRecurArgsFrom(ctx, args, frame, i + 1, st1)
+                      : _v._tag === "Some"
+                        ? (({ value: pt }) =>
+                            _Result_flatMap(
+                              (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
+                              u(ctx, at, pt, st1, exprSpan(a)),
+                            ))(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(_Array_get(i, frame)),
+                inferExpr(ctx, a, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, args)),
 );
-const inferRecur: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  args: Expr[],
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferRecur: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    args: Expr[],
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1614,290 +1150,234 @@ const inferRecur: <A>(
     sp: SpanAt,
     st: St,
   ) =>
-    match(ctx.loopStack)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () =>
-          Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([frame]) =>
-          _Result_flatMap(
-            (st1) =>
-              (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(freshVar(st1)),
-            unifyRecurArgsFrom(ctx, args, frame, 0, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>)
+        : _v.length >= 1
+          ? (([frame]) =>
+              _Result_flatMap(
+                (st1) =>
+                  (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(
+                    freshVar(st1),
+                  ),
+                unifyRecurArgsFrom(ctx, args, frame, 0, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(ctx.loopStack),
 );
 const rowHasOptional: (row: Row) => boolean = (row: Row) =>
-  match(row)
-    .with({ _tag: "RowExtend" }, ({ optional, rest }) => or(optional, rowHasOptional(rest)))
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "RowExtend"
+      ? (({ optional, rest }) => or(optional, rowHasOptional(rest)))(_v)
+      : false)(row);
 const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) =>
-  match(zonk(t, st))
-    .with({ _tag: "TyRecord" }, ({ row }) => rowHasOptional(row))
-    .otherwise(() => false),
+  ((_v) => (_v._tag === "TyRecord" ? (({ row }) => rowHasOptional(row))(_v) : false))(zonk(t, st)),
 );
 /**
  * True when every known field is optional. This is what makes `f()` legal:
  * the nullary call applies `{}`, which only `fits` an all-optional domain.
  */
 const rowAllOptional: (row: Row) => boolean = (row: Row) =>
-  match(row)
-    .with({ _tag: "RowExtend" }, ({ optional, rest }) => and(optional, rowAllOptional(rest)))
-    .otherwise(() => true);
+  ((_v) =>
+    _v._tag === "RowExtend"
+      ? (({ optional, rest }) => and(optional, rowAllOptional(rest)))(_v)
+      : true)(row);
 const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) =>
-  match(zonk(t, st))
-    .with({ _tag: "TyRecord" }, ({ row }) => rowAllOptional(row))
-    .otherwise(() => false),
+  ((_v) => (_v._tag === "TyRecord" ? (({ row }) => rowAllOptional(row))(_v) : false))(zonk(t, st)),
 );
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
-  match(p)
-    .with({ _tag: "LPLabeled" }, () => true)
-    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "LPLabeled"
+      ? true
+      : _v._tag === "LPSpanned"
+        ? (({ param: inner }) => isLabeledParam(inner))(_v)
+        : false)(p);
 const splitLamParams: _Curry<
   [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
   [LamParam[], LamParam[]]
 > = _curry(3, (params: LamParam[], positional: LamParam[], labeled: LamParam[]) =>
-  match(params)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple(positional, labeled),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([p, ...rest]) =>
-        isLabeledParam(p)
-          ? splitLamParams(rest, positional, _Array_append(p, labeled))
-          : splitLamParams(rest, _Array_append(p, positional), labeled),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(positional, labeled)
+      : _v.length >= 1
+        ? (([p, ...rest]) =>
+            isLabeledParam(p)
+              ? splitLamParams(rest, positional, _Array_append(p, labeled))
+              : splitLamParams(rest, _Array_append(p, positional), labeled))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(params),
 );
 /**
  * One pass per label, threading `st` but NOT `env`: a default is inferred in
  * the positional-only scope, so one label's default cannot read another's.
  */
-const labFieldsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  labs: LamParam[],
-  env: Map<string, Scheme>,
-  vars: Map<string, Ty>,
-  st: St,
-) => Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr> =
-  _curry(
-    5,
-    <A>(
-      ctx: {
-        env: Map<string, Scheme>;
-        open: boolean;
-        ns: Map<string, Map<string, Scheme>>;
-        aliasMap: Map<string, QualAliasInfo>;
-        plugins: {
-          name: string;
-          parse: Option<
-            (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-              c: (
-                a: { tok: A; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], PErr>,
-            ) => Result<Option<[Expr, number]>, PErr>
-          >;
-          inferCall: Option<
-            (
-              a: Expr,
-              b: Expr[],
-              c: Option<string>,
-              d: St,
-              e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
-          >;
-          format: Option<(a: Expr) => Option<Expr>>;
-          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-        }[];
-        loopStack: Ty[][];
-        letOwner: Map<string, SpanAt>;
-        localNames: Set<string>;
-      },
-      labs: LamParam[],
-      env: Map<string, Scheme>,
-      vars: Map<string, Ty>,
-      st: St,
-    ) =>
-      match(labs)
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
-          () =>
-            Ok(
-              _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
-            ) as Result<
-              [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
-              IErr
-            >,
-        )
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
-          ([lab, ...rest]) =>
-            match(lab)
-              .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
-                labFieldsFrom(ctx, [inner, ...rest], env, vars, st),
-              )
-              .with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) =>
-                (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                  _Result_flatMap(
-                    ([fieldT1, st2]) =>
-                      ((bodyT: Ty) =>
-                        ((omittable: boolean) =>
+const labFieldsFrom: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    labs: LamParam[],
+    env: Map<string, Scheme>,
+    vars: Map<string, Ty>,
+    st: St,
+  ],
+  Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    labs: LamParam[],
+    env: Map<string, Scheme>,
+    vars: Map<string, Ty>,
+    st: St,
+  ) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(
+            _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
+          ) as Result<
+            [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
+            IErr
+          >)
+        : _v.length >= 1
+          ? (([lab, ...rest]) =>
+              ((_v) =>
+                _v._tag === "LPSpanned"
+                  ? (({ param: inner }) => labFieldsFrom(ctx, [inner, ...rest], env, vars, st))(_v)
+                  : _v._tag === "LPLabeled"
+                    ? (({ name, annot, optional, defaultValue }) =>
+                        (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                           _Result_flatMap(
-                            ([fields, stN]) =>
-                              Ok(
-                                _tuple(
-                                  _Array_prepend(
-                                    {
-                                      name: name,
-                                      fieldType: fieldT1,
-                                      omittable: omittable,
-                                      bodyType: bodyT,
-                                    },
-                                    fields,
-                                  ),
-                                  stN,
-                                ),
-                              ) as Result<
-                                [
-                                  {
-                                    name: string;
-                                    fieldType: Ty;
-                                    omittable: boolean;
-                                    bodyType: Ty;
-                                  }[],
-                                  St,
-                                ],
-                                IErr
-                              >,
-                            labFieldsFrom(ctx, rest, env, vars1, st2),
-                          ))(
-                          or(
-                            optional,
-                            match(defaultValue)
-                              .with({ _tag: "Some" }, () => true)
-                              .with({ _tag: "None" }, () => false)
-                              .exhaustive(),
-                          ),
-                        ))(
-                        match(defaultValue)
-                          .with({ _tag: "Some" }, () => fieldT1)
-                          .with({ _tag: "None" }, () =>
-                            optional ? tCon("Option", [fieldT1]) : fieldT1,
-                          )
-                          .exhaustive(),
-                      ),
-                    match(defaultValue)
-                      .with(
-                        { _tag: "None" },
-                        () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>,
-                      )
-                      .with({ _tag: "Some" }, ({ value: d }) =>
-                        _Result_flatMap(
-                          ([dt, s2]) =>
-                            match(annot)
-                              .with({ _tag: "Some" }, () =>
-                                _Result_flatMap(
-                                  (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
-                                  checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
-                                ),
-                              )
-                              .with({ _tag: "None" }, () =>
-                                ((widened: Ty) =>
+                            ([fieldT1, st2]) =>
+                              ((bodyT: Ty) =>
+                                ((omittable: boolean) =>
                                   _Result_flatMap(
-                                    (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
-                                    u(ctx, fieldT, widened, s2, exprSpan(d)),
-                                  ))(widenLits(zonk(dt, s2))),
-                              )
-                              .exhaustive(),
-                          inferExpr(ctxWithEnv(ctx, env), d, st1),
-                        ),
-                      )
-                      .exhaustive(),
-                  ))(
-                  match(annot)
-                    .with({ _tag: "Some" }, ({ value: te }) =>
-                      typeExprToType(te, vars, st, ctx.aliasMap, _Set_fromArray([] as string[])),
-                    )
-                    .with({ _tag: "None" }, () =>
-                      (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
-                    )
-                    .exhaustive(),
-                ),
-              )
-              .otherwise(() => labFieldsFrom(ctx, rest, env, vars, st)),
-        )
-        .otherwise(() => {
-          throw new Error("non-exhaustive match");
-        }),
-  );
+                                    ([fields, stN]) =>
+                                      Ok(
+                                        _tuple(
+                                          _Array_prepend(
+                                            {
+                                              name: name,
+                                              fieldType: fieldT1,
+                                              omittable: omittable,
+                                              bodyType: bodyT,
+                                            },
+                                            fields,
+                                          ),
+                                          stN,
+                                        ),
+                                      ) as Result<
+                                        [
+                                          {
+                                            name: string;
+                                            fieldType: Ty;
+                                            omittable: boolean;
+                                            bodyType: Ty;
+                                          }[],
+                                          St,
+                                        ],
+                                        IErr
+                                      >,
+                                    labFieldsFrom(ctx, rest, env, vars1, st2),
+                                  ))(
+                                  or(
+                                    optional,
+                                    ((_v) =>
+                                      _v._tag === "Some"
+                                        ? true
+                                        : _v._tag === "None"
+                                          ? false
+                                          : (() => {
+                                              throw new Error("non-exhaustive match");
+                                            })())(defaultValue),
+                                  ),
+                                ))(
+                                ((_v) =>
+                                  _v._tag === "Some"
+                                    ? fieldT1
+                                    : _v._tag === "None"
+                                      ? optional
+                                        ? tCon("Option", [fieldT1])
+                                        : fieldT1
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(defaultValue),
+                              ),
+                            ((_v) =>
+                              _v._tag === "None"
+                                ? (Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>)
+                                : _v._tag === "Some"
+                                  ? (({ value: d }) =>
+                                      _Result_flatMap(
+                                        ([dt, s2]) =>
+                                          ((_v) =>
+                                            _v._tag === "Some"
+                                              ? _Result_flatMap(
+                                                  (s3) =>
+                                                    Ok(_tuple(fieldT, s3)) as Result<
+                                                      [Ty, St],
+                                                      IErr
+                                                    >,
+                                                  checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
+                                                )
+                                              : _v._tag === "None"
+                                                ? ((widened: Ty) =>
+                                                    _Result_flatMap(
+                                                      (s3) =>
+                                                        Ok(_tuple(widened, s3)) as Result<
+                                                          [Ty, St],
+                                                          IErr
+                                                        >,
+                                                      u(ctx, fieldT, widened, s2, exprSpan(d)),
+                                                    ))(widenLits(zonk(dt, s2)))
+                                                : (() => {
+                                                    throw new Error("non-exhaustive match");
+                                                  })())(annot),
+                                        inferExpr(ctxWithEnv(ctx, env), d, st1),
+                                      ))(_v)
+                                  : (() => {
+                                      throw new Error("non-exhaustive match");
+                                    })())(defaultValue),
+                          ))(
+                          ((_v) =>
+                            _v._tag === "Some"
+                              ? (({ value: te }) =>
+                                  typeExprToType(
+                                    te,
+                                    vars,
+                                    st,
+                                    ctx.aliasMap,
+                                    _Set_fromArray([] as string[]),
+                                  ))(_v)
+                              : _v._tag === "None"
+                                ? (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st))
+                                : (() => {
+                                    throw new Error("non-exhaustive match");
+                                  })())(annot),
+                        ))(_v)
+                    : labFieldsFrom(ctx, rest, env, vars, st))(lab))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(labs),
+);
 const rowOfLabFields: <A>(
   fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[],
 ) => Row = <A>(fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[]) =>
@@ -1932,80 +1412,33 @@ const envWithLabFields: <A, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferCallArgs: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fnT: Ty,
-  args: Expr[],
-  st: St,
-  callSpan: SpanAt,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferCallArgs: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fnT: Ty,
+    args: Expr[],
+    st: St,
+    callSpan: SpanAt,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2015,129 +1448,72 @@ const inferCallArgs: <A>(
     st: St,
     callSpan: SpanAt,
   ) =>
-    match(args)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(fnT, st)) as Result<[Ty, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([arg, ...rest]) =>
-          _Result_flatMap(
-            ([argT, st1]) =>
-              match(resolve(fnT, st1))
-                .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-                  domainNeedsFits(fromT, st1)
-                    ? _Result_flatMap(
-                        (st2) => inferCallArgs(ctx, toT, rest, st2, callSpan),
-                        checkFits(ctx, argT, fromT, st1, exprSpan(arg)),
-                      )
-                    : (([resultT, st2]: [Ty, St]) =>
-                        _Result_flatMap(
-                          (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
-                          u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
-                        ))(freshVar(st1)),
-                )
-                .otherwise(() =>
-                  (([resultT, st2]: [Ty, St]) =>
-                    _Result_flatMap(
-                      (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
-                      u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
-                    ))(freshVar(st1)),
-                ),
-            inferExpr(ctx, arg, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(fnT, st)) as Result<[Ty, St], IErr>)
+        : _v.length >= 1
+          ? (([arg, ...rest]) =>
+              _Result_flatMap(
+                ([argT, st1]) =>
+                  ((_v) =>
+                    _v._tag === "TyFn"
+                      ? (({ from: fromT, to: toT }) =>
+                          domainNeedsFits(fromT, st1)
+                            ? _Result_flatMap(
+                                (st2) => inferCallArgs(ctx, toT, rest, st2, callSpan),
+                                checkFits(ctx, argT, fromT, st1, exprSpan(arg)),
+                              )
+                            : (([resultT, st2]: [Ty, St]) =>
+                                _Result_flatMap(
+                                  (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
+                                  u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
+                                ))(freshVar(st1)))(_v)
+                      : (([resultT, st2]: [Ty, St]) =>
+                          _Result_flatMap(
+                            (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
+                            u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
+                          ))(freshVar(st1)))(resolve(fnT, st1)),
+                inferExpr(ctx, arg, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(args),
 );
 const isTupleParam: (p: LamParam) => boolean = (p: LamParam) =>
-  match(p)
-    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isTupleParam(inner))
-    .with({ _tag: "LPTuple" }, () => true)
-    .otherwise(() => false);
-const inferTupleLet: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  param: LamParam,
-  body: Expr,
-  lamSpan: SpanAt,
-  value: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  6,
-  <A>(
+  ((_v) =>
+    _v._tag === "LPSpanned"
+      ? (({ param: inner }) => isTupleParam(inner))(_v)
+      : _v._tag === "LPTuple"
+        ? true
+        : false)(p);
+const inferTupleLet: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    body: Expr,
+    lamSpan: SpanAt,
+    value: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2166,79 +1542,32 @@ const inferTupleLet: <A>(
       inferExpr(ctx, value, st),
     ),
 );
-const inferApplied: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fn: Expr,
-  args: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferApplied: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fn: Expr,
+    args: Expr[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2249,111 +1578,56 @@ const inferApplied: <A>(
   ) =>
     _Result_flatMap(
       ([fnT, st1]) =>
-        match(args)
-          .with(
-            (_v) => {
-              const _g: any = _v;
-              return _g.length === 0;
-            },
-            () =>
-              match(resolve(fnT, st1))
-                .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-                  domainIsOmittableRecord(fromT, st1)
-                    ? _Result_flatMap(
-                        (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
-                        checkFits(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
-                      )
-                    : (([resultT, st2]: [Ty, St]) =>
-                        _Result_flatMap(
-                          (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-                          u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
-                        ))(freshVar(st1)),
-                )
-                .otherwise(() =>
-                  (([resultT, st2]: [Ty, St]) =>
-                    _Result_flatMap(
-                      (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-                      u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
-                    ))(freshVar(st1)),
-                ),
-          )
-          .otherwise(() => inferCallArgs(ctx, fnT, args, st1, exprSpan(fn))),
+        ((_v) =>
+          _v.length === 0
+            ? ((_v) =>
+                _v._tag === "TyFn"
+                  ? (({ from: fromT, to: toT }) =>
+                      domainIsOmittableRecord(fromT, st1)
+                        ? _Result_flatMap(
+                            (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
+                            checkFits(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
+                          )
+                        : (([resultT, st2]: [Ty, St]) =>
+                            _Result_flatMap(
+                              (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+                              u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
+                            ))(freshVar(st1)))(_v)
+                  : (([resultT, st2]: [Ty, St]) =>
+                      _Result_flatMap(
+                        (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+                        u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
+                      ))(freshVar(st1)))(resolve(fnT, st1))
+            : inferCallArgs(ctx, fnT, args, st1, exprSpan(fn)))(args),
       inferExpr(ctx, fn, st),
     ),
 );
-const inferNormalCall: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fn: Expr,
-  args: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferNormalCall: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fn: Expr,
+    args: Expr[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2362,100 +1636,50 @@ const inferNormalCall: <A>(
     args: Expr[],
     st: St,
   ) =>
-    match(_tuple(fn, args))
-      .with(
-        (_v): _v is [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]] => {
-          const _g: any = _v;
-          return _g[0]._tag === "ELambda" && _g[0].params.length === 1 && _g[1].length === 1;
-        },
-        ([
-          {
-            params: [param],
-            body,
-            span: lamSpan,
-          },
-          [value],
-        ]) =>
-          isTupleParam(param)
-            ? inferTupleLet(ctx, param, body, lamSpan, value, st)
-            : inferApplied(ctx, fn, args, st),
-      )
-      .otherwise(() => inferApplied(ctx, fn, args, st)),
+    ((_v) =>
+      _v[0]._tag === "ELambda" && _v[0].params.length === 1 && _v[1].length === 1
+        ? (([
+            {
+              params: [param],
+              body,
+              span: lamSpan,
+            },
+            [value],
+          ]) =>
+            isTupleParam(param)
+              ? inferTupleLet(ctx, param, body, lamSpan, value, st)
+              : inferApplied(ctx, fn, args, st))(
+            _v as [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]],
+          )
+        : inferApplied(ctx, fn, args, st))(_tuple(fn, args)),
 );
-const inferTernary: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  cond: Expr,
-  thenE: Expr,
-  elseE: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferTernary: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    cond: Expr,
+    thenE: Expr,
+    elseE: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2486,82 +1710,35 @@ const inferTernary: <A>(
       inferExpr(ctx, cond, st),
     ),
 );
-const inferBindBody: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  param: LamParam,
-  paramSpan: SpanAt,
-  body: Expr,
-  payloadT: Ty,
-  mkBody: (a: Ty) => Ty,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  7,
-  <A>(
+const inferBindBody: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    paramSpan: SpanAt,
+    body: Expr,
+    payloadT: Ty,
+    mkBody: (a: Ty) => Ty,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  7,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2590,83 +1767,36 @@ const inferBindBody: <A>(
         u(ctx, paramT, payloadT, st1, paramSpan),
       ))(bindParam(param, ctx.env, st)),
 );
-const inferTwoSlotBind: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  param: LamParam,
-  paramSpan: SpanAt,
-  value: Expr,
-  body: Expr,
-  valT: Ty,
-  ctor: string,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  8,
-  <A>(
+const inferTwoSlotBind: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    paramSpan: SpanAt,
+    value: Expr,
+    body: Expr,
+    valT: Ty,
+    ctor: string,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  8,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2695,83 +1825,36 @@ const inferTwoSlotBind: <A>(
           u(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
         ))(freshVar(st1)))(freshVar(st)),
 );
-const inferQuestionBind: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  bind: Expr,
-  param: LamParam,
-  paramSpan: SpanAt,
-  value: Expr,
-  body: Expr,
-  valT: Ty,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  8,
-  <A>(
+const inferQuestionBind: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    bind: Expr,
+    param: LamParam,
+    paramSpan: SpanAt,
+    value: Expr,
+    body: Expr,
+    valT: Ty,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  8,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2784,128 +1867,77 @@ const inferQuestionBind: <A>(
     valT: Ty,
     st: St,
   ) =>
-    match(resolve(valT, st))
-      .with({ _tag: "TyVar" }, () =>
-        (($written) => inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
-          setLetBindMonad(bind, "Result"),
-        ),
-      )
-      .with({ _tag: "TyCon" }, ({ name }) =>
-        eq(name, "Option")
-          ? (($written) =>
-              (([payloadT, st1]: [Ty, St]) =>
-                _Result_flatMap(
-                  (st2) =>
-                    inferBindBody(
-                      ctx,
-                      param,
-                      paramSpan,
-                      body,
-                      payloadT,
-                      (resT: Ty) => tCon("Option", [resT]),
-                      st2,
-                    ),
-                  u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
-                ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
-          : eq(name, "Result")
-            ? (($written) =>
-                inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
-                setLetBindMonad(bind, "Result"),
-              )
-            : (Err(
-                typeErr(
-                  `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-                  exprSpan(value),
-                ),
-              ) as Result<[Ty, St], IErr>),
-      )
-      .otherwise(
-        () =>
-          Err(
-            typeErr(
-              `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-              exprSpan(value),
-            ),
-          ) as Result<[Ty, St], IErr>,
-      ),
+    ((_v) =>
+      _v._tag === "TyVar"
+        ? (($written) => inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
+            setLetBindMonad(bind, "Result"),
+          )
+        : _v._tag === "TyCon"
+          ? (({ name }) =>
+              eq(name, "Option")
+                ? (($written) =>
+                    (([payloadT, st1]: [Ty, St]) =>
+                      _Result_flatMap(
+                        (st2) =>
+                          inferBindBody(
+                            ctx,
+                            param,
+                            paramSpan,
+                            body,
+                            payloadT,
+                            (resT: Ty) => tCon("Option", [resT]),
+                            st2,
+                          ),
+                        u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
+                      ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
+                : eq(name, "Result")
+                  ? (($written) =>
+                      inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
+                      setLetBindMonad(bind, "Result"),
+                    )
+                  : (Err(
+                      typeErr(
+                        `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+                        exprSpan(value),
+                      ),
+                    ) as Result<[Ty, St], IErr>))(_v)
+          : (Err(
+              typeErr(
+                `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+                exprSpan(value),
+              ),
+            ) as Result<[Ty, St], IErr>))(resolve(valT, st)),
 );
-const inferLetBind: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  bind: Expr,
-  param: LamParam,
-  paramSpan: SpanAt,
-  monad: string,
-  value: Expr,
-  body: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  8,
-  <A>(
+const inferLetBind: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    bind: Expr,
+    param: LamParam,
+    paramSpan: SpanAt,
+    monad: string,
+    value: Expr,
+    body: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  8,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2926,78 +1958,31 @@ const inferLetBind: <A>(
       inferExpr(ctx, value, st),
     ),
 );
-const inferRecordRow: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fields: Field[],
-  st: St,
-) => Result<[Row, St], IErr> = _curry(
-  3,
-  <A>(
+const inferRecordRow: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fields: Field[],
+    st: St,
+  ],
+  Result<[Row, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3005,135 +1990,87 @@ const inferRecordRow: <A>(
     fields: Field[],
     st: St,
   ) =>
-    match(fields)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([f, ...rest]) =>
-          _Result_flatMap(
-            ([restRow, st1]) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], IErr>)
+        : _v.length >= 1
+          ? (([f, ...rest]) =>
               _Result_flatMap(
-                ([ft, st2]) =>
-                  Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
-                inferExpr(ctx, f.value, st1),
-              ),
-            inferRecordRow(ctx, rest, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                ([restRow, st1]) =>
+                  _Result_flatMap(
+                    ([ft, st2]) =>
+                      Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
+                    inferExpr(ctx, f.value, st1),
+                  ),
+                inferRecordRow(ctx, rest, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(fields),
 );
 const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, (row: Row, tail: Row) =>
-  match(row)
-    .with({ _tag: "RowEmpty" }, () => tail)
-    .with({ _tag: "RowVar" }, ({ id }) => rVar(id))
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-      rField(label, fieldType, rWithTail(rest, tail), optional),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "RowEmpty"
+      ? tail
+      : _v._tag === "RowVar"
+        ? (({ id }) => rVar(id))(_v)
+        : _v._tag === "RowExtend"
+          ? (({ label, fieldType, optional, rest }) =>
+              rField(label, fieldType, rWithTail(rest, tail), optional))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(row),
 );
 const lookupField: _Curry<[row: Row, name: string], Option<[Ty, boolean]>> = _curry(
   2,
   (row: Row, name: string) =>
-    match(row)
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-        eq(label, name)
-          ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
-          : lookupField(rest, name),
-      )
-      .otherwise(() => None as Option<[Ty, boolean]>),
+    ((_v) =>
+      _v._tag === "RowExtend"
+        ? (({ label, fieldType, optional, rest }) =>
+            eq(label, name)
+              ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
+              : lookupField(rest, name))(_v)
+        : (None as Option<[Ty, boolean]>))(row),
 );
 const rowEndsEmpty: (row: Row) => boolean = (row: Row) =>
-  match(row)
-    .with({ _tag: "RowEmpty" }, () => true)
-    .with({ _tag: "RowExtend" }, ({ rest }) => rowEndsEmpty(rest))
-    .with({ _tag: "RowVar" }, () => false)
-    .exhaustive();
-const inferFieldAccess: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  field: Expr,
-  target: Expr,
-  name: string,
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  6,
-  <A>(
+  ((_v) =>
+    _v._tag === "RowEmpty"
+      ? true
+      : _v._tag === "RowExtend"
+        ? (({ rest }) => rowEndsEmpty(rest))(_v)
+        : _v._tag === "RowVar"
+          ? false
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(row);
+const inferFieldAccess: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    field: Expr,
+    target: Expr,
+    name: string,
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3147,107 +2084,61 @@ const inferFieldAccess: <A>(
     _Result_flatMap(
       ([targetT, st1]) =>
         ((zonked: Ty) =>
-          match(zonked)
-            .with({ _tag: "TyRecord" }, ({ row }) =>
-              match(lookupField(row, name))
-                .with(
-                  (_v): _v is Extract<Option<[Ty, boolean]>, { _tag: "Some" }> => {
-                    const _g: any = _v;
-                    return _g._tag === "Some";
-                  },
-                  ({ value: [ft, optional] }) =>
-                    optional
-                      ? (($written) =>
-                          Ok(_tuple(tCon("Option", [ft]), st1)) as Result<[Ty, St], IErr>)(
-                          setFieldOptional(field, true),
+          ((_v) =>
+            _v._tag === "TyRecord"
+              ? (({ row }) =>
+                  ((_v) =>
+                    _v._tag === "Some"
+                      ? (({ value: [ft, optional] }) =>
+                          optional
+                            ? (($written) =>
+                                Ok(_tuple(tCon("Option", [ft]), st1)) as Result<[Ty, St], IErr>)(
+                                setFieldOptional(field, true),
+                              )
+                            : (Ok(_tuple(ft, st1)) as Result<[Ty, St], IErr>))(
+                          _v as Extract<Option<[Ty, boolean]>, { _tag: "Some" }>,
                         )
-                      : (Ok(_tuple(ft, st1)) as Result<[Ty, St], IErr>),
-                )
-                .with({ _tag: "None" }, () =>
-                  rowEndsEmpty(row)
-                    ? (Err(typeErr(`record missing field '${name}'`, sp)) as Result<[Ty, St], IErr>)
-                    : inferDuckField(ctx, targetT, name, sp, st1),
-                )
-                .exhaustive(),
-            )
-            .otherwise(() => inferDuckField(ctx, targetT, name, sp, st1)))(zonk(targetT, st1)),
+                      : _v._tag === "None"
+                        ? rowEndsEmpty(row)
+                          ? (Err(typeErr(`record missing field '${name}'`, sp)) as Result<
+                              [Ty, St],
+                              IErr
+                            >)
+                          : inferDuckField(ctx, targetT, name, sp, st1)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(lookupField(row, name)))(_v)
+              : inferDuckField(ctx, targetT, name, sp, st1))(zonked))(zonk(targetT, st1)),
       inferExpr(ctx, target, st),
     ),
 );
-const inferDuckField: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  targetT: Ty,
-  name: string,
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferDuckField: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    targetT: Ty,
+    name: string,
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3264,80 +2155,33 @@ const inferDuckField: <A>(
           u(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
         ))(freshRowVar(st2)))(freshVar(st)),
 );
-const inferNsField: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  tname: string,
-  name: string,
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferNsField: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    tname: string,
+    name: string,
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3347,88 +2191,43 @@ const inferNsField: <A>(
     sp: SpanAt,
     st: St,
   ) =>
-    match(_Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)))
-      .with({ _tag: "Some" }, ({ value: sc }) =>
-        (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
-      )
-      .with(
-        { _tag: "None" },
-        () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: sc }) =>
+            (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
+              instantiate(sc, st),
+            ))(_v)
+        : _v._tag === "None"
+          ? (Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns))),
 );
-const inferInterpParts: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  parts: InterpPart[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  3,
-  <A>(
+const inferInterpParts: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    parts: InterpPart[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3436,112 +2235,52 @@ const inferInterpParts: <A>(
     parts: InterpPart[],
     st: St,
   ) =>
-    match(parts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st) as Result<St, IErr>,
-      )
-      .with(
-        (_v): _v is [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]] => {
-          const _g: any = _v;
-          return _g.length >= 1 && _g[0]._tag === "IPLit";
-        },
-        ([, ...rest]) => inferInterpParts(ctx, rest, st),
-      )
-      .with(
-        (_v): _v is [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]] => {
-          const _g: any = _v;
-          return _g.length >= 1 && _g[0]._tag === "IPExpr";
-        },
-        ([{ expr: ex }, ...rest]) =>
-          _Result_flatMap(
-            ([t, st1]) =>
-              _Result_flatMap(
-                (st2) => inferInterpParts(ctx, rest, st2),
-                u(ctx, t, tString, st1, exprSpan(ex)),
-              ),
-            inferExpr(ctx, ex, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(st) as Result<St, IErr>)
+        : _v.length >= 1 && _v[0]._tag === "IPLit"
+          ? (([, ...rest]) => inferInterpParts(ctx, rest, st))(
+              _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
+            )
+          : _v.length >= 1 && _v[0]._tag === "IPExpr"
+            ? (([{ expr: ex }, ...rest]) =>
+                _Result_flatMap(
+                  ([t, st1]) =>
+                    _Result_flatMap(
+                      (st2) => inferInterpParts(ctx, rest, st2),
+                      u(ctx, t, tString, st1, exprSpan(ex)),
+                    ),
+                  inferExpr(ctx, ex, st),
+                ))(_v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]])
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(parts),
 );
-const inferTupleElems: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elements: Expr[],
-  st: St,
-) => Result<[Ty[], St], IErr> = _curry(
-  3,
-  <A>(
+const inferTupleElems: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elements: Expr[],
+    st: St,
+  ],
+  Result<[Ty[], St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3549,113 +2288,60 @@ const inferTupleElems: <A>(
     elements: Expr[],
     st: St,
   ) =>
-    match(elements)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([el, ...rest]) =>
-          _Result_flatMap(
-            ([t, st1]) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], IErr>)
+        : _v.length >= 1
+          ? (([el, ...rest]) =>
               _Result_flatMap(
-                ([restTs, st2]) =>
-                  Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
-                inferTupleElems(ctx, rest, st1),
-              ),
-            inferExpr(ctx, el, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                ([t, st1]) =>
+                  _Result_flatMap(
+                    ([restTs, st2]) =>
+                      Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
+                    inferTupleElems(ctx, rest, st1),
+                  ),
+                inferExpr(ctx, el, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(elements),
 );
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
-  match(el)
-    .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-    .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-    .exhaustive();
-const inferSeqSlotsElems: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  con: string,
-  elem: Ty,
-  elements: SeqElem[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+  ((_v) =>
+    _v._tag === "SEExpr"
+      ? (({ expr: e }) => e)(_v)
+      : _v._tag === "SESpread"
+        ? (({ expr: e }) => e)(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(el);
+const inferSeqSlotsElems: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    con: string,
+    elem: Ty,
+    elements: SeqElem[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3665,113 +2351,60 @@ const inferSeqSlotsElems: <A>(
     elements: SeqElem[],
     st: St,
   ) =>
-    match(elements)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st) as Result<St, IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([slot, ...rest]) =>
-          ((ex: Expr) =>
-            _Result_flatMap(
-              ([et, st1]) =>
-                ((want: Ty) =>
-                  _Result_flatMap(
-                    (st2) => inferSeqSlotsElems(ctx, con, elem, rest, st2),
-                    u(ctx, want, et, st1, exprSpan(ex)),
-                  ))(
-                  match(slot)
-                    .with({ _tag: "SEExpr" }, () => elem)
-                    .with({ _tag: "SESpread" }, () => tCon(con, [elem]))
-                    .exhaustive(),
-                ),
-              inferExpr(ctx, ex, st),
-            ))(seqElemExpr(slot)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(st) as Result<St, IErr>)
+        : _v.length >= 1
+          ? (([slot, ...rest]) =>
+              ((ex: Expr) =>
+                _Result_flatMap(
+                  ([et, st1]) =>
+                    ((want: Ty) =>
+                      _Result_flatMap(
+                        (st2) => inferSeqSlotsElems(ctx, con, elem, rest, st2),
+                        u(ctx, want, et, st1, exprSpan(ex)),
+                      ))(
+                      ((_v) =>
+                        _v._tag === "SEExpr"
+                          ? elem
+                          : _v._tag === "SESpread"
+                            ? tCon(con, [elem])
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(slot),
+                    ),
+                  inferExpr(ctx, ex, st),
+                ))(seqElemExpr(slot)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(elements),
 );
-const inferSeqSlots: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  con: string,
-  elements: SeqElem[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferSeqSlots: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    con: string,
+    elements: SeqElem[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3786,80 +2419,33 @@ const inferSeqSlots: <A>(
         inferSeqSlotsElems(ctx, con, elem, elements, st1),
       ))(freshVar(st)),
 );
-const inferMapEntries: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  k: Ty,
-  v: Ty,
-  entries: MapEntry[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const inferMapEntries: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    k: Ty,
+    v: Ty,
+    entries: MapEntry[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3869,113 +2455,56 @@ const inferMapEntries: <A>(
     entries: MapEntry[],
     st: St,
   ) =>
-    match(entries)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st) as Result<St, IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([ent, ...rest]) =>
-          _Result_flatMap(
-            ([kt, st1]) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(st) as Result<St, IErr>)
+        : _v.length >= 1
+          ? (([ent, ...rest]) =>
               _Result_flatMap(
-                (st2) =>
+                ([kt, st1]) =>
                   _Result_flatMap(
-                    ([vt, st3]) =>
+                    (st2) =>
                       _Result_flatMap(
-                        (st4) => inferMapEntries(ctx, k, v, rest, st4),
-                        u(ctx, v, vt, st3, exprSpan(ent.value)),
+                        ([vt, st3]) =>
+                          _Result_flatMap(
+                            (st4) => inferMapEntries(ctx, k, v, rest, st4),
+                            u(ctx, v, vt, st3, exprSpan(ent.value)),
+                          ),
+                        inferExpr(ctx, ent.value, st2),
                       ),
-                    inferExpr(ctx, ent.value, st2),
+                    u(ctx, k, kt, st1, exprSpan(ent.key)),
                   ),
-                u(ctx, k, kt, st1, exprSpan(ent.key)),
-              ),
-            inferExpr(ctx, ent.key, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                inferExpr(ctx, ent.key, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(entries),
 );
-const inferMapExpr: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  entries: MapEntry[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferMapExpr: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    entries: MapEntry[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4000,12 +2529,14 @@ const mergeBindingMapsFrom: <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) =
       .with(
         (_v) => _v.length >= 1,
         ([k, ...rest]) =>
-          match(_Map_get(k, src))
-            .with({ _tag: "Some" }, ({ value: v }) =>
-              mergeBindingMapsFrom(rest, src, _Map_set(k, v, dest)),
-            )
-            .with({ _tag: "None" }, () => mergeBindingMapsFrom(rest, src, dest))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: v }) => mergeBindingMapsFrom(rest, src, _Map_set(k, v, dest)))(_v)
+              : _v._tag === "None"
+                ? mergeBindingMapsFrom(rest, src, dest)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(k, src)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -4028,12 +2559,16 @@ const mergeEnvBindingsFrom: <A>(
     .with(
       (_v) => _v.length >= 1,
       ([k, ...rest]) =>
-        match(_Map_get(k, bindings))
-          .with({ _tag: "Some" }, ({ value: t }) =>
-            mergeEnvBindingsFrom(rest, bindings, _Map_set(k, mono(t), env)),
-          )
-          .with({ _tag: "None" }, () => mergeEnvBindingsFrom(rest, bindings, env))
-          .exhaustive(),
+        ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: t }) => mergeEnvBindingsFrom(rest, bindings, _Map_set(k, mono(t), env)))(
+                _v,
+              )
+            : _v._tag === "None"
+              ? mergeEnvBindingsFrom(rest, bindings, env)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Map_get(k, bindings)),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -4044,80 +2579,33 @@ const mergeEnvBindings: <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) => Map<A,
   <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
-const inferArms: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  scrutT: Ty,
-  resultT: Ty,
-  arms: MatchArm[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const inferArms: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    scrutT: Ty,
+    resultT: Ty,
+    arms: MatchArm[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4127,127 +2615,73 @@ const inferArms: <A>(
     arms: MatchArm[],
     st: St,
   ) =>
-    match(arms)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st) as Result<St, IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([arm, ...rest]) =>
-          _Result_flatMap(
-            ([patT, bindings, st1]) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(st) as Result<St, IErr>)
+        : _v.length >= 1
+          ? (([arm, ...rest]) =>
               _Result_flatMap(
-                (st2) =>
-                  ((armCtx) =>
-                    _Result_flatMap(
-                      (st3) =>
+                ([patT, bindings, st1]) =>
+                  _Result_flatMap(
+                    (st2) =>
+                      ((armCtx) =>
                         _Result_flatMap(
-                          ([bodyT, st4]) =>
+                          (st3) =>
                             _Result_flatMap(
-                              (st5) => inferArms(ctx, scrutT, resultT, rest, st5),
-                              u(ctx, resultT, bodyT, st4, exprSpan(arm.body)),
+                              ([bodyT, st4]) =>
+                                _Result_flatMap(
+                                  (st5) => inferArms(ctx, scrutT, resultT, rest, st5),
+                                  u(ctx, resultT, bodyT, st4, exprSpan(arm.body)),
+                                ),
+                              inferExpr(armCtx, arm.body, st3),
                             ),
-                          inferExpr(armCtx, arm.body, st3),
-                        ),
-                      match(arm.guard)
-                        .with({ _tag: "None" }, () => Ok(st2) as Result<St, IErr>)
-                        .with({ _tag: "Some" }, ({ value: g }) =>
-                          _Result_flatMap(
-                            ([guardT, stg]) => u(ctx, tBool, guardT, stg, exprSpan(g)),
-                            inferExpr(armCtx, g, st2),
-                          ),
-                        )
-                        .exhaustive(),
-                    ))(ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env))),
-                u(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
-              ),
-            inferPat(ctx, arm.pattern, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                          ((_v) =>
+                            _v._tag === "None"
+                              ? (Ok(st2) as Result<St, IErr>)
+                              : _v._tag === "Some"
+                                ? (({ value: g }) =>
+                                    _Result_flatMap(
+                                      ([guardT, stg]) => u(ctx, tBool, guardT, stg, exprSpan(g)),
+                                      inferExpr(armCtx, g, st2),
+                                    ))(_v)
+                                : (() => {
+                                    throw new Error("non-exhaustive match");
+                                  })())(arm.guard),
+                        ))(ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env))),
+                    u(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
+                  ),
+                inferPat(ctx, arm.pattern, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(arms),
 );
-const inferMatch: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  scrutinee: Expr,
-  arms: MatchArm[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferMatch: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    scrutinee: Expr,
+    arms: MatchArm[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4271,78 +2705,31 @@ const inferMatch: <A>(
  * every expression node's inferred type lands in `st.recorded`, keyed by span,
  * so the TS backend can annotate lambda params and empty literals (ADR 0090).
  */
-const inferExpr: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  e: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferExpr: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    e: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4355,78 +2742,31 @@ const inferExpr: <A>(
       inferExprRaw(ctx, e, st),
     ),
 );
-const inferExprRaw: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  e: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferExprRaw: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    e: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4434,320 +2774,382 @@ const inferExprRaw: <A>(
     e: Expr,
     st: St,
   ) =>
-    match(e)
-      .with({ _tag: "ENum" }, () => Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "EUnit" }, () => Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "EBool" }, () => Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "EStr" }, ({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)
-      .with({ _tag: "ERef" }, ({ name, span: sp }) =>
-        match(_Map_get(name, ctx.env))
-          .with({ _tag: "Some" }, ({ value: sc }) =>
-            (([t, st1]: [Ty, St]) =>
-              Ok(
-                _tuple(
-                  t,
-                  match(_Map_get(name, ctx.letOwner))
-                    .with({ _tag: "Some" }, ({ value: vsp }) => noteUse(vsp, t, st1))
-                    .with({ _tag: "None" }, () => st1)
-                    .exhaustive(),
-                ),
-              ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
-          )
-          .with({ _tag: "None" }, () =>
-            ctx.open
-              ? _Set_has(name, ctx.localNames)
-                ? (Err(
-                    typeErrHelp(
-                      `'${name}' is not in scope here`,
-                      sp,
-                      "it is bound elsewhere in this file, but not around this use — check the binder's extent",
-                    ),
-                  ) as Result<[Ty, St], IErr>)
-                : (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
-                    freshVar(st),
-                  )
-              : match(closestName(name, _Map_keys(ctx.env)))
-                  .with(
-                    { _tag: "Some" },
-                    ({ value: hint }) =>
-                      Err(
-                        typeErrSuggest(
-                          `unbound variable '${name}'`,
-                          sp,
-                          `did you mean '${hint}'?`,
-                          hint,
-                        ),
-                      ) as Result<[Ty, St], IErr>,
-                  )
-                  .with(
-                    { _tag: "None" },
-                    () =>
-                      Err(
-                        typeErrHelp(
-                          `unbound variable '${name}'`,
-                          sp,
-                          "bind the name before using it, or check the spelling",
-                        ),
-                      ) as Result<[Ty, St], IErr>,
-                  )
-                  .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .with({ _tag: "ELambda" }, ({ params, body }) =>
-        (([posParams, labParams]: [LamParam[], LamParam[]]) =>
-          (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
-            _Result_flatMap(
-              ([annotVars, st2]) =>
-                _Result_flatMap(
-                  ([labFields, st3]) =>
-                    ((allTypes: Ty[]) =>
-                      _Result_flatMap(
-                        ([bodyT, st4]) =>
-                          Ok(_tuple(arrowChain(allTypes, bodyT), st4)) as Result<[Ty, St], IErr>,
-                        inferExpr(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3),
-                      ))(
-                      match(labParams)
-                        .with(
-                          (_v) => {
-                            const _g: any = _v;
-                            return _g.length === 0;
-                          },
-                          () => paramTypes,
-                        )
-                        .otherwise(() =>
-                          _Array_append(tRecord(rowOfLabFields(labFields)), paramTypes),
-                        ),
-                    ),
-                  labFieldsFrom(ctx, labParams, bodyEnv, annotVars, st2),
-                ),
-              constrainParamAnnotsFrom(ctx, posParams, paramTypes, new Map<string, Ty>(), st1),
-            ))(bindParamsFrom(posParams, ctx.env, st)))(
-          splitLamParams(params, [] as LamParam[], [] as LamParam[]),
-        ),
-      )
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan: _nameSpan, annot, value, body, span: _span }) =>
-        match(value)
-          .with({ _tag: "ELambda" }, () =>
-            ((lets: Stmt[]) =>
-              ((idxOf: Map<string, number>) =>
-                ((tail: Expr) =>
-                  _Result_flatMap(
-                    ([localCtx, localSt]) => inferExpr(localCtx, tail, localSt),
-                    processGroupsFrom(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st),
-                  ))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e)),
-          )
-          .otherwise(() =>
-            _Result_flatMap(
-              ([valT, st1]) =>
-                _Result_flatMap(
-                  ([pinned, st2]) =>
-                    ((widen: boolean) =>
-                      ((sc: Scheme) =>
-                        ((vsp: SpanAt) =>
-                          (($ctx) => inferExpr($ctx, body, noteLet(vsp, st2)))(
-                            ctxWithLets(
+    ((_v) =>
+      _v._tag === "ENum"
+        ? (Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
+        : _v._tag === "EUnit"
+          ? (Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
+          : _v._tag === "EBool"
+            ? (Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
+            : _v._tag === "EStr"
+              ? (({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)(_v)
+              : _v._tag === "ERef"
+                ? (({ name, span: sp }) =>
+                    ((_v) =>
+                      _v._tag === "Some"
+                        ? (({ value: sc }) =>
+                            (([t, st1]: [Ty, St]) =>
+                              Ok(
+                                _tuple(
+                                  t,
+                                  ((_v) =>
+                                    _v._tag === "Some"
+                                      ? (({ value: vsp }) => noteUse(vsp, t, st1))(_v)
+                                      : _v._tag === "None"
+                                        ? st1
+                                        : (() => {
+                                            throw new Error("non-exhaustive match");
+                                          })())(_Map_get(name, ctx.letOwner)),
+                                ),
+                              ) as Result<[Ty, St], IErr>)(instantiate(sc, st)))(_v)
+                        : _v._tag === "None"
+                          ? ctx.open
+                            ? _Set_has(name, ctx.localNames)
+                              ? (Err(
+                                  typeErrHelp(
+                                    `'${name}' is not in scope here`,
+                                    sp,
+                                    "it is bound elsewhere in this file, but not around this use — check the binder's extent",
+                                  ),
+                                ) as Result<[Ty, St], IErr>)
+                              : (([t, st1]: [Ty, St]) =>
+                                  Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
+                            : ((_v) =>
+                                _v._tag === "Some"
+                                  ? (({ value: hint }) =>
+                                      Err(
+                                        typeErrSuggest(
+                                          `unbound variable '${name}'`,
+                                          sp,
+                                          `did you mean '${hint}'?`,
+                                          hint,
+                                        ),
+                                      ) as Result<[Ty, St], IErr>)(_v)
+                                  : _v._tag === "None"
+                                    ? (Err(
+                                        typeErrHelp(
+                                          `unbound variable '${name}'`,
+                                          sp,
+                                          "bind the name before using it, or check the spelling",
+                                        ),
+                                      ) as Result<[Ty, St], IErr>)
+                                    : (() => {
+                                        throw new Error("non-exhaustive match");
+                                      })())(closestName(name, _Map_keys(ctx.env)))
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(_Map_get(name, ctx.env)))(_v)
+                : _v._tag === "ELambda"
+                  ? (({ params, body }) =>
+                      (([posParams, labParams]: [LamParam[], LamParam[]]) =>
+                        (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
+                          _Result_flatMap(
+                            ([annotVars, st2]) =>
+                              _Result_flatMap(
+                                ([labFields, st3]) =>
+                                  ((allTypes: Ty[]) =>
+                                    _Result_flatMap(
+                                      ([bodyT, st4]) =>
+                                        Ok(_tuple(arrowChain(allTypes, bodyT), st4)) as Result<
+                                          [Ty, St],
+                                          IErr
+                                        >,
+                                      inferExpr(
+                                        ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
+                                        body,
+                                        st3,
+                                      ),
+                                    ))(
+                                    ((_v) =>
+                                      _v.length === 0
+                                        ? paramTypes
+                                        : _Array_append(
+                                            tRecord(rowOfLabFields(labFields)),
+                                            paramTypes,
+                                          ))(labParams),
+                                  ),
+                                labFieldsFrom(ctx, labParams, bodyEnv, annotVars, st2),
+                              ),
+                            constrainParamAnnotsFrom(
                               ctx,
-                              _Map_set(name, sc, ctx.env),
-                              _Map_set(name, vsp, ctx.letOwner),
+                              posParams,
+                              paramTypes,
+                              new Map<string, Ty>(),
+                              st1,
                             ),
-                          ))(exprSpan(value)))(generalize(ctx.env, pinned, st2, widen)))(
-                      match(annot)
-                        .with({ _tag: "Some" }, () => false)
-                        .with({ _tag: "None" }, () => true)
-                        .exhaustive(),
-                    ),
-                  match(annot)
-                    .with({ _tag: "Some" }, ({ value: te }) =>
-                      (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
-                        _Result_map(
-                          (stB: St) => _tuple(at, stB),
-                          checkFits(ctx, valT, at, stA, annotSpan(te)),
-                        ))(
-                        typeExprToType(
-                          te,
-                          new Map<string, Ty>(),
-                          st1,
-                          ctx.aliasMap,
-                          _Set_fromArray([] as string[]),
-                        ),
-                      ),
-                    )
-                    .with({ _tag: "None" }, () => Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>)
-                    .exhaustive(),
-                ),
-              inferExpr(ctx, value, st),
-            ),
-          ),
-      )
-      .with({ _tag: "ELetBind" }, ({ param, paramSpan, monad, value, body }) =>
-        inferLetBind(ctx, e, param, paramSpan, monad, value, body, st),
-      )
-      .with({ _tag: "ECall" }, ({ fn, args, origin }) =>
-        ((api: InferApi) =>
-          _Result_flatMap(
-            (claimed) =>
-              match(claimed)
-                .with({ _tag: "Some" }, ({ value: r }) => Ok(r) as Result<[Ty, St], IErr>)
-                .with({ _tag: "None" }, () => inferNormalCall(ctx, fn, args, st))
-                .exhaustive(),
-            runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
-          ))({
-          inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)),
-          unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
-            u(ctx, left, right, st0, sp),
-          ),
-        }),
-      )
-      .with({ _tag: "EPipe", fast: true }, ({ left, right, span: sp }) =>
-        match(right)
-          .with({ _tag: "ECall" }, ({ fn: rfn, args: rargs, origin }) =>
-            inferExpr(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp), st),
-          )
-          .otherwise(() =>
-            inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
-          ),
-      )
-      .with({ _tag: "EPipe" }, ({ left, right, span: sp }) =>
-        inferExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp), st),
-      )
-      .with({ _tag: "EDo" }, ({ exprs }) => inferDo(ctx, exprs, st))
-      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-        inferTernary(ctx, cond, thenE, elseE, st),
-      )
-      .with({ _tag: "ERecord" }, ({ fields, spread, span: sp }) =>
-        match(spread)
-          .with({ _tag: "None" }, () =>
-            _Result_flatMap(
-              ([row, st1]) => Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
-              inferRecordRow(ctx, fields, st),
-            ),
-          )
-          .with({ _tag: "Some" }, ({ value: spreadExpr }) =>
-            _Result_flatMap(
-              ([row, st1]) =>
-                _Result_flatMap(
-                  ([baseT, st2]) =>
-                    (([tailVar, st3]: [Row, St]) =>
-                      _Result_flatMap(
-                        (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], IErr>,
-                        u(ctx, baseT, tRecord(rWithTail(row, tailVar)), st3, sp),
-                      ))(freshRowVar(st2)),
-                  inferExpr(ctx, spreadExpr, st1),
-                ),
-              inferRecordRow(ctx, fields, st),
-            ),
-          )
-          .exhaustive(),
-      )
-      .with({ _tag: "EField" }, ({ target, name, span: sp }) =>
-        match(target)
-          .with({ _tag: "ERef" }, ({ name: tname }) =>
-            and(_Map_has(tname, ctx.ns), not(_Map_has(tname, ctx.env)))
-              ? inferNsField(ctx, tname, name, sp, st)
-              : inferFieldAccess(ctx, e, target, name, sp, st),
-          )
-          .otherwise(() => inferFieldAccess(ctx, e, target, name, sp, st)),
-      )
-      .with({ _tag: "ETuple" }, ({ elements }) =>
-        _Result_flatMap(
-          ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)) as Result<[Ty, St], IErr>,
-          inferTupleElems(ctx, elements, st),
-        ),
-      )
-      .with({ _tag: "EArr" }, ({ elements }) => inferSeqSlots(ctx, "Array", elements, st))
-      .with({ _tag: "EList" }, ({ elements }) => inferSeqSlots(ctx, "List", elements, st))
-      .with({ _tag: "ESet" }, ({ elements }) => inferSeqSlots(ctx, "Set", elements, st))
-      .with({ _tag: "EMap" }, ({ entries }) => inferMapExpr(ctx, entries, st))
-      .with({ _tag: "EMatch" }, ({ scrutinee, arms }) => inferMatch(ctx, scrutinee, arms, st))
-      .with({ _tag: "ELoop" }, ({ params, body }) =>
-        _Result_flatMap(
-          ([frame, bodyEnv, bodyOwner, st1]) =>
-            inferExpr(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1),
-          inferLoopParamsFrom(ctx, params, 0, ctx.env, [] as Ty[], ctx.letOwner, st),
-        ),
-      )
-      .with({ _tag: "ERecur" }, ({ args, span: sp }) => inferRecur(ctx, args, sp, st))
-      .with({ _tag: "EInterp" }, ({ parts }) =>
-        _Result_flatMap(
-          (st1) => Ok(_tuple(tString, st1)) as Result<[Ty, St], IErr>,
-          inferInterpParts(ctx, parts, st),
-        ),
-      )
-      .exhaustive(),
+                          ))(bindParamsFrom(posParams, ctx.env, st)))(
+                        splitLamParams(params, [] as LamParam[], [] as LamParam[]),
+                      ))(_v)
+                  : _v._tag === "ELetIn"
+                    ? (({ name, nameSpan: _nameSpan, annot, value, body, span: _span }) =>
+                        ((_v) =>
+                          _v._tag === "ELambda"
+                            ? ((lets: Stmt[]) =>
+                                ((idxOf: Map<string, number>) =>
+                                  ((tail: Expr) =>
+                                    _Result_flatMap(
+                                      ([localCtx, localSt]) => inferExpr(localCtx, tail, localSt),
+                                      processGroupsFrom(
+                                        ctx,
+                                        stronglyConnected(adjOf(lets, idxOf)),
+                                        lets,
+                                        st,
+                                      ),
+                                    ))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e))
+                            : _Result_flatMap(
+                                ([valT, st1]) =>
+                                  _Result_flatMap(
+                                    ([pinned, st2]) =>
+                                      ((widen: boolean) =>
+                                        ((sc: Scheme) =>
+                                          ((vsp: SpanAt) =>
+                                            (($ctx) => inferExpr($ctx, body, noteLet(vsp, st2)))(
+                                              ctxWithLets(
+                                                ctx,
+                                                _Map_set(name, sc, ctx.env),
+                                                _Map_set(name, vsp, ctx.letOwner),
+                                              ),
+                                            ))(exprSpan(value)))(
+                                          generalize(ctx.env, pinned, st2, widen),
+                                        ))(
+                                        ((_v) =>
+                                          _v._tag === "Some"
+                                            ? false
+                                            : _v._tag === "None"
+                                              ? true
+                                              : (() => {
+                                                  throw new Error("non-exhaustive match");
+                                                })())(annot),
+                                      ),
+                                    ((_v) =>
+                                      _v._tag === "Some"
+                                        ? (({ value: te }) =>
+                                            (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                                              _Result_map(
+                                                (stB: St) => _tuple(at, stB),
+                                                checkFits(ctx, valT, at, stA, annotSpan(te)),
+                                              ))(
+                                              typeExprToType(
+                                                te,
+                                                new Map<string, Ty>(),
+                                                st1,
+                                                ctx.aliasMap,
+                                                _Set_fromArray([] as string[]),
+                                              ),
+                                            ))(_v)
+                                        : _v._tag === "None"
+                                          ? (Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>)
+                                          : (() => {
+                                              throw new Error("non-exhaustive match");
+                                            })())(annot),
+                                  ),
+                                inferExpr(ctx, value, st),
+                              ))(value))(_v)
+                    : _v._tag === "ELetBind"
+                      ? (({ param, paramSpan, monad, value, body }) =>
+                          inferLetBind(ctx, e, param, paramSpan, monad, value, body, st))(_v)
+                      : _v._tag === "ECall"
+                        ? (({ fn, args, origin }) =>
+                            ((api: InferApi) =>
+                              _Result_flatMap(
+                                (claimed) =>
+                                  ((_v) =>
+                                    _v._tag === "Some"
+                                      ? (({ value: r }) => Ok(r) as Result<[Ty, St], IErr>)(_v)
+                                      : _v._tag === "None"
+                                        ? inferNormalCall(ctx, fn, args, st)
+                                        : (() => {
+                                            throw new Error("non-exhaustive match");
+                                          })())(claimed),
+                                runInferCallHooks(
+                                  inferCallHooksOf(ctx.plugins),
+                                  fn,
+                                  args,
+                                  origin,
+                                  st,
+                                  api,
+                                ),
+                              ))({
+                              inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)),
+                              unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
+                                u(ctx, left, right, st0, sp),
+                              ),
+                            }))(_v)
+                        : _v._tag === "EPipe" && _v.fast === true
+                          ? (({ left, right, span: sp }) =>
+                              ((_v) =>
+                                _v._tag === "ECall"
+                                  ? (({ fn: rfn, args: rargs, origin }) =>
+                                      inferExpr(
+                                        ctx,
+                                        Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp),
+                                        st,
+                                      ))(_v)
+                                  : inferExpr(
+                                      ctx,
+                                      Ast.ECall(right, [left], None as Option<string>, sp),
+                                      st,
+                                    ))(right))(_v)
+                          : _v._tag === "EPipe"
+                            ? (({ left, right, span: sp }) =>
+                                inferExpr(
+                                  ctx,
+                                  Ast.ECall(right, [left], None as Option<string>, sp),
+                                  st,
+                                ))(_v)
+                            : _v._tag === "EDo"
+                              ? (({ exprs }) => inferDo(ctx, exprs, st))(_v)
+                              : _v._tag === "ETernary"
+                                ? (({ cond, thenE, elseE }) =>
+                                    inferTernary(ctx, cond, thenE, elseE, st))(_v)
+                                : _v._tag === "ERecord"
+                                  ? (({ fields, spread, span: sp }) =>
+                                      ((_v) =>
+                                        _v._tag === "None"
+                                          ? _Result_flatMap(
+                                              ([row, st1]) =>
+                                                Ok(_tuple(tRecord(row), st1)) as Result<
+                                                  [Ty, St],
+                                                  IErr
+                                                >,
+                                              inferRecordRow(ctx, fields, st),
+                                            )
+                                          : _v._tag === "Some"
+                                            ? (({ value: spreadExpr }) =>
+                                                _Result_flatMap(
+                                                  ([row, st1]) =>
+                                                    _Result_flatMap(
+                                                      ([baseT, st2]) =>
+                                                        (([tailVar, st3]: [Row, St]) =>
+                                                          _Result_flatMap(
+                                                            (st4) =>
+                                                              Ok(_tuple(baseT, st4)) as Result<
+                                                                [Ty, St],
+                                                                IErr
+                                                              >,
+                                                            u(
+                                                              ctx,
+                                                              baseT,
+                                                              tRecord(rWithTail(row, tailVar)),
+                                                              st3,
+                                                              sp,
+                                                            ),
+                                                          ))(freshRowVar(st2)),
+                                                      inferExpr(ctx, spreadExpr, st1),
+                                                    ),
+                                                  inferRecordRow(ctx, fields, st),
+                                                ))(_v)
+                                            : (() => {
+                                                throw new Error("non-exhaustive match");
+                                              })())(spread))(_v)
+                                  : _v._tag === "EField"
+                                    ? (({ target, name, span: sp }) =>
+                                        ((_v) =>
+                                          _v._tag === "ERef"
+                                            ? (({ name: tname }) =>
+                                                and(
+                                                  _Map_has(tname, ctx.ns),
+                                                  not(_Map_has(tname, ctx.env)),
+                                                )
+                                                  ? inferNsField(ctx, tname, name, sp, st)
+                                                  : inferFieldAccess(ctx, e, target, name, sp, st))(
+                                                _v,
+                                              )
+                                            : inferFieldAccess(ctx, e, target, name, sp, st))(
+                                          target,
+                                        ))(_v)
+                                    : _v._tag === "ETuple"
+                                      ? (({ elements }) =>
+                                          _Result_flatMap(
+                                            ([elems, st1]) =>
+                                              Ok(_tuple(tTuple(elems), st1)) as Result<
+                                                [Ty, St],
+                                                IErr
+                                              >,
+                                            inferTupleElems(ctx, elements, st),
+                                          ))(_v)
+                                      : _v._tag === "EArr"
+                                        ? (({ elements }) =>
+                                            inferSeqSlots(ctx, "Array", elements, st))(_v)
+                                        : _v._tag === "EList"
+                                          ? (({ elements }) =>
+                                              inferSeqSlots(ctx, "List", elements, st))(_v)
+                                          : _v._tag === "ESet"
+                                            ? (({ elements }) =>
+                                                inferSeqSlots(ctx, "Set", elements, st))(_v)
+                                            : _v._tag === "EMap"
+                                              ? (({ entries }) => inferMapExpr(ctx, entries, st))(
+                                                  _v,
+                                                )
+                                              : _v._tag === "EMatch"
+                                                ? (({ scrutinee, arms }) =>
+                                                    inferMatch(ctx, scrutinee, arms, st))(_v)
+                                                : _v._tag === "ELoop"
+                                                  ? (({ params, body }) =>
+                                                      _Result_flatMap(
+                                                        ([frame, bodyEnv, bodyOwner, st1]) =>
+                                                          inferExpr(
+                                                            ctxWithLoop(
+                                                              ctx,
+                                                              bodyEnv,
+                                                              frame,
+                                                              bodyOwner,
+                                                            ),
+                                                            body,
+                                                            st1,
+                                                          ),
+                                                        inferLoopParamsFrom(
+                                                          ctx,
+                                                          params,
+                                                          0,
+                                                          ctx.env,
+                                                          [] as Ty[],
+                                                          ctx.letOwner,
+                                                          st,
+                                                        ),
+                                                      ))(_v)
+                                                  : _v._tag === "ERecur"
+                                                    ? (({ args, span: sp }) =>
+                                                        inferRecur(ctx, args, sp, st))(_v)
+                                                    : _v._tag === "EInterp"
+                                                      ? (({ parts }) =>
+                                                          _Result_flatMap(
+                                                            (st1) =>
+                                                              Ok(_tuple(tString, st1)) as Result<
+                                                                [Ty, St],
+                                                                IErr
+                                                              >,
+                                                            inferInterpParts(ctx, parts, st),
+                                                          ))(_v)
+                                                      : (() => {
+                                                          throw new Error("non-exhaustive match");
+                                                        })())(e),
 );
-const inferDo: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  exprs: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferDo: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    exprs: Expr[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4755,108 +3157,47 @@ const inferDo: <A>(
     exprs: Expr[],
     st: St,
   ) =>
-    match(exprs)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () =>
-          Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 1;
-        },
-        ([last]) => inferExpr(ctx, last, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([first, ...rest]) =>
-          _Result_flatMap(([_, st1]) => inferDo(ctx, rest, st1), inferExpr(ctx, first, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>)
+        : _v.length === 1
+          ? (([last]) => inferExpr(ctx, last, st))(_v)
+          : _v.length >= 1
+            ? (([first, ...rest]) =>
+                _Result_flatMap(([_, st1]) => inferDo(ctx, rest, st1), inferExpr(ctx, first, st)))(
+                _v,
+              )
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(exprs),
 );
-const inferPatRecordFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fields: PatField[],
-  row: Row,
-  bindings: Map<string, Ty>,
-  st: St,
-) => Result<[Row, Map<string, Ty>, St], IErr> = _curry(
-  5,
-  <A>(
+const inferPatRecordFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fields: PatField[],
+    row: Row,
+    bindings: Map<string, Ty>,
+    st: St,
+  ],
+  Result<[Row, Map<string, Ty>, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4866,108 +3207,51 @@ const inferPatRecordFrom: <A>(
     bindings: Map<string, Ty>,
     st: St,
   ) =>
-    match(fields)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([f, ...rest]) =>
-          _Result_flatMap(
-            ([subT, subBindings, st1]) =>
-              inferPatRecordFrom(
-                ctx,
-                rest,
-                rExtend(f.label, subT, row),
-                mergeBindingMaps(bindings, subBindings),
-                st1,
-              ),
-            inferPat(ctx, f.pat, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], IErr>)
+        : _v.length >= 1
+          ? (([f, ...rest]) =>
+              _Result_flatMap(
+                ([subT, subBindings, st1]) =>
+                  inferPatRecordFrom(
+                    ctx,
+                    rest,
+                    rExtend(f.label, subT, row),
+                    mergeBindingMaps(bindings, subBindings),
+                    st1,
+                  ),
+                inferPat(ctx, f.pat, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(fields),
 );
-const inferPatRecord: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fields: PatField[],
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatRecord: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fields: PatField[],
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4982,82 +3266,35 @@ const inferPatRecord: <A>(
         inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st1),
       ))(freshRowVar(st)),
 );
-const inferPatCtorArgs: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  ctor: string,
-  curT: Ty,
-  args: Pattern[],
-  st: St,
-  bindings: Map<string, Ty>,
-  sp: SpanAt,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  7,
-  <A>(
+const inferPatCtorArgs: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    ctor: string,
+    curT: Ty,
+    args: Pattern[],
+    st: St,
+    bindings: Map<string, Ty>,
+    sp: SpanAt,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  7,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5069,124 +3306,63 @@ const inferPatCtorArgs: <A>(
     bindings: Map<string, Ty>,
     sp: SpanAt,
   ) =>
-    match(args)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([argPat, ...rest]) =>
-          match(resolve(curT, st))
-            .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-              _Result_flatMap(
-                ([subT, subBindings, st1]) =>
-                  _Result_flatMap(
-                    (st2) =>
-                      inferPatCtorArgs(
-                        ctx,
-                        ctor,
-                        toT,
-                        rest,
-                        st2,
-                        mergeBindingMaps(bindings, subBindings),
-                        sp,
-                      ),
-                    u(ctx, fromT, subT, st1, patSpan(argPat)),
-                  ),
-                inferPat(ctx, argPat, st),
-              ),
-            )
-            .otherwise(
-              () =>
-                Err(typeErr(`constructor '${ctor}' applied to too many arguments`, sp)) as Result<
-                  [Ty, Map<string, Ty>, St],
-                  IErr
-                >,
-            ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], IErr>)
+        : _v.length >= 1
+          ? (([argPat, ...rest]) =>
+              ((_v) =>
+                _v._tag === "TyFn"
+                  ? (({ from: fromT, to: toT }) =>
+                      _Result_flatMap(
+                        ([subT, subBindings, st1]) =>
+                          _Result_flatMap(
+                            (st2) =>
+                              inferPatCtorArgs(
+                                ctx,
+                                ctor,
+                                toT,
+                                rest,
+                                st2,
+                                mergeBindingMaps(bindings, subBindings),
+                                sp,
+                              ),
+                            u(ctx, fromT, subT, st1, patSpan(argPat)),
+                          ),
+                        inferPat(ctx, argPat, st),
+                      ))(_v)
+                  : (Err(
+                      typeErr(`constructor '${ctor}' applied to too many arguments`, sp),
+                    ) as Result<[Ty, Map<string, Ty>, St], IErr>))(resolve(curT, st)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(args),
 );
-const inferPatTupleFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elems: Pattern[],
-  st: St,
-) => Result<[Ty[], Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatTupleFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elems: Pattern[],
+    st: St,
+  ],
+  Result<[Ty[], Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5194,116 +3370,58 @@ const inferPatTupleFrom: <A>(
     elems: Pattern[],
     st: St,
   ) =>
-    match(elems)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () =>
-          Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)) as Result<
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)) as Result<
             [Ty[], Map<string, Ty>, St],
             IErr
-          >,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([ep, ...rest]) =>
-          _Result_flatMap(
-            ([t, bindings, st1]) =>
+          >)
+        : _v.length >= 1
+          ? (([ep, ...rest]) =>
               _Result_flatMap(
-                ([restTs, restBindings, st2]) =>
-                  Ok(
-                    _tuple(
-                      _Array_prepend(t, restTs),
-                      mergeBindingMaps(restBindings, bindings),
-                      st2,
-                    ),
-                  ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
-                inferPatTupleFrom(ctx, rest, st1),
-              ),
-            inferPat(ctx, ep, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                ([t, bindings, st1]) =>
+                  _Result_flatMap(
+                    ([restTs, restBindings, st2]) =>
+                      Ok(
+                        _tuple(
+                          _Array_prepend(t, restTs),
+                          mergeBindingMaps(restBindings, bindings),
+                          st2,
+                        ),
+                      ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
+                    inferPatTupleFrom(ctx, rest, st1),
+                  ),
+                inferPat(ctx, ep, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(elems),
 );
-const inferPatTuple: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elems: Pattern[],
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatTuple: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elems: Pattern[],
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5317,79 +3435,32 @@ const inferPatTuple: <A>(
       inferPatTupleFrom(ctx, elems, st),
     ),
 );
-const inferSeqPatElems: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elem: Ty,
-  elems: Pattern[],
-  st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  4,
-  <A>(
+const inferSeqPatElems: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elem: Ty,
+    elems: Pattern[],
+    st: St,
+  ],
+  Result<[Map<string, Ty>, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5398,115 +3469,58 @@ const inferSeqPatElems: <A>(
     elems: Pattern[],
     st: St,
   ) =>
-    match(elems)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([ep, ...rest]) =>
-          _Result_flatMap(
-            ([subT, subBindings, st1]) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>)
+        : _v.length >= 1
+          ? (([ep, ...rest]) =>
               _Result_flatMap(
-                (st2) =>
+                ([subT, subBindings, st1]) =>
                   _Result_flatMap(
-                    ([restBindings, st3]) =>
-                      Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)) as Result<
-                        [Map<string, Ty>, St],
-                        IErr
-                      >,
-                    inferSeqPatElems(ctx, elem, rest, st2),
+                    (st2) =>
+                      _Result_flatMap(
+                        ([restBindings, st3]) =>
+                          Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)) as Result<
+                            [Map<string, Ty>, St],
+                            IErr
+                          >,
+                        inferSeqPatElems(ctx, elem, rest, st2),
+                      ),
+                    u(ctx, elem, subT, st1, patSpan(ep)),
                   ),
-                u(ctx, elem, subT, st1, patSpan(ep)),
-              ),
-            inferPat(ctx, ep, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                inferPat(ctx, ep, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(elems),
 );
-const inferSeqPat: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  con: string,
-  elems: Pattern[],
-  restPat: Option<Pattern>,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  5,
-  <A>(
+const inferSeqPat: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    con: string,
+    elems: Pattern[],
+    restPat: Option<Pattern>,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5520,26 +3534,25 @@ const inferSeqPat: <A>(
       const seqT: Ty = tCon(con, [elem]);
       return _Result_flatMap(
         ([bindings, st2]) =>
-          match(restPat)
-            .with(
-              { _tag: "None" },
-              () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-            )
-            .with({ _tag: "Some" }, ({ value: r }) =>
-              _Result_flatMap(
-                ([subT, subBindings, st3]) =>
-                  _Result_flatMap(
-                    (st4) =>
-                      Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)) as Result<
-                        [Ty, Map<string, Ty>, St],
-                        IErr
-                      >,
-                    u(ctx, subT, seqT, st3, patSpan(r)),
-                  ),
-                inferPat(ctx, r, st2),
-              ),
-            )
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "None"
+              ? (Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>)
+              : _v._tag === "Some"
+                ? (({ value: r }) =>
+                    _Result_flatMap(
+                      ([subT, subBindings, st3]) =>
+                        _Result_flatMap(
+                          (st4) =>
+                            Ok(
+                              _tuple(seqT, mergeBindingMaps(bindings, subBindings), st4),
+                            ) as Result<[Ty, Map<string, Ty>, St], IErr>,
+                          u(ctx, subT, seqT, st3, patSpan(r)),
+                        ),
+                      inferPat(ctx, r, st2),
+                    ))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(restPat),
         inferSeqPatElems(ctx, elem, elems, st1),
       );
     })(freshVar(st)),
@@ -5548,78 +3561,31 @@ const inferSeqPat: <A>(
  * Pattern-side analogue of `inferExpr` — records every pattern node's span
  * and type, so a pattern-bound param can be annotated by span.
  */
-const inferPat: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  p: Pattern,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPat: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    p: Pattern,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5636,78 +3602,31 @@ const inferPat: <A>(
       inferPatRaw(ctx, p, st),
     ),
 );
-const inferPatRaw: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  p: Pattern,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatRaw: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    p: Pattern,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5715,132 +3634,125 @@ const inferPatRaw: <A>(
     p: Pattern,
     st: St,
   ) =>
-    match(p)
-      .with({ _tag: "PAs" }, ({ pat, name }) =>
-        _Result_flatMap(
-          ([t, bindings, st1]) =>
-            Ok(_tuple(t, _Map_set(name, t, bindings), st1)) as Result<
-              [Ty, Map<string, Ty>, St],
-              IErr
-            >,
-          inferPat(ctx, pat, st),
-        ),
-      )
-      .with({ _tag: "PWild" }, () =>
-        (([t, st1]: [Ty, St]) =>
-          Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
-          freshVar(st),
-        ),
-      )
-      .with(
-        { _tag: "PUnit" },
-        () =>
-          Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        { _tag: "PLit" },
-        () =>
-          Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        { _tag: "PBool" },
-        () =>
-          Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        { _tag: "PStr" },
-        ({ value }) =>
-          Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
-            [Ty, Map<string, Ty>, St],
-            IErr
-          >,
-      )
-      .with({ _tag: "PBind" }, ({ name }) =>
-        (([t, st1]: [Ty, St]) =>
-          Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
-            [Ty, Map<string, Ty>, St],
-            IErr
-          >)(freshVar(st)),
-      )
-      .with({ _tag: "PRecord" }, ({ fields }) => inferPatRecord(ctx, fields, st))
-      .with({ _tag: "PCtor" }, ({ ctor, args, ns, span: sp }) =>
-        match(ns)
-          .with({ _tag: "Some" }, ({ value: alias }) =>
-            match(_Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)))
-              .with(
-                { _tag: "None" },
-                () =>
-                  Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
+    ((_v) =>
+      _v._tag === "PAs"
+        ? (({ pat, name }) =>
+            _Result_flatMap(
+              ([t, bindings, st1]) =>
+                Ok(_tuple(t, _Map_set(name, t, bindings), st1)) as Result<
+                  [Ty, Map<string, Ty>, St],
+                  IErr
+                >,
+              inferPat(ctx, pat, st),
+            ))(_v)
+        : _v._tag === "PWild"
+          ? (([t, st1]: [Ty, St]) =>
+              Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
+              freshVar(st),
+            )
+          : _v._tag === "PUnit"
+            ? (Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<
+                [Ty, Map<string, Ty>, St],
+                IErr
+              >)
+            : _v._tag === "PLit"
+              ? (Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<
+                  [Ty, Map<string, Ty>, St],
+                  IErr
+                >)
+              : _v._tag === "PBool"
+                ? (Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<
                     [Ty, Map<string, Ty>, St],
                     IErr
-                  >,
-              )
-              .with({ _tag: "Some" }, ({ value: sc }) =>
-                (([curT, st1]: [Ty, St]) =>
-                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
-                  instantiate(sc, st),
-                ),
-              )
-              .exhaustive(),
-          )
-          .with({ _tag: "None" }, () =>
-            match(_Map_get(ctor, ctx.env))
-              .with(
-                { _tag: "None" },
-                () =>
-                  Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
-                    [Ty, Map<string, Ty>, St],
-                    IErr
-                  >,
-              )
-              .with({ _tag: "Some" }, ({ value: sc }) =>
-                (([curT, st1]: [Ty, St]) =>
-                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
-                  instantiate(sc, st),
-                ),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .with({ _tag: "PTuple" }, ({ elems }) => inferPatTuple(ctx, elems, st))
-      .with({ _tag: "PArr" }, ({ elems, rest }) => inferSeqPat(ctx, "Array", elems, rest, st))
-      .with({ _tag: "PList" }, ({ elems, rest }) => inferSeqPat(ctx, "List", elems, rest, st))
-      .with({ _tag: "POr" }, ({ alts, span: sp }) => inferOrPat(ctx, alts, sp, st))
-      .exhaustive(),
+                  >)
+                : _v._tag === "PStr"
+                  ? (({ value }) =>
+                      Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
+                        [Ty, Map<string, Ty>, St],
+                        IErr
+                      >)(_v)
+                  : _v._tag === "PBind"
+                    ? (({ name }) =>
+                        (([t, st1]: [Ty, St]) =>
+                          Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
+                            [Ty, Map<string, Ty>, St],
+                            IErr
+                          >)(freshVar(st)))(_v)
+                    : _v._tag === "PRecord"
+                      ? (({ fields }) => inferPatRecord(ctx, fields, st))(_v)
+                      : _v._tag === "PCtor"
+                        ? (({ ctor, args, ns, span: sp }) =>
+                            ((_v) =>
+                              _v._tag === "Some"
+                                ? (({ value: alias }) =>
+                                    ((_v) =>
+                                      _v._tag === "None"
+                                        ? (Err(
+                                            typeErr(`'${alias}' has no member '${ctor}'`, sp),
+                                          ) as Result<[Ty, Map<string, Ty>, St], IErr>)
+                                        : _v._tag === "Some"
+                                          ? (({ value: sc }) =>
+                                              (([curT, st1]: [Ty, St]) =>
+                                                inferPatCtorArgs(
+                                                  ctx,
+                                                  ctor,
+                                                  curT,
+                                                  args,
+                                                  st1,
+                                                  new Map<string, Ty>(),
+                                                  sp,
+                                                ))(instantiate(sc, st)))(_v)
+                                          : (() => {
+                                              throw new Error("non-exhaustive match");
+                                            })())(
+                                      _Map_get(
+                                        ctor,
+                                        _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns),
+                                      ),
+                                    ))(_v)
+                                : _v._tag === "None"
+                                  ? ((_v) =>
+                                      _v._tag === "None"
+                                        ? (Err(
+                                            typeErr(`unknown constructor '${ctor}'`, sp),
+                                          ) as Result<[Ty, Map<string, Ty>, St], IErr>)
+                                        : _v._tag === "Some"
+                                          ? (({ value: sc }) =>
+                                              (([curT, st1]: [Ty, St]) =>
+                                                inferPatCtorArgs(
+                                                  ctx,
+                                                  ctor,
+                                                  curT,
+                                                  args,
+                                                  st1,
+                                                  new Map<string, Ty>(),
+                                                  sp,
+                                                ))(instantiate(sc, st)))(_v)
+                                          : (() => {
+                                              throw new Error("non-exhaustive match");
+                                            })())(_Map_get(ctor, ctx.env))
+                                  : (() => {
+                                      throw new Error("non-exhaustive match");
+                                    })())(ns))(_v)
+                        : _v._tag === "PTuple"
+                          ? (({ elems }) => inferPatTuple(ctx, elems, st))(_v)
+                          : _v._tag === "PArr"
+                            ? (({ elems, rest }) => inferSeqPat(ctx, "Array", elems, rest, st))(_v)
+                            : _v._tag === "PList"
+                              ? (({ elems, rest }) => inferSeqPat(ctx, "List", elems, rest, st))(_v)
+                              : _v._tag === "POr"
+                                ? (({ alts, span: sp }) => inferOrPat(ctx, alts, sp, st))(_v)
+                                : (() => {
+                                    throw new Error("non-exhaustive match");
+                                  })())(p),
 );
-const unifyOrPatBinding: <A, B>(
+const unifyOrPatBinding: <B>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -5852,38 +3764,13 @@ const unifyOrPatBinding: <A, B>(
   sp: SpanAt,
 ) => Result<St, IErr> = _curry(
   6,
-  <A, B>(
+  <B>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5894,48 +3781,30 @@ const unifyOrPatBinding: <A, B>(
     st: St,
     sp: SpanAt,
   ) =>
-    match(_Map_get(name, bindings))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
-      .with({ _tag: "Some" }, ({ value: prevT }) =>
-        match(_Map_get(name, altBindings))
-          .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
-          .with({ _tag: "Some" }, ({ value: ty }) => u(ctx, prevT, ty, st, sp))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? (Ok(st) as Result<St, IErr>)
+        : _v._tag === "Some"
+          ? (({ value: prevT }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? (Ok(st) as Result<St, IErr>)
+                  : _v._tag === "Some"
+                    ? (({ value: ty }) => u(ctx, prevT, ty, st, sp))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(name, altBindings)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(name, bindings)),
 );
-const unifyOrPatBindings: <A, B>(
+const unifyOrPatBindings: <B>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -5947,38 +3816,13 @@ const unifyOrPatBindings: <A, B>(
   sp: SpanAt,
 ) => Result<St, IErr> = _curry(
   6,
-  <A, B>(
+  <B>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -6006,81 +3850,34 @@ const unifyOrPatBindings: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferOrPatAlts: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  alts: Pattern[],
-  i: number,
-  t: Ty,
-  bindings: Map<string, Ty>,
-  st: St,
-) => Result<St, IErr> = _curry(
-  6,
-  <A>(
+const inferOrPatAlts: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    alts: Pattern[],
+    i: number,
+    t: Ty,
+    bindings: Map<string, Ty>,
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -6091,104 +3888,60 @@ const inferOrPatAlts: <A>(
     bindings: Map<string, Ty>,
     st: St,
   ) =>
-    match(_Array_get(i, alts))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, IErr>)
-      .with({ _tag: "Some" }, ({ value: alt }) =>
-        _Result_flatMap(
-          ([altT, altBindings, st1]) =>
-            _Result_flatMap(
-              (st2) =>
-                _Result_flatMap(
-                  (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
-                  unifyOrPatBindings(
-                    ctx,
-                    _Map_keys(altBindings),
-                    altBindings,
-                    bindings,
-                    st2,
-                    patSpan(alt),
+    ((_v) =>
+      _v._tag === "None"
+        ? (Ok(st) as Result<St, IErr>)
+        : _v._tag === "Some"
+          ? (({ value: alt }) =>
+              _Result_flatMap(
+                ([altT, altBindings, st1]) =>
+                  _Result_flatMap(
+                    (st2) =>
+                      _Result_flatMap(
+                        (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
+                        unifyOrPatBindings(
+                          ctx,
+                          _Map_keys(altBindings),
+                          altBindings,
+                          bindings,
+                          st2,
+                          patSpan(alt),
+                        ),
+                      ),
+                    u(ctx, t, altT, st1, patSpan(alt)),
                   ),
-                ),
-              u(ctx, t, altT, st1, patSpan(alt)),
-            ),
-          inferPat(ctx, alt, st),
-        ),
-      )
-      .exhaustive(),
+                inferPat(ctx, alt, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, alts)),
 );
-const inferOrPat: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  alts: Pattern[],
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  4,
-  <A>(
+const inferOrPat: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    alts: Pattern[],
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -6197,64 +3950,65 @@ const inferOrPat: <A>(
     sp: SpanAt,
     st: St,
   ) =>
-    match(alts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () =>
-          Err(typeErr("or-pattern needs at least one alternative", sp)) as Result<
+    ((_v) =>
+      _v.length === 0
+        ? (Err(typeErr("or-pattern needs at least one alternative", sp)) as Result<
             [Ty, Map<string, Ty>, St],
             IErr
-          >,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([first, ...rest]) =>
-          _Result_flatMap(
-            ([t, bindings, st1]) =>
+          >)
+        : _v.length >= 1
+          ? (([first, ...rest]) =>
               _Result_flatMap(
-                (st2) => Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-                inferOrPatAlts(ctx, rest, 0, t, bindings, st1),
-              ),
-            inferPat(ctx, first, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                ([t, bindings, st1]) =>
+                  _Result_flatMap(
+                    (st2) =>
+                      Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+                    inferOrPatAlts(ctx, rest, 0, t, bindings, st1),
+                  ),
+                inferPat(ctx, first, st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(alts),
 );
 const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) =>
-  match(rest)
-    .with({ _tag: "Some" }, ({ value: r }) => patternBinds(r))
-    .with({ _tag: "None" }, () => [] as string[])
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: r }) => patternBinds(r))(_v)
+      : _v._tag === "None"
+        ? ([] as string[])
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(rest);
 const patternBinds: (p: Pattern) => string[] = (p: Pattern) =>
-  match(p)
-    .with({ _tag: "PAs" }, ({ pat, name }) => _Array_append(name, patternBinds(pat)))
-    .with({ _tag: "PBind" }, ({ name }) => [name])
-    .with({ _tag: "PRecord" }, ({ fields }) =>
-      _Array_flatMap((f: PatField) => patternBinds(f.pat), fields),
-    )
-    .with({ _tag: "PCtor" }, ({ args }) => _Array_flatMap(patternBinds, args))
-    .with({ _tag: "PTuple" }, ({ elems }) => _Array_flatMap(patternBinds, elems))
-    .with({ _tag: "PArr" }, ({ elems, rest }) =>
-      _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)),
-    )
-    .with({ _tag: "PList" }, ({ elems, rest }) =>
-      _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)),
-    )
-    .with({ _tag: "POr" }, ({ alts }) =>
-      match(_Array_head(alts))
-        .with({ _tag: "Some" }, ({ value: first }) => patternBinds(first))
-        .with({ _tag: "None" }, () => [] as string[])
-        .exhaustive(),
-    )
-    .otherwise(() => [] as string[]);
+  ((_v) =>
+    _v._tag === "PAs"
+      ? (({ pat, name }) => _Array_append(name, patternBinds(pat)))(_v)
+      : _v._tag === "PBind"
+        ? (({ name }) => [name])(_v)
+        : _v._tag === "PRecord"
+          ? (({ fields }) => _Array_flatMap((f: PatField) => patternBinds(f.pat), fields))(_v)
+          : _v._tag === "PCtor"
+            ? (({ args }) => _Array_flatMap(patternBinds, args))(_v)
+            : _v._tag === "PTuple"
+              ? (({ elems }) => _Array_flatMap(patternBinds, elems))(_v)
+              : _v._tag === "PArr"
+                ? (({ elems, rest }) =>
+                    _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)))(_v)
+                : _v._tag === "PList"
+                  ? (({ elems, rest }) =>
+                      _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)))(_v)
+                  : _v._tag === "POr"
+                    ? (({ alts }) =>
+                        ((_v) =>
+                          _v._tag === "Some"
+                            ? (({ value: first }) => patternBinds(first))(_v)
+                            : _v._tag === "None"
+                              ? ([] as string[])
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(_Array_head(alts)))(_v)
+                    : ([] as string[]))(p);
 const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: A[], set: Set<A>) =>
   match(names)
     .with(
@@ -6272,35 +4026,32 @@ const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: 
 const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curry(
   2,
   (p: LamParam, bound: Set<string>) =>
-    match(p)
-      .with({ _tag: "LPSpanned" }, ({ param: inner }) => paramBound(inner, bound))
-      .with({ _tag: "LPName" }, ({ name }) => _Set_add(name, bound))
-      .with({ _tag: "LPTuple" }, ({ names }) => addAllFrom(names, bound))
-      .with({ _tag: "LPRecord" }, ({ fields }) => addAllFrom(fields, bound))
-      .with({ _tag: "LPLabeled" }, ({ name }) => _Set_add(name, bound))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "LPSpanned"
+        ? (({ param: inner }) => paramBound(inner, bound))(_v)
+        : _v._tag === "LPName"
+          ? (({ name }) => _Set_add(name, bound))(_v)
+          : _v._tag === "LPTuple"
+            ? (({ names }) => addAllFrom(names, bound))(_v)
+            : _v._tag === "LPRecord"
+              ? (({ fields }) => addAllFrom(fields, bound))(_v)
+              : _v._tag === "LPLabeled"
+                ? (({ name }) => _Set_add(name, bound))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(p),
 );
 const lambdaBound: _Curry<[params: LamParam[], bound: Set<string>], Set<string>> = _curry(
   2,
   (params: LamParam[], bound: Set<string>) =>
-    match(params)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => bound,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([p, ...rest]) => lambdaBound(rest, paramBound(p, bound)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? bound
+        : _v.length >= 1
+          ? (([p, ...rest]) => lambdaBound(rest, paramBound(p, bound)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(params),
 );
 /**
  * A labeled default names the enclosing scope, not the lambda's own params,
@@ -6310,44 +4061,28 @@ const labeledDefaultRefs: _Curry<
   [params: LamParam[], bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(3, (params: LamParam[], bound: Set<string>, acc: Set<string>) =>
-  match(params)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([p, ...rest]) =>
-        match(p)
-          .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
-            labeledDefaultRefs([inner, ...rest], bound, acc),
-          )
-          .with(
-            (
-              _v,
-            ): _v is Extract<LamParam, { _tag: "LPLabeled" }> & {
-              defaultValue: Extract<
-                Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
-                { _tag: "Some" }
-              >;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "LPLabeled" && _g.defaultValue._tag === "Some";
-            },
-            ({ defaultValue: { value: d } }) =>
-              labeledDefaultRefs(rest, bound, freeRefs(d, bound, acc)),
-          )
-          .otherwise(() => labeledDefaultRefs(rest, bound, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([p, ...rest]) =>
+            ((_v) =>
+              _v._tag === "LPSpanned"
+                ? (({ param: inner }) => labeledDefaultRefs([inner, ...rest], bound, acc))(_v)
+                : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some"
+                  ? (({ defaultValue: { value: d } }) =>
+                      labeledDefaultRefs(rest, bound, freeRefs(d, bound, acc)))(
+                      _v as Extract<LamParam, { _tag: "LPLabeled" }> & {
+                        defaultValue: Extract<
+                          Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
+                          { _tag: "Some" }
+                        >;
+                      },
+                    )
+                  : labeledDefaultRefs(rest, bound, acc))(p))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(params),
 );
 const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = _curry(
   2,
@@ -6362,211 +4097,218 @@ const loopInitRefsFrom: _Curry<
   [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
-  match(_Array_get(i, params))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: p }) =>
-      loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? acc
+      : _v._tag === "Some"
+        ? (({ value: p }) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)))(
+            _v,
+          )
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, params)),
 );
 const freeRefsList: _Curry<
   [es: Expr[], bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(3, (es: Expr[], bound: Set<string>, acc: Set<string>) =>
-  match(es)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([e, ...rest]) => freeRefsList(rest, bound, freeRefs(e, bound, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([e, ...rest]) => freeRefsList(rest, bound, freeRefs(e, bound, acc)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(es),
 );
 const freeRefsFields: _Curry<
   [fields: Field[], bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(3, (fields: Field[], bound: Set<string>, acc: Set<string>) =>
-  match(fields)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([f, ...rest]) => freeRefsFields(rest, bound, freeRefs(f.value, bound, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([f, ...rest]) => freeRefsFields(rest, bound, freeRefs(f.value, bound, acc)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(fields),
 );
 const freeRefsEntries: _Curry<
   [entries: MapEntry[], bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(3, (entries: MapEntry[], bound: Set<string>, acc: Set<string>) =>
-  match(entries)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([ent, ...rest]) =>
-        freeRefsEntries(rest, bound, freeRefs(ent.value, bound, freeRefs(ent.key, bound, acc))),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([ent, ...rest]) =>
+            freeRefsEntries(
+              rest,
+              bound,
+              freeRefs(ent.value, bound, freeRefs(ent.key, bound, acc)),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(entries),
 );
 const freeRefsInterpParts: _Curry<
   [parts: InterpPart[], bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(3, (parts: InterpPart[], bound: Set<string>, acc: Set<string>) =>
-  match(parts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v): _v is [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]] => {
-        const _g: any = _v;
-        return _g.length >= 1 && _g[0]._tag === "IPLit";
-      },
-      ([, ...rest]) => freeRefsInterpParts(rest, bound, acc),
-    )
-    .with(
-      (_v): _v is [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]] => {
-        const _g: any = _v;
-        return _g.length >= 1 && _g[0]._tag === "IPExpr";
-      },
-      ([{ expr: ex }, ...rest]) => freeRefsInterpParts(rest, bound, freeRefs(ex, bound, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1 && _v[0]._tag === "IPLit"
+        ? (([, ...rest]) => freeRefsInterpParts(rest, bound, acc))(
+            _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
+          )
+        : _v.length >= 1 && _v[0]._tag === "IPExpr"
+          ? (([{ expr: ex }, ...rest]) =>
+              freeRefsInterpParts(rest, bound, freeRefs(ex, bound, acc)))(
+              _v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]],
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(parts),
 );
 const freeRefsArms: _Curry<
   [arms: MatchArm[], bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(3, (arms: MatchArm[], bound: Set<string>, acc: Set<string>) =>
-  match(arms)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([arm, ...rest]) =>
-        ((armBound: Set<string>) =>
-          ((acc1: Set<string>) => freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
-            match(arm.guard)
-              .with({ _tag: "Some" }, ({ value: g }) => freeRefs(g, armBound, acc))
-              .with({ _tag: "None" }, () => acc)
-              .exhaustive(),
-          ))(addAllFrom(patternBinds(arm.pattern), bound)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([arm, ...rest]) =>
+            ((armBound: Set<string>) =>
+              ((acc1: Set<string>) =>
+                freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: g }) => freeRefs(g, armBound, acc))(_v)
+                    : _v._tag === "None"
+                      ? acc
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(arm.guard),
+              ))(addAllFrom(patternBinds(arm.pattern), bound)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(arms),
 );
 const freeRefs: _Curry<[e: Expr, bound: Set<string>, acc: Set<string>], Set<string>> = _curry(
   3,
   (e: Expr, bound: Set<string>, acc: Set<string>) =>
-    match(e)
-      .with({ _tag: "ENum" }, () => acc)
-      .with({ _tag: "EUnit" }, () => acc)
-      .with({ _tag: "EBool" }, () => acc)
-      .with({ _tag: "EStr" }, () => acc)
-      .with({ _tag: "ERef" }, ({ name }) => (_Set_has(name, bound) ? acc : _Set_add(name, acc)))
-      .with({ _tag: "ECall" }, ({ fn, args }) =>
-        freeRefsList(args, bound, freeRefs(fn, bound, acc)),
-      )
-      .with({ _tag: "ELambda" }, ({ params, body }) =>
-        freeRefs(body, lambdaBound(params, bound), labeledDefaultRefs(params, bound, acc)),
-      )
-      .with({ _tag: "ELetIn" }, ({ name, value, body }) =>
-        ((valueBound: Set<string>) =>
-          ((acc1: Set<string>) => freeRefs(body, _Set_add(name, bound), acc1))(
-            freeRefs(value, valueBound, acc),
-          ))(
-          match(value)
-            .with({ _tag: "ELambda" }, () => _Set_add(name, bound))
-            .otherwise(() => bound),
-        ),
-      )
-      .with({ _tag: "ELetBind" }, ({ param, value, body }) =>
-        ((acc1: Set<string>) => freeRefs(body, paramBound(param, bound), acc1))(
-          freeRefs(value, bound, acc),
-        ),
-      )
-      .with({ _tag: "EPipe" }, ({ left, right }) =>
-        freeRefs(right, bound, freeRefs(left, bound, acc)),
-      )
-      .with({ _tag: "EDo" }, ({ exprs }) => freeRefsList(exprs, bound, acc))
-      .with({ _tag: "ETernary" }, ({ cond, thenE, elseE }) =>
-        freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc))),
-      )
-      .with({ _tag: "EMatch" }, ({ scrutinee, arms }) =>
-        freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc)),
-      )
-      .with({ _tag: "ELoop" }, ({ params, body }) =>
-        freeRefs(body, loopBound(params, bound), loopInitRefsFrom(params, 0, bound, acc)),
-      )
-      .with({ _tag: "ERecur" }, ({ args }) => freeRefsList(args, bound, acc))
-      .with({ _tag: "ERecord" }, ({ fields, spread }) =>
-        freeRefsFields(
-          fields,
-          bound,
-          match(spread)
-            .with({ _tag: "Some" }, ({ value: s }) => freeRefs(s, bound, acc))
-            .with({ _tag: "None" }, () => acc)
-            .exhaustive(),
-        ),
-      )
-      .with({ _tag: "EField" }, ({ target }) => freeRefs(target, bound, acc))
-      .with({ _tag: "ETuple" }, ({ elements }) => freeRefsList(elements, bound, acc))
-      .with({ _tag: "EArr" }, ({ elements }) =>
-        freeRefsList(map(seqElemExpr, elements), bound, acc),
-      )
-      .with({ _tag: "EList" }, ({ elements }) =>
-        freeRefsList(map(seqElemExpr, elements), bound, acc),
-      )
-      .with({ _tag: "ESet" }, ({ elements }) =>
-        freeRefsList(map(seqElemExpr, elements), bound, acc),
-      )
-      .with({ _tag: "EMap" }, ({ entries }) => freeRefsEntries(entries, bound, acc))
-      .with({ _tag: "EInterp" }, ({ parts }) => freeRefsInterpParts(parts, bound, acc))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "ENum"
+        ? acc
+        : _v._tag === "EUnit"
+          ? acc
+          : _v._tag === "EBool"
+            ? acc
+            : _v._tag === "EStr"
+              ? acc
+              : _v._tag === "ERef"
+                ? (({ name }) => (_Set_has(name, bound) ? acc : _Set_add(name, acc)))(_v)
+                : _v._tag === "ECall"
+                  ? (({ fn, args }) => freeRefsList(args, bound, freeRefs(fn, bound, acc)))(_v)
+                  : _v._tag === "ELambda"
+                    ? (({ params, body }) =>
+                        freeRefs(
+                          body,
+                          lambdaBound(params, bound),
+                          labeledDefaultRefs(params, bound, acc),
+                        ))(_v)
+                    : _v._tag === "ELetIn"
+                      ? (({ name, value, body }) =>
+                          ((valueBound: Set<string>) =>
+                            ((acc1: Set<string>) => freeRefs(body, _Set_add(name, bound), acc1))(
+                              freeRefs(value, valueBound, acc),
+                            ))(
+                            ((_v) => (_v._tag === "ELambda" ? _Set_add(name, bound) : bound))(
+                              value,
+                            ),
+                          ))(_v)
+                      : _v._tag === "ELetBind"
+                        ? (({ param, value, body }) =>
+                            ((acc1: Set<string>) => freeRefs(body, paramBound(param, bound), acc1))(
+                              freeRefs(value, bound, acc),
+                            ))(_v)
+                        : _v._tag === "EPipe"
+                          ? (({ left, right }) =>
+                              freeRefs(right, bound, freeRefs(left, bound, acc)))(_v)
+                          : _v._tag === "EDo"
+                            ? (({ exprs }) => freeRefsList(exprs, bound, acc))(_v)
+                            : _v._tag === "ETernary"
+                              ? (({ cond, thenE, elseE }) =>
+                                  freeRefs(
+                                    elseE,
+                                    bound,
+                                    freeRefs(thenE, bound, freeRefs(cond, bound, acc)),
+                                  ))(_v)
+                              : _v._tag === "EMatch"
+                                ? (({ scrutinee, arms }) =>
+                                    freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc)))(_v)
+                                : _v._tag === "ELoop"
+                                  ? (({ params, body }) =>
+                                      freeRefs(
+                                        body,
+                                        loopBound(params, bound),
+                                        loopInitRefsFrom(params, 0, bound, acc),
+                                      ))(_v)
+                                  : _v._tag === "ERecur"
+                                    ? (({ args }) => freeRefsList(args, bound, acc))(_v)
+                                    : _v._tag === "ERecord"
+                                      ? (({ fields, spread }) =>
+                                          freeRefsFields(
+                                            fields,
+                                            bound,
+                                            ((_v) =>
+                                              _v._tag === "Some"
+                                                ? (({ value: s }) => freeRefs(s, bound, acc))(_v)
+                                                : _v._tag === "None"
+                                                  ? acc
+                                                  : (() => {
+                                                      throw new Error("non-exhaustive match");
+                                                    })())(spread),
+                                          ))(_v)
+                                      : _v._tag === "EField"
+                                        ? (({ target }) => freeRefs(target, bound, acc))(_v)
+                                        : _v._tag === "ETuple"
+                                          ? (({ elements }) => freeRefsList(elements, bound, acc))(
+                                              _v,
+                                            )
+                                          : _v._tag === "EArr"
+                                            ? (({ elements }) =>
+                                                freeRefsList(
+                                                  map(seqElemExpr, elements),
+                                                  bound,
+                                                  acc,
+                                                ))(_v)
+                                            : _v._tag === "EList"
+                                              ? (({ elements }) =>
+                                                  freeRefsList(
+                                                    map(seqElemExpr, elements),
+                                                    bound,
+                                                    acc,
+                                                  ))(_v)
+                                              : _v._tag === "ESet"
+                                                ? (({ elements }) =>
+                                                    freeRefsList(
+                                                      map(seqElemExpr, elements),
+                                                      bound,
+                                                      acc,
+                                                    ))(_v)
+                                                : _v._tag === "EMap"
+                                                  ? (({ entries }) =>
+                                                      freeRefsEntries(entries, bound, acc))(_v)
+                                                  : _v._tag === "EInterp"
+                                                    ? (({ parts }) =>
+                                                        freeRefsInterpParts(parts, bound, acc))(_v)
+                                                    : (() => {
+                                                        throw new Error("non-exhaustive match");
+                                                      })())(e),
 );
 const seedBuiltinsFrom: <A>(
   keys: A[],
@@ -6582,12 +4324,20 @@ const seedBuiltinsFrom: <A>(
     .with(
       (_v) => _v.length >= 1,
       ([n, ...rest]) =>
-        match(_Map_get(n, builtins))
-          .with({ _tag: "Some" }, ({ value: t }) =>
-            seedBuiltinsFrom(rest, builtins, _Map_set(n, generalize(env, t, st, true), env), st),
-          )
-          .with({ _tag: "None" }, () => seedBuiltinsFrom(rest, builtins, env, st))
-          .exhaustive(),
+        ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: t }) =>
+                seedBuiltinsFrom(
+                  rest,
+                  builtins,
+                  _Map_set(n, generalize(env, t, st, true), env),
+                  st,
+                ))(_v)
+            : _v._tag === "None"
+              ? seedBuiltinsFrom(rest, builtins, env, st)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Map_get(n, builtins)),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -6620,18 +4370,21 @@ const seedNsMembersFrom: <A, B, C>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          match(_Map_get(m, members))
-            .with({ _tag: "Some" }, ({ value: t }) =>
-              seedNsMembersFrom(
-                rest,
-                members,
-                env,
-                st,
-                _Map_set(m, generalize(env, t, st, true), acc),
-              ),
-            )
-            .with({ _tag: "None" }, () => seedNsMembersFrom(rest, members, env, st, acc))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: t }) =>
+                  seedNsMembersFrom(
+                    rest,
+                    members,
+                    env,
+                    st,
+                    _Map_set(m, generalize(env, t, st, true), acc),
+                  ))(_v)
+              : _v._tag === "None"
+                ? seedNsMembersFrom(rest, members, env, st, acc)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(m, members)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -6660,22 +4413,25 @@ const seedNsFrom: <A, B, C, D>(
       .with(
         (_v) => _v.length >= 1,
         ([nsName, ...rest]) =>
-          match(_Map_get(nsName, namespaces))
-            .with({ _tag: "Some" }, ({ value: members }) =>
-              seedNsFrom(
-                rest,
-                namespaces,
-                env,
-                st,
-                _Map_set(
-                  nsName,
-                  seedNsMembersFrom(_Map_keys(members), members, env, st, new Map<B, Scheme>()),
-                  acc,
-                ),
-              ),
-            )
-            .with({ _tag: "None" }, () => seedNsFrom(rest, namespaces, env, st, acc))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: members }) =>
+                  seedNsFrom(
+                    rest,
+                    namespaces,
+                    env,
+                    st,
+                    _Map_set(
+                      nsName,
+                      seedNsMembersFrom(_Map_keys(members), members, env, st, new Map<B, Scheme>()),
+                      acc,
+                    ),
+                  ))(_v)
+              : _v._tag === "None"
+                ? seedNsFrom(rest, namespaces, env, st, acc)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(nsName, namespaces)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -6703,12 +4459,15 @@ const seedNsImportsFrom: <A, B>(aliases: A[], nsImports: Map<A, B>, ns: Map<A, B
       .with(
         (_v) => _v.length >= 1,
         ([alias, ...rest]) =>
-          match(_Map_get(alias, nsImports))
-            .with({ _tag: "Some" }, ({ value: members }) =>
-              seedNsImportsFrom(rest, nsImports, _Map_set(alias, members, ns)),
-            )
-            .with({ _tag: "None" }, () => seedNsImportsFrom(rest, nsImports, ns))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: members }) =>
+                  seedNsImportsFrom(rest, nsImports, _Map_set(alias, members, ns)))(_v)
+              : _v._tag === "None"
+                ? seedNsImportsFrom(rest, nsImports, ns)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(alias, nsImports)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -6723,68 +4482,51 @@ const aliasMapFrom: _Curry<
   [stmts: Stmt[], acc: Map<string, QualAliasInfo>],
   Map<string, QualAliasInfo>
 > = _curry(2, (stmts: Stmt[], acc: Map<string, QualAliasInfo>) =>
-  match(stmts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => acc,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with(
-            (
-              _v,
-            ): _v is Extract<Stmt, { _tag: "SType" }> & {
-              alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "SType" && _g.alias._tag === "Some";
-            },
-            ({ name, params, alias: { value: fields } }) =>
-              aliasMapFrom(
-                rest,
-                _Map_set(
-                  name,
-                  { params: params, fields: fields, expr: None as Option<TypeExpr> },
-                  acc,
-                ),
-              ),
-          )
-          .with(
-            (
-              _v,
-            ): _v is Extract<Stmt, { _tag: "SType" }> & {
-              aliasType: Extract<Extract<Stmt, { _tag: "SType" }>["aliasType"], { _tag: "Some" }>;
-            } => {
-              const _g: any = _v;
-              return _g._tag === "SType" && _g.aliasType._tag === "Some";
-            },
-            ({ name, params, aliasType: { value: te } }) =>
-              aliasMapFrom(
-                rest,
-                _Map_set(
-                  name,
-                  {
-                    params: params,
-                    fields: [] as AliasField[],
-                    expr: Some(te) as Option<TypeExpr>,
-                  },
-                  acc,
-                ),
-              ),
-          )
-          .otherwise(() => aliasMapFrom(rest, acc)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SType" && _v.alias._tag === "Some"
+                ? (({ name, params, alias: { value: fields } }) =>
+                    aliasMapFrom(
+                      rest,
+                      _Map_set(
+                        name,
+                        { params: params, fields: fields, expr: None as Option<TypeExpr> },
+                        acc,
+                      ),
+                    ))(
+                    _v as Extract<Stmt, { _tag: "SType" }> & {
+                      alias: Extract<Extract<Stmt, { _tag: "SType" }>["alias"], { _tag: "Some" }>;
+                    },
+                  )
+                : _v._tag === "SType" && _v.aliasType._tag === "Some"
+                  ? (({ name, params, aliasType: { value: te } }) =>
+                      aliasMapFrom(
+                        rest,
+                        _Map_set(
+                          name,
+                          {
+                            params: params,
+                            fields: [] as AliasField[],
+                            expr: Some(te) as Option<TypeExpr>,
+                          },
+                          acc,
+                        ),
+                      ))(
+                      _v as Extract<Stmt, { _tag: "SType" }> & {
+                        aliasType: Extract<
+                          Extract<Stmt, { _tag: "SType" }>["aliasType"],
+                          { _tag: "Some" }
+                        >;
+                      },
+                    )
+                  : aliasMapFrom(rest, acc))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(stmts),
 );
 const registerCtorsFrom: <A, B>(
   ctors: ({ fields: CtorField[]; name: A } & B)[],
@@ -6826,32 +4568,22 @@ const registerUserCtorsFrom: _Curry<
 > = _curry(
   4,
   (stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St) =>
-    match(stmts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(env, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SType" }, ({ name, params, ctors }) =>
-              (([env1, st1]: [Map<string, Scheme>, St]) =>
-                registerUserCtorsFrom(rest, aliasMap, env1, st1))(
-                registerCtorsFrom(ctors, name, params, aliasMap, env, st),
-              ),
-            )
-            .otherwise(() => registerUserCtorsFrom(rest, aliasMap, env, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? _tuple(env, st)
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SType"
+                  ? (({ name, params, ctors }) =>
+                      (([env1, st1]: [Map<string, Scheme>, St]) =>
+                        registerUserCtorsFrom(rest, aliasMap, env1, st1))(
+                        registerCtorsFrom(ctors, name, params, aliasMap, env, st),
+                      ))(_v)
+                  : registerUserCtorsFrom(rest, aliasMap, env, st))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(stmts),
 );
 const registerBuiltinCtorGroup: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
@@ -6938,103 +4670,85 @@ const registerExternsFrom: _Curry<
 > = _curry(
   4,
   (stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St) =>
-    match(stmts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => _tuple(env, st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
-              (([vars, st0]: [Map<string, Ty>, St]) =>
-                (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
-                  registerExternsFrom(
-                    rest,
-                    aliasMap,
-                    _Map_set(name, generalize(env, t, st1, false), env),
-                    st1,
-                  ))(
-                  typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray([] as string[])),
-                ))(
-                reduce(
-                  _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
-                    (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
-                  ),
-                  _tuple(new Map<string, Ty>(), st),
-                  params,
-                ),
-              ),
-            )
-            .otherwise(() => registerExternsFrom(rest, aliasMap, env, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? _tuple(env, st)
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SExtern"
+                  ? (({ name, params, typeExpr }) =>
+                      (([vars, st0]: [Map<string, Ty>, St]) =>
+                        (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
+                          registerExternsFrom(
+                            rest,
+                            aliasMap,
+                            _Map_set(name, generalize(env, t, st1, false), env),
+                            st1,
+                          ))(
+                          typeExprToType(
+                            typeExpr,
+                            vars,
+                            st0,
+                            aliasMap,
+                            _Set_fromArray([] as string[]),
+                          ),
+                        ))(
+                        reduce(
+                          _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
+                            (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(
+                              freshVar(s),
+                            ),
+                          ),
+                          _tuple(new Map<string, Ty>(), st),
+                          params,
+                        ),
+                      ))(_v)
+                  : registerExternsFrom(rest, aliasMap, env, st))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(stmts),
 );
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
-  match(stmts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => [] as Stmt[],
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with({ _tag: "SLet" }, () => _Array_prepend(s, letsOfFrom(rest)))
-          .otherwise(() => letsOfFrom(rest)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    });
+  ((_v) =>
+    _v.length === 0
+      ? ([] as Stmt[])
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) => (_v._tag === "SLet" ? _Array_prepend(s, letsOfFrom(rest)) : letsOfFrom(rest)))(
+              s,
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(stmts);
 const localLetsFrom: (e: Expr) => Stmt[] = (e: Expr) => {
   const collect: (a: Expr, b: Stmt[]) => Stmt[] = _curry(2, (current: Expr, acc: Stmt[]) =>
-    match(current)
-      .with({ _tag: "ELetIn" }, ({ name, nameSpan, annot, value, body, span }) =>
-        match(value)
-          .with({ _tag: "ELambda" }, () =>
-            collect(
-              body,
-              _Array_append(
-                Ast.SLet(name, nameSpan, annot, value, false, None as Option<string>, span),
-                acc,
-              ),
-            ),
-          )
-          .otherwise(() => acc),
-      )
-      .otherwise(() => acc),
+    ((_v) =>
+      _v._tag === "ELetIn"
+        ? (({ name, nameSpan, annot, value, body, span }) =>
+            ((_v) =>
+              _v._tag === "ELambda"
+                ? collect(
+                    body,
+                    _Array_append(
+                      Ast.SLet(name, nameSpan, annot, value, false, None as Option<string>, span),
+                      acc,
+                    ),
+                  )
+                : acc)(value))(_v)
+        : acc)(current),
   );
   return collect(e, [] as Stmt[]);
 };
 const localTail: (e: Expr) => Expr = (e: Expr) =>
-  match(e)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Expr, { _tag: "ELetIn" }> & {
-        value: Extract<Extract<Expr, { _tag: "ELetIn" }>["value"], { _tag: "ELambda" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "ELetIn" && _g.value._tag === "ELambda";
-      },
-      ({ body }) => localTail(body),
-    )
-    .otherwise(() => e);
+  ((_v) =>
+    _v._tag === "ELetIn" && _v.value._tag === "ELambda"
+      ? (({ body }) => localTail(body))(
+          _v as Extract<Expr, { _tag: "ELetIn" }> & {
+            value: Extract<Extract<Expr, { _tag: "ELetIn" }>["value"], { _tag: "ELambda" }>;
+          },
+        )
+      : e)(e);
 const idxOfFrom: _Curry<
   [lets: Stmt[], i0: number, acc0: Map<string, number>],
   Map<string, number>
@@ -7042,21 +4756,20 @@ const idxOfFrom: _Curry<
   let i: number = i0;
   let acc: Map<string, number> = acc0;
   while (true) {
-    const _step = match(_Array_get(i, lets))
-      .with({ _tag: "None" }, () => _done(acc))
-      .with(
-        (
-          _v,
-        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SLet";
-        },
-        ({ value: { name } }) => _recur(i + 1, _Map_set(name, i, acc)),
-      )
-      .with({ _tag: "Some" }, () => _recur(i + 1, acc))
-      .exhaustive();
+    const _step = ((_v) =>
+      _v._tag === "None"
+        ? _done(acc)
+        : _v._tag === "Some" && _v.value._tag === "SLet"
+          ? (({ value: { name } }) => _recur(i + 1, _Map_set(name, i, acc)))(
+              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
+              },
+            )
+          : _v._tag === "Some"
+            ? _recur(i + 1, acc)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(_Array_get(i, lets));
     if (_step._tag === "recur") {
       [i, acc] = _step.args;
       continue;
@@ -7069,20 +4782,24 @@ const idxOfMap: (lets: Stmt[]) => Map<string, number> = (lets: Stmt[]) =>
 const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
   2,
   <A>(letStmt: Stmt, idxOf: Map<string, A>) =>
-    match(letStmt)
-      .with({ _tag: "SLet" }, ({ value }) =>
-        _Array_flatMap(
-          (r: string) =>
-            match(_Map_get(r, idxOf))
-              .with({ _tag: "Some" }, ({ value: j }) => [j])
-              .with({ _tag: "None" }, () => [] as A[])
-              .exhaustive(),
-          _Set_toArray(
-            freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
-          ),
-        ),
-      )
-      .otherwise(() => [] as A[]),
+    ((_v) =>
+      _v._tag === "SLet"
+        ? (({ value }) =>
+            _Array_flatMap(
+              (r: string) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: j }) => [j])(_v)
+                    : _v._tag === "None"
+                      ? ([] as A[])
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(r, idxOf)),
+              _Set_toArray(
+                freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
+              ),
+            ))(_v)
+        : ([] as A[]))(letStmt),
 );
 const adjOf: <A>(lets: Stmt[], idxOf: Map<string, A>) => A[][] = _curry(
   2,
@@ -7091,131 +4808,67 @@ const adjOf: <A>(lets: Stmt[], idxOf: Map<string, A>) => A[][] = _curry(
 const groupOfFrom: <A>(idxs: number[], lets: A[]) => A[] = _curry(
   2,
   <A>(idxs: number[], lets: A[]) =>
-    match(idxs)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => [] as A[],
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([i, ...rest]) =>
-          match(_Array_get(i, lets))
-            .with({ _tag: "Some" }, ({ value: s }) => _Array_prepend(s, groupOfFrom(rest, lets)))
-            .with({ _tag: "None" }, () => groupOfFrom(rest, lets))
-            .exhaustive(),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? ([] as A[])
+        : _v.length >= 1
+          ? (([i, ...rest]) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: s }) => _Array_prepend(s, groupOfFrom(rest, lets)))(_v)
+                  : _v._tag === "None"
+                    ? groupOfFrom(rest, lets)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Array_get(i, lets)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(idxs),
 );
 const preBindGroupFrom: _Curry<
   [group: Stmt[], env: Map<string, Scheme>, st: St],
   [Map<string, Scheme>, St]
 > = _curry(3, (group: Stmt[], env: Map<string, Scheme>, st: St) =>
-  match(group)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple(env, st),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with({ _tag: "SLet" }, ({ name }) =>
-            (([v, st1]: [Ty, St]) => preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(
-              freshVar(st),
-            ),
-          )
-          .otherwise(() => preBindGroupFrom(rest, env, st)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(env, st)
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SLet"
+                ? (({ name }) =>
+                    (([v, st1]: [Ty, St]) =>
+                      preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)))(_v)
+                : preBindGroupFrom(rest, env, st))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(group),
 );
-const inferGroupFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  group: Stmt[],
-  st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferGroupFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    group: Stmt[],
+    st: St,
+  ],
+  Result<[Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -7223,299 +4876,187 @@ const inferGroupFrom: <A>(
     group: Stmt[],
     st: St,
   ) =>
-    match(group)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SLet" }, ({ name, annot, value, span }) =>
-              _Result_flatMap(
-                ([t, st1]) =>
-                  match(_Map_get(name, ctx.env))
-                    .with({ _tag: "Some" }, ({ value: selfSc }) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>)
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SLet"
+                  ? (({ name, annot, value, span }) =>
                       _Result_flatMap(
-                        (st2) =>
-                          _Result_flatMap(
-                            ([pinned, st3]) =>
-                              _Result_flatMap(
-                                ([restTypes, st4]) =>
-                                  Ok(_tuple(_Map_set(name, pinned, restTypes), st4)) as Result<
-                                    [Map<string, Ty>, St],
-                                    IErr
-                                  >,
-                                inferGroupFrom(ctx, rest, st3),
-                              ),
-                            match(annot)
-                              .with({ _tag: "Some" }, ({ value: te }) =>
-                                (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
-                                  _Result_map(
-                                    (stB: St) => _tuple(at, stB),
-                                    checkFits(ctx, t, at, stA, annotSpan(te)),
-                                  ))(
-                                  typeExprToType(
-                                    te,
-                                    new Map<string, Ty>(),
-                                    st2,
-                                    ctx.aliasMap,
-                                    _Set_fromArray([] as string[]),
-                                  ),
-                                ),
-                              )
-                              .with(
-                                { _tag: "None" },
-                                () => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>,
-                              )
-                              .exhaustive(),
-                          ),
-                        u(ctx, selfSc.ty, t, st1, span),
-                      ),
-                    )
-                    .with(
-                      { _tag: "None" },
-                      () =>
-                        Err(
-                          typeErr(`internal: missing self-binding for '${name}'`, span),
-                        ) as Result<[Map<string, Ty>, St], IErr>,
-                    )
-                    .exhaustive(),
-                inferExpr(ctx, value, st),
-              ),
-            )
-            .otherwise(() => inferGroupFrom(ctx, rest, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                        ([t, st1]) =>
+                          ((_v) =>
+                            _v._tag === "Some"
+                              ? (({ value: selfSc }) =>
+                                  _Result_flatMap(
+                                    (st2) =>
+                                      _Result_flatMap(
+                                        ([pinned, st3]) =>
+                                          _Result_flatMap(
+                                            ([restTypes, st4]) =>
+                                              Ok(
+                                                _tuple(_Map_set(name, pinned, restTypes), st4),
+                                              ) as Result<[Map<string, Ty>, St], IErr>,
+                                            inferGroupFrom(ctx, rest, st3),
+                                          ),
+                                        ((_v) =>
+                                          _v._tag === "Some"
+                                            ? (({ value: te }) =>
+                                                (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                                                  _Result_map(
+                                                    (stB: St) => _tuple(at, stB),
+                                                    checkFits(ctx, t, at, stA, annotSpan(te)),
+                                                  ))(
+                                                  typeExprToType(
+                                                    te,
+                                                    new Map<string, Ty>(),
+                                                    st2,
+                                                    ctx.aliasMap,
+                                                    _Set_fromArray([] as string[]),
+                                                  ),
+                                                ))(_v)
+                                            : _v._tag === "None"
+                                              ? (Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)
+                                              : (() => {
+                                                  throw new Error("non-exhaustive match");
+                                                })())(annot),
+                                      ),
+                                    u(ctx, selfSc.ty, t, st1, span),
+                                  ))(_v)
+                              : _v._tag === "None"
+                                ? (Err(
+                                    typeErr(`internal: missing self-binding for '${name}'`, span),
+                                  ) as Result<[Map<string, Ty>, St], IErr>)
+                                : (() => {
+                                    throw new Error("non-exhaustive match");
+                                  })())(_Map_get(name, ctx.env)),
+                        inferExpr(ctx, value, st),
+                      ))(_v)
+                  : inferGroupFrom(ctx, rest, st))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(group),
 );
 const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> = _curry(
   2,
   <A>(group: Stmt[], env: Map<string, A>) =>
-    match(group)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => env,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SLet" }, ({ name }) => dropGroupFrom(rest, _Map_delete(name, env)))
-            .otherwise(() => dropGroupFrom(rest, env)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? env
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SLet"
+                  ? (({ name }) => dropGroupFrom(rest, _Map_delete(name, env)))(_v)
+                  : dropGroupFrom(rest, env))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(group),
 );
 const generalizeGroupFrom: _Curry<
   [group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St],
   Map<string, Scheme>
 > = _curry(4, (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) =>
-  match(group)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => env,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with({ _tag: "SLet" }, ({ name, annot }) =>
-            match(_Map_get(name, bodyTypes))
-              .with({ _tag: "Some" }, ({ value: t }) =>
-                ((widen: boolean) =>
-                  generalizeGroupFrom(
-                    rest,
-                    bodyTypes,
-                    _Map_set(name, generalize(env, t, st, widen), env),
-                    st,
-                  ))(
-                  match(annot)
-                    .with({ _tag: "None" }, () => true)
-                    .with({ _tag: "Some" }, () => false)
-                    .exhaustive(),
-                ),
-              )
-              .with({ _tag: "None" }, () => generalizeGroupFrom(rest, bodyTypes, env, st))
-              .exhaustive(),
-          )
-          .otherwise(() => generalizeGroupFrom(rest, bodyTypes, env, st)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? env
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SLet"
+                ? (({ name, annot }) =>
+                    ((_v) =>
+                      _v._tag === "Some"
+                        ? (({ value: t }) =>
+                            ((widen: boolean) =>
+                              generalizeGroupFrom(
+                                rest,
+                                bodyTypes,
+                                _Map_set(name, generalize(env, t, st, widen), env),
+                                st,
+                              ))(
+                              ((_v) =>
+                                _v._tag === "None"
+                                  ? true
+                                  : _v._tag === "Some"
+                                    ? false
+                                    : (() => {
+                                        throw new Error("non-exhaustive match");
+                                      })())(annot),
+                            ))(_v)
+                        : _v._tag === "None"
+                          ? generalizeGroupFrom(rest, bodyTypes, env, st)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(_Map_get(name, bodyTypes)))(_v)
+                : generalizeGroupFrom(rest, bodyTypes, env, st))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(group),
 );
 const noteGroupLets: _Curry<
   [group: Stmt[], letOwner: Map<string, SpanAt>, st: St],
   [Map<string, SpanAt>, St]
 > = _curry(3, (group: Stmt[], letOwner: Map<string, SpanAt>, st: St) =>
-  match(group)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => _tuple(letOwner, st),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([s, ...rest]) =>
-        match(s)
-          .with(
-            (_v): _v is Extract<Stmt, { _tag: "SLet" }> => {
-              const _g: any = _v;
-              return (
-                _g._tag === "SLet" && (({ name, value }) => not(_Str_startsWith("$", name)))(_g)
-              );
-            },
-            ({ name, value }) =>
-              ((sp: SpanAt) => noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
-                exprSpan(value),
-              ),
-          )
-          .otherwise(() => noteGroupLets(rest, letOwner, st)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(letOwner, st)
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SLet" && (({ name, value }) => not(_Str_startsWith("$", name)))(_v)
+                ? (({ name, value }) =>
+                    ((sp: SpanAt) =>
+                      noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
+                      exprSpan(value),
+                    ))(_v)
+                : noteGroupLets(rest, letOwner, st))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(group),
 );
-const processGroupsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  sccs: number[][],
-  lets: Stmt[],
-  st: St,
-) => Result<
+const processGroupsFrom: _Curry<
   [
-    {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-    },
-    St,
-  ],
-  IErr
-> = _curry(
-  4,
-  <A>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    sccs: number[][],
+    lets: Stmt[],
+    st: St,
+  ],
+  Result<
+    [
+      {
+        env: Map<string, Scheme>;
+        open: boolean;
+        ns: Map<string, Map<string, Scheme>>;
+        aliasMap: Map<string, QualAliasInfo>;
+        plugins: HostPlugin[];
+        loopStack: Ty[][];
+        letOwner: Map<string, SpanAt>;
+        localNames: Set<string>;
+      },
+      St,
+    ],
+    IErr
+  >
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -7524,115 +5065,58 @@ const processGroupsFrom: <A>(
     lets: Stmt[],
     st: St,
   ) =>
-    match(sccs)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(_tuple(ctx, st)),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([comp, ...restSccs]) =>
-          ((group: Stmt[]) =>
-            (([preEnv, st1]: [Map<string, Scheme>, St]) => {
-              const preCtx = ctxWithEnv(ctx, preEnv);
-              return _Result_flatMap(
-                ([bodyTypes, st2]) =>
-                  ((finalEnv: Map<string, Scheme>) =>
-                    (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
-                      processGroupsFrom(
-                        ctxWithLets(ctx, finalEnv, finalOwner),
-                        restSccs,
-                        lets,
-                        st3,
-                      ))(noteGroupLets(group, ctx.letOwner, st2)))(
-                    generalizeGroupFrom(group, bodyTypes, dropGroupFrom(group, preEnv), st2),
-                  ),
-                inferGroupFrom(preCtx, group, st1),
-              );
-            })(preBindGroupFrom(group, ctx.env, st)))(groupOfFrom(comp, lets)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? Ok(_tuple(ctx, st))
+        : _v.length >= 1
+          ? (([comp, ...restSccs]) =>
+              ((group: Stmt[]) =>
+                (([preEnv, st1]: [Map<string, Scheme>, St]) => {
+                  const preCtx = ctxWithEnv(ctx, preEnv);
+                  return _Result_flatMap(
+                    ([bodyTypes, st2]) =>
+                      ((finalEnv: Map<string, Scheme>) =>
+                        (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
+                          processGroupsFrom(
+                            ctxWithLets(ctx, finalEnv, finalOwner),
+                            restSccs,
+                            lets,
+                            st3,
+                          ))(noteGroupLets(group, ctx.letOwner, st2)))(
+                        generalizeGroupFrom(group, bodyTypes, dropGroupFrom(group, preEnv), st2),
+                      ),
+                    inferGroupFrom(preCtx, group, st1),
+                  );
+                })(preBindGroupFrom(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(sccs),
 );
-const inferExprStmtsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  stmts: Stmt[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  3,
-  <A>(
+const inferExprStmtsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    stmts: Stmt[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -7640,36 +5124,26 @@ const inferExprStmtsFrom: <A>(
     stmts: Stmt[],
     st: St,
   ) =>
-    match(stmts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st) as Result<St, IErr>,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          match(s)
-            .with({ _tag: "SExpr" }, ({ value, span }) =>
-              _Result_flatMap(
-                ([t, st1]) =>
-                  _Result_flatMap(
-                    (st2) => inferExprStmtsFrom(ctx, rest, st2),
-                    u(ctx, t, tUnit, st1, span),
-                  ),
-                inferExpr(ctx, value, st),
-              ),
-            )
-            .otherwise(() => inferExprStmtsFrom(ctx, rest, st)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(st) as Result<St, IErr>)
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SExpr"
+                  ? (({ value, span }) =>
+                      _Result_flatMap(
+                        ([t, st1]) =>
+                          _Result_flatMap(
+                            (st2) => inferExprStmtsFrom(ctx, rest, st2),
+                            u(ctx, t, tUnit, st1, span),
+                          ),
+                        inferExpr(ctx, value, st),
+                      ))(_v)
+                  : inferExprStmtsFrom(ctx, rest, st))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(stmts),
 );
 const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => Map<A, B> = _curry(
   3,
@@ -7682,12 +5156,14 @@ const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => 
       .with(
         (_v) => _v.length >= 1,
         ([k, ...rest]) =>
-          match(_Map_get(k, imports))
-            .with({ _tag: "Some" }, ({ value: sc }) =>
-              seedImportsFrom(rest, imports, _Map_set(k, sc, env)),
-            )
-            .with({ _tag: "None" }, () => seedImportsFrom(rest, imports, env))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: sc }) => seedImportsFrom(rest, imports, _Map_set(k, sc, env)))(_v)
+              : _v._tag === "None"
+                ? seedImportsFrom(rest, imports, env)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(k, imports)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -7710,43 +5186,44 @@ const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => 
 const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeExpr = _curry(
   3,
   <A>(te: TypeExpr, alias: string, from: Map<string, A>) =>
-    match(te)
-      .with({ _tag: "TyName" }, ({ name, span: sp }) =>
-        _Map_has(name, from) ? Ast.TyQual(alias, name, sp, [] as TypeExpr[], sp) : te,
-      )
-      .with({ _tag: "TyApp" }, ({ ctor, args, span: sp }) =>
-        ((args1: TypeExpr[]) =>
-          _Map_has(ctor, from)
-            ? Ast.TyQual(alias, ctor, sp, args1, sp)
-            : Ast.TyApp(ctor, args1, sp))(map((a: TypeExpr) => qualifyTe(a, alias, from), args)),
-      )
-      .with({ _tag: "TyArrow" }, ({ from: fromTe, to: toTe, span: sp }) =>
-        Ast.TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp),
-      )
-      .with({ _tag: "TyTuple" }, ({ elems, span: sp }) =>
-        Ast.TyTuple(
-          map((e: TypeExpr) => qualifyTe(e, alias, from), elems),
-          sp,
-        ),
-      )
-      .with({ _tag: "TyList" }, ({ elem, span: sp }) =>
-        Ast.TyList(qualifyTe(elem, alias, from), sp),
-      )
-      .with({ _tag: "TyUnion" }, ({ members, span: sp }) =>
-        Ast.TyUnion(
-          map((m: TypeExpr) => qualifyTe(m, alias, from), members),
-          sp,
-        ),
-      )
-      .with({ _tag: "TyQual" }, ({ alias: inner, name, nameSpan: nsp, args, span: sp }) =>
-        ((args1: TypeExpr[]) =>
-          _Map_has(`${inner}.${name}`, from)
-            ? Ast.TyQual(alias, `${inner}.${name}`, nsp, args1, sp)
-            : Ast.TyQual(inner, name, nsp, args1, sp))(
-          map((a: TypeExpr) => qualifyTe(a, alias, from), args),
-        ),
-      )
-      .otherwise(() => te),
+    ((_v) =>
+      _v._tag === "TyName"
+        ? (({ name, span: sp }) =>
+            _Map_has(name, from) ? Ast.TyQual(alias, name, sp, [] as TypeExpr[], sp) : te)(_v)
+        : _v._tag === "TyApp"
+          ? (({ ctor, args, span: sp }) =>
+              ((args1: TypeExpr[]) =>
+                _Map_has(ctor, from)
+                  ? Ast.TyQual(alias, ctor, sp, args1, sp)
+                  : Ast.TyApp(ctor, args1, sp))(
+                map((a: TypeExpr) => qualifyTe(a, alias, from), args),
+              ))(_v)
+          : _v._tag === "TyArrow"
+            ? (({ from: fromTe, to: toTe, span: sp }) =>
+                Ast.TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp))(_v)
+            : _v._tag === "TyTuple"
+              ? (({ elems, span: sp }) =>
+                  Ast.TyTuple(
+                    map((e: TypeExpr) => qualifyTe(e, alias, from), elems),
+                    sp,
+                  ))(_v)
+              : _v._tag === "TyList"
+                ? (({ elem, span: sp }) => Ast.TyList(qualifyTe(elem, alias, from), sp))(_v)
+                : _v._tag === "TyUnion"
+                  ? (({ members, span: sp }) =>
+                      Ast.TyUnion(
+                        map((m: TypeExpr) => qualifyTe(m, alias, from), members),
+                        sp,
+                      ))(_v)
+                  : _v._tag === "TyQual"
+                    ? (({ alias: inner, name, nameSpan: nsp, args, span: sp }) =>
+                        ((args1: TypeExpr[]) =>
+                          _Map_has(`${inner}.${name}`, from)
+                            ? Ast.TyQual(alias, `${inner}.${name}`, nsp, args1, sp)
+                            : Ast.TyQual(inner, name, nsp, args1, sp))(
+                          map((a: TypeExpr) => qualifyTe(a, alias, from), args),
+                        ))(_v)
+                    : te)(te),
 );
 const qualifyField: <C, D>(
   fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
@@ -7819,35 +5296,28 @@ const qualAliasSeedFrom: <D, E>(
     >,
     acc: Map<string, QualAliasInfo>,
   ) =>
-    match(names)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => acc,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([n, ...rest]) =>
-          qualAliasSeedFrom(
-            rest,
-            alias,
-            from,
-            match(_Map_get(n, from))
-              .with({ _tag: "Some" }, ({ value: info }) =>
-                _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc),
-              )
-              .with({ _tag: "None" }, () => acc)
-              .exhaustive(),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? acc
+        : _v.length >= 1
+          ? (([n, ...rest]) =>
+              qualAliasSeedFrom(
+                rest,
+                alias,
+                from,
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: info }) =>
+                        _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc))(_v)
+                    : _v._tag === "None"
+                      ? acc
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(n, from)),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(names),
 );
 const qualAliasSeed: <D, E, F>(
   stmts: Stmt[],
@@ -7884,38 +5354,36 @@ const qualAliasSeed: <D, E, F>(
     >,
     acc: Map<string, QualAliasInfo>,
   ) =>
-    match(stmts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => acc,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([s, ...rest]) =>
-          qualAliasSeed(
-            rest,
-            quals,
-            match(s)
-              .with({ _tag: "SImportNs" }, ({ alias }) =>
-                match(_Map_get(alias.name, quals))
-                  .with({ _tag: "Some" }, ({ value: dep }) =>
-                    qualAliasSeedFrom(_Map_keys(dep.aliases), alias.name, dep.aliases, acc),
-                  )
-                  .with({ _tag: "None" }, () => acc)
-                  .exhaustive(),
-              )
-              .otherwise(() => acc),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? acc
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              qualAliasSeed(
+                rest,
+                quals,
+                ((_v) =>
+                  _v._tag === "SImportNs"
+                    ? (({ alias }) =>
+                        ((_v) =>
+                          _v._tag === "Some"
+                            ? (({ value: dep }) =>
+                                qualAliasSeedFrom(
+                                  _Map_keys(dep.aliases),
+                                  alias.name,
+                                  dep.aliases,
+                                  acc,
+                                ))(_v)
+                            : _v._tag === "None"
+                              ? acc
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(_Map_get(alias.name, quals)))(_v)
+                    : acc)(s),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(stmts),
 );
 /**
  * Zonk every recorded node type against the FINAL state and restore source
@@ -7948,14 +5416,17 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => {
 const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
   3,
   (shown: string, uses: Ty[], i: number) =>
-    match(_Array_get(i, uses))
-      .with({ _tag: "None" }, () => true)
-      .with({ _tag: "Some" }, ({ value: t }) =>
-        and(isConcrete(t), eq(showType(t), shown))
-          ? allSameConcreteFrom(shown, uses, i + 1)
-          : false,
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? true
+        : _v._tag === "Some"
+          ? (({ value: t }) =>
+              and(isConcrete(t), eq(showType(t), shown))
+                ? allSameConcreteFrom(shown, uses, i + 1)
+                : false)(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, uses)),
 );
 const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
   2,
@@ -7970,41 +5441,37 @@ const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
 const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
   2,
   (keys: string[], st: St) =>
-    match(keys)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => [] as TypeAt[],
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([k, ...rest]) =>
-          ((tail: TypeAt[]) =>
-            ((uses: Ty[]) =>
-              match(_Array_get(0, uses))
-                .with({ _tag: "None" }, () => tail)
-                .with({ _tag: "Some" }, ({ value: first }) =>
-                  allSameConcrete(showType(first), uses)
-                    ? match(_Map_get(k, st.letSpans))
-                        .with({ _tag: "Some" }, ({ value: span }) =>
-                          _Array_prepend({ span: span, ty: first }, tail),
-                        )
-                        .with({ _tag: "None" }, () => tail)
-                        .exhaustive()
-                    : tail,
-                )
-                .exhaustive())(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
-            resolveLetParamsFrom(rest, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? ([] as TypeAt[])
+        : _v.length >= 1
+          ? (([k, ...rest]) =>
+              ((tail: TypeAt[]) =>
+                ((uses: Ty[]) =>
+                  ((_v) =>
+                    _v._tag === "None"
+                      ? tail
+                      : _v._tag === "Some"
+                        ? (({ value: first }) =>
+                            allSameConcrete(showType(first), uses)
+                              ? ((_v) =>
+                                  _v._tag === "Some"
+                                    ? (({ value: span }) =>
+                                        _Array_prepend({ span: span, ty: first }, tail))(_v)
+                                    : _v._tag === "None"
+                                      ? tail
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(_Map_get(k, st.letSpans))
+                              : tail)(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(_Array_get(0, uses)))(
+                  map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses)),
+                ))(resolveLetParamsFrom(rest, st)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(keys),
 );
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
   resolveLetParamsFrom(_Map_keys(st.letSpans), st);
@@ -8108,7 +5575,74 @@ const runInferImports: <A, B, C>(
           const lets: Stmt[] = letsOfFrom(stmts);
           const idxOf: Map<string, number> = idxOfMap(lets);
           const sccs: number[][] = stronglyConnected(adjOf(lets, idxOf));
-          return match(
+          return ((_v) =>
+            _v._tag === "Ok"
+              ? (({ value: [finalCtx, st4] }) =>
+                  ((_v) =>
+                    _v._tag === "Ok"
+                      ? (({ value: st5 }) =>
+                          Ok({
+                            env: finalCtx.env,
+                            types: zonkRecorded(st5.recorded, st5),
+                            aliases: aliasMap,
+                            letParams: resolveLetParams(st5),
+                          }) as Result<
+                            {
+                              env: Map<string, Scheme>;
+                              types: TypeAt[];
+                              aliases: Map<string, QualAliasInfo>;
+                              letParams: TypeAt[];
+                            },
+                            IErr
+                          >)(_v)
+                      : _v._tag === "Err"
+                        ? (({ error: e }) =>
+                            Err(e) as Result<
+                              {
+                                env: Map<string, Scheme>;
+                                types: TypeAt[];
+                                aliases: Map<string, QualAliasInfo>;
+                                letParams: TypeAt[];
+                              },
+                              IErr
+                            >)(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(inferExprStmtsFrom(finalCtx, stmts, st4)))(
+                  _v as Extract<
+                    Result<
+                      [
+                        {
+                          env: Map<string, Scheme>;
+                          open: boolean;
+                          ns: Map<string, Map<string, Scheme>>;
+                          aliasMap: Map<string, QualAliasInfo>;
+                          plugins: HostPlugin[];
+                          loopStack: Ty[][];
+                          letOwner: Map<string, SpanAt>;
+                          localNames: Set<string>;
+                        },
+                        St,
+                      ],
+                      IErr
+                    >,
+                    { _tag: "Ok" }
+                  >,
+                )
+              : _v._tag === "Err"
+                ? (({ error: e }) =>
+                    Err(e) as Result<
+                      {
+                        env: Map<string, Scheme>;
+                        types: TypeAt[];
+                        aliases: Map<string, QualAliasInfo>;
+                        letParams: TypeAt[];
+                      },
+                      IErr
+                    >)(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(
             processGroupsFrom(
               {
                 env: env4,
@@ -8124,81 +5658,7 @@ const runInferImports: <A, B, C>(
               lets,
               st3,
             ),
-          )
-            .with(
-              (
-                _v,
-              ): _v is Extract<
-                Result<
-                  [
-                    {
-                      env: Map<string, Scheme>;
-                      open: boolean;
-                      ns: Map<string, Map<string, Scheme>>;
-                      aliasMap: Map<string, QualAliasInfo>;
-                      plugins: HostPlugin[];
-                      loopStack: Ty[][];
-                      letOwner: Map<string, SpanAt>;
-                      localNames: Set<string>;
-                    },
-                    St,
-                  ],
-                  IErr
-                >,
-                { _tag: "Ok" }
-              > => {
-                const _g: any = _v;
-                return _g._tag === "Ok";
-              },
-              ({ value: [finalCtx, st4] }) =>
-                match(inferExprStmtsFrom(finalCtx, stmts, st4))
-                  .with(
-                    { _tag: "Ok" },
-                    ({ value: st5 }) =>
-                      Ok({
-                        env: finalCtx.env,
-                        types: zonkRecorded(st5.recorded, st5),
-                        aliases: aliasMap,
-                        letParams: resolveLetParams(st5),
-                      }) as Result<
-                        {
-                          env: Map<string, Scheme>;
-                          types: TypeAt[];
-                          aliases: Map<string, QualAliasInfo>;
-                          letParams: TypeAt[];
-                        },
-                        IErr
-                      >,
-                  )
-                  .with(
-                    { _tag: "Err" },
-                    ({ error: e }) =>
-                      Err(e) as Result<
-                        {
-                          env: Map<string, Scheme>;
-                          types: TypeAt[];
-                          aliases: Map<string, QualAliasInfo>;
-                          letParams: TypeAt[];
-                        },
-                        IErr
-                      >,
-                  )
-                  .exhaustive(),
-            )
-            .with(
-              { _tag: "Err" },
-              ({ error: e }) =>
-                Err(e) as Result<
-                  {
-                    env: Map<string, Scheme>;
-                    types: TypeAt[];
-                    aliases: Map<string, QualAliasInfo>;
-                    letParams: TypeAt[];
-                  },
-                  IErr
-                >,
-            )
-            .exhaustive();
+          );
         })(registerExternsFrom(stmts, aliasMap, env2, st2)))(
         registerBuiltinCtorsFrom(builtinDeclsFor(stmts), aliasMap, env1, st1),
       ))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
@@ -8504,10 +5964,14 @@ export const inferProgramWith: _Curry<
 const takeScheme: <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) =>
-    match(_Map_get(name, env))
-      .with({ _tag: "Some" }, ({ value: sc }) => _Map_set(name, sc, acc))
-      .with({ _tag: "None" }, () => acc)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: sc }) => _Map_set(name, sc, acc))(_v)
+        : _v._tag === "None"
+          ? acc
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(name, env)),
 );
 const exportCtorsInto: <A, B, C>(
   ctors: ({ name: A } & C)[],
@@ -8517,12 +5981,14 @@ const exportCtorsInto: <A, B, C>(
 ) => Map<A, B> = _curry(
   4,
   <A, B, C>(ctors: ({ name: A } & C)[], i: number, env: Map<A, B>, acc: Map<A, B>) =>
-    match(_Array_get(i, ctors))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: c }) =>
-        exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: c }) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ctors)),
 );
 const exportedSchemesFrom: <A>(
   stmts: Stmt[],
@@ -8535,43 +6001,41 @@ const exportedSchemesFrom: <A>(
     let i: number = i0;
     let acc = acc0;
     while (true) {
-      const _step = match(_Array_get(i, stmts))
-        .with({ _tag: "None" }, () => _done(acc))
-        .with(
-          (
-            _v,
-          ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-            value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "Some" && _g.value._tag === "SLet" && _g.value.exported === true;
-          },
-          ({ value: { name } }) => _recur(i + 1, takeScheme(name, env, acc)),
-        )
-        .with(
-          (
-            _v,
-          ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-            value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SExtern" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "Some" && _g.value._tag === "SExtern" && _g.value.exported === true;
-          },
-          ({ value: { name } }) => _recur(i + 1, takeScheme(name, env, acc)),
-        )
-        .with(
-          (
-            _v,
-          ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-            value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
-          },
-          ({ value: { ctors } }) => _recur(i + 1, exportCtorsInto(ctors, 0, env, acc)),
-        )
-        .with({ _tag: "Some" }, () => _recur(i + 1, acc))
-        .exhaustive();
+      const _step = ((_v) =>
+        _v._tag === "None"
+          ? _done(acc)
+          : _v._tag === "Some" && _v.value._tag === "SLet" && _v.value.exported === true
+            ? (({ value: { name } }) => _recur(i + 1, takeScheme(name, env, acc)))(
+                _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                  value: Extract<
+                    Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                    { _tag: "SLet" }
+                  >;
+                },
+              )
+            : _v._tag === "Some" && _v.value._tag === "SExtern" && _v.value.exported === true
+              ? (({ value: { name } }) => _recur(i + 1, takeScheme(name, env, acc)))(
+                  _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                    value: Extract<
+                      Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                      { _tag: "SExtern" }
+                    >;
+                  },
+                )
+              : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true
+                ? (({ value: { ctors } }) => _recur(i + 1, exportCtorsInto(ctors, 0, env, acc)))(
+                    _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                      value: Extract<
+                        Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                        { _tag: "SType" }
+                      >;
+                    },
+                  )
+                : _v._tag === "Some"
+                  ? _recur(i + 1, acc)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(_Array_get(i, stmts));
       if (_step._tag === "recur") {
         [i, acc] = _step.args;
         continue;
