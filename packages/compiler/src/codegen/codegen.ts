@@ -14,9 +14,10 @@
 import type { Ctor, Expr, Program, TypeStmt } from "../ast/ast";
 import { ctorTableOf } from "../ast/ctors";
 import type { Span } from "../ast/span";
+import { localBinderNames } from "../infer/local-names";
 import type { CtorFactoryTs, GenCtx } from "./codegen-core";
 import { genStmt } from "./codegen-decl";
-import { collectValueRefs, preludePreamble, usesMatchLib } from "./codegen-deps";
+import { boundNames, collectValueRefs, preludePreamble, usesMatchLib } from "./codegen-deps";
 
 export type { CtorFactoryTs } from "./codegen-core";
 export { collectRuntimeDeps } from "./codegen-deps";
@@ -103,6 +104,7 @@ export const codegen = (
   const ctorKeys = new Map(imported ?? []);
   for (const [name, e] of ctorTableOf(prog).ctor)
     if (!e.builtin || !ctorKeys.has(name)) ctorKeys.set(name, e.keys);
+  const valueRefs = collectValueRefs(prog);
   const ctx: GenCtx = {
     ctorKeys,
     annotateLet: opts.annotate ?? null,
@@ -117,7 +119,8 @@ export const codegen = (
     annotateLetin: opts.annotateLetin ?? null,
     annotateCall: opts.annotateCall ?? null,
     moduleExt: opts.moduleExt ?? ".js",
-    valueRefs: collectValueRefs(prog),
+    valueRefs,
+    userNames: new Set([...boundNames(prog, valueRefs), ...localBinderNames(prog)]),
     docs: opts.docs ?? true,
   };
   const needsMatch = prog.stmts.some(

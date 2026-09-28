@@ -21,6 +21,7 @@
 //   xs)` cursor loops (matches check.mochi/infer.mochi's established idiom).
 
 import * as Ast from "./ast.mochi"
+import { localBinderNames } from "./local-names.mochi"
 
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -108,6 +109,7 @@ type GCtx = {
   preserveJsx: bool,
   moduleExt: string,
   valueRefs: Set<string>,
+  userNames: Set<string>,
   docs: bool
 }
 
@@ -374,17 +376,23 @@ let eqTest = (ctx: GCtx, left, right, op) => switch (left, right) {
       : None
 }
 
+/// A call to a name the module binds itself, not the prelude function.
+let isUserCall = (ctx: GCtx, fn) => switch fn {
+  | Ast.ERef(name, _) => Set.has(name, ctx.userNames)
+  | _ => false
+}
+
 /// The calls whose saturated runtime behavior is exactly JavaScript's infix
 /// behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
 /// `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
 /// belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
 let tsInfix = (ctx: GCtx, fn, args) =>
-  !ctx.preserveInfix
+  !ctx.preserveInfix || isUserCall(ctx, fn)
     ? None
     : switch (fn, args) {
       | (Ast.ERef("eq", _), [left, right]) => ctx->eqTest(left, right, "===")
       | (Ast.ERef("not", _), [operand]) => switch operand {
-          | Ast.ECall(Ast.ERef("eq", _), [left, right], _, _) => switch ctx->eqTest(left, right, "!==") {
+          | Ast.ECall(Ast.ERef("eq", _), [left, right], _, _) when !Set.has("eq", ctx.userNames) => switch ctx->eqTest(left, right, "!==") {
               | Some(test) => Some(test)
               | None => Some("!(${ctx->genExpr(operand)})")
             }
@@ -2226,10 +2234,17 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     preserveJsx: opts.preserveJsx,
     moduleExt: opts.moduleExt,
     valueRefs: Set.fromArray([]),
+    userNames: Set.fromArray([]),
     docs: opts.docs
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
-  let ctx = { ...ctx0, valueRefs } in
+  // Names the module binds at any scope. An operator call on one of them is
+  // the user's function, so `tsInfix` leaves it a call.
+  let userNames = Set.union(
+    boundNames(valueRefs, stmts),
+    localBinderNames(stmts)
+  ) in
+  let ctx = { ...ctx0, valueRefs, userNames } in
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => ctx->usesMatchLib(value)
@@ -2268,6 +2283,7 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     preserveJsx: false,
     moduleExt: ".js",
     valueRefs: Set.fromArray([]),
+    userNames: Set.fromArray([]),
     docs: false
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in

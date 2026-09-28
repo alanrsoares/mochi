@@ -161,6 +161,15 @@ test.each([
   expect(emitted).not.toMatch(/import \{[^}]*\b(eq|not)\b[^}]*\} from "@mochi\/runtime"/);
 });
 
+// An operator whose prelude name the module rebinds calls the user's function.
+test.each([
+  ['let eq = (a, b) => false\nlet f = s => s == "a"', 'eq(s, "a")'],
+  ["let not = b => b\nlet f = b => !b", "not(b)"],
+  ["let f = (add, x) => x + 1", "add(x, 1)"],
+])("shadowed operator %p stays a call", (src, out) => {
+  expect(ts(src)).toContain(out);
+});
+
 test("parser-originated JSX re-folds to TSX while handwritten h remains a call", () => {
   const jsx = ts('let el = <button disabled>{"go"}</button>');
   expect(jsx).toContain("/** @jsx h */");

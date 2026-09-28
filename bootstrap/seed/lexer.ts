@@ -604,7 +604,7 @@ const go: _Curry<
               c === "\n"
                 ? ((n: number) =>
                     ((kept: string[]) => go(src, i + 1, kept, n, false, toks))(
-                      n < 2 ? doc : ([] as string[]),
+                      lt(n, 2) ? doc : ([] as string[]),
                     ))(nlRun + 1)
                 : go(src, i + 1, doc, nlRun, lineTok, toks))(_v)
           : _v._tag === "Some" && _v.value === "/" && _Option_contains("/", _Str_get(i + 1, src))

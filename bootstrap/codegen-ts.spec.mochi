@@ -445,6 +445,13 @@ testEach("typed emit writes exact comparisons as operators", [
   ("let f = b => !b", "!(b)")
 ], ((src, out)) => assertEq(true, tsOf(src) |> Str.contains(out)))
 
+// An operator whose prelude name the module rebinds calls the user's function.
+testEach("typed emit keeps a shadowed operator a call", [
+  ("let eq = (a, b) => false\nlet f = s => s == \"a\"", "eq(s, \"a\")"),
+  ("let not = b => b\nlet f = b => !b", "not(b)"),
+  ("let f = (add, x) => x + 1", "add(x, 1)")
+], ((src, out)) => assertEq(true, tsOf(src) |> Str.contains(out)))
+
 test("typed emit keeps structural eq between two non-literals", () =>
   assertEq(
     true,

@@ -198,7 +198,7 @@ export const collectValueRefs = (prog: Program): Set<string> => {
  * when its factory is emitted: an unused local `| Some(value: a)` drops its
  * `const Some`, and a runtime `_Map_get` still needs the builtin one.
  */
-const boundNames = (prog: Program, valueRefs: ReadonlySet<string>): Set<string> => {
+export const boundNames = (prog: Program, valueRefs: ReadonlySet<string>): Set<string> => {
   const bound = new Set<string>();
   for (const s of prog.stmts) {
     if (s.kind === "let" || s.kind === "extern") bound.add(s.name);

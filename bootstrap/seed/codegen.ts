@@ -80,6 +80,7 @@ export type GCtx = {
   preserveJsx: boolean;
   moduleExt: string;
   valueRefs: Set<string>;
+  userNames: Set<string>;
   docs: boolean;
 };
 
@@ -143,6 +144,7 @@ import {
 import { match } from "@onrails/pattern";
 
 import * as Ast from "./ast";
+import { localBinderNames } from "./local-names";
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors";
 
 /**
@@ -574,6 +576,12 @@ const eqTest: _Curry<[ctx: GCtx, left: Expr, right: Expr, op: string], Option<st
             : (None as Option<string>))(_tuple(left, right)),
 );
 /**
+ * A call to a name the module binds itself, not the prelude function.
+ */
+const isUserCall: _Curry<[ctx: GCtx, fn: Expr], boolean> = _curry(2, (ctx: GCtx, fn: Expr) =>
+  ((_v) => (_v._tag === "ERef" ? (({ name }) => _Set_has(name, ctx.userNames))(_v) : false))(fn),
+);
+/**
  * The calls whose saturated runtime behavior is exactly JavaScript's infix
  * behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
  * `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
@@ -582,7 +590,7 @@ const eqTest: _Curry<[ctx: GCtx, left: Expr, right: Expr, op: string], Option<st
 const tsInfix: _Curry<[ctx: GCtx, fn: Expr, args: Expr[]], Option<string>> = _curry(
   3,
   (ctx: GCtx, fn: Expr, args: Expr[]) =>
-    !ctx.preserveInfix
+    or(!ctx.preserveInfix, isUserCall(ctx, fn))
       ? (None as Option<string>)
       : ((_v) =>
           _v[0]._tag === "ERef" && _v[0].name === "eq" && _v[1].length === 2
@@ -595,7 +603,12 @@ const tsInfix: _Curry<[ctx: GCtx, fn: Expr, args: Expr[]], Option<string>> = _cu
                     _v._tag === "ECall" &&
                     _v.fn._tag === "ERef" &&
                     _v.fn.name === "eq" &&
-                    _v.args.length === 2
+                    _v.args.length === 2 &&
+                    (({ args: [left, right] }) => !_Set_has("eq", ctx.userNames))(
+                      _v as Extract<Expr, { _tag: "ECall" }> & {
+                        fn: Extract<Extract<Expr, { _tag: "ECall" }>["fn"], { _tag: "ERef" }>;
+                      },
+                    )
                       ? (({ args: [left, right] }) =>
                           ((_v) =>
                             _v._tag === "Some"
@@ -2753,7 +2766,7 @@ const ${name} = _curry(${show(arity)}, (${args}) => ${ctor});`)(`new ${raw}(${ar
                               args === ""
                                 ? `($receiver) => $receiver[${jsStringLit(target)}]()`
                                 : `($receiver, ${args}) => $receiver[${jsStringLit(target)}](${args})`,
-                            ))(externArgs(arity - 1)))(typeExprArity(typeExpr)))(
+                            ))(externArgs(sub(arity, 1))))(typeExprArity(typeExpr)))(
                         _Str_slice(11, _Str_length(modName), modName),
                       )
                     : imported === "default"
@@ -2775,7 +2788,7 @@ const ${name} = _curry(${show(arity)}, ${flat});`)(
                                 ))(_Str_concat("$", name)))(typeExprArity(typeExpr)))(_v)
       : "")(s);
 const stripAlExt: (s: string) => string = (s: string) =>
-  _Str_endsWith(".mochi", s) ? _Str_slice(0, _Str_length(s) - 6, s) : s;
+  _Str_endsWith(".mochi", s) ? _Str_slice(0, sub(_Str_length(s), 6), s) : s;
 /**
  * Relative `./` / `../` get `ext` (`.js` for the JS backend, `""` for TS —
  * tsc resolves the extensionless sibling); bare package specs keep their
@@ -3671,10 +3684,15 @@ export const codegenWith: <A>(
       preserveJsx: opts.preserveJsx,
       moduleExt: opts.moduleExt,
       valueRefs: _Set_fromArray([]),
+      userNames: _Set_fromArray([]),
       docs: opts.docs,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
-    const ctx: GCtx = { ...ctx0, valueRefs: valueRefs };
+    const userNames: Set<string> = _Set_union(
+      boundNames(valueRefs, stmts),
+      localBinderNames(stmts),
+    );
+    const ctx: GCtx = { ...ctx0, valueRefs: valueRefs, userNames: userNames };
     const needsMatch: boolean = someOf(
       (s: Stmt) =>
         ((_v) =>
@@ -3732,6 +3750,7 @@ export const runtimeDepNames: <A>(
       preserveJsx: false,
       moduleExt: ".js",
       valueRefs: _Set_fromArray([]),
+      userNames: _Set_fromArray([]),
       docs: false,
     };
     const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));

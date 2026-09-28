@@ -39,6 +39,10 @@ whose JavaScript operator behaves exactly like the runtime function.
     equality reduces to the tag test.
   - A runtime import is dropped once nothing references it, as it already
     was for the numeric names.
+  - No rewrite applies to a name the module binds itself, at any scope (a
+    top-level `let eq`, a parameter named `add`). Such a call is the user's
+    function, and the JS backend calls it. This also covers ADR 0100's numeric
+    re-folds, which had the same gap.
 - `and` / `or` stay calls. `&&` / `||` would skip the right side, which would
   change what runs. That is a language decision, not an optimization.
 - The JavaScript backend still emits no rewrites (ADR 0100). It gets the

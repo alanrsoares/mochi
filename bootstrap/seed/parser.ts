@@ -4199,7 +4199,9 @@ const maxParseErrors: number = 100;
 const resumeAt: _Curry<[toks: LocTok[], pos: number, at: number], number> = _curry(
   3,
   (toks: LocTok[], pos: number, at: number) =>
-    and(pos + 1 < length(toks), tokAt(toks, pos).start < at) ? resumeAt(toks, pos + 1, at) : pos,
+    and(lt(pos + 1, length(toks)), lt(tokAt(toks, pos).start, at))
+      ? resumeAt(toks, pos + 1, at)
+      : pos,
 );
 /**
  * Panic-mode skip: stop at the first sync token whose bracket depth relative to

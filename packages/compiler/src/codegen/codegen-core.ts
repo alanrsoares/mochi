@@ -140,6 +140,9 @@ export type GenCtx = {
   // arm only matches `_tag`, so `genType` can skip that ctor's factory unless
   // the name appears here (`tok == TGt`) or the type stmt is exported.
   readonly valueRefs: ReadonlySet<string>;
+  // Names the module binds at any scope. An operator call on one of them is the
+  // user's function, so `tsInfix` leaves it a call.
+  readonly userNames: ReadonlySet<string>;
 
   // Whether to retain docstrings as JSDoc comments (defaults to true).
   readonly docs: boolean;
@@ -187,7 +190,7 @@ const eqTest = (l: Expr, r: Expr, op: "===" | "!==", ctx: GenCtx): string | null
  * is structural and `mod` is true modulo; `and` / `or` evaluate both sides.
  */
 const tsInfix = (e: CallExpr, ctx: GenCtx): string | null => {
-  if (!ctx.preserveInfix || e.fn.kind !== "ref") return null;
+  if (!ctx.preserveInfix || e.fn.kind !== "ref" || ctx.userNames.has(e.fn.name)) return null;
   const [left, right] = e.args;
   if (e.fn.name === "eq" && e.args.length === 2) return eqTest(left!, right!, "===", ctx);
   if (e.fn.name === "not" && e.args.length === 1) {
@@ -195,6 +198,7 @@ const tsInfix = (e: CallExpr, ctx: GenCtx): string | null => {
       left!.kind === "call" &&
       left!.fn.kind === "ref" &&
       left!.fn.name === "eq" &&
+      !ctx.userNames.has("eq") &&
       left!.args.length === 2
         ? eqTest(left!.args[0]!, left!.args[1]!, "!==", ctx)
         : null;

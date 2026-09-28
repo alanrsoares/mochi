@@ -27,19 +27,21 @@ import {
 import { match } from "@onrails/pattern";
 
 import * as Ast from "./ast";
-const addNames: <A>(names: A[], out: Set<A>) => Set<A> = _curry(2, <A>(names: A[], out: Set<A>) =>
-  match(names)
-    .with(
-      (_v) => _v.length === 0,
-      () => out,
-    )
-    .with(
-      (_v) => _v.length >= 1,
-      ([n, ...rest]) => addNames(rest, _Set_add(n, out)),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+const addBinderNames: <A>(names: A[], out: Set<A>) => Set<A> = _curry(
+  2,
+  <A>(names: A[], out: Set<A>) =>
+    match(names)
+      .with(
+        (_v) => _v.length === 0,
+        () => out,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([n, ...rest]) => addBinderNames(rest, _Set_add(n, out)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const patternNamesOpt: _Curry<[p: Option<Pattern>, out: Set<string>], Set<string>> = _curry(
   2,
@@ -213,30 +215,30 @@ const armNames: _Curry<[arms: MatchArm[], out: Set<string>], Set<string>> = _cur
               throw new Error("non-exhaustive match");
             })())(arms),
 );
-const loopParamNames: _Curry<[params: LoopParam[], out: Set<string>], Set<string>> = _curry(
+const loopBinderNames: _Curry<[params: LoopParam[], out: Set<string>], Set<string>> = _curry(
   2,
   (params: LoopParam[], out: Set<string>) =>
     ((_v) =>
       _v.length === 0
         ? out
         : _v.length >= 1
-          ? (([p, ...rest]) => loopParamNames(rest, exprNames(p.init, _Set_add(p.name, out))))(_v)
+          ? (([p, ...rest]) => loopBinderNames(rest, exprNames(p.init, _Set_add(p.name, out))))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(params),
 );
-const paramNames: _Curry<[p: LamParam, out: Set<string>], Set<string>> = _curry(
+const paramBinderNames: _Curry<[p: LamParam, out: Set<string>], Set<string>> = _curry(
   2,
   (p: LamParam, out: Set<string>) =>
     ((_v) =>
       _v._tag === "LPSpanned"
-        ? (({ param: inner }) => paramNames(inner, out))(_v)
+        ? (({ param: inner }) => paramBinderNames(inner, out))(_v)
         : _v._tag === "LPName"
           ? (({ name }) => _Set_add(name, out))(_v)
           : _v._tag === "LPTuple"
-            ? (({ names }) => addNames(names, out))(_v)
+            ? (({ names }) => addBinderNames(names, out))(_v)
             : _v._tag === "LPRecord"
-              ? (({ fields }) => addNames(fields, out))(_v)
+              ? (({ fields }) => addBinderNames(fields, out))(_v)
               : _v._tag === "LPLabeled"
                 ? (({ name, defaultValue }) => exprNamesOpt(defaultValue, _Set_add(name, out)))(_v)
                 : (() => {
@@ -250,7 +252,7 @@ const paramNamesAll: _Curry<[params: LamParam[], out: Set<string>], Set<string>>
       _v.length === 0
         ? out
         : _v.length >= 1
-          ? (([p, ...rest]) => paramNamesAll(rest, paramNames(p, out)))(_v)
+          ? (([p, ...rest]) => paramNamesAll(rest, paramBinderNames(p, out)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(params),
@@ -280,7 +282,7 @@ const exprNames: _Curry<[e: Expr, out: Set<string>], Set<string>> = _curry(
                             exprNames(body, exprNames(value, _Set_add(name, out))))(_v)
                         : _v._tag === "ELetBind"
                           ? (({ param, value, body }) =>
-                              exprNames(body, paramNames(param, exprNames(value, out))))(_v)
+                              exprNames(body, paramBinderNames(param, exprNames(value, out))))(_v)
                           : _v._tag === "EPipe"
                             ? (({ left, right }) => exprNames(right, exprNames(left, out)))(_v)
                             : _v._tag === "EDo"
@@ -298,7 +300,7 @@ const exprNames: _Curry<[e: Expr, out: Set<string>], Set<string>> = _curry(
                                       ? (({ target }) => exprNames(target, out))(_v)
                                       : _v._tag === "ELoop"
                                         ? (({ params, body }) =>
-                                            exprNames(body, loopParamNames(params, out)))(_v)
+                                            exprNames(body, loopBinderNames(params, out)))(_v)
                                         : _v._tag === "ERecur"
                                           ? (({ args }) => exprNamesAll(args, out))(_v)
                                           : _v._tag === "ETuple"
