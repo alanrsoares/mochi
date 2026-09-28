@@ -488,80 +488,33 @@ const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], st
       0,
     ),
 );
-const u: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  left: Ty,
-  right: Ty,
-  st: St,
-  sp: SpanAt,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const u: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    left: Ty,
+    right: Ty,
+    st: St,
+    sp: SpanAt,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -583,80 +536,33 @@ const u: <A>(
 /**
  * `actual` may be used as `expected` (ADR 0098 optional fields).
  */
-const checkFits: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  actual: Ty,
-  expected: Ty,
-  st: St,
-  sp: SpanAt,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const checkFits: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    actual: Ty,
+    expected: Ty,
+    st: St,
+    sp: SpanAt,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -778,80 +684,33 @@ const bindParamsFrom: _Curry<
       throw new Error("non-exhaustive match");
     }),
 );
-const constrainParamAnnotsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  params: LamParam[],
-  paramTypes: Ty[],
-  vars: Map<string, Ty>,
-  st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  5,
-  <A>(
+const constrainParamAnnotsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    params: LamParam[],
+    paramTypes: Ty[],
+    vars: Map<string, Ty>,
+    st: St,
+  ],
+  Result<[Map<string, Ty>, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -966,38 +825,13 @@ const arrowChain: _Curry<[paramTypes: Ty[], resultT: Ty], Ty> = _curry(
         throw new Error("non-exhaustive match");
       }),
 );
-const ctxWithEnv: <A, B>(
+const ctxWithEnv: <B>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -1008,63 +842,19 @@ const ctxWithEnv: <A, B>(
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
   aliasMap: Map<string, QualAliasInfo>;
-  plugins: {
-    name: string;
-    parse: Option<
-      (
-        a: { tok: A; start: number; end: number; doc: Option<string> }[],
-        b: number,
-        c: (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-        ) => Result<[Expr, number], PErr>,
-      ) => Result<Option<[Expr, number]>, PErr>
-    >;
-    inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
-    >;
-    format: Option<(a: Expr) => Option<Expr>>;
-    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-  }[];
+  plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
   localNames: Set<string>;
 } = _curry(
   2,
-  <A, B>(
+  <B>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1081,38 +871,13 @@ const ctxWithEnv: <A, B>(
     localNames: ctx.localNames,
   }),
 );
-const ctxWithLets: <A, B, C>(
+const ctxWithLets: <B, C>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -1124,63 +889,19 @@ const ctxWithLets: <A, B, C>(
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
   aliasMap: Map<string, QualAliasInfo>;
-  plugins: {
-    name: string;
-    parse: Option<
-      (
-        a: { tok: A; start: number; end: number; doc: Option<string> }[],
-        b: number,
-        c: (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-        ) => Result<[Expr, number], PErr>,
-      ) => Result<Option<[Expr, number]>, PErr>
-    >;
-    inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
-    >;
-    format: Option<(a: Expr) => Option<Expr>>;
-    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-  }[];
+  plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: C;
   localNames: Set<string>;
 } = _curry(
   3,
-  <A, B, C>(
+  <B, C>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1198,38 +919,13 @@ const ctxWithLets: <A, B, C>(
     localNames: ctx.localNames,
   }),
 );
-const ctxWithLoop: <A, B, C>(
+const ctxWithLoop: <B, C>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -1242,63 +938,19 @@ const ctxWithLoop: <A, B, C>(
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
   aliasMap: Map<string, QualAliasInfo>;
-  plugins: {
-    name: string;
-    parse: Option<
-      (
-        a: { tok: A; start: number; end: number; doc: Option<string> }[],
-        b: number,
-        c: (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-        ) => Result<[Expr, number], PErr>,
-      ) => Result<Option<[Expr, number]>, PErr>
-    >;
-    inferCall: Option<
-      (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
-    >;
-    format: Option<(a: Expr) => Option<Expr>>;
-    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-    dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-    bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-  }[];
+  plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: C;
   localNames: Set<string>;
 } = _curry(
   4,
-  <A, B, C>(
+  <B, C>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1317,82 +969,35 @@ const ctxWithLoop: <A, B, C>(
     localNames: ctx.localNames,
   }),
 );
-const inferLoopParamsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  params: LoopParam[],
-  i: number,
-  envAcc: Map<string, Scheme>,
-  frameAcc: Ty[],
-  ownerAcc: Map<string, SpanAt>,
-  st: St,
-) => Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr> = _curry(
-  7,
-  <A>(
+const inferLoopParamsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    params: LoopParam[],
+    i: number,
+    envAcc: Map<string, Scheme>,
+    frameAcc: Ty[],
+    ownerAcc: Map<string, SpanAt>,
+    st: St,
+  ],
+  Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr>
+> = _curry(
+  7,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1431,80 +1036,33 @@ const inferLoopParamsFrom: <A>(
       )
       .exhaustive(),
 );
-const unifyRecurArgsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  args: Expr[],
-  frame: Ty[],
-  i: number,
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const unifyRecurArgsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    args: Expr[],
+    frame: Ty[],
+    i: number,
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1533,79 +1091,32 @@ const unifyRecurArgsFrom: <A>(
       )
       .exhaustive(),
 );
-const inferRecur: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  args: Expr[],
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferRecur: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    args: Expr[],
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -1696,208 +1207,152 @@ const splitLamParams: _Curry<
  * One pass per label, threading `st` but NOT `env`: a default is inferred in
  * the positional-only scope, so one label's default cannot read another's.
  */
-const labFieldsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  labs: LamParam[],
-  env: Map<string, Scheme>,
-  vars: Map<string, Ty>,
-  st: St,
-) => Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr> =
-  _curry(
-    5,
-    <A>(
-      ctx: {
-        env: Map<string, Scheme>;
-        open: boolean;
-        ns: Map<string, Map<string, Scheme>>;
-        aliasMap: Map<string, QualAliasInfo>;
-        plugins: {
-          name: string;
-          parse: Option<
-            (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-              c: (
-                a: { tok: A; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], PErr>,
-            ) => Result<Option<[Expr, number]>, PErr>
-          >;
-          inferCall: Option<
-            (
-              a: Expr,
-              b: Expr[],
-              c: Option<string>,
-              d: St,
-              e: InferApi,
-            ) => Result<Option<[Ty, St]>, IErr>
-          >;
-          format: Option<(a: Expr) => Option<Expr>>;
-          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-        }[];
-        loopStack: Ty[][];
-        letOwner: Map<string, SpanAt>;
-        localNames: Set<string>;
-      },
-      labs: LamParam[],
-      env: Map<string, Scheme>,
-      vars: Map<string, Ty>,
-      st: St,
-    ) =>
-      match(labs)
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
-          () =>
-            Ok(
-              _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
-            ) as Result<
-              [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
-              IErr
-            >,
-        )
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
-          ([lab, ...rest]) =>
-            match(lab)
-              .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
-                labFieldsFrom(ctx, [inner, ...rest], env, vars, st),
-              )
-              .with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) =>
-                (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                  _Result_flatMap(
-                    ([fieldT1, st2]) =>
-                      ((bodyT: Ty) =>
-                        ((omittable: boolean) =>
-                          _Result_flatMap(
-                            ([fields, stN]) =>
-                              Ok(
-                                _tuple(
-                                  _Array_prepend(
-                                    {
-                                      name: name,
-                                      fieldType: fieldT1,
-                                      omittable: omittable,
-                                      bodyType: bodyT,
-                                    },
-                                    fields,
-                                  ),
-                                  stN,
-                                ),
-                              ) as Result<
-                                [
-                                  {
-                                    name: string;
-                                    fieldType: Ty;
-                                    omittable: boolean;
-                                    bodyType: Ty;
-                                  }[],
-                                  St,
-                                ],
-                                IErr
-                              >,
-                            labFieldsFrom(ctx, rest, env, vars1, st2),
-                          ))(
-                          or(
-                            optional,
-                            match(defaultValue)
-                              .with({ _tag: "Some" }, () => true)
-                              .with({ _tag: "None" }, () => false)
-                              .exhaustive(),
-                          ),
-                        ))(
-                        match(defaultValue)
-                          .with({ _tag: "Some" }, () => fieldT1)
-                          .with({ _tag: "None" }, () =>
-                            optional ? tCon("Option", [fieldT1]) : fieldT1,
-                          )
-                          .exhaustive(),
-                      ),
-                    match(defaultValue)
-                      .with(
-                        { _tag: "None" },
-                        () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>,
-                      )
-                      .with({ _tag: "Some" }, ({ value: d }) =>
+const labFieldsFrom: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    labs: LamParam[],
+    env: Map<string, Scheme>,
+    vars: Map<string, Ty>,
+    st: St,
+  ],
+  Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    labs: LamParam[],
+    env: Map<string, Scheme>,
+    vars: Map<string, Ty>,
+    st: St,
+  ) =>
+    match(labs)
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length === 0;
+        },
+        () =>
+          Ok(
+            _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
+          ) as Result<
+            [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
+            IErr
+          >,
+      )
+      .with(
+        (_v) => {
+          const _g: any = _v;
+          return _g.length >= 1;
+        },
+        ([lab, ...rest]) =>
+          match(lab)
+            .with({ _tag: "LPSpanned" }, ({ param: inner }) =>
+              labFieldsFrom(ctx, [inner, ...rest], env, vars, st),
+            )
+            .with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) =>
+              (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                _Result_flatMap(
+                  ([fieldT1, st2]) =>
+                    ((bodyT: Ty) =>
+                      ((omittable: boolean) =>
                         _Result_flatMap(
-                          ([dt, s2]) =>
-                            match(annot)
-                              .with({ _tag: "Some" }, () =>
-                                _Result_flatMap(
-                                  (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
-                                  checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
+                          ([fields, stN]) =>
+                            Ok(
+                              _tuple(
+                                _Array_prepend(
+                                  {
+                                    name: name,
+                                    fieldType: fieldT1,
+                                    omittable: omittable,
+                                    bodyType: bodyT,
+                                  },
+                                  fields,
                                 ),
-                              )
-                              .with({ _tag: "None" }, () =>
-                                ((widened: Ty) =>
-                                  _Result_flatMap(
-                                    (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
-                                    u(ctx, fieldT, widened, s2, exprSpan(d)),
-                                  ))(widenLits(zonk(dt, s2))),
-                              )
-                              .exhaustive(),
-                          inferExpr(ctxWithEnv(ctx, env), d, st1),
+                                stN,
+                              ),
+                            ) as Result<
+                              [
+                                { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[],
+                                St,
+                              ],
+                              IErr
+                            >,
+                          labFieldsFrom(ctx, rest, env, vars1, st2),
+                        ))(
+                        or(
+                          optional,
+                          match(defaultValue)
+                            .with({ _tag: "Some" }, () => true)
+                            .with({ _tag: "None" }, () => false)
+                            .exhaustive(),
                         ),
-                      )
-                      .exhaustive(),
-                  ))(
-                  match(annot)
-                    .with({ _tag: "Some" }, ({ value: te }) =>
-                      typeExprToType(te, vars, st, ctx.aliasMap, _Set_fromArray([] as string[])),
-                    )
-                    .with({ _tag: "None" }, () =>
-                      (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
+                      ))(
+                      match(defaultValue)
+                        .with({ _tag: "Some" }, () => fieldT1)
+                        .with({ _tag: "None" }, () =>
+                          optional ? tCon("Option", [fieldT1]) : fieldT1,
+                        )
+                        .exhaustive(),
+                    ),
+                  match(defaultValue)
+                    .with({ _tag: "None" }, () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>)
+                    .with({ _tag: "Some" }, ({ value: d }) =>
+                      _Result_flatMap(
+                        ([dt, s2]) =>
+                          match(annot)
+                            .with({ _tag: "Some" }, () =>
+                              _Result_flatMap(
+                                (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
+                                checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
+                              ),
+                            )
+                            .with({ _tag: "None" }, () =>
+                              ((widened: Ty) =>
+                                _Result_flatMap(
+                                  (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
+                                  u(ctx, fieldT, widened, s2, exprSpan(d)),
+                                ))(widenLits(zonk(dt, s2))),
+                            )
+                            .exhaustive(),
+                        inferExpr(ctxWithEnv(ctx, env), d, st1),
+                      ),
                     )
                     .exhaustive(),
-                ),
-              )
-              .otherwise(() => labFieldsFrom(ctx, rest, env, vars, st)),
-        )
-        .otherwise(() => {
-          throw new Error("non-exhaustive match");
-        }),
-  );
+                ))(
+                match(annot)
+                  .with({ _tag: "Some" }, ({ value: te }) =>
+                    typeExprToType(te, vars, st, ctx.aliasMap, _Set_fromArray([] as string[])),
+                  )
+                  .with({ _tag: "None" }, () =>
+                    (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
+                  )
+                  .exhaustive(),
+              ),
+            )
+            .otherwise(() => labFieldsFrom(ctx, rest, env, vars, st)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
 const rowOfLabFields: <A>(
   fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[],
 ) => Row = <A>(fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[]) =>
@@ -1932,80 +1387,33 @@ const envWithLabFields: <A, E>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferCallArgs: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fnT: Ty,
-  args: Expr[],
-  st: St,
-  callSpan: SpanAt,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferCallArgs: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fnT: Ty,
+    args: Expr[],
+    st: St,
+    callSpan: SpanAt,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2063,81 +1471,34 @@ const isTupleParam: (p: LamParam) => boolean = (p: LamParam) =>
     .with({ _tag: "LPSpanned" }, ({ param: inner }) => isTupleParam(inner))
     .with({ _tag: "LPTuple" }, () => true)
     .otherwise(() => false);
-const inferTupleLet: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  param: LamParam,
-  body: Expr,
-  lamSpan: SpanAt,
-  value: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  6,
-  <A>(
+const inferTupleLet: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    body: Expr,
+    lamSpan: SpanAt,
+    value: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2166,79 +1527,32 @@ const inferTupleLet: <A>(
       inferExpr(ctx, value, st),
     ),
 );
-const inferApplied: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fn: Expr,
-  args: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferApplied: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fn: Expr,
+    args: Expr[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2281,79 +1595,32 @@ const inferApplied: <A>(
       inferExpr(ctx, fn, st),
     ),
 );
-const inferNormalCall: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fn: Expr,
-  args: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferNormalCall: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fn: Expr,
+    args: Expr[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2382,80 +1649,33 @@ const inferNormalCall: <A>(
       )
       .otherwise(() => inferApplied(ctx, fn, args, st)),
 );
-const inferTernary: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  cond: Expr,
-  thenE: Expr,
-  elseE: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferTernary: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    cond: Expr,
+    thenE: Expr,
+    elseE: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2486,82 +1706,35 @@ const inferTernary: <A>(
       inferExpr(ctx, cond, st),
     ),
 );
-const inferBindBody: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  param: LamParam,
-  paramSpan: SpanAt,
-  body: Expr,
-  payloadT: Ty,
-  mkBody: (a: Ty) => Ty,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  7,
-  <A>(
+const inferBindBody: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    paramSpan: SpanAt,
+    body: Expr,
+    payloadT: Ty,
+    mkBody: (a: Ty) => Ty,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  7,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2590,83 +1763,36 @@ const inferBindBody: <A>(
         u(ctx, paramT, payloadT, st1, paramSpan),
       ))(bindParam(param, ctx.env, st)),
 );
-const inferTwoSlotBind: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  param: LamParam,
-  paramSpan: SpanAt,
-  value: Expr,
-  body: Expr,
-  valT: Ty,
-  ctor: string,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  8,
-  <A>(
+const inferTwoSlotBind: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    param: LamParam,
+    paramSpan: SpanAt,
+    value: Expr,
+    body: Expr,
+    valT: Ty,
+    ctor: string,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  8,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2695,83 +1821,36 @@ const inferTwoSlotBind: <A>(
           u(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
         ))(freshVar(st1)))(freshVar(st)),
 );
-const inferQuestionBind: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  bind: Expr,
-  param: LamParam,
-  paramSpan: SpanAt,
-  value: Expr,
-  body: Expr,
-  valT: Ty,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  8,
-  <A>(
+const inferQuestionBind: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    bind: Expr,
+    param: LamParam,
+    paramSpan: SpanAt,
+    value: Expr,
+    body: Expr,
+    valT: Ty,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  8,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2829,83 +1908,36 @@ const inferQuestionBind: <A>(
           ) as Result<[Ty, St], IErr>,
       ),
 );
-const inferLetBind: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  bind: Expr,
-  param: LamParam,
-  paramSpan: SpanAt,
-  monad: string,
-  value: Expr,
-  body: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  8,
-  <A>(
+const inferLetBind: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    bind: Expr,
+    param: LamParam,
+    paramSpan: SpanAt,
+    monad: string,
+    value: Expr,
+    body: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  8,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -2926,78 +1958,31 @@ const inferLetBind: <A>(
       inferExpr(ctx, value, st),
     ),
 );
-const inferRecordRow: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fields: Field[],
-  st: St,
-) => Result<[Row, St], IErr> = _curry(
-  3,
-  <A>(
+const inferRecordRow: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fields: Field[],
+    st: St,
+  ],
+  Result<[Row, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3059,81 +2044,34 @@ const rowEndsEmpty: (row: Row) => boolean = (row: Row) =>
     .with({ _tag: "RowExtend" }, ({ rest }) => rowEndsEmpty(rest))
     .with({ _tag: "RowVar" }, () => false)
     .exhaustive();
-const inferFieldAccess: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  field: Expr,
-  target: Expr,
-  name: string,
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  6,
-  <A>(
+const inferFieldAccess: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    field: Expr,
+    target: Expr,
+    name: string,
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3174,80 +2112,33 @@ const inferFieldAccess: <A>(
       inferExpr(ctx, target, st),
     ),
 );
-const inferDuckField: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  targetT: Ty,
-  name: string,
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferDuckField: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    targetT: Ty,
+    name: string,
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3264,80 +2155,33 @@ const inferDuckField: <A>(
           u(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
         ))(freshRowVar(st2)))(freshVar(st)),
 );
-const inferNsField: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  tname: string,
-  name: string,
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  5,
-  <A>(
+const inferNsField: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    tname: string,
+    name: string,
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3357,78 +2201,31 @@ const inferNsField: <A>(
       )
       .exhaustive(),
 );
-const inferInterpParts: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  parts: InterpPart[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  3,
-  <A>(
+const inferInterpParts: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    parts: InterpPart[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3470,78 +2267,31 @@ const inferInterpParts: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferTupleElems: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elements: Expr[],
-  st: St,
-) => Result<[Ty[], St], IErr> = _curry(
-  3,
-  <A>(
+const inferTupleElems: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elements: Expr[],
+    st: St,
+  ],
+  Result<[Ty[], St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3582,80 +2332,33 @@ const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
     .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
     .with({ _tag: "SESpread" }, ({ expr: e }) => e)
     .exhaustive();
-const inferSeqSlotsElems: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  con: string,
-  elem: Ty,
-  elements: SeqElem[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const inferSeqSlotsElems: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    con: string,
+    elem: Ty,
+    elements: SeqElem[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3699,79 +2402,32 @@ const inferSeqSlotsElems: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferSeqSlots: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  con: string,
-  elements: SeqElem[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferSeqSlots: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    con: string,
+    elements: SeqElem[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3786,80 +2442,33 @@ const inferSeqSlots: <A>(
         inferSeqSlotsElems(ctx, con, elem, elements, st1),
       ))(freshVar(st)),
 );
-const inferMapEntries: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  k: Ty,
-  v: Ty,
-  entries: MapEntry[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const inferMapEntries: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    k: Ty,
+    v: Ty,
+    entries: MapEntry[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -3904,78 +2513,31 @@ const inferMapEntries: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferMapExpr: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  entries: MapEntry[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferMapExpr: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    entries: MapEntry[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4044,80 +2606,33 @@ const mergeEnvBindings: <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) => Map<A,
   <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
-const inferArms: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  scrutT: Ty,
-  resultT: Ty,
-  arms: MatchArm[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  5,
-  <A>(
+const inferArms: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    scrutT: Ty,
+    resultT: Ty,
+    arms: MatchArm[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4175,79 +2690,32 @@ const inferArms: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferMatch: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  scrutinee: Expr,
-  arms: MatchArm[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  4,
-  <A>(
+const inferMatch: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    scrutinee: Expr,
+    arms: MatchArm[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4271,78 +2739,31 @@ const inferMatch: <A>(
  * every expression node's inferred type lands in `st.recorded`, keyed by span,
  * so the TS backend can annotate lambda params and empty literals (ADR 0090).
  */
-const inferExpr: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  e: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferExpr: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    e: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4355,78 +2776,31 @@ const inferExpr: <A>(
       inferExprRaw(ctx, e, st),
     ),
 );
-const inferExprRaw: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  e: Expr,
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferExprRaw: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    e: Expr,
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4676,78 +3050,31 @@ const inferExprRaw: <A>(
       )
       .exhaustive(),
 );
-const inferDo: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  exprs: Expr[],
-  st: St,
-) => Result<[Ty, St], IErr> = _curry(
-  3,
-  <A>(
+const inferDo: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    exprs: Expr[],
+    st: St,
+  ],
+  Result<[Ty, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4783,80 +3110,33 @@ const inferDo: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatRecordFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fields: PatField[],
-  row: Row,
-  bindings: Map<string, Ty>,
-  st: St,
-) => Result<[Row, Map<string, Ty>, St], IErr> = _curry(
-  5,
-  <A>(
+const inferPatRecordFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fields: PatField[],
+    row: Row,
+    bindings: Map<string, Ty>,
+    st: St,
+  ],
+  Result<[Row, Map<string, Ty>, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4896,78 +3176,31 @@ const inferPatRecordFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatRecord: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  fields: PatField[],
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatRecord: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    fields: PatField[],
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -4982,82 +3215,35 @@ const inferPatRecord: <A>(
         inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st1),
       ))(freshRowVar(st)),
 );
-const inferPatCtorArgs: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  ctor: string,
-  curT: Ty,
-  args: Pattern[],
-  st: St,
-  bindings: Map<string, Ty>,
-  sp: SpanAt,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  7,
-  <A>(
+const inferPatCtorArgs: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    ctor: string,
+    curT: Ty,
+    args: Pattern[],
+    st: St,
+    bindings: Map<string, Ty>,
+    sp: SpanAt,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  7,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5115,78 +3301,31 @@ const inferPatCtorArgs: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatTupleFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elems: Pattern[],
-  st: St,
-) => Result<[Ty[], Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatTupleFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elems: Pattern[],
+    st: St,
+  ],
+  Result<[Ty[], Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5232,78 +3371,31 @@ const inferPatTupleFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferPatTuple: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elems: Pattern[],
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatTuple: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elems: Pattern[],
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5317,79 +3409,32 @@ const inferPatTuple: <A>(
       inferPatTupleFrom(ctx, elems, st),
     ),
 );
-const inferSeqPatElems: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  elem: Ty,
-  elems: Pattern[],
-  st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  4,
-  <A>(
+const inferSeqPatElems: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    elem: Ty,
+    elems: Pattern[],
+    st: St,
+  ],
+  Result<[Map<string, Ty>, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5433,80 +3478,33 @@ const inferSeqPatElems: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferSeqPat: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  con: string,
-  elems: Pattern[],
-  restPat: Option<Pattern>,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  5,
-  <A>(
+const inferSeqPat: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    con: string,
+    elems: Pattern[],
+    restPat: Option<Pattern>,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  5,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5548,78 +3546,31 @@ const inferSeqPat: <A>(
  * Pattern-side analogue of `inferExpr` — records every pattern node's span
  * and type, so a pattern-bound param can be annotated by span.
  */
-const inferPat: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  p: Pattern,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPat: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    p: Pattern,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5636,78 +3587,31 @@ const inferPat: <A>(
       inferPatRaw(ctx, p, st),
     ),
 );
-const inferPatRaw: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  p: Pattern,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferPatRaw: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    p: Pattern,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5809,38 +3713,13 @@ const inferPatRaw: <A>(
       .with({ _tag: "POr" }, ({ alts, span: sp }) => inferOrPat(ctx, alts, sp, st))
       .exhaustive(),
 );
-const unifyOrPatBinding: <A, B>(
+const unifyOrPatBinding: <B>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -5852,38 +3731,13 @@ const unifyOrPatBinding: <A, B>(
   sp: SpanAt,
 ) => Result<St, IErr> = _curry(
   6,
-  <A, B>(
+  <B>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -5904,38 +3758,13 @@ const unifyOrPatBinding: <A, B>(
       )
       .exhaustive(),
 );
-const unifyOrPatBindings: <A, B>(
+const unifyOrPatBindings: <B>(
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
     aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
+    plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
@@ -5947,38 +3776,13 @@ const unifyOrPatBindings: <A, B>(
   sp: SpanAt,
 ) => Result<St, IErr> = _curry(
   6,
-  <A, B>(
+  <B>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -6006,81 +3810,34 @@ const unifyOrPatBindings: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferOrPatAlts: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  alts: Pattern[],
-  i: number,
-  t: Ty,
-  bindings: Map<string, Ty>,
-  st: St,
-) => Result<St, IErr> = _curry(
-  6,
-  <A>(
+const inferOrPatAlts: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    alts: Pattern[],
+    i: number,
+    t: Ty,
+    bindings: Map<string, Ty>,
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -6116,79 +3873,32 @@ const inferOrPatAlts: <A>(
       )
       .exhaustive(),
 );
-const inferOrPat: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  alts: Pattern[],
-  sp: SpanAt,
-  st: St,
-) => Result<[Ty, Map<string, Ty>, St], IErr> = _curry(
-  4,
-  <A>(
+const inferOrPat: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    alts: Pattern[],
+    sp: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, Map<string, Ty>, St], IErr>
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -7144,78 +4854,31 @@ const preBindGroupFrom: _Curry<
       throw new Error("non-exhaustive match");
     }),
 );
-const inferGroupFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  group: Stmt[],
-  st: St,
-) => Result<[Map<string, Ty>, St], IErr> = _curry(
-  3,
-  <A>(
+const inferGroupFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    group: Stmt[],
+    st: St,
+  ],
+  Result<[Map<string, Ty>, St], IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -7403,119 +5066,47 @@ const noteGroupLets: _Curry<
       throw new Error("non-exhaustive match");
     }),
 );
-const processGroupsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  sccs: number[][],
-  lets: Stmt[],
-  st: St,
-) => Result<
+const processGroupsFrom: _Curry<
   [
-    {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-    },
-    St,
-  ],
-  IErr
-> = _curry(
-  4,
-  <A>(
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    sccs: number[][],
+    lets: Stmt[],
+    st: St,
+  ],
+  Result<
+    [
+      {
+        env: Map<string, Scheme>;
+        open: boolean;
+        ns: Map<string, Map<string, Scheme>>;
+        aliasMap: Map<string, QualAliasInfo>;
+        plugins: HostPlugin[];
+        loopStack: Ty[][];
+        letOwner: Map<string, SpanAt>;
+        localNames: Set<string>;
+      },
+      St,
+    ],
+    IErr
+  >
+> = _curry(
+  4,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
@@ -7561,78 +5152,31 @@ const processGroupsFrom: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferExprStmtsFrom: <A>(
-  ctx: {
-    env: Map<string, Scheme>;
-    open: boolean;
-    ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
-    plugins: {
-      name: string;
-      parse: Option<
-        (
-          a: { tok: A; start: number; end: number; doc: Option<string> }[],
-          b: number,
-          c: (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
-        ) => Result<Option<[Expr, number]>, PErr>
-      >;
-      inferCall: Option<
-        (
-          a: Expr,
-          b: Expr[],
-          c: Option<string>,
-          d: St,
-          e: InferApi,
-        ) => Result<Option<[Ty, St]>, IErr>
-      >;
-      format: Option<(a: Expr) => Option<Expr>>;
-      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-      dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-      bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-    }[];
-    loopStack: Ty[][];
-    letOwner: Map<string, SpanAt>;
-    localNames: Set<string>;
-  },
-  stmts: Stmt[],
-  st: St,
-) => Result<St, IErr> = _curry(
-  3,
-  <A>(
+const inferExprStmtsFrom: _Curry<
+  [
     ctx: {
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
       aliasMap: Map<string, QualAliasInfo>;
-      plugins: {
-        name: string;
-        parse: Option<
-          (
-            a: { tok: A; start: number; end: number; doc: Option<string> }[],
-            b: number,
-            c: (
-              a: { tok: A; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], PErr>,
-          ) => Result<Option<[Expr, number]>, PErr>
-        >;
-        inferCall: Option<
-          (
-            a: Expr,
-            b: Expr[],
-            c: Option<string>,
-            d: St,
-            e: InferApi,
-          ) => Result<Option<[Ty, St]>, IErr>
-        >;
-        format: Option<(a: Expr) => Option<Expr>>;
-        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
-        dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
-        bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
-      }[];
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+    },
+    stmts: Stmt[],
+    st: St,
+  ],
+  Result<St, IErr>
+> = _curry(
+  3,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;

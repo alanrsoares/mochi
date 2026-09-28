@@ -238,6 +238,26 @@ let mkTok = (tok, start, stop, doc) => switch doc {
   | lines => { tok, start, end: stop, doc: Some(Str.join("\n", lines)) }
 }
 
+// Tokens collect in a stack of runs whose lengths are distinct powers of two,
+// largest first — a binary counter. Pushing a token merges equal runs, so each
+// token is copied O(log n) times; appending to one flat array copies it O(n)
+// times, which made lexing quadratic (~117M element copies on parser.mochi).
+type LocTok = { tok: Tok, start: number, end: number, doc: Option<string> }
+
+let pushRun = (run: [LocTok], buf: [[LocTok]]) =>
+  let n = Array.length(buf) in
+    switch Array.get(n - 1, buf) {
+      | Some(top) when Array.length(top) <= Array.length(run) => pushRun(
+          Array.concat(top, run),
+          Array.take(n - 1, buf)
+        )
+      | _ => Array.append(run, buf)
+    }
+
+let pushTok = (t: LocTok, buf: [[LocTok]]) => pushRun([t], buf)
+
+let bufToks = (buf: [[LocTok]]) => Array.flatMap(run => run, buf)
+
 let lexError = (message, start, stop) => Err({ message, start, end: stop })
 
 // `Number(raw)` in the TS original can be NaN (e.g. "1.2.3"); div(0, 0) mirrors it.
@@ -259,7 +279,7 @@ let spliceHoleToks = (holeToks, by, toks) => switch Array.head(holeToks) {
   | None => toks
   | Some(ht) => let toks2 = ht.tok == TEof
       ? toks
-      : Array.append(offsetLocTok(ht, by), toks) in
+      : pushTok(offsetLocTok(ht, by), toks) in
       spliceHoleToks(Array.tail(holeToks), by, toks2)
 }
 
@@ -294,7 +314,7 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
             wholeStart,
             wholeEnd,
             [],
-            Array.append(t, toks)
+            pushTok(t, toks)
           )
       | PHole(hs, he) => switch spliceHole(src, hs, he, toks) {
           | Err(e) => Err(e)
@@ -315,7 +335,7 @@ let lexParts = (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => swit
 // Emit one token: doc attaches and clears, the line now has a token, the
 // newline run resets. Mutually recursive with `go`.
 let emit = (src, tok, start, stop, doc, toks) =>
-  go(src, stop, [], 0, true, Array.append(mkTok(tok, start, stop, doc), toks))
+  go(src, stop, [], 0, true, pushTok(mkTok(tok, start, stop, doc), toks))
 
 // Top-level entry for a "..." literal starting at its opening quote `i`.
 // Mutually recursive with `go` (continues the outer scan past the literal).
@@ -332,7 +352,7 @@ let lexString = (src, i, doc, toks) => switch scanTemplate(src, i) {
 // (>= 2 = a blank line, which breaks doc attachment), `lineTok` says whether
 // the current line already has a token (makes a comment "trailing").
 let go = (src, i, doc, nlRun, lineTok, toks) => switch Str.get(i, src) {
-  | None => Ok(Array.append(mkTok(TEof, i, i, doc), toks))
+  | None => Ok(bufToks(pushTok(mkTok(TEof, i, i, doc), toks)))
   | Some(c) when isSpace(c) => c == "\n"
       ? let n = nlRun + 1 in
       let kept = n < 2 ? doc : [] in go(src, i + 1, kept, n, false, toks)

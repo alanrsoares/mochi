@@ -1,3 +1,4 @@
+import type { LocTok, QualAliasInfo, TsApi } from "./infer";
 import type {
   AliasField,
   Ctor,
@@ -15,7 +16,6 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
-import type { LocTok, QualAliasInfo, TsApi } from "./infer";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
 

@@ -12,7 +12,7 @@ export type Doc =
   | { _tag: "DLine"; hard: boolean; soft: boolean }
   | { _tag: "DCat"; parts: Doc[] }
   | { _tag: "DIndent"; doc: Doc }
-  | { _tag: "DGroup"; doc: Doc }
+  | { _tag: "DGroup"; doc: Doc; breaks: boolean }
   | { _tag: "DLineSuffix"; doc: Doc }
   | { _tag: "DBreakParent" };
 export type Item = { i: number; m: string; d: Doc };
@@ -49,7 +49,10 @@ export const DLine = _curry(2, (hard, soft) => ({ _tag: "DLine", hard, soft })) 
 ) => Doc;
 export const DCat = (parts: Doc[]): Doc => ({ _tag: "DCat", parts });
 export const DIndent = (doc: Doc): Doc => ({ _tag: "DIndent", doc });
-export const DGroup = (doc: Doc): Doc => ({ _tag: "DGroup", doc });
+export const DGroup = _curry(2, (doc, breaks) => ({ _tag: "DGroup", doc, breaks })) as (
+  doc: Doc,
+  breaks: boolean,
+) => Doc;
 export const DLineSuffix = (doc: Doc): Doc => ({ _tag: "DLineSuffix", doc });
 export const DBreakParent: Doc = { _tag: "DBreakParent" };
 const INDENT: number = 2;
@@ -61,7 +64,7 @@ export const softline = DLine(false, true);
 export const hardline = DLine(true, false);
 export const breakParent = DBreakParent as Doc;
 export const indent: (doc: Doc) => Doc = (doc: Doc) => DIndent(doc);
-export const group: (doc: Doc) => Doc = (doc: Doc) => DGroup(doc);
+export const group: (doc: Doc) => Doc = (doc: Doc) => DGroup(doc, forcesBreak(doc));
 export const lineSuffix: (doc: Doc) => Doc = (doc: Doc) => DLineSuffix(doc);
 const joinFrom: <A>(sep: A, parts: A[], i: number, acc: A[]) => A[] = _curry(
   4,
@@ -175,6 +178,7 @@ const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(
  * Does this document contain a hardline anywhere in its subtree? If so every
  * enclosing group must break — a group can never print flat across a forced
  * newline. Comments introduce hardlines, so a commented node breaks its parents.
+ * A nested group already knows its own answer, so the walk stops there.
  */
 const forcesBreak: (d: Doc) => boolean = (d: Doc) =>
   match(d)
@@ -183,7 +187,7 @@ const forcesBreak: (d: Doc) => boolean = (d: Doc) =>
     .with({ _tag: "DLine" }, ({ hard }) => hard)
     .with({ _tag: "DCat" }, ({ parts }) => anyForcesBreak(parts, 0))
     .with({ _tag: "DIndent" }, ({ doc: inner }) => forcesBreak(inner))
-    .with({ _tag: "DGroup" }, ({ doc: inner }) => forcesBreak(inner))
+    .with({ _tag: "DGroup" }, ({ breaks }) => breaks)
     .with({ _tag: "DLineSuffix" }, () => false)
     .with({ _tag: "DText" }, () => false)
     .exhaustive();
@@ -286,8 +290,8 @@ ${spaces(i)}`,
                         [] as Item[],
                       ),
               )
-              .with({ _tag: "DGroup" }, ({ doc: inner }) =>
-                forcesBreak(inner)
+              .with({ _tag: "DGroup" }, ({ doc: inner, breaks }) =>
+                breaks
                   ? _recur(out, pos, WCons({ i: i, m: "break", d: inner }, tail), sfx)
                   : ((cand: Work) =>
                       fits(width - pos, cand)

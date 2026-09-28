@@ -46,6 +46,14 @@ export type Ctx = {
   commentStarts: number[];
   src: string;
 };
+export type Anchor = { kind: string; sp: SpanAt };
+/**
+ * The anchors twice over: by start (`sortAnchors`) for leading comments, and
+ * stably by end for trailing ones. Both lookups bisect. The linear scans they
+ * replace also sliced the source once per anchor, and were most of the
+ * printer's time on a large file.
+ */
+export type AnchorIndex = { byStart: Anchor[]; byEnd: Anchor[] };
 export type Attached = { table: Ctx; tail: Comment[] };
 export type StmtDoc = { doc: Doc; consumed: number };
 
@@ -76,7 +84,6 @@ import {
   _Set_union,
   _Str_chars,
   _Str_codeAt,
-  _Str_contains,
   _Str_fromCode,
   _Str_get,
   _Str_join,
@@ -93,8 +100,10 @@ import {
   and,
   compare,
   concat,
+  div,
   eq,
   filter,
+  floor,
   gt,
   gte,
   length,
@@ -474,7 +483,7 @@ const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
     .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
     .with({ _tag: "SESpread" }, ({ expr: e }) => e)
     .exhaustive();
-const exprAnchors: (e: Expr) => { kind: string; sp: SpanAt }[] = (e: Expr) =>
+const exprAnchors: (e: Expr) => Anchor[] = (e: Expr) =>
   _Array_append(
     { kind: EXPR, sp: exprSpan(e) },
     match(e)
@@ -501,7 +510,7 @@ const exprAnchors: (e: Expr) => { kind: string; sp: SpanAt }[] = (e: Expr) =>
                   },
                   ({ defaultValue: { value: d } }) => exprAnchors(d),
                 )
-                .otherwise(() => [] as { kind: string; sp: SpanAt }[]),
+                .otherwise(() => [] as Anchor[]),
             params,
           ),
         ),
@@ -527,7 +536,7 @@ const exprAnchors: (e: Expr) => { kind: string; sp: SpanAt }[] = (e: Expr) =>
               _Array_concat(
                 match(a.guard)
                   .with({ _tag: "Some" }, ({ value: g }) => exprAnchors(g))
-                  .with({ _tag: "None" }, () => [] as { kind: string; sp: SpanAt }[])
+                  .with({ _tag: "None" }, () => [] as Anchor[])
                   .exhaustive(),
                 exprAnchors(a.body),
               ),
@@ -539,7 +548,7 @@ const exprAnchors: (e: Expr) => { kind: string; sp: SpanAt }[] = (e: Expr) =>
         _Array_concat(
           match(spread)
             .with({ _tag: "Some" }, ({ value: sp }) => exprAnchors(sp))
-            .with({ _tag: "None" }, () => [] as { kind: string; sp: SpanAt }[])
+            .with({ _tag: "None" }, () => [] as Anchor[])
             .exhaustive(),
           _Array_flatMap((f: Field) => exprAnchors(f.value), fields),
         ),
@@ -572,13 +581,13 @@ const exprAnchors: (e: Expr) => { kind: string; sp: SpanAt }[] = (e: Expr) =>
         _Array_flatMap(
           (prt: InterpPart) =>
             match(prt)
-              .with({ _tag: "IPLit" }, () => [] as { kind: string; sp: SpanAt }[])
+              .with({ _tag: "IPLit" }, () => [] as Anchor[])
               .with({ _tag: "IPExpr" }, ({ expr: ex }) => exprAnchors(ex))
               .exhaustive(),
           parts,
         ),
       )
-      .otherwise(() => [] as { kind: string; sp: SpanAt }[]),
+      .otherwise(() => [] as Anchor[]),
   );
 /**
  * Sorted so the tightest enclosing anchor wins: by start ascending, then by
@@ -597,148 +606,124 @@ const anchorKey: <A, B>(a: { sp: { start: number; end: number } & A } & B) => nu
  * therefore the same key — keep collection order, statement first. That order
  * is what decides which of the two a leading comment attaches to.
  */
-const sortAnchors: (a: { sp: SpanAt; kind: string }[]) => { sp: SpanAt; kind: string }[] =
-  _Array_sortBy(anchorKey);
+const sortAnchors: (a: Anchor[]) => Anchor[] = _Array_sortBy(anchorKey);
+
+const anchorIndex: (sorted: Anchor[]) => AnchorIndex = (sorted: Anchor[]) => ({
+  byStart: sorted,
+  byEnd: _Array_sortBy((a: Anchor) => a.sp.end, sorted),
+});
+/**
+ * The first index in `[lo, hi)` whose anchor has `key(a) >= target`, for a
+ * `key` that `anchors` is sorted by; `hi` when there is none.
+ */
+const lowerBound: _Curry<
+  [anchors: Anchor[], key: (a: Anchor) => number, target: number, lo: number, hi: number],
+  number
+> = _curry(
+  5,
+  (anchors: Anchor[], key: (a: Anchor) => number, target: number, lo: number, hi: number) =>
+    lo >= hi
+      ? lo
+      : ((mid: number) =>
+          match(_Array_get(mid, anchors))
+            .with(
+              (_v): _v is Extract<Option<Anchor>, { _tag: "Some" }> => {
+                const _g: any = _v;
+                return _g._tag === "Some" && (({ value: a }) => key(a) < target)(_g);
+              },
+              ({ value: a }) => lowerBound(anchors, key, target, mid + 1, hi),
+            )
+            .otherwise(() => lowerBound(anchors, key, target, lo, mid)))(floor((lo + hi) / 2)),
+);
+const startOf: (a: Anchor) => number = (a: Anchor) => a.sp.start;
+const endOf: (a: Anchor) => number = (a: Anchor) => a.sp.end;
+/**
+ * Where the line holding offset `i` starts.
+ */
+const lineStartOf: _Curry<[src: string, i: number], number> = _curry(2, (src: string, i: number) =>
+  i <= 0 ? 0 : _Option_contains("\n", _Str_get(i - 1, src)) ? i : lineStartOf(src, i - 1),
+);
 /**
  * The node a trailing comment most tightly follows ON ITS OWN LINE: the
  * largest `end` at or before the comment's start, with no newline between.
- * Index-based, not `[head, ...rest]`: a rest pattern copies the tail, which
- * turns one linear scan into a quadratic one.
+ * Among anchors sharing that end, the first in `byStart` order wins; the
+ * stable sort keeps that order within `byEnd`.
  */
-const trailedByFrom: <A, B>(
-  anchors: ({ sp: { end: number } & A } & B)[],
-  i: number,
-  c: Comment,
-  src: string,
-  best: Option<{ sp: { end: number } & A } & B>,
-) => Option<{ sp: { end: number } & A } & B> = _curry(
-  5,
-  <A, B>(
-    anchors: ({ sp: { end: number } & A } & B)[],
-    i: number,
-    c: Comment,
-    src: string,
-    best: Option<{ sp: { end: number } & A } & B>,
-  ) =>
-    match(_Array_get(i, anchors))
-      .with({ _tag: "None" }, () => best)
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        ((fits: boolean) =>
-          ((better: boolean) => trailedByFrom(anchors, i + 1, c, src, better ? Some(a) : best))(
-            and(
-              fits,
-              match(best)
-                .with({ _tag: "None" }, () => true)
-                .with({ _tag: "Some" }, ({ value: b }) => a.sp.end > b.sp.end)
-                .exhaustive(),
-            ),
-          ))(
-          and(a.sp.end <= c.start, not(_Str_contains("\n", _Str_slice(a.sp.end, c.start, src)))),
-        ),
-      )
-      .exhaustive(),
-);
-const trailedBy: <A, B>(
-  anchors: ({ sp: { end: number } & A } & B)[],
-  c: Comment,
-  src: string,
-) => Option<{ sp: { end: number } & A } & B> = _curry(
+const trailedBy: _Curry<[idx: AnchorIndex, c: Comment, src: string], Option<Anchor>> = _curry(
   3,
-  <A, B>(anchors: ({ sp: { end: number } & A } & B)[], c: Comment, src: string) =>
-    trailedByFrom(anchors, 0, c, src, None),
+  (idx: AnchorIndex, c: Comment, src: string) => {
+    const n: number = length(idx.byEnd);
+    const past: number = lowerBound(idx.byEnd, endOf, c.start + 1, 0, n);
+    return match(_Array_get(past - 1, idx.byEnd))
+      .with(
+        (_v): _v is Extract<Option<Anchor>, { _tag: "Some" }> => {
+          const _g: any = _v;
+          return (
+            _g._tag === "Some" &&
+            (({ value: last }) => last.sp.end >= lineStartOf(src, c.start))(_g)
+          );
+        },
+        ({ value: last }) => _Array_get(lowerBound(idx.byEnd, endOf, last.sp.end, 0, n), idx.byEnd),
+      )
+      .otherwise(() => None as Option<Anchor>);
+  },
 );
 /**
  * The node an own-line comment most tightly precedes: the first anchor
  * starting at or after the comment ends (the sort puts outermost first).
  */
-const leadTargetFrom: <A, B>(
-  anchors: ({ sp: { start: number } & A } & B)[],
-  i: number,
-  c: Comment,
-) => Option<{ sp: { start: number } & A } & B> = _curry(
-  3,
-  <A, B>(anchors: ({ sp: { start: number } & A } & B)[], i: number, c: Comment) =>
-    match(_Array_get(i, anchors))
-      .with({ _tag: "None" }, () => None)
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        a.sp.start >= c.end ? Some(a) : leadTargetFrom(anchors, i + 1, c),
-      )
-      .exhaustive(),
-);
-const leadTarget: <A, B>(
-  anchors: ({ sp: { start: number } & A } & B)[],
-  c: Comment,
-) => Option<{ sp: { start: number } & A } & B> = _curry(
+const leadTarget: _Curry<[idx: AnchorIndex, c: Comment], Option<Anchor>> = _curry(
   2,
-  <A, B>(anchors: ({ sp: { start: number } & A } & B)[], c: Comment) =>
-    leadTargetFrom(anchors, 0, c),
+  (idx: AnchorIndex, c: Comment) =>
+    _Array_get(lowerBound(idx.byStart, startOf, c.end, 0, length(idx.byStart)), idx.byStart),
 );
 
 /**
  * `None` when the comment has no anchor at all (it sits past the last node) —
  * the program printer emits those after the final statement.
  */
-const attachOne: <A>(
-  anchors: ({ sp: SpanAt; kind: string } & A)[],
-  src: string,
-  c: Comment,
-  tbl: Ctx,
-) => Option<Ctx> = _curry(
-  4,
-  <A>(anchors: ({ sp: SpanAt; kind: string } & A)[], src: string, c: Comment, tbl: Ctx) => {
-    const trailed = c.trailing ? trailedBy(anchors, c, src) : None;
-    return match(trailed)
-      .with(
-        { _tag: "Some" },
-        ({ value: a }) =>
-          Some({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) }) as Option<Ctx>,
-      )
-      .with({ _tag: "None" }, () =>
-        match(leadTarget(anchors, c))
-          .with({ _tag: "None" }, () => None as Option<Ctx>)
-          .with(
-            { _tag: "Some" },
-            ({ value: a }) =>
-              Some({
-                ...tbl,
-                leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading),
-              }) as Option<Ctx>,
-          )
+const attachOne: _Curry<
+  [idx: AnchorIndex, src: string, c: Comment, tbl: Ctx],
+  Option<Ctx>
+> = _curry(4, (idx: AnchorIndex, src: string, c: Comment, tbl: Ctx) => {
+  const trailed: Option<Anchor> = c.trailing ? trailedBy(idx, c, src) : (None as Option<Anchor>);
+  return match(trailed)
+    .with(
+      { _tag: "Some" },
+      ({ value: a }) =>
+        Some({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) }) as Option<Ctx>,
+    )
+    .with({ _tag: "None" }, () =>
+      match(leadTarget(idx, c))
+        .with({ _tag: "None" }, () => None as Option<Ctx>)
+        .with(
+          { _tag: "Some" },
+          ({ value: a }) =>
+            Some({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) }) as Option<Ctx>,
+        )
+        .exhaustive(),
+    )
+    .exhaustive();
+});
+const attachFrom: _Curry<
+  [comments: Comment[], i: number, idx: AnchorIndex, src: string, acc: Attached],
+  Attached
+> = _curry(5, (comments: Comment[], i: number, idx: AnchorIndex, src: string, acc: Attached) =>
+  match(_Array_get(i, comments))
+    .with({ _tag: "None" }, () => acc)
+    .with({ _tag: "Some" }, ({ value: c }) =>
+      attachFrom(
+        comments,
+        i + 1,
+        idx,
+        src,
+        match(attachOne(idx, src, c, acc.table))
+          .with({ _tag: "Some" }, ({ value: table }) => ({ table: table, tail: acc.tail }))
+          .with({ _tag: "None" }, () => ({ table: acc.table, tail: _Array_append(c, acc.tail) }))
           .exhaustive(),
-      )
-      .exhaustive();
-  },
-);
-const attachFrom: <A>(
-  comments: Comment[],
-  i: number,
-  anchors: ({ sp: SpanAt; kind: string } & A)[],
-  src: string,
-  acc: Attached,
-) => Attached = _curry(
-  5,
-  <A>(
-    comments: Comment[],
-    i: number,
-    anchors: ({ sp: SpanAt; kind: string } & A)[],
-    src: string,
-    acc: Attached,
-  ) =>
-    match(_Array_get(i, comments))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: c }) =>
-        attachFrom(
-          comments,
-          i + 1,
-          anchors,
-          src,
-          match(attachOne(anchors, src, c, acc.table))
-            .with({ _tag: "Some" }, ({ value: table }) => ({ table: table, tail: acc.tail }))
-            .with({ _tag: "None" }, () => ({ table: acc.table, tail: _Array_append(c, acc.tail) }))
-            .exhaustive(),
-        ),
-      )
-      .exhaustive(),
+      ),
+    )
+    .exhaustive(),
 );
 /**
  * Build the table for one expression: scan the source, anchor every node.
@@ -746,7 +731,7 @@ const attachFrom: <A>(
 export const commentsForExpr: _Curry<[src: string, e: Expr], Ctx> = _curry(
   2,
   (src: string, e: Expr) =>
-    attachFrom(collectComments(src), 0, sortAnchors(exprAnchors(e)), src, {
+    attachFrom(collectComments(src), 0, anchorIndex(sortAnchors(exprAnchors(e))), src, {
       table: noComments,
       tail: [] as Comment[],
     }).table,
@@ -2997,14 +2982,14 @@ const programDoc: _Curry<[cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]]
  * Every anchor in a program: each statement span plus every expression under
  * it, so a comment binds to the tightest node that follows (or precedes) it.
  */
-const stmtAnchors: (s: Stmt) => { kind: string; sp: SpanAt }[] = (s: Stmt) =>
+const stmtAnchors: (s: Stmt) => Anchor[] = (s: Stmt) =>
   _Array_append(
     { kind: STMT, sp: stmtSpan(s) },
     match(s)
       .with({ _tag: "SLet" }, ({ value }) => exprAnchors(value))
       .with({ _tag: "SExpr" }, ({ value }) => exprAnchors(value))
       .with({ _tag: "SType" }, ({ ctors }) => map((c: Ctor) => ({ kind: CTOR, sp: c.span }), ctors))
-      .otherwise(() => [] as { kind: string; sp: SpanAt }[]),
+      .otherwise(() => [] as Anchor[]),
   );
 /**
  * A comment inside an unparsable region is part of the bytes `SError` re-emits
@@ -3076,7 +3061,7 @@ export const formatProgramWith: _Curry<[stmts: Stmt[], src: string, hooks: Forma
     const attached: Attached = attachFrom(
       comments,
       0,
-      sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
+      anchorIndex(sortAnchors(_Array_flatMap(stmtAnchors, stmts))),
       src,
       { table: base, tail: [] as Comment[] },
     );

@@ -1,6 +1,6 @@
+import type { HostPlugin, LocTok, Plugin } from "./infer";
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
-import type { HostPlugin, LocTok, Plugin } from "./infer";
 import type { Scheme } from "./schemes";
 import type { StageErr, Stamped } from "./compile";
 import type { Occurrence } from "./symbols";
