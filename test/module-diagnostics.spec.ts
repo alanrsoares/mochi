@@ -137,7 +137,7 @@ test("strict diagnostics flag unbound typos (open-world emit would swallow them)
     .replace("let canvasRef = useRef", "let canvasRefasdasd = useRef")
     .replace("let particles = useRef", "let particles = useRefssss");
   const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
-    plugins: snakeVendorPlugins,
+    bootstrapPlugins: snakeVendorPlugins,
   });
   expect(diags.some((d) => d.message.includes("unbound variable"))).toBe(true);
   expect(
@@ -158,9 +158,14 @@ test("the snake container compiles clean across the whole re-reduced surface", a
   const entry = resolve(import.meta.dir, "../examples/snake/src/App.mochi");
   const src = await readFile(entry, "utf8");
   const diags = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    plugins: snakeVendorPlugins,
+    bootstrapPlugins: snakeVendorPlugins,
   });
   expect(diags.map((d) => d.message)).toEqual([]);
+  // The plugins are what make it clean: the bare core cannot type the host kits.
+  const bare = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
+    bootstrapPlugins: [],
+  });
+  expect(bare).not.toEqual([]);
 });
 
 /**
@@ -178,7 +183,7 @@ test("dropping a Key arm in the snake dispatch is a non-exhaustive error", async
   const broken = good.replace(/\n\s*\| MoveLeft => store\.actions\.left\(\)/, "");
   expect(broken).not.toBe(good); // the arm we key on still exists
   const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
-    plugins: snakeVendorPlugins,
+    bootstrapPlugins: snakeVendorPlugins,
   });
   const msgs = diags.map((d) => d.message).join("\n");
   expect(msgs).toContain("non-exhaustive");

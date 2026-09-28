@@ -13,10 +13,11 @@
 // so `tw.*` factories emit `$tone` unions — not part of language core.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { emitDtsForFile } from "@mochi/compiler/module";
-import { isErr, unwrapOk } from "@onrails/result";
+import {
+  defaultBootstrapOptions,
+  emitDtsForFileBootstrapWith,
+} from "@mochi/compiler/bootstrap/module";
 import { repoPath, vendorPluginsFor } from "./lib";
 
 const args = process.argv.slice(2);
@@ -61,14 +62,15 @@ for (const file of files) {
   const plugins = vendorPluginsFor(targetRoot);
   // Graph-aware: a module importing a sibling needs that sibling's schemes, which
   // single-file `emitDts` reports as unbound.
-  const r = await emitDtsForFile(file, readFileSync(file, "utf8"), (p) => readFile(p, "utf8"), {
-    plugins: plugins ? [...plugins] : [],
+  const r = emitDtsForFileBootstrapWith(file, "@mochi/runtime", {
+    ...defaultBootstrapOptions,
+    plugins: plugins ?? [],
   });
-  if (isErr(r)) {
-    for (const d of r.error) console.error(`dts error in ${file}: ${d.kind}: ${d.message}`);
+  if (r._tag === "Err") {
+    console.error(`dts error in ${file}: ${r.error.kind ?? "type"}: ${r.error.message}`);
     process.exit(1);
   }
-  const out = `${header}${withVNodeAlias(withDefaultExport(unwrapOk(r)))}`;
+  const out = `${header}${withVNodeAlias(withDefaultExport(r.value))}`;
   const path = sidecarPath(file);
   const current = Bun.file(path).size ? readFileSync(path, "utf8") : null;
   if (current === out) continue;

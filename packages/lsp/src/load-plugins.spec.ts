@@ -38,7 +38,7 @@ test("loadPluginsFile reads default export from .ts", async () => {
     const file = join(root, "mochi.plugins.ts");
     writeFileSync(file, 'export default [{ name: "test" }];\n');
     clearPluginsCache();
-    const plugins = await loadPluginsFile(file);
+    const { plugins } = await loadPluginsFile(file);
     expect(plugins).toHaveLength(1);
     expect(plugins[0]?.name).toBe("test");
   } finally {
@@ -52,7 +52,7 @@ test("loadPluginsFile reads default export", async () => {
     const file = join(root, "mochi.plugins.mjs");
     writeFileSync(file, 'export default [{ name: "test" }];\n');
     clearPluginsCache();
-    const plugins = await loadPluginsFile(file);
+    const { plugins } = await loadPluginsFile(file);
     expect(plugins).toHaveLength(1);
     expect(plugins[0]?.name).toBe("test");
   } finally {
@@ -139,7 +139,8 @@ test("pluginsForDocument reports a claim clash via onError (ADR 0050)", async ()
     writeFileSync(
       file,
       [
-        "export default [",
+        "export default [];",
+        "export const dxPlugins = [",
         '  { name: "a", inferCall: { refs: ["useThing"], hook: () => null } },',
         '  { name: "b", inferCall: { refs: ["useThing"], hook: () => null } },',
         "];",
@@ -154,6 +155,43 @@ test("pluginsForDocument reports a claim clash via onError (ADR 0050)", async ()
     expect(plugins).toBeUndefined();
     expect(errors).toHaveLength(1);
     expect(String((errors[0]?.error as Error)?.message)).toContain("clash");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("loadPluginsFile reads a named dxPlugins list beside the bootstrap one", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
+  try {
+    const file = join(root, "mochi.plugins.mjs");
+    writeFileSync(
+      file,
+      'export default [{ name: "boot" }];\nexport const dxPlugins = [{ name: "dx" }];\n',
+    );
+    clearPluginsCache();
+    const project = await loadPluginsFile(file);
+    expect(project.plugins.map((p) => p.name)).toEqual(["boot"]);
+    expect(project.dxPlugins?.map((p) => p.name)).toEqual(["dx"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("pluginsForDocument rejects a TypeScript-core plugin in the bootstrap list", async () => {
+  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
+  try {
+    const file = join(root, "mochi.plugins.mjs");
+    writeFileSync(
+      file,
+      'export default [{ name: "old", inferCall: { refs: ["x"], hook: () => null } }];\n',
+    );
+    clearPluginsCache();
+    const errors: Array<{ file: string; error: unknown }> = [];
+    const plugins = await pluginsForDocument(join(root, "app.mochi"), {
+      onError: (errFile, error) => errors.push({ file: errFile, error }),
+    });
+    expect(plugins).toBeUndefined();
+    expect(String((errors[0]?.error as Error)?.message)).toContain("dxPlugins");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -208,13 +246,13 @@ test("pluginsForDocument picks up an edited manifest after clearPluginsCache (ES
 
     writeFileSync(file, 'export default [{ name: "first" }];\n');
     clearPluginsCache();
-    const before = await pluginsForDocument(nested);
+    const before = (await pluginsForDocument(nested))?.plugins;
     expect(before).toHaveLength(1);
     expect(before?.[0]?.name).toBe("first");
 
     writeFileSync(file, 'export default [{ name: "second" }, { name: "third" }];\n');
     clearPluginsCache();
-    const after = await pluginsForDocument(nested);
+    const after = (await pluginsForDocument(nested))?.plugins;
     expect(after).toHaveLength(2);
     expect(after?.map((p) => p.name)).toEqual(["second", "third"]);
   } finally {
@@ -238,7 +276,7 @@ test("pluginsForDocument recovers once a broken manifest is fixed and the cache 
 
     writeFileSync(file, 'export default [{ name: "fixed" }];\n');
     clearPluginsCache();
-    const fixed = await pluginsForDocument(nested, { onError });
+    const fixed = (await pluginsForDocument(nested, { onError }))?.plugins;
     expect(fixed).toHaveLength(1);
     expect(fixed?.[0]?.name).toBe("fixed");
     expect(errors).toHaveLength(1);
@@ -256,14 +294,16 @@ test("pluginsForDocument retains the active plugins when a reload fails", async 
 
     writeFileSync(file, 'export default [{ name: "working" }];\n');
     clearPluginsCache();
-    const active = await pluginsForDocument(nested);
+    const active = (await pluginsForDocument(nested))?.plugins;
     expect(active?.map((plugin) => plugin.name)).toEqual(["working"]);
 
     writeFileSync(file, "export default [{ name: ");
     clearPluginsCache();
-    const retained = await pluginsForDocument(nested, {
-      onError: (errFile, error) => errors.push({ file: errFile, error }),
-    });
+    const retained = (
+      await pluginsForDocument(nested, {
+        onError: (errFile, error) => errors.push({ file: errFile, error }),
+      })
+    )?.plugins;
     expect(retained?.map((plugin) => plugin.name)).toEqual(["working"]);
     expect(errors).toHaveLength(1);
   } finally {

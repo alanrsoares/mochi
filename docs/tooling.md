@@ -175,9 +175,9 @@ unbound names), filtered to the diagnostics overlapping the requested range. A f
   over the repo's `.mochi` sources from the command line. Each file resolves its own
   `mochi.plugins.ts` by the upward walk `pluginsForDocument` does for the editor: sweeping
   without a tree's manifest reports its vendor call sites (`on(…)`, `tw.*`) as type errors.
-  Dependency inference is shared across files through a `createModuleCache()` memo
-  ([ADR 0095](adr/0095-module-context-cache.md)) — without it the `bootstrap/` graph is
-  re-inferred once per file. It is still seconds, not sub-second, so this is not wired into
+  Dependency inference is shared across files through a bootstrap graph cache, one per
+  manifest ([ADR 0095](adr/0095-module-context-cache.md)) — without it the `bootstrap/`
+  graph is re-inferred once per file. It is still seconds, not sub-second, so this is not wired into
   `lint` (biome) or the `check` gate — it is the standalone sweep, and the shape a
   `mochi check` command would take.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for
@@ -198,8 +198,11 @@ extension all accept the same vendor-plugin list `compile`/`emitDts`/`format` do
 Apps keep one typed manifest — `mochi.plugins.ts` — read by Vite, `gen-mochi-dts`,
 and the LSP (the extension walks upward from each open `.mochi` file; loads only
 in a **trusted** workspace and only when the manifest resolves inside a workspace
-folder). Export `default` or named `plugins` for the LSP; Vite may also import a
-project-specific alias (`docsVendorPlugins`, …). A legacy `mochi.plugins.mjs`
+folder). Export `default` or named `plugins` as the self-hosted-core list
+(`BootstrapPlugin[]`, from each vendor's `/bootstrap` entry), plus an optional
+`dxPlugins` TypeScript-core copy that hover, completion, navigation, and formatting
+read until #103 ([ADR 0110](adr/0110-plugin-manifest-bootstrap-first.md)). Vite may
+also import a project-specific alias (`docsVendorPlugins`, …). A legacy `mochi.plugins.mjs`
 beside it still works as a fallback. JSX needs no entry —
 `jsxPlugin` is a builtin, registered by default; passing `plugins: []` is the non-UI
 opt-out ([ADR 0011](adr/0011-language-plugins.md), [tracer bullets](dx-tracer-bullets.md)).

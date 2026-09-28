@@ -6,8 +6,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createBootstrapRecoveryGraphCache } from "@mochi/compiler/bootstrap";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
+import {
+  type BootstrapRecoveryGraphCache,
+  createBootstrapRecoveryGraphCache,
+} from "@mochi/compiler/bootstrap";
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
@@ -26,7 +28,6 @@ import {
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import {
   bootstrapModuleDiagnostics,
-  documentDiagnostics,
   type PublishDiagnostic,
   unusedBindingDiagnostics,
 } from "@mochi/dx/diagnostics";
@@ -70,7 +71,12 @@ import {
   type WorkspaceSymbol,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { clearPluginsCache, PLUGIN_FILENAMES, pluginsForDocument } from "./load-plugins.ts";
+import {
+  clearPluginsCache,
+  PLUGIN_FILENAMES,
+  type ProjectPlugins,
+  pluginsForDocument,
+} from "./load-plugins.ts";
 
 /** Client → server init payload (editor extension). */
 export type MochiInitOptions = {
@@ -87,8 +93,8 @@ export type CachedDiagnostics = PublishDiagnostic[];
 
 /** Options for {@link startServer}. */
 export type ServerOptions = {
-  /** Fixed plugin list (tests / custom launchers). Overrides project discovery. */
-  plugins?: LanguagePlugin[];
+  /** Fixed plugins (tests / custom launchers), in manifest shape. Overrides project discovery. */
+  plugins?: ProjectPlugins;
   /** Load `mochi.plugins.ts` upward from each open file (default false). */
   loadProjectPlugins?: boolean;
 };
@@ -131,8 +137,10 @@ const symbolKind = (kind: string): SymbolKind => {
 
 /**
  * Wire the LSP connection and start listening. `opts.plugins` is the
- * project's vendor-plugin list (styled-cva, …) — the same list the project's
- * Vite plugin / `gen-mochi-dts` script pass to `compile`/`emitDts`. This file
+ * project's vendor plugins (styled-cva, …) — the same lists the project's
+ * Vite plugin / `gen-mochi-dts` script run with. Diagnostics run its
+ * self-hosted-core `plugins`; the DX queries still on the TypeScript core read
+ * `dxPlugins` until #103. This file
  * never imports a concrete plugin: the caller (a project's LSP launcher, or
  * #20's shared plugin-list module) supplies it, so hover/diagnostics stop
  * lying about a `tw.*` factory's type relative to what Vite actually emits.
@@ -185,12 +193,22 @@ export function startServer(opts: ServerOptions = {}): void {
   // One memo for the session: a keystroke re-infers the edited buffer, not the
   // whole import graph behind it (ADR 0095). Dropped wholesale when a plugin
   // manifest changes, since that changes what every call site means.
+  //
+  // A bootstrap cache is only valid for the plugin list it was filled under, so
+  // each manifest gets its own; `bootstrapCache` is the builtin-only one.
   let cache = createModuleCache();
   let bootstrapCache = createBootstrapRecoveryGraphCache();
-  const dxOpts = async (path: string) => ({
-    cache,
-    bootstrapCache: bootstrapCache.types,
-    plugins: loadProjectPlugins
+  let projectCaches = new WeakMap<ProjectPlugins, BootstrapRecoveryGraphCache>();
+  const bootstrapCacheFor = (project: ProjectPlugins | undefined): BootstrapRecoveryGraphCache => {
+    if (project === undefined) return bootstrapCache;
+    const hit = projectCaches.get(project);
+    if (hit) return hit;
+    const fresh = createBootstrapRecoveryGraphCache();
+    projectCaches.set(project, fresh);
+    return fresh;
+  };
+  const projectPlugins = async (path: string): Promise<ProjectPlugins | undefined> =>
+    loadProjectPlugins
       ? await pluginsForDocument(path, {
           allowedRoots,
           onError: (file, error) => {
@@ -203,17 +221,27 @@ export function startServer(opts: ServerOptions = {}): void {
             );
           },
         })
-      : fixedPlugins,
-  });
+      : fixedPlugins;
+  const dxOpts = async (path: string) => {
+    const dxPlugins = (await projectPlugins(path))?.dxPlugins;
+    return {
+      cache,
+      bootstrapCache: bootstrapCache.types,
+      plugins: dxPlugins ? [...dxPlugins] : undefined,
+    };
+  };
+  // The whole graph is checked by the shipped bootstrap compiler, with the
+  // project's self-hosted-core plugins (ADR 0109).
   const diagnosticsFor = async (path: string, src: string) => {
-    const opts = await dxOpts(path);
-    // Vendor plugins execute in the TypeScript host. Builtin-only workspaces
-    // validate their full graph through the shipped bootstrap compiler.
-    if (opts.plugins === undefined) {
-      const bootstrap = await bootstrapModuleDiagnostics(path, src, read, bootstrapCache);
-      return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
-    }
-    return documentDiagnostics(path, src, read, { cache: opts.cache, plugins: opts.plugins });
+    const project = await projectPlugins(path);
+    const bootstrap = await bootstrapModuleDiagnostics(
+      path,
+      src,
+      read,
+      bootstrapCacheFor(project),
+      project?.plugins,
+    );
+    return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
   };
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
@@ -618,6 +646,7 @@ export function startServer(opts: ServerOptions = {}): void {
     clearPluginsCache();
     cache = createModuleCache();
     bootstrapCache = createBootstrapRecoveryGraphCache();
+    projectCaches = new WeakMap();
     for (const doc of documents.all()) {
       if (doc.uri.endsWith(".mochi")) scheduleValidate(doc);
     }

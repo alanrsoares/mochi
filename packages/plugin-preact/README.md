@@ -29,4 +29,5 @@ package `exports`).
 | `hookDeps*` | pack heterogeneous deps | `Array<'a>` (element opaque) |
 
 Without the plugin on the project list, extern schemes alone are polymorphic —
-anything goes. Register `preactExtension` in `mochi.plugins.ts`.
+anything goes. Register `preactBootstrap` (from `@mochi/plugin-preact/bootstrap`) in
+`mochi.plugins.ts`, and `preactExtension` in its `dxPlugins` list (ADR 0110).

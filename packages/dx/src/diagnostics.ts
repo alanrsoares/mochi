@@ -11,6 +11,7 @@ import {
   type BootstrapRecoveryGraphCache,
   checkGraphBootstrapRecovering,
 } from "@mochi/compiler/bootstrap";
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
 import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
@@ -107,22 +108,29 @@ export type ModuleDiagnosticsOptions = {
   plugins?: LanguagePlugin[];
   /** TS-host graph memo, retained for plugins until their ABI is bootstrap-native. */
   cache?: ModuleCache;
-  /** Bootstrap graph memo for builtin-only diagnostics. */
+  /** Bootstrap graph memo; only valid for the one `bootstrapPlugins` list it was filled under. */
   bootstrapCache?: BootstrapRecoveryGraphCache;
+  /**
+   * Project plugins for the self-hosted core (ADR 0109). When set, graph
+   * diagnostics run on the bootstrap compiler with them, whatever `plugins`
+   * and `cache` say.
+   */
+  bootstrapPlugins?: readonly BootstrapPlugin[];
 };
 
-/**
- * Graph diagnostics through the frozen bootstrap compiler. Project plugins are
- * intentionally excluded: the seed can run builtin JSX, but not arbitrary
- * TypeScript plugin modules loaded by the editor.
- */
+/** Bootstrap owns the graph check unless only TypeScript-core plugins or a TS cache were given. */
+const onBootstrap = (opts: ModuleDiagnosticsOptions): boolean =>
+  opts.bootstrapPlugins !== undefined || (opts.plugins === undefined && opts.cache === undefined);
+
+/** Graph diagnostics through the frozen bootstrap compiler, with the project's bootstrap plugins. */
 export async function bootstrapModuleDiagnostics(
   path: string,
   src: string,
   readFile: (p: string) => Promise<string>,
   cache?: BootstrapRecoveryGraphCache,
+  plugins?: readonly BootstrapPlugin[],
 ): Promise<PublishDiagnostic[]> {
-  const errors = await checkGraphBootstrapRecovering(path, src, readFile, cache);
+  const errors = await checkGraphBootstrapRecovering(path, src, readFile, cache, plugins);
   return errors.map((error) => {
     const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
     const errorPath = error.path ?? tagged?.[1];
@@ -218,12 +226,17 @@ export async function moduleDiagnostics(
 ): Promise<PublishDiagnostic[]> {
   const parsed = parseForDiagnostics(src, path, opts);
   if (isErr(parsed)) return parsed.error;
-  // The shipped seed handles the builtin language graph, including recovery.
-  // Arbitrary project plugins still execute in the TypeScript host until their
-  // plugin ABI is bootstrap-native. The cache is a TS graph object, so callers
-  // that opt into it retain that host until bootstrap owns cache invalidation.
-  if (opts.plugins === undefined && opts.cache === undefined)
-    return bootstrapModuleDiagnostics(path, src, readFile, opts.bootstrapCache);
+  // The shipped seed handles the graph, including recovery and project plugins
+  // in their bootstrap shape. Callers with only TypeScript-core plugins or a TS
+  // cache stay on the TypeScript host until #103.
+  if (onBootstrap(opts))
+    return bootstrapModuleDiagnostics(
+      path,
+      src,
+      readFile,
+      opts.bootstrapCache,
+      opts.bootstrapPlugins,
+    );
   return moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
 }
 
@@ -294,8 +307,14 @@ export async function documentDiagnostics(
   const parsed = parseForDiagnostics(src, path, opts);
   if (isErr(parsed)) return parsed.error;
   return [
-    ...(opts.plugins === undefined && opts.cache === undefined
-      ? await bootstrapModuleDiagnostics(path, src, readFile, opts.bootstrapCache)
+    ...(onBootstrap(opts)
+      ? await bootstrapModuleDiagnostics(
+          path,
+          src,
+          readFile,
+          opts.bootstrapCache,
+          opts.bootstrapPlugins,
+        )
       : await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
     ...unusedBindingDiagnosticsFor(parsed.value, src, path),
   ];

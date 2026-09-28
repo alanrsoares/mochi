@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { type LanguagePlugin, pluginClashes, resolvePlugins } from "@mochi/compiler/extensions";
 import {
   type ComponentHost,
@@ -39,12 +40,21 @@ export type PluginLoadOptions = {
   onError?: (file: string, error: unknown) => void;
 };
 
-const cache = new Map<string, Promise<LanguagePlugin[] | undefined>>();
+/**
+ * What a manifest supplies. `plugins` (the `default` or named `plugins` export)
+ * runs on the self-hosted core (ADR 0109). `dxPlugins` is the optional
+ * TypeScript-core copy that hover, completion, navigation, and formatting still
+ * read until #103 moves them; it goes away then.
+ */
+export type ProjectPlugins = {
+  readonly plugins: readonly BootstrapPlugin[];
+  readonly dxPlugins?: readonly LanguagePlugin[];
+};
+
+const cache = new Map<string, Promise<ProjectPlugins | undefined>>();
 
 /** The LSP capability supplied by a project's active plugin manifest. */
-const languagePluginsCapability = capability<readonly LanguagePlugin[]>(
-  "mochi.lsp.language-plugins",
-);
+const projectPluginsCapability = capability<ProjectPlugins>("mochi.lsp.project-plugins");
 
 /**
  * Hosts outlive a cache generation. This is what lets a failed reload retain
@@ -119,16 +129,19 @@ export const findPluginsFile = (startDir: string, stopAt?: string): string | nul
   return null;
 };
 
-const assertPluginList = (plugins: unknown, file: string): LanguagePlugin[] => {
+/** Bootstrap hooks are plain functions; TypeScript-core `inferCall` is a `{ refs, hook }` record. */
+const BOOTSTRAP_HOOKS = ["parse", "inferCall", "format", "dtsBinding"] as const;
+
+const assertNamedList = (plugins: unknown, file: string, exportName: string): unknown[] => {
   if (!Array.isArray(plugins)) {
-    throw new Error(`${file} must export default or named \`plugins\` array`);
+    throw new Error(`${file} must export ${exportName} array`);
   }
   const seenNames = new Set<string>();
   for (const plugin of plugins) {
     if (typeof plugin !== "object" || plugin === null) {
       throw new Error(`${file}: plugin entries must be objects`);
     }
-    const name = (plugin as LanguagePlugin).name;
+    const name = (plugin as { name?: unknown }).name;
     if (typeof name !== "string") {
       throw new Error(`${file}: each plugin needs a string \`name\``);
     }
@@ -137,7 +150,31 @@ const assertPluginList = (plugins: unknown, file: string): LanguagePlugin[] => {
     }
     seenNames.add(name);
   }
-  return plugins as LanguagePlugin[];
+  return plugins;
+};
+
+const assertBootstrapPlugins = (plugins: unknown, file: string): BootstrapPlugin[] => {
+  const list = assertNamedList(plugins, file, "default or named `plugins`");
+  for (const plugin of list as Record<string, unknown>[]) {
+    for (const hook of BOOTSTRAP_HOOKS) {
+      if (plugin[hook] !== undefined && typeof plugin[hook] !== "function") {
+        throw new Error(
+          `${file}: plugin "${String(plugin.name)}" \`${hook}\` must be a function — \`plugins\` takes self-hosted-core plugins (ADR 0109); TypeScript-core ones go in \`dxPlugins\``,
+        );
+      }
+    }
+  }
+  return list as BootstrapPlugin[];
+};
+
+/** A manifest module's exports, before validation. */
+type ManifestModule = { default?: unknown; plugins?: unknown; dxPlugins?: unknown };
+
+const assertProjectPlugins = (mod: ManifestModule, file: string): ProjectPlugins => {
+  const plugins = assertBootstrapPlugins(mod.default ?? mod.plugins, file);
+  if (mod.dxPlugins === undefined) return { plugins };
+  const dxPlugins = assertNamedList(mod.dxPlugins, file, "`dxPlugins` as an") as LanguagePlugin[];
+  return { plugins, dxPlugins };
 };
 
 /** Shadow-copy path for `file` at the current cache `generation` (same dir, so relative imports inside the manifest still resolve). */
@@ -148,21 +185,19 @@ const shadowPathFor = (file: string, gen: number): string => {
 };
 
 /**
- * Dynamic-import a plugin manifest (`export default` or named `plugins`).
+ * Dynamic-import a plugin manifest (`export default` or named `plugins`, plus
+ * an optional `dxPlugins`).
  * Generation 0 (the common case — no reload has happened) imports `file`
  * directly, writing nothing to the workspace. After {@link clearPluginsCache}
  * the manifest path is already in the ESM loader's cache, so a reload imports
  * a generation-suffixed shadow copy instead — see {@link generation} — and
  * always removes it afterward, whether the import succeeds or throws.
  */
-export const loadPluginsFile = async (file: string): Promise<LanguagePlugin[]> => {
+export const loadPluginsFile = async (file: string): Promise<ProjectPlugins> => {
   const gen = generation;
-  const importManifest = async (path: string): Promise<LanguagePlugin[]> => {
-    const mod = (await import(pathToFileURL(path).href)) as {
-      default?: unknown;
-      plugins?: unknown;
-    };
-    return assertPluginList(mod.default ?? mod.plugins, file);
+  const importManifest = async (path: string): Promise<ProjectPlugins> => {
+    const mod = (await import(pathToFileURL(path).href)) as ManifestModule;
+    return assertProjectPlugins(mod, file);
   };
   if (gen === 0) return importManifest(file);
   const shadow = shadowPathFor(file, gen);
@@ -179,22 +214,21 @@ export const loadPluginsFile = async (file: string): Promise<LanguagePlugin[]> =
   }
 };
 
-const validatePlugins = (plugins: LanguagePlugin[]): LanguagePlugin[] => {
-  const clashes = pluginClashes(resolvePlugins(plugins));
+/** Claim clashes (ADR 0050) are declared by TypeScript-core `inferCall.refs`, so only `dxPlugins` can clash. */
+const validatePlugins = (project: ProjectPlugins): ProjectPlugins => {
+  const clashes = project.dxPlugins ? pluginClashes(resolvePlugins([...project.dxPlugins])) : [];
   if (clashes.length > 0) throw new Error(clashes.map((d) => d.message).join("; "));
-  return plugins;
+  return project;
 };
 
-const languagePluginsComponent = (plugins: readonly LanguagePlugin[]): RuntimeComponent => ({
+const projectPluginsComponent = (project: ProjectPlugins): RuntimeComponent => ({
   name: "mochi-lsp-project-plugins",
-  provides: [languagePluginsCapability],
-  activate: () => ResultAsync.ok(resource([provide(languagePluginsCapability, plugins)])),
+  provides: [projectPluginsCapability],
+  activate: () => ResultAsync.ok(resource([provide(projectPluginsCapability, project)])),
 });
 
-const activePlugins = (host: ComponentHost): LanguagePlugin[] | undefined => {
-  const plugins = host.get(languagePluginsCapability);
-  return plugins ? [...plugins] : undefined;
-};
+const activePlugins = (host: ComponentHost): ProjectPlugins | undefined =>
+  host.get(projectPluginsCapability);
 
 const hasActivationCause = (
   error: unknown,
@@ -225,11 +259,11 @@ const lexicalRootOf = (file: string, roots: readonly string[]): string | undefin
   return best;
 };
 
-/** Cached vendor-plugin list for a `.mochi` path; `undefined` → builtin defaults. */
+/** Cached vendor plugins for a `.mochi` path; `undefined` → builtin defaults. */
 export const pluginsForDocument = async (
   filePath: string,
   opts: PluginLoadOptions = {},
-): Promise<LanguagePlugin[] | undefined> => {
+): Promise<ProjectPlugins | undefined> => {
   // Stop the upward walk at the workspace root when one contains the file —
   // a manifest above it would be rejected by `isPathUnderRoots` anyway.
   const stopAt = opts.allowedRoots?.length ? lexicalRootOf(filePath, opts.allowedRoots) : undefined;
@@ -244,7 +278,7 @@ export const pluginsForDocument = async (
     const host = existingHost ?? createComponentHost();
     pending = (async () => {
       const plugins = validatePlugins(await loadPluginsFile(pluginsFile));
-      const component = languagePluginsComponent(plugins);
+      const component = projectPluginsComponent(plugins);
       const transition = await (existingHost
         ? host.replace(component.name, component)
         : host.mount(component));
