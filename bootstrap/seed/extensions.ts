@@ -1,6 +1,8 @@
 import type { Tok } from "./lexer";
 import type { Expr } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
+import type { Doc } from "./doc";
+import type { FormatApi } from "./format-api";
 import type { BoundErr } from "./plugins/jsx";
 
 import type { Option, Result } from "@mochi/compiler/runtime";
@@ -69,6 +71,7 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -104,6 +107,7 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
     ) => Result<Option<[Ty, St]>, BoundErr>
   >;
   format: Option<C>;
+  formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
   dtsBinding: Option<D>;
   bindingType: Option<
     (
@@ -139,6 +143,7 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -287,9 +292,35 @@ const formatHooksFrom: <A, B>(plugins: ({ format: Option<A> } & B)[], i: number,
       )
       .exhaustive(),
   );
-export const formatHooksOf: <A, B>(plugins: ({ format: Option<A> } & B)[]) => A[] = <A, B>(
-  plugins: ({ format: Option<A> } & B)[],
-) => formatHooksFrom(plugins, 0, [] as A[]);
+const formatDocHooksFrom: <A, B>(
+  plugins: ({ formatDoc: Option<A> } & B)[],
+  i: number,
+  acc: A[],
+) => A[] = _curry(3, <A, B>(plugins: ({ formatDoc: Option<A> } & B)[], i: number, acc: A[]) =>
+  match(_Array_get(i, plugins))
+    .with({ _tag: "None" }, () => acc)
+    .with({ _tag: "Some" }, ({ value: p }) =>
+      match(p.formatDoc)
+        .with({ _tag: "Some" }, ({ value: hook }) =>
+          formatDocHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
+        )
+        .with({ _tag: "None" }, () => formatDocHooksFrom(plugins, i + 1, acc))
+        .exhaustive(),
+    )
+    .exhaustive(),
+);
+/**
+ * Both kinds of format hook (ADR 0112): `rewrite` swaps a node for another
+ * before layout, `layout` prints a node itself.
+ */
+export const formatHooksOf: <A, B, C>(
+  plugins: ({ formatDoc: Option<A>; format: Option<B> } & C)[],
+) => { rewrite: B[]; layout: A[] } = <A, B, C>(
+  plugins: ({ formatDoc: Option<A>; format: Option<B> } & C)[],
+) => ({
+  rewrite: formatHooksFrom(plugins, 0, [] as B[]),
+  layout: formatDocHooksFrom(plugins, 0, [] as A[]),
+});
 /**
  * The format hooks a caller's `pluginsOpt` resolves to (builtins included).
  */
@@ -320,6 +351,7 @@ export const formatHooksFor: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -330,7 +362,7 @@ export const formatHooksFor: <B, C, D, E, F>(
       >;
     }[]
   >,
-) => C[] = <B, C, D, E, F>(
+) => { rewrite: C[]; layout: ((a: Expr, b: FormatApi) => Option<Doc>)[] } = <B, C, D, E, F>(
   pluginsOpt: Option<
     {
       name: string;
@@ -357,6 +389,7 @@ export const formatHooksFor: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -409,6 +442,7 @@ export const dtsHooksFor: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -446,6 +480,7 @@ export const dtsHooksFor: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -479,6 +514,31 @@ export const runFormatHooks: <A, B>(hooks: ((a: A) => Option<B>)[], e: A) => Opt
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
+);
+/**
+ * First hook to claim wins: `Some(doc)` is the node's layout.
+ */
+export const runFormatDocHooks: <A, B, C>(
+  hooks: ((a: A, b: B) => Option<C>)[],
+  e: A,
+  api: B,
+) => Option<C> = _curry(3, <A, B, C>(hooks: ((a: A, b: B) => Option<C>)[], e: A, api: B) =>
+  match(hooks)
+    .with(
+      (_v) => _v.length === 0,
+      () => None,
+    )
+    .with(
+      (_v) => _v.length >= 1,
+      ([hook, ...rest]) =>
+        match(hook(e, api))
+          .with({ _tag: "Some" }, ({ value: doc }) => Some(doc))
+          .with({ _tag: "None" }, () => runFormatDocHooks(rest, e, api))
+          .exhaustive(),
+    )
+    .otherwise(() => {
+      throw new Error("non-exhaustive match");
+    }),
 );
 /**
  * First hook to claim wins: `Some(ts)` is the binding's declared type text.
@@ -559,6 +619,7 @@ export const bindingHooksFor: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (
@@ -600,6 +661,7 @@ export const bindingHooksFor: <B, C, D, E, F>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<C>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<D>;
       bindingType: Option<
         (

@@ -142,6 +142,7 @@ export type HostPlugin = {
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
   format: Option<(a: Expr) => Option<Expr>>;
+  formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
   dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
@@ -234,6 +235,22 @@ export type IErr = {
   suggestions: Suggestion[];
 };
 export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
+export type FormatApi = {
+  exprD: (a: Expr) => Doc;
+  memberD: (a: Expr) => Doc;
+  flat: (a: Doc) => string;
+  strLit: (a: string) => string;
+  sourceText: (a: number, b: number) => string;
+};
+export type Doc =
+  | { _tag: "DText"; s: string }
+  | { _tag: "DVerbatim"; s: string }
+  | { _tag: "DLine"; hard: boolean; soft: boolean }
+  | { _tag: "DCat"; parts: Doc[] }
+  | { _tag: "DIndent"; doc: Doc }
+  | { _tag: "DGroup"; doc: Doc }
+  | { _tag: "DLineSuffix"; doc: Doc }
+  | { _tag: "DBreakParent" };
 export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };
 export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
 export type SeedTypeCtors = {

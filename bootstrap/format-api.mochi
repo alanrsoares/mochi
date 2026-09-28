@@ -1,0 +1,18 @@
+// bootstrap/format-api.mochi — what a plugin `formatDoc` hook prints with
+// (ADR 0112). Its own module because the plugin type (infer.mochi), the
+// printer (format.mochi), and the JSX plugin all name it, and none of them may
+// import another: the printer would pull in inference, the plugin the printer.
+
+import * as Ast from "./ast.mochi"
+import * as Layout from "./doc.mochi"
+
+/// The formatter's own printers, so a sub-expression keeps its comments and
+/// re-enters the hooks. `sourceText` returns the source between two offsets,
+/// for sugar that leaves no other trace in the tree (a JSX shorthand attribute).
+export type FormatApi = {
+  exprD: Ast.Expr -> Layout.Doc,
+  memberD: Ast.Expr -> Layout.Doc,
+  flat: Layout.Doc -> string,
+  strLit: string -> string,
+  sourceText: number -> number -> string
+}

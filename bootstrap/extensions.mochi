@@ -1,6 +1,6 @@
 // bootstrap/extensions.mochi — thin LanguagePlugin seam for the self-host
-// (Wave 8 / ADR 0011 §6, ADR 0109). Parse, inferCall, format, dtsBinding and
-// bindingType.
+// (Wave 8 / ADR 0011 §6, ADR 0109, ADR 0112). Parse, inferCall, format,
+// formatDoc, dtsBinding and bindingType.
 // Hooks are Result/(toks, pos) shaped — not an imperative ParserApi.
 //
 // resolvePlugins mirrors src/extensions.ts:
@@ -80,7 +80,24 @@ let formatHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
     }
 }
 
-export let formatHooksOf = plugins => plugins->formatHooksFrom(0, [])
+let formatDocHooksFrom = (plugins, i, acc) => switch Array.get(i, plugins) {
+  | None => acc
+  | Some(p) => switch p.formatDoc {
+      | Some(hook) => plugins->formatDocHooksFrom(
+          i + 1,
+          Array.append(hook, acc)
+        )
+      | None => plugins->formatDocHooksFrom(i + 1, acc)
+    }
+}
+
+/// Both kinds of format hook (ADR 0112): `rewrite` swaps a node for another
+/// before layout, `layout` prints a node itself.
+export let formatHooksOf = plugins =>
+  {
+    rewrite: plugins->formatHooksFrom(0, []),
+    layout: plugins->formatDocHooksFrom(0, [])
+  }
 
 /// The format hooks a caller's `pluginsOpt` resolves to (builtins included).
 export let formatHooksFor = pluginsOpt =>
@@ -103,6 +120,15 @@ export let runFormatHooks = (hooks, e) => switch hooks {
   | [hook, ...rest] => switch hook(e) {
       | Some(out) => Some(out)
       | None => rest->runFormatHooks(e)
+    }
+}
+
+/// First hook to claim wins: `Some(doc)` is the node's layout.
+export let runFormatDocHooks = (hooks, e, api) => switch hooks {
+  | [] => None
+  | [hook, ...rest] => switch hook(e, api) {
+      | Some(doc) => Some(doc)
+      | None => rest->runFormatDocHooks(e, api)
     }
 }
 

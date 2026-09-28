@@ -38,6 +38,8 @@ const seedRoot = BOOTSTRAP_SEED;
 // discovers the graph itself; this list is what we read back and diff.
 const MODULES = [
   "ast",
+  "doc",
+  "format-api",
   "usefulness",
   "types",
   "ctors",
@@ -57,7 +59,6 @@ const MODULES = [
   "ts-types",
   "codegen-ts",
   "symbols",
-  "doc",
   "show-type-expr",
   "format",
   "dts",

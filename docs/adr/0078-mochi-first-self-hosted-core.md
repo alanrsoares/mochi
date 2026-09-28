@@ -97,7 +97,8 @@ one users run. Two consequences follow from that split:
 - Plugin `format` hooks stay a TypeScript-host seam; bootstrap has no format
   hook protocol (ADR 0011 §6). JSX files are the one parity exclusion, and a
   formatting rule that exists only inside a plugin hook is out of scope for
-  `format.mochi` until that protocol is designed.
+  `format.mochi` until that protocol is designed. *(Superseded by ADR 0112:
+  plugins lay nodes out through `formatDoc`, and JSX is no longer excluded.)*
 - The `@mochi/dx` API surface around the formatter (option records, the
   `Result` shape, exports the LSP and CLI consume) is not core; it may change
   in TypeScript alone so long as the printed bytes still match.

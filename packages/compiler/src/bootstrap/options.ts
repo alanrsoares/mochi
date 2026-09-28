@@ -69,7 +69,8 @@ export type BootstrapDtsBindingHook = Nullable<SeedHook<"dtsBinding">>;
 /**
  * A host plugin over the self-hosted core (ADR 0109). Every hook is optional;
  * `toSeedPlugins` turns the record into the seed's `Option`-shaped `Plugin`.
- * `bindingType` stays builtin-only (the JSX plugin's ADR 0055 rendering).
+ * `bindingType` and `formatDoc` stay builtin-only (the JSX plugin's ADR 0055
+ * rendering and tag re-fold, ADR 0112).
  */
 export type BootstrapPlugin = {
   name: string;
@@ -100,6 +101,7 @@ const toSeedPlugin = (plugin: BootstrapPlugin): SeedPlugin => ({
   parse: optionOf(plugin.parse),
   inferCall: optionOf(plugin.inferCall),
   format: optionOf(plugin.format && nullable(plugin.format)),
+  formatDoc: none,
   dtsBinding: optionOf(plugin.dtsBinding && nullable(plugin.dtsBinding)),
   bindingType: none,
 });

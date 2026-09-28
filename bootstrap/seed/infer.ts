@@ -16,6 +16,8 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty, TypeAt } from "./types";
+import type { Doc } from "./doc";
+import type { FormatApi } from "./format-api";
 import type { Scheme, VarSets } from "./schemes";
 import type { PErr } from "./parser";
 import type { TSt } from "./scc";
@@ -57,7 +59,8 @@ export type HookErr = { message: string; start: number; end: number };
 export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };
 /**
  * A plugin as every pass sees it (ADR 0011, 0109). `format` rewrites a node
- * before the printer lays it out; `dtsBinding` supplies a binding's `.d.ts`
+ * before the printer lays it out; `formatDoc` lays a node out itself, for sugar
+ * no node can spell (JSX, ADR 0112); `dtsBinding` supplies a binding's `.d.ts`
  * type text from its name, value, and inferred type. The parse hook is written INLINE rather than
  * behind its own alias: a parameterized alias whose body is an arrow emits as
  * an opaque brand, not a transparent type.
@@ -78,6 +81,7 @@ export type Plugin<A> = {
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
   format: Option<(a: Expr) => Option<Expr>>;
+  formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
   dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
@@ -102,6 +106,7 @@ export type HostPlugin = {
     (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
   >;
   format: Option<(a: Expr) => Option<Expr>>;
+  formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
   dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
@@ -133,6 +138,7 @@ export type Ctx<A> = {
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
+    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
     dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
@@ -221,6 +227,8 @@ import {
   fits,
 } from "./types";
 import * as Ast from "./ast";
+import * as Layout from "./doc";
+import * as Fmt from "./format-api";
 import { localBinderNames } from "./local-names";
 import { closestName } from "./suggest";
 import * as Types from "./types";
@@ -508,6 +516,7 @@ const u: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -549,6 +558,7 @@ const u: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -601,6 +611,7 @@ const checkFits: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -642,6 +653,7 @@ const checkFits: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -794,6 +806,7 @@ const constrainParamAnnotsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -835,6 +848,7 @@ const constrainParamAnnotsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -980,6 +994,7 @@ const ctxWithEnv: <A, B>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1009,6 +1024,7 @@ const ctxWithEnv: <A, B>(
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
+    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
     dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
@@ -1045,6 +1061,7 @@ const ctxWithEnv: <A, B>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -1092,6 +1109,7 @@ const ctxWithLets: <A, B, C>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1122,6 +1140,7 @@ const ctxWithLets: <A, B, C>(
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
+    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
     dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
@@ -1158,6 +1177,7 @@ const ctxWithLets: <A, B, C>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -1206,6 +1226,7 @@ const ctxWithLoop: <A, B, C>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1237,6 +1258,7 @@ const ctxWithLoop: <A, B, C>(
       (a: Expr, b: Expr[], c: Option<string>, d: St, e: InferApi) => Result<Option<[Ty, St]>, IErr>
     >;
     format: Option<(a: Expr) => Option<Expr>>;
+    formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
     dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
     bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
   }[];
@@ -1273,6 +1295,7 @@ const ctxWithLoop: <A, B, C>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -1322,6 +1345,7 @@ const inferLoopParamsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1365,6 +1389,7 @@ const inferLoopParamsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -1434,6 +1459,7 @@ const unifyRecurArgsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1475,6 +1501,7 @@ const unifyRecurArgsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -1534,6 +1561,7 @@ const inferRecur: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1574,6 +1602,7 @@ const inferRecur: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -1695,6 +1724,7 @@ const labFieldsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1737,6 +1767,7 @@ const labFieldsFrom: <A>(
             ) => Result<Option<[Ty, St]>, IErr>
           >;
           format: Option<(a: Expr) => Option<Expr>>;
+          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
           dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[];
@@ -1929,6 +1960,7 @@ const inferCallArgs: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -1970,6 +2002,7 @@ const inferCallArgs: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2058,6 +2091,7 @@ const inferTupleLet: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2100,6 +2134,7 @@ const inferTupleLet: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2159,6 +2194,7 @@ const inferApplied: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2199,6 +2235,7 @@ const inferApplied: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2272,6 +2309,7 @@ const inferNormalCall: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2312,6 +2350,7 @@ const inferNormalCall: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2371,6 +2410,7 @@ const inferTernary: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2412,6 +2452,7 @@ const inferTernary: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2473,6 +2514,7 @@ const inferBindBody: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2516,6 +2558,7 @@ const inferBindBody: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2575,6 +2618,7 @@ const inferTwoSlotBind: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2619,6 +2663,7 @@ const inferTwoSlotBind: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2678,6 +2723,7 @@ const inferQuestionBind: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2722,6 +2768,7 @@ const inferQuestionBind: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2810,6 +2857,7 @@ const inferLetBind: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2854,6 +2902,7 @@ const inferLetBind: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -2905,6 +2954,7 @@ const inferRecordRow: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -2944,6 +2994,7 @@ const inferRecordRow: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3036,6 +3087,7 @@ const inferFieldAccess: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3078,6 +3130,7 @@ const inferFieldAccess: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3149,6 +3202,7 @@ const inferDuckField: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3190,6 +3244,7 @@ const inferDuckField: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3237,6 +3292,7 @@ const inferNsField: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3278,6 +3334,7 @@ const inferNsField: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3328,6 +3385,7 @@ const inferInterpParts: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3367,6 +3425,7 @@ const inferInterpParts: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3439,6 +3498,7 @@ const inferTupleElems: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3478,6 +3538,7 @@ const inferTupleElems: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3549,6 +3610,7 @@ const inferSeqSlotsElems: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3590,6 +3652,7 @@ const inferSeqSlotsElems: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3664,6 +3727,7 @@ const inferSeqSlots: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3704,6 +3768,7 @@ const inferSeqSlots: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3749,6 +3814,7 @@ const inferMapEntries: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3790,6 +3856,7 @@ const inferMapEntries: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -3865,6 +3932,7 @@ const inferMapExpr: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -3904,6 +3972,7 @@ const inferMapExpr: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4003,6 +4072,7 @@ const inferArms: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4044,6 +4114,7 @@ const inferArms: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4132,6 +4203,7 @@ const inferMatch: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4172,6 +4244,7 @@ const inferMatch: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4226,6 +4299,7 @@ const inferExpr: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4265,6 +4339,7 @@ const inferExpr: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4308,6 +4383,7 @@ const inferExprRaw: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4347,6 +4423,7 @@ const inferExprRaw: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4627,6 +4704,7 @@ const inferDo: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4666,6 +4744,7 @@ const inferDo: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4732,6 +4811,7 @@ const inferPatRecordFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4773,6 +4853,7 @@ const inferPatRecordFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4843,6 +4924,7 @@ const inferPatRecord: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4882,6 +4964,7 @@ const inferPatRecord: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -4927,6 +5010,7 @@ const inferPatCtorArgs: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -4970,6 +5054,7 @@ const inferPatCtorArgs: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5058,6 +5143,7 @@ const inferPatTupleFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5097,6 +5183,7 @@ const inferPatTupleFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5173,6 +5260,7 @@ const inferPatTuple: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5212,6 +5300,7 @@ const inferPatTuple: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5256,6 +5345,7 @@ const inferSeqPatElems: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5296,6 +5386,7 @@ const inferSeqPatElems: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5370,6 +5461,7 @@ const inferSeqPat: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5411,6 +5503,7 @@ const inferSeqPat: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5483,6 +5576,7 @@ const inferPat: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5522,6 +5616,7 @@ const inferPat: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5569,6 +5664,7 @@ const inferPatRaw: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5608,6 +5704,7 @@ const inferPatRaw: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5740,6 +5837,7 @@ const unifyOrPatBinding: <A, B>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5782,6 +5880,7 @@ const unifyOrPatBinding: <A, B>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5833,6 +5932,7 @@ const unifyOrPatBindings: <A, B>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5875,6 +5975,7 @@ const unifyOrPatBindings: <A, B>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -5933,6 +6034,7 @@ const inferOrPatAlts: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -5975,6 +6077,7 @@ const inferOrPatAlts: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -6041,6 +6144,7 @@ const inferOrPat: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -6081,6 +6185,7 @@ const inferOrPat: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -7067,6 +7172,7 @@ const inferGroupFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -7106,6 +7212,7 @@ const inferGroupFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -7324,6 +7431,7 @@ const processGroupsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -7363,6 +7471,7 @@ const processGroupsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -7403,6 +7512,7 @@ const processGroupsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -7479,6 +7589,7 @@ const inferExprStmtsFrom: <A>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[];
@@ -7518,6 +7629,7 @@ const inferExprStmtsFrom: <A>(
           ) => Result<Option<[Ty, St]>, IErr>
         >;
         format: Option<(a: Expr) => Option<Expr>>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
         bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
       }[];
@@ -7975,6 +8087,7 @@ const runInferImports: <A, B, C>(
         ) => Result<Option<[Ty, St]>, IErr>
       >;
       format: Option<(a: Expr) => Option<Expr>>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
       bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
     }[] = resolvePluginsDefault(pluginsOpt);

@@ -23,7 +23,7 @@ export type LamParam =
   // remain spanless while editor-facing binders never need reconstructed text.
   | LPSpanned(param: LamParam, nameSpans: [Span])
 
-type Field = { name: string, value: Expr }
+export type Field = { name: string, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
 type MatchArm = { pattern: Pattern, guard: Option<Expr>, body: Expr }
 

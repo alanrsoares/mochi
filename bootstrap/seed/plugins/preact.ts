@@ -509,6 +509,7 @@ export const preactPlugin = {
   parse: None,
   inferCall: Some(inferPreactCall),
   format: None,
+  formatDoc: None,
   dtsBinding: None,
   bindingType: None,
 };
