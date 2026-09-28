@@ -8,7 +8,6 @@ import {
   _curry,
   _done,
   _recur,
-  eq,
 } from "@mochi/compiler/runtime";
 
 const skipStrLoop: _Curry<[src: string, j0: number], Option<number>> = _curry(
@@ -95,7 +94,7 @@ const findHoleLoop: _Curry<[src: string, j0: number, depth0: number], Option<num
               : _v._tag === "Some" && _v.value === "{"
                 ? _recur(j + 1, depth + 1)
                 : _v._tag === "Some" && _v.value === "}"
-                  ? eq(depth, 1)
+                  ? depth === 1
                     ? _done(Some(j + 1) as Option<number>)
                     : _recur(j + 1, depth - 1)
                   : _v._tag === "Some"

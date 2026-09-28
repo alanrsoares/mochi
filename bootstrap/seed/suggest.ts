@@ -17,7 +17,6 @@ import {
   gt,
   max,
   min,
-  not,
   or,
 } from "@mochi/compiler/runtime";
 
@@ -96,7 +95,7 @@ const levFrom: _Curry<[a: string, b: string, m: number, n: number], number> = _c
 const lev: _Curry<[a: string, b: string], number> = _curry(2, (a: string, b: string) => {
   const m: number = _Str_length(a);
   const n: number = _Str_length(b);
-  return eq(m, 0) ? n : eq(n, 0) ? m : levFrom(a, b, m, n);
+  return m === 0 ? n : n === 0 ? m : levFrom(a, b, m, n);
 });
 /**
  * `^[A-Z]` — identifier heads are ASCII. Empty and non-letters are lower.
@@ -115,8 +114,8 @@ const sameCaseClass: _Curry<[a: string, b: string], boolean> = _curry(2, (a: str
 );
 const skipName: _Curry<[want: string, n: string], boolean> = _curry(2, (want: string, n: string) =>
   or(
-    or(or(or(eq(n, ""), eq(n, want)), _Str_startsWith("$", n)), _Str_startsWith("_", n)),
-    not(sameCaseClass(want, n)),
+    or(or(or(n === "", eq(n, want)), _Str_startsWith("$", n)), _Str_startsWith("_", n)),
+    !sameCaseClass(want, n),
   ),
 );
 const consider: _Curry<

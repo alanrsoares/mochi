@@ -16,7 +16,6 @@ import {
   _Array_concat,
   _Array_get,
   _curry,
-  eq,
   length,
 } from "@mochi/compiler/runtime";
 
@@ -41,7 +40,7 @@ export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] 
       _v._tag === "None"
         ? builtins
         : _v._tag === "Some"
-          ? (({ value: ps }) => (eq(length(ps), 0) ? ([] as A[]) : _Array_concat(builtins, ps)))(_v)
+          ? (({ value: ps }) => (length(ps) === 0 ? ([] as A[]) : _Array_concat(builtins, ps)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(pluginsOpt),

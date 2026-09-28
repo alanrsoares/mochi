@@ -258,7 +258,7 @@ export const tUnit = TyCon(UNIT, [] as Ty[]);
 export const isUnit: (t: Ty) => boolean = (t: Ty) =>
   ((_v) =>
     _v._tag === "TyCon"
-      ? (({ name, args }) => and(eq(name, UNIT), eq(length(args), 0)))(_v)
+      ? (({ name, args }) => and(eq(name, UNIT), length(args) === 0))(_v)
       : false)(t);
 export const rVar: (id: number) => Row = (id: number) => RowVar(id);
 export const rExtend: _Curry<[label: string, fieldType: Ty, rest: Row], Row> = _curry(
@@ -281,13 +281,13 @@ export const showType: (t: Ty) => string = (t: Ty) =>
       : _v._tag === "TyCon"
         ? (({ name, args }) =>
             ((_v) =>
-              _v.length === 1 && (([elem]) => eq(name, "Array"))(_v)
+              _v.length === 1 && (([elem]) => name === "Array")(_v)
                 ? (([elem]) => `[${showType(elem)}]`)(_v)
                 : _v.length === 0 && eq(name, UNIT)
                   ? "()"
                   : eq(name, TUPLE)
                     ? `(${showTypeArgs(args)})`
-                    : eq(length(args), 0)
+                    : length(args) === 0
                       ? name
                       : `${name}<${showTypeArgs(args)}>`)(args))(_v)
         : _v._tag === "TyFn"
@@ -298,7 +298,7 @@ export const showType: (t: Ty) => string = (t: Ty) =>
           : _v._tag === "TyRecord"
             ? (({ row }) => showRow(row))(_v)
             : _v._tag === "TySingleton"
-              ? (({ base, value }) => (eq(base, "string") ? show(value) : value))(_v)
+              ? (({ base, value }) => (base === "string" ? show(value) : value))(_v)
               : _v._tag === "TyOneOf"
                 ? (({ members }) => _Str_join(" | ", map(showType, members)))(_v)
                 : (() => {
@@ -327,15 +327,13 @@ const showRow: (row: Row) => string = (row: Row) =>
   (([fields, tailId]: [string[], Option<number>]) => {
     const tail: string = ((_v) =>
       _v._tag === "Some"
-        ? (({ value: id }) => `${eq(length(fields), 0) ? "" : " "}| 'r${show(id)}`)(_v)
+        ? (({ value: id }) => `${length(fields) === 0 ? "" : " "}| 'r${show(id)}`)(_v)
         : _v._tag === "None"
           ? ""
           : (() => {
               throw new Error("non-exhaustive match");
             })())(tailId);
-    return and(eq(length(fields), 0), eq(tail, ""))
-      ? "{}"
-      : `{ ${_Str_join(", ", fields)}${tail} }`;
+    return and(length(fields) === 0, tail === "") ? "{}" : `{ ${_Str_join(", ", fields)}${tail} }`;
   })(showRowFields(row));
 const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
   3,
@@ -542,34 +540,34 @@ const rowVarOccursInType: _Curry<[id: number, t: Ty, st: St], boolean> = _curry(
 );
 const isArrowT: (t: Ty) => boolean = (t: Ty) => ((_v) => (_v._tag === "TyFn" ? true : false))(t);
 const isCollection: (name: string) => boolean = (name: string) =>
-  or(or(or(eq(name, "Array"), eq(name, "List")), eq(name, "Set")), eq(name, "Map"));
+  or(or(or(name === "Array", name === "List"), name === "Set"), name === "Map");
 const isTupleT: (t: Ty) => boolean = (t: Ty) =>
   ((_v) => (_v._tag === "TyCon" ? (({ name }) => eq(name, TUPLE))(_v) : false))(t);
 const tupleParenMsg: _Curry<[a: Ty, b: Ty, shown: string], string> = _curry(
   3,
   (a: Ty, b: Ty, shown: string) =>
-    not(eq(isTupleT(a), isTupleT(b)))
+    !eq(isTupleT(a), isTupleT(b))
       ? `${shown} — ((a, b)) => takes one tuple; (a, b) => takes two arguments`
       : shown,
 );
 const collectionUnifyMsg: _Curry<[aname: string, bname: string, shown: string], string> = _curry(
   3,
   (aname: string, bname: string, shown: string) =>
-    or(or(eq(aname, bname), not(isCollection(aname))), not(isCollection(bname)))
+    or(or(eq(aname, bname), !isCollection(aname)), !isCollection(bname))
       ? shown
       : ((other: string) =>
           ((hint: string) => `${shown} — ${hint}`)(
-            eq(other, "List")
+            other === "List"
               ? "unqualified map/filter/length expect Array; use List.map"
-              : eq(other, "Set")
+              : other === "Set"
                 ? "unqualified map/filter/length expect Array; convert with Set.toArray or use Set.*"
-                : eq(other, "Map")
+                : other === "Map"
                   ? "unqualified map/filter/length expect Array; use Map.*"
                   : `${aname} and ${bname} are distinct collections`,
-          ))(eq(aname, "Array") ? bname : eq(bname, "Array") ? aname : ""),
+          ))(aname === "Array" ? bname : bname === "Array" ? aname : ""),
 );
 const unifyMismatch: <A>(ra: Ty, rb: Ty) => Result<A, TypeErr> = _curry(2, <A>(ra: Ty, rb: Ty) =>
-  not(eq(isArrowT(ra), isArrowT(rb)))
+  !eq(isArrowT(ra), isArrowT(rb))
     ? (([fn, val]: [Ty, Ty]) =>
         fail(
           tupleParenMsg(
@@ -607,7 +605,7 @@ const unifyArgs: _Curry<[as_: Ty[], bs: Ty[], i: number, st: St], Result<St, Typ
 const isPrimT: _Curry<[t: Ty, name: string], boolean> = _curry(2, (t: Ty, name: string) =>
   ((_v) =>
     _v._tag === "TyCon"
-      ? (({ name: n, args }) => and(eq(n, name), eq(length(args), 0)))(_v)
+      ? (({ name: n, args }) => and(eq(n, name), length(args) === 0))(_v)
       : false)(t),
 );
 const isLitOnlyUnion: (members: Ty[]) => boolean = (members: Ty[]) =>
@@ -1031,7 +1029,7 @@ const fitsRows: _Curry<[actual: Row, expected: Row, st: St], Result<St, TypeErr>
                       : _v._tag === "Ok"
                         ? (({ value: hit }) =>
                             (([htype, hopt, hrest, s1]: [Ty, boolean, Row, St]) =>
-                              and(hopt, not(eopt))
+                              and(hopt, !eopt)
                                 ? fail(
                                     `record field '${elabel}' is required but missing or optional`,
                                   )

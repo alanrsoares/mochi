@@ -444,13 +444,13 @@ const shownOfAlias: <A, B, C, D>(
     } & D,
     aliases: Map<string, QualAliasInfo>,
   ) =>
-    not(eq(length(info.params), 0))
+    length(info.params) !== 0
       ? (None as Option<string>)
       : ((_v) =>
           _v._tag === "Some"
             ? (None as Option<string>)
             : _v._tag === "None"
-              ? eq(length(info.fields), 0)
+              ? length(info.fields) === 0
                 ? (None as Option<string>)
                 : (Some(showType(tRecord(aliasRowFrom(info.fields, aliases, 0)))) as Option<string>)
               : (() => {
@@ -1874,7 +1874,7 @@ const inferQuestionBind: _Curry<
           )
         : _v._tag === "TyCon"
           ? (({ name }) =>
-              eq(name, "Option")
+              name === "Option"
                 ? (($written) =>
                     (([payloadT, st1]: [Ty, St]) =>
                       _Result_flatMap(
@@ -1890,7 +1890,7 @@ const inferQuestionBind: _Curry<
                           ),
                         u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
                       ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
-                : eq(name, "Result")
+                : name === "Result"
                   ? (($written) =>
                       inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
                       setLetBindMonad(bind, "Result"),
@@ -1952,7 +1952,7 @@ const inferLetBind: _Curry<
   ) =>
     _Result_flatMap(
       ([valT, st1]) =>
-        eq(monad, "Task")
+        monad === "Task"
           ? inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Task", st1)
           : inferQuestionBind(ctx, bind, param, paramSpan, value, body, valT, st1),
       inferExpr(ctx, value, st),
@@ -3049,7 +3049,7 @@ const inferExprRaw: _Curry<
                                             ? (({ name: tname }) =>
                                                 and(
                                                   _Map_has(tname, ctx.ns),
-                                                  not(_Map_has(tname, ctx.env)),
+                                                  !_Map_has(tname, ctx.env),
                                                 )
                                                   ? inferNsField(ctx, tname, name, sp, st)
                                                   : inferFieldAccess(ctx, e, target, name, sp, st))(
@@ -5005,7 +5005,7 @@ const noteGroupLets: _Curry<
       : _v.length >= 1
         ? (([s, ...rest]) =>
             ((_v) =>
-              _v._tag === "SLet" && (({ name, value }) => not(_Str_startsWith("$", name)))(_v)
+              _v._tag === "SLet" && (({ name, value }) => !_Str_startsWith("$", name))(_v)
                 ? (({ name, value }) =>
                     ((sp: SpanAt) =>
                       noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
@@ -5411,7 +5411,7 @@ const zonkRecorded: <B>(
  */
 const isConcrete: (t: Ty) => boolean = (t: Ty) => {
   const f: VarSets = freeInType(t);
-  return and(eq(_Set_size(f.tv), 0), eq(_Set_size(f.rv), 0));
+  return and(_Set_size(f.tv) === 0, _Set_size(f.rv) === 0);
 };
 const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
   3,

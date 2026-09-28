@@ -31,7 +31,6 @@ import {
   _curry,
   _tuple,
   and,
-  eq,
   map,
 } from "@mochi/compiler/runtime";
 

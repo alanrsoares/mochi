@@ -158,7 +158,7 @@ const nominal: _Curry<[name: string, args: Ty[], env: TsEnv], string> = _curry(
   3,
   (name: string, args: Ty[], env: TsEnv) => {
     const shown: string = qualifiedCon(name, env);
-    return eq(length(args), 0) ? shown : `${shown}<${namesOf(args, env)}>`;
+    return length(args) === 0 ? shown : `${shown}<${namesOf(args, env)}>`;
   },
 );
 const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = _curry(
@@ -235,7 +235,7 @@ const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(
                 ? tsOf(t, plainEnv(vars))
                 : _v._tag === "Some"
                   ? (({ value: fs }) =>
-                      eq(length(fs), 0) ? "{}" : `{ ${_Str_join("; ", _Array_sort(fs))} }`)(_v)
+                      length(fs) === 0 ? "{}" : `{ ${_Str_join("; ", _Array_sort(fs))} }`)(_v)
                   : (() => {
                       throw new Error("non-exhaustive match");
                     })())(shapeFieldsFrom(row, vars)))(_v)
@@ -263,7 +263,7 @@ const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(
                 ? (({ args: elems }) => `[${shapeJoined(elems, vars)}]`)(_v)
                 : _v._tag === "TyCon"
                   ? (({ name, args }) =>
-                      eq(length(args), 0)
+                      length(args) === 0
                         ? primitiveTs(name)
                         : `${name}<${shapeJoined(args, vars)}>`)(_v)
                   : _v._tag === "TyOneOf"
@@ -303,7 +303,7 @@ export const rowShapeKey: _Curry<[row: Row, vars: Map<number, string>], Option<s
 const aliasNameFor: _Curry<[row: Row, env: TsEnv], Option<string>> = _curry(
   2,
   (row: Row, env: TsEnv) =>
-    eq(_Map_size(env.recs), 0)
+    _Map_size(env.recs) === 0
       ? (None as Option<string>)
       : _Option_flatMap(
           (k: string) =>
@@ -333,7 +333,7 @@ const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: 
       ? (({ value: alias }) => alias)(_v)
       : _v._tag === "None"
         ? (([fields, tail]: [string[], Option<number>]) => {
-            const body: string = eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
+            const body: string = length(fields) === 0 ? "{}" : `{ ${_Str_join("; ", fields)} }`;
             return ((_v) =>
               _v._tag === "None"
                 ? body
@@ -344,7 +344,7 @@ const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: 
                           ? body
                           : _v._tag === "Some"
                             ? (({ value: name }) =>
-                                eq(length(fields), 0) ? name : `(${body} & ${name})`)(_v)
+                                length(fields) === 0 ? name : `(${body} & ${name})`)(_v)
                             : (() => {
                                 throw new Error("non-exhaustive match");
                               })())(_Map_get(id, env.vars)))(_v)
@@ -378,7 +378,7 @@ const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: 
       params,
     );
     return ((_v) =>
-      _v._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => not(isUnit(nextFrom)))(_v)
+      _v._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => !isUnit(nextFrom))(_v)
         ? (({ from: nextFrom, to: nextTo }) =>
             tsArrowParams(nextFrom, nextTo, env, i + 1, params1))(_v)
         : `(${_Str_join(", ", params1)}) => ${tsReturn(toT, env)}`)(toT);
@@ -462,18 +462,18 @@ const allDigitsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, (s: str
   i >= _Str_length(s) ? i > 1 : and(isDigitChar(_Str_slice(i, i + 1, s)), allDigitsFrom(s, i + 1)),
 );
 const isTypeLetter: (s: string) => boolean = (s: string) =>
-  eq(_Str_length(s), 1)
+  _Str_length(s) === 1
     ? isUpperChar(s)
-    : and(and(_Str_length(s) > 1, eq(_Str_slice(0, 1, s), "T")), allDigitsFrom(s, 1));
+    : and(and(_Str_length(s) > 1, _Str_slice(0, 1, s) === "T"), allDigitsFrom(s, 1));
 const depthStep: _Curry<[s: string, i: number, depth: number], number> = _curry(
   3,
   (s: string, i: number, depth: number) => {
     const ch: string = _Str_slice(i, i + 1, s);
-    return or(or(or(eq(ch, "<"), eq(ch, "{")), eq(ch, "(")), eq(ch, "["))
+    return or(or(or(ch === "<", ch === "{"), ch === "("), ch === "[")
       ? depth + 1
-      : or(or(eq(ch, "}"), eq(ch, ")")), eq(ch, "]"))
+      : or(or(ch === "}", ch === ")"), ch === "]")
         ? depth - 1
-        : and(eq(ch, ">"), or(eq(i, 0), not(eq(_Str_slice(i - 1, i, s), "="))))
+        : and(ch === ">", or(i === 0, _Str_slice(i - 1, i, s) !== "="))
           ? depth - 1
           : depth;
   },
@@ -497,7 +497,7 @@ const splitTopAt: _Curry<
   i >= _Str_length(s)
     ? _Array_append(_Str_slice(start, _Str_length(s), s), acc)
     : ((n: number) =>
-        and(and(eq(depth, 0), i + n <= _Str_length(s)), eq(_Str_slice(i, i + n, s), sep))
+        and(and(depth === 0, i + n <= _Str_length(s)), eq(_Str_slice(i, i + n, s), sep))
           ? splitTopAt(sep, s, i + n, 0, i + n, _Array_append(_Str_slice(start, i, s), acc))
           : splitTopAt(sep, s, i + 1, depthStep(s, i, depth), start, acc))(_Str_length(sep)),
 );
@@ -506,7 +506,7 @@ const findTop: _Curry<[ch: string, s: string, i: number, depth: number], Option<
   (ch: string, s: string, i: number, depth: number) =>
     i >= _Str_length(s)
       ? (None as Option<number>)
-      : and(eq(depth, 0), eq(_Str_slice(i, i + 1, s), ch))
+      : and(depth === 0, eq(_Str_slice(i, i + 1, s), ch))
         ? (Some(i) as Option<number>)
         : findTop(ch, s, i + 1, depthStep(s, i, depth)),
 );
@@ -526,7 +526,7 @@ const agreeList: _Curry<
   [useTs: string[], aliasTs: string[], subst: Map<string, string>, i: number],
   Option<Map<string, string>>
 > = _curry(4, (useTs: string[], aliasTs: string[], subst: Map<string, string>, i: number) =>
-  not(eq(length(useTs), length(aliasTs)))
+  !eq(length(useTs), length(aliasTs))
     ? (None as Option<Map<string, string>>)
     : i >= length(useTs)
       ? (Some(subst) as Option<Map<string, string>>)
@@ -662,7 +662,7 @@ const agreeFields: _Curry<
   [useFs: string[], aliasFs: string[], subst: Map<string, string>, i: number],
   Option<Map<string, string>>
 > = _curry(4, (useFs: string[], aliasFs: string[], subst: Map<string, string>, i: number) =>
-  not(eq(length(useFs), length(aliasFs)))
+  !eq(length(useFs), length(aliasFs))
     ? (None as Option<Map<string, string>>)
     : i >= length(useFs)
       ? (Some(subst) as Option<Map<string, string>>)
@@ -1059,9 +1059,9 @@ const headLetters: <A, B>(names: Map<A, string>, pins: Map<A, B>) => string = _c
   <A, B>(names: Map<A, string>, pins: Map<A, B>) => {
     const letters: string[] = map(
       (id: A) => _Option_unwrapOr("", _Map_get(id, names)),
-      filter((id: A) => not(_Map_has(id, pins)), _Map_keys(names)),
+      filter((id: A) => !_Map_has(id, pins), _Map_keys(names)),
     );
-    return eq(length(letters), 0) ? "" : `<${_Str_join(", ", letters)}>`;
+    return length(letters) === 0 ? "" : `<${_Str_join(", ", letters)}>`;
   },
 );
 /**

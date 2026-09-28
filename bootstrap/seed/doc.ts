@@ -32,9 +32,7 @@ import {
   _done,
   _recur,
   and,
-  eq,
   length,
-  not,
   or,
   sub,
 } from "@mochi/compiler/runtime";
@@ -76,7 +74,7 @@ const joinFrom: <A>(sep: A, parts: A[], i: number, acc: A[]) => A[] = _curry(
                 sep,
                 parts,
                 i + 1,
-                eq(i, 0) ? _Array_append(p, acc) : _Array_append(p, _Array_append(sep, acc)),
+                i === 0 ? _Array_append(p, acc) : _Array_append(p, _Array_append(sep, acc)),
               ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -154,7 +152,7 @@ const fits: _Curry<[width: number, start: Work], boolean> = _curry(
                                   _recur(rem, WCons({ i: i, m: "flat", d: inner }, tail)))(_v)
                               : _v._tag === "DLine"
                                 ? (({ hard, soft }) =>
-                                    or(hard, eq(m, "break"))
+                                    or(hard, m === "break")
                                       ? _done(true)
                                       : _recur(rem - (soft ? 0 : 1), tail))(_v)
                                 : _v._tag === "DLineSuffix"
@@ -233,7 +231,7 @@ const spaces: (n: number) => string = (n: number) => {
  */
 const posAfter: _Curry<[pos: number, s: string], number> = _curry(2, (pos: number, s: string) => {
   const parts: string[] = _Str_split("\n", s);
-  return eq(length(parts), 1)
+  return length(parts) === 1
     ? pos + _Str_length(s)
     : _Str_length(_Option_unwrapOr("", _Array_get(length(parts) - 1, parts)));
 });
@@ -276,7 +274,7 @@ export const render: _Curry<[root: Doc, width: number], string> = _curry(
     while (true) {
       const _step = ((_v) =>
         _v._tag === "WNil"
-          ? eq(length(sfx), 0)
+          ? length(sfx) === 0
             ? _done(out)
             : _recur(out, pos, consItems(sfx, WNil as Work), [] as Item[])
           : _v._tag === "WCons"
@@ -298,12 +296,12 @@ export const render: _Curry<[root: Doc, width: number], string> = _curry(
                               ))(_v)
                           : _v._tag === "DLine"
                             ? (({ hard, soft }) =>
-                                and(eq(m, "flat"), not(hard))
+                                and(m === "flat", !hard)
                                   ? ((s: string) =>
                                       _recur(`${out}${s}`, pos + _Str_length(s), tail, sfx))(
                                       soft ? "" : " ",
                                     )
-                                  : eq(length(sfx), 0)
+                                  : length(sfx) === 0
                                     ? _recur(
                                         `${out}
 ${spaces(i)}`,

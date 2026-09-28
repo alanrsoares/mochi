@@ -351,13 +351,45 @@ let collapseLambda = (params, body) =>
 
 // ---- expressions -----------------------------------------------------------
 
-/// The numeric calls whose saturated runtime behavior is exactly JavaScript's
-/// infix behavior. `eq` is structural and `mod` is true modulo, so neither
-/// belongs here.
+/// A string, number or bool literal.
+let isPrimLit = e => switch e {
+  | Ast.ENum(_, _, _) => true
+  | Ast.EStr(_, _) => true
+  | Ast.EBool(_, _) => true
+  | _ => false
+}
+
+/// Structural `eq` as a JavaScript comparison, where the two agree exactly
+/// (ADR 0115): against a primitive literal it is `===`, and against a nullary
+/// ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+let eqTest = (ctx: GCtx, left, right, op) => switch (left, right) {
+  | (_, Ast.ERef(c, _)) when isNullaryCtor(c, ctx.keys) => Some(
+      "(${ctx->genMember(left)}._tag ${op} \"${c}\")"
+    )
+  | (Ast.ERef(c, _), _) when isNullaryCtor(c, ctx.keys) => Some(
+      "(${ctx->genMember(right)}._tag ${op} \"${c}\")"
+    )
+  | _ => isPrimLit(left) || isPrimLit(right)
+      ? Some("(${ctx->genExpr(left)} ${op} ${ctx->genExpr(right)})")
+      : None
+}
+
+/// The calls whose saturated runtime behavior is exactly JavaScript's infix
+/// behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
+/// `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
+/// belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
 let tsInfix = (ctx: GCtx, fn, args) =>
   !ctx.preserveInfix
     ? None
     : switch (fn, args) {
+      | (Ast.ERef("eq", _), [left, right]) => ctx->eqTest(left, right, "===")
+      | (Ast.ERef("not", _), [operand]) => switch operand {
+          | Ast.ECall(Ast.ERef("eq", _), [left, right], _, _) => switch ctx->eqTest(left, right, "!==") {
+              | Some(test) => Some(test)
+              | None => Some("!(${ctx->genExpr(operand)})")
+            }
+          | _ => Some("!(${ctx->genExpr(operand)})")
+        }
       | (Ast.ERef(name, _), [left, right]) => switch name {
           | "add" => Some("(${ctx->genExpr(left)} + ${ctx->genExpr(right)})")
           | "sub" => Some("(${ctx->genExpr(left)} - ${ctx->genExpr(right)})")

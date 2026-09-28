@@ -281,7 +281,7 @@ const arrMissingLen: <A>(
   n: number,
 ) => number = _curry(2, <A>(shape: { fixed: number[]; restFrom: Option<number> } & A, n: number) =>
   and(
-    not(_Array_contains(n, shape.fixed)),
+    !_Array_contains(n, shape.fixed),
     ((_v) =>
       _v._tag === "None"
         ? true
@@ -535,11 +535,11 @@ const useful: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], UR
   (m: MP[][], width: number, reg: Registry, fuel: number) =>
     fuel <= 0
       ? (UFuel as URes)
-      : eq(width, 0)
-        ? eq(length(m), 0)
+      : width === 0
+        ? length(m) === 0
           ? USome([] as MP[], fuel - 1)
           : UNone(fuel - 1)
-        : eq(length(m), 0)
+        : length(m) === 0
           ? USome(mWilds(width), fuel - 1)
           : usefulSplit(m, width, reg, fuel - 1),
 );
@@ -699,7 +699,7 @@ const usefulCtor: _Curry<
               ? (({ value: n }) => MCtor(n, mWilds(arityOfCtor(reg, n))))(_v)
               : (() => {
                   throw new Error("non-exhaustive match");
-                })())(_Array_head(filter((n: string) => not(_Array_contains(n, names)), all))),
+                })())(_Array_head(filter((n: string) => !_Array_contains(n, names), all))),
         useful(defaultM(m), width - 1, reg, fuel),
       );
 });
@@ -711,7 +711,7 @@ const usefulBool: _Curry<
   const hasTrue: boolean = _Array_contains(true, vs);
   return and(hasTrue, _Array_contains(false, vs))
     ? tryHeads(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
-    : prependWitness(MBool(not(hasTrue)), useful(defaultM(m), width - 1, reg, fuel));
+    : prependWitness(MBool(!hasTrue), useful(defaultM(m), width - 1, reg, fuel));
 });
 const usefulArr: _Curry<[m: MP[][], col: MP[], width: number, reg: Registry, fuel: number], URes> =
   _curry(5, (m: MP[][], col: MP[], width: number, reg: Registry, fuel: number) => {
@@ -766,9 +766,7 @@ export const showWitness: (mp: MP) => string = (mp: MP) =>
               ? (({ value: v }) => show(v))(_v)
               : _v._tag === "MCtor"
                 ? (({ name: n, args }) =>
-                    eq(length(args), 0) ? n : `${n}(${_Str_join(", ", map(showWitness, args))})`)(
-                    _v,
-                  )
+                    length(args) === 0 ? n : `${n}(${_Str_join(", ", map(showWitness, args))})`)(_v)
                 : _v._tag === "MTuple"
                   ? (({ elems }) => `(${_Str_join(", ", map(showWitness, elems))})`)(_v)
                   : _v._tag === "MRecord"

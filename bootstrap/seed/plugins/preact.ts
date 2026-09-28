@@ -128,7 +128,7 @@ const inferUseState: <A, B, C, D>(
     st: B,
     api: { inferExpr: (a: A, b: B) => Result<[Ty, St], C> } & D,
   ) =>
-    and(isRef(fn, "useState"), eq(length(args), 1))
+    and(isRef(fn, "useState"), length(args) === 1)
       ? ((_v) =>
           _v._tag === "None"
             ? Ok(None as Option<[Ty, St]>)
@@ -167,7 +167,7 @@ const inferUseLazyState: <A, B, C, D, E>(
       inferExpr: (a: Expr, b: { next: number } & D) => Result<[A, B], C>;
     } & E,
   ) =>
-    and(isRef(fn, "useLazyState"), eq(length(args), 1))
+    and(isRef(fn, "useLazyState"), length(args) === 1)
       ? ((_v) =>
           _v._tag === "None"
             ? Ok(None as Option<[Ty, St]>)
@@ -205,7 +205,7 @@ const inferUseRef: <A, B, C, D>(
     st: B,
     api: { inferExpr: (a: A, b: B) => Result<[Ty, St], C> } & D,
   ) =>
-    and(isRef(fn, "useRef"), eq(length(args), 1))
+    and(isRef(fn, "useRef"), length(args) === 1)
       ? ((_v) =>
           _v._tag === "None"
             ? Ok(None as Option<[Ty, St]>)
@@ -319,7 +319,7 @@ const inferEffectLike: <A, D, E, F>(
                       ([effectT, st2]: [A, { next: number } & E]) =>
                         _Result_flatMap(
                           (st3: { next: number } & D) =>
-                            eq(length(args), 1)
+                            length(args) === 1
                               ? (([dep, st4]: [Ty, { next: number } & D]) =>
                                   Ok(Some(_tuple(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3))
                               : _Result_map(
@@ -362,7 +362,7 @@ const inferUseCallback: <C>(
               ? (({ value: callback }) =>
                   _Result_flatMap(
                     ([callbackT, st1]: [Ty, St]) =>
-                      eq(length(args), 1)
+                      length(args) === 1
                         ? (([dep, st2]: [Ty, St]) =>
                             Ok(
                               Some(_tuple(tArrow(arrOf(dep), zonk(callbackT, st2)), st2)) as Option<
@@ -411,7 +411,7 @@ const inferUseMemo: <A, D, E>(
                       ([thunkT, st2]: [A, { next: number } & D]) =>
                         _Result_flatMap(
                           (st3: St) =>
-                            eq(length(args), 1)
+                            length(args) === 1
                               ? (([dep, st4]: [Ty, St]) =>
                                   Ok(
                                     Some(

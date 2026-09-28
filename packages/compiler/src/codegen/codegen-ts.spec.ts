@@ -148,6 +148,19 @@ test("structural equality remains a runtime call", () => {
   expect(out).toContain('import { _curry, eq } from "@mochi/runtime";');
 });
 
+// ADR 0115: only where structural `eq` and `===` agree exactly.
+test.each([
+  ['let f = s => s == "a"', '(s === "a")'],
+  ["let f = n => 1 != n", "(1 !== n)"],
+  ["type T = A | B(number)\nlet f = t => t == A", '(t._tag === "A")'],
+  ["type T = A | B(number)\nlet f = t => A != t", '(t._tag !== "A")'],
+  ["let f = b => !b", "!(b)"],
+])("exact comparison %p emits as an operator", (src, out) => {
+  const emitted = ts(src);
+  expect(emitted).toContain(out);
+  expect(emitted).not.toMatch(/import \{[^}]*\b(eq|not)\b[^}]*\} from "@mochi\/runtime"/);
+});
+
 test("parser-originated JSX re-folds to TSX while handwritten h remains a call", () => {
   const jsx = ts('let el = <button disabled>{"go"}</button>');
   expect(jsx).toContain("/** @jsx h */");

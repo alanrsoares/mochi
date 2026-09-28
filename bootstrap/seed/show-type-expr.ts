@@ -1,14 +1,6 @@
 import type { TypeExpr } from "./ast";
 
-import {
-  _Str_chars,
-  _Str_endsWith,
-  _Str_join,
-  _curry,
-  eq,
-  length,
-  map,
-} from "@mochi/compiler/runtime";
+import { _Str_chars, _Str_endsWith, _Str_join, _curry, length, map } from "@mochi/compiler/runtime";
 
 import * as Ast from "./ast";
 const escChar: (c: string) => string = (c: string) =>
@@ -31,7 +23,7 @@ const joinWith: <A>(f: (a: A) => string, sep: string, tes: A[]) => string = _cur
 export const showTypeExpr: (te: TypeExpr) => string = (te: TypeExpr) =>
   ((_v) =>
     _v._tag === "TyName"
-      ? (({ name }) => (eq(name, "unit") ? "()" : name))(_v)
+      ? (({ name }) => (name === "unit" ? "()" : name))(_v)
       : _v._tag === "TyApp"
         ? (({ ctor, args }) => `${ctor}<${joinWith(typeArg, ", ", args)}>`)(_v)
         : _v._tag === "TyTuple"
@@ -41,7 +33,7 @@ export const showTypeExpr: (te: TypeExpr) => string = (te: TypeExpr) =>
             : _v._tag === "TyQual"
               ? (({ alias, name, args }) =>
                   ((head: string) =>
-                    eq(length(args), 0) ? head : `${head}<${joinWith(typeArg, ", ", args)}>`)(
+                    length(args) === 0 ? head : `${head}<${joinWith(typeArg, ", ", args)}>`)(
                     `${alias}.${name}`,
                   ))(_v)
               : _v._tag === "TyLit"

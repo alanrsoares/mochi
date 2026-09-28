@@ -164,9 +164,43 @@ export const emptyNsEmit = (e: FieldExpr, ctx: GenCtx): string | null => {
   }
 };
 
-/** Operators whose Mochi and JavaScript semantics coincide for a saturated call. */
+/** A string, number or bool literal. */
+const isPrimLit = (e: Expr): boolean => e.kind === "num" || e.kind === "str" || e.kind === "bool";
+
+const isNullaryCtorRef = (e: Expr, ctx: GenCtx): e is Extract<Expr, { kind: "ref" }> =>
+  e.kind === "ref" && ctx.ctorKeys.get(e.name)?.length === 0;
+
+/**
+ * Structural `eq` as a JavaScript comparison, where the two agree exactly (ADR
+ * 0115): against a primitive literal it is `===`, and against a nullary ctor (a
+ * bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+ */
+const eqTest = (l: Expr, r: Expr, op: "===" | "!==", ctx: GenCtx): string | null => {
+  if (isNullaryCtorRef(r, ctx)) return `(${genMember(l, ctx)}._tag ${op} "${r.name}")`;
+  if (isNullaryCtorRef(l, ctx)) return `(${genMember(r, ctx)}._tag ${op} "${l.name}")`;
+  return isPrimLit(l) || isPrimLit(r) ? `(${genExpr(l, ctx)} ${op} ${genExpr(r, ctx)})` : null;
+};
+
+/**
+ * Operators whose Mochi and JavaScript semantics coincide for a saturated call:
+ * the numeric ones, `not`, and the `eq` / `!=` cases of `eqTest`. General `eq`
+ * is structural and `mod` is true modulo; `and` / `or` evaluate both sides.
+ */
 const tsInfix = (e: CallExpr, ctx: GenCtx): string | null => {
-  if (!ctx.preserveInfix || e.fn.kind !== "ref" || e.args.length !== 2) return null;
+  if (!ctx.preserveInfix || e.fn.kind !== "ref") return null;
+  const [left, right] = e.args;
+  if (e.fn.name === "eq" && e.args.length === 2) return eqTest(left!, right!, "===", ctx);
+  if (e.fn.name === "not" && e.args.length === 1) {
+    const test =
+      left!.kind === "call" &&
+      left!.fn.kind === "ref" &&
+      left!.fn.name === "eq" &&
+      left!.args.length === 2
+        ? eqTest(left!.args[0]!, left!.args[1]!, "!==", ctx)
+        : null;
+    return test ?? `!(${genExpr(left!, ctx)})`;
+  }
+  if (e.args.length !== 2) return null;
   const op = (
     { add: "+", sub: "-", mul: "*", div: "/", lt: "<", lte: "<=", gt: ">", gte: ">=" } as const
   )[e.fn.name as "add" | "sub" | "mul" | "div" | "lt" | "lte" | "gt" | "gte"];
