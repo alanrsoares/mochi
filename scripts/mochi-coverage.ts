@@ -47,8 +47,11 @@ const main = async (): Promise<void> => {
       process.execPath,
       "test",
       ...specs,
-      // Workers merge into one lcov with the serial totals, at a fifth of the wall clock.
-      "--parallel",
+      // One spec per worker. A worker that runs a second spec file reloads the
+      // modules it shares with the first, and Bun's merged lcov then drops hits:
+      // a 4-core CI runner reported ~6 points less line coverage than serial.
+      // With one file each, the merge matches the serial totals on any machine.
+      `--parallel=${specs.length}`,
       "--coverage",
       "--coverage-reporter=text",
       "--coverage-reporter=lcov",

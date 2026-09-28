@@ -180,6 +180,8 @@ unbound names), filtered to the diagnostics overlapping the requested range. A f
   over the repo's `.mochi` sources from the command line. Each file resolves its own
   `mochi.plugins.ts` by the upward walk `pluginsForDocument` does for the editor: sweeping
   without a tree's manifest reports its vendor call sites (`on(…)`, `tw.*`) as type errors.
+  `fixtures/` and `test/conformance/` are skipped: they are broken on purpose, and the
+  conformance runner checks their expected diagnostics (ADR 0105). A clean repo exits 0.
   Dependency inference is shared across files through a bootstrap graph cache, one per
   manifest, holding one slice per module ([ADR 0111](adr/0111-bootstrap-graph-per-module-slices.md)),
   so each module is inferred about once per sweep (~45s for `bootstrap/`, most of it the
