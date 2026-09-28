@@ -602,17 +602,21 @@ let mergeRecovered = (e: MErr, checks) =>
     ? checks
     : Array.concat(checks, [e])
 
+let recoverOne = (ctx, m, isEntry, errors, opts) => switch ctx->compileOne(m, true, isEntry, opts) {
+  | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
+      { ctx, errors: Array.concat(errors, mergeRecovered(e, checks)) }
+  | Ok(ctx1) => { ctx: ctx1, errors }
+}
+
 let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
   | [] => { ctx, errors }
-  | [m, ...rest] => switch ctx->compileOne(m, true, Array.length(rest) == 0, opts) {
-      | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
-          ctx->compileAllRecovering(
-            rest,
-            Array.concat(errors, mergeRecovered(e, checks)),
-            opts
-          )
-      | Ok(ctx1) => ctx1->compileAllRecovering(rest, errors, opts)
-    }
+  | [m, ...rest] => let next = ctx->recoverOne(
+      m,
+      Array.length(rest) == 0,
+      errors,
+      opts
+    ) in
+      next.ctx->compileAllRecovering(rest, next.errors, opts)
 }
 
 /// freshRecoveryGraphState : unit -> RecoveryGraphState
@@ -637,6 +641,56 @@ export let recoverGraphFromWith = (state, graph, opts: Opts) =>
 
 export let recoverGraphFrom = (state, graph) =>
   state->recoverGraphFromWith(graph, defaultOpts)
+
+// --- per-module slices (ADR 0111) ---------------------------------------------
+// A module reads only its own imports' entries out of a graph state, and every
+// such read is keyed by the dependency's path. So one module's entries are a
+// slice a host can cache per module, and any dependency closure can be rebuilt
+// by merging its members' slices, whatever order the entry walked them in.
+
+/// recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Opts -> RecoveryGraphState
+/// Recover one module on top of a state that already holds its dependencies.
+/// A host stepping module by module says which one is the entry: a one-module
+/// suffix cannot tell, and `strictEntry` judges only the entry strictly.
+export let recoverModuleWith = (state: RecoveryGraphState, loaded: Loaded, isEntry, opts: Opts) =>
+  state.ctx->recoverOne(loaded, isEntry, state.errors, opts)
+
+// `m` with every key but `key` removed, so the result keeps `m`'s own type.
+let keepOnly = (key, keys, i, m) => switch Array.get(i, keys) {
+  | None => m
+  | Some(k) => keepOnly(key, keys, i + 1, k == key ? m : Map.delete(k, m))
+}
+
+let onlyAt = (key, m) => keepOnly(key, Map.keys(m), 0, m)
+
+/// recoverySliceOf : RecoveryGraphState -> string -> RecoveryGraphState
+/// The entries `path` published into `state`, and no errors: the host keeps
+/// each module's errors itself, as the suffix `recoverModuleWith` appended.
+export let recoverySliceOf = (state: RecoveryGraphState, path) =>
+  {
+    ctx: {
+      exportsByPath: onlyAt(path, state.ctx.exportsByPath),
+      regByPath: onlyAt(path, state.ctx.regByPath),
+      keysByPath: onlyAt(path, state.ctx.keysByPath),
+      qualsByPath: onlyAt(path, state.ctx.qualsByPath),
+      outputs: Array.filter(o => o.path == path, state.ctx.outputs)
+    },
+    errors: []
+  }
+
+/// mergeRecoveryStates : RecoveryGraphState -> RecoveryGraphState -> RecoveryGraphState
+/// `b`'s modules after `a`'s. Slices hold disjoint paths, so no entry is lost.
+export let mergeRecoveryStates = (a: RecoveryGraphState, b: RecoveryGraphState) =>
+  {
+    ctx: {
+      exportsByPath: mergeMap(b.ctx.exportsByPath, a.ctx.exportsByPath),
+      regByPath: mergeMap(b.ctx.regByPath, a.ctx.regByPath),
+      keysByPath: mergeMap(b.ctx.keysByPath, a.ctx.keysByPath),
+      qualsByPath: mergeMap(b.ctx.qualsByPath, a.ctx.qualsByPath),
+      outputs: Array.concat(a.ctx.outputs, b.ctx.outputs)
+    },
+    errors: Array.concat(a.errors, b.errors)
+  }
 
 /// Recovery graph driver: keeps checking after failures and gives downstream
 /// imports a polymorphic placeholder rather than an unbound-name cascade.
@@ -730,6 +784,31 @@ export let inferGraphTypesFromWith = (state, graph, opts: Opts) =>
 
 export let inferGraphTypesFrom = (state, graph) =>
   state->inferGraphTypesFromWith(graph, defaultOpts)
+
+/// inferSliceOf : InferGraphState -> string -> InferGraphState
+/// The entries and typed output `path` added to `state` (ADR 0111). `aliases`
+/// is the whole accumulated scope, which merging leaves unchanged.
+export let inferSliceOf = (state, path) =>
+  {
+    exportsByPath: onlyAt(path, state.exportsByPath),
+    regByPath: onlyAt(path, state.regByPath),
+    keysByPath: onlyAt(path, state.keysByPath),
+    qualsByPath: onlyAt(path, state.qualsByPath),
+    aliases: state.aliases,
+    outputs: Array.filter(o => o.path == path, state.outputs)
+  }
+
+/// mergeInferStates : InferGraphState -> InferGraphState -> InferGraphState
+/// `b`'s modules after `a`'s.
+export let mergeInferStates = (a, b) =>
+  {
+    exportsByPath: mergeMap(b.exportsByPath, a.exportsByPath),
+    regByPath: mergeMap(b.regByPath, a.regByPath),
+    keysByPath: mergeMap(b.keysByPath, a.keysByPath),
+    qualsByPath: mergeMap(b.qualsByPath, a.qualsByPath),
+    aliases: mergeMap(b.aliases, a.aliases),
+    outputs: Array.concat(a.outputs, b.outputs)
+  }
 
 /// inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
 /// Infer every dependency-ordered module with the exact import environment its

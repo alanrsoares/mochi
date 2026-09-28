@@ -176,8 +176,9 @@ unbound names), filtered to the diagnostics overlapping the requested range. A f
   `mochi.plugins.ts` by the upward walk `pluginsForDocument` does for the editor: sweeping
   without a tree's manifest reports its vendor call sites (`on(…)`, `tw.*`) as type errors.
   Dependency inference is shared across files through a bootstrap graph cache, one per
-  manifest ([ADR 0095](adr/0095-module-context-cache.md)) — without it the `bootstrap/`
-  graph is re-inferred once per file. It is still seconds, not sub-second, so this is not wired into
+  manifest, holding one slice per module ([ADR 0111](adr/0111-bootstrap-graph-per-module-slices.md)),
+  so each module is inferred about once per sweep (~45s for `bootstrap/`, most of it the
+  first cold graph). It is still seconds, not sub-second, so this is not wired into
   `lint` (biome) or the `check` gate — it is the standalone sweep, and the shape a
   `mochi check` command would take.
 - **`.d.ts`** — HM types lowered to TypeScript declarations, including declarations for

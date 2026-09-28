@@ -33,11 +33,25 @@ type SeedModule = {
     modules: BootstrapGraphModule[],
     opts: SeedOptions,
   ) => BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic>;
+  inferSliceOf: (state: BootstrapGraphInferState, path: string) => BootstrapGraphInferState;
+  mergeInferStates: (
+    a: BootstrapGraphInferState,
+    b: BootstrapGraphInferState,
+  ) => BootstrapGraphInferState;
   freshRecoveryGraphState: () => BootstrapRecoveryGraphState;
-  recoverGraphFromWith: (
+  recoverModuleWith: (
     state: BootstrapRecoveryGraphState,
-    modules: BootstrapGraphModule[],
+    module: BootstrapGraphModule,
+    isEntry: boolean,
     opts: SeedOptions,
+  ) => BootstrapRecoveryGraphState;
+  recoverySliceOf: (
+    state: BootstrapRecoveryGraphState,
+    path: string,
+  ) => BootstrapRecoveryGraphState;
+  mergeRecoveryStates: (
+    a: BootstrapRecoveryGraphState,
+    b: BootstrapRecoveryGraphState,
   ) => BootstrapRecoveryGraphState;
   compileGraphRecoveringWith: (
     modules: BootstrapGraphModule[],
@@ -139,12 +153,46 @@ export const inferGraphTypesFromBootstrap = (
 export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState =>
   seed.freshRecoveryGraphState();
 
-export const recoverGraphFromBootstrap = (
+/**
+ * Recover one module over a state holding its dependencies. `isEntry` says
+ * whether it is the graph entry, which `strictEntry` judges strictly.
+ */
+export const recoverModuleBootstrap = (
   state: BootstrapRecoveryGraphState,
-  modules: BootstrapGraphModule[],
+  module: BootstrapGraphModule,
+  isEntry: boolean,
   plugins?: readonly BootstrapPlugin[],
 ): BootstrapRecoveryGraphState =>
-  seed.recoverGraphFromWith(state, modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
+  seed.recoverModuleWith(
+    state,
+    module,
+    isEntry,
+    toSeedOptions({ ...editorBootstrapOptions, plugins }),
+  );
+
+/** The entries `path` published into `state`, with no errors (ADR 0111). */
+export const recoverySliceOfBootstrap = (
+  state: BootstrapRecoveryGraphState,
+  path: string,
+): BootstrapRecoveryGraphState => seed.recoverySliceOf(state, path);
+
+/** `b`'s modules after `a`'s. */
+export const mergeRecoveryStatesBootstrap = (
+  a: BootstrapRecoveryGraphState,
+  b: BootstrapRecoveryGraphState,
+): BootstrapRecoveryGraphState => seed.mergeRecoveryStates(a, b);
+
+/** The entries and typed output `path` added to `state` (ADR 0111). */
+export const inferSliceOfBootstrap = (
+  state: BootstrapGraphInferState,
+  path: string,
+): BootstrapGraphInferState => seed.inferSliceOf(state, path);
+
+/** `b`'s modules after `a`'s. */
+export const mergeInferStatesBootstrap = (
+  a: BootstrapGraphInferState,
+  b: BootstrapGraphInferState,
+): BootstrapGraphInferState => seed.mergeInferStates(a, b);
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],

@@ -49,6 +49,7 @@ import {
   _Array_flatMap,
   _Array_get,
   _Array_sort,
+  _Map_delete,
   _Map_get,
   _Map_getOr,
   _Map_has,
@@ -1086,6 +1087,20 @@ const mergeRecovered: _Curry<[e: StageErr, checks: StageErr[]], StageErr[]> = _c
       ? checks
       : _Array_concat(checks, [e]),
 );
+const recoverOne: _Curry<
+  [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: StageErr[], opts: Opts],
+  RecoveryGraphState
+> = _curry(5, (ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: StageErr[], opts: Opts) =>
+  match(compileOne(ctx, m, true, isEntry, opts))
+    .with({ _tag: "Err" }, ({ error: e }) =>
+      ((checks: StageErr[]) => ({
+        ctx: ctx,
+        errors: _Array_concat(errors, mergeRecovered(e, checks)),
+      }))(checkErrorsRecovering(ctx, m)),
+    )
+    .with({ _tag: "Ok" }, ({ value: ctx1 }) => ({ ctx: ctx1, errors: errors }))
+    .exhaustive(),
+);
 const compileAllRecovering: _Curry<
   [ctx: RecoveryCtx, graph: Loaded[], errors: StageErr[], opts: Opts],
   RecoveryGraphState
@@ -1104,18 +1119,9 @@ const compileAllRecovering: _Curry<
         return _g.length >= 1;
       },
       ([m, ...rest]) =>
-        match(compileOne(ctx, m, true, eq(length(rest), 0), opts))
-          .with({ _tag: "Err" }, ({ error: e }) =>
-            ((checks: StageErr[]) =>
-              compileAllRecovering(
-                ctx,
-                rest,
-                _Array_concat(errors, mergeRecovered(e, checks)),
-                opts,
-              ))(checkErrorsRecovering(ctx, m)),
-          )
-          .with({ _tag: "Ok" }, ({ value: ctx1 }) => compileAllRecovering(ctx1, rest, errors, opts))
-          .exhaustive(),
+        ((next: RecoveryGraphState) => compileAllRecovering(next.ctx, rest, next.errors, opts))(
+          recoverOne(ctx, m, eq(length(rest), 0), errors, opts),
+        ),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -1157,6 +1163,66 @@ export const recoverGraphFrom: <A>(
   <A>(state: { ctx: RecoveryCtx; errors: StageErr[] } & A, graph: Loaded[]) =>
     recoverGraphFromWith(state, graph, defaultOpts),
 );
+/**
+ * recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Opts -> RecoveryGraphState
+ * Recover one module on top of a state that already holds its dependencies.
+ * A host stepping module by module says which one is the entry: a one-module
+ * suffix cannot tell, and `strictEntry` judges only the entry strictly.
+ */
+export const recoverModuleWith: _Curry<
+  [state: RecoveryGraphState, loaded: Loaded, isEntry: boolean, opts: Opts],
+  RecoveryGraphState
+> = _curry(4, (state: RecoveryGraphState, loaded: Loaded, isEntry: boolean, opts: Opts) =>
+  recoverOne(state.ctx, loaded, isEntry, state.errors, opts),
+);
+const keepOnly: <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => Map<A, B> = _curry(
+  4,
+  <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) =>
+    match(_Array_get(i, keys))
+      .with({ _tag: "None" }, () => m)
+      .with({ _tag: "Some" }, ({ value: k }) =>
+        keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m)),
+      )
+      .exhaustive(),
+);
+const onlyAt: <A, B>(key: A, m: Map<A, B>) => Map<A, B> = _curry(2, <A, B>(key: A, m: Map<A, B>) =>
+  keepOnly(key, _Map_keys(m), 0, m),
+);
+/**
+ * recoverySliceOf : RecoveryGraphState -> string -> RecoveryGraphState
+ * The entries `path` published into `state`, and no errors: the host keeps
+ * each module's errors itself, as the suffix `recoverModuleWith` appended.
+ */
+export const recoverySliceOf: _Curry<
+  [state: RecoveryGraphState, path: string],
+  RecoveryGraphState
+> = _curry(2, (state: RecoveryGraphState, path: string) => ({
+  ctx: {
+    exportsByPath: onlyAt(path, state.ctx.exportsByPath),
+    regByPath: onlyAt(path, state.ctx.regByPath),
+    keysByPath: onlyAt(path, state.ctx.keysByPath),
+    qualsByPath: onlyAt(path, state.ctx.qualsByPath),
+    outputs: filter((o: ModuleOutput) => eq(o.path, path), state.ctx.outputs),
+  },
+  errors: [] as { end: number; message: string; start: number }[],
+}));
+/**
+ * mergeRecoveryStates : RecoveryGraphState -> RecoveryGraphState -> RecoveryGraphState
+ * `b`'s modules after `a`'s. Slices hold disjoint paths, so no entry is lost.
+ */
+export const mergeRecoveryStates: _Curry<
+  [a: RecoveryGraphState, b: RecoveryGraphState],
+  RecoveryGraphState
+> = _curry(2, (a: RecoveryGraphState, b: RecoveryGraphState) => ({
+  ctx: {
+    exportsByPath: mergeMap(b.ctx.exportsByPath, a.ctx.exportsByPath),
+    regByPath: mergeMap(b.ctx.regByPath, a.ctx.regByPath),
+    keysByPath: mergeMap(b.ctx.keysByPath, a.ctx.keysByPath),
+    qualsByPath: mergeMap(b.ctx.qualsByPath, a.ctx.qualsByPath),
+    outputs: _Array_concat(a.ctx.outputs, b.ctx.outputs),
+  },
+  errors: _Array_concat(a.errors, b.errors),
+}));
 /**
  * Recovery graph driver: keeps checking after failures and gives downstream
  * imports a polymorphic placeholder rather than an unbound-name cascade.
@@ -1576,6 +1642,105 @@ export const inferGraphTypesFrom: <A>(
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
   ) => inferGraphTypesFromWith(state, graph, defaultOpts),
+);
+/**
+ * inferSliceOf : InferGraphState -> string -> InferGraphState
+ * The entries and typed output `path` added to `state` (ADR 0111). `aliases`
+ * is the whole accumulated scope, which merging leaves unchanged.
+ */
+export const inferSliceOf: <A, B, C, D, E, F, G, H>(
+  state: {
+    outputs: ({ path: A } & G)[];
+    aliases: B;
+    qualsByPath: Map<A, C>;
+    keysByPath: Map<A, D>;
+    regByPath: Map<A, E>;
+    exportsByPath: Map<A, F>;
+  } & H,
+  path: A,
+) => {
+  exportsByPath: Map<A, F>;
+  regByPath: Map<A, E>;
+  keysByPath: Map<A, D>;
+  qualsByPath: Map<A, C>;
+  aliases: B;
+  outputs: ({ path: A } & G)[];
+} = _curry(
+  2,
+  <A, B, C, D, E, F, G, H>(
+    state: {
+      outputs: ({ path: A } & G)[];
+      aliases: B;
+      qualsByPath: Map<A, C>;
+      keysByPath: Map<A, D>;
+      regByPath: Map<A, E>;
+      exportsByPath: Map<A, F>;
+    } & H,
+    path: A,
+  ) => ({
+    exportsByPath: onlyAt(path, state.exportsByPath),
+    regByPath: onlyAt(path, state.regByPath),
+    keysByPath: onlyAt(path, state.keysByPath),
+    qualsByPath: onlyAt(path, state.qualsByPath),
+    aliases: state.aliases,
+    outputs: filter((o: { path: A } & G) => eq(o.path, path), state.outputs),
+  }),
+);
+/**
+ * mergeInferStates : InferGraphState -> InferGraphState -> InferGraphState
+ * `b`'s modules after `a`'s.
+ */
+export const mergeInferStates: <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+  a: {
+    outputs: A[];
+    aliases: Map<B, C>;
+    qualsByPath: Map<D, E>;
+    keysByPath: Map<F, G>;
+    regByPath: Map<H, I>;
+    exportsByPath: Map<J, K>;
+  } & L,
+  b: {
+    outputs: A[];
+    aliases: Map<B, C>;
+    qualsByPath: Map<D, E>;
+    keysByPath: Map<F, G>;
+    regByPath: Map<H, I>;
+    exportsByPath: Map<J, K>;
+  } & M,
+) => {
+  exportsByPath: Map<J, K>;
+  regByPath: Map<H, I>;
+  keysByPath: Map<F, G>;
+  qualsByPath: Map<D, E>;
+  aliases: Map<B, C>;
+  outputs: A[];
+} = _curry(
+  2,
+  <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+    a: {
+      outputs: A[];
+      aliases: Map<B, C>;
+      qualsByPath: Map<D, E>;
+      keysByPath: Map<F, G>;
+      regByPath: Map<H, I>;
+      exportsByPath: Map<J, K>;
+    } & L,
+    b: {
+      outputs: A[];
+      aliases: Map<B, C>;
+      qualsByPath: Map<D, E>;
+      keysByPath: Map<F, G>;
+      regByPath: Map<H, I>;
+      exportsByPath: Map<J, K>;
+    } & M,
+  ) => ({
+    exportsByPath: mergeMap(b.exportsByPath, a.exportsByPath),
+    regByPath: mergeMap(b.regByPath, a.regByPath),
+    keysByPath: mergeMap(b.keysByPath, a.keysByPath),
+    qualsByPath: mergeMap(b.qualsByPath, a.qualsByPath),
+    aliases: mergeMap(b.aliases, a.aliases),
+    outputs: _Array_concat(a.outputs, b.outputs),
+  }),
 );
 /**
  * inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
