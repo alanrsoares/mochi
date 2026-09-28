@@ -32,8 +32,6 @@ import {
   min,
 } from "@mochi/compiler/runtime";
 
-import { match } from "@onrails/pattern";
-
 const hasIndex: <A, B, C>(v: A, st: { index: Map<A, B> } & C) => boolean = _curry(
   2,
   <A, B, C>(v: A, st: { index: Map<A, B> } & C) => _Map_has(v, st.index),
@@ -47,20 +45,28 @@ const lowOfV: <A, B>(v: A, st: { low: Map<A, number> } & B) => number = _curry(
   <A, B>(v: A, st: { low: Map<A, number> } & B) => _Map_getOr(-1, v, st.low),
 );
 const neighborsOf: <A>(v: number, adj: A[][]) => A[] = _curry(2, <A>(v: number, adj: A[][]) =>
-  match(_Array_get(v, adj))
-    .with({ _tag: "Some" }, ({ value: ws }) => ws)
-    .with({ _tag: "None" }, () => [] as A[])
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: ws }) => ws)(_v)
+      : _v._tag === "None"
+        ? ([] as A[])
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(v, adj)),
 );
 const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
   3,
   <A>(v: A, xs: A[], i: number) => {
     let j: number = i;
     while (true) {
-      const _step = match(_Array_get(j, xs))
-        .with({ _tag: "None" }, () => _done(-1))
-        .with({ _tag: "Some" }, ({ value: x }) => (eq(x, v) ? _done(j) : _recur(j + 1)))
-        .exhaustive();
+      const _step = ((_v) =>
+        _v._tag === "None"
+          ? _done(-1)
+          : _v._tag === "Some"
+            ? (({ value: x }) => (eq(x, v) ? _done(j) : _recur(j + 1)))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(_Array_get(j, xs));
       if (_step._tag === "recur") {
         j = _step.args[0];
         continue;
@@ -75,36 +81,30 @@ const visitNeighbors: _Curry<[v: number, ws: number[], adj: number[][], st: TSt]
     let remaining: number[] = ws;
     let current: TSt = st;
     while (true) {
-      const _step = match(remaining)
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
-          () => _done(current),
-        )
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
-          ([w, ...rest]) =>
-            hasIndex(w, current)
-              ? _Set_has(w, current.onStack)
-                ? _recur(rest, {
-                    ...current,
-                    low: _Map_set(v, min(lowOfV(v, current), indexOfV(w, current)), current.low),
-                  })
-                : _recur(rest, current)
-              : ((next: TSt) =>
-                  _recur(rest, {
-                    ...next,
-                    low: _Map_set(v, min(lowOfV(v, next), lowOfV(w, next)), next.low),
-                  }))(connect(w, adj, current)),
-        )
-        .otherwise(() => {
-          throw new Error("non-exhaustive match");
-        });
+      const _step = ((_v) =>
+        _v.length === 0
+          ? _done(current)
+          : _v.length >= 1
+            ? (([w, ...rest]) =>
+                hasIndex(w, current)
+                  ? _Set_has(w, current.onStack)
+                    ? _recur(rest, {
+                        ...current,
+                        low: _Map_set(
+                          v,
+                          min(lowOfV(v, current), indexOfV(w, current)),
+                          current.low,
+                        ),
+                      })
+                    : _recur(rest, current)
+                  : ((next: TSt) =>
+                      _recur(rest, {
+                        ...next,
+                        low: _Map_set(v, min(lowOfV(v, next), lowOfV(w, next)), next.low),
+                      }))(connect(w, adj, current)))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(remaining);
       if (_step._tag === "recur") {
         [remaining, current] = _step.args;
         continue;

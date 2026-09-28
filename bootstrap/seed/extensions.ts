@@ -37,12 +37,14 @@ export const PREACT_PLUGIN = preactPlugin;
 export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] = _curry(
   2,
   <A>(pluginsOpt: Option<A[]>, builtins: A[]) =>
-    match(pluginsOpt)
-      .with({ _tag: "None" }, () => builtins)
-      .with({ _tag: "Some" }, ({ value: ps }) =>
-        eq(length(ps), 0) ? ([] as A[]) : _Array_concat(builtins, ps),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? builtins
+        : _v._tag === "Some"
+          ? (({ value: ps }) => (eq(length(ps), 0) ? ([] as A[]) : _Array_concat(builtins, ps)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(pluginsOpt),
 );
 export const resolvePluginsDefault: <B, C, D, E, F>(
   pluginsOpt: Option<
@@ -165,12 +167,14 @@ const parseHooksFrom: <A, B>(plugins: ({ parse: Option<A> } & B)[], i: number, a
       .with(
         (_v) => _v._tag === "Some",
         ({ value: { parse } }) =>
-          match(parse)
-            .with({ _tag: "Some" }, ({ value: hook }) =>
-              parseHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-            )
-            .with({ _tag: "None" }, () => parseHooksFrom(plugins, i + 1, acc))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: hook }) => parseHooksFrom(plugins, i + 1, _Array_append(hook, acc)))(_v)
+              : _v._tag === "None"
+                ? parseHooksFrom(plugins, i + 1, acc)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(parse),
       )
       .exhaustive(),
   );
@@ -182,17 +186,24 @@ const inferHooksFrom: <A, B>(
   i: number,
   acc: A[],
 ) => A[] = _curry(3, <A, B>(plugins: ({ inferCall: Option<A> } & B)[], i: number, acc: A[]) =>
-  match(_Array_get(i, plugins))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: p }) =>
-      match(p.inferCall)
-        .with({ _tag: "Some" }, ({ value: hook }) =>
-          inferHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-        )
-        .with({ _tag: "None" }, () => inferHooksFrom(plugins, i + 1, acc))
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? acc
+      : _v._tag === "Some"
+        ? (({ value: p }) =>
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: hook }) => inferHooksFrom(plugins, i + 1, _Array_append(hook, acc)))(
+                    _v,
+                  )
+                : _v._tag === "None"
+                  ? inferHooksFrom(plugins, i + 1, acc)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(p.inferCall))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, plugins)),
 );
 export const inferCallHooksOf: <A, B>(plugins: ({ inferCall: Option<A> } & B)[]) => A[] = <A, B>(
   plugins: ({ inferCall: Option<A> } & B)[],
@@ -222,15 +233,22 @@ export const runParseHooks: <A, B, C, D, E>(
       .with(
         (_v) => _v.length >= 1,
         ([hook, ...rest]) =>
-          match(hook(toks, pos, parseExpr))
-            .with({ _tag: "Err" }, ({ error: e }) => Err(e))
-            .with({ _tag: "Ok" }, ({ value: v }) =>
-              match(v)
-                .with({ _tag: "None" }, () => runParseHooks(rest, toks, pos, parseExpr))
-                .with({ _tag: "Some" }, ({ value: claim }) => Ok(Some(claim)))
-                .exhaustive(),
-            )
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Err"
+              ? (({ error: e }) => Err(e))(_v)
+              : _v._tag === "Ok"
+                ? (({ value: v }) =>
+                    ((_v) =>
+                      _v._tag === "None"
+                        ? runParseHooks(rest, toks, pos, parseExpr)
+                        : _v._tag === "Some"
+                          ? (({ value: claim }) => Ok(Some(claim)))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(v))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(hook(toks, pos, parseExpr)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -264,15 +282,22 @@ export const runInferCallHooks: <A, B, C, D, E, F, G>(
       .with(
         (_v) => _v.length >= 1,
         ([hook, ...rest]) =>
-          match(hook(fn, args, origin, st, api))
-            .with({ _tag: "Err" }, ({ error: e }) => Err(e))
-            .with({ _tag: "Ok" }, ({ value: v }) =>
-              match(v)
-                .with({ _tag: "None" }, () => runInferCallHooks(rest, fn, args, origin, st, api))
-                .with({ _tag: "Some" }, ({ value: claim }) => Ok(Some(claim)))
-                .exhaustive(),
-            )
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Err"
+              ? (({ error: e }) => Err(e))(_v)
+              : _v._tag === "Ok"
+                ? (({ value: v }) =>
+                    ((_v) =>
+                      _v._tag === "None"
+                        ? runInferCallHooks(rest, fn, args, origin, st, api)
+                        : _v._tag === "Some"
+                          ? (({ value: claim }) => Ok(Some(claim)))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(v))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(hook(fn, args, origin, st, api)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -280,34 +305,46 @@ export const runInferCallHooks: <A, B, C, D, E, F, G>(
 );
 const formatHooksFrom: <A, B>(plugins: ({ format: Option<A> } & B)[], i: number, acc: A[]) => A[] =
   _curry(3, <A, B>(plugins: ({ format: Option<A> } & B)[], i: number, acc: A[]) =>
-    match(_Array_get(i, plugins))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        match(p.format)
-          .with({ _tag: "Some" }, ({ value: hook }) =>
-            formatHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-          )
-          .with({ _tag: "None" }, () => formatHooksFrom(plugins, i + 1, acc))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: p }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: hook }) =>
+                      formatHooksFrom(plugins, i + 1, _Array_append(hook, acc)))(_v)
+                  : _v._tag === "None"
+                    ? formatHooksFrom(plugins, i + 1, acc)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(p.format))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, plugins)),
   );
 const formatDocHooksFrom: <A, B>(
   plugins: ({ formatDoc: Option<A> } & B)[],
   i: number,
   acc: A[],
 ) => A[] = _curry(3, <A, B>(plugins: ({ formatDoc: Option<A> } & B)[], i: number, acc: A[]) =>
-  match(_Array_get(i, plugins))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: p }) =>
-      match(p.formatDoc)
-        .with({ _tag: "Some" }, ({ value: hook }) =>
-          formatDocHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-        )
-        .with({ _tag: "None" }, () => formatDocHooksFrom(plugins, i + 1, acc))
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? acc
+      : _v._tag === "Some"
+        ? (({ value: p }) =>
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: hook }) =>
+                    formatDocHooksFrom(plugins, i + 1, _Array_append(hook, acc)))(_v)
+                : _v._tag === "None"
+                  ? formatDocHooksFrom(plugins, i + 1, acc)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(p.formatDoc))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, plugins)),
 );
 /**
  * Both kinds of format hook (ADR 0112): `rewrite` swaps a node for another
@@ -403,17 +440,24 @@ export const formatHooksFor: <B, C, D, E, F>(
 ) => formatHooksOf(resolvePluginsDefault(pluginsOpt));
 const dtsHooksFrom: <A, B>(plugins: ({ dtsBinding: Option<A> } & B)[], i: number, acc: A[]) => A[] =
   _curry(3, <A, B>(plugins: ({ dtsBinding: Option<A> } & B)[], i: number, acc: A[]) =>
-    match(_Array_get(i, plugins))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: p }) =>
-        match(p.dtsBinding)
-          .with({ _tag: "Some" }, ({ value: hook }) =>
-            dtsHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-          )
-          .with({ _tag: "None" }, () => dtsHooksFrom(plugins, i + 1, acc))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: p }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: hook }) => dtsHooksFrom(plugins, i + 1, _Array_append(hook, acc)))(
+                      _v,
+                    )
+                  : _v._tag === "None"
+                    ? dtsHooksFrom(plugins, i + 1, acc)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(p.dtsBinding))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, plugins)),
   );
 export const dtsHooksFor: <B, C, D, E, F>(
   pluginsOpt: Option<
@@ -506,10 +550,14 @@ export const runFormatHooks: <A, B>(hooks: ((a: A) => Option<B>)[], e: A) => Opt
       .with(
         (_v) => _v.length >= 1,
         ([hook, ...rest]) =>
-          match(hook(e))
-            .with({ _tag: "Some" }, ({ value: out }) => Some(out))
-            .with({ _tag: "None" }, () => runFormatHooks(rest, e))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: out }) => Some(out))(_v)
+              : _v._tag === "None"
+                ? runFormatHooks(rest, e)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(hook(e)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -531,10 +579,14 @@ export const runFormatDocHooks: <A, B, C>(
     .with(
       (_v) => _v.length >= 1,
       ([hook, ...rest]) =>
-        match(hook(e, api))
-          .with({ _tag: "Some" }, ({ value: doc }) => Some(doc))
-          .with({ _tag: "None" }, () => runFormatDocHooks(rest, e, api))
-          .exhaustive(),
+        ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: doc }) => Some(doc))(_v)
+            : _v._tag === "None"
+              ? runFormatDocHooks(rest, e, api)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(hook(e, api)),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -566,10 +618,14 @@ export const runDtsHooks: <A, B, C, D, E>(
       .with(
         (_v) => _v.length >= 1,
         ([hook, ...rest]) =>
-          match(hook(name, value, ty, api))
-            .with({ _tag: "Some" }, ({ value: ts }) => Some(ts))
-            .with({ _tag: "None" }, () => runDtsHooks(rest, name, value, ty, api))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: ts }) => Some(ts))(_v)
+              : _v._tag === "None"
+                ? runDtsHooks(rest, name, value, ty, api)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(hook(name, value, ty, api)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -580,17 +636,24 @@ const bindingHooksFrom: <A, B>(
   i: number,
   acc: A[],
 ) => A[] = _curry(3, <A, B>(plugins: ({ bindingType: Option<A> } & B)[], i: number, acc: A[]) =>
-  match(_Array_get(i, plugins))
-    .with({ _tag: "None" }, () => acc)
-    .with({ _tag: "Some" }, ({ value: p }) =>
-      match(p.bindingType)
-        .with({ _tag: "Some" }, ({ value: hook }) =>
-          bindingHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-        )
-        .with({ _tag: "None" }, () => bindingHooksFrom(plugins, i + 1, acc))
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? acc
+      : _v._tag === "Some"
+        ? (({ value: p }) =>
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: hook }) => bindingHooksFrom(plugins, i + 1, _Array_append(hook, acc)))(
+                    _v,
+                  )
+                : _v._tag === "None"
+                  ? bindingHooksFrom(plugins, i + 1, acc)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(p.bindingType))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, plugins)),
 );
 export const bindingHooksFor: <B, C, D, E, F>(
   pluginsOpt: Option<
@@ -701,10 +764,14 @@ export const runBindingHooks: <A, B, C, D>(
       .with(
         (_v) => _v.length >= 1,
         ([hook, ...rest]) =>
-          match(hook(value, ty, api))
-            .with({ _tag: "Some" }, ({ value: ts }) => Some(ts))
-            .with({ _tag: "None" }, () => runBindingHooks(rest, value, ty, api))
-            .exhaustive(),
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: ts }) => Some(ts))(_v)
+              : _v._tag === "None"
+                ? runBindingHooks(rest, value, ty, api)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(hook(value, ty, api)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");

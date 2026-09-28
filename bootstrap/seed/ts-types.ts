@@ -59,8 +59,6 @@ import {
   sub,
 } from "@mochi/compiler/runtime";
 
-import { match } from "@onrails/pattern";
-
 import {
   TyVar,
   TyCon,
@@ -112,22 +110,30 @@ export const genericNames: <A, B>(sc: { vars: A[]; rvars: A[] } & B) => Map<A, s
 const genericNamesFrom: <A>(ids: A[], i: number, names: Map<A, string>) => Map<A, string> = _curry(
   3,
   <A>(ids: A[], i: number, names: Map<A, string>) =>
-    match(_Array_get(i, ids))
-      .with({ _tag: "None" }, () => names)
-      .with({ _tag: "Some" }, ({ value: id }) =>
-        genericNamesFrom(ids, i + 1, _Map_set(id, letterAt(i), names)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? names
+        : _v._tag === "Some"
+          ? (({ value: id }) => genericNamesFrom(ids, i + 1, _Map_set(id, letterAt(i), names)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ids)),
 );
 const primitiveTs: (name: string) => string = (name: string) =>
-  match(name)
-    .with("number", () => "number")
-    .with("int", () => "number")
-    .with("float", () => "number")
-    .with("string", () => "string")
-    .with("bool", () => "boolean")
-    .with("unit", () => "undefined")
-    .otherwise(() => name);
+  ((_v) =>
+    _v === "number"
+      ? "number"
+      : _v === "int"
+        ? "number"
+        : _v === "float"
+          ? "number"
+          : _v === "string"
+            ? "string"
+            : _v === "bool"
+              ? "boolean"
+              : _v === "unit"
+                ? "undefined"
+                : name)(name);
 const namesOf: _Curry<[ts: Ty[], env: TsEnv], string> = _curry(2, (ts: Ty[], env: TsEnv) =>
   _Str_join(
     ", ",
@@ -143,15 +149,10 @@ const namesOf: _Curry<[ts: Ty[], env: TsEnv], string> = _curry(2, (ts: Ty[], env
 const qualifiedCon: _Curry<[name: string, env: TsEnv], string> = _curry(
   2,
   (name: string, env: TsEnv) =>
-    match(_Map_get(name, env.recs))
-      .with(
-        (_v): _v is Extract<Option<string>, { _tag: "Some" }> => {
-          const _g: any = _v;
-          return _g._tag === "Some" && (({ value: qual }) => _Str_contains(".", qual))(_g);
-        },
-        ({ value: qual }) => qual,
-      )
-      .otherwise(() => primitiveTs(name)),
+    ((_v) =>
+      _v._tag === "Some" && (({ value: qual }) => _Str_contains(".", qual))(_v)
+        ? (({ value: qual }) => qual)(_v)
+        : primitiveTs(name))(_Map_get(name, env.recs)),
 );
 const nominal: _Curry<[name: string, args: Ty[], env: TsEnv], string> = _curry(
   3,
@@ -163,17 +164,24 @@ const nominal: _Curry<[name: string, args: Ty[], env: TsEnv], string> = _curry(
 const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = _curry(
   2,
   (row: Row, env: TsEnv) =>
-    match(row)
-      .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
-      .with({ _tag: "RowVar" }, ({ id }) => _tuple([] as string[], Some(id) as Option<number>))
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-        (([fields, tail]: [string[], Option<number>]) =>
-          _tuple(
-            _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields),
-            tail,
-          ))(tsRowFields(rest, env)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "RowEmpty"
+        ? _tuple([] as string[], None as Option<number>)
+        : _v._tag === "RowVar"
+          ? (({ id }) => _tuple([] as string[], Some(id) as Option<number>))(_v)
+          : _v._tag === "RowExtend"
+            ? (({ label, fieldType, optional, rest }) =>
+                (([fields, tail]: [string[], Option<number>]) =>
+                  _tuple(
+                    _Array_prepend(
+                      `${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`,
+                      fields,
+                    ),
+                    tail,
+                  ))(tsRowFields(rest, env)))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(row),
 );
 /**
  * Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
@@ -185,17 +193,24 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
 const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<string[]>> = _curry(
   2,
   (row: Row, vars: Map<number, string>) =>
-    match(row)
-      .with({ _tag: "RowEmpty" }, () => Some([] as string[]) as Option<string[]>)
-      .with({ _tag: "RowVar" }, () => None as Option<string[]>)
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-        _Option_map(
-          (fs: string[]) =>
-            _Array_prepend(`${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`, fs),
-          shapeFieldsFrom(rest, vars),
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "RowEmpty"
+        ? (Some([] as string[]) as Option<string[]>)
+        : _v._tag === "RowVar"
+          ? (None as Option<string[]>)
+          : _v._tag === "RowExtend"
+            ? (({ label, fieldType, optional, rest }) =>
+                _Option_map(
+                  (fs: string[]) =>
+                    _Array_prepend(
+                      `${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`,
+                      fs,
+                    ),
+                  shapeFieldsFrom(rest, vars),
+                ))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(row),
 );
 const shapeJoined: _Curry<[ts: Ty[], vars: Map<number, string>], string> = _curry(
   2,
@@ -212,60 +227,61 @@ const shapeJoined: _Curry<[ts: Ty[], vars: Map<number, string>], string> = _curr
 const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(
   2,
   (t: Ty, vars: Map<number, string>) =>
-    match(widenLits(t))
-      .with({ _tag: "TyRecord" }, ({ row }) =>
-        match(shapeFieldsFrom(row, vars))
-          .with({ _tag: "None" }, () => tsOf(t, plainEnv(vars)))
-          .with({ _tag: "Some" }, ({ value: fs }) =>
-            eq(length(fs), 0) ? "{}" : `{ ${_Str_join("; ", _Array_sort(fs))} }`,
-          )
-          .exhaustive(),
-      )
-      .with(
-        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-          const _g: any = _v;
-          return _g._tag === "TyCon" && _g.name === "Array" && _g.args.length === 1;
-        },
-        ({ args: [elem] }) =>
-          ((inner: string) =>
-            match(widenLits(elem))
-              .with({ _tag: "TyFn" }, () => `(${inner})[]`)
-              .with({ _tag: "TyOneOf" }, () => `(${inner})[]`)
-              .otherwise(() => `${inner}[]`))(shapeType(elem, vars)),
-      )
-      .with(
-        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-          const _g: any = _v;
-          return _g._tag === "TyCon" && _g.name === "List" && _g.args.length === 1;
-        },
-        ({ args: [elem] }) => `Iterable<${shapeType(elem, vars)}>`,
-      )
-      .with(
-        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-          const _g: any = _v;
-          return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
-        },
-        ({ args: [value, error] }) =>
-          `() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>`,
-      )
-      .with({ _tag: "TyCon", name: "tuple" }, ({ args: elems }) => `[${shapeJoined(elems, vars)}]`)
-      .with({ _tag: "TyCon" }, ({ name, args }) =>
-        eq(length(args), 0) ? primitiveTs(name) : `${name}<${shapeJoined(args, vars)}>`,
-      )
-      .with({ _tag: "TyOneOf" }, ({ members }) =>
-        _Str_join(
-          " | ",
-          map(
-            (m: Ty) =>
-              match(m)
-                .with({ _tag: "TySingleton", base: "string" }, ({ value }) => `"${value}"`)
-                .with({ _tag: "TySingleton" }, ({ value }) => value)
-                .otherwise(() => shapeType(m, vars)),
-            members,
-          ),
-        ),
-      )
-      .otherwise(() => tsOf(t, plainEnv(vars))),
+    ((_v) =>
+      _v._tag === "TyRecord"
+        ? (({ row }) =>
+            ((_v) =>
+              _v._tag === "None"
+                ? tsOf(t, plainEnv(vars))
+                : _v._tag === "Some"
+                  ? (({ value: fs }) =>
+                      eq(length(fs), 0) ? "{}" : `{ ${_Str_join("; ", _Array_sort(fs))} }`)(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(shapeFieldsFrom(row, vars)))(_v)
+        : _v._tag === "TyCon" && _v.name === "Array" && _v.args.length === 1
+          ? (({ args: [elem] }) =>
+              ((inner: string) =>
+                ((_v) =>
+                  _v._tag === "TyFn"
+                    ? `(${inner})[]`
+                    : _v._tag === "TyOneOf"
+                      ? `(${inner})[]`
+                      : `${inner}[]`)(widenLits(elem)))(shapeType(elem, vars)))(
+              _v as Extract<Ty, { _tag: "TyCon" }>,
+            )
+          : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1
+            ? (({ args: [elem] }) => `Iterable<${shapeType(elem, vars)}>`)(
+                _v as Extract<Ty, { _tag: "TyCon" }>,
+              )
+            : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
+              ? (({ args: [value, error] }) =>
+                  `() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>`)(
+                  _v as Extract<Ty, { _tag: "TyCon" }>,
+                )
+              : _v._tag === "TyCon" && _v.name === "tuple"
+                ? (({ args: elems }) => `[${shapeJoined(elems, vars)}]`)(_v)
+                : _v._tag === "TyCon"
+                  ? (({ name, args }) =>
+                      eq(length(args), 0)
+                        ? primitiveTs(name)
+                        : `${name}<${shapeJoined(args, vars)}>`)(_v)
+                  : _v._tag === "TyOneOf"
+                    ? (({ members }) =>
+                        _Str_join(
+                          " | ",
+                          map(
+                            (m: Ty) =>
+                              ((_v) =>
+                                _v._tag === "TySingleton" && _v.base === "string"
+                                  ? (({ value }) => `"${value}"`)(_v)
+                                  : _v._tag === "TySingleton"
+                                    ? (({ value }) => value)(_v)
+                                    : shapeType(m, vars))(m),
+                            members,
+                          ),
+                        ))(_v)
+                    : tsOf(t, plainEnv(vars)))(widenLits(t)),
 );
 /**
  * The index key for a row. Sorted, because a row carries fields in the order
@@ -291,11 +307,16 @@ const aliasNameFor: _Curry<[row: Row, env: TsEnv], Option<string>> = _curry(
       ? (None as Option<string>)
       : _Option_flatMap(
           (k: string) =>
-            match(_Map_get(k, env.recs))
-              .with({ _tag: "Some", value: "" }, () => None as Option<string>)
-              .with({ _tag: "Some" }, ({ value: name }) => Some(name) as Option<string>)
-              .with({ _tag: "None" }, () => None as Option<string>)
-              .exhaustive(),
+            ((_v) =>
+              _v._tag === "Some" && _v.value === ""
+                ? (None as Option<string>)
+                : _v._tag === "Some"
+                  ? (({ value: name }) => Some(name) as Option<string>)(_v)
+                  : _v._tag === "None"
+                    ? (None as Option<string>)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(k, env.recs)),
           rowShapeKey(row, env.vars),
         ),
 );
@@ -307,25 +328,33 @@ export const rowAliasName: _Curry<[row: Row, recs: Map<string, string>], Option<
   (row: Row, recs: Map<string, string>) => aliasNameFor(row, recsEnv(recs)),
 );
 const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: TsEnv) =>
-  match(aliasNameFor(row, env))
-    .with({ _tag: "Some" }, ({ value: alias }) => alias)
-    .with({ _tag: "None" }, () =>
-      (([fields, tail]: [string[], Option<number>]) => {
-        const body: string = eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
-        return match(tail)
-          .with({ _tag: "None" }, () => body)
-          .with({ _tag: "Some" }, ({ value: id }) =>
-            match(_Map_get(id, env.vars))
-              .with({ _tag: "None" }, () => body)
-              .with({ _tag: "Some" }, ({ value: name }) =>
-                eq(length(fields), 0) ? name : `(${body} & ${name})`,
-              )
-              .exhaustive(),
-          )
-          .exhaustive();
-      })(tsRowFields(row, env)),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: alias }) => alias)(_v)
+      : _v._tag === "None"
+        ? (([fields, tail]: [string[], Option<number>]) => {
+            const body: string = eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
+            return ((_v) =>
+              _v._tag === "None"
+                ? body
+                : _v._tag === "Some"
+                  ? (({ value: id }) =>
+                      ((_v) =>
+                        _v._tag === "None"
+                          ? body
+                          : _v._tag === "Some"
+                            ? (({ value: name }) =>
+                                eq(length(fields), 0) ? name : `(${body} & ${name})`)(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(_Map_get(id, env.vars)))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(tail);
+          })(tsRowFields(row, env))
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(aliasNameFor(row, env)),
 );
 /**
  * A `unit` result renders `void`, not `undefined`: a declared fn type has to
@@ -348,17 +377,11 @@ const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: 
       `${_Str_fromCode(97 + i)}: ${tsOfRaw(fromT, env)}`,
       params,
     );
-    return match(toT)
-      .with(
-        (_v): _v is Extract<Ty, { _tag: "TyFn" }> => {
-          const _g: any = _v;
-          return (
-            _g._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => not(isUnit(nextFrom)))(_g)
-          );
-        },
-        ({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1),
-      )
-      .otherwise(() => `(${_Str_join(", ", params1)}) => ${tsReturn(toT, env)}`);
+    return ((_v) =>
+      _v._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => not(isUnit(nextFrom)))(_v)
+        ? (({ from: nextFrom, to: nextTo }) =>
+            tsArrowParams(nextFrom, nextTo, env, i + 1, params1))(_v)
+        : `(${_Str_join(", ", params1)}) => ${tsReturn(toT, env)}`)(toT);
   });
 /**
  * Render an already-zonked HM type into strict TypeScript syntax. Bare
@@ -368,63 +391,73 @@ export const tsOf: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, (t: Ty, env: 
   tsOfRaw(widenLits(t), env),
 );
 const tsOfRaw: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, (t: Ty, env: TsEnv) =>
-  match(t)
-    .with({ _tag: "TyVar" }, ({ id }) => _Option_unwrapOr("unknown", _Map_get(id, env.vars)))
-    .with(
-      (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-        const _g: any = _v;
-        return _g._tag === "TyCon" && _g.name === "Array" && _g.args.length === 1;
-      },
-      ({ args: [elem] }) =>
-        ((inner: string) =>
-          match(elem)
-            .with({ _tag: "TyFn" }, () => `(${inner})[]`)
-            .with({ _tag: "TyOneOf" }, () => `(${inner})[]`)
-            .otherwise(() => `${inner}[]`))(tsOfRaw(elem, env)),
-    )
-    .with(
-      (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-        const _g: any = _v;
-        return _g._tag === "TyCon" && _g.name === "List" && _g.args.length === 1;
-      },
-      ({ args: [elem] }) => `Iterable<${tsOfRaw(elem, env)}>`,
-    )
-    .with(
-      (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-        const _g: any = _v;
-        return _g._tag === "TyCon" && _g.name === "Task" && _g.args.length === 2;
-      },
-      ({ args: [value, error] }) =>
-        `() => Promise<Result<${tsOfRaw(value, env)}, ${tsOfRaw(error, env)}>>`,
-    )
-    .with({ _tag: "TyCon", name: "tuple" }, ({ args: elems }) => `[${namesOf(elems, env)}]`)
-    .with({ _tag: "TyCon" }, ({ name, args }) => nominal(name, args, env))
-    .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) => tsArrow(fromT, toT, env))
-    .with({ _tag: "TyRecord" }, ({ row }) => tsRow(row, env))
-    .with({ _tag: "TySingleton", base: "string" }, ({ value }) => `"${value}"`)
-    .with({ _tag: "TySingleton" }, ({ value }) => value)
-    .with({ _tag: "TyOneOf" }, ({ members }) =>
-      _Str_join(
-        " | ",
-        map((m: Ty) => tsOfRaw(m, env), members),
-      ),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id }) => _Option_unwrapOr("unknown", _Map_get(id, env.vars)))(_v)
+      : _v._tag === "TyCon" && _v.name === "Array" && _v.args.length === 1
+        ? (({ args: [elem] }) =>
+            ((inner: string) =>
+              ((_v) =>
+                _v._tag === "TyFn"
+                  ? `(${inner})[]`
+                  : _v._tag === "TyOneOf"
+                    ? `(${inner})[]`
+                    : `${inner}[]`)(elem))(tsOfRaw(elem, env)))(
+            _v as Extract<Ty, { _tag: "TyCon" }>,
+          )
+        : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1
+          ? (({ args: [elem] }) => `Iterable<${tsOfRaw(elem, env)}>`)(
+              _v as Extract<Ty, { _tag: "TyCon" }>,
+            )
+          : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
+            ? (({ args: [value, error] }) =>
+                `() => Promise<Result<${tsOfRaw(value, env)}, ${tsOfRaw(error, env)}>>`)(
+                _v as Extract<Ty, { _tag: "TyCon" }>,
+              )
+            : _v._tag === "TyCon" && _v.name === "tuple"
+              ? (({ args: elems }) => `[${namesOf(elems, env)}]`)(_v)
+              : _v._tag === "TyCon"
+                ? (({ name, args }) => nominal(name, args, env))(_v)
+                : _v._tag === "TyFn"
+                  ? (({ from: fromT, to: toT }) => tsArrow(fromT, toT, env))(_v)
+                  : _v._tag === "TyRecord"
+                    ? (({ row }) => tsRow(row, env))(_v)
+                    : _v._tag === "TySingleton" && _v.base === "string"
+                      ? (({ value }) => `"${value}"`)(_v)
+                      : _v._tag === "TySingleton"
+                        ? (({ value }) => value)(_v)
+                        : _v._tag === "TyOneOf"
+                          ? (({ members }) =>
+                              _Str_join(
+                                " | ",
+                                map((m: Ty) => tsOfRaw(m, env), members),
+                              ))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(t),
 );
 /**
  * A scheme variable prints as `A`, `B`, … then `T26`. A nominal type named
  * `Tok` is not one of those letters, so it must not be treated as a hole.
  */
 const isDigitChar: (ch: string) => boolean = (ch: string) =>
-  match(_Str_codeAt(0, ch))
-    .with({ _tag: "Some" }, ({ value: n }) => and(n >= 48, n <= 57))
-    .with({ _tag: "None" }, () => false)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: n }) => and(n >= 48, n <= 57))(_v)
+      : _v._tag === "None"
+        ? false
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Str_codeAt(0, ch));
 const isUpperChar: (ch: string) => boolean = (ch: string) =>
-  match(_Str_codeAt(0, ch))
-    .with({ _tag: "Some" }, ({ value: n }) => and(n >= 65, n <= 90))
-    .with({ _tag: "None" }, () => false)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: n }) => and(n >= 65, n <= 90))(_v)
+      : _v._tag === "None"
+        ? false
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Str_codeAt(0, ch));
 const allDigitsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, (s: string, i: number) =>
   i >= _Str_length(s) ? i > 1 : and(isDigitChar(_Str_slice(i, i + 1, s)), allDigitsFrom(s, i + 1)),
 );
@@ -480,10 +513,14 @@ const findTop: _Curry<[ch: string, s: string, i: number, depth: number], Option<
 const bindLetter: <A, B>(letter: A, concrete: B, subst: Map<A, B>) => Option<Map<A, B>> = _curry(
   3,
   <A, B>(letter: A, concrete: B, subst: Map<A, B>) =>
-    match(_Map_get(letter, subst))
-      .with({ _tag: "None" }, () => Some(_Map_set(letter, concrete, subst)))
-      .with({ _tag: "Some" }, ({ value: prev }) => (eq(prev, concrete) ? Some(subst) : None))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? Some(_Map_set(letter, concrete, subst))
+        : _v._tag === "Some"
+          ? (({ value: prev }) => (eq(prev, concrete) ? Some(subst) : None))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(letter, subst)),
 );
 const agreeList: _Curry<
   [useTs: string[], aliasTs: string[], subst: Map<string, string>, i: number],
@@ -493,35 +530,47 @@ const agreeList: _Curry<
     ? (None as Option<Map<string, string>>)
     : i >= length(useTs)
       ? (Some(subst) as Option<Map<string, string>>)
-      : match(_Array_get(i, useTs))
-          .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-          .with({ _tag: "Some" }, ({ value: u }) =>
-            match(_Array_get(i, aliasTs))
-              .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-              .with({ _tag: "Some" }, ({ value: a }) =>
-                match(typesAgree(u, a, subst))
-                  .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-                  .with({ _tag: "Some" }, ({ value: subst1 }) =>
-                    agreeList(useTs, aliasTs, subst1, i + 1),
-                  )
-                  .exhaustive(),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "None"
+            ? (None as Option<Map<string, string>>)
+            : _v._tag === "Some"
+              ? (({ value: u }) =>
+                  ((_v) =>
+                    _v._tag === "None"
+                      ? (None as Option<Map<string, string>>)
+                      : _v._tag === "Some"
+                        ? (({ value: a }) =>
+                            ((_v) =>
+                              _v._tag === "None"
+                                ? (None as Option<Map<string, string>>)
+                                : _v._tag === "Some"
+                                  ? (({ value: subst1 }) =>
+                                      agreeList(useTs, aliasTs, subst1, i + 1))(_v)
+                                  : (() => {
+                                      throw new Error("non-exhaustive match");
+                                    })())(typesAgree(u, a, subst)))(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(_Array_get(i, aliasTs)))(_v)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Array_get(i, useTs)),
 );
 const peelApp: (s: string) => Option<{ name: string; args: string }> = (s: string) =>
-  match(findTop("<", s, 0, 0))
-    .with({ _tag: "None" }, () => None as Option<{ name: string; args: string }>)
-    .with({ _tag: "Some" }, ({ value: i }) =>
-      and(hasSuffix(">", s), i > 0)
-        ? (Some({
-            name: _Str_slice(0, i, s),
-            args: _Str_slice(i + 1, _Str_length(s) - 1, s),
-          }) as Option<{ name: string; args: string }>)
-        : (None as Option<{ name: string; args: string }>),
-    )
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "None"
+      ? (None as Option<{ name: string; args: string }>)
+      : _v._tag === "Some"
+        ? (({ value: i }) =>
+            and(hasSuffix(">", s), i > 0)
+              ? (Some({
+                  name: _Str_slice(0, i, s),
+                  args: _Str_slice(i + 1, _Str_length(s) - 1, s),
+                }) as Option<{ name: string; args: string }>)
+              : (None as Option<{ name: string; args: string }>))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(findTop("<", s, 0, 0));
 const wrapped: _Curry<[open: string, close: string, s: string], boolean> = _curry(
   3,
   (open: string, close: string, s: string) =>
@@ -546,49 +595,62 @@ const agreeApp: _Curry<
   [useT: string, aliasT: string, subst: Map<string, string>],
   Option<Map<string, string>>
 > = _curry(3, (useT: string, aliasT: string, subst: Map<string, string>) =>
-  match(peelApp(useT))
-    .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-    .with({ _tag: "Some" }, ({ value: u }) =>
-      match(peelApp(aliasT))
-        .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-        .with({ _tag: "Some" }, ({ value: a }) =>
-          eq(u.name, a.name)
-            ? agreeList(splitTop(", ", u.args), splitTop(", ", a.args), subst, 0)
-            : (None as Option<Map<string, string>>),
-        )
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? (None as Option<Map<string, string>>)
+      : _v._tag === "Some"
+        ? (({ value: u }) =>
+            ((_v) =>
+              _v._tag === "None"
+                ? (None as Option<Map<string, string>>)
+                : _v._tag === "Some"
+                  ? (({ value: a }) =>
+                      eq(u.name, a.name)
+                        ? agreeList(splitTop(", ", u.args), splitTop(", ", a.args), subst, 0)
+                        : (None as Option<Map<string, string>>))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(peelApp(aliasT)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(peelApp(useT)),
 );
 const splitLabel: (s: string) => Option<{ label: string; ty: string }> = (s: string) =>
-  match(findTop(":", s, 0, 0))
-    .with({ _tag: "None" }, () => None as Option<{ label: string; ty: string }>)
-    .with(
-      { _tag: "Some" },
-      ({ value: i }) =>
-        Some({ label: _Str_slice(0, i, s), ty: _Str_slice(i + 1, _Str_length(s), s) }) as Option<{
-          label: string;
-          ty: string;
-        }>,
-    )
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "None"
+      ? (None as Option<{ label: string; ty: string }>)
+      : _v._tag === "Some"
+        ? (({ value: i }) =>
+            Some({
+              label: _Str_slice(0, i, s),
+              ty: _Str_slice(i + 1, _Str_length(s), s),
+            }) as Option<{ label: string; ty: string }>)(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(findTop(":", s, 0, 0));
 const fieldAgree: _Curry<
   [useF: string, aliasF: string, subst: Map<string, string>],
   Option<Map<string, string>>
 > = _curry(3, (useF: string, aliasF: string, subst: Map<string, string>) =>
-  match(splitLabel(useF))
-    .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-    .with({ _tag: "Some" }, ({ value: u }) =>
-      match(splitLabel(aliasF))
-        .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-        .with({ _tag: "Some" }, ({ value: a }) =>
-          eq(_Str_trim(u.label), _Str_trim(a.label))
-            ? typesAgree(_Str_trim(u.ty), _Str_trim(a.ty), subst)
-            : (None as Option<Map<string, string>>),
-        )
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? (None as Option<Map<string, string>>)
+      : _v._tag === "Some"
+        ? (({ value: u }) =>
+            ((_v) =>
+              _v._tag === "None"
+                ? (None as Option<Map<string, string>>)
+                : _v._tag === "Some"
+                  ? (({ value: a }) =>
+                      eq(_Str_trim(u.label), _Str_trim(a.label))
+                        ? typesAgree(_Str_trim(u.ty), _Str_trim(a.ty), subst)
+                        : (None as Option<Map<string, string>>))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(splitLabel(aliasF)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(splitLabel(useF)),
 );
 const fieldsAgree: _Curry<
   [useFs: string[], aliasFs: string[], subst: Map<string, string>],
@@ -604,22 +666,31 @@ const agreeFields: _Curry<
     ? (None as Option<Map<string, string>>)
     : i >= length(useFs)
       ? (Some(subst) as Option<Map<string, string>>)
-      : match(_Array_get(i, useFs))
-          .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-          .with({ _tag: "Some" }, ({ value: u }) =>
-            match(_Array_get(i, aliasFs))
-              .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-              .with({ _tag: "Some" }, ({ value: a }) =>
-                match(fieldAgree(u, a, subst))
-                  .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-                  .with({ _tag: "Some" }, ({ value: subst1 }) =>
-                    agreeFields(useFs, aliasFs, subst1, i + 1),
-                  )
-                  .exhaustive(),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "None"
+            ? (None as Option<Map<string, string>>)
+            : _v._tag === "Some"
+              ? (({ value: u }) =>
+                  ((_v) =>
+                    _v._tag === "None"
+                      ? (None as Option<Map<string, string>>)
+                      : _v._tag === "Some"
+                        ? (({ value: a }) =>
+                            ((_v) =>
+                              _v._tag === "None"
+                                ? (None as Option<Map<string, string>>)
+                                : _v._tag === "Some"
+                                  ? (({ value: subst1 }) =>
+                                      agreeFields(useFs, aliasFs, subst1, i + 1))(_v)
+                                  : (() => {
+                                      throw new Error("non-exhaustive match");
+                                    })())(fieldAgree(u, a, subst)))(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(_Array_get(i, aliasFs)))(_v)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Array_get(i, useFs)),
 );
 const agreeBrace: _Curry<
   [useT: string, aliasT: string, subst: Map<string, string>],
@@ -650,10 +721,14 @@ const agreeUnion: _Curry<
 const firstSome: <A>(a: Option<A>, b: Option<A>) => Option<A> = _curry(
   2,
   <A>(a: Option<A>, b: Option<A>) =>
-    match(a)
-      .with({ _tag: "Some" }, () => a)
-      .with({ _tag: "None" }, () => b)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Some"
+        ? a
+        : _v._tag === "None"
+          ? b
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(a),
 );
 /**
  * `useT` matches `aliasT` exactly, or by binding a scheme letter (`A`, `T26`)
@@ -688,29 +763,42 @@ const uniqueSubst: _Curry<
   [useKey: string, keys: string[], i: number, found: Option<Map<string, string>>],
   Option<Map<string, string>>
 > = _curry(4, (useKey: string, keys: string[], i: number, found: Option<Map<string, string>>) =>
-  match(_Array_get(i, keys))
-    .with({ _tag: "None" }, () => found)
-    .with({ _tag: "Some" }, ({ value: k }) =>
-      match(fieldsAgree(splitTop("; ", useKey), splitTop("; ", k), new Map<string, string>()))
-        .with({ _tag: "None" }, () => uniqueSubst(useKey, keys, i + 1, found))
-        .with({ _tag: "Some" }, ({ value: subst }) =>
-          match(found)
-            .with({ _tag: "None" }, () =>
-              uniqueSubst(useKey, keys, i + 1, Some(subst) as Option<Map<string, string>>),
-            )
-            .with({ _tag: "Some" }, () =>
-              uniqueSubst(
-                useKey,
-                keys,
-                i + 1,
-                Some(new Map([["*", ""]])) as Option<Map<string, string>>,
-              ),
-            )
-            .exhaustive(),
-        )
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? found
+      : _v._tag === "Some"
+        ? (({ value: k }) =>
+            ((_v) =>
+              _v._tag === "None"
+                ? uniqueSubst(useKey, keys, i + 1, found)
+                : _v._tag === "Some"
+                  ? (({ value: subst }) =>
+                      ((_v) =>
+                        _v._tag === "None"
+                          ? uniqueSubst(
+                              useKey,
+                              keys,
+                              i + 1,
+                              Some(subst) as Option<Map<string, string>>,
+                            )
+                          : _v._tag === "Some"
+                            ? uniqueSubst(
+                                useKey,
+                                keys,
+                                i + 1,
+                                Some(new Map([["*", ""]])) as Option<Map<string, string>>,
+                              )
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(found))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(
+              fieldsAgree(splitTop("; ", useKey), splitTop("; ", k), new Map<string, string>()),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, keys)),
 );
 const substOf: <A, B>(
   useKey: string,
@@ -718,29 +806,38 @@ const substOf: <A, B>(
 ) => Option<Map<string, string>> = _curry(
   2,
   <A, B>(useKey: string, env: { recs: Map<string, A> } & B) =>
-    match(uniqueSubst(useKey, _Map_keys(env.recs), 0, None as Option<Map<string, string>>))
-      .with({ _tag: "None" }, () => None as Option<Map<string, string>>)
-      .with({ _tag: "Some" }, ({ value: subst }) =>
-        _Map_has("*", subst)
-          ? (None as Option<Map<string, string>>)
-          : (Some(subst) as Option<Map<string, string>>),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? (None as Option<Map<string, string>>)
+        : _v._tag === "Some"
+          ? (({ value: subst }) =>
+              _Map_has("*", subst)
+                ? (None as Option<Map<string, string>>)
+                : (Some(subst) as Option<Map<string, string>>))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(uniqueSubst(useKey, _Map_keys(env.recs), 0, None as Option<Map<string, string>>)),
 );
 const idForLetter: <A, B>(letter: A, ids: B[], vars: Map<B, A>, i: number) => Option<B> = _curry(
   4,
   <A, B>(letter: A, ids: B[], vars: Map<B, A>, i: number) =>
-    match(_Array_get(i, ids))
-      .with({ _tag: "None" }, () => None)
-      .with({ _tag: "Some" }, ({ value: id }) =>
-        match(_Map_get(id, vars))
-          .with({ _tag: "Some" }, ({ value: name }) =>
-            eq(name, letter) ? Some(id) : idForLetter(letter, ids, vars, i + 1),
-          )
-          .with({ _tag: "None" }, () => idForLetter(letter, ids, vars, i + 1))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? None
+        : _v._tag === "Some"
+          ? (({ value: id }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: name }) =>
+                      eq(name, letter) ? Some(id) : idForLetter(letter, ids, vars, i + 1))(_v)
+                  : _v._tag === "None"
+                    ? idForLetter(letter, ids, vars, i + 1)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(id, vars)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ids)),
 );
 /**
  * A variable pinned to two different concrete types is dropped. Printing it
@@ -755,12 +852,17 @@ const notePin: <A, B>(
   <A, B>(id: A, concrete: B, st: { bad: Set<A>; pins: Map<A, B> }) =>
     _Set_has(id, st.bad)
       ? st
-      : match(_Map_get(id, st.pins))
-          .with({ _tag: "None" }, () => ({ pins: _Map_set(id, concrete, st.pins), bad: st.bad }))
-          .with({ _tag: "Some" }, ({ value: prev }) =>
-            eq(prev, concrete) ? st : { pins: _Map_delete(id, st.pins), bad: _Set_add(id, st.bad) },
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "None"
+            ? { pins: _Map_set(id, concrete, st.pins), bad: st.bad }
+            : _v._tag === "Some"
+              ? (({ value: prev }) =>
+                  eq(prev, concrete)
+                    ? st
+                    : { pins: _Map_delete(id, st.pins), bad: _Set_add(id, st.bad) })(_v)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Map_get(id, st.pins)),
 );
 const mergeSubst: <A, B, C>(
   letters: A[],
@@ -779,22 +881,38 @@ const mergeSubst: <A, B, C>(
     st: { bad: Set<C>; pins: Map<C, B> },
     i: number,
   ) =>
-    match(_Array_get(i, letters))
-      .with({ _tag: "None" }, () => st)
-      .with({ _tag: "Some" }, ({ value: letter }) =>
-        match(_Map_get(letter, subst))
-          .with({ _tag: "None" }, () => mergeSubst(letters, subst, vars, ids, st, i + 1))
-          .with({ _tag: "Some" }, ({ value: concrete }) =>
-            match(idForLetter(letter, ids, vars, 0))
-              .with({ _tag: "None" }, () => mergeSubst(letters, subst, vars, ids, st, i + 1))
-              .with({ _tag: "Some" }, ({ value: id }) =>
-                mergeSubst(letters, subst, vars, ids, notePin(id, concrete, st), i + 1),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? st
+        : _v._tag === "Some"
+          ? (({ value: letter }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? mergeSubst(letters, subst, vars, ids, st, i + 1)
+                  : _v._tag === "Some"
+                    ? (({ value: concrete }) =>
+                        ((_v) =>
+                          _v._tag === "None"
+                            ? mergeSubst(letters, subst, vars, ids, st, i + 1)
+                            : _v._tag === "Some"
+                              ? (({ value: id }) =>
+                                  mergeSubst(
+                                    letters,
+                                    subst,
+                                    vars,
+                                    ids,
+                                    notePin(id, concrete, st),
+                                    i + 1,
+                                  ))(_v)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(idForLetter(letter, ids, vars, 0)))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(letter, subst)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, letters)),
 );
 const emptyPins: { pins: Map<number, string>; bad: Set<number> } = {
   pins: new Map([]),
@@ -811,22 +929,37 @@ const considerClosed: <A, B>(
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
   ) =>
-    match(rowShapeKey(row, env.vars))
-      .with({ _tag: "None" }, () => st)
-      .with({ _tag: "Some" }, ({ value: key }) =>
-        match(_Map_get(key, env.recs))
-          .with({ _tag: "Some" }, () => st)
-          .with({ _tag: "None" }, () =>
-            match(substOf(key, env))
-              .with({ _tag: "None" }, () => st)
-              .with({ _tag: "Some" }, ({ value: subst }) =>
-                mergeSubst(_Map_keys(subst), subst, env.vars, _Map_keys(env.vars), st, 0),
-              )
-              .exhaustive(),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? st
+        : _v._tag === "Some"
+          ? (({ value: key }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? st
+                  : _v._tag === "None"
+                    ? ((_v) =>
+                        _v._tag === "None"
+                          ? st
+                          : _v._tag === "Some"
+                            ? (({ value: subst }) =>
+                                mergeSubst(
+                                  _Map_keys(subst),
+                                  subst,
+                                  env.vars,
+                                  _Map_keys(env.vars),
+                                  st,
+                                  0,
+                                ))(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(substOf(key, env))
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(key, env.recs)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(rowShapeKey(row, env.vars)),
 );
 const pinInTys: <A, B>(
   ts: Ty[],
@@ -841,10 +974,14 @@ const pinInTys: <A, B>(
     st: { bad: Set<number>; pins: Map<number, string> },
     i: number,
   ) =>
-    match(_Array_get(i, ts))
-      .with({ _tag: "None" }, () => st)
-      .with({ _tag: "Some" }, ({ value: t }) => pinInTys(ts, env, pinInTy(t, env, st), i + 1))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? st
+        : _v._tag === "Some"
+          ? (({ value: t }) => pinInTys(ts, env, pinInTy(t, env, st), i + 1))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ts)),
 );
 const pinInRow: <A, B>(
   row: Row,
@@ -857,11 +994,10 @@ const pinInRow: <A, B>(
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
   ) =>
-    match(row)
-      .with({ _tag: "RowExtend" }, ({ fieldType: ft, rest }) =>
-        pinInRow(rest, env, pinInTy(ft, env, st)),
-      )
-      .otherwise(() => st),
+    ((_v) =>
+      _v._tag === "RowExtend"
+        ? (({ fieldType: ft, rest }) => pinInRow(rest, env, pinInTy(ft, env, st)))(_v)
+        : st)(row),
 );
 const pinInTy: <A, B>(
   t: Ty,
@@ -874,12 +1010,16 @@ const pinInTy: <A, B>(
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
   ) =>
-    match(t)
-      .with({ _tag: "TyRecord" }, ({ row }) => pinInRow(row, env, considerClosed(row, env, st)))
-      .with({ _tag: "TyFn" }, ({ from: a, to: b }) => pinInTy(b, env, pinInTy(a, env, st)))
-      .with({ _tag: "TyCon" }, ({ args }) => pinInTys(args, env, st, 0))
-      .with({ _tag: "TyOneOf" }, ({ members: ms }) => pinInTys(ms, env, st, 0))
-      .otherwise(() => st),
+    ((_v) =>
+      _v._tag === "TyRecord"
+        ? (({ row }) => pinInRow(row, env, considerClosed(row, env, st)))(_v)
+        : _v._tag === "TyFn"
+          ? (({ from: a, to: b }) => pinInTy(b, env, pinInTy(a, env, st)))(_v)
+          : _v._tag === "TyCon"
+            ? (({ args }) => pinInTys(args, env, st, 0))(_v)
+            : _v._tag === "TyOneOf"
+              ? (({ members: ms }) => pinInTys(ms, env, st, 0))(_v)
+              : st)(t),
 );
 /**
  * Variables a unique in-scope record alias explains, as concrete type text.
@@ -896,17 +1036,23 @@ const pinAliasVars: <A, B>(
 );
 const overlayPins: <A, B>(ids: A[], pins: Map<A, B>, names: Map<A, B>, i: number) => Map<A, B> =
   _curry(4, <A, B>(ids: A[], pins: Map<A, B>, names: Map<A, B>, i: number) =>
-    match(_Array_get(i, ids))
-      .with({ _tag: "None" }, () => names)
-      .with({ _tag: "Some" }, ({ value: id }) =>
-        match(_Map_get(id, pins))
-          .with({ _tag: "Some" }, ({ value: concrete }) =>
-            overlayPins(ids, pins, _Map_set(id, concrete, names), i + 1),
-          )
-          .with({ _tag: "None" }, () => overlayPins(ids, pins, names, i + 1))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? names
+        : _v._tag === "Some"
+          ? (({ value: id }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: concrete }) =>
+                      overlayPins(ids, pins, _Map_set(id, concrete, names), i + 1))(_v)
+                  : _v._tag === "None"
+                    ? overlayPins(ids, pins, names, i + 1)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(id, pins)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ids)),
   );
 const headLetters: <A, B>(names: Map<A, string>, pins: Map<A, B>) => string = _curry(
   2,

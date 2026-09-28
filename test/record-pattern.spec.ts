@@ -28,7 +28,7 @@ const run = (src: string, ret: string): unknown => {
 
 test("a pure-binding record pattern is a catch-all that destructures", () => {
   const out = js("let f = p => switch p { | { x, y } => add(x, y) }");
-  expect(out).toContain(".otherwise(({ x, y }) => add(x, y))");
+  expect(out).toContain("(({ x, y }) => (add(x, y)))(_v)");
 });
 
 test("a punning field binds its own name at runtime", () => {
@@ -38,17 +38,17 @@ test("a punning field binds its own name at runtime", () => {
 
 test("a renamed field binds to the new name", () => {
   const out = js("let f = p => switch p { | { x: n } => n }");
-  expect(out).toContain(".otherwise(({ x: n }) => n)");
+  expect(out).toContain("(({ x: n }) => (n))(_v)");
 });
 
-test("a literal field narrows via the matcher object", () => {
+test("a literal field narrows via a field test", () => {
   const out = js('let f = p => switch p { | { status: "ok" } => 1 | _ => 0 }');
-  expect(out).toContain('.with({ status: "ok" }, () => 1)');
+  expect(out).toContain('_v.status === "ok"\n    ? (1)');
 });
 
 test("literal-narrowed fields coexist with binding fields", () => {
   const out = js('let f = p => switch p { | { status: "err", code } => code | _ => 0 }');
-  expect(out).toContain('.with({ status: "err" }, ({ code }) => code)');
+  expect(out).toContain('_v.status === "err"\n    ? (({ code }) => (code))(_v)');
 });
 
 test("a record switch selects the narrowed arm at runtime", () => {

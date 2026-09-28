@@ -12,9 +12,9 @@ const run = (src: string, ret: string): unknown => {
   return new Function("match", `${body}\nreturn ${ret};`)(match);
 };
 
-test('string arms lower to literal .with("...", ...)', () => {
+test('string arms lower to `_v === "..."` tests', () => {
   const out = js('let f = s => switch s { | "a" => 1 | _ => 0 }');
-  expect(out).toContain('.with("a", () => 1)');
+  expect(out).toContain('_v === "a"\n    ? (1)');
 });
 
 test("a string switch needs a catch-all to be exhaustive", () => {

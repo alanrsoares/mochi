@@ -922,9 +922,10 @@ let genLambdaBodyIn = (ctx: GCtx, e, bound, prefix) =>
           | _ => "{ ${prefix}${block} return ${ctx->genExpr(rest)}; }"
         }
 
-// ---- match -> @onrails/pattern chain ---------------------------------------
-// We target @onrails/pattern (pairs with @onrails/result + @onrails/maybe).
-// Each arm lowers to a single `.with(...)`.
+// ---- match -------------------------------------------------------------------
+// A match lowers to a ternary chain over its scrutinee (ADR 0113). The TS
+// backend keeps an @onrails/pattern chain, one `.with(...)` per arm, for the
+// matches `ternaryTypes` rules out.
 
 // A pattern always matches (-> `.otherwise`) when it binds without narrowing:
 // wildcard, plain name, or a record whose every field just binds.
@@ -1220,36 +1221,109 @@ let hasArrArm = arms =>
     arms
   )
 
+/// Does TypeScript's own narrowing on `_v` type this arm's bindings? A
+/// discriminant or literal test on `_v` itself does; a test on a nested field
+/// narrows only that field, so a destructuring that reaches past it needs the
+/// arm's `patTarget` (ADR 0031).
+let isShallowArm = (ctx: GCtx, p) => switch p {
+  | Ast.PAs(pat, _, _, _) => isShallowPat(pat)
+  | _ => isShallowPat(p) || ctx->patSlot(p) == ""
+}
+
+let isShallowPat = p => switch p {
+  | Ast.PCtor(_, args, _, _) => allOf(isFlatSub, args)
+  | Ast.PRecord(fields, _) => allOf(f => isFlatSub(f.pat), fields)
+  | Ast.PLit(_, _, _) => true
+  | Ast.PBool(_, _) => true
+  | Ast.PStr(_, _) => true
+  | _ => isCatchAll(p)
+}
+
+/// `_v` as an arm's bindings see it: cast to the arm's narrowed type when the
+/// tests do not narrow it themselves and that type refines the base. The tests just proved the cast, as they
+/// prove the `_v is T` predicate of the `match()` form.
+let armView = (ctx: GCtx, p, base) => switch base {
+  | Some(b) when !(ctx->isShallowArm(p)) =>
+    // Only a refining target: `_v as base` would close a row-polymorphic
+    // `{…} & R` scrutinee and lose `R` (ADR 0034).
+    let target = ctx->patTarget(p, b) in
+      target == b ? "_v" : "(_v as ${target})"
+  | _ => "_v"
+}
+
+/// Run `body` under the pattern's bindings, destructured from `view`.
+let underBinds = (ctx: GCtx, p, view, body) => switch p {
+  | Ast.PAs(pat, name, _, _) => let slot = ctx->patSlot(pat) in
+      slot == ""
+        ? "((${name}) => ${body})(${view})"
+        : "((${name}) => ((${slot}) => ${body})(${name}))(${view})"
+  | _ => let slot = ctx->patSlot(p) in
+      slot == "" ? body : "((${slot}) => ${body})(${view})"
+}
+
+let ternArmTest = (ctx: GCtx, p, guardOpt, base) =>
+  let conds = ctx->patConds(p, "_v") in
+  let all = switch guardOpt {
+    | Some(g) => Array.append(
+        ctx->underBinds(p, ctx->armView(p, base), "(${ctx->genExpr(g)})"),
+        conds
+      )
+    | None => conds
+  } in
+    Array.length(all) == 0 ? "true" : Str.join(" && ", all)
+
+let ternArms = (ctx: GCtx, arms, i, base) => switch Array.get(i, arms) {
+  | None => "(() => { throw new Error(\"non-exhaustive match\"); })()"
+  | Some(a) => let body = "(${ctx->genLambdaBody(a.body)})" in
+      Option.isNone(a.guard) && isCatchAll(a.pattern)
+        ? switch ctx->catchAllParam(a.pattern) {
+          | "()" => body
+          | param => "(${param} => ${body})(_v)"
+        }
+        : "${ctx->ternArmTest(a.pattern, a.guard, base)}\n    ? ${ctx->underBinds(a.pattern, ctx->armView(a.pattern, base), body)}\n    : ${ctx->ternArms(arms, i + 1, base)}"
+}
+
+/// A match lowers to a ternary chain over `_v` (ADR 0113), except where the
+/// TypeScript backend could not type an arm's bindings: a nested pattern on a
+/// scrutinee whose type it cannot name keeps the `match()` form.
+let ternaryTypes = (ctx: GCtx, arms, base) =>
+  Option.isNone(
+    ctx.guardBaseType
+  ) || Option.isSome(base) || allOf(a => ctx->isShallowArm(a.pattern), arms)
+
 let genMatch = (ctx: GCtx, scrutinee, arms) =>
   isListMatch(arms)
     ? ctx->genListMatch(scrutinee, arms)
-    :
-      // The concrete type a guard-form arm's predicate narrows FROM; `None` in
-      // JS mode or for a generic scrutinee, which leaves the bare guard form.
-      let base = hook1(ctx.guardBaseType, scrutinee) in
-      let (armLines, catchAll) = ctx->matchArmsLoop(arms, 0, base) in
-      let tail = switch catchAll {
-        | Some((p, body)) => "  .otherwise(${ctx->catchAllParam(p)} => ${ctx->genLambdaBody(body)})"
-        | None => Option.isSome(ctx.guardBaseType) && hasArrArm(arms)
-            ?
-              // TS backend (ADR 0038): an eager-array match with no catch-all is
-              // the `[]` + `[h, ...t]` length partition check.mochi proved total.
-              // Its guard arms test `.length` — they do not narrow `A[]`
-              // structurally, so `.exhaustive()` still sees `A[]` leftover and
-              // types as `NonExhaustiveError<A[]>` (TS2322). Close with a
-              // throwing `.otherwise` instead: its `never` return is assignable
-              // to the declared type, and the branch is dead. JS mode keeps
-              // `.exhaustive()` — emitted JS stays byte-identical.
-              "  .otherwise(() => { throw new Error(\"non-exhaustive match\"); })"
-            : "  .exhaustive()"
-      } in
-        Str.join(
-          "\n",
-          Array.concat(
-            Array.prepend("match(${ctx->genExpr(scrutinee)})", armLines),
-            [tail]
-          )
-        )
+    : let base = hook1(ctx.guardBaseType, scrutinee) in
+      ctx->ternaryTypes(arms, base)
+        ? "((_v) => ${ctx->ternArms(arms, 0, base)})(${ctx->genExpr(scrutinee)})"
+        : ctx->genMatchChain(scrutinee, arms, base)
+
+/// The `@onrails/pattern` chain.
+let genMatchChain = (ctx: GCtx, scrutinee, arms, base) =>
+  let (armLines, catchAll) = ctx->matchArmsLoop(arms, 0, base) in
+  let tail = switch catchAll {
+    | Some((p, body)) => "  .otherwise(${ctx->catchAllParam(p)} => ${ctx->genLambdaBody(body)})"
+    | None => Option.isSome(ctx.guardBaseType) && hasArrArm(arms)
+        ?
+          // TS backend (ADR 0038): an eager-array match with no catch-all is
+          // the `[]` + `[h, ...t]` length partition check.mochi proved total.
+          // Its guard arms test `.length` — they do not narrow `A[]`
+          // structurally, so `.exhaustive()` still sees `A[]` leftover and
+          // types as `NonExhaustiveError<A[]>` (TS2322). Close with a
+          // throwing `.otherwise` instead: its `never` return is assignable
+          // to the declared type, and the branch is dead. JS mode keeps
+          // `.exhaustive()` — emitted JS stays byte-identical.
+          "  .otherwise(() => { throw new Error(\"non-exhaustive match\"); })"
+        : "  .exhaustive()"
+  } in
+    Str.join(
+      "\n",
+      Array.concat(
+        Array.prepend("match(${ctx->genExpr(scrutinee)})", armLines),
+        [tail]
+      )
+    )
 
 let litValue = p => switch p {
   | Ast.PStr(v, _) => jsStringLit(v)
@@ -1721,70 +1795,85 @@ let genStmt = (ctx: GCtx, s) => switch s {
 }
 
 // Need `@onrails/pattern` import? Only if a match lowers to a `match()`
-// chain. A lazy-List switch lowers to a plain IIFE instead, so a program that
+// chain (`ternaryTypes` says which do). A lazy-List switch lowers to a plain IIFE instead, so a program that
 // only ever destructures Lists imports nothing.
-let usesMatchLibArm = a =>
+let usesMatchLibArm = (ctx: GCtx, a) =>
   switch a.guard {
-    | Some(g) => usesMatchLib(g)
+    | Some(g) => ctx->usesMatchLib(g)
     | None => false
-  } || usesMatchLib(a.body)
+  } || ctx->usesMatchLib(a.body)
 
-let usesMatchLib = e => switch e {
+let usesMatchLib = (ctx: GCtx, e) => switch e {
   | Ast.ENum(_, _, _) => false
   | Ast.EUnit(_) => false
   | Ast.EBool(_, _) => false
   | Ast.EStr(_, _) => false
   | Ast.ERef(_, _) => false
-  | Ast.ECall(fn, args, _, _) => usesMatchLib(fn) || someOf(usesMatchLib, args)
-  | Ast.ELambda(_, body, _) => usesMatchLib(body)
-  | Ast.ELetIn(_, _, _, value, body, _) => usesMatchLib(
+  | Ast.ECall(fn, args, _, _) => ctx->usesMatchLib(
+      fn
+    ) || someOf(x => ctx->usesMatchLib(x), args)
+  | Ast.ELambda(_, body, _) => ctx->usesMatchLib(body)
+  | Ast.ELetIn(_, _, _, value, body, _) => ctx->usesMatchLib(
       value
-    ) || usesMatchLib(body)
-  | Ast.ELetBind(_, _, _, value, body, _) => usesMatchLib(
+    ) || ctx->usesMatchLib(body)
+  | Ast.ELetBind(_, _, _, value, body, _) => ctx->usesMatchLib(
       value
-    ) || usesMatchLib(body)
-  | Ast.EPipe(left, right, _, _) => usesMatchLib(left) || usesMatchLib(right)
-  | Ast.EDo(exprs, _) => someOf(usesMatchLib, exprs)
-  | Ast.ETernary(cond, thenE, elseE, _) => usesMatchLib(
+    ) || ctx->usesMatchLib(body)
+  | Ast.EPipe(left, right, _, _) => ctx->usesMatchLib(
+      left
+    ) || ctx->usesMatchLib(right)
+  | Ast.EDo(exprs, _) => someOf(x => ctx->usesMatchLib(x), exprs)
+  | Ast.ETernary(cond, thenE, elseE, _) => ctx->usesMatchLib(
       cond
-    ) || (usesMatchLib(thenE) || usesMatchLib(elseE))
+    ) || (ctx->usesMatchLib(thenE) || ctx->usesMatchLib(elseE))
   | Ast.EMatch(scrutinee, arms, _) => !isListMatch(
       arms
-    ) || (usesMatchLib(scrutinee) || someOf(usesMatchLibArm, arms))
+    ) && !(ctx->ternaryTypes(
+      arms,
+      hook1(ctx.guardBaseType, scrutinee)
+    )) || (ctx->usesMatchLib(
+      scrutinee
+    ) || someOf(a => ctx->usesMatchLibArm(a), arms))
   | Ast.ELoop(params, body, _) => someOf(
-      p => usesMatchLib(p.init),
+      p => ctx->usesMatchLib(p.init),
       params
-    ) || usesMatchLib(body)
-  | Ast.ERecur(args, _) => someOf(usesMatchLib, args)
+    ) || ctx->usesMatchLib(body)
+  | Ast.ERecur(args, _) => someOf(x => ctx->usesMatchLib(x), args)
   | Ast.ERecord(fields, spread, _) => switch spread {
-      | Some(s) => usesMatchLib(s)
+      | Some(s) => ctx->usesMatchLib(s)
       | None => false
-    } || someOf(f => usesMatchLib(f.value), fields)
-  | Ast.EField(target, _, _, _) => usesMatchLib(target)
-  | Ast.ETuple(elements, _) => someOf(usesMatchLib, elements)
+    } || someOf(f => ctx->usesMatchLib(f.value), fields)
+  | Ast.EField(target, _, _, _) => ctx->usesMatchLib(target)
+  | Ast.ETuple(elements, _) => someOf(x => ctx->usesMatchLib(x), elements)
   | Ast.EArr(elements, _) => someOf(
       el =>
-        usesMatchLib(switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
+        ctx->usesMatchLib(
+          switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }
+        ),
       elements
     )
   | Ast.EList(elements, _) => someOf(
       el =>
-        usesMatchLib(switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
+        ctx->usesMatchLib(
+          switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }
+        ),
       elements
     )
   | Ast.ESet(elements, _) => someOf(
       el =>
-        usesMatchLib(switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }),
+        ctx->usesMatchLib(
+          switch el { | Ast.SEExpr(e) => e | Ast.SESpread(e) => e }
+        ),
       elements
     )
   | Ast.EMap(entries, _) => someOf(
-      en => usesMatchLib(en.key) || usesMatchLib(en.value),
+      en => ctx->usesMatchLib(en.key) || ctx->usesMatchLib(en.value),
       entries
     )
   | Ast.EInterp(parts, _) => someOf(
       p => switch p {
         | Ast.IPLit(_) => false
-        | Ast.IPExpr(ex) => usesMatchLib(ex)
+        | Ast.IPExpr(ex) => ctx->usesMatchLib(ex)
       },
       parts
     )
@@ -2111,8 +2200,8 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
   let ctx = { ...ctx0, valueRefs } in
   let needsMatch = someOf(
     s => switch s {
-      | Ast.SLet(_, _, _, value, _, _, _) => usesMatchLib(value)
-      | Ast.SExpr(value, _) => usesMatchLib(value)
+      | Ast.SLet(_, _, _, value, _, _, _) => ctx->usesMatchLib(value)
+      | Ast.SExpr(value, _) => ctx->usesMatchLib(value)
       | _ => false
     },
     stmts

@@ -103,20 +103,32 @@ import {
 } from "../lexer";
 
 const jxTokName: (t: Tok) => string = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TEq" }, () => "eq")
-    .with({ _tag: "TLbrace" }, () => "lbrace")
-    .with({ _tag: "TRbrace" }, () => "rbrace")
-    .with({ _tag: "TSpread" }, () => "spread")
-    .with({ _tag: "TSlash" }, () => "slash")
-    .with({ _tag: "TLt" }, () => "lt")
-    .with({ _tag: "TGt" }, () => "gt")
-    .with({ _tag: "TId" }, () => "id")
-    .with({ _tag: "TStr" }, () => "str")
-    .with({ _tag: "TNum" }, () => "num")
-    .with({ _tag: "TBool" }, () => "bool")
-    .with({ _tag: "TEof" }, () => "eof")
-    .otherwise(() => "tok");
+  ((_v) =>
+    _v._tag === "TEq"
+      ? "eq"
+      : _v._tag === "TLbrace"
+        ? "lbrace"
+        : _v._tag === "TRbrace"
+          ? "rbrace"
+          : _v._tag === "TSpread"
+            ? "spread"
+            : _v._tag === "TSlash"
+              ? "slash"
+              : _v._tag === "TLt"
+                ? "lt"
+                : _v._tag === "TGt"
+                  ? "gt"
+                  : _v._tag === "TId"
+                    ? "id"
+                    : _v._tag === "TStr"
+                      ? "str"
+                      : _v._tag === "TNum"
+                        ? "num"
+                        : _v._tag === "TBool"
+                          ? "bool"
+                          : _v._tag === "TEof"
+                            ? "eof"
+                            : "tok")(t);
 const jxEofTok = { tok: TEof as Tok, start: 0, end: 0, doc: None };
 const jxTokAt: _Curry<[toks: LocTok[], i: number], LocTok> = _curry(
   2,
@@ -154,16 +166,14 @@ const jxExpectId: _Curry<
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = jxTokAt(toks, pos);
-  return match(lt.tok)
-    .with(
-      { _tag: "TId" },
-      ({ value: name }) =>
-        Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
-          [Name, number],
-          { message: string; start: number; end: number }
-        >,
-    )
-    .otherwise((t) => jxErrAt(`expected id, got ${jxTokName(t)}`, lt));
+  return ((_v) =>
+    _v._tag === "TId"
+      ? (({ value: name }) =>
+          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+            [Name, number],
+            { message: string; start: number; end: number }
+          >)(_v)
+      : ((t) => jxErrAt(`expected id, got ${jxTokName(t)}`, lt))(_v))(lt.tok);
 });
 /**
  * Keyword spelling, mirroring `parser.mochi`'s `keywordText` (ADR 0077). The
@@ -171,17 +181,26 @@ const jxExpectId: _Curry<
  * sees the token stream, not the parser's internals.
  */
 const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TLet" }, () => Some("let") as Option<string>)
-    .with({ _tag: "TType" }, () => Some("type") as Option<string>)
-    .with({ _tag: "TExtern" }, () => Some("extern") as Option<string>)
-    .with({ _tag: "TSwitch" }, () => Some("switch") as Option<string>)
-    .with({ _tag: "TLoop" }, () => Some("loop") as Option<string>)
-    .with({ _tag: "TRecur" }, () => Some("recur") as Option<string>)
-    .with({ _tag: "TDo" }, () => Some("do") as Option<string>)
-    .with({ _tag: "TImport" }, () => Some("import") as Option<string>)
-    .with({ _tag: "TExport" }, () => Some("export") as Option<string>)
-    .otherwise(() => None as Option<string>);
+  ((_v) =>
+    _v._tag === "TLet"
+      ? (Some("let") as Option<string>)
+      : _v._tag === "TType"
+        ? (Some("type") as Option<string>)
+        : _v._tag === "TExtern"
+          ? (Some("extern") as Option<string>)
+          : _v._tag === "TSwitch"
+            ? (Some("switch") as Option<string>)
+            : _v._tag === "TLoop"
+              ? (Some("loop") as Option<string>)
+              : _v._tag === "TRecur"
+                ? (Some("recur") as Option<string>)
+                : _v._tag === "TDo"
+                  ? (Some("do") as Option<string>)
+                  : _v._tag === "TImport"
+                    ? (Some("import") as Option<string>)
+                    : _v._tag === "TExport"
+                      ? (Some("export") as Option<string>)
+                      : (None as Option<string>))(t);
 /**
  * Attribute name. A keyword is legal here (ADR 0077) — `type="button"` is the
  * case that forced it. A valueless attr lowers to `true`, not a reference, so
@@ -192,17 +211,18 @@ const jxExpectLabel: _Curry<
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = jxTokAt(toks, pos);
-  return match(jxKeywordText(lt.tok))
-    .with(
-      { _tag: "Some" },
-      ({ value: name }) =>
-        Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
-          [Name, number],
-          { message: string; start: number; end: number }
-        >,
-    )
-    .with({ _tag: "None" }, () => jxExpectId(toks, pos))
-    .exhaustive();
+  return ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: name }) =>
+          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+            [Name, number],
+            { message: string; start: number; end: number }
+          >)(_v)
+      : _v._tag === "None"
+        ? jxExpectId(toks, pos)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(jxKeywordText(lt.tok));
 });
 /**
  * Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
@@ -219,25 +239,23 @@ const jxAttrNameFrom: _Curry<[toks: LocTok[], pos: number, acc: Name], [Name, nu
       and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
       eq(partTok.start, minusTok.end),
     )
-      ? match(jxExpectLabel(toks, pos + 1))
-          .with(
-            (
-              _v,
-            ): _v is Extract<
-              Result<[Name, number], { message: string; start: number; end: number }>,
-              { _tag: "Ok" }
-            > => {
-              const _g: any = _v;
-              return _g._tag === "Ok";
-            },
-            ({ value: [part, p1] }) =>
-              jxAttrNameFrom(toks, p1, {
-                name: `${acc.name}-${part.name}`,
-                span: { start: acc.span.start, end: part.span.end },
-              }),
-          )
-          .with({ _tag: "Err" }, () => _tuple(acc, pos))
-          .exhaustive()
+      ? ((_v) =>
+          _v._tag === "Ok"
+            ? (({ value: [part, p1] }) =>
+                jxAttrNameFrom(toks, p1, {
+                  name: `${acc.name}-${part.name}`,
+                  span: { start: acc.span.start, end: part.span.end },
+                }))(
+                _v as Extract<
+                  Result<[Name, number], { message: string; start: number; end: number }>,
+                  { _tag: "Ok" }
+                >,
+              )
+            : _v._tag === "Err"
+              ? _tuple(acc, pos)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(jxExpectLabel(toks, pos + 1))
       : _tuple(acc, pos);
   },
 );
@@ -256,31 +274,56 @@ const jxExpectAttrName: _Curry<
 const jxIsUpper: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(n >= 65, n <= 90), _Str_codeAt(0, s));
 const jxExprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  match(e)
-    .with({ _tag: "ENum" }, ({ span: sp }) => sp)
-    .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
-    .with({ _tag: "EBool" }, ({ span: sp }) => sp)
-    .with({ _tag: "EStr" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERef" }, ({ span: sp }) => sp)
-    .with({ _tag: "ECall" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELambda" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELetIn" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELetBind" }, ({ span: sp }) => sp)
-    .with({ _tag: "EPipe" }, ({ span: sp }) => sp)
-    .with({ _tag: "EDo" }, ({ span: sp }) => sp)
-    .with({ _tag: "ETernary" }, ({ span: sp }) => sp)
-    .with({ _tag: "EMatch" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELoop" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERecur" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERecord" }, ({ span: sp }) => sp)
-    .with({ _tag: "EField" }, ({ span: sp }) => sp)
-    .with({ _tag: "ETuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "EArr" }, ({ span: sp }) => sp)
-    .with({ _tag: "EList" }, ({ span: sp }) => sp)
-    .with({ _tag: "ESet" }, ({ span: sp }) => sp)
-    .with({ _tag: "EMap" }, ({ span: sp }) => sp)
-    .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "ENum"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "EUnit"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "EBool"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "EStr"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "ERef"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "ECall"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "ELambda"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "ELetIn"
+                    ? (({ span: sp }) => sp)(_v)
+                    : _v._tag === "ELetBind"
+                      ? (({ span: sp }) => sp)(_v)
+                      : _v._tag === "EPipe"
+                        ? (({ span: sp }) => sp)(_v)
+                        : _v._tag === "EDo"
+                          ? (({ span: sp }) => sp)(_v)
+                          : _v._tag === "ETernary"
+                            ? (({ span: sp }) => sp)(_v)
+                            : _v._tag === "EMatch"
+                              ? (({ span: sp }) => sp)(_v)
+                              : _v._tag === "ELoop"
+                                ? (({ span: sp }) => sp)(_v)
+                                : _v._tag === "ERecur"
+                                  ? (({ span: sp }) => sp)(_v)
+                                  : _v._tag === "ERecord"
+                                    ? (({ span: sp }) => sp)(_v)
+                                    : _v._tag === "EField"
+                                      ? (({ span: sp }) => sp)(_v)
+                                      : _v._tag === "ETuple"
+                                        ? (({ span: sp }) => sp)(_v)
+                                        : _v._tag === "EArr"
+                                          ? (({ span: sp }) => sp)(_v)
+                                          : _v._tag === "EList"
+                                            ? (({ span: sp }) => sp)(_v)
+                                            : _v._tag === "ESet"
+                                              ? (({ span: sp }) => sp)(_v)
+                                              : _v._tag === "EMap"
+                                                ? (({ span: sp }) => sp)(_v)
+                                                : _v._tag === "EInterp"
+                                                  ? (({ span: sp }) => sp)(_v)
+                                                  : (() => {
+                                                      throw new Error("non-exhaustive match");
+                                                    })())(e);
 const makeJsxCall: <B>(
   tagExpr: Expr,
   fields: Field[],
@@ -377,31 +420,30 @@ const parseJsxAttributes: _Curry<
               })(
                 eq(jxTokAt(toks, p1).tok, TEq as Tok)
                   ? ((pEq: number) =>
-                      match(jxTokAt(toks, pEq).tok)
-                        .with({ _tag: "TStr" }, ({ value: v }) =>
-                          _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1),
-                        )
-                        .with({ _tag: "TLbrace" }, () =>
-                          match(parseExpr(toks, pEq + 1))
-                            .with(
-                              (
-                                _v,
-                              ): _v is Extract<
-                                Result<
-                                  [Expr, number],
-                                  { message: string; start: number; end: number }
-                                >,
-                                { _tag: "Ok" }
-                              > => {
-                                const _g: any = _v;
-                                return _g._tag === "Ok";
-                              },
-                              ({ value: [e, pR] }) => _tuple(e, pR + 1),
-                            )
-                            .with({ _tag: "Err" }, () => _tuple(Ast.EBool(true, attrId.span), pEq))
-                            .exhaustive(),
-                        )
-                        .otherwise(() => _tuple(Ast.EBool(true, attrId.span), pEq)))(p1 + 1)
+                      ((_v) =>
+                        _v._tag === "TStr"
+                          ? (({ value: v }) =>
+                              _tuple(Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1))(_v)
+                          : _v._tag === "TLbrace"
+                            ? ((_v) =>
+                                _v._tag === "Ok"
+                                  ? (({ value: [e, pR] }) => _tuple(e, pR + 1))(
+                                      _v as Extract<
+                                        Result<
+                                          [Expr, number],
+                                          { message: string; start: number; end: number }
+                                        >,
+                                        { _tag: "Ok" }
+                                      >,
+                                    )
+                                  : _v._tag === "Err"
+                                    ? _tuple(Ast.EBool(true, attrId.span), pEq)
+                                    : (() => {
+                                        throw new Error("non-exhaustive match");
+                                      })())(parseExpr(toks, pEq + 1))
+                            : _tuple(Ast.EBool(true, attrId.span), pEq))(jxTokAt(toks, pEq).tok))(
+                      p1 + 1,
+                    )
                   : _tuple(Ast.EBool(true, attrId.span), p1),
               ),
             jxExpectAttrName(toks, pos),
@@ -504,44 +546,44 @@ const parseJsxChildren: _Curry<
                     ),
                   parseExpr(toks, pos + 1),
                 )
-            : match(lt.tok)
-                .with({ _tag: "TStr" }, ({ value: v }) =>
-                  parseJsxChildren(
-                    expectedTag,
-                    toks,
-                    pos + 1,
-                    _Array_append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
-                    parseExpr,
-                  ),
-                )
-                .with({ _tag: "TNum" }, ({ value: v, raw }) =>
-                  parseJsxChildren(
-                    expectedTag,
-                    toks,
-                    pos + 1,
-                    _Array_append(Ast.SEExpr(Ast.ENum(v, raw, jxSpanOf(lt))), acc),
-                    parseExpr,
-                  ),
-                )
-                .with({ _tag: "TBool" }, ({ value: v }) =>
-                  parseJsxChildren(
-                    expectedTag,
-                    toks,
-                    pos + 1,
-                    _Array_append(Ast.SEExpr(Ast.EBool(v, jxSpanOf(lt))), acc),
-                    parseExpr,
-                  ),
-                )
-                .with({ _tag: "TId" }, ({ value: v }) =>
-                  parseJsxChildren(
-                    expectedTag,
-                    toks,
-                    pos + 1,
-                    _Array_append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
-                    parseExpr,
-                  ),
-                )
-                .otherwise(() => jxErrAt("unexpected token in JSX children", lt));
+            : ((_v) =>
+                _v._tag === "TStr"
+                  ? (({ value: v }) =>
+                      parseJsxChildren(
+                        expectedTag,
+                        toks,
+                        pos + 1,
+                        _Array_append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
+                        parseExpr,
+                      ))(_v)
+                  : _v._tag === "TNum"
+                    ? (({ value: v, raw }) =>
+                        parseJsxChildren(
+                          expectedTag,
+                          toks,
+                          pos + 1,
+                          _Array_append(Ast.SEExpr(Ast.ENum(v, raw, jxSpanOf(lt))), acc),
+                          parseExpr,
+                        ))(_v)
+                    : _v._tag === "TBool"
+                      ? (({ value: v }) =>
+                          parseJsxChildren(
+                            expectedTag,
+                            toks,
+                            pos + 1,
+                            _Array_append(Ast.SEExpr(Ast.EBool(v, jxSpanOf(lt))), acc),
+                            parseExpr,
+                          ))(_v)
+                      : _v._tag === "TId"
+                        ? (({ value: v }) =>
+                            parseJsxChildren(
+                              expectedTag,
+                              toks,
+                              pos + 1,
+                              _Array_append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
+                              parseExpr,
+                            ))(_v)
+                        : jxErrAt("unexpected token in JSX children", lt))(lt.tok);
   },
 );
 const parseJsx: _Curry<
@@ -682,10 +724,14 @@ export const parseJsxAtom: _Curry<
         >),
 );
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
-  match(el)
-    .with({ _tag: "SEExpr" }, ({ expr: e }) => e)
-    .with({ _tag: "SESpread" }, ({ expr: e }) => e)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "SEExpr"
+      ? (({ expr: e }) => e)(_v)
+      : _v._tag === "SESpread"
+        ? (({ expr: e }) => e)(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(el);
 const inferJsxArrElems: <A, B, C>(
   elements: SeqElem[],
   st: A,
@@ -693,28 +739,18 @@ const inferJsxArrElems: <A, B, C>(
 ) => Result<A, C> = _curry(
   3,
   <A, B, C>(elements: SeqElem[], st: A, inferExpr: (a: Expr, b: A) => Result<[B, A], C>) =>
-    match(elements)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([el, ...rest]) =>
-          _Result_flatMap(
-            ([_, st1]: [B, A]) => inferJsxArrElems(rest, st1, inferExpr),
-            inferExpr(seqElemExpr(el), st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? Ok(st)
+        : _v.length >= 1
+          ? (([el, ...rest]) =>
+              _Result_flatMap(
+                ([_, st1]: [B, A]) => inferJsxArrElems(rest, st1, inferExpr),
+                inferExpr(seqElemExpr(el), st),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(elements),
 );
 const inferJsxChildren: <A, B, C>(
   children: Expr[],
@@ -723,39 +759,24 @@ const inferJsxChildren: <A, B, C>(
 ) => Result<A, C> = _curry(
   3,
   <A, B, C>(children: Expr[], st: A, inferExpr: (a: Expr, b: A) => Result<[B, A], C>) =>
-    match(children)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => Ok(st),
-      )
-      .with(
-        (_v): _v is [Extract<Expr[][number], { _tag: "EArr" }>, ...Expr[]] => {
-          const _g: any = _v;
-          return _g.length >= 1 && _g[0]._tag === "EArr";
-        },
-        ([{ elements }, ...rest]) =>
-          _Result_flatMap(
-            (st1: A) => inferJsxChildren(rest, st1, inferExpr),
-            inferJsxArrElems(elements, st, inferExpr),
-          ),
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([child, ...rest]) =>
-          _Result_flatMap(
-            ([_, st1]: [B, A]) => inferJsxChildren(rest, st1, inferExpr),
-            inferExpr(child, st),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? Ok(st)
+        : _v.length >= 1 && _v[0]._tag === "EArr"
+          ? (([{ elements }, ...rest]) =>
+              _Result_flatMap(
+                (st1: A) => inferJsxChildren(rest, st1, inferExpr),
+                inferJsxArrElems(elements, st, inferExpr),
+              ))(_v as [Extract<Expr[][number], { _tag: "EArr" }>, ...Expr[]])
+          : _v.length >= 1
+            ? (([child, ...rest]) =>
+                _Result_flatMap(
+                  ([_, st1]: [B, A]) => inferJsxChildren(rest, st1, inferExpr),
+                  inferExpr(child, st),
+                ))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(children),
 );
 /**
  * Walk a row for `label`; open tails / missing labels → None.
@@ -763,13 +784,17 @@ const inferJsxChildren: <A, B, C>(
 const rowField: _Curry<[row: Row, label: string], Option<Ty>> = _curry(
   2,
   (row: Row, label: string) =>
-    match(row)
-      .with({ _tag: "RowExtend" }, ({ label: l, fieldType, rest }) =>
-        eq(l, label) ? (Some(fieldType) as Option<Ty>) : rowField(rest, label),
-      )
-      .with({ _tag: "RowEmpty" }, () => None as Option<Ty>)
-      .with({ _tag: "RowVar" }, () => None as Option<Ty>)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "RowExtend"
+        ? (({ label: l, fieldType, rest }) =>
+            eq(l, label) ? (Some(fieldType) as Option<Ty>) : rowField(rest, label))(_v)
+        : _v._tag === "RowEmpty"
+          ? (None as Option<Ty>)
+          : _v._tag === "RowVar"
+            ? (None as Option<Ty>)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(row),
 );
 const fieldNamed: <A, B>(label: A, fields: ({ name: A } & B)[]) => boolean = _curry(
   2,
@@ -790,20 +815,17 @@ const fieldNamed: <A, B>(label: A, fields: ({ name: A } & B)[]) => boolean = _cu
 const recordHasAttr: _Curry<[expr: Expr, label: string], boolean> = _curry(
   2,
   (expr: Expr, label: string) =>
-    match(expr)
-      .with({ _tag: "ERecord" }, ({ fields }) => fieldNamed(label, fields))
-      .otherwise(() => false),
+    ((_v) => (_v._tag === "ERecord" ? (({ fields }) => fieldNamed(label, fields))(_v) : false))(
+      expr,
+    ),
 );
 const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
-  match(restArgs)
-    .with(
-      (_v): _v is [Extract<Expr[][number], { _tag: "EArr" }>, ...Expr[]] => {
-        const _g: any = _v;
-        return _g.length >= 1 && _g[0]._tag === "EArr";
-      },
-      ([{ elements }]) => length(elements),
-    )
-    .otherwise(() => 0);
+  ((_v) =>
+    _v.length >= 1 && _v[0]._tag === "EArr"
+      ? (([{ elements }]) => length(elements))(
+          _v as [Extract<Expr[][number], { _tag: "EArr" }>, ...Expr[]],
+        )
+      : 0)(restArgs);
 /**
  * Runtime hosts fold h's 3rd arg into props.children. When the component
  * expects that field and the JSX body supplied kids, synthesize it onto the
@@ -813,18 +835,21 @@ const jsxPropsWithSynthesizedChildren: _Curry<
   [propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]],
   Ty
 > = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) =>
-  match(rowField(expectedRow, "children"))
-    .with({ _tag: "None" }, () => propsT)
-    .with({ _tag: "Some" }, ({ value: expectedChildren }) =>
-      match(propsT)
-        .with({ _tag: "TyRecord" }, ({ row: prow }) =>
-          or(recordHasAttr(propsExpr, "children"), eq(jsxChildCount(restArgs), 0))
-            ? propsT
-            : tRecord(rExtend("children", expectedChildren, prow)),
-        )
-        .otherwise(() => propsT),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? propsT
+      : _v._tag === "Some"
+        ? (({ value: expectedChildren }) =>
+            ((_v) =>
+              _v._tag === "TyRecord"
+                ? (({ row: prow }) =>
+                    or(recordHasAttr(propsExpr, "children"), eq(jsxChildCount(restArgs), 0))
+                      ? propsT
+                      : tRecord(rExtend("children", expectedChildren, prow)))(_v)
+                : propsT)(propsT))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(rowField(expectedRow, "children")),
 );
 import { intrinsicElements as jsxIntrinsicElements } from "./jsx-schema.gen.mjs";
 /**
@@ -848,105 +873,78 @@ const attrKindType: (kind: string) => Option<Ty> = (kind: string) =>
                 ) as Option<Ty>)
               : (None as Option<Ty>);
 const mismatchHint: (name: string) => Option<string> = (name: string) =>
-  match(name)
-    .with("class", () => Some("In JSX, use 'className' instead of 'class'.") as Option<string>)
-    .with("for", () => Some("In JSX, use 'htmlFor' instead of 'for'.") as Option<string>)
-    .with("tabindex", () => Some("In JSX, use 'tabIndex' instead of 'tabindex'.") as Option<string>)
-    .with(
-      "autofocus",
-      () => Some("In JSX, use 'autoFocus' instead of 'autofocus'.") as Option<string>,
-    )
-    .with(
-      "autocomplete",
-      () => Some("In JSX, use 'autoComplete' instead of 'autocomplete'.") as Option<string>,
-    )
-    .with("readonly", () => Some("In JSX, use 'readOnly' instead of 'readonly'.") as Option<string>)
-    .with(
-      "maxlength",
-      () => Some("In JSX, use 'maxLength' instead of 'maxlength'.") as Option<string>,
-    )
-    .with(
-      "minlength",
-      () => Some("In JSX, use 'minLength' instead of 'minlength'.") as Option<string>,
-    )
-    .with(
-      "spellcheck",
-      () => Some("In JSX, use 'spellCheck' instead of 'spellcheck'.") as Option<string>,
-    )
-    .with(
-      "contenteditable",
-      () => Some("In JSX, use 'contentEditable' instead of 'contenteditable'.") as Option<string>,
-    )
-    .with("viewbox", () => Some("In JSX, use 'viewBox' instead of 'viewbox'.") as Option<string>)
-    .with(
-      "strokewidth",
-      () => Some("In JSX, use 'strokeWidth' instead of 'strokewidth'.") as Option<string>,
-    )
-    .with(
-      "strokelinecap",
-      () => Some("In JSX, use 'strokeLinecap' instead of 'strokelinecap'.") as Option<string>,
-    )
-    .with(
-      "strokelinejoin",
-      () => Some("In JSX, use 'strokeLinejoin' instead of 'strokelinejoin'.") as Option<string>,
-    )
-    .with(
-      "onclick",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onClick' instead of 'onclick'.",
-        ) as Option<string>,
-    )
-    .with(
-      "onchange",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onChange' instead of 'onchange'.",
-        ) as Option<string>,
-    )
-    .with(
-      "oninput",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onInput' instead of 'oninput'.",
-        ) as Option<string>,
-    )
-    .with(
-      "onkeydown",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onKeyDown' instead of 'onkeydown'.",
-        ) as Option<string>,
-    )
-    .with(
-      "onkeyup",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onKeyUp' instead of 'onkeyup'.",
-        ) as Option<string>,
-    )
-    .with(
-      "onsubmit",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onSubmit' instead of 'onsubmit'.",
-        ) as Option<string>,
-    )
-    .with(
-      "onfocus",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onFocus' instead of 'onfocus'.",
-        ) as Option<string>,
-    )
-    .with(
-      "onblur",
-      () =>
-        Some(
-          "In JSX, event handlers are camelCase: use 'onBlur' instead of 'onblur'.",
-        ) as Option<string>,
-    )
-    .otherwise(() => None as Option<string>);
+  ((_v) =>
+    _v === "class"
+      ? (Some("In JSX, use 'className' instead of 'class'.") as Option<string>)
+      : _v === "for"
+        ? (Some("In JSX, use 'htmlFor' instead of 'for'.") as Option<string>)
+        : _v === "tabindex"
+          ? (Some("In JSX, use 'tabIndex' instead of 'tabindex'.") as Option<string>)
+          : _v === "autofocus"
+            ? (Some("In JSX, use 'autoFocus' instead of 'autofocus'.") as Option<string>)
+            : _v === "autocomplete"
+              ? (Some("In JSX, use 'autoComplete' instead of 'autocomplete'.") as Option<string>)
+              : _v === "readonly"
+                ? (Some("In JSX, use 'readOnly' instead of 'readonly'.") as Option<string>)
+                : _v === "maxlength"
+                  ? (Some("In JSX, use 'maxLength' instead of 'maxlength'.") as Option<string>)
+                  : _v === "minlength"
+                    ? (Some("In JSX, use 'minLength' instead of 'minlength'.") as Option<string>)
+                    : _v === "spellcheck"
+                      ? (Some(
+                          "In JSX, use 'spellCheck' instead of 'spellcheck'.",
+                        ) as Option<string>)
+                      : _v === "contenteditable"
+                        ? (Some(
+                            "In JSX, use 'contentEditable' instead of 'contenteditable'.",
+                          ) as Option<string>)
+                        : _v === "viewbox"
+                          ? (Some("In JSX, use 'viewBox' instead of 'viewbox'.") as Option<string>)
+                          : _v === "strokewidth"
+                            ? (Some(
+                                "In JSX, use 'strokeWidth' instead of 'strokewidth'.",
+                              ) as Option<string>)
+                            : _v === "strokelinecap"
+                              ? (Some(
+                                  "In JSX, use 'strokeLinecap' instead of 'strokelinecap'.",
+                                ) as Option<string>)
+                              : _v === "strokelinejoin"
+                                ? (Some(
+                                    "In JSX, use 'strokeLinejoin' instead of 'strokelinejoin'.",
+                                  ) as Option<string>)
+                                : _v === "onclick"
+                                  ? (Some(
+                                      "In JSX, event handlers are camelCase: use 'onClick' instead of 'onclick'.",
+                                    ) as Option<string>)
+                                  : _v === "onchange"
+                                    ? (Some(
+                                        "In JSX, event handlers are camelCase: use 'onChange' instead of 'onchange'.",
+                                      ) as Option<string>)
+                                    : _v === "oninput"
+                                      ? (Some(
+                                          "In JSX, event handlers are camelCase: use 'onInput' instead of 'oninput'.",
+                                        ) as Option<string>)
+                                      : _v === "onkeydown"
+                                        ? (Some(
+                                            "In JSX, event handlers are camelCase: use 'onKeyDown' instead of 'onkeydown'.",
+                                          ) as Option<string>)
+                                        : _v === "onkeyup"
+                                          ? (Some(
+                                              "In JSX, event handlers are camelCase: use 'onKeyUp' instead of 'onkeyup'.",
+                                            ) as Option<string>)
+                                          : _v === "onsubmit"
+                                            ? (Some(
+                                                "In JSX, event handlers are camelCase: use 'onSubmit' instead of 'onsubmit'.",
+                                              ) as Option<string>)
+                                            : _v === "onfocus"
+                                              ? (Some(
+                                                  "In JSX, event handlers are camelCase: use 'onFocus' instead of 'onfocus'.",
+                                                ) as Option<string>)
+                                              : _v === "onblur"
+                                                ? (Some(
+                                                    "In JSX, event handlers are camelCase: use 'onBlur' instead of 'onblur'.",
+                                                  ) as Option<string>)
+                                                : (None as Option<string>))(name);
 
 const noJxSuggestions: Hint[] = [] as Hint[];
 const jxTypeErr: <A>(message: string, sp: SpanAt) => Result<A, BoundErr> = _curry(
@@ -963,11 +961,14 @@ const jxTypeErr: <A>(message: string, sp: SpanAt) => Result<A, BoundErr> = _curr
 const isHandlerName: (name: string) => boolean = (name: string) =>
   and(and(_Str_startsWith("on", name), _Str_length(name) > 2), jxIsUpper(_Str_slice(2, 3, name)));
 const isFnOrOpen: (t: Ty) => boolean = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyFn" }, () => true)
-    .with({ _tag: "TyVar" }, () => true)
-    .with({ _tag: "TyCon" }, ({ name }) => eq(name, "any"))
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TyFn"
+      ? true
+      : _v._tag === "TyVar"
+        ? true
+        : _v._tag === "TyCon"
+          ? (({ name }) => eq(name, "any"))(_v)
+          : false)(t);
 const checkHandler: <A, B, C>(
   name: string,
   value: Expr,
@@ -1000,10 +1001,14 @@ const unknownProp: <A, B>(
   4,
   <A, B>(tag: string, name: string, value: Expr, schema: Map<string, A>) => {
     const hint: Option<string> = closestName(name, _Map_keys(schema));
-    const did: string = match(hint)
-      .with({ _tag: "Some" }, ({ value: s }) => ` Did you mean '${s}'?`)
-      .with({ _tag: "None" }, () => "")
-      .exhaustive();
+    const did: string = ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: s }) => ` Did you mean '${s}'?`)(_v)
+        : _v._tag === "None"
+          ? ""
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(hint);
     return jxTypeErr(`Property '${name}' does not exist on '<${tag}>'.${did}`, jxExprSpan(value));
   },
 );
@@ -1037,60 +1042,76 @@ const inferIntrinsicFields: <A, B>(
         (_v) => _v.length >= 1,
         ([f, ...rest]) =>
           ((cont: (a: St) => Result<St, BoundErr>) =>
-            match(mismatchHint(f.name))
-              .with({ _tag: "Some" }, ({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))
-              .with({ _tag: "None" }, () =>
-                or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
-                  ? _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st))
-                  : match(schema)
-                      .with({ _tag: "None" }, () =>
-                        _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st)),
-                      )
-                      .with({ _tag: "Some" }, ({ value: m }) =>
-                        ((expected: Option<string>) =>
-                          match(expected)
-                            .with({ _tag: "None" }, () => unknownProp(tag, f.name, f.value, m))
-                            .with({ _tag: "Some" }, ({ value: kind }) =>
-                              eq(kind, "event")
-                                ? checkHandler(f.name, f.value, st, api, cont)
-                                : eq(kind, "any")
-                                  ? _Result_flatMap(
-                                      ([_, st1]) => cont(st1),
-                                      api.inferExpr(f.value, st),
-                                    )
-                                  : match(attrKindType(kind))
-                                      .with({ _tag: "Some" }, ({ value: expectedT }) =>
-                                        _Result_flatMap(
-                                          ([valT, st1]) =>
-                                            _Result_flatMap(
-                                              (st2) => cont(st2),
-                                              api.unify(valT, expectedT, st1, jxExprSpan(f.value)),
-                                            ),
-                                          api.inferExpr(f.value, st),
-                                        ),
-                                      )
-                                      .with({ _tag: "None" }, () =>
-                                        _Result_flatMap(
-                                          ([_, st1]) => cont(st1),
-                                          api.inferExpr(f.value, st),
-                                        ),
-                                      )
-                                      .exhaustive(),
-                            )
-                            .exhaustive())(
-                          match(_Map_get(f.name, m))
-                            .with({ _tag: "Some" }, ({ value: k }) => Some(k) as Option<string>)
-                            .with({ _tag: "None" }, () =>
-                              isHandlerName(f.name)
-                                ? (Some("event") as Option<string>)
-                                : (None as Option<string>),
-                            )
-                            .exhaustive(),
-                        ),
-                      )
-                      .exhaustive(),
-              )
-              .exhaustive())((st1: St) => inferIntrinsicFields(tag, rest, st1, api, schema)),
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v)
+                : _v._tag === "None"
+                  ? or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
+                    ? _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st))
+                    : ((_v) =>
+                        _v._tag === "None"
+                          ? _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st))
+                          : _v._tag === "Some"
+                            ? (({ value: m }) =>
+                                ((expected: Option<string>) =>
+                                  ((_v) =>
+                                    _v._tag === "None"
+                                      ? unknownProp(tag, f.name, f.value, m)
+                                      : _v._tag === "Some"
+                                        ? (({ value: kind }) =>
+                                            eq(kind, "event")
+                                              ? checkHandler(f.name, f.value, st, api, cont)
+                                              : eq(kind, "any")
+                                                ? _Result_flatMap(
+                                                    ([_, st1]) => cont(st1),
+                                                    api.inferExpr(f.value, st),
+                                                  )
+                                                : ((_v) =>
+                                                    _v._tag === "Some"
+                                                      ? (({ value: expectedT }) =>
+                                                          _Result_flatMap(
+                                                            ([valT, st1]) =>
+                                                              _Result_flatMap(
+                                                                (st2) => cont(st2),
+                                                                api.unify(
+                                                                  valT,
+                                                                  expectedT,
+                                                                  st1,
+                                                                  jxExprSpan(f.value),
+                                                                ),
+                                                              ),
+                                                            api.inferExpr(f.value, st),
+                                                          ))(_v)
+                                                      : _v._tag === "None"
+                                                        ? _Result_flatMap(
+                                                            ([_, st1]) => cont(st1),
+                                                            api.inferExpr(f.value, st),
+                                                          )
+                                                        : (() => {
+                                                            throw new Error("non-exhaustive match");
+                                                          })())(attrKindType(kind)))(_v)
+                                        : (() => {
+                                            throw new Error("non-exhaustive match");
+                                          })())(expected))(
+                                  ((_v) =>
+                                    _v._tag === "Some"
+                                      ? (({ value: k }) => Some(k) as Option<string>)(_v)
+                                      : _v._tag === "None"
+                                        ? isHandlerName(f.name)
+                                          ? (Some("event") as Option<string>)
+                                          : (None as Option<string>)
+                                        : (() => {
+                                            throw new Error("non-exhaustive match");
+                                          })())(_Map_get(f.name, m)),
+                                ))(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(schema)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(mismatchHint(f.name)))((st1: St) =>
+            inferIntrinsicFields(tag, rest, st1, api, schema),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -1133,10 +1154,14 @@ const unknownTagErr: <A>(tagName: string, sp: SpanAt) => Result<A, BoundErr> = _
   2,
   <A>(tagName: string, sp: SpanAt) => {
     const hint: Option<string> = closestName(tagName, _Map_keys(jsxIntrinsicElements));
-    const did: string = match(hint)
-      .with({ _tag: "Some" }, ({ value: s }) => ` Did you mean '<${s}>'?`)
-      .with({ _tag: "None" }, () => "")
-      .exhaustive();
+    const did: string = ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: s }) => ` Did you mean '<${s}>'?`)(_v)
+        : _v._tag === "None"
+          ? ""
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(hint);
     return jxTypeErr(`Unknown JSX element '<${tagName}>'.${did}`, sp);
   },
 );
@@ -1163,22 +1188,29 @@ const inferStringTag: <A, B>(
   ) =>
     eq(tagName, "Fragment")
       ? inferFragmentFields(fields, st, api)
-      : match(_Map_get(tagName, jsxIntrinsicElements))
-          .with({ _tag: "Some" }, ({ value: schema }) =>
-            inferIntrinsicFields(
-              tagName,
-              fields,
-              st,
-              api,
-              Some(schema) as Option<Map<string, string>>,
-            ),
-          )
-          .with({ _tag: "None" }, () =>
-            _Str_contains("-", tagName)
-              ? inferIntrinsicFields(tagName, fields, st, api, None as Option<Map<string, string>>)
-              : unknownTagErr(tagName, jxExprSpan(tagExpr)),
-          )
-          .exhaustive(),
+      : ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: schema }) =>
+                inferIntrinsicFields(
+                  tagName,
+                  fields,
+                  st,
+                  api,
+                  Some(schema) as Option<Map<string, string>>,
+                ))(_v)
+            : _v._tag === "None"
+              ? _Str_contains("-", tagName)
+                ? inferIntrinsicFields(
+                    tagName,
+                    fields,
+                    st,
+                    api,
+                    None as Option<Map<string, string>>,
+                  )
+                : unknownTagErr(tagName, jxExprSpan(tagExpr))
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Map_get(tagName, jsxIntrinsicElements)),
 );
 const inferJsxCall: <A>(
   tagExpr: Expr,
@@ -1208,40 +1240,44 @@ const inferJsxCall: <A>(
             _Result_flatMap(
               (st3: St) => {
                 const zonkedTag: Ty = zonk(tagT, st3);
-                return match(zonkedTag)
-                  .with({ _tag: "TyFn" }, ({ from, to }) =>
-                    match(from)
-                      .with({ _tag: "TyRecord" }, ({ row: expectedRow }) =>
-                        ((propsForCheck: Ty) =>
-                          _Result_map(
-                            (st4: St) => _tuple(zonk(to, st4), st4),
-                            api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
-                          ))(
-                          jsxPropsWithSynthesizedChildren(propsT, propsExpr, expectedRow, restArgs),
-                        ),
-                      )
-                      .otherwise(
-                        () => Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>,
-                      ),
-                  )
-                  .otherwise(() =>
-                    match(tagExpr)
-                      .with({ _tag: "EStr" }, ({ value: tagName }) =>
-                        match(propsExpr)
-                          .with({ _tag: "ERecord" }, ({ fields }) =>
-                            _Result_map(
-                              (st4: St) => _tuple(tPrim("VNode"), st4),
-                              inferStringTag(tagName, tagExpr, fields, st3, api),
-                            ),
-                          )
-                          .otherwise(
-                            () => Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>,
-                          ),
-                      )
-                      .otherwise(
-                        () => Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>,
-                      ),
-                  );
+                return ((_v) =>
+                  _v._tag === "TyFn"
+                    ? (({ from, to }) =>
+                        ((_v) =>
+                          _v._tag === "TyRecord"
+                            ? (({ row: expectedRow }) =>
+                                ((propsForCheck: Ty) =>
+                                  _Result_map(
+                                    (st4: St) => _tuple(zonk(to, st4), st4),
+                                    api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
+                                  ))(
+                                  jsxPropsWithSynthesizedChildren(
+                                    propsT,
+                                    propsExpr,
+                                    expectedRow,
+                                    restArgs,
+                                  ),
+                                ))(_v)
+                            : (Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>))(
+                          from,
+                        ))(_v)
+                    : ((_v) =>
+                        _v._tag === "EStr"
+                          ? (({ value: tagName }) =>
+                              ((_v) =>
+                                _v._tag === "ERecord"
+                                  ? (({ fields }) =>
+                                      _Result_map(
+                                        (st4: St) => _tuple(tPrim("VNode"), st4),
+                                        inferStringTag(tagName, tagExpr, fields, st3, api),
+                                      ))(_v)
+                                  : (Ok(_tuple(tPrim("VNode"), st3)) as Result<
+                                      [Ty, St],
+                                      BoundErr
+                                    >))(propsExpr))(_v)
+                          : (Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>))(
+                        tagExpr,
+                      ))(zonkedTag);
               },
               inferJsxChildren(restArgs, st2, api.inferExpr),
             ),
@@ -1276,65 +1312,50 @@ export const inferJsxCallHook: <A, B>(
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     } & B,
   ) =>
-    match(origin)
-      .with({ _tag: "Some" }, ({ value: o }) =>
-        eq(o, "jsx")
-          ? match(args)
-              .with(
-                (_v) => {
-                  const _g: any = _v;
-                  return _g.length >= 2;
-                },
-                ([tagExpr, propsExpr, ...rest]) =>
-                  _Result_map(
-                    (r: [Ty, St]) => Some(r) as Option<[Ty, St]>,
-                    inferJsxCall(tagExpr, propsExpr, rest, st, api),
-                  ),
-              )
-              .otherwise(() => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>)
-          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>),
-      )
-      .with(
-        { _tag: "None" },
-        () => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>,
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: o }) =>
+            eq(o, "jsx")
+              ? ((_v) =>
+                  _v.length >= 2
+                    ? (([tagExpr, propsExpr, ...rest]) =>
+                        _Result_map(
+                          (r: [Ty, St]) => Some(r) as Option<[Ty, St]>,
+                          inferJsxCall(tagExpr, propsExpr, rest, st, api),
+                        ))(_v)
+                    : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(args)
+              : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(_v)
+        : _v._tag === "None"
+          ? (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(origin),
 );
 /**
  * The final return of an arrow is `VNode`.
  */
 const returnsVNode: (t: Ty) => boolean = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyFn" }, ({ to: toT }) => returnsVNode(toT))
-    .with({ _tag: "TyCon", name: "VNode" }, () => true)
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TyFn"
+      ? (({ to: toT }) => returnsVNode(toT))(_v)
+      : _v._tag === "TyCon" && _v.name === "VNode"
+        ? true
+        : false)(t);
 const isComponentType: (t: Ty) => boolean = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyFn" }, ({ to: toT }) => returnsVNode(toT))
-    .otherwise(() => false);
+  ((_v) => (_v._tag === "TyFn" ? (({ to: toT }) => returnsVNode(toT))(_v) : false))(t);
 /**
  * A lambda whose body is parser-synthesized JSX (ADR 0011 §5), for a binding
  * whose return has not pinned to `VNode` yet.
  */
 const jsxBodied: (body: Expr) => boolean = (body: Expr) =>
-  match(body)
-    .with({ _tag: "ELambda" }, ({ body: inner }) => jsxBodied(inner))
-    .with(
-      (
-        _v,
-      ): _v is Extract<Expr, { _tag: "ECall" }> & {
-        origin: Extract<Extract<Expr, { _tag: "ECall" }>["origin"], { _tag: "Some" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "ECall" && _g.origin._tag === "Some" && _g.origin.value === "jsx";
-      },
-      () => true,
-    )
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "ELambda"
+      ? (({ body: inner }) => jsxBodied(inner))(_v)
+      : _v._tag === "ECall" && _v.origin._tag === "Some" && _v.origin.value === "jsx"
+        ? true
+        : false)(body);
 const isJsxComponentLambda: (value: Expr) => boolean = (value: Expr) =>
-  match(value)
-    .with({ _tag: "ELambda" }, ({ body }) => jsxBodied(body))
-    .otherwise(() => false);
+  ((_v) => (_v._tag === "ELambda" ? (({ body }) => jsxBodied(body))(_v) : false))(value);
 const isHandlerLabel: (label: string) => boolean = (label: string) => {
   const third: boolean = _Option_exists(
     (n: number) => and(n >= 65, n <= 90),
@@ -1347,10 +1368,14 @@ const componentPropFieldTs: <A>(
   t: Ty,
   api: { tsType: (a: Ty) => string } & A,
 ) => string = _curry(3, <A>(label: string, t: Ty, api: { tsType: (a: Ty) => string } & A) =>
-  match(t)
-    .with({ _tag: "TyVar" }, () => (isHandlerLabel(label) ? "() => void" : "unknown"))
-    .with({ _tag: "TyCon", name: "VNode" }, () => "unknown")
-    .otherwise(() => api.tsType(t)),
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? isHandlerLabel(label)
+        ? "() => void"
+        : "unknown"
+      : _v._tag === "TyCon" && _v.name === "VNode"
+        ? "unknown"
+        : api.tsType(t))(t),
 );
 const propFieldsFrom: <A>(
   row: Row,
@@ -1359,16 +1384,17 @@ const propFieldsFrom: <A>(
 ) => [string[], boolean] = _curry(
   3,
   <A>(row: Row, api: { tsType: (a: Ty) => string } & A, acc: string[]) =>
-    match(row)
-      .with({ _tag: "RowExtend" }, ({ label, fieldType, rest }) =>
-        propFieldsFrom(
-          rest,
-          api,
-          _Array_append(`${label}: ${componentPropFieldTs(label, fieldType, api)}`, acc),
-        ),
-      )
-      .with({ _tag: "RowVar" }, () => _tuple(acc, true))
-      .otherwise(() => _tuple(acc, false)),
+    ((_v) =>
+      _v._tag === "RowExtend"
+        ? (({ label, fieldType, rest }) =>
+            propFieldsFrom(
+              rest,
+              api,
+              _Array_append(`${label}: ${componentPropFieldTs(label, fieldType, api)}`, acc),
+            ))(_v)
+        : _v._tag === "RowVar"
+          ? _tuple(acc, true)
+          : _tuple(acc, false))(row),
 );
 const hasField: _Curry<[fields: string[], name: string], boolean> = _curry(
   2,
@@ -1398,23 +1424,30 @@ const componentPropsParamTs: <A>(
 ) => string = _curry(
   2,
   <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
-    match(t)
-      .with({ _tag: "TyRecord" }, ({ row }) =>
-        match(api.aliasOf(row))
-          .with({ _tag: "Some" }, ({ value: name }) => name)
-          .with({ _tag: "None" }, () => componentPropsTs(row, api))
-          .exhaustive(),
-      )
-      .with({ _tag: "TyVar" }, () => "Record<string, unknown>")
-      .otherwise(() => api.tsType(t)),
+    ((_v) =>
+      _v._tag === "TyRecord"
+        ? (({ row }) =>
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: name }) => name)(_v)
+                : _v._tag === "None"
+                  ? componentPropsTs(row, api)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(api.aliasOf(row)))(_v)
+        : _v._tag === "TyVar"
+          ? "Record<string, unknown>"
+          : api.tsType(t))(t),
 );
 const extraParamTs: <A>(t: Ty, api: { tsType: (a: Ty) => string } & A) => string = _curry(
   2,
   <A>(t: Ty, api: { tsType: (a: Ty) => string } & A) =>
-    match(t)
-      .with({ _tag: "TyVar" }, () => "unknown")
-      .with({ _tag: "TyCon", name: "VNode" }, () => "any")
-      .otherwise(() => api.tsType(t)),
+    ((_v) =>
+      _v._tag === "TyVar"
+        ? "unknown"
+        : _v._tag === "TyCon" && _v.name === "VNode"
+          ? "any"
+          : api.tsType(t))(t),
 );
 /**
  * Params after `props`, for a component that takes more than one.
@@ -1427,16 +1460,16 @@ const extraParamsFrom: <A>(
 ) => string[] = _curry(
   4,
   <A>(t: Ty, api: { tsType: (a: Ty) => string } & A, i: number, acc: string[]) =>
-    match(t)
-      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-        extraParamsFrom(
-          toT,
-          api,
-          i + 1,
-          _Array_append(`_${show(i)}: ${extraParamTs(fromT, api)}`, acc),
-        ),
-      )
-      .otherwise(() => acc),
+    ((_v) =>
+      _v._tag === "TyFn"
+        ? (({ from: fromT, to: toT }) =>
+            extraParamsFrom(
+              toT,
+              api,
+              i + 1,
+              _Array_append(`_${show(i)}: ${extraParamTs(fromT, api)}`, acc),
+            ))(_v)
+        : acc)(t),
 );
 /**
  * A multi-param component is `_curry`'d like any other function, so it takes
@@ -1448,17 +1481,17 @@ const componentSig: <A>(
 ) => string = _curry(
   2,
   <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
-    match(t)
-      .with({ _tag: "TyFn" }, ({ from: fromT, to: toT }) =>
-        ((props: string) =>
-          ((extras: string[]) =>
-            eq(length(extras), 0)
-              ? `(${props}) => any`
-              : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], any>`)(
-            extraParamsFrom(toT, api, 1, [] as string[]),
-          ))(`props: ${componentPropsParamTs(fromT, api)}`),
-      )
-      .otherwise(() => "(props: Record<string, unknown>) => any"),
+    ((_v) =>
+      _v._tag === "TyFn"
+        ? (({ from: fromT, to: toT }) =>
+            ((props: string) =>
+              ((extras: string[]) =>
+                eq(length(extras), 0)
+                  ? `(${props}) => any`
+                  : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], any>`)(
+                extraParamsFrom(toT, api, 1, [] as string[]),
+              ))(`props: ${componentPropsParamTs(fromT, api)}`))(_v)
+        : "(props: Record<string, unknown>) => any")(t),
 );
 export const componentBindingTs: <A>(
   value: Expr,
@@ -1471,62 +1504,49 @@ export const componentBindingTs: <A>(
     t: Ty,
     api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
   ) =>
-    match(t)
-      .with(
-        (_v): _v is Extract<Ty, { _tag: "TyCon" }> => {
-          const _g: any = _v;
-          return _g._tag === "TyCon" && _g.name === "VNode" && _g.args.length === 0;
-        },
-        () => Some("any") as Option<string>,
-      )
-      .otherwise(() =>
-        or(isComponentType(t), isJsxComponentLambda(value))
+    ((_v) =>
+      _v._tag === "TyCon" && _v.name === "VNode" && _v.args.length === 0
+        ? (Some("any") as Option<string>)
+        : or(isComponentType(t), isJsxComponentLambda(value))
           ? (Some(componentSig(t, api)) as Option<string>)
-          : (None as Option<string>),
-      ),
+          : (None as Option<string>))(t),
 );
 
 /**
  * The exact call shape the parser emits; anything else prints as a plain call.
  */
 const jsxShape: (e: Expr) => Option<JsxShape> = (e: Expr) =>
-  match(e)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Expr, { _tag: "ECall" }> & {
-        fn: Extract<Extract<Expr, { _tag: "ECall" }>["fn"], { _tag: "ERef" }>;
-        args: [
-          Extract<Expr, { _tag: "ECall" }>["args"][number],
-          Extract<Extract<Expr, { _tag: "ECall" }>["args"][number], { _tag: "ERecord" }>,
-          Extract<Extract<Expr, { _tag: "ECall" }>["args"][number], { _tag: "EArr" }>,
-        ];
-        origin: Extract<Extract<Expr, { _tag: "ECall" }>["origin"], { _tag: "Some" }>;
-      } => {
-        const _g: any = _v;
-        return (
-          _g._tag === "ECall" &&
-          _g.fn._tag === "ERef" &&
-          _g.fn.name === "h" &&
-          _g.args.length === 3 &&
-          _g.args[1]._tag === "ERecord" &&
-          _g.args[2]._tag === "EArr" &&
-          _g.origin._tag === "Some" &&
-          _g.origin.value === "jsx"
-        );
-      },
-      ({ args: [tag, { fields, spread }, { elements: children }] }) =>
-        Some({ tag: tag, fields: fields, spread: spread, children: children }) as Option<JsxShape>,
-    )
-    .otherwise(() => None as Option<JsxShape>);
+  ((_v) =>
+    _v._tag === "ECall" &&
+    _v.fn._tag === "ERef" &&
+    _v.fn.name === "h" &&
+    _v.args.length === 3 &&
+    _v.args[1]._tag === "ERecord" &&
+    _v.args[2]._tag === "EArr" &&
+    _v.origin._tag === "Some" &&
+    _v.origin.value === "jsx"
+      ? (({ args: [tag, { fields, spread }, { elements: children }] }) =>
+          Some({
+            tag: tag,
+            fields: fields,
+            spread: spread,
+            children: children,
+          }) as Option<JsxShape>)(
+          _v as Extract<Expr, { _tag: "ECall" }> & {
+            fn: Extract<Extract<Expr, { _tag: "ECall" }>["fn"], { _tag: "ERef" }>;
+            args: [
+              Extract<Expr, { _tag: "ECall" }>["args"][number],
+              Extract<Extract<Expr, { _tag: "ECall" }>["args"][number], { _tag: "ERecord" }>,
+              Extract<Extract<Expr, { _tag: "ECall" }>["args"][number], { _tag: "EArr" }>,
+            ];
+            origin: Extract<Extract<Expr, { _tag: "ECall" }>["origin"], { _tag: "Some" }>;
+          },
+        )
+      : (None as Option<JsxShape>))(e);
 const isFragment: (tag: Expr) => boolean = (tag: Expr) =>
-  match(tag)
-    .with({ _tag: "EStr", value: "Fragment" }, () => true)
-    .otherwise(() => false);
+  ((_v) => (_v._tag === "EStr" && _v.value === "Fragment" ? true : false))(tag);
 const jsxTag: _Curry<[tag: Expr, api: FormatApi], string> = _curry(2, (tag: Expr, api: FormatApi) =>
-  match(tag)
-    .with({ _tag: "EStr" }, ({ value }) => value)
-    .otherwise(() => api.flat(api.memberD(tag))),
+  ((_v) => (_v._tag === "EStr" ? (({ value }) => value)(_v) : api.flat(api.memberD(tag))))(tag),
 );
 const jsxHoleD: _Curry<[open: string, e: Expr, api: FormatApi], Doc> = _curry(
   3,
@@ -1539,12 +1559,15 @@ const jsxHoleD: _Curry<[open: string, e: Expr, api: FormatApi], Doc> = _curry(
 const jsxAttrD: _Curry<[name: string, value: Expr, api: FormatApi], Doc> = _curry(
   3,
   (name: string, value: Expr, api: FormatApi) =>
-    match(value)
-      .with({ _tag: "EBool", value: true }, ({ span: sp }) =>
-        eq(api.sourceText(sp.start, sp.end), name) ? txt(name) : jsxHoleD(`${name}={`, value, api),
-      )
-      .with({ _tag: "EStr" }, ({ value: v }) => txt(`${name}=${api.strLit(v)}`))
-      .otherwise(() => jsxHoleD(`${name}={`, value, api)),
+    ((_v) =>
+      _v._tag === "EBool" && _v.value === true
+        ? (({ span: sp }) =>
+            eq(api.sourceText(sp.start, sp.end), name)
+              ? txt(name)
+              : jsxHoleD(`${name}={`, value, api))(_v)
+        : _v._tag === "EStr"
+          ? (({ value: v }) => txt(`${name}=${api.strLit(v)}`))(_v)
+          : jsxHoleD(`${name}={`, value, api))(value),
 );
 const jsxOpenD: _Curry<[tag: string, attrs: Doc[], selfClosing: boolean], Doc> = _curry(
   3,
@@ -1563,20 +1586,28 @@ const jsxOpenD: _Curry<[tag: string, attrs: Doc[], selfClosing: boolean], Doc> =
 const jsxChildD: _Curry<[child: SeqElem, api: FormatApi], Doc> = _curry(
   2,
   (child: SeqElem, api: FormatApi) =>
-    match(child)
-      .with({ _tag: "SEExpr" }, ({ expr: e }) =>
-        _Option_isSome(jsxShape(e)) ? api.exprD(e) : jsxHoleD("{", e, api),
-      )
-      .with({ _tag: "SESpread" }, ({ expr: e }) => jsxHoleD("{...", e, api))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "SEExpr"
+        ? (({ expr: e }) => (_Option_isSome(jsxShape(e)) ? api.exprD(e) : jsxHoleD("{", e, api)))(
+            _v,
+          )
+        : _v._tag === "SESpread"
+          ? (({ expr: e }) => jsxHoleD("{...", e, api))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(child),
 );
 const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
   2,
   (shape: JsxShape, api: FormatApi) => {
-    const spreadD: Doc[] = match(shape.spread)
-      .with({ _tag: "Some" }, ({ value: sp }) => [jsxHoleD("{...", sp, api)])
-      .with({ _tag: "None" }, () => [] as Doc[])
-      .exhaustive();
+    const spreadD: Doc[] = ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: sp }) => [jsxHoleD("{...", sp, api)])(_v)
+        : _v._tag === "None"
+          ? ([] as Doc[])
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(shape.spread);
     return _Array_concat(
       spreadD,
       map((f: Field) => jsxAttrD(f.name, f.value, api), shape.fields),
@@ -1590,35 +1621,38 @@ const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
 export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
   2,
   (e: Expr, api: FormatApi) =>
-    match(jsxShape(e))
-      .with({ _tag: "None" }, () => None as Option<Doc>)
-      .with({ _tag: "Some" }, ({ value: shape }) =>
-        ((fragment: boolean) =>
-          ((tag: string) =>
-            ((attrs: Doc[]) =>
-              and(eq(length(shape.children), 0), not(fragment))
-                ? (Some(jsxOpenD(tag, attrs, true)) as Option<Doc>)
-                : (Some(
-                    group(
-                      cat([
-                        fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
-                        indent(
-                          cat(
-                            map(
-                              (child: SeqElem) => cat([softline, jsxChildD(child, api)]),
-                              shape.children,
-                            ),
+    ((_v) =>
+      _v._tag === "None"
+        ? (None as Option<Doc>)
+        : _v._tag === "Some"
+          ? (({ value: shape }) =>
+              ((fragment: boolean) =>
+                ((tag: string) =>
+                  ((attrs: Doc[]) =>
+                    and(eq(length(shape.children), 0), not(fragment))
+                      ? (Some(jsxOpenD(tag, attrs, true)) as Option<Doc>)
+                      : (Some(
+                          group(
+                            cat([
+                              fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
+                              indent(
+                                cat(
+                                  map(
+                                    (child: SeqElem) => cat([softline, jsxChildD(child, api)]),
+                                    shape.children,
+                                  ),
+                                ),
+                              ),
+                              softline,
+                              txt(fragment ? "</>" : `</${tag}>`),
+                            ]),
                           ),
-                        ),
-                        softline,
-                        txt(fragment ? "</>" : `</${tag}>`),
-                      ]),
-                    ),
-                  ) as Option<Doc>))(jsxAttrsD(shape, api)))(
-            fragment ? "" : jsxTag(shape.tag, api),
-          ))(isFragment(shape.tag)),
-      )
-      .exhaustive(),
+                        ) as Option<Doc>))(jsxAttrsD(shape, api)))(
+                  fragment ? "" : jsxTag(shape.tag, api),
+                ))(isFragment(shape.tag)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(jsxShape(e)),
 );
 export const jsxPlugin = {
   name: "jsx",

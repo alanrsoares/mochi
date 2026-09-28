@@ -2,65 +2,77 @@
 import { match } from "@onrails/pattern";
 import type { Expr, Program } from "../ast/ast";
 import { preludeJsDefs, runtimeDeps } from "../prelude/prelude";
-import { bindRuntime, collapseLambda, nsRuntimeId, typeExprArity } from "./codegen-core";
+import {
+  bindRuntime,
+  collapseLambda,
+  type GenCtx,
+  nsRuntimeId,
+  typeExprArity,
+} from "./codegen-core";
 import { loopNeedsStep } from "./codegen-loop";
-import { isListMatch } from "./codegen-match";
+import { isListMatch, ternaryTypes } from "./codegen-match";
 
 /**
  * Does the program need the `@onrails/pattern` import? Only if it has a match
  * that lowers to a `match()` chain. A lazy-List switch lowers to a plain IIFE
  * instead, so a program that only ever destructures Lists imports nothing.
  */
-export const usesMatchLib = (e: Expr): boolean =>
+export const usesMatchLib = (e: Expr, ctx: GenCtx): boolean =>
   match(e)
     .withOneOf(
       [{ kind: "num" }, { kind: "bool" }, { kind: "str" }, { kind: "ref" }, { kind: "unit" }],
       () => false,
     )
-    .with({ kind: "interp" }, (i) => i.parts.some((p) => typeof p !== "string" && usesMatchLib(p)))
-    .with({ kind: "call" }, (c) => usesMatchLib(c.fn) || c.args.some(usesMatchLib))
+    .with({ kind: "interp" }, (i) =>
+      i.parts.some((p) => typeof p !== "string" && usesMatchLib(p, ctx)),
+    )
+    .with(
+      { kind: "call" },
+      (c) => usesMatchLib(c.fn, ctx) || c.args.some((x) => usesMatchLib(x, ctx)),
+    )
     .with({ kind: "lambda" }, (l) => {
       const { body, fills } = collapseLambda(l);
       return (
         fills.some((g) =>
-          g.labs.some((lab) => lab.default !== undefined && usesMatchLib(lab.default)),
-        ) || usesMatchLib(body)
+          g.labs.some((lab) => lab.default !== undefined && usesMatchLib(lab.default, ctx)),
+        ) || usesMatchLib(body, ctx)
       );
     })
-    .with({ kind: "letin" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
-    .with({ kind: "letbind" }, (l) => usesMatchLib(l.value) || usesMatchLib(l.body))
+    .with({ kind: "letin" }, (l) => usesMatchLib(l.value, ctx) || usesMatchLib(l.body, ctx))
+    .with({ kind: "letbind" }, (l) => usesMatchLib(l.value, ctx) || usesMatchLib(l.body, ctx))
     .with(
       { kind: "loop" },
-      (l) => l.params.some((p) => usesMatchLib(p.init)) || usesMatchLib(l.body),
+      (l) => l.params.some((p) => usesMatchLib(p.init, ctx)) || usesMatchLib(l.body, ctx),
     )
-    .with({ kind: "recur" }, (r) => r.args.some(usesMatchLib))
-    .with({ kind: "pipe" }, (p) => usesMatchLib(p.left) || usesMatchLib(p.right))
-    .with({ kind: "do" }, (block) => block.exprs.some(usesMatchLib))
+    .with({ kind: "recur" }, (r) => r.args.some((x) => usesMatchLib(x, ctx)))
+    .with({ kind: "pipe" }, (p) => usesMatchLib(p.left, ctx) || usesMatchLib(p.right, ctx))
+    .with({ kind: "do" }, (block) => block.exprs.some((x) => usesMatchLib(x, ctx)))
     .with(
       { kind: "ternary" },
-      (t) => usesMatchLib(t.cond) || usesMatchLib(t.then) || usesMatchLib(t.else),
+      (t) => usesMatchLib(t.cond, ctx) || usesMatchLib(t.then, ctx) || usesMatchLib(t.else, ctx),
     )
     .with(
       { kind: "match" },
       (m) =>
-        !isListMatch(m) ||
-        usesMatchLib(m.scrutinee) ||
+        (!isListMatch(m) && !ternaryTypes(m, ctx.guardBaseType?.(m.scrutinee) ?? null, ctx)) ||
+        usesMatchLib(m.scrutinee, ctx) ||
         m.arms.some(
-          (a) => (a.guard !== undefined && usesMatchLib(a.guard)) || usesMatchLib(a.body),
+          (a) => (a.guard !== undefined && usesMatchLib(a.guard, ctx)) || usesMatchLib(a.body, ctx),
         ),
     )
     .with(
       { kind: "record" },
       (r) =>
-        (r.spread ? usesMatchLib(r.spread) : false) || r.fields.some((f) => usesMatchLib(f.value)),
+        (r.spread ? usesMatchLib(r.spread, ctx) : false) ||
+        r.fields.some((f) => usesMatchLib(f.value, ctx)),
     )
-    .with({ kind: "field" }, (f) => usesMatchLib(f.target))
-    .with({ kind: "tuple" }, (t) => t.elements.some(usesMatchLib))
-    .with({ kind: "arr" }, (l) => l.elements.some((el) => usesMatchLib(el.expr)))
-    .with({ kind: "list" }, (l) => l.elements.some((el) => usesMatchLib(el.expr)))
-    .with({ kind: "set" }, (s) => s.elements.some((el) => usesMatchLib(el.expr)))
+    .with({ kind: "field" }, (f) => usesMatchLib(f.target, ctx))
+    .with({ kind: "tuple" }, (t) => t.elements.some((x) => usesMatchLib(x, ctx)))
+    .with({ kind: "arr" }, (l) => l.elements.some((el) => usesMatchLib(el.expr, ctx)))
+    .with({ kind: "list" }, (l) => l.elements.some((el) => usesMatchLib(el.expr, ctx)))
+    .with({ kind: "set" }, (s) => s.elements.some((el) => usesMatchLib(el.expr, ctx)))
     .with({ kind: "map" }, (m) =>
-      m.entries.some((e) => usesMatchLib(e.key) || usesMatchLib(e.value)),
+      m.entries.some((e) => usesMatchLib(e.key, ctx) || usesMatchLib(e.value, ctx)),
     )
     .exhaustive();
 

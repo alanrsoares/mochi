@@ -53,7 +53,7 @@ Three pieces, one per phase ([ADR 0108](adr/0108-bun-mochi-loader.md)):
   `Bun.build({ entrypoints, plugins: [mochiPlugin] })` with `mochiPlugin` from
   `@mochi/bun/plugin`. The bundle runs with no preload.
 
-Compiled Mochi imports `@onrails/pattern`, so the host project depends on it.
+Compiled JavaScript has no match-library import. Typed TypeScript output can import `@onrails/pattern` for a nested `switch` arm on a generic scrutinee ([ADR 0113](adr/0113-switch-lowers-to-ternaries.md)), so a host that type-checks emitted `.ts` keeps it as a dependency.
 
 ## Strict inference
 

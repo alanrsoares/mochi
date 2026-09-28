@@ -63,8 +63,11 @@ annotations pulled from the inference table; it does not re-emit — the two out
 byte-identical apart from the annotations TS adds. The result typechecks under
 `tsc --strict` with no `any` and no escape hatches.
 
-`@onrails/pattern`'s `.exhaustive()` runs *inside* the compiler (a missing `Expr`
-case is a TS error at build time) and is also *emitted into* the user's JS.
+`@onrails/pattern`'s `.exhaustive()` runs *inside* the TypeScript compiler (a missing
+`Expr` case is a TS error at build time). Emitted code does not use it: a `switch`
+lowers to a ternary chain over its scrutinee, and only the TS backend falls back to a
+`match()` chain for a nested arm on a scrutinee type it cannot name
+([ADR 0113](adr/0113-switch-lowers-to-ternaries.md)).
 
 ## Self-hosting
 

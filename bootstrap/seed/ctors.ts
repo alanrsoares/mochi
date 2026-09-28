@@ -46,12 +46,17 @@ export const primTypeNames = ["number", "int", "float", "string", "bool", "unit"
 const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => string[] = _curry(
   2,
   <A>(fields: ({ name: Option<string> } & A)[], i: number) =>
-    match(_Array_get(i, fields))
-      .with({ _tag: "None" }, () => [] as string[])
-      .with({ _tag: "Some" }, ({ value: f }) =>
-        _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? ([] as string[])
+        : _v._tag === "Some"
+          ? (({ value: f }) =>
+              _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1)))(
+              _v,
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, fields)),
 );
 export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] = <A>(
   fields: ({ name: Option<string> } & A)[],
@@ -96,21 +101,20 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
 const declaresType: _Curry<[stmts: Stmt[], i: number, name: string], boolean> = _curry(
   3,
   (stmts: Stmt[], i: number, name: string) =>
-    match(_Array_get(i, stmts))
-      .with({ _tag: "None" }, () => false)
-      .with(
-        (
-          _v,
-        ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-          value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-        } => {
-          const _g: any = _v;
-          return _g._tag === "Some" && _g.value._tag === "SType";
-        },
-        ({ value: { name: n } }) => (eq(n, name) ? true : declaresType(stmts, i + 1, name)),
-      )
-      .with({ _tag: "Some" }, () => declaresType(stmts, i + 1, name))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? false
+        : _v._tag === "Some" && _v.value._tag === "SType"
+          ? (({ value: { name: n } }) => (eq(n, name) ? true : declaresType(stmts, i + 1, name)))(
+              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+              },
+            )
+          : _v._tag === "Some"
+            ? declaresType(stmts, i + 1, name)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(_Array_get(i, stmts)),
 );
 /**
  * The builtin decls a program does NOT shadow: a user `type` of the same name
@@ -138,19 +142,22 @@ const seedRegCtorsFrom: <A, B, D>(
     owner: string,
     acc: Map<A, CtorInfo>,
   ) =>
-    match(_Array_get(i, ctors))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: c }) =>
-        seedRegCtorsFrom(
-          ctors,
-          i + 1,
-          owner,
-          _Map_has(c.name, acc)
-            ? acc
-            : _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: c }) =>
+              seedRegCtorsFrom(
+                ctors,
+                i + 1,
+                owner,
+                _Map_has(c.name, acc)
+                  ? acc
+                  : _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ctors)),
 );
 const seedRegDeclsFrom: <C, D, E>(
   decls: ({ name: string; ctors: ({ name: string; fields: C[] } & D)[] } & E)[],
@@ -163,19 +170,22 @@ const seedRegDeclsFrom: <C, D, E>(
     i: number,
     reg: Registry,
   ) =>
-    match(_Array_get(i, decls))
-      .with({ _tag: "None" }, () => reg)
-      .with({ _tag: "Some" }, ({ value: bt }) =>
-        seedRegDeclsFrom(decls, i + 1, {
-          ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
-          types: _Map_set(
-            bt.name,
-            map((c: { name: string; fields: C[] } & D) => c.name, bt.ctors),
-            reg.types,
-          ),
-        }),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? reg
+        : _v._tag === "Some"
+          ? (({ value: bt }) =>
+              seedRegDeclsFrom(decls, i + 1, {
+                ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
+                types: _Map_set(
+                  bt.name,
+                  map((c: { name: string; fields: C[] } & D) => c.name, bt.ctors),
+                  reg.types,
+                ),
+              }))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, decls)),
 );
 const ctorErr: <A, B, C, D>(
   message: A,
@@ -203,60 +213,59 @@ const ctorsInto: <A, C, D, E, F>(
     sp: { end: C; start: D } & F,
     acc: Map<string, CtorInfo>,
   ) =>
-    match(_Array_get(i, ctors))
-      .with({ _tag: "None" }, () => Ok(acc))
-      .with({ _tag: "Some" }, ({ value: c }) =>
-        _Map_has(c.name, acc)
-          ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
-          : ctorsInto(
-              ctors,
-              i + 1,
-              owner,
-              sp,
-              _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-            ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? Ok(acc)
+        : _v._tag === "Some"
+          ? (({ value: c }) =>
+              _Map_has(c.name, acc)
+                ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
+                : ctorsInto(
+                    ctors,
+                    i + 1,
+                    owner,
+                    sp,
+                    _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
+                  ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, ctors)),
 );
 const buildLoop: _Curry<
   [stmts: Stmt[], i: number, reg: Registry],
   Result<Registry, { message: string; start: number; end: number }>
 > = _curry(3, (stmts: Stmt[], i: number, reg: Registry) =>
-  match(_Array_get(i, stmts))
-    .with(
-      { _tag: "None" },
-      () => Ok(reg) as Result<Registry, { message: string; start: number; end: number }>,
-    )
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType";
-      },
-      ({ value: { name, ctors, span: sp } }) =>
-        _Map_has(name, reg.types)
-          ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<
-              Registry,
-              { message: string; start: number; end: number }
-            >)
-          : _Result_flatMap(
-              (cs: Map<string, CtorInfo>) =>
-                buildLoop(stmts, i + 1, {
-                  ctors: cs,
-                  types: _Map_set(
-                    name,
-                    map((c: Ctor) => c.name, ctors),
-                    reg.types,
-                  ),
-                }),
-              ctorsInto(ctors, 0, name, sp, reg.ctors),
-            ),
-    )
-    .with({ _tag: "Some" }, () => buildLoop(stmts, i + 1, reg))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? (Ok(reg) as Result<Registry, { message: string; start: number; end: number }>)
+      : _v._tag === "Some" && _v.value._tag === "SType"
+        ? (({ value: { name, ctors, span: sp } }) =>
+            _Map_has(name, reg.types)
+              ? (Err(ctorErr(`duplicate type '${name}'`, sp)) as Result<
+                  Registry,
+                  { message: string; start: number; end: number }
+                >)
+              : _Result_flatMap(
+                  (cs: Map<string, CtorInfo>) =>
+                    buildLoop(stmts, i + 1, {
+                      ctors: cs,
+                      types: _Map_set(
+                        name,
+                        map((c: Ctor) => c.name, ctors),
+                        reg.types,
+                      ),
+                    }),
+                  ctorsInto(ctors, 0, name, sp, reg.ctors),
+                ))(
+            _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+              value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+            },
+          )
+        : _v._tag === "Some"
+          ? buildLoop(stmts, i + 1, reg)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, stmts)),
 );
 /**
  * The failing builder — check's entry point: duplicate-decl detection lives
@@ -276,29 +285,31 @@ const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Regis
     let i: number = i0;
     let reg: Registry = reg0;
     while (true) {
-      const _step = match(_Array_get(i, stmts))
-        .with({ _tag: "None" }, () => _done(reg))
-        .with(
-          (
-            _v,
-          ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-            value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-          } => {
-            const _g: any = _v;
-            return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
-          },
-          ({ value: { name, ctors } }) =>
-            _recur(i + 1, {
-              ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
-              types: _Map_set(
-                name,
-                map((c: Ctor) => c.name, ctors),
-                reg.types,
-              ),
-            }),
-        )
-        .with({ _tag: "Some" }, () => _recur(i + 1, reg))
-        .exhaustive();
+      const _step = ((_v) =>
+        _v._tag === "None"
+          ? _done(reg)
+          : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true
+            ? (({ value: { name, ctors } }) =>
+                _recur(i + 1, {
+                  ctors: seedRegCtorsFrom(ctors, 0, name, reg.ctors),
+                  types: _Map_set(
+                    name,
+                    map((c: Ctor) => c.name, ctors),
+                    reg.types,
+                  ),
+                }))(
+                _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                  value: Extract<
+                    Extract<Option<Stmt>, { _tag: "Some" }>["value"],
+                    { _tag: "SType" }
+                  >;
+                },
+              )
+            : _v._tag === "Some"
+              ? _recur(i + 1, reg)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Array_get(i, stmts));
       if (_step._tag === "recur") {
         [i, reg] = _step.args;
         continue;
@@ -333,21 +344,20 @@ const ctorKeysFrom: _Curry<
   [stmts: Stmt[], i: number, m: Map<string, string[]>],
   Map<string, string[]>
 > = _curry(3, (stmts: Stmt[], i: number, m: Map<string, string[]>) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => m)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType";
-      },
-      ({ value: { ctors } }) => ctorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m)),
-    )
-    .with({ _tag: "Some" }, () => ctorKeysFrom(stmts, i + 1, m))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? m
+      : _v._tag === "Some" && _v.value._tag === "SType"
+        ? (({ value: { ctors } }) => ctorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m)))(
+            _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+              value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+            },
+          )
+        : _v._tag === "Some"
+          ? ctorKeysFrom(stmts, i + 1, m)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, stmts)),
 );
 export const ctorKeysFromStmts: _Curry<
   [stmts: Stmt[], m: Map<string, string[]>],
@@ -407,21 +417,20 @@ const exportedCtorKeysFrom: _Curry<
   [stmts: Stmt[], i: number, m: Map<string, string[]>],
   Map<string, string[]>
 > = _curry(3, (stmts: Stmt[], i: number, m: Map<string, string[]>) =>
-  match(_Array_get(i, stmts))
-    .with({ _tag: "None" }, () => m)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Stmt>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "SType" && _g.value.exported === true;
-      },
-      ({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m)),
-    )
-    .with({ _tag: "Some" }, () => exportedCtorKeysFrom(stmts, i + 1, m))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? m
+      : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true
+        ? (({ value: { ctors } }) => exportedCtorKeysFrom(stmts, i + 1, ctorKeysInto(ctors, 0, m)))(
+            _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+              value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+            },
+          )
+        : _v._tag === "Some"
+          ? exportedCtorKeysFrom(stmts, i + 1, m)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, stmts)),
 );
 export const exportedCtorKeys: (stmts: Stmt[]) => Map<string, string[]> = (stmts: Stmt[]) =>
   exportedCtorKeysFrom(stmts, 0, new Map<string, string[]>());

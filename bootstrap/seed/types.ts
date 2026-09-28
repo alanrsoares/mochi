@@ -73,8 +73,6 @@ import {
   show,
 } from "@mochi/compiler/runtime";
 
-import { match } from "@onrails/pattern";
-
 export const TyVar = (id: number): Ty => ({ _tag: "TyVar", id });
 export const TyCon = _curry(2, (name, args) => ({ _tag: "TyCon", name, args })) as (
   name: string,
@@ -110,134 +108,143 @@ export const tRecord: (row: Row) => Ty = (row: Row) => TyRecord(row);
 export const tPrim: (name: string) => Ty = (name: string) => TyCon(name, [] as Ty[]);
 export const tLit: (value: string) => Ty = (value: string) => TySingleton("string", value);
 const typeEq: _Curry<[a: Ty, b: Ty], boolean> = _curry(2, (a: Ty, b: Ty) =>
-  match(a)
-    .with({ _tag: "TyVar" }, ({ id: aid }) =>
-      match(b)
-        .with({ _tag: "TyVar" }, ({ id: bid }) => eq(aid, bid))
-        .otherwise(() => false),
-    )
-    .with({ _tag: "TyCon" }, ({ name: aname, args: aargs }) =>
-      match(b)
-        .with({ _tag: "TyCon" }, ({ name: bname, args: bargs }) =>
-          and(and(eq(aname, bname), eq(length(aargs), length(bargs))), typeEqList(aargs, bargs, 0)),
-        )
-        .otherwise(() => false),
-    )
-    .with({ _tag: "TyFn" }, ({ from: af, to: at }) =>
-      match(b)
-        .with({ _tag: "TyFn" }, ({ from: bf, to: bt }) => and(typeEq(af, bf), typeEq(at, bt)))
-        .otherwise(() => false),
-    )
-    .with({ _tag: "TyRecord" }, ({ row: arow }) =>
-      match(b)
-        .with({ _tag: "TyRecord" }, ({ row: brow }) => rowEq(arow, brow))
-        .otherwise(() => false),
-    )
-    .with({ _tag: "TySingleton" }, ({ base: abase, value: aval }) =>
-      match(b)
-        .with({ _tag: "TySingleton" }, ({ base: bbase, value: bval }) =>
-          and(eq(abase, bbase), eq(aval, bval)),
-        )
-        .otherwise(() => false),
-    )
-    .with({ _tag: "TyOneOf" }, ({ members: am }) =>
-      match(b)
-        .with({ _tag: "TyOneOf" }, ({ members: bm }) =>
-          and(eq(length(am), length(bm)), allMembersIn(am, bm, 0)),
-        )
-        .otherwise(() => false),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id: aid }) =>
+          ((_v) => (_v._tag === "TyVar" ? (({ id: bid }) => eq(aid, bid))(_v) : false))(b))(_v)
+      : _v._tag === "TyCon"
+        ? (({ name: aname, args: aargs }) =>
+            ((_v) =>
+              _v._tag === "TyCon"
+                ? (({ name: bname, args: bargs }) =>
+                    and(
+                      and(eq(aname, bname), eq(length(aargs), length(bargs))),
+                      typeEqList(aargs, bargs, 0),
+                    ))(_v)
+                : false)(b))(_v)
+        : _v._tag === "TyFn"
+          ? (({ from: af, to: at }) =>
+              ((_v) =>
+                _v._tag === "TyFn"
+                  ? (({ from: bf, to: bt }) => and(typeEq(af, bf), typeEq(at, bt)))(_v)
+                  : false)(b))(_v)
+          : _v._tag === "TyRecord"
+            ? (({ row: arow }) =>
+                ((_v) =>
+                  _v._tag === "TyRecord" ? (({ row: brow }) => rowEq(arow, brow))(_v) : false)(b))(
+                _v,
+              )
+            : _v._tag === "TySingleton"
+              ? (({ base: abase, value: aval }) =>
+                  ((_v) =>
+                    _v._tag === "TySingleton"
+                      ? (({ base: bbase, value: bval }) => and(eq(abase, bbase), eq(aval, bval)))(
+                          _v,
+                        )
+                      : false)(b))(_v)
+              : _v._tag === "TyOneOf"
+                ? (({ members: am }) =>
+                    ((_v) =>
+                      _v._tag === "TyOneOf"
+                        ? (({ members: bm }) =>
+                            and(eq(length(am), length(bm)), allMembersIn(am, bm, 0)))(_v)
+                        : false)(b))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(a),
 );
 const typeEqList: _Curry<[as_: Ty[], bs: Ty[], i: number], boolean> = _curry(
   3,
   (as_: Ty[], bs: Ty[], i: number) =>
-    match(_Array_get(i, as_))
-      .with({ _tag: "None" }, () => true)
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        match(_Array_get(i, bs))
-          .with({ _tag: "None" }, () => false)
-          .with({ _tag: "Some" }, ({ value: b }) => and(typeEq(a, b), typeEqList(as_, bs, i + 1)))
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? true
+        : _v._tag === "Some"
+          ? (({ value: a }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? false
+                  : _v._tag === "Some"
+                    ? (({ value: b }) => and(typeEq(a, b), typeEqList(as_, bs, i + 1)))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Array_get(i, bs)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, as_)),
 );
 const memberEqIn: _Curry<[t: Ty, xs: Ty[], i: number], boolean> = _curry(
   3,
   (t: Ty, xs: Ty[], i: number) =>
-    match(_Array_get(i, xs))
-      .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: x }) => (typeEq(t, x) ? true : memberEqIn(t, xs, i + 1)))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? false
+        : _v._tag === "Some"
+          ? (({ value: x }) => (typeEq(t, x) ? true : memberEqIn(t, xs, i + 1)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, xs)),
 );
 const allMembersIn: _Curry<[am: Ty[], bm: Ty[], i: number], boolean> = _curry(
   3,
   (am: Ty[], bm: Ty[], i: number) =>
-    match(_Array_get(i, am))
-      .with({ _tag: "None" }, () => true)
-      .with({ _tag: "Some" }, ({ value: m }) =>
-        and(memberEqIn(m, bm, 0), allMembersIn(am, bm, i + 1)),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? true
+        : _v._tag === "Some"
+          ? (({ value: m }) => and(memberEqIn(m, bm, 0), allMembersIn(am, bm, i + 1)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, am)),
 );
 const rowEq: _Curry<[a: Row, b: Row], boolean> = _curry(2, (a: Row, b: Row) =>
-  match(a)
-    .with({ _tag: "RowEmpty" }, () =>
-      match(b)
-        .with({ _tag: "RowEmpty" }, () => true)
-        .otherwise(() => false),
-    )
-    .with({ _tag: "RowVar" }, ({ id: aid }) =>
-      match(b)
-        .with({ _tag: "RowVar" }, ({ id: bid }) => eq(aid, bid))
-        .otherwise(() => false),
-    )
-    .with({ _tag: "RowExtend" }, ({ label: al, fieldType: at, optional: ao, rest: ar }) =>
-      match(b)
-        .with({ _tag: "RowExtend" }, ({ label: bl, fieldType: bt, optional: bo, rest: br }) =>
-          and(and(and(eq(al, bl), eq(ao, bo)), typeEq(at, bt)), rowEq(ar, br)),
-        )
-        .otherwise(() => false),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "RowEmpty"
+      ? ((_v) => (_v._tag === "RowEmpty" ? true : false))(b)
+      : _v._tag === "RowVar"
+        ? (({ id: aid }) =>
+            ((_v) => (_v._tag === "RowVar" ? (({ id: bid }) => eq(aid, bid))(_v) : false))(b))(_v)
+        : _v._tag === "RowExtend"
+          ? (({ label: al, fieldType: at, optional: ao, rest: ar }) =>
+              ((_v) =>
+                _v._tag === "RowExtend"
+                  ? (({ label: bl, fieldType: bt, optional: bo, rest: br }) =>
+                      and(and(and(eq(al, bl), eq(ao, bo)), typeEq(at, bt)), rowEq(ar, br)))(_v)
+                  : false)(b))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(a),
 );
 const flattenUnionFrom: _Curry<[members: Ty[], acc: Ty[], i: number], Ty[]> = _curry(
   3,
   (members: Ty[], acc: Ty[], i: number) =>
-    match(_Array_get(i, members))
-      .with({ _tag: "None" }, () => acc)
-      .with({ _tag: "Some" }, ({ value: t }) =>
-        match(t)
-          .with({ _tag: "TyOneOf" }, ({ members: ms }) =>
-            flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), i + 1),
-          )
-          .otherwise(() =>
-            flattenUnionFrom(members, memberEqIn(t, acc, 0) ? acc : _Array_append(t, acc), i + 1),
-          ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: t }) =>
+              ((_v) =>
+                _v._tag === "TyOneOf"
+                  ? (({ members: ms }) =>
+                      flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), i + 1))(_v)
+                  : flattenUnionFrom(
+                      members,
+                      memberEqIn(t, acc, 0) ? acc : _Array_append(t, acc),
+                      i + 1,
+                    ))(t))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, members)),
 );
 /**
  * Finite union. Flattens nested unions, dedupes, unwraps a singleton.
  */
 export const tUnion: (members: Ty[]) => Ty = (members: Ty[]) => {
   const flat: Ty[] = flattenUnionFrom(members, [] as Ty[], 0);
-  return match(flat)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => tPrim("string"),
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 1;
-      },
-      ([only]) => only,
-    )
-    .otherwise(() => TyOneOf(flat));
+  return ((_v) =>
+    _v.length === 0 ? tPrim("string") : _v.length === 1 ? (([only]) => only)(_v) : TyOneOf(flat))(
+    flat,
+  );
 };
 const TUPLE: string = "tuple";
 export const tTuple: (elems: Ty[]) => Ty = (elems: Ty[]) => TyCon(TUPLE, elems);
@@ -249,9 +256,10 @@ export const tTuple: (elems: Ty[]) => Ty = (elems: Ty[]) => TyCon(TUPLE, elems);
 export const UNIT: string = "unit";
 export const tUnit = TyCon(UNIT, [] as Ty[]);
 export const isUnit: (t: Ty) => boolean = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyCon" }, ({ name, args }) => and(eq(name, UNIT), eq(length(args), 0)))
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TyCon"
+      ? (({ name, args }) => and(eq(name, UNIT), eq(length(args), 0)))(_v)
+      : false)(t);
 export const rVar: (id: number) => Row = (id: number) => RowVar(id);
 export const rExtend: _Curry<[label: string, fieldType: Ty, rest: Row], Row> = _curry(
   3,
@@ -267,67 +275,64 @@ const showTypeArgs: (args: Ty[]) => string = (args: Ty[]) => _Str_join(", ", map
  * covers the nullary-arrow domain: `unit -> T` prints `() -> T` (ADR 0014).
  */
 export const showType: (t: Ty) => string = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyVar" }, ({ id }) => `'t${show(id)}`)
-    .with({ _tag: "TyCon" }, ({ name, args }) =>
-      match(args)
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 1 && (([elem]) => eq(name, "Array"))(_g);
-          },
-          ([elem]) => `[${showType(elem)}]`,
-        )
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0 && eq(name, UNIT);
-          },
-          () => "()",
-        )
-        .otherwise(() =>
-          eq(name, TUPLE)
-            ? `(${showTypeArgs(args)})`
-            : eq(length(args), 0)
-              ? name
-              : `${name}<${showTypeArgs(args)}>`,
-        ),
-    )
-    .with({ _tag: "TyFn" }, ({ from, to }) =>
-      ((fromS: string) => `${fromS} -> ${showType(to)}`)(
-        match(from)
-          .with({ _tag: "TyFn" }, () => `(${showType(from)})`)
-          .otherwise(() => showType(from)),
-      ),
-    )
-    .with({ _tag: "TyRecord" }, ({ row }) => showRow(row))
-    .with({ _tag: "TySingleton" }, ({ base, value }) => (eq(base, "string") ? show(value) : value))
-    .with({ _tag: "TyOneOf" }, ({ members }) => _Str_join(" | ", map(showType, members)))
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id }) => `'t${show(id)}`)(_v)
+      : _v._tag === "TyCon"
+        ? (({ name, args }) =>
+            ((_v) =>
+              _v.length === 1 && (([elem]) => eq(name, "Array"))(_v)
+                ? (([elem]) => `[${showType(elem)}]`)(_v)
+                : _v.length === 0 && eq(name, UNIT)
+                  ? "()"
+                  : eq(name, TUPLE)
+                    ? `(${showTypeArgs(args)})`
+                    : eq(length(args), 0)
+                      ? name
+                      : `${name}<${showTypeArgs(args)}>`)(args))(_v)
+        : _v._tag === "TyFn"
+          ? (({ from, to }) =>
+              ((fromS: string) => `${fromS} -> ${showType(to)}`)(
+                ((_v) => (_v._tag === "TyFn" ? `(${showType(from)})` : showType(from)))(from),
+              ))(_v)
+          : _v._tag === "TyRecord"
+            ? (({ row }) => showRow(row))(_v)
+            : _v._tag === "TySingleton"
+              ? (({ base, value }) => (eq(base, "string") ? show(value) : value))(_v)
+              : _v._tag === "TyOneOf"
+                ? (({ members }) => _Str_join(" | ", map(showType, members)))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(t);
 /**
  * walk a row to its tail, collecting `label: type` field strings on the way
  */
 const showRowFields: (row: Row) => [string[], Option<number>] = (row: Row) =>
-  match(row)
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-      (([fields, tailId]: [string[], Option<number>]) =>
-        _tuple(
-          _Array_prepend(`${label}${optional ? "?" : ""}: ${showType(fieldType)}`, fields),
-          tailId,
-        ))(showRowFields(rest)),
-    )
-    .with({ _tag: "RowVar" }, ({ id }) => _tuple([] as string[], Some(id) as Option<number>))
-    .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "RowExtend"
+      ? (({ label, fieldType, optional, rest }) =>
+          (([fields, tailId]: [string[], Option<number>]) =>
+            _tuple(
+              _Array_prepend(`${label}${optional ? "?" : ""}: ${showType(fieldType)}`, fields),
+              tailId,
+            ))(showRowFields(rest)))(_v)
+      : _v._tag === "RowVar"
+        ? (({ id }) => _tuple([] as string[], Some(id) as Option<number>))(_v)
+        : _v._tag === "RowEmpty"
+          ? _tuple([] as string[], None as Option<number>)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(row);
 const showRow: (row: Row) => string = (row: Row) =>
   (([fields, tailId]: [string[], Option<number>]) => {
-    const tail: string = match(tailId)
-      .with(
-        { _tag: "Some" },
-        ({ value: id }) => `${eq(length(fields), 0) ? "" : " "}| 'r${show(id)}`,
-      )
-      .with({ _tag: "None" }, () => "")
-      .exhaustive();
+    const tail: string = ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: id }) => `${eq(length(fields), 0) ? "" : " "}| 'r${show(id)}`)(_v)
+        : _v._tag === "None"
+          ? ""
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(tailId);
     return and(eq(length(fields), 0), eq(tail, ""))
       ? "{}"
       : `{ ${_Str_join(", ", fields)}${tail} }`;
@@ -335,10 +340,14 @@ const showRow: (row: Row) => string = (row: Row) =>
 const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
   3,
   <A>(f: (a: A) => boolean, xs: A[], i: number) =>
-    match(_Array_get(i, xs))
-      .with({ _tag: "None" }, () => false)
-      .with({ _tag: "Some" }, ({ value: x }) => (f(x) ? true : someOfFrom(f, xs, i + 1)))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? false
+        : _v._tag === "Some"
+          ? (({ value: x }) => (f(x) ? true : someOfFrom(f, xs, i + 1)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, xs)),
 );
 const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
@@ -386,13 +395,17 @@ export const noteUse: <A, B, C>(span: { start: A; end: B } & C, t: Ty, st: St) =
   3,
   <A, B, C>(span: { start: A; end: B } & C, t: Ty, st: St) => {
     const k: string = spanKeyOf(span);
-    return match(_Map_get(k, st.letUses))
-      .with({ _tag: "None" }, () => st)
-      .with({ _tag: "Some" }, ({ value: uses }) => ({
-        ...st,
-        letUses: _Map_set(k, _Array_append(t, uses), st.letUses),
-      }))
-      .exhaustive();
+    return ((_v) =>
+      _v._tag === "None"
+        ? st
+        : _v._tag === "Some"
+          ? (({ value: uses }) => ({
+              ...st,
+              letUses: _Map_set(k, _Array_append(t, uses), st.letUses),
+            }))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(k, st.letUses));
   },
 );
 export const fail: <B>(message: string) => Result<B, TypeErr> = <B>(message: string) =>
@@ -404,108 +417,134 @@ export const freshRowVar: <A>(st: { next: number } & A) => [Row, { next: number 
   st: { next: number } & A,
 ) => _tuple(rVar(st.next), { ...st, next: st.next + 1 });
 export const resolve: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
-  match(t)
-    .with({ _tag: "TyVar" }, ({ id }) =>
-      match(_Map_get(id, st.tv))
-        .with({ _tag: "Some" }, ({ value: next }) => resolve(next, st))
-        .with({ _tag: "None" }, () => t)
-        .exhaustive(),
-    )
-    .otherwise(() => t),
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id }) =>
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: next }) => resolve(next, st))(_v)
+              : _v._tag === "None"
+                ? t
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(id, st.tv)))(_v)
+      : t)(t),
 );
 const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, (r: Row, st: St) =>
-  match(r)
-    .with({ _tag: "RowVar" }, ({ id }) =>
-      match(_Map_get(id, st.rv))
-        .with({ _tag: "Some" }, ({ value: next }) => resolveRow(next, st))
-        .with({ _tag: "None" }, () => r)
-        .exhaustive(),
-    )
-    .otherwise(() => r),
+  ((_v) =>
+    _v._tag === "RowVar"
+      ? (({ id }) =>
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: next }) => resolveRow(next, st))(_v)
+              : _v._tag === "None"
+                ? r
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(id, st.rv)))(_v)
+      : r)(r),
 );
 /**
  * Fully apply the substitution ("zonk") — for display and assertions.
  */
 export const zonk: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
-  match(resolve(t, st))
-    .with({ _tag: "TyVar" }, ({ id }) => tVar(id))
-    .with({ _tag: "TyCon" }, ({ name, args }) =>
-      tCon(
-        name,
-        map((a: Ty) => zonk(a, st), args),
-      ),
-    )
-    .with({ _tag: "TyFn" }, ({ from, to }) => tArrow(zonk(from, st), zonk(to, st)))
-    .with({ _tag: "TyRecord" }, ({ row }) => tRecord(zonkRow(row, st)))
-    .with({ _tag: "TySingleton" }, ({ base, value }) => TySingleton(base, value))
-    .with({ _tag: "TyOneOf" }, ({ members }) => tUnion(map((m: Ty) => zonk(m, st), members)))
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id }) => tVar(id))(_v)
+      : _v._tag === "TyCon"
+        ? (({ name, args }) =>
+            tCon(
+              name,
+              map((a: Ty) => zonk(a, st), args),
+            ))(_v)
+        : _v._tag === "TyFn"
+          ? (({ from, to }) => tArrow(zonk(from, st), zonk(to, st)))(_v)
+          : _v._tag === "TyRecord"
+            ? (({ row }) => tRecord(zonkRow(row, st)))(_v)
+            : _v._tag === "TySingleton"
+              ? (({ base, value }) => TySingleton(base, value))(_v)
+              : _v._tag === "TyOneOf"
+                ? (({ members }) => tUnion(map((m: Ty) => zonk(m, st), members)))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(resolve(t, st)),
 );
 const zonkRow: _Curry<[row: Row, st: St], Row> = _curry(2, (row: Row, st: St) =>
-  match(resolveRow(row, st))
-    .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-      rField(label, zonk(fieldType, st), zonkRow(rest, st), optional),
-    )
-    .otherwise((r) => r),
+  ((_v) =>
+    _v._tag === "RowExtend"
+      ? (({ label, fieldType, optional, rest }) =>
+          rField(label, zonk(fieldType, st), zonkRow(rest, st), optional))(_v)
+      : ((r) => r)(_v))(resolveRow(row, st)),
 );
 export const occurs: _Curry<[id: number, t: Ty, st: St], boolean> = _curry(
   3,
   (id: number, t: Ty, st: St) =>
-    match(resolve(t, st))
-      .with({ _tag: "TyVar" }, ({ id: rid }) => eq(rid, id))
-      .with({ _tag: "TyCon" }, ({ args }) => someOf((a: Ty) => occurs(id, a, st), args))
-      .with({ _tag: "TyFn" }, ({ from, to }) => or(occurs(id, from, st), occurs(id, to, st)))
-      .with({ _tag: "TyRecord" }, ({ row }) => occursRow(id, row, st))
-      .with({ _tag: "TySingleton" }, () => false)
-      .with({ _tag: "TyOneOf" }, ({ members }) => someOf((m: Ty) => occurs(id, m, st), members))
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "TyVar"
+        ? (({ id: rid }) => eq(rid, id))(_v)
+        : _v._tag === "TyCon"
+          ? (({ args }) => someOf((a: Ty) => occurs(id, a, st), args))(_v)
+          : _v._tag === "TyFn"
+            ? (({ from, to }) => or(occurs(id, from, st), occurs(id, to, st)))(_v)
+            : _v._tag === "TyRecord"
+              ? (({ row }) => occursRow(id, row, st))(_v)
+              : _v._tag === "TySingleton"
+                ? false
+                : _v._tag === "TyOneOf"
+                  ? (({ members }) => someOf((m: Ty) => occurs(id, m, st), members))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(resolve(t, st)),
 );
 const occursRow: _Curry<[id: number, row: Row, st: St], boolean> = _curry(
   3,
   (id: number, row: Row, st: St) =>
-    match(resolveRow(row, st))
-      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
-        or(occurs(id, fieldType, st), occursRow(id, rest, st)),
-      )
-      .otherwise(() => false),
+    ((_v) =>
+      _v._tag === "RowExtend"
+        ? (({ fieldType, rest }) => or(occurs(id, fieldType, st), occursRow(id, rest, st)))(_v)
+        : false)(resolveRow(row, st)),
 );
 export const rowVarOccurs: _Curry<[id: number, row: Row, st: St], boolean> = _curry(
   3,
   (id: number, row: Row, st: St) =>
-    match(resolveRow(row, st))
-      .with({ _tag: "RowVar" }, ({ id: rid }) => eq(rid, id))
-      .with({ _tag: "RowExtend" }, ({ fieldType, rest }) =>
-        or(rowVarOccursInType(id, fieldType, st), rowVarOccurs(id, rest, st)),
-      )
-      .with({ _tag: "RowEmpty" }, () => false)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "RowVar"
+        ? (({ id: rid }) => eq(rid, id))(_v)
+        : _v._tag === "RowExtend"
+          ? (({ fieldType, rest }) =>
+              or(rowVarOccursInType(id, fieldType, st), rowVarOccurs(id, rest, st)))(_v)
+          : _v._tag === "RowEmpty"
+            ? false
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(resolveRow(row, st)),
 );
 const rowVarOccursInType: _Curry<[id: number, t: Ty, st: St], boolean> = _curry(
   3,
   (id: number, t: Ty, st: St) =>
-    match(resolve(t, st))
-      .with({ _tag: "TyVar" }, () => false)
-      .with({ _tag: "TyCon" }, ({ args }) => someOf((a: Ty) => rowVarOccursInType(id, a, st), args))
-      .with({ _tag: "TyFn" }, ({ from, to }) =>
-        or(rowVarOccursInType(id, from, st), rowVarOccursInType(id, to, st)),
-      )
-      .with({ _tag: "TyRecord" }, ({ row }) => rowVarOccurs(id, row, st))
-      .with({ _tag: "TySingleton" }, () => false)
-      .with({ _tag: "TyOneOf" }, ({ members }) =>
-        someOf((m: Ty) => rowVarOccursInType(id, m, st), members),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "TyVar"
+        ? false
+        : _v._tag === "TyCon"
+          ? (({ args }) => someOf((a: Ty) => rowVarOccursInType(id, a, st), args))(_v)
+          : _v._tag === "TyFn"
+            ? (({ from, to }) =>
+                or(rowVarOccursInType(id, from, st), rowVarOccursInType(id, to, st)))(_v)
+            : _v._tag === "TyRecord"
+              ? (({ row }) => rowVarOccurs(id, row, st))(_v)
+              : _v._tag === "TySingleton"
+                ? false
+                : _v._tag === "TyOneOf"
+                  ? (({ members }) => someOf((m: Ty) => rowVarOccursInType(id, m, st), members))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(resolve(t, st)),
 );
-const isArrowT: (t: Ty) => boolean = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyFn" }, () => true)
-    .otherwise(() => false);
+const isArrowT: (t: Ty) => boolean = (t: Ty) => ((_v) => (_v._tag === "TyFn" ? true : false))(t);
 const isCollection: (name: string) => boolean = (name: string) =>
   or(or(or(eq(name, "Array"), eq(name, "List")), eq(name, "Set")), eq(name, "Map"));
 const isTupleT: (t: Ty) => boolean = (t: Ty) =>
-  match(t)
-    .with({ _tag: "TyCon" }, ({ name }) => eq(name, TUPLE))
-    .otherwise(() => false);
+  ((_v) => (_v._tag === "TyCon" ? (({ name }) => eq(name, TUPLE))(_v) : false))(t);
 const tupleParenMsg: _Curry<[a: Ty, b: Ty, shown: string], string> = _curry(
   3,
   (a: Ty, b: Ty, shown: string) =>
@@ -544,80 +583,75 @@ const unifyMismatch: <A>(ra: Ty, rb: Ty) => Result<A, TypeErr> = _curry(2, <A>(r
 const unifyArgs: _Curry<[as_: Ty[], bs: Ty[], i: number, st: St], Result<St, TypeErr>> = _curry(
   4,
   (as_: Ty[], bs: Ty[], i: number, st: St) =>
-    match(_Array_get(i, as_))
-      .with({ _tag: "None" }, () => Ok(st) as Result<St, TypeErr>)
-      .with({ _tag: "Some" }, ({ value: a }) =>
-        match(_Array_get(i, bs))
-          .with({ _tag: "None" }, () => Ok(st) as Result<St, TypeErr>)
-          .with({ _tag: "Some" }, ({ value: b }) =>
-            _Result_flatMap((s1: St) => unifyArgs(as_, bs, i + 1, s1), unify(a, b, st)),
-          )
-          .exhaustive(),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? (Ok(st) as Result<St, TypeErr>)
+        : _v._tag === "Some"
+          ? (({ value: a }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? (Ok(st) as Result<St, TypeErr>)
+                  : _v._tag === "Some"
+                    ? (({ value: b }) =>
+                        _Result_flatMap(
+                          (s1: St) => unifyArgs(as_, bs, i + 1, s1),
+                          unify(a, b, st),
+                        ))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Array_get(i, bs)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, as_)),
 );
 const isPrimT: _Curry<[t: Ty, name: string], boolean> = _curry(2, (t: Ty, name: string) =>
-  match(t)
-    .with({ _tag: "TyCon" }, ({ name: n, args }) => and(eq(n, name), eq(length(args), 0)))
-    .otherwise(() => false),
+  ((_v) =>
+    _v._tag === "TyCon"
+      ? (({ name: n, args }) => and(eq(n, name), eq(length(args), 0)))(_v)
+      : false)(t),
 );
 const isLitOnlyUnion: (members: Ty[]) => boolean = (members: Ty[]) =>
-  match(members)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => true,
-    )
-    .with(
-      (_v): _v is [Extract<Ty[][number], { _tag: "TySingleton" }>, ...Ty[]] => {
-        const _g: any = _v;
-        return _g.length >= 1 && _g[0]._tag === "TySingleton";
-      },
-      ([, ...rest]) => isLitOnlyUnion(rest),
-    )
-    .otherwise(() => false);
+  ((_v) =>
+    _v.length === 0
+      ? true
+      : _v.length >= 1 && _v[0]._tag === "TySingleton"
+        ? (([, ...rest]) => isLitOnlyUnion(rest))(
+            _v as [Extract<Ty[][number], { _tag: "TySingleton" }>, ...Ty[]],
+          )
+        : false)(members);
 const widenLitBindingsFrom: _Curry<[ids: number[], lit: Ty, st: St], St> = _curry(
   3,
   (ids: number[], lit: Ty, st: St) =>
-    match(ids)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => st,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([id, ...rest]) =>
-          match(_Map_get(id, st.tv))
-            .with({ _tag: "Some" }, ({ value: t }) =>
-              match(resolve(t, st))
-                .with({ _tag: "TySingleton" }, ({ base, value }) =>
-                  match(lit)
-                    .with({ _tag: "TySingleton" }, ({ base: lbase, value: lvalue }) =>
-                      and(eq(base, lbase), eq(value, lvalue))
-                        ? widenLitBindingsFrom(rest, lit, {
-                            ...st,
-                            tv: _Map_set(id, tPrim(base), st.tv),
-                          })
-                        : widenLitBindingsFrom(rest, lit, st),
-                    )
-                    .otherwise(() => widenLitBindingsFrom(rest, lit, st)),
-                )
-                .otherwise(() => widenLitBindingsFrom(rest, lit, st)),
-            )
-            .with({ _tag: "None" }, () => widenLitBindingsFrom(rest, lit, st))
-            .exhaustive(),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? st
+        : _v.length >= 1
+          ? (([id, ...rest]) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: t }) =>
+                      ((_v) =>
+                        _v._tag === "TySingleton"
+                          ? (({ base, value }) =>
+                              ((_v) =>
+                                _v._tag === "TySingleton"
+                                  ? (({ base: lbase, value: lvalue }) =>
+                                      and(eq(base, lbase), eq(value, lvalue))
+                                        ? widenLitBindingsFrom(rest, lit, {
+                                            ...st,
+                                            tv: _Map_set(id, tPrim(base), st.tv),
+                                          })
+                                        : widenLitBindingsFrom(rest, lit, st))(_v)
+                                  : widenLitBindingsFrom(rest, lit, st))(lit))(_v)
+                          : widenLitBindingsFrom(rest, lit, st))(resolve(t, st)))(_v)
+                  : _v._tag === "None"
+                    ? widenLitBindingsFrom(rest, lit, st)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(id, st.tv)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(ids),
 );
 const widenLitBindings: _Curry<[lit: Ty, st: St], St> = _curry(2, (lit: Ty, st: St) =>
   widenLitBindingsFrom(_Map_keys(st.tv), lit, st),
@@ -626,37 +660,41 @@ const litInUnionFrom: _Curry<
   [lit: Ty, members: Ty[], i: number, st: St],
   Result<St, TypeErr>
 > = _curry(4, (lit: Ty, members: Ty[], i: number, st: St) =>
-  match(_Array_get(i, members))
-    .with({ _tag: "None" }, () =>
-      fail(`cannot unify ${showType(lit)} with ${showType(TyOneOf(members))}`),
-    )
-    .with({ _tag: "Some" }, ({ value: m }) =>
-      match(m)
-        .with({ _tag: "TySingleton" }, ({ base, value }) =>
-          match(lit)
-            .with({ _tag: "TySingleton" }, ({ base: lbase, value: lvalue }) =>
-              and(eq(base, lbase), eq(value, lvalue))
-                ? (Ok(st) as Result<St, TypeErr>)
-                : litInUnionFrom(lit, members, i + 1, st),
-            )
-            .otherwise(() => litInUnionFrom(lit, members, i + 1, st)),
-        )
-        .otherwise(() =>
-          match(unify(lit, m, st))
-            .with({ _tag: "Ok" }, ({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)
-            .with({ _tag: "Err" }, () => litInUnionFrom(lit, members, i + 1, st))
-            .exhaustive(),
-        ),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? fail(`cannot unify ${showType(lit)} with ${showType(TyOneOf(members))}`)
+      : _v._tag === "Some"
+        ? (({ value: m }) =>
+            ((_v) =>
+              _v._tag === "TySingleton"
+                ? (({ base, value }) =>
+                    ((_v) =>
+                      _v._tag === "TySingleton"
+                        ? (({ base: lbase, value: lvalue }) =>
+                            and(eq(base, lbase), eq(value, lvalue))
+                              ? (Ok(st) as Result<St, TypeErr>)
+                              : litInUnionFrom(lit, members, i + 1, st))(_v)
+                        : litInUnionFrom(lit, members, i + 1, st))(lit))(_v)
+                : ((_v) =>
+                    _v._tag === "Ok"
+                      ? (({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)(_v)
+                      : _v._tag === "Err"
+                        ? litInUnionFrom(lit, members, i + 1, st)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(unify(lit, m, st)))(m))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, members)),
 );
 const unifyMemberAgainstUnionFrom: _Curry<
   [member: Ty, members: Ty[], i: number, st: St],
   Result<St, TypeErr>
 > = _curry(4, (member: Ty, members: Ty[], i: number, st: St) =>
-  match(member)
-    .with({ _tag: "TySingleton" }, () => litInUnionFrom(member, members, 0, st))
-    .otherwise(() => unifyConcreteAgainstUnionFrom(member, members, i, st)),
+  ((_v) =>
+    _v._tag === "TySingleton"
+      ? litInUnionFrom(member, members, 0, st)
+      : unifyConcreteAgainstUnionFrom(member, members, i, st))(member),
 );
 /**
  * Split so `fail` sits beside `Ok` in one match (tsc-clean Result, ADR 0026).
@@ -665,150 +703,169 @@ const unifyConcreteAgainstUnionFrom: _Curry<
   [member: Ty, members: Ty[], i: number, st: St],
   Result<St, TypeErr>
 > = _curry(4, (member: Ty, members: Ty[], i: number, st: St) =>
-  match(_Array_get(i, members))
-    .with({ _tag: "None" }, () =>
-      fail(`cannot unify ${showType(member)} with ${showType(TyOneOf(members))}`),
-    )
-    .with({ _tag: "Some" }, ({ value: m }) =>
-      match(unify(member, m, st))
-        .with({ _tag: "Ok" }, ({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)
-        .with({ _tag: "Err" }, () => unifyConcreteAgainstUnionFrom(member, members, i + 1, st))
-        .exhaustive(),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? fail(`cannot unify ${showType(member)} with ${showType(TyOneOf(members))}`)
+      : _v._tag === "Some"
+        ? (({ value: m }) =>
+            ((_v) =>
+              _v._tag === "Ok"
+                ? (({ value: st1 }) => Ok(st1) as Result<St, TypeErr>)(_v)
+                : _v._tag === "Err"
+                  ? unifyConcreteAgainstUnionFrom(member, members, i + 1, st)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(unify(member, m, st)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, members)),
 );
 const unifyUnionMembersFrom: _Curry<
   [members: Ty[], u: Ty, i: number, st: St],
   Result<St, TypeErr>
 > = _curry(4, (members: Ty[], u: Ty, i: number, st: St) =>
-  match(_Array_get(i, members))
-    .with({ _tag: "None" }, () => Ok(st) as Result<St, TypeErr>)
-    .with({ _tag: "Some" }, ({ value: m }) =>
-      match(u)
-        .with({ _tag: "TyOneOf" }, ({ members: ums }) =>
-          _Result_flatMap(
-            (s1: St) => unifyUnionMembersFrom(members, u, i + 1, s1),
-            unifyMemberAgainstUnionFrom(m, ums, 0, st),
-          ),
-        )
-        .otherwise(() => Ok(st) as Result<St, TypeErr>),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "None"
+      ? (Ok(st) as Result<St, TypeErr>)
+      : _v._tag === "Some"
+        ? (({ value: m }) =>
+            ((_v) =>
+              _v._tag === "TyOneOf"
+                ? (({ members: ums }) =>
+                    _Result_flatMap(
+                      (s1: St) => unifyUnionMembersFrom(members, u, i + 1, s1),
+                      unifyMemberAgainstUnionFrom(m, ums, 0, st),
+                    ))(_v)
+                : (Ok(st) as Result<St, TypeErr>))(u))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, members)),
 );
 const unifyLitUnion: _Curry<[a: Ty, b: Ty, st: St], Result<St, TypeErr>> = _curry(
   3,
   (a: Ty, b: Ty, st: St) =>
-    match(a)
-      .with({ _tag: "TySingleton" }, ({ base: abase, value: aval }) =>
-        match(b)
-          .with({ _tag: "TySingleton" }, ({ base: bbase, value: bval }) =>
-            and(eq(abase, bbase), eq(aval, bval))
-              ? (Ok(st) as Result<St, TypeErr>)
-              : eq(abase, bbase)
-                ? (Ok(widenLitBindings(b, widenLitBindings(a, st))) as Result<St, TypeErr>)
-                : fail(`cannot unify ${showType(a)} with ${showType(b)}`),
-          )
-          .with({ _tag: "TyOneOf" }, ({ members }) => litInUnionFrom(a, members, 0, st))
-          .otherwise(() =>
-            isPrimT(b, abase)
-              ? (Ok(st) as Result<St, TypeErr>)
-              : fail(`cannot unify ${showType(a)} with ${showType(b)}`),
-          ),
-      )
-      .with({ _tag: "TyOneOf" }, ({ members: amembers }) =>
-        match(b)
-          .with({ _tag: "TySingleton" }, () => litInUnionFrom(b, amembers, 0, st))
-          .with({ _tag: "TyOneOf" }, ({ members: bmembers }) =>
-            _Result_flatMap(
-              (s1: St) => unifyUnionMembersFrom(bmembers, a, 0, s1),
-              unifyUnionMembersFrom(amembers, b, 0, st),
-            ),
-          )
-          .otherwise(() =>
-            isLitOnlyUnion(amembers)
-              ? fail(`cannot unify ${showType(a)} with ${showType(b)}`)
-              : unifyMemberAgainstUnionFrom(b, amembers, 0, st),
-          ),
-      )
-      .otherwise(() =>
-        match(b)
-          .with({ _tag: "TySingleton" }, ({ base: bbase }) =>
-            isPrimT(a, bbase)
-              ? (Ok(st) as Result<St, TypeErr>)
-              : fail(`cannot unify ${showType(a)} with ${showType(b)}`),
-          )
-          .with({ _tag: "TyOneOf" }, ({ members: bmembers }) =>
-            isLitOnlyUnion(bmembers)
-              ? fail(`cannot unify ${showType(a)} with ${showType(b)}`)
-              : unifyMemberAgainstUnionFrom(a, bmembers, 0, st),
-          )
-          .otherwise(() => fail(`cannot unify ${showType(a)} with ${showType(b)}`)),
-      ),
+    ((_v) =>
+      _v._tag === "TySingleton"
+        ? (({ base: abase, value: aval }) =>
+            ((_v) =>
+              _v._tag === "TySingleton"
+                ? (({ base: bbase, value: bval }) =>
+                    and(eq(abase, bbase), eq(aval, bval))
+                      ? (Ok(st) as Result<St, TypeErr>)
+                      : eq(abase, bbase)
+                        ? (Ok(widenLitBindings(b, widenLitBindings(a, st))) as Result<St, TypeErr>)
+                        : fail(`cannot unify ${showType(a)} with ${showType(b)}`))(_v)
+                : _v._tag === "TyOneOf"
+                  ? (({ members }) => litInUnionFrom(a, members, 0, st))(_v)
+                  : isPrimT(b, abase)
+                    ? (Ok(st) as Result<St, TypeErr>)
+                    : fail(`cannot unify ${showType(a)} with ${showType(b)}`))(b))(_v)
+        : _v._tag === "TyOneOf"
+          ? (({ members: amembers }) =>
+              ((_v) =>
+                _v._tag === "TySingleton"
+                  ? litInUnionFrom(b, amembers, 0, st)
+                  : _v._tag === "TyOneOf"
+                    ? (({ members: bmembers }) =>
+                        _Result_flatMap(
+                          (s1: St) => unifyUnionMembersFrom(bmembers, a, 0, s1),
+                          unifyUnionMembersFrom(amembers, b, 0, st),
+                        ))(_v)
+                    : isLitOnlyUnion(amembers)
+                      ? fail(`cannot unify ${showType(a)} with ${showType(b)}`)
+                      : unifyMemberAgainstUnionFrom(b, amembers, 0, st))(b))(_v)
+          : ((_v) =>
+              _v._tag === "TySingleton"
+                ? (({ base: bbase }) =>
+                    isPrimT(a, bbase)
+                      ? (Ok(st) as Result<St, TypeErr>)
+                      : fail(`cannot unify ${showType(a)} with ${showType(b)}`))(_v)
+                : _v._tag === "TyOneOf"
+                  ? (({ members: bmembers }) =>
+                      isLitOnlyUnion(bmembers)
+                        ? fail(`cannot unify ${showType(a)} with ${showType(b)}`)
+                        : unifyMemberAgainstUnionFrom(a, bmembers, 0, st))(_v)
+                  : fail(`cannot unify ${showType(a)} with ${showType(b)}`))(b))(a),
 );
 export const unify: _Curry<[a: Ty, b: Ty, st: St], Result<St, TypeErr>> = _curry(
   3,
   (a: Ty, b: Ty, st: St) => {
     const ra: Ty = resolve(a, st);
     const rb: Ty = resolve(b, st);
-    return match(ra)
-      .with({ _tag: "TyVar" }, ({ id: aid }) =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) =>
-            eq(aid, bid) ? (Ok(st) as Result<St, TypeErr>) : bindVar(aid, rb, st),
-          )
-          .otherwise(() => bindVar(aid, rb, st)),
-      )
-      .with({ _tag: "TyCon" }, ({ name: aname, args: aargs }) =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
-          .with({ _tag: "TyCon" }, ({ name: bname, args: bargs }) =>
-            and(eq(aname, bname), eq(length(aargs), length(bargs)))
-              ? unifyArgs(aargs, bargs, 0, st)
-              : fail(
-                  tupleParenMsg(
-                    ra,
-                    rb,
-                    collectionUnifyMsg(
-                      aname,
-                      bname,
-                      `cannot unify ${showType(ra)} with ${showType(rb)}`,
-                    ),
-                  ),
-                ),
-          )
-          .with({ _tag: "TySingleton" }, () => unifyLitUnion(ra, rb, st))
-          .with({ _tag: "TyOneOf" }, () => unifyLitUnion(ra, rb, st))
-          .otherwise(() => unifyMismatch(ra, rb)),
-      )
-      .with({ _tag: "TyFn" }, ({ from: afrom, to: ato }) =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
-          .with({ _tag: "TyFn" }, ({ from: bfrom, to: bto }) =>
-            _Result_flatMap((s1: St) => unify(ato, bto, s1), unify(afrom, bfrom, st)),
-          )
-          .with({ _tag: "TySingleton" }, () => unifyLitUnion(ra, rb, st))
-          .with({ _tag: "TyOneOf" }, () => unifyLitUnion(ra, rb, st))
-          .otherwise(() => unifyMismatch(ra, rb)),
-      )
-      .with({ _tag: "TyRecord" }, ({ row: arow }) =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
-          .with({ _tag: "TyRecord" }, ({ row: brow }) => unifyRows(arow, brow, st))
-          .with({ _tag: "TySingleton" }, () => unifyLitUnion(ra, rb, st))
-          .with({ _tag: "TyOneOf" }, () => unifyLitUnion(ra, rb, st))
-          .otherwise(() => unifyMismatch(ra, rb)),
-      )
-      .with({ _tag: "TySingleton" }, () =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
-          .otherwise(() => unifyLitUnion(ra, rb, st)),
-      )
-      .with({ _tag: "TyOneOf" }, () =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
-          .otherwise(() => unifyLitUnion(ra, rb, st)),
-      )
-      .exhaustive();
+    return ((_v) =>
+      _v._tag === "TyVar"
+        ? (({ id: aid }) =>
+            ((_v) =>
+              _v._tag === "TyVar"
+                ? (({ id: bid }) =>
+                    eq(aid, bid) ? (Ok(st) as Result<St, TypeErr>) : bindVar(aid, rb, st))(_v)
+                : bindVar(aid, rb, st))(rb))(_v)
+        : _v._tag === "TyCon"
+          ? (({ name: aname, args: aargs }) =>
+              ((_v) =>
+                _v._tag === "TyVar"
+                  ? (({ id: bid }) => bindVar(bid, ra, st))(_v)
+                  : _v._tag === "TyCon"
+                    ? (({ name: bname, args: bargs }) =>
+                        and(eq(aname, bname), eq(length(aargs), length(bargs)))
+                          ? unifyArgs(aargs, bargs, 0, st)
+                          : fail(
+                              tupleParenMsg(
+                                ra,
+                                rb,
+                                collectionUnifyMsg(
+                                  aname,
+                                  bname,
+                                  `cannot unify ${showType(ra)} with ${showType(rb)}`,
+                                ),
+                              ),
+                            ))(_v)
+                    : _v._tag === "TySingleton"
+                      ? unifyLitUnion(ra, rb, st)
+                      : _v._tag === "TyOneOf"
+                        ? unifyLitUnion(ra, rb, st)
+                        : unifyMismatch(ra, rb))(rb))(_v)
+          : _v._tag === "TyFn"
+            ? (({ from: afrom, to: ato }) =>
+                ((_v) =>
+                  _v._tag === "TyVar"
+                    ? (({ id: bid }) => bindVar(bid, ra, st))(_v)
+                    : _v._tag === "TyFn"
+                      ? (({ from: bfrom, to: bto }) =>
+                          _Result_flatMap(
+                            (s1: St) => unify(ato, bto, s1),
+                            unify(afrom, bfrom, st),
+                          ))(_v)
+                      : _v._tag === "TySingleton"
+                        ? unifyLitUnion(ra, rb, st)
+                        : _v._tag === "TyOneOf"
+                          ? unifyLitUnion(ra, rb, st)
+                          : unifyMismatch(ra, rb))(rb))(_v)
+            : _v._tag === "TyRecord"
+              ? (({ row: arow }) =>
+                  ((_v) =>
+                    _v._tag === "TyVar"
+                      ? (({ id: bid }) => bindVar(bid, ra, st))(_v)
+                      : _v._tag === "TyRecord"
+                        ? (({ row: brow }) => unifyRows(arow, brow, st))(_v)
+                        : _v._tag === "TySingleton"
+                          ? unifyLitUnion(ra, rb, st)
+                          : _v._tag === "TyOneOf"
+                            ? unifyLitUnion(ra, rb, st)
+                            : unifyMismatch(ra, rb))(rb))(_v)
+              : _v._tag === "TySingleton"
+                ? ((_v) =>
+                    _v._tag === "TyVar"
+                      ? (({ id: bid }) => bindVar(bid, ra, st))(_v)
+                      : unifyLitUnion(ra, rb, st))(rb)
+                : _v._tag === "TyOneOf"
+                  ? ((_v) =>
+                      _v._tag === "TyVar"
+                        ? (({ id: bid }) => bindVar(bid, ra, st))(_v)
+                        : unifyLitUnion(ra, rb, st))(rb)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(ra);
   },
 );
 const bindVar: _Curry<[id: number, t: Ty, st: St], Result<St, TypeErr>> = _curry(
@@ -826,30 +883,33 @@ const rewriteRow: _Curry<
   [row: Row, label: string, st: St],
   Result<[Ty, boolean, Row, St], TypeErr>
 > = _curry(3, (row: Row, label: string, st: St) =>
-  match(resolveRow(row, st))
-    .with({ _tag: "RowEmpty" }, () => fail(`record missing field '${label}'`))
-    .with(
-      { _tag: "RowExtend" },
-      ({ label: rlabel, fieldType: rtype, optional: ropt, rest: rrest }) =>
-        eq(rlabel, label)
-          ? (Ok(_tuple(rtype, ropt, rrest, st)) as Result<[Ty, boolean, Row, St], TypeErr>)
-          : _Result_map(
-              ([subType, subOpt, subRest, subSt]: [Ty, boolean, Row, St]) =>
-                _tuple(subType, subOpt, rField(rlabel, rtype, subRest, ropt), subSt),
-              rewriteRow(rrest, label, st),
-            ),
-    )
-    .with({ _tag: "RowVar" }, ({ id: rid }) =>
-      (([freshT, st1]: [Ty, St]) =>
-        (([freshTail, st2]: [Row, St]) =>
-          Ok(
-            _tuple(freshT, false, freshTail, {
-              ...st2,
-              rv: _Map_set(rid, rExtend(label, freshT, freshTail), st2.rv),
-            }),
-          ) as Result<[Ty, boolean, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st)),
-    )
-    .exhaustive(),
+  ((_v) =>
+    _v._tag === "RowEmpty"
+      ? fail(`record missing field '${label}'`)
+      : _v._tag === "RowExtend"
+        ? (({ label: rlabel, fieldType: rtype, optional: ropt, rest: rrest }) =>
+            eq(rlabel, label)
+              ? (Ok(_tuple(rtype, ropt, rrest, st)) as Result<[Ty, boolean, Row, St], TypeErr>)
+              : _Result_map(
+                  ([subType, subOpt, subRest, subSt]: [Ty, boolean, Row, St]) =>
+                    _tuple(subType, subOpt, rField(rlabel, rtype, subRest, ropt), subSt),
+                  rewriteRow(rrest, label, st),
+                ))(_v)
+        : _v._tag === "RowVar"
+          ? (({ id: rid }) =>
+              (([freshT, st1]: [Ty, St]) =>
+                (([freshTail, st2]: [Row, St]) =>
+                  Ok(
+                    _tuple(freshT, false, freshTail, {
+                      ...st2,
+                      rv: _Map_set(rid, rExtend(label, freshT, freshTail), st2.rv),
+                    }),
+                  ) as Result<[Ty, boolean, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st)))(
+              _v,
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(resolveRow(row, st)),
 );
 /**
  * both rows extend: pull a's label out of b, unify the field types, recurse
@@ -859,58 +919,62 @@ export const unifyRows: _Curry<[r1: Row, r2: Row, st: St], Result<St, TypeErr>> 
   (r1: Row, r2: Row, st: St) => {
     const a: Row = resolveRow(r1, st);
     const b: Row = resolveRow(r2, st);
-    return match(a)
-      .with({ _tag: "RowEmpty" }, () =>
-        match(b)
-          .with({ _tag: "RowEmpty" }, () => Ok(st) as Result<St, TypeErr>)
-          .with({ _tag: "RowVar" }, ({ id: bid }) => bindRowVar(bid, a, st))
-          .with({ _tag: "RowExtend" }, ({ label }) => fail(`record missing field '${label}'`))
-          .exhaustive(),
-      )
-      .with({ _tag: "RowVar" }, ({ id: aid }) => bindRowVar(aid, b, st))
-      .with(
-        { _tag: "RowExtend" },
-        ({ label: alabel, fieldType: atype, optional: aopt, rest: arest }) =>
-          match(b)
-            .with({ _tag: "RowEmpty" }, () => fail(`record has extra field '${alabel}'`))
-            .with({ _tag: "RowVar" }, ({ id: bid }) => bindRowVar(bid, a, st))
-            .with({ _tag: "RowExtend" }, () =>
-              _Result_flatMap(
-                ([btype, bopt, brest, s1]: [Ty, boolean, Row, St]) =>
-                  eq(aopt, bopt)
-                    ? _Result_flatMap(
-                        (s2: St) => unifyRows(arest, brest, s2),
-                        unify(atype, btype, s1),
-                      )
-                    : fail(
-                        aopt
-                          ? `record field '${alabel}' is optional but required on the other side`
-                          : `record field '${alabel}' is required but optional on the other side`,
-                      ),
-                rewriteRow(b, alabel, st),
-              ),
-            )
-            .exhaustive(),
-      )
-      .exhaustive();
+    return ((_v) =>
+      _v._tag === "RowEmpty"
+        ? ((_v) =>
+            _v._tag === "RowEmpty"
+              ? (Ok(st) as Result<St, TypeErr>)
+              : _v._tag === "RowVar"
+                ? (({ id: bid }) => bindRowVar(bid, a, st))(_v)
+                : _v._tag === "RowExtend"
+                  ? (({ label }) => fail(`record missing field '${label}'`))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(b)
+        : _v._tag === "RowVar"
+          ? (({ id: aid }) => bindRowVar(aid, b, st))(_v)
+          : _v._tag === "RowExtend"
+            ? (({ label: alabel, fieldType: atype, optional: aopt, rest: arest }) =>
+                ((_v) =>
+                  _v._tag === "RowEmpty"
+                    ? fail(`record has extra field '${alabel}'`)
+                    : _v._tag === "RowVar"
+                      ? (({ id: bid }) => bindRowVar(bid, a, st))(_v)
+                      : _v._tag === "RowExtend"
+                        ? _Result_flatMap(
+                            ([btype, bopt, brest, s1]: [Ty, boolean, Row, St]) =>
+                              eq(aopt, bopt)
+                                ? _Result_flatMap(
+                                    (s2: St) => unifyRows(arest, brest, s2),
+                                    unify(atype, btype, s1),
+                                  )
+                                : fail(
+                                    aopt
+                                      ? `record field '${alabel}' is optional but required on the other side`
+                                      : `record field '${alabel}' is required but optional on the other side`,
+                                  ),
+                            rewriteRow(b, alabel, st),
+                          )
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(b))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(a);
   },
 );
 const bindRowVar: _Curry<[id: number, row: Row, st: St], Result<St, TypeErr>> = _curry(
   3,
   (id: number, row: Row, st: St) =>
-    match(resolveRow(row, st))
-      .with(
-        (_v): _v is Extract<Row, { _tag: "RowVar" }> => {
-          const _g: any = _v;
-          return _g._tag === "RowVar" && (({ id: rid }) => eq(rid, id))(_g);
-        },
-        ({ id: rid }) => Ok(st) as Result<St, TypeErr>,
-      )
-      .otherwise((r) =>
-        rowVarOccurs(id, r, st)
-          ? fail("infinite record type")
-          : (Ok({ ...st, rv: _Map_set(id, r, st.rv) }) as Result<St, TypeErr>),
-      ),
+    ((_v) =>
+      _v._tag === "RowVar" && (({ id: rid }) => eq(rid, id))(_v)
+        ? (({ id: rid }) => Ok(st) as Result<St, TypeErr>)(_v)
+        : ((r) =>
+            rowVarOccurs(id, r, st)
+              ? fail("infinite record type")
+              : (Ok({ ...st, rv: _Map_set(id, r, st.rv) }) as Result<St, TypeErr>))(_v))(
+      resolveRow(row, st),
+    ),
 );
 /**
  * Directional record check: `actual` may be used where `expected` is required
@@ -922,18 +986,19 @@ export const fits: _Curry<[actual: Ty, expected: Ty, st: St], Result<St, TypeErr
   (actual: Ty, expected: Ty, st: St) => {
     const ra: Ty = resolve(actual, st);
     const rb: Ty = resolve(expected, st);
-    return match(ra)
-      .with({ _tag: "TyVar" }, ({ id: aid }) => bindVar(aid, rb, st))
-      .otherwise(() =>
-        match(rb)
-          .with({ _tag: "TyVar" }, ({ id: bid }) => bindVar(bid, ra, st))
-          .with({ _tag: "TyRecord" }, ({ row: erow }) =>
-            match(ra)
-              .with({ _tag: "TyRecord" }, ({ row: arow }) => fitsRows(arow, erow, st))
-              .otherwise(() => unify(actual, expected, st)),
-          )
-          .otherwise(() => unify(actual, expected, st)),
-      );
+    return ((_v) =>
+      _v._tag === "TyVar"
+        ? (({ id: aid }) => bindVar(aid, rb, st))(_v)
+        : ((_v) =>
+            _v._tag === "TyVar"
+              ? (({ id: bid }) => bindVar(bid, ra, st))(_v)
+              : _v._tag === "TyRecord"
+                ? (({ row: erow }) =>
+                    ((_v) =>
+                      _v._tag === "TyRecord"
+                        ? (({ row: arow }) => fitsRows(arow, erow, st))(_v)
+                        : unify(actual, expected, st))(ra))(_v)
+                : unify(actual, expected, st))(rb))(ra);
   },
 );
 const fitsRows: _Curry<[actual: Row, expected: Row, st: St], Result<St, TypeErr>> = _curry(
@@ -941,34 +1006,44 @@ const fitsRows: _Curry<[actual: Row, expected: Row, st: St], Result<St, TypeErr>
   (actual: Row, expected: Row, st: St) => {
     const exp: Row = resolveRow(expected, st);
     const act: Row = resolveRow(actual, st);
-    return match(exp)
-      .with({ _tag: "RowVar" }, ({ id: eid }) => bindRowVar(eid, act, st))
-      .with({ _tag: "RowEmpty" }, () =>
-        match(act)
-          .with({ _tag: "RowEmpty" }, () => Ok(st) as Result<St, TypeErr>)
-          .with({ _tag: "RowVar" }, ({ id: aid }) => bindRowVar(aid, exp, st))
-          .with({ _tag: "RowExtend" }, ({ label }) => fail(`record has extra field '${label}'`))
-          .exhaustive(),
-      )
-      .with(
-        { _tag: "RowExtend" },
-        ({ label: elabel, fieldType: etype, optional: eopt, rest: erest }) =>
-          ((rw: Result<[Ty, boolean, Row, St], TypeErr>) =>
-            match(rw)
-              .with({ _tag: "Err" }, () =>
-                eopt ? fitsRows(act, erest, st) : fail(`record missing field '${elabel}'`),
-              )
-              .with({ _tag: "Ok" }, ({ value: hit }) =>
-                (([htype, hopt, hrest, s1]: [Ty, boolean, Row, St]) =>
-                  and(hopt, not(eopt))
-                    ? fail(`record field '${elabel}' is required but missing or optional`)
-                    : _Result_flatMap(
-                        (s2: St) => fitsRows(hrest, erest, s2),
-                        unify(htype, etype, s1),
-                      ))(hit),
-              )
-              .exhaustive())(rewriteRow(act, elabel, st)),
-      )
-      .exhaustive();
+    return ((_v) =>
+      _v._tag === "RowVar"
+        ? (({ id: eid }) => bindRowVar(eid, act, st))(_v)
+        : _v._tag === "RowEmpty"
+          ? ((_v) =>
+              _v._tag === "RowEmpty"
+                ? (Ok(st) as Result<St, TypeErr>)
+                : _v._tag === "RowVar"
+                  ? (({ id: aid }) => bindRowVar(aid, exp, st))(_v)
+                  : _v._tag === "RowExtend"
+                    ? (({ label }) => fail(`record has extra field '${label}'`))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(act)
+          : _v._tag === "RowExtend"
+            ? (({ label: elabel, fieldType: etype, optional: eopt, rest: erest }) =>
+                ((rw: Result<[Ty, boolean, Row, St], TypeErr>) =>
+                  ((_v) =>
+                    _v._tag === "Err"
+                      ? eopt
+                        ? fitsRows(act, erest, st)
+                        : fail(`record missing field '${elabel}'`)
+                      : _v._tag === "Ok"
+                        ? (({ value: hit }) =>
+                            (([htype, hopt, hrest, s1]: [Ty, boolean, Row, St]) =>
+                              and(hopt, not(eopt))
+                                ? fail(
+                                    `record field '${elabel}' is required but missing or optional`,
+                                  )
+                                : _Result_flatMap(
+                                    (s2: St) => fitsRows(hrest, erest, s2),
+                                    unify(htype, etype, s1),
+                                  ))(hit))(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(rw))(rewriteRow(act, elabel, st)))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(exp);
   },
 );

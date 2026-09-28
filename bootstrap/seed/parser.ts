@@ -67,8 +67,6 @@ import {
   sub,
 } from "@mochi/compiler/runtime";
 
-import { match } from "@onrails/pattern";
-
 import * as Ast from "./ast";
 import { parseHooksOf, resolvePluginsDefault, runParseHooks } from "./extensions";
 import * as Lexer from "./lexer";
@@ -133,62 +131,137 @@ import {
  * The TS `t` tag of a token — error messages must match the TS parser's.
  */
 const tokName: (t: Tok) => string = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TLet" }, () => "let")
-    .with({ _tag: "TType" }, () => "type")
-    .with({ _tag: "TExtern" }, () => "extern")
-    .with({ _tag: "TSwitch" }, () => "switch")
-    .with({ _tag: "TLoop" }, () => "loop")
-    .with({ _tag: "TRecur" }, () => "recur")
-    .with({ _tag: "TDo" }, () => "do")
-    .with({ _tag: "TImport" }, () => "import")
-    .with({ _tag: "TExport" }, () => "export")
-    .with({ _tag: "TEq" }, () => "eq")
-    .with({ _tag: "TArrow" }, () => "arrow")
-    .with({ _tag: "TTarrow" }, () => "tarrow")
-    .with({ _tag: "TPipe" }, () => "pipe")
-    .with({ _tag: "TCompose" }, () => "compose")
-    .with({ _tag: "TConcat" }, () => "concat")
-    .with({ _tag: "TBar" }, () => "bar")
-    .with({ _tag: "TLparen" }, () => "lparen")
-    .with({ _tag: "TRparen" }, () => "rparen")
-    .with({ _tag: "TLbrace" }, () => "lbrace")
-    .with({ _tag: "TRbrace" }, () => "rbrace")
-    .with({ _tag: "TLbracket" }, () => "lbracket")
-    .with({ _tag: "TRbracket" }, () => "rbracket")
-    .with({ _tag: "TSpread" }, () => "spread")
-    .with({ _tag: "TPlus" }, () => "plus")
-    .with({ _tag: "TMinus" }, () => "minus")
-    .with({ _tag: "TStar" }, () => "star")
-    .with({ _tag: "TSlash" }, () => "slash")
-    .with({ _tag: "TPercent" }, () => "percent")
-    .with({ _tag: "TAt" }, () => "at")
-    .with({ _tag: "THash" }, () => "hash")
-    .with({ _tag: "TTilde" }, () => "tilde")
-    .with({ _tag: "TDot" }, () => "dot")
-    .with({ _tag: "TColon" }, () => "colon")
-    .with({ _tag: "TQuestion" }, () => "question")
-    .with({ _tag: "TEqeq" }, () => "eqeq")
-    .with({ _tag: "TNeq" }, () => "neq")
-    .with({ _tag: "TLte" }, () => "lte")
-    .with({ _tag: "TGte" }, () => "gte")
-    .with({ _tag: "TLt" }, () => "lt")
-    .with({ _tag: "TGt" }, () => "gt")
-    .with({ _tag: "TAndand" }, () => "andand")
-    .with({ _tag: "TOror" }, () => "oror")
-    .with({ _tag: "TBang" }, () => "bang")
-    .with({ _tag: "TBacktick" }, () => "backtick")
-    .with({ _tag: "TComma" }, () => "comma")
-    .with({ _tag: "TSemi" }, () => "semi")
-    .with({ _tag: "TNum" }, () => "num")
-    .with({ _tag: "TBool" }, () => "bool")
-    .with({ _tag: "TStr" }, () => "str")
-    .with({ _tag: "TTmplStart" }, () => "tmplstart")
-    .with({ _tag: "TTmplMid" }, () => "tmplmid")
-    .with({ _tag: "TTmplEnd" }, () => "tmplend")
-    .with({ _tag: "TId" }, () => "id")
-    .with({ _tag: "TEof" }, () => "eof")
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "TLet"
+      ? "let"
+      : _v._tag === "TType"
+        ? "type"
+        : _v._tag === "TExtern"
+          ? "extern"
+          : _v._tag === "TSwitch"
+            ? "switch"
+            : _v._tag === "TLoop"
+              ? "loop"
+              : _v._tag === "TRecur"
+                ? "recur"
+                : _v._tag === "TDo"
+                  ? "do"
+                  : _v._tag === "TImport"
+                    ? "import"
+                    : _v._tag === "TExport"
+                      ? "export"
+                      : _v._tag === "TEq"
+                        ? "eq"
+                        : _v._tag === "TArrow"
+                          ? "arrow"
+                          : _v._tag === "TTarrow"
+                            ? "tarrow"
+                            : _v._tag === "TPipe"
+                              ? "pipe"
+                              : _v._tag === "TCompose"
+                                ? "compose"
+                                : _v._tag === "TConcat"
+                                  ? "concat"
+                                  : _v._tag === "TBar"
+                                    ? "bar"
+                                    : _v._tag === "TLparen"
+                                      ? "lparen"
+                                      : _v._tag === "TRparen"
+                                        ? "rparen"
+                                        : _v._tag === "TLbrace"
+                                          ? "lbrace"
+                                          : _v._tag === "TRbrace"
+                                            ? "rbrace"
+                                            : _v._tag === "TLbracket"
+                                              ? "lbracket"
+                                              : _v._tag === "TRbracket"
+                                                ? "rbracket"
+                                                : _v._tag === "TSpread"
+                                                  ? "spread"
+                                                  : _v._tag === "TPlus"
+                                                    ? "plus"
+                                                    : _v._tag === "TMinus"
+                                                      ? "minus"
+                                                      : _v._tag === "TStar"
+                                                        ? "star"
+                                                        : _v._tag === "TSlash"
+                                                          ? "slash"
+                                                          : _v._tag === "TPercent"
+                                                            ? "percent"
+                                                            : _v._tag === "TAt"
+                                                              ? "at"
+                                                              : _v._tag === "THash"
+                                                                ? "hash"
+                                                                : _v._tag === "TTilde"
+                                                                  ? "tilde"
+                                                                  : _v._tag === "TDot"
+                                                                    ? "dot"
+                                                                    : _v._tag === "TColon"
+                                                                      ? "colon"
+                                                                      : _v._tag === "TQuestion"
+                                                                        ? "question"
+                                                                        : _v._tag === "TEqeq"
+                                                                          ? "eqeq"
+                                                                          : _v._tag === "TNeq"
+                                                                            ? "neq"
+                                                                            : _v._tag === "TLte"
+                                                                              ? "lte"
+                                                                              : _v._tag === "TGte"
+                                                                                ? "gte"
+                                                                                : _v._tag === "TLt"
+                                                                                  ? "lt"
+                                                                                  : _v._tag ===
+                                                                                      "TGt"
+                                                                                    ? "gt"
+                                                                                    : _v._tag ===
+                                                                                        "TAndand"
+                                                                                      ? "andand"
+                                                                                      : _v._tag ===
+                                                                                          "TOror"
+                                                                                        ? "oror"
+                                                                                        : _v._tag ===
+                                                                                            "TBang"
+                                                                                          ? "bang"
+                                                                                          : _v._tag ===
+                                                                                              "TBacktick"
+                                                                                            ? "backtick"
+                                                                                            : _v._tag ===
+                                                                                                "TComma"
+                                                                                              ? "comma"
+                                                                                              : _v._tag ===
+                                                                                                  "TSemi"
+                                                                                                ? "semi"
+                                                                                                : _v._tag ===
+                                                                                                    "TNum"
+                                                                                                  ? "num"
+                                                                                                  : _v._tag ===
+                                                                                                      "TBool"
+                                                                                                    ? "bool"
+                                                                                                    : _v._tag ===
+                                                                                                        "TStr"
+                                                                                                      ? "str"
+                                                                                                      : _v._tag ===
+                                                                                                          "TTmplStart"
+                                                                                                        ? "tmplstart"
+                                                                                                        : _v._tag ===
+                                                                                                            "TTmplMid"
+                                                                                                          ? "tmplmid"
+                                                                                                          : _v._tag ===
+                                                                                                              "TTmplEnd"
+                                                                                                            ? "tmplend"
+                                                                                                            : _v._tag ===
+                                                                                                                "TId"
+                                                                                                              ? "id"
+                                                                                                              : _v._tag ===
+                                                                                                                  "TEof"
+                                                                                                                ? "eof"
+                                                                                                                : (() => {
+                                                                                                                    throw new Error(
+                                                                                                                      "non-exhaustive match",
+                                                                                                                    );
+                                                                                                                  })())(
+    t,
+  );
 /**
  * The stream is TEof-terminated, so the fallback is unreachable in practice.
  */
@@ -230,13 +303,13 @@ const expectId: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], PEr
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return match(lt.tok)
-      .with(
-        { _tag: "TId" },
-        ({ value: name }) =>
-          Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
-      )
-      .otherwise((t) => errAt(`expected id, got ${tokName(t)}`, lt));
+    return ((_v) =>
+      _v._tag === "TId"
+        ? (({ value: name }) =>
+            Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>)(
+            _v,
+          )
+        : ((t) => errAt(`expected id, got ${tokName(t)}`, lt))(_v))(lt.tok);
   },
 );
 /**
@@ -245,17 +318,26 @@ const expectId: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], PEr
  * a value rather than a spelling, so `true`/`false` are not labels.
  */
 const keywordText: (t: Tok) => Option<string> = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TLet" }, () => Some("let") as Option<string>)
-    .with({ _tag: "TType" }, () => Some("type") as Option<string>)
-    .with({ _tag: "TExtern" }, () => Some("extern") as Option<string>)
-    .with({ _tag: "TSwitch" }, () => Some("switch") as Option<string>)
-    .with({ _tag: "TLoop" }, () => Some("loop") as Option<string>)
-    .with({ _tag: "TRecur" }, () => Some("recur") as Option<string>)
-    .with({ _tag: "TDo" }, () => Some("do") as Option<string>)
-    .with({ _tag: "TImport" }, () => Some("import") as Option<string>)
-    .with({ _tag: "TExport" }, () => Some("export") as Option<string>)
-    .otherwise(() => None as Option<string>);
+  ((_v) =>
+    _v._tag === "TLet"
+      ? (Some("let") as Option<string>)
+      : _v._tag === "TType"
+        ? (Some("type") as Option<string>)
+        : _v._tag === "TExtern"
+          ? (Some("extern") as Option<string>)
+          : _v._tag === "TSwitch"
+            ? (Some("switch") as Option<string>)
+            : _v._tag === "TLoop"
+              ? (Some("loop") as Option<string>)
+              : _v._tag === "TRecur"
+                ? (Some("recur") as Option<string>)
+                : _v._tag === "TDo"
+                  ? (Some("do") as Option<string>)
+                  : _v._tag === "TImport"
+                    ? (Some("import") as Option<string>)
+                    : _v._tag === "TExport"
+                      ? (Some("export") as Option<string>)
+                      : (None as Option<string>))(t);
 /**
  * Label in JSX attrs / record fields / `.field` projection: `tone` or `$tone`
  * (styled-cva). Since ADR 0047 `$` is an ordinary identifier char, so a plain
@@ -267,26 +349,27 @@ const expectLabel: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], 
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return match(keywordText(lt.tok))
-      .with(
-        { _tag: "Some" },
-        ({ value: name }) =>
-          Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
-      )
-      .with({ _tag: "None" }, () => expectId(toks, pos))
-      .exhaustive();
+    return ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: name }) =>
+            Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>)(
+            _v,
+          )
+        : _v._tag === "None"
+          ? expectId(toks, pos)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(keywordText(lt.tok));
   },
 );
 const expectStr: _Curry<[toks: LocTok[], pos: number], Result<[string, number], PErr>> = _curry(
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return match(lt.tok)
-      .with(
-        { _tag: "TStr" },
-        ({ value }) => Ok(_tuple(value, pos + 1)) as Result<[string, number], PErr>,
-      )
-      .otherwise((t) => errAt(`expected str, got ${tokName(t)}`, lt));
+    return ((_v) =>
+      _v._tag === "TStr"
+        ? (({ value }) => Ok(_tuple(value, pos + 1)) as Result<[string, number], PErr>)(_v)
+        : ((t) => errAt(`expected str, got ${tokName(t)}`, lt))(_v))(lt.tok);
   },
 );
 /**
@@ -406,145 +489,173 @@ const listUntilH: <B, C, D>(
 const scanLambdaDepth: _Curry<[toks: LocTok[], k: number, depth: number], boolean> = _curry(
   3,
   (toks: LocTok[], k: number, depth: number) =>
-    match(tokAt(toks, k).tok)
-      .with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, k + 1, depth + 1))
-      .with({ _tag: "TRparen" }, () =>
-        eq(depth, 1)
-          ? eq(tokAt(toks, k + 1).tok, TArrow as Tok)
-          : scanLambdaDepth(toks, k + 1, depth - 1),
-      )
-      .with({ _tag: "TEof" }, () => false)
-      .otherwise(() => scanLambdaDepth(toks, k + 1, depth)),
+    ((_v) =>
+      _v._tag === "TLparen"
+        ? scanLambdaDepth(toks, k + 1, depth + 1)
+        : _v._tag === "TRparen"
+          ? eq(depth, 1)
+            ? eq(tokAt(toks, k + 1).tok, TArrow as Tok)
+            : scanLambdaDepth(toks, k + 1, depth - 1)
+          : _v._tag === "TEof"
+            ? false
+            : scanLambdaDepth(toks, k + 1, depth))(tokAt(toks, k).tok),
 );
 const looksLikeLambda: _Curry<[toks: LocTok[], pos: number], boolean> = _curry(
   2,
   (toks: LocTok[], pos: number) =>
-    match(tokAt(toks, pos).tok)
-      .with({ _tag: "TId" }, () => eq(tokAt(toks, pos + 1).tok, TArrow as Tok))
-      .with({ _tag: "TLparen" }, () => scanLambdaDepth(toks, pos, 0))
-      .otherwise(() => false),
+    ((_v) =>
+      _v._tag === "TId"
+        ? eq(tokAt(toks, pos + 1).tok, TArrow as Tok)
+        : _v._tag === "TLparen"
+          ? scanLambdaDepth(toks, pos, 0)
+          : false)(tokAt(toks, pos).tok),
 );
 /**
  * The span of a node, for composite spans (TS reads `.span` directly).
  */
 const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  match(e)
-    .with({ _tag: "ENum" }, ({ span: sp }) => sp)
-    .with({ _tag: "EUnit" }, ({ span: sp }) => sp)
-    .with({ _tag: "EBool" }, ({ span: sp }) => sp)
-    .with({ _tag: "EStr" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERef" }, ({ span: sp }) => sp)
-    .with({ _tag: "ECall" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELambda" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELetIn" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELetBind" }, ({ span: sp }) => sp)
-    .with({ _tag: "EPipe" }, ({ span: sp }) => sp)
-    .with({ _tag: "EDo" }, ({ span: sp }) => sp)
-    .with({ _tag: "ETernary" }, ({ span: sp }) => sp)
-    .with({ _tag: "EMatch" }, ({ span: sp }) => sp)
-    .with({ _tag: "ELoop" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERecur" }, ({ span: sp }) => sp)
-    .with({ _tag: "ERecord" }, ({ span: sp }) => sp)
-    .with({ _tag: "EField" }, ({ span: sp }) => sp)
-    .with({ _tag: "ETuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "EArr" }, ({ span: sp }) => sp)
-    .with({ _tag: "EList" }, ({ span: sp }) => sp)
-    .with({ _tag: "ESet" }, ({ span: sp }) => sp)
-    .with({ _tag: "EMap" }, ({ span: sp }) => sp)
-    .with({ _tag: "EInterp" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "ENum"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "EUnit"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "EBool"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "EStr"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "ERef"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "ECall"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "ELambda"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "ELetIn"
+                    ? (({ span: sp }) => sp)(_v)
+                    : _v._tag === "ELetBind"
+                      ? (({ span: sp }) => sp)(_v)
+                      : _v._tag === "EPipe"
+                        ? (({ span: sp }) => sp)(_v)
+                        : _v._tag === "EDo"
+                          ? (({ span: sp }) => sp)(_v)
+                          : _v._tag === "ETernary"
+                            ? (({ span: sp }) => sp)(_v)
+                            : _v._tag === "EMatch"
+                              ? (({ span: sp }) => sp)(_v)
+                              : _v._tag === "ELoop"
+                                ? (({ span: sp }) => sp)(_v)
+                                : _v._tag === "ERecur"
+                                  ? (({ span: sp }) => sp)(_v)
+                                  : _v._tag === "ERecord"
+                                    ? (({ span: sp }) => sp)(_v)
+                                    : _v._tag === "EField"
+                                      ? (({ span: sp }) => sp)(_v)
+                                      : _v._tag === "ETuple"
+                                        ? (({ span: sp }) => sp)(_v)
+                                        : _v._tag === "EArr"
+                                          ? (({ span: sp }) => sp)(_v)
+                                          : _v._tag === "EList"
+                                            ? (({ span: sp }) => sp)(_v)
+                                            : _v._tag === "ESet"
+                                              ? (({ span: sp }) => sp)(_v)
+                                              : _v._tag === "EMap"
+                                                ? (({ span: sp }) => sp)(_v)
+                                                : _v._tag === "EInterp"
+                                                  ? (({ span: sp }) => sp)(_v)
+                                                  : (() => {
+                                                      throw new Error("non-exhaustive match");
+                                                    })())(e);
 const tySpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) =>
-  match(t)
-    .with({ _tag: "TyName" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyArrow" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyApp" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyTuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyList" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyQual" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyLit" }, ({ span: sp }) => sp)
-    .with({ _tag: "TyUnion" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "TyName"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "TyArrow"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "TyApp"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "TyTuple"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "TyList"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "TyQual"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "TyLit"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "TyUnion"
+                    ? (({ span: sp }) => sp)(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(t);
 const parseParam: _Curry<[toks: LocTok[], pos: number], Result<[LamParam, number], PErr>> = _curry(
   2,
   (toks: LocTok[], pos: number) =>
-    match(tokAt(toks, pos).tok)
-      .with({ _tag: "TLbrace" }, () =>
-        _Result_flatMap(
-          ([fields, p]) =>
-            _Result_flatMap(
-              (p2) =>
-                Ok(
-                  _tuple(
-                    Ast.LPSpanned(
-                      Ast.LPRecord(map((f: Name) => f.name, fields)),
-                      map((f: Name) => f.span, fields),
+    ((_v) =>
+      _v._tag === "TLbrace"
+        ? _Result_flatMap(
+            ([fields, p]) =>
+              _Result_flatMap(
+                (p2) =>
+                  Ok(
+                    _tuple(
+                      Ast.LPSpanned(
+                        Ast.LPRecord(map((f: Name) => f.name, fields)),
+                        map((f: Name) => f.span, fields),
+                      ),
+                      p2,
                     ),
-                    p2,
-                  ),
-                ) as Result<[LamParam, number], PErr>,
-              expectTok(TRbrace as Tok, toks, p),
-            ),
-          listUntil(TRbrace as Tok, expectId, toks, pos + 1),
-        ),
-      )
-      .with({ _tag: "TLparen" }, () =>
-        _Result_flatMap(
-          ([names, p]) =>
-            _Result_flatMap(
-              (p2) =>
-                Ok(
-                  match(names)
-                    .with(
-                      (_v) => {
-                        const _g: any = _v;
-                        return _g.length === 1;
-                      },
-                      ([single]) =>
+                  ) as Result<[LamParam, number], PErr>,
+                expectTok(TRbrace as Tok, toks, p),
+              ),
+            listUntil(TRbrace as Tok, expectId, toks, pos + 1),
+          )
+        : _v._tag === "TLparen"
+          ? _Result_flatMap(
+              ([names, p]) =>
+                _Result_flatMap(
+                  (p2) =>
+                    Ok(
+                      ((_v) =>
+                        _v.length === 1
+                          ? (([single]) =>
+                              _tuple(
+                                Ast.LPSpanned(Ast.LPName(single.name, None as Option<TypeExpr>), [
+                                  single.span,
+                                ]),
+                                p2,
+                              ))(_v)
+                          : ((many) =>
+                              _tuple(
+                                Ast.LPSpanned(
+                                  Ast.LPTuple(map((n: Name) => n.name, many)),
+                                  map((n: Name) => n.span, many),
+                                ),
+                                p2,
+                              ))(_v))(names),
+                    ) as Result<[LamParam, number], PErr>,
+                  expectTok(TRparen as Tok, toks, p),
+                ),
+              sepBy(expectId, toks, pos + 1, [] as Name[]),
+            )
+          : _Result_flatMap(
+              ([nm, p]) =>
+                eq(tokAt(toks, p).tok, TColon as Tok)
+                  ? _Result_map(
+                      ([annot, p2]: [TypeExpr, number]) =>
                         _tuple(
-                          Ast.LPSpanned(Ast.LPName(single.name, None as Option<TypeExpr>), [
-                            single.span,
+                          Ast.LPSpanned(Ast.LPName(nm.name, Some(annot) as Option<TypeExpr>), [
+                            nm.span,
                           ]),
                           p2,
                         ),
+                      parseTypeExpr(toks, p + 1),
                     )
-                    .otherwise((many) =>
+                  : (Ok(
                       _tuple(
-                        Ast.LPSpanned(
-                          Ast.LPTuple(map((n: Name) => n.name, many)),
-                          map((n: Name) => n.span, many),
-                        ),
-                        p2,
+                        Ast.LPSpanned(Ast.LPName(nm.name, None as Option<TypeExpr>), [nm.span]),
+                        p,
                       ),
-                    ),
-                ) as Result<[LamParam, number], PErr>,
-              expectTok(TRparen as Tok, toks, p),
-            ),
-          sepBy(expectId, toks, pos + 1, [] as Name[]),
-        ),
-      )
-      .otherwise(() =>
-        _Result_flatMap(
-          ([nm, p]) =>
-            eq(tokAt(toks, p).tok, TColon as Tok)
-              ? _Result_map(
-                  ([annot, p2]: [TypeExpr, number]) =>
-                    _tuple(
-                      Ast.LPSpanned(Ast.LPName(nm.name, Some(annot) as Option<TypeExpr>), [
-                        nm.span,
-                      ]),
-                      p2,
-                    ),
-                  parseTypeExpr(toks, p + 1),
-                )
-              : (Ok(
-                  _tuple(
-                    Ast.LPSpanned(Ast.LPName(nm.name, None as Option<TypeExpr>), [nm.span]),
-                    p,
-                  ),
-                ) as Result<[LamParam, number], PErr>),
-          expectId(toks, pos),
-        ),
-      ),
+                    ) as Result<[LamParam, number], PErr>),
+              expectId(toks, pos),
+            ))(tokAt(toks, pos).tok),
 );
 /**
  * `~name`, `~name?`, `~name: T`, `~name = e`, `~name: T = e` (ADR 0098 §2).
@@ -644,37 +755,29 @@ const parseLamParam: _Curry<
       : parseParam(toks, pos),
 );
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
-  match(p)
-    .with({ _tag: "LPLabeled" }, () => true)
-    .with({ _tag: "LPSpanned" }, ({ param: inner }) => isLabeledParam(inner))
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "LPLabeled"
+      ? true
+      : _v._tag === "LPSpanned"
+        ? (({ param: inner }) => isLabeledParam(inner))(_v)
+        : false)(p);
 /**
  * True when every labeled parameter (if any) sits after every positional one.
  */
 const labeledTrailing: _Curry<[params: LamParam[], seen: boolean], boolean> = _curry(
   2,
   (params: LamParam[], seen: boolean) =>
-    match(params)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => true,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([p, ...rest]) =>
-          isLabeledParam(p)
-            ? labeledTrailing(rest, true)
-            : and(not(seen), labeledTrailing(rest, false)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? true
+        : _v.length >= 1
+          ? (([p, ...rest]) =>
+              isLabeledParam(p)
+                ? labeledTrailing(rest, true)
+                : and(not(seen), labeledTrailing(rest, false)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(params),
 );
 const parseLambda: _Curry<
   [
@@ -699,58 +802,56 @@ const parseLambda: _Curry<
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const start: SpanAt = spanOf(tokAt(toks, pos));
-    return match(tokAt(toks, pos).tok)
-      .with({ _tag: "TId" }, ({ value: name }) =>
-        _Result_flatMap(
-          (p) =>
+    return ((_v) =>
+      _v._tag === "TId"
+        ? (({ value: name }) =>
             _Result_flatMap(
-              ([body, p2]) =>
-                Ok(
-                  _tuple(
-                    Ast.ELambda(
-                      [
-                        Ast.LPSpanned(Ast.LPName(name, None as Option<TypeExpr>), [
-                          spanOf(tokAt(toks, pos)),
-                        ]),
-                      ],
-                      body,
-                      toEnd(start, toks, p2),
-                    ),
-                    p2,
-                  ),
-                ) as Result<[Expr, number], PErr>,
-              parseLambdaBody(toks, p, hooks),
-            ),
-          expectTok(TArrow as Tok, toks, pos + 1),
-        ),
-      )
-      .otherwise(() =>
-        _Result_flatMap(
-          (p) =>
-            _Result_flatMap(
-              ([params, p2]) =>
+              (p) =>
                 _Result_flatMap(
-                  (p3) =>
-                    labeledTrailing(params, false)
-                      ? _Result_flatMap(
-                          (p4) =>
-                            _Result_flatMap(
-                              ([body, p5]) =>
-                                Ok(
-                                  _tuple(Ast.ELambda(params, body, toEnd(start, toks, p5)), p5),
-                                ) as Result<[Expr, number], PErr>,
-                              parseLambdaBody(toks, p4, hooks),
-                            ),
-                          expectTok(TArrow as Tok, toks, p3),
-                        )
-                      : errAt("labeled parameters must be a trailing group", tokAt(toks, p)),
-                  expectTok(TRparen as Tok, toks, p2),
+                  ([body, p2]) =>
+                    Ok(
+                      _tuple(
+                        Ast.ELambda(
+                          [
+                            Ast.LPSpanned(Ast.LPName(name, None as Option<TypeExpr>), [
+                              spanOf(tokAt(toks, pos)),
+                            ]),
+                          ],
+                          body,
+                          toEnd(start, toks, p2),
+                        ),
+                        p2,
+                      ),
+                    ) as Result<[Expr, number], PErr>,
+                  parseLambdaBody(toks, p, hooks),
                 ),
-              listUntilH(TRparen as Tok, parseLamParam, toks, p, hooks),
-            ),
-          expectTok(TLparen as Tok, toks, pos),
-        ),
-      );
+              expectTok(TArrow as Tok, toks, pos + 1),
+            ))(_v)
+        : _Result_flatMap(
+            (p) =>
+              _Result_flatMap(
+                ([params, p2]) =>
+                  _Result_flatMap(
+                    (p3) =>
+                      labeledTrailing(params, false)
+                        ? _Result_flatMap(
+                            (p4) =>
+                              _Result_flatMap(
+                                ([body, p5]) =>
+                                  Ok(
+                                    _tuple(Ast.ELambda(params, body, toEnd(start, toks, p5)), p5),
+                                  ) as Result<[Expr, number], PErr>,
+                                parseLambdaBody(toks, p4, hooks),
+                              ),
+                            expectTok(TArrow as Tok, toks, p3),
+                          )
+                        : errAt("labeled parameters must be a trailing group", tokAt(toks, p)),
+                    expectTok(TRparen as Tok, toks, p2),
+                  ),
+                listUntilH(TRparen as Tok, parseLamParam, toks, p, hooks),
+              ),
+            expectTok(TLparen as Tok, toks, pos),
+          ))(tokAt(toks, pos).tok);
   },
 );
 const parseLambdaBody: _Curry<
@@ -782,14 +883,18 @@ const parseLambdaBody: _Curry<
 const arrowBodyIsDoBlock: _Curry<[toks: LocTok[], pos: number, depth: number], boolean> = _curry(
   3,
   (toks: LocTok[], pos: number, depth: number) =>
-    match(tokAt(toks, pos).tok)
-      .with({ _tag: "TLbrace" }, () => arrowBodyIsDoBlock(toks, pos + 1, depth + 1))
-      .with({ _tag: "TRbrace" }, () =>
-        eq(depth, 1) ? false : arrowBodyIsDoBlock(toks, pos + 1, depth - 1),
-      )
-      .with({ _tag: "TSemi" }, () => or(eq(depth, 1), arrowBodyIsDoBlock(toks, pos + 1, depth)))
-      .with({ _tag: "TEof" }, () => false)
-      .otherwise(() => arrowBodyIsDoBlock(toks, pos + 1, depth)),
+    ((_v) =>
+      _v._tag === "TLbrace"
+        ? arrowBodyIsDoBlock(toks, pos + 1, depth + 1)
+        : _v._tag === "TRbrace"
+          ? eq(depth, 1)
+            ? false
+            : arrowBodyIsDoBlock(toks, pos + 1, depth - 1)
+          : _v._tag === "TSemi"
+            ? or(eq(depth, 1), arrowBodyIsDoBlock(toks, pos + 1, depth))
+            : _v._tag === "TEof"
+              ? false
+              : arrowBodyIsDoBlock(toks, pos + 1, depth))(tokAt(toks, pos).tok),
 );
 const parseLetIn: _Curry<
   [
@@ -960,38 +1065,65 @@ const mkBinCall: _Curry<[fnName: string, opSpan: SpanAt, left: Expr, right: Expr
     ),
 );
 const opFnName: (t: Tok) => string = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TPlus" }, () => "add")
-    .with({ _tag: "TMinus" }, () => "sub")
-    .with({ _tag: "TStar" }, () => "mul")
-    .with({ _tag: "TSlash" }, () => "div")
-    .with({ _tag: "TPercent" }, () => "mod")
-    .with({ _tag: "TAndand" }, () => "and")
-    .with({ _tag: "TOror" }, () => "or")
-    .with({ _tag: "TConcat" }, () => "concat")
-    .with({ _tag: "TEqeq" }, () => "eq")
-    .with({ _tag: "TLt" }, () => "lt")
-    .with({ _tag: "TLte" }, () => "lte")
-    .with({ _tag: "TGt" }, () => "gt")
-    .with({ _tag: "TGte" }, () => "gte")
-    .otherwise(() => "eq");
+  ((_v) =>
+    _v._tag === "TPlus"
+      ? "add"
+      : _v._tag === "TMinus"
+        ? "sub"
+        : _v._tag === "TStar"
+          ? "mul"
+          : _v._tag === "TSlash"
+            ? "div"
+            : _v._tag === "TPercent"
+              ? "mod"
+              : _v._tag === "TAndand"
+                ? "and"
+                : _v._tag === "TOror"
+                  ? "or"
+                  : _v._tag === "TConcat"
+                    ? "concat"
+                    : _v._tag === "TEqeq"
+                      ? "eq"
+                      : _v._tag === "TLt"
+                        ? "lt"
+                        : _v._tag === "TLte"
+                          ? "lte"
+                          : _v._tag === "TGt"
+                            ? "gt"
+                            : _v._tag === "TGte"
+                              ? "gte"
+                              : "eq")(t);
 const isSectionOp: (t: Tok) => boolean = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TPlus" }, () => true)
-    .with({ _tag: "TMinus" }, () => true)
-    .with({ _tag: "TStar" }, () => true)
-    .with({ _tag: "TSlash" }, () => true)
-    .with({ _tag: "TPercent" }, () => true)
-    .with({ _tag: "TAndand" }, () => true)
-    .with({ _tag: "TOror" }, () => true)
-    .with({ _tag: "TConcat" }, () => true)
-    .with({ _tag: "TEqeq" }, () => true)
-    .with({ _tag: "TNeq" }, () => true)
-    .with({ _tag: "TLt" }, () => true)
-    .with({ _tag: "TLte" }, () => true)
-    .with({ _tag: "TGt" }, () => true)
-    .with({ _tag: "TGte" }, () => true)
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TPlus"
+      ? true
+      : _v._tag === "TMinus"
+        ? true
+        : _v._tag === "TStar"
+          ? true
+          : _v._tag === "TSlash"
+            ? true
+            : _v._tag === "TPercent"
+              ? true
+              : _v._tag === "TAndand"
+                ? true
+                : _v._tag === "TOror"
+                  ? true
+                  : _v._tag === "TConcat"
+                    ? true
+                    : _v._tag === "TEqeq"
+                      ? true
+                      : _v._tag === "TNeq"
+                        ? true
+                        : _v._tag === "TLt"
+                          ? true
+                          : _v._tag === "TLte"
+                            ? true
+                            : _v._tag === "TGt"
+                              ? true
+                              : _v._tag === "TGte"
+                                ? true
+                                : false)(t);
 const sectionBody: _Curry<[opTok: Tok, x: Expr, y: Expr, opSpan: SpanAt], Expr> = _curry(
   4,
   (opTok: Tok, x: Expr, y: Expr, opSpan: SpanAt) => {
@@ -1107,21 +1239,31 @@ const binCallOrLeftSection: _Curry<
         ),
 );
 const isCmpTok: (t: Tok) => boolean = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TEqeq" }, () => true)
-    .with({ _tag: "TNeq" }, () => true)
-    .with({ _tag: "TLt" }, () => true)
-    .with({ _tag: "TLte" }, () => true)
-    .with({ _tag: "TGt" }, () => true)
-    .with({ _tag: "TGte" }, () => true)
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TEqeq"
+      ? true
+      : _v._tag === "TNeq"
+        ? true
+        : _v._tag === "TLt"
+          ? true
+          : _v._tag === "TLte"
+            ? true
+            : _v._tag === "TGt"
+              ? true
+              : _v._tag === "TGte"
+                ? true
+                : false)(t);
 const cmpFnName: (t: Tok) => string = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TLt" }, () => "lt")
-    .with({ _tag: "TLte" }, () => "lte")
-    .with({ _tag: "TGt" }, () => "gt")
-    .with({ _tag: "TGte" }, () => "gte")
-    .otherwise(() => "eq");
+  ((_v) =>
+    _v._tag === "TLt"
+      ? "lt"
+      : _v._tag === "TLte"
+        ? "lte"
+        : _v._tag === "TGt"
+          ? "gt"
+          : _v._tag === "TGte"
+            ? "gte"
+            : "eq")(t);
 const parseInfix: _Curry<
   [
     toks: LocTok[],
@@ -1162,19 +1304,15 @@ const parseInfix: _Curry<
       : and(eq(lt.tok, TTarrow as Tok), FAST_PIPE_BP >= minBp)
         ? _Result_flatMap(
             ([right, p]) =>
-              match(right)
-                .with(
-                  { _tag: "ECall" },
-                  ({ span: rightSpan }) =>
-                    Ok({
-                      left: Ast.EPipe(left, right, true, spanning(exprSpan(left), rightSpan)),
-                      p: p,
-                      matched: true,
-                    }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
-                )
-                .otherwise(() =>
-                  errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt),
-                ),
+              ((_v) =>
+                _v._tag === "ECall"
+                  ? (({ span: rightSpan }) =>
+                      Ok({
+                        left: Ast.EPipe(left, right, true, spanning(exprSpan(left), rightSpan)),
+                        p: p,
+                        matched: true,
+                      }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>)(_v)
+                  : errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt))(right),
             parseAtomOrCall(toks, pos + 1, hooks),
           )
         : and(eq(lt.tok, TCompose as Tok), COMPOSE_BP >= minBp)
@@ -1395,10 +1533,10 @@ const parseExprBp: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    match(tokAt(toks, pos).tok)
-      .with({ _tag: "TLet" }, () => parseLetIn(toks, pos, hooks))
-      .otherwise(() =>
-        and(eq(minBp, 0), looksLikeLambda(toks, pos))
+    ((_v) =>
+      _v._tag === "TLet"
+        ? parseLetIn(toks, pos, hooks)
+        : and(eq(minBp, 0), looksLikeLambda(toks, pos))
           ? parseLambda(toks, pos, hooks)
           : _Result_flatMap(
               ([left, p]) =>
@@ -1410,8 +1548,7 @@ const parseExprBp: _Curry<
                   infixLoop(toks, minBp, left, p, hooks),
                 ),
               parseAtomOrCall(toks, pos, hooks),
-            ),
-      ),
+            ))(tokAt(toks, pos).tok),
 );
 const parseExpr: _Curry<
   [
@@ -1485,10 +1622,14 @@ const parseCallPart: _Curry<
       : _Result_map(([v, k]: [Expr, number]) => _tuple(CPPos(v), k), parseExpr(toks, pos, hooks)),
 );
 const callPartSpan: (p: CallPart) => SpanAt = (p: CallPart) =>
-  match(p)
-    .with({ _tag: "CPPos" }, ({ value }) => exprSpan(value))
-    .with({ _tag: "CPLab" }, ({ value, labelSpan }) => spanning(labelSpan, exprSpan(value)))
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "CPPos"
+      ? (({ value }) => exprSpan(value))(_v)
+      : _v._tag === "CPLab"
+        ? (({ value, labelSpan }) => spanning(labelSpan, exprSpan(value)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(p);
 /**
  * Positionals first, then a single trailing labeled group; a positional after
  * a label is an error, so the record argument is always last.
@@ -1497,69 +1638,49 @@ const splitCallParts: _Curry<
   [parts: CallPart[], positional: Expr[], labeled: CallPart[]],
   Result<[Expr[], CallPart[]], PErr>
 > = _curry(3, (parts: CallPart[], positional: Expr[], labeled: CallPart[]) =>
-  match(parts)
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length === 0;
-      },
-      () => Ok(_tuple(positional, labeled)) as Result<[Expr[], CallPart[]], PErr>,
-    )
-    .with(
-      (_v) => {
-        const _g: any = _v;
-        return _g.length >= 1;
-      },
-      ([p, ...rest]) =>
-        match(p)
-          .with({ _tag: "CPLab" }, () =>
-            splitCallParts(rest, positional, _Array_append(p, labeled)),
-          )
-          .with({ _tag: "CPPos" }, ({ value }) =>
-            match(labeled)
-              .with(
-                (_v) => {
-                  const _g: any = _v;
-                  return _g.length === 0;
-                },
-                () => splitCallParts(rest, _Array_append(value, positional), labeled),
-              )
-              .otherwise(() =>
-                errAt("labeled arguments must be a trailing group", callPartSpan(p)),
-              ),
-          )
-          .exhaustive(),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(positional, labeled)) as Result<[Expr[], CallPart[]], PErr>)
+      : _v.length >= 1
+        ? (([p, ...rest]) =>
+            ((_v) =>
+              _v._tag === "CPLab"
+                ? splitCallParts(rest, positional, _Array_append(p, labeled))
+                : _v._tag === "CPPos"
+                  ? (({ value }) =>
+                      ((_v) =>
+                        _v.length === 0
+                          ? splitCallParts(rest, _Array_append(value, positional), labeled)
+                          : errAt("labeled arguments must be a trailing group", callPartSpan(p)))(
+                        labeled,
+                      ))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(p))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(parts),
 );
 const labeledField: (p: CallPart) => Field = (p: CallPart) =>
-  match(p)
-    .with({ _tag: "CPLab" }, ({ name, value }) => ({ name: name, value: value }))
-    .with({ _tag: "CPPos" }, ({ value }) => ({ name: "", value: value }))
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "CPLab"
+      ? (({ name, value }) => ({ name: name, value: value }))(_v)
+      : _v._tag === "CPPos"
+        ? (({ value }) => ({ name: "", value: value }))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(p);
 const unionSpans: _Curry<[parts: CallPart[], acc: SpanAt], SpanAt> = _curry(
   2,
   (parts: CallPart[], acc: SpanAt) =>
-    match(parts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length === 0;
-        },
-        () => acc,
-      )
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([p, ...rest]) => unionSpans(rest, spanning(acc, callPartSpan(p))),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+    ((_v) =>
+      _v.length === 0
+        ? acc
+        : _v.length >= 1
+          ? (([p, ...rest]) => unionSpans(rest, spanning(acc, callPartSpan(p))))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(parts),
 );
 /**
  * A trailing labeled group collapses to one record argument, tagged
@@ -1570,35 +1691,25 @@ const callArgsOf: (parts: CallPart[]) => Result<[Expr[], Option<string>], PErr> 
 ) =>
   _Result_map(
     ([positional, labeled]: [Expr[], CallPart[]]) =>
-      match(labeled)
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length === 0;
-          },
-          () => _tuple(positional, None as Option<string>),
-        )
-        .with(
-          (_v) => {
-            const _g: any = _v;
-            return _g.length >= 1;
-          },
-          ([first, ...rest]) =>
-            _tuple(
-              _Array_append(
-                Ast.ERecord(
-                  map(labeledField, labeled),
-                  None as Option<Expr>,
-                  unionSpans(rest, callPartSpan(first)),
-                ),
-                positional,
-              ),
-              Some("labeled") as Option<string>,
-            ),
-        )
-        .otherwise(() => {
-          throw new Error("non-exhaustive match");
-        }),
+      ((_v) =>
+        _v.length === 0
+          ? _tuple(positional, None as Option<string>)
+          : _v.length >= 1
+            ? (([first, ...rest]) =>
+                _tuple(
+                  _Array_append(
+                    Ast.ERecord(
+                      map(labeledField, labeled),
+                      None as Option<Expr>,
+                      unionSpans(rest, callPartSpan(first)),
+                    ),
+                    positional,
+                  ),
+                  Some("labeled") as Option<string>,
+                ))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(labeled),
     splitCallParts(parts, [] as Expr[], [] as CallPart[]),
   );
 const postfixLoop: _Curry<
@@ -1625,40 +1736,38 @@ const postfixLoop: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    match(tokAt(toks, pos).tok)
-      .with({ _tag: "TLparen" }, () =>
-        _Result_flatMap(
-          ([parts, p]) =>
-            _Result_flatMap(
-              (p2) =>
-                _Result_flatMap(
-                  ([args, origin]) =>
-                    postfixLoop(
-                      toks,
-                      Ast.ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)),
-                      p2,
-                      hooks,
-                    ),
-                  callArgsOf(parts),
+    ((_v) =>
+      _v._tag === "TLparen"
+        ? _Result_flatMap(
+            ([parts, p]) =>
+              _Result_flatMap(
+                (p2) =>
+                  _Result_flatMap(
+                    ([args, origin]) =>
+                      postfixLoop(
+                        toks,
+                        Ast.ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)),
+                        p2,
+                        hooks,
+                      ),
+                    callArgsOf(parts),
+                  ),
+                expectTok(TRparen as Tok, toks, p),
+              ),
+            listUntilH(TRparen as Tok, parseCallPart, toks, pos + 1, hooks),
+          )
+        : _v._tag === "TDot"
+          ? _Result_flatMap(
+              ([id, p]) =>
+                postfixLoop(
+                  toks,
+                  Ast.EField(e, id.name, false, spanning(exprSpan(e), id.span)),
+                  p,
+                  hooks,
                 ),
-              expectTok(TRparen as Tok, toks, p),
-            ),
-          listUntilH(TRparen as Tok, parseCallPart, toks, pos + 1, hooks),
-        ),
-      )
-      .with({ _tag: "TDot" }, () =>
-        _Result_flatMap(
-          ([id, p]) =>
-            postfixLoop(
-              toks,
-              Ast.EField(e, id.name, false, spanning(exprSpan(e), id.span)),
-              p,
-              hooks,
-            ),
-          expectLabel(toks, pos + 1),
-        ),
-      )
-      .otherwise(() => Ok(_tuple(e, pos)) as Result<[Expr, number], PErr>),
+              expectLabel(toks, pos + 1),
+            )
+          : (Ok(_tuple(e, pos)) as Result<[Expr, number], PErr>))(tokAt(toks, pos).tok),
 );
 const parseAtomOrCall: _Curry<
   [
@@ -1727,90 +1836,140 @@ const parseAtom: _Curry<
   ) => {
     const lt = tokAt(toks, pos);
     const sp: SpanAt = spanOf(lt);
-    return match(lt.tok)
-      .with({ _tag: "TSwitch" }, () => parseMatch(toks, pos, hooks))
-      .with({ _tag: "TDo" }, () => parseDo(toks, pos, hooks))
-      .with({ _tag: "TLoop" }, () => parseLoop(toks, pos, hooks))
-      .with({ _tag: "TRecur" }, () => parseRecur(toks, pos, hooks))
-      .with({ _tag: "TLbrace" }, () => parseRecord(toks, pos, hooks))
-      .with({ _tag: "TLbracket" }, () => parseArr(toks, pos, hooks))
-      .with({ _tag: "TAt" }, () => parseList(toks, pos, hooks))
-      .with({ _tag: "THash" }, () => parseHash(toks, pos, hooks))
-      .with({ _tag: "TTmplStart" }, () => parseInterp(toks, pos, hooks))
-      .otherwise(() =>
-        _Result_flatMap(
-          (claimed) =>
-            match(claimed)
-              .with(
-                (_v): _v is Extract<Option<[Expr, number]>, { _tag: "Some" }> => {
-                  const _g: any = _v;
-                  return _g._tag === "Some";
-                },
-                ({ value: [e, p] }) => Ok(_tuple(e, p)) as Result<[Expr, number], PErr>,
-              )
-              .with({ _tag: "None" }, () =>
-                match(lt.tok)
-                  .with(
-                    { _tag: "TNum" },
-                    ({ value, raw }) =>
-                      Ok(_tuple(Ast.ENum(value, raw, sp), pos + 1)) as Result<[Expr, number], PErr>,
-                  )
-                  .with(
-                    { _tag: "TBool" },
-                    ({ value }) =>
-                      Ok(_tuple(Ast.EBool(value, sp), pos + 1)) as Result<[Expr, number], PErr>,
-                  )
-                  .with(
-                    { _tag: "TStr" },
-                    ({ value }) =>
-                      Ok(_tuple(Ast.EStr(value, sp), pos + 1)) as Result<[Expr, number], PErr>,
-                  )
-                  .with(
-                    { _tag: "TId" },
-                    ({ value: name }) =>
-                      Ok(_tuple(Ast.ERef(name, sp), pos + 1)) as Result<[Expr, number], PErr>,
-                  )
-                  .with({ _tag: "TLparen" }, () =>
-                    ((nxt) =>
-                      eq(nxt.tok, TRparen as Tok)
-                        ? (Ok(_tuple(Ast.EUnit(toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
-                            [Expr, number],
-                            PErr
-                          >)
-                        : and(isSectionOp(nxt.tok), not(eq(nxt.tok, TMinus as Tok)))
-                          ? parseRightSection(toks, sp, pos + 1, hooks)
-                          : _Result_flatMap(
-                              ([first, p]) =>
-                                eq(tokAt(toks, p).tok, TComma as Tok)
-                                  ? _Result_flatMap(
-                                      ([elements, p2]) =>
-                                        _Result_flatMap(
-                                          (p3) =>
-                                            Ok(
-                                              _tuple(Ast.ETuple(elements, toEnd(sp, toks, p3)), p3),
-                                            ) as Result<[Expr, number], PErr>,
-                                          expectTok(TRparen as Tok, toks, p2),
-                                        ),
-                                      sepByH(parseExpr, toks, p + 1, [first], hooks),
+    return ((_v) =>
+      _v._tag === "TSwitch"
+        ? parseMatch(toks, pos, hooks)
+        : _v._tag === "TDo"
+          ? parseDo(toks, pos, hooks)
+          : _v._tag === "TLoop"
+            ? parseLoop(toks, pos, hooks)
+            : _v._tag === "TRecur"
+              ? parseRecur(toks, pos, hooks)
+              : _v._tag === "TLbrace"
+                ? parseRecord(toks, pos, hooks)
+                : _v._tag === "TLbracket"
+                  ? parseArr(toks, pos, hooks)
+                  : _v._tag === "TAt"
+                    ? parseList(toks, pos, hooks)
+                    : _v._tag === "THash"
+                      ? parseHash(toks, pos, hooks)
+                      : _v._tag === "TTmplStart"
+                        ? parseInterp(toks, pos, hooks)
+                        : _Result_flatMap(
+                            (claimed) =>
+                              ((_v) =>
+                                _v._tag === "Some"
+                                  ? (({ value: [e, p] }) =>
+                                      Ok(_tuple(e, p)) as Result<[Expr, number], PErr>)(
+                                      _v as Extract<Option<[Expr, number]>, { _tag: "Some" }>,
                                     )
-                                  : _Result_map(
-                                      (p2: number) => _tuple(first, p2),
-                                      expectTok(TRparen as Tok, toks, p),
-                                    ),
-                              parseExpr(toks, pos + 1, hooks),
-                            ))(tokAt(toks, pos + 1)),
-                  )
-                  .otherwise((t) => errAt(`unexpected token ${tokName(t)}`, lt)),
-              )
-              .exhaustive(),
-          runParseHooks(
-            hooks,
-            toks,
-            pos,
-            _curry(2, (t: LocTok[], p: number) => parseExpr(t, p, hooks)),
-          ),
-        ),
-      );
+                                  : _v._tag === "None"
+                                    ? ((_v) =>
+                                        _v._tag === "TNum"
+                                          ? (({ value, raw }) =>
+                                              Ok(
+                                                _tuple(Ast.ENum(value, raw, sp), pos + 1),
+                                              ) as Result<[Expr, number], PErr>)(_v)
+                                          : _v._tag === "TBool"
+                                            ? (({ value }) =>
+                                                Ok(_tuple(Ast.EBool(value, sp), pos + 1)) as Result<
+                                                  [Expr, number],
+                                                  PErr
+                                                >)(_v)
+                                            : _v._tag === "TStr"
+                                              ? (({ value }) =>
+                                                  Ok(
+                                                    _tuple(Ast.EStr(value, sp), pos + 1),
+                                                  ) as Result<[Expr, number], PErr>)(_v)
+                                              : _v._tag === "TId"
+                                                ? (({ value: name }) =>
+                                                    Ok(
+                                                      _tuple(Ast.ERef(name, sp), pos + 1),
+                                                    ) as Result<[Expr, number], PErr>)(_v)
+                                                : _v._tag === "TLparen"
+                                                  ? ((nxt) =>
+                                                      eq(nxt.tok, TRparen as Tok)
+                                                        ? (Ok(
+                                                            _tuple(
+                                                              Ast.EUnit(toEnd(sp, toks, pos + 2)),
+                                                              pos + 2,
+                                                            ),
+                                                          ) as Result<[Expr, number], PErr>)
+                                                        : and(
+                                                              isSectionOp(nxt.tok),
+                                                              not(eq(nxt.tok, TMinus as Tok)),
+                                                            )
+                                                          ? parseRightSection(
+                                                              toks,
+                                                              sp,
+                                                              pos + 1,
+                                                              hooks,
+                                                            )
+                                                          : _Result_flatMap(
+                                                              ([first, p]) =>
+                                                                eq(
+                                                                  tokAt(toks, p).tok,
+                                                                  TComma as Tok,
+                                                                )
+                                                                  ? _Result_flatMap(
+                                                                      ([elements, p2]) =>
+                                                                        _Result_flatMap(
+                                                                          (p3) =>
+                                                                            Ok(
+                                                                              _tuple(
+                                                                                Ast.ETuple(
+                                                                                  elements,
+                                                                                  toEnd(
+                                                                                    sp,
+                                                                                    toks,
+                                                                                    p3,
+                                                                                  ),
+                                                                                ),
+                                                                                p3,
+                                                                              ),
+                                                                            ) as Result<
+                                                                              [Expr, number],
+                                                                              PErr
+                                                                            >,
+                                                                          expectTok(
+                                                                            TRparen as Tok,
+                                                                            toks,
+                                                                            p2,
+                                                                          ),
+                                                                        ),
+                                                                      sepByH(
+                                                                        parseExpr,
+                                                                        toks,
+                                                                        p + 1,
+                                                                        [first],
+                                                                        hooks,
+                                                                      ),
+                                                                    )
+                                                                  : _Result_map(
+                                                                      (p2: number) =>
+                                                                        _tuple(first, p2),
+                                                                      expectTok(
+                                                                        TRparen as Tok,
+                                                                        toks,
+                                                                        p,
+                                                                      ),
+                                                                    ),
+                                                              parseExpr(toks, pos + 1, hooks),
+                                                            ))(tokAt(toks, pos + 1))
+                                                  : ((t) =>
+                                                      errAt(`unexpected token ${tokName(t)}`, lt))(
+                                                      _v,
+                                                    ))(lt.tok)
+                                    : (() => {
+                                        throw new Error("non-exhaustive match");
+                                      })())(claimed),
+                            runParseHooks(
+                              hooks,
+                              toks,
+                              pos,
+                              _curry(2, (t: LocTok[], p: number) => parseExpr(t, p, hooks)),
+                            ),
+                          ))(lt.tok);
   },
 );
 const parseInterpLoop: _Curry<
@@ -1843,23 +2002,30 @@ const parseInterpLoop: _Curry<
       ([holeExpr, p]) =>
         ((acc2: InterpPart[]) =>
           ((lt) =>
-            match(lt.tok)
-              .with({ _tag: "TTmplMid" }, ({ value }) =>
-                parseInterpLoop(toks, p + 1, start, _Array_append(Ast.IPLit(value), acc2), hooks),
-              )
-              .with(
-                { _tag: "TTmplEnd" },
-                ({ value }) =>
-                  Ok(
-                    _tuple(
-                      Ast.EInterp(_Array_append(Ast.IPLit(value), acc2), toEnd(start, toks, p + 1)),
+            ((_v) =>
+              _v._tag === "TTmplMid"
+                ? (({ value }) =>
+                    parseInterpLoop(
+                      toks,
                       p + 1,
-                    ),
-                  ) as Result<[Expr, number], PErr>,
-              )
-              .otherwise((t) => errAt(`expected \${...} to close, got ${tokName(t)}`, lt)))(
-            tokAt(toks, p),
-          ))(_Array_append(Ast.IPExpr(holeExpr), acc)),
+                      start,
+                      _Array_append(Ast.IPLit(value), acc2),
+                      hooks,
+                    ))(_v)
+                : _v._tag === "TTmplEnd"
+                  ? (({ value }) =>
+                      Ok(
+                        _tuple(
+                          Ast.EInterp(
+                            _Array_append(Ast.IPLit(value), acc2),
+                            toEnd(start, toks, p + 1),
+                          ),
+                          p + 1,
+                        ),
+                      ) as Result<[Expr, number], PErr>)(_v)
+                  : ((t) => errAt(`expected \${...} to close, got ${tokName(t)}`, lt))(_v))(
+              lt.tok,
+            ))(tokAt(toks, p)))(_Array_append(Ast.IPExpr(holeExpr), acc)),
       parseExpr(toks, pos, hooks),
     ),
 );
@@ -1886,11 +2052,10 @@ const parseInterp: _Curry<
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const lt = tokAt(toks, pos);
-    return match(lt.tok)
-      .with({ _tag: "TTmplStart" }, ({ value }) =>
-        parseInterpLoop(toks, pos + 1, spanOf(lt), [Ast.IPLit(value)], hooks),
-      )
-      .otherwise((t) => errAt(`expected tmplstart, got ${tokName(t)}`, lt));
+    return ((_v) =>
+      _v._tag === "TTmplStart"
+        ? (({ value }) => parseInterpLoop(toks, pos + 1, spanOf(lt), [Ast.IPLit(value)], hooks))(_v)
+        : ((t) => errAt(`expected tmplstart, got ${tokName(t)}`, lt))(_v))(lt.tok);
   },
 );
 const parseField: _Curry<
@@ -2297,33 +2462,47 @@ const parseGuard: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    match(tokAt(toks, pos).tok)
-      .with({ _tag: "TId", value: "when" }, () =>
-        _Result_map(
-          ([g, p]: [Expr, number]) => _tuple(Some(g) as Option<Expr>, p),
-          parseExpr(toks, pos + 1, hooks),
-        ),
-      )
-      .otherwise(
-        () => Ok(_tuple(None as Option<Expr>, pos)) as Result<[Option<Expr>, number], PErr>,
-      ),
+    ((_v) =>
+      _v._tag === "TId" && _v.value === "when"
+        ? _Result_map(
+            ([g, p]: [Expr, number]) => _tuple(Some(g) as Option<Expr>, p),
+            parseExpr(toks, pos + 1, hooks),
+          )
+        : (Ok(_tuple(None as Option<Expr>, pos)) as Result<[Option<Expr>, number], PErr>))(
+      tokAt(toks, pos).tok,
+    ),
 );
 const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
-  match(p)
-    .with({ _tag: "PWild" }, ({ span: sp }) => sp)
-    .with({ _tag: "PUnit" }, ({ span: sp }) => sp)
-    .with({ _tag: "PBind" }, ({ span: sp }) => sp)
-    .with({ _tag: "PAs" }, ({ span: sp }) => sp)
-    .with({ _tag: "PLit" }, ({ span: sp }) => sp)
-    .with({ _tag: "PBool" }, ({ span: sp }) => sp)
-    .with({ _tag: "PStr" }, ({ span: sp }) => sp)
-    .with({ _tag: "PTuple" }, ({ span: sp }) => sp)
-    .with({ _tag: "PRecord" }, ({ span: sp }) => sp)
-    .with({ _tag: "PCtor" }, ({ span: sp }) => sp)
-    .with({ _tag: "PArr" }, ({ span: sp }) => sp)
-    .with({ _tag: "PList" }, ({ span: sp }) => sp)
-    .with({ _tag: "POr" }, ({ span: sp }) => sp)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "PWild"
+      ? (({ span: sp }) => sp)(_v)
+      : _v._tag === "PUnit"
+        ? (({ span: sp }) => sp)(_v)
+        : _v._tag === "PBind"
+          ? (({ span: sp }) => sp)(_v)
+          : _v._tag === "PAs"
+            ? (({ span: sp }) => sp)(_v)
+            : _v._tag === "PLit"
+              ? (({ span: sp }) => sp)(_v)
+              : _v._tag === "PBool"
+                ? (({ span: sp }) => sp)(_v)
+                : _v._tag === "PStr"
+                  ? (({ span: sp }) => sp)(_v)
+                  : _v._tag === "PTuple"
+                    ? (({ span: sp }) => sp)(_v)
+                    : _v._tag === "PRecord"
+                      ? (({ span: sp }) => sp)(_v)
+                      : _v._tag === "PCtor"
+                        ? (({ span: sp }) => sp)(_v)
+                        : _v._tag === "PArr"
+                          ? (({ span: sp }) => sp)(_v)
+                          : _v._tag === "PList"
+                            ? (({ span: sp }) => sp)(_v)
+                            : _v._tag === "POr"
+                              ? (({ span: sp }) => sp)(_v)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(p);
 const altsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: Pattern[], lastSpan: SpanAt],
   Result<[Pattern[], number, SpanAt], PErr>
@@ -2606,11 +2785,12 @@ const loopParamsLoop: _Curry<
             _Result_flatMap(
               ([init, p1]) =>
                 ((next: LoopParam[]) =>
-                  match(tokAt(toks, p1).tok)
-                    .with({ _tag: "TComma" }, () => loopParamsLoop(toks, p1 + 1, next, hooks))
-                    .otherwise(() => Ok(_tuple(next, p1)) as Result<[LoopParam[], number], PErr>))(
-                  _Array_append({ name: id.name, nameSpan: id.span, init: init }, acc),
-                ),
+                  ((_v) =>
+                    _v._tag === "TComma"
+                      ? loopParamsLoop(toks, p1 + 1, next, hooks)
+                      : (Ok(_tuple(next, p1)) as Result<[LoopParam[], number], PErr>))(
+                    tokAt(toks, p1).tok,
+                  ))(_Array_append({ name: id.name, nameSpan: id.span, init: init }, acc)),
               parseExpr(toks, p, hooks),
             ),
           expectTok(TEq as Tok, toks, pid),
@@ -2645,24 +2825,19 @@ const parseRecur: _Curry<
       (p) =>
         _Result_flatMap(
           (p1) =>
-            match(tokAt(toks, p1).tok)
-              .with(
-                { _tag: "TRparen" },
-                () =>
-                  Ok(
+            ((_v) =>
+              _v._tag === "TRparen"
+                ? (Ok(
                     _tuple(Ast.ERecur([] as Expr[], toEnd(start, toks, p1 + 1)), p1 + 1),
-                  ) as Result<[Expr, number], PErr>,
-              )
-              .otherwise(() =>
-                _Result_flatMap(
-                  ([args, p2]) =>
-                    _Result_map(
-                      (p3: number) => _tuple(Ast.ERecur(args, toEnd(start, toks, p3)), p3),
-                      expectTok(TRparen as Tok, toks, p2),
-                    ),
-                  sepByH(parseExpr, toks, p1, [] as Expr[], hooks),
-                ),
-              ),
+                  ) as Result<[Expr, number], PErr>)
+                : _Result_flatMap(
+                    ([args, p2]) =>
+                      _Result_map(
+                        (p3: number) => _tuple(Ast.ERecur(args, toEnd(start, toks, p3)), p3),
+                        expectTok(TRparen as Tok, toks, p2),
+                      ),
+                    sepByH(parseExpr, toks, p1, [] as Expr[], hooks),
+                  ))(tokAt(toks, p1).tok),
           expectTok(TLparen as Tok, toks, p),
         ),
       expectTok(TRecur as Tok, toks, pos),
@@ -2700,15 +2875,14 @@ const parseMatch: _Curry<
               (p2) =>
                 _Result_flatMap(
                   ([arms, p3]) =>
-                    match(length(arms))
-                      .with(0, () => errAt("switch needs at least one | arm", tokAt(toks, p3)))
-                      .otherwise(() =>
-                        _Result_map(
-                          (p4: number) =>
-                            _tuple(Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4),
-                          expectTok(TRbrace as Tok, toks, p3),
-                        ),
-                      ),
+                    ((_v) =>
+                      _v === 0
+                        ? errAt("switch needs at least one | arm", tokAt(toks, p3))
+                        : _Result_map(
+                            (p4: number) =>
+                              _tuple(Ast.EMatch(scrutinee, arms, toEnd(start, toks, p4)), p4),
+                            expectTok(TRbrace as Tok, toks, p3),
+                          ))(length(arms)),
                   armsLoop(toks, p2, [] as MatchArm[], hooks),
                 ),
               expectTok(TLbrace as Tok, toks, p1),
@@ -2747,155 +2921,142 @@ const parsePatternAtom: _Curry<
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = tokAt(toks, pos);
   const sp: SpanAt = spanOf(lt);
-  return match(lt.tok)
-    .with(
-      { _tag: "TNum" },
-      ({ value, raw }) =>
-        Ok(_tuple(Ast.PLit(value, raw, sp), pos + 1)) as Result<[Pattern, number], PErr>,
-    )
-    .with(
-      { _tag: "TBool" },
-      ({ value }) => Ok(_tuple(Ast.PBool(value, sp), pos + 1)) as Result<[Pattern, number], PErr>,
-    )
-    .with(
-      { _tag: "TStr" },
-      ({ value }) => Ok(_tuple(Ast.PStr(value, sp), pos + 1)) as Result<[Pattern, number], PErr>,
-    )
-    .with({ _tag: "TLparen" }, () =>
-      eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
-        ? (Ok(_tuple(Ast.PUnit(toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
-            [Pattern, number],
-            PErr
-          >)
-        : _Result_flatMap(
-            ([elems, p]) =>
-              _Result_flatMap(
-                (p2) =>
-                  Ok(
-                    match(elems)
-                      .with(
-                        (_v) => {
-                          const _g: any = _v;
-                          return _g.length === 1;
-                        },
-                        ([single]) => _tuple(single, p2),
-                      )
-                      .otherwise((many) => _tuple(Ast.PTuple(many, toEnd(sp, toks, p2)), p2)),
-                  ) as Result<[Pattern, number], PErr>,
-                expectTok(TRparen as Tok, toks, p),
-              ),
-            sepBy(parsePattern, toks, pos + 1, [] as Pattern[]),
-          ),
-    )
-    .with({ _tag: "TLbrace" }, () =>
-      _Result_flatMap(
-        ([fields, p]) =>
-          _Result_flatMap(
-            (p2) =>
-              Ok(_tuple(Ast.PRecord(fields, toEnd(sp, toks, p2)), p2)) as Result<
-                [Pattern, number],
-                PErr
-              >,
-            expectTok(TRbrace as Tok, toks, p),
-          ),
-        listUntil(TRbrace as Tok, parsePatField, toks, pos + 1),
-      ),
-    )
-    .with({ _tag: "TLbracket" }, () => parseArrPattern(toks, pos))
-    .with({ _tag: "TAt" }, () => parseListPattern(toks, pos))
-    .with(
-      { _tag: "TId", value: "_" },
-      () => Ok(_tuple(Ast.PWild(sp), pos + 1)) as Result<[Pattern, number], PErr>,
-    )
-    .with({ _tag: "TId" }, ({ value: name }) =>
-      eq(tokAt(toks, pos + 1).tok, TDot as Tok)
-        ? _Result_flatMap(
-            ([c, p1]) =>
-              isUpper(c.name)
-                ? parseCtorArgs(toks, c.name, Some(name) as Option<string>, sp, p1)
-                : errAt(`expected constructor after '${name}.', got '${c.name}'`, tokAt(toks, p1)),
-            expectId(toks, pos + 2),
-          )
-        : isUpper(name)
-          ? parseCtorArgs(toks, name, None as Option<string>, sp, pos + 1)
-          : (Ok(_tuple(Ast.PBind(name, sp), pos + 1)) as Result<[Pattern, number], PErr>),
-    )
-    .otherwise((t) => errAt(`unexpected token in pattern: ${tokName(t)}`, lt));
+  return ((_v) =>
+    _v._tag === "TNum"
+      ? (({ value, raw }) =>
+          Ok(_tuple(Ast.PLit(value, raw, sp), pos + 1)) as Result<[Pattern, number], PErr>)(_v)
+      : _v._tag === "TBool"
+        ? (({ value }) =>
+            Ok(_tuple(Ast.PBool(value, sp), pos + 1)) as Result<[Pattern, number], PErr>)(_v)
+        : _v._tag === "TStr"
+          ? (({ value }) =>
+              Ok(_tuple(Ast.PStr(value, sp), pos + 1)) as Result<[Pattern, number], PErr>)(_v)
+          : _v._tag === "TLparen"
+            ? eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
+              ? (Ok(_tuple(Ast.PUnit(toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
+                  [Pattern, number],
+                  PErr
+                >)
+              : _Result_flatMap(
+                  ([elems, p]) =>
+                    _Result_flatMap(
+                      (p2) =>
+                        Ok(
+                          ((_v) =>
+                            _v.length === 1
+                              ? (([single]) => _tuple(single, p2))(_v)
+                              : ((many) => _tuple(Ast.PTuple(many, toEnd(sp, toks, p2)), p2))(_v))(
+                            elems,
+                          ),
+                        ) as Result<[Pattern, number], PErr>,
+                      expectTok(TRparen as Tok, toks, p),
+                    ),
+                  sepBy(parsePattern, toks, pos + 1, [] as Pattern[]),
+                )
+            : _v._tag === "TLbrace"
+              ? _Result_flatMap(
+                  ([fields, p]) =>
+                    _Result_flatMap(
+                      (p2) =>
+                        Ok(_tuple(Ast.PRecord(fields, toEnd(sp, toks, p2)), p2)) as Result<
+                          [Pattern, number],
+                          PErr
+                        >,
+                      expectTok(TRbrace as Tok, toks, p),
+                    ),
+                  listUntil(TRbrace as Tok, parsePatField, toks, pos + 1),
+                )
+              : _v._tag === "TLbracket"
+                ? parseArrPattern(toks, pos)
+                : _v._tag === "TAt"
+                  ? parseListPattern(toks, pos)
+                  : _v._tag === "TId" && _v.value === "_"
+                    ? (Ok(_tuple(Ast.PWild(sp), pos + 1)) as Result<[Pattern, number], PErr>)
+                    : _v._tag === "TId"
+                      ? (({ value: name }) =>
+                          eq(tokAt(toks, pos + 1).tok, TDot as Tok)
+                            ? _Result_flatMap(
+                                ([c, p1]) =>
+                                  isUpper(c.name)
+                                    ? parseCtorArgs(
+                                        toks,
+                                        c.name,
+                                        Some(name) as Option<string>,
+                                        sp,
+                                        p1,
+                                      )
+                                    : errAt(
+                                        `expected constructor after '${name}.', got '${c.name}'`,
+                                        tokAt(toks, p1),
+                                      ),
+                                expectId(toks, pos + 2),
+                              )
+                            : isUpper(name)
+                              ? parseCtorArgs(toks, name, None as Option<string>, sp, pos + 1)
+                              : (Ok(_tuple(Ast.PBind(name, sp), pos + 1)) as Result<
+                                  [Pattern, number],
+                                  PErr
+                                >))(_v)
+                      : ((t) => errAt(`unexpected token in pattern: ${tokName(t)}`, lt))(_v))(
+    lt.tok,
+  );
 });
 const parsePattern: _Curry<[toks: LocTok[], pos: number], Result<[Pattern, number], PErr>> = _curry(
   2,
   (toks: LocTok[], pos: number) =>
     _Result_flatMap(
       ([pat, p]) =>
-        match(tokAt(toks, p).tok)
-          .with({ _tag: "TId", value: "as" }, () =>
-            _Result_flatMap(
-              ([nm, p2]) =>
-                Ok(
-                  _tuple(Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)), p2),
-                ) as Result<[Pattern, number], PErr>,
-              expectId(toks, p + 1),
-            ),
-          )
-          .otherwise(() => Ok(_tuple(pat, p)) as Result<[Pattern, number], PErr>),
+        ((_v) =>
+          _v._tag === "TId" && _v.value === "as"
+            ? _Result_flatMap(
+                ([nm, p2]) =>
+                  Ok(
+                    _tuple(Ast.PAs(pat, nm.name, nm.span, spanning(patSpan(pat), nm.span)), p2),
+                  ) as Result<[Pattern, number], PErr>,
+                expectId(toks, p + 1),
+              )
+            : (Ok(_tuple(pat, p)) as Result<[Pattern, number], PErr>))(tokAt(toks, p).tok),
       parsePatternAtom(toks, pos),
     ),
 );
 const restOk: (rest: Option<Pattern>) => boolean = (rest: Option<Pattern>) =>
-  match(rest)
-    .with({ _tag: "None" }, () => true)
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Pattern>, { _tag: "Some" }>["value"], { _tag: "PBind" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "PBind";
-      },
-      () => true,
-    )
-    .with(
-      (
-        _v,
-      ): _v is Extract<Option<Pattern>, { _tag: "Some" }> & {
-        value: Extract<Extract<Option<Pattern>, { _tag: "Some" }>["value"], { _tag: "PWild" }>;
-      } => {
-        const _g: any = _v;
-        return _g._tag === "Some" && _g.value._tag === "PWild";
-      },
-      () => true,
-    )
-    .with({ _tag: "Some" }, () => false)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "None"
+      ? true
+      : _v._tag === "Some" && _v.value._tag === "PBind"
+        ? true
+        : _v._tag === "Some" && _v.value._tag === "PWild"
+          ? true
+          : _v._tag === "Some"
+            ? false
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(rest);
 const patElemsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: Pattern[]],
   Result<[Pattern[], Option<Pattern>, number], PErr>
 > = _curry(3, (toks: LocTok[], pos: number, acc: Pattern[]) =>
-  match(tokAt(toks, pos).tok)
-    .with({ _tag: "TSpread" }, () =>
-      _Result_flatMap(
-        ([rest, p]) =>
-          Ok(_tuple(acc, Some(rest) as Option<Pattern>, p)) as Result<
-            [Pattern[], Option<Pattern>, number],
-            PErr
-          >,
-        parsePattern(toks, pos + 1),
-      ),
-    )
-    .otherwise(() =>
-      _Result_flatMap(
-        ([pat, p]) =>
-          ((elems: Pattern[]) =>
-            eq(tokAt(toks, p).tok, TComma as Tok)
-              ? patElemsLoop(toks, p + 1, elems)
-              : (Ok(_tuple(elems, None as Option<Pattern>, p)) as Result<
-                  [Pattern[], Option<Pattern>, number],
-                  PErr
-                >))(_Array_append(pat, acc)),
-        parsePattern(toks, pos),
-      ),
-    ),
+  ((_v) =>
+    _v._tag === "TSpread"
+      ? _Result_flatMap(
+          ([rest, p]) =>
+            Ok(_tuple(acc, Some(rest) as Option<Pattern>, p)) as Result<
+              [Pattern[], Option<Pattern>, number],
+              PErr
+            >,
+          parsePattern(toks, pos + 1),
+        )
+      : _Result_flatMap(
+          ([pat, p]) =>
+            ((elems: Pattern[]) =>
+              eq(tokAt(toks, p).tok, TComma as Tok)
+                ? patElemsLoop(toks, p + 1, elems)
+                : (Ok(_tuple(elems, None as Option<Pattern>, p)) as Result<
+                    [Pattern[], Option<Pattern>, number],
+                    PErr
+                  >))(_Array_append(pat, acc)),
+          parsePattern(toks, pos),
+        ))(tokAt(toks, pos).tok),
 );
 const parseArrPattern: _Curry<
   [toks: LocTok[], pos: number],
@@ -2983,9 +3144,9 @@ const parseTypeAtom: _Curry<
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = tokAt(toks, pos);
   const sp: SpanAt = spanOf(lt);
-  return match(lt.tok)
-    .with({ _tag: "TLparen" }, () =>
-      eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
+  return ((_v) =>
+    _v._tag === "TLparen"
+      ? eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
         ? (Ok(_tuple(Ast.TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
             [TypeExpr, number],
             PErr
@@ -3010,63 +3171,65 @@ const parseTypeAtom: _Curry<
                     expectTok(TRparen as Tok, toks, p),
                   ),
             parseTypeExpr(toks, pos + 1),
-          ),
-    )
-    .with({ _tag: "TLbracket" }, () =>
-      _Result_flatMap(
-        ([elem, p]) =>
-          _Result_flatMap(
-            (p2) =>
-              Ok(_tuple(Ast.TyList(elem, toEnd(sp, toks, p2)), p2)) as Result<
-                [TypeExpr, number],
-                PErr
-              >,
-            expectTok(TRbracket as Tok, toks, p),
-          ),
-        parseTypeExpr(toks, pos + 1),
-      ),
-    )
-    .with(
-      { _tag: "TStr" },
-      ({ value }) => Ok(_tuple(Ast.TyLit(value, sp), pos + 1)) as Result<[TypeExpr, number], PErr>,
-    )
-    .otherwise(() =>
-      _Result_flatMap(
-        ([nm, p]) =>
-          and(isUpper(nm.name), eq(tokAt(toks, p).tok, TDot as Tok))
-            ? _Result_flatMap(
-                ([q, p2]) =>
-                  isUpper(q.name)
-                    ? (Ok(
-                        _tuple(
-                          Ast.TyQual(
-                            nm.name,
-                            q.name,
-                            q.span,
-                            [] as TypeExpr[],
-                            spanning(nm.span, q.span),
-                          ),
-                          p2,
-                        ),
-                      ) as Result<[TypeExpr, number], PErr>)
-                    : errAt(
-                        `a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'`,
-                        tokAt(toks, p2),
-                      ),
-                expectId(toks, p + 1),
-              )
-            : (Ok(_tuple(Ast.TyName(nm.name, nm.span), p)) as Result<[TypeExpr, number], PErr>),
-        expectId(toks, pos),
-      ),
-    );
+          )
+      : _v._tag === "TLbracket"
+        ? _Result_flatMap(
+            ([elem, p]) =>
+              _Result_flatMap(
+                (p2) =>
+                  Ok(_tuple(Ast.TyList(elem, toEnd(sp, toks, p2)), p2)) as Result<
+                    [TypeExpr, number],
+                    PErr
+                  >,
+                expectTok(TRbracket as Tok, toks, p),
+              ),
+            parseTypeExpr(toks, pos + 1),
+          )
+        : _v._tag === "TStr"
+          ? (({ value }) =>
+              Ok(_tuple(Ast.TyLit(value, sp), pos + 1)) as Result<[TypeExpr, number], PErr>)(_v)
+          : _Result_flatMap(
+              ([nm, p]) =>
+                and(isUpper(nm.name), eq(tokAt(toks, p).tok, TDot as Tok))
+                  ? _Result_flatMap(
+                      ([q, p2]) =>
+                        isUpper(q.name)
+                          ? (Ok(
+                              _tuple(
+                                Ast.TyQual(
+                                  nm.name,
+                                  q.name,
+                                  q.span,
+                                  [] as TypeExpr[],
+                                  spanning(nm.span, q.span),
+                                ),
+                                p2,
+                              ),
+                            ) as Result<[TypeExpr, number], PErr>)
+                          : errAt(
+                              `a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'`,
+                              tokAt(toks, p2),
+                            ),
+                      expectId(toks, p + 1),
+                    )
+                  : (Ok(_tuple(Ast.TyName(nm.name, nm.span), p)) as Result<
+                      [TypeExpr, number],
+                      PErr
+                    >),
+              expectId(toks, pos),
+            ))(lt.tok);
 });
 const startsTypeAtom: (t: Tok) => boolean = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TId" }, () => true)
-    .with({ _tag: "TLparen" }, () => true)
-    .with({ _tag: "TLbracket" }, () => true)
-    .with({ _tag: "TStr" }, () => true)
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TId"
+      ? true
+      : _v._tag === "TLparen"
+        ? true
+        : _v._tag === "TLbracket"
+          ? true
+          : _v._tag === "TStr"
+            ? true
+            : false)(t);
 const legacyTypeArgsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: TypeExpr[], lastSp: Option<SpanAt>],
   Result<[TypeExpr[], Option<SpanAt>, number], PErr>
@@ -3085,66 +3248,73 @@ const parseTypeApp: _Curry<
 > = _curry(2, (toks: LocTok[], pos: number) =>
   _Result_flatMap(
     ([head, p]) =>
-      match(head)
-        .with(
-          (_v): _v is Extract<TypeExpr, { _tag: "TyName" }> => {
-            const _g: any = _v;
-            return _g._tag === "TyName" && (({ name, span: sp }) => isUpper(name))(_g);
-          },
-          ({ name, span: sp }) =>
-            eq(tokAt(toks, p).tok, TLt as Tok)
-              ? _Result_flatMap(
-                  ([args, p1]) =>
-                    _Result_flatMap(
-                      (p2) =>
-                        Ok(_tuple(Ast.TyApp(name, args, toEnd(sp, toks, p2)), p2)) as Result<
-                          [TypeExpr, number],
-                          PErr
-                        >,
-                      expectTok(TGt as Tok, toks, p1),
-                    ),
-                  listUntil(TGt as Tok, parseTypeExpr, toks, p + 1),
-                )
-              : _Result_flatMap(
-                  ([args, lastSp, p2]) =>
-                    Ok(
-                      match(lastSp)
-                        .with({ _tag: "None" }, () => _tuple(head, p2))
-                        .with({ _tag: "Some" }, ({ value: ls }) =>
-                          _tuple(Ast.TyApp(name, args, spanning(sp, ls)), p2),
-                        )
-                        .exhaustive(),
-                    ) as Result<[TypeExpr, number], PErr>,
-                  legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<SpanAt>),
-                ),
-        )
-        .with({ _tag: "TyQual" }, ({ alias, name: nm, nameSpan, span: sp }) =>
-          eq(tokAt(toks, p).tok, TLt as Tok)
-            ? _Result_flatMap(
-                ([args, p1]) =>
-                  _Result_flatMap(
-                    (p2) =>
+      ((_v) =>
+        _v._tag === "TyName" && (({ name, span: sp }) => isUpper(name))(_v)
+          ? (({ name, span: sp }) =>
+              eq(tokAt(toks, p).tok, TLt as Tok)
+                ? _Result_flatMap(
+                    ([args, p1]) =>
+                      _Result_flatMap(
+                        (p2) =>
+                          Ok(_tuple(Ast.TyApp(name, args, toEnd(sp, toks, p2)), p2)) as Result<
+                            [TypeExpr, number],
+                            PErr
+                          >,
+                        expectTok(TGt as Tok, toks, p1),
+                      ),
+                    listUntil(TGt as Tok, parseTypeExpr, toks, p + 1),
+                  )
+                : _Result_flatMap(
+                    ([args, lastSp, p2]) =>
                       Ok(
-                        _tuple(Ast.TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)), p2),
+                        ((_v) =>
+                          _v._tag === "None"
+                            ? _tuple(head, p2)
+                            : _v._tag === "Some"
+                              ? (({ value: ls }) =>
+                                  _tuple(Ast.TyApp(name, args, spanning(sp, ls)), p2))(_v)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(lastSp),
                       ) as Result<[TypeExpr, number], PErr>,
-                    expectTok(TGt as Tok, toks, p1),
-                  ),
-                listUntil(TGt as Tok, parseTypeExpr, toks, p + 1),
-              )
-            : _Result_flatMap(
-                ([args, lastSp, p2]) =>
-                  Ok(
-                    match(lastSp)
-                      .with({ _tag: "None" }, () => _tuple(head, p2))
-                      .with({ _tag: "Some" }, ({ value: ls }) =>
-                        _tuple(Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)), p2),
-                      )
-                      .exhaustive(),
-                  ) as Result<[TypeExpr, number], PErr>,
-                legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<SpanAt>),
-              ),
-        )
-        .otherwise(() => Ok(_tuple(head, p)) as Result<[TypeExpr, number], PErr>),
+                    legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<SpanAt>),
+                  ))(_v)
+          : _v._tag === "TyQual"
+            ? (({ alias, name: nm, nameSpan, span: sp }) =>
+                eq(tokAt(toks, p).tok, TLt as Tok)
+                  ? _Result_flatMap(
+                      ([args, p1]) =>
+                        _Result_flatMap(
+                          (p2) =>
+                            Ok(
+                              _tuple(
+                                Ast.TyQual(alias, nm, nameSpan, args, toEnd(sp, toks, p2)),
+                                p2,
+                              ),
+                            ) as Result<[TypeExpr, number], PErr>,
+                          expectTok(TGt as Tok, toks, p1),
+                        ),
+                      listUntil(TGt as Tok, parseTypeExpr, toks, p + 1),
+                    )
+                  : _Result_flatMap(
+                      ([args, lastSp, p2]) =>
+                        Ok(
+                          ((_v) =>
+                            _v._tag === "None"
+                              ? _tuple(head, p2)
+                              : _v._tag === "Some"
+                                ? (({ value: ls }) =>
+                                    _tuple(
+                                      Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
+                                      p2,
+                                    ))(_v)
+                                : (() => {
+                                    throw new Error("non-exhaustive match");
+                                  })())(lastSp),
+                        ) as Result<[TypeExpr, number], PErr>,
+                      legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<SpanAt>),
+                    ))(_v)
+            : (Ok(_tuple(head, p)) as Result<[TypeExpr, number], PErr>))(head),
     parseTypeAtom(toks, pos),
   ),
 );
@@ -3201,9 +3371,8 @@ const parseCtorField: _Curry<
   [toks: LocTok[], pos: number],
   Result<[CtorField, number], PErr>
 > = _curry(2, (toks: LocTok[], pos: number) => {
-  const isLabel: boolean = match(tokAt(toks, pos).tok)
-    .with({ _tag: "TId" }, () => eq(tokAt(toks, pos + 1).tok, TColon as Tok))
-    .otherwise(() => false);
+  const isLabel: boolean = ((_v) =>
+    _v._tag === "TId" ? eq(tokAt(toks, pos + 1).tok, TColon as Tok) : false)(tokAt(toks, pos).tok);
   return isLabel
     ? _Result_flatMap(
         ([nm, p]) =>
@@ -3304,11 +3473,10 @@ const typeParamsLoop: <B>(
   pos: number,
   acc: string[],
 ) => Result<[string[], number], B> = _curry(3, <B>(toks: LocTok[], pos: number, acc: string[]) =>
-  match(tokAt(toks, pos).tok)
-    .with({ _tag: "TId" }, ({ value: name }) =>
-      typeParamsLoop(toks, pos + 1, _Array_append(name, acc)),
-    )
-    .otherwise(() => Ok(_tuple(acc, pos))),
+  ((_v) =>
+    _v._tag === "TId"
+      ? (({ value: name }) => typeParamsLoop(toks, pos + 1, _Array_append(name, acc)))(_v)
+      : Ok(_tuple(acc, pos)))(tokAt(toks, pos).tok),
 );
 const parseTypeParams: _Curry<
   [toks: LocTok[], pos: number],
@@ -3330,11 +3498,14 @@ const parseTypeParams: _Curry<
     : typeParamsLoop(toks, pos, [] as string[]),
 );
 const startsTypeSynonym: (t: Tok) => boolean = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TStr" }, () => true)
-    .with({ _tag: "TLparen" }, () => true)
-    .with({ _tag: "TLbracket" }, () => true)
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TStr"
+      ? true
+      : _v._tag === "TLparen"
+        ? true
+        : _v._tag === "TLbracket"
+          ? true
+          : false)(t);
 const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PErr>> = _curry(
   2,
   (toks: LocTok[], pos: number) => {
@@ -3505,14 +3676,13 @@ const parseExtern: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
                                                               PErr
                                                             >),
                                                       ))(
-                                                      match(tokAt(toks, p7).tok)
-                                                        .with({ _tag: "TStr" }, () =>
-                                                          or(
-                                                            eq(convention.name, "global"),
-                                                            eq(convention.name, "new"),
-                                                          ),
-                                                        )
-                                                        .otherwise(() => false),
+                                                      ((_v) =>
+                                                        _v._tag === "TStr"
+                                                          ? or(
+                                                              eq(convention.name, "global"),
+                                                              eq(convention.name, "new"),
+                                                            )
+                                                          : false)(tokAt(toks, p7).tok),
                                                     ),
                                                   expectStr(toks, p6),
                                                 ),
@@ -3802,34 +3972,32 @@ const parseLet: _Curry<
 const setLetMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
   3,
   (exported: boolean, doc: Option<string>, s: Stmt) =>
-    match(s)
-      .with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, span }) =>
-        Ast.SLet(name, nameSpan, annot, value, exported, doc, span),
-      )
-      .otherwise((other) => other),
+    ((_v) =>
+      _v._tag === "SLet"
+        ? (({ name, nameSpan, annot, value, span }) =>
+            Ast.SLet(name, nameSpan, annot, value, exported, doc, span))(_v)
+        : ((other) => other)(_v))(s),
 );
 const setTypeMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
   3,
   (exported: boolean, doc: Option<string>, s: Stmt) =>
-    match(s)
-      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) =>
-        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span),
-      )
-      .otherwise((other) => other),
+    ((_v) =>
+      _v._tag === "SType"
+        ? (({ name, params, ctors, alias, aliasType, span }) =>
+            Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span))(_v)
+        : ((other) => other)(_v))(s),
 );
 const setExternMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
   3,
   (exported: boolean, doc: Option<string>, s: Stmt) =>
-    match(s)
-      .with(
-        { _tag: "SExtern" },
-        ({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) =>
-          Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span),
-      )
-      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, span }) =>
-        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span),
-      )
-      .otherwise((other) => other),
+    ((_v) =>
+      _v._tag === "SExtern"
+        ? (({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) =>
+            Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span))(_v)
+        : _v._tag === "SType"
+          ? (({ name, params, ctors, alias, aliasType, span }) =>
+              Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span))(_v)
+          : ((other) => other)(_v))(s),
 );
 const parseExprStmt: <B>(
   toks: LocTok[],
@@ -3888,58 +4056,54 @@ const parseStmt: _Curry<
   ) => {
     const lt: LocTok = tokAt(toks, pos);
     const doc: Option<string> = lt.doc;
-    return match(lt.tok)
-      .with({ _tag: "TImport" }, () =>
-        _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport(toks, pos)),
-      )
-      .with({ _tag: "TExport" }, () =>
-        ((exportSp: SpanAt) =>
-          match(tokAt(toks, pos + 1).tok)
-            .with({ _tag: "TType" }, () =>
-              _Result_map(
-                ([s, p]: [Stmt, number]) =>
-                  _tuple([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp),
-                parseType(toks, pos + 1),
-              ),
-            )
-            .with({ _tag: "TExtern" }, () =>
-              _Result_map(
-                ([s, p]: [Stmt, number]) =>
-                  _tuple([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp),
-                parseExtern(toks, pos + 1),
-              ),
-            )
-            .with({ _tag: "TLet" }, () =>
-              _Result_map(
-                ([stmts, p, tmp2]: [Stmt[], number, number]) =>
-                  _tuple(widenHeadToExport(exportSp, map(setLetMeta(true, doc), stmts)), p, tmp2),
-                parseLet(toks, pos + 1, tmp, hooks),
-              ),
-            )
-            .otherwise(() =>
-              errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)),
-            ))(spanOf(lt)),
-      )
-      .with({ _tag: "TType" }, () =>
-        _Result_map(
-          ([s, p]: [Stmt, number]) => _tuple([setTypeMeta(false, doc, s)], p, tmp),
-          parseType(toks, pos),
-        ),
-      )
-      .with({ _tag: "TExtern" }, () =>
-        _Result_map(
-          ([s, p]: [Stmt, number]) => _tuple([setExternMeta(false, doc, s)], p, tmp),
-          parseExtern(toks, pos),
-        ),
-      )
-      .with({ _tag: "TLet" }, () =>
-        _Result_map(
-          ([stmts, p, tmp2]: [Stmt[], number, number]) =>
-            _tuple(map(setLetMeta(false, doc), stmts), p, tmp2),
-          parseLet(toks, pos, tmp, hooks),
-        ),
-      )
-      .otherwise(() => parseExprStmt(toks, pos, tmp, hooks));
+    return ((_v) =>
+      _v._tag === "TImport"
+        ? _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport(toks, pos))
+        : _v._tag === "TExport"
+          ? ((exportSp: SpanAt) =>
+              ((_v) =>
+                _v._tag === "TType"
+                  ? _Result_map(
+                      ([s, p]: [Stmt, number]) =>
+                        _tuple([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp),
+                      parseType(toks, pos + 1),
+                    )
+                  : _v._tag === "TExtern"
+                    ? _Result_map(
+                        ([s, p]: [Stmt, number]) =>
+                          _tuple([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp),
+                        parseExtern(toks, pos + 1),
+                      )
+                    : _v._tag === "TLet"
+                      ? _Result_map(
+                          ([stmts, p, tmp2]: [Stmt[], number, number]) =>
+                            _tuple(
+                              widenHeadToExport(exportSp, map(setLetMeta(true, doc), stmts)),
+                              p,
+                              tmp2,
+                            ),
+                          parseLet(toks, pos + 1, tmp, hooks),
+                        )
+                      : errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)))(
+                tokAt(toks, pos + 1).tok,
+              ))(spanOf(lt))
+          : _v._tag === "TType"
+            ? _Result_map(
+                ([s, p]: [Stmt, number]) => _tuple([setTypeMeta(false, doc, s)], p, tmp),
+                parseType(toks, pos),
+              )
+            : _v._tag === "TExtern"
+              ? _Result_map(
+                  ([s, p]: [Stmt, number]) => _tuple([setExternMeta(false, doc, s)], p, tmp),
+                  parseExtern(toks, pos),
+                )
+              : _v._tag === "TLet"
+                ? _Result_map(
+                    ([stmts, p, tmp2]: [Stmt[], number, number]) =>
+                      _tuple(map(setLetMeta(false, doc), stmts), p, tmp2),
+                    parseLet(toks, pos, tmp, hooks),
+                  )
+                : parseExprStmt(toks, pos, tmp, hooks))(lt.tok);
   },
 );
 /**
@@ -3951,43 +4115,56 @@ const parseStmt: _Curry<
 const widenToExport: <A>(start: { start: number } & A, s: Stmt) => Stmt = _curry(
   2,
   <A>(start: { start: number } & A, s: Stmt) =>
-    match(s)
-      .with({ _tag: "SLet" }, ({ name, nameSpan, annot, value, exported, doc, span }) =>
-        Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span)),
-      )
-      .with({ _tag: "SType" }, ({ name, params, ctors, alias, aliasType, exported, doc, span }) =>
-        Ast.SType(name, params, ctors, alias, aliasType, exported, doc, spanning(start, span)),
-      )
-      .with(
-        { _tag: "SExtern" },
-        ({ name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span }) =>
-          Ast.SExtern(
-            name,
-            nameSpan,
-            params,
-            typeExpr,
-            module,
-            imported,
-            curried,
-            exported,
-            doc,
-            spanning(start, span),
-          ),
-      )
-      .otherwise((other) => other),
+    ((_v) =>
+      _v._tag === "SLet"
+        ? (({ name, nameSpan, annot, value, exported, doc, span }) =>
+            Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span)))(_v)
+        : _v._tag === "SType"
+          ? (({ name, params, ctors, alias, aliasType, exported, doc, span }) =>
+              Ast.SType(
+                name,
+                params,
+                ctors,
+                alias,
+                aliasType,
+                exported,
+                doc,
+                spanning(start, span),
+              ))(_v)
+          : _v._tag === "SExtern"
+            ? (({
+                name,
+                nameSpan,
+                params,
+                typeExpr,
+                module,
+                imported,
+                curried,
+                exported,
+                doc,
+                span,
+              }) =>
+                Ast.SExtern(
+                  name,
+                  nameSpan,
+                  params,
+                  typeExpr,
+                  module,
+                  imported,
+                  curried,
+                  exported,
+                  doc,
+                  spanning(start, span),
+                ))(_v)
+            : ((other) => other)(_v))(s),
 );
 const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stmt[] = _curry(
   2,
   <A>(start: { start: number } & A, stmts: Stmt[]) =>
-    match(stmts)
-      .with(
-        (_v) => {
-          const _g: any = _v;
-          return _g.length >= 1;
-        },
-        ([head, ...rest]) => _Array_prepend(widenToExport(start, head), rest),
-      )
-      .otherwise(() => stmts),
+    ((_v) =>
+      _v.length >= 1
+        ? (([head, ...rest]) => _Array_prepend(widenToExport(start, head), rest))(_v)
+        : stmts)(stmts),
 );
 /**
  * Core sync set for panic-mode recovery: the language's own declaration keywords.
@@ -3995,13 +4172,18 @@ const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stm
  * plugin declares any, so this mirror carries the core set only.
  */
 const isSyncTok: (t: Tok) => boolean = (t: Tok) =>
-  match(t)
-    .with({ _tag: "TLet" }, () => true)
-    .with({ _tag: "TType" }, () => true)
-    .with({ _tag: "TExtern" }, () => true)
-    .with({ _tag: "TImport" }, () => true)
-    .with({ _tag: "TExport" }, () => true)
-    .otherwise(() => false);
+  ((_v) =>
+    _v._tag === "TLet"
+      ? true
+      : _v._tag === "TType"
+        ? true
+        : _v._tag === "TExtern"
+          ? true
+          : _v._tag === "TImport"
+            ? true
+            : _v._tag === "TExport"
+              ? true
+              : false)(t);
 const isOpener: (t: Tok) => boolean = (t: Tok) =>
   or(or(eq(t, TLparen as Tok), eq(t, TLbrace as Tok)), eq(t, TLbracket as Tok));
 const isCloser: (t: Tok) => boolean = (t: Tok) =>
@@ -4104,56 +4286,55 @@ const stmtsLoop: _Curry<
       } else {
         {
           const failedAt: LocTok = tokAt(toks, pos);
-          const _step = match(parseStmt(toks, pos, tmp, hooks))
-            .with(
-              (_v): _v is Extract<Result<[Stmt[], number, number], PErr>, { _tag: "Ok" }> => {
-                const _g: any = _v;
-                return _g._tag === "Ok";
-              },
-              ({ value: [stmts, p, tmp2] }) =>
-                eq(p, pos)
-                  ? ((r: { node: Stmt; pos: number }) =>
-                      _recur(
-                        r.pos,
-                        tmp,
-                        _Array_append(r.node, acc),
-                        _Array_append(
-                          {
-                            message: `unexpected token ${tokName(failedAt.tok)}`,
-                            start: failedAt.start,
-                            end: failedAt.end,
-                          },
-                          diags,
-                        ),
-                      ))(recoverFrom(toks, pos, failedAt, failedAt.start))
-                  : _recur(p, tmp2, _Array_concat(acc, stmts), diags),
-            )
-            .with({ _tag: "Err" }, ({ error: d }) =>
-              ((ds: PErr[]) =>
-                length(ds) >= maxParseErrors
-                  ? _done({
-                      stmts: _Array_append(
-                        Ast.SError({
-                          start: failedAt.start,
-                          end: tokAt(toks, length(toks) - 1).end,
-                        }),
-                        acc,
-                      ),
-                      diagnostics: _Array_append(
-                        {
-                          message: "too many parse errors; stopping",
-                          start: failedAt.start,
-                          end: failedAt.end,
-                        },
-                        ds,
-                      ),
-                    })
-                  : ((r: { node: Stmt; pos: number }) =>
-                      _recur(r.pos, tmp, _Array_append(r.node, acc), ds))(
-                      recoverFrom(toks, pos, failedAt, d.start),
-                    ))(_Array_append(d, diags)),
-            )
-            .exhaustive();
+          const _step = ((_v) =>
+            _v._tag === "Ok"
+              ? (({ value: [stmts, p, tmp2] }) =>
+                  eq(p, pos)
+                    ? ((r: { node: Stmt; pos: number }) =>
+                        _recur(
+                          r.pos,
+                          tmp,
+                          _Array_append(r.node, acc),
+                          _Array_append(
+                            {
+                              message: `unexpected token ${tokName(failedAt.tok)}`,
+                              start: failedAt.start,
+                              end: failedAt.end,
+                            },
+                            diags,
+                          ),
+                        ))(recoverFrom(toks, pos, failedAt, failedAt.start))
+                    : _recur(p, tmp2, _Array_concat(acc, stmts), diags))(
+                  _v as Extract<Result<[Stmt[], number, number], PErr>, { _tag: "Ok" }>,
+                )
+              : _v._tag === "Err"
+                ? (({ error: d }) =>
+                    ((ds: PErr[]) =>
+                      length(ds) >= maxParseErrors
+                        ? _done({
+                            stmts: _Array_append(
+                              Ast.SError({
+                                start: failedAt.start,
+                                end: tokAt(toks, length(toks) - 1).end,
+                              }),
+                              acc,
+                            ),
+                            diagnostics: _Array_append(
+                              {
+                                message: "too many parse errors; stopping",
+                                start: failedAt.start,
+                                end: failedAt.end,
+                              },
+                              ds,
+                            ),
+                          })
+                        : ((r: { node: Stmt; pos: number }) =>
+                            _recur(r.pos, tmp, _Array_append(r.node, acc), ds))(
+                            recoverFrom(toks, pos, failedAt, d.start),
+                          ))(_Array_append(d, diags)))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(parseStmt(toks, pos, tmp, hooks));
           if (_step._tag === "recur") {
             [pos, tmp, acc, diags] = _step.args;
             continue;
@@ -4250,9 +4431,9 @@ export const parseRecovering: <A, B, C, D, E>(
     ) => Result<Option<[Expr, number]>, PErr>)[] = parseHooksOf(resolvePluginsDefault(pluginsOpt));
     return stmtsLoop(
       toks,
-      match(tokAt(toks, 0).tok)
-        .with({ _tag: "TStr" }, ({ value }) => (eq(value, "use open") ? 1 : 0))
-        .otherwise(() => 0),
+      ((_v) => (_v._tag === "TStr" ? (({ value }) => (eq(value, "use open") ? 1 : 0))(_v) : 0))(
+        tokAt(toks, 0).tok,
+      ),
       0,
       [] as Stmt[],
       [] as PErr[],
@@ -4343,9 +4524,13 @@ export const parseWith: <A, B, C, D, E>(
     >,
   ) => {
     const r: { stmts: Stmt[]; diagnostics: PErr[] } = parseRecovering(toks, pluginsOpt);
-    return match(_Array_get(0, r.diagnostics))
-      .with({ _tag: "Some" }, ({ value: d }) => Err(d) as Result<Stmt[], PErr>)
-      .with({ _tag: "None" }, () => Ok(r.stmts) as Result<Stmt[], PErr>)
-      .exhaustive();
+    return ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: d }) => Err(d) as Result<Stmt[], PErr>)(_v)
+        : _v._tag === "None"
+          ? (Ok(r.stmts) as Result<Stmt[], PErr>)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(0, r.diagnostics));
   },
 );

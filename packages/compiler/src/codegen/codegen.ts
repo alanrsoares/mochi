@@ -121,7 +121,7 @@ export const codegen = (
     docs: opts.docs ?? true,
   };
   const needsMatch = prog.stmts.some(
-    (s) => (s.kind === "let" || s.kind === "expr") && usesMatchLib(s.value),
+    (s) => (s.kind === "let" || s.kind === "expr") && usesMatchLib(s.value, ctx),
   );
   const header = needsMatch ? `import { match } from "@onrails/pattern";\n\n` : "";
   const preamble = opts.runtime ? preludePreamble(prog) : "";

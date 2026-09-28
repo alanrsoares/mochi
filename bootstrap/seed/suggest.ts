@@ -21,33 +21,30 @@ import {
   or,
 } from "@mochi/compiler/runtime";
 
-import { match } from "@onrails/pattern";
-
 const at: <A>(xs: A[], i: number, fallback: A) => A = _curry(
   3,
   <A>(xs: A[], i: number, fallback: A) =>
-    match(_Array_get(i, xs))
-      .with({ _tag: "Some" }, ({ value: v }) => v)
-      .with({ _tag: "None" }, () => fallback)
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: v }) => v)(_v)
+        : _v._tag === "None"
+          ? fallback
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, xs)),
 );
 const charsEq: _Curry<[a: string, i: number, b: string, j: number], boolean> = _curry(
   4,
   (a: string, i: number, b: string, j: number) =>
-    match(_tuple(_Str_get(i, a), _Str_get(j, b)))
-      .with(
-        (
-          _v,
-        ): _v is [
-          Extract<[Option<string>, Option<string>][0], { _tag: "Some" }>,
-          Extract<[Option<string>, Option<string>][1], { _tag: "Some" }>,
-        ] => {
-          const _g: any = _v;
-          return _g[0]._tag === "Some" && _g[1]._tag === "Some";
-        },
-        ([{ value: x }, { value: y }]) => eq(x, y),
-      )
-      .otherwise(() => false),
+    ((_v) =>
+      _v[0]._tag === "Some" && _v[1]._tag === "Some"
+        ? (([{ value: x }, { value: y }]) => eq(x, y))(
+            _v as [
+              Extract<[Option<string>, Option<string>][0], { _tag: "Some" }>,
+              Extract<[Option<string>, Option<string>][1], { _tag: "Some" }>,
+            ],
+          )
+        : false)(_tuple(_Str_get(i, a), _Str_get(j, b))),
 );
 const initRow: (n: number) => number[] = (n: number) => {
   let j: number = 0;
@@ -105,10 +102,14 @@ const lev: _Curry<[a: string, b: string], number> = _curry(2, (a: string, b: str
  * `^[A-Z]` — identifier heads are ASCII. Empty and non-letters are lower.
  */
 const upperStart: (s: string) => boolean = (s: string) =>
-  match(_Str_codeAt(0, s))
-    .with({ _tag: "Some" }, ({ value: n }) => and(n >= 65, n <= 90))
-    .with({ _tag: "None" }, () => false)
-    .exhaustive();
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: n }) => and(n >= 65, n <= 90))(_v)
+      : _v._tag === "None"
+        ? false
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Str_codeAt(0, s));
 const sameCaseClass: _Curry<[a: string, b: string], boolean> = _curry(2, (a: string, b: string) =>
   eq(upperStart(a), upperStart(b)),
 );
@@ -149,15 +150,18 @@ const closestFrom: _Curry<
     best: Option<string>,
     bestDist: number,
   ) =>
-    match(_Array_get(i, names))
-      .with({ _tag: "None" }, () => best)
-      .with({ _tag: "Some" }, ({ value: n }) =>
-        (([next, dist]: [Option<string>, number]) =>
-          closestFrom(want, names, i + 1, budget, next, dist))(
-          consider(want, budget, best, bestDist, n),
-        ),
-      )
-      .exhaustive(),
+    ((_v) =>
+      _v._tag === "None"
+        ? best
+        : _v._tag === "Some"
+          ? (({ value: n }) =>
+              (([next, dist]: [Option<string>, number]) =>
+                closestFrom(want, names, i + 1, budget, next, dist))(
+                consider(want, budget, best, bestDist, n),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, names)),
 );
 /**
  * Closest candidate within the edit-distance budget, or None.
