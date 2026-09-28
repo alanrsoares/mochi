@@ -50,6 +50,7 @@ import {
   freshRowVar,
   resolve,
   zonk,
+  recordedTypes,
   unify,
   fits
 } from "./types.mochi"
@@ -2004,8 +2005,8 @@ let qualAliasSeed = (stmts, quals, acc) => switch stmts {
 /// order (`recordAt` prepends). Mirrors src/infer.ts: types are only resolved
 /// once the whole program's substitution is settled, and later records win when
 /// two nodes share a span.
-let zonkRecorded = (recorded, st: Types.St) =>
-  Array.reverse(recorded) |> map(r => { span: r.span, ty: zonk(r.ty, st) })
+let zonkRecorded = (st: Types.St) =>
+  recordedTypes(st) |> map(r => { span: r.span, ty: zonk(r.ty, st) })
 
 /// A type with no free type OR row vars — the only kind worth annotating from:
 /// a generic position has nowhere to bind letters at a `const` / IIFE param.
@@ -2069,7 +2070,7 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
           | Ok(st5) => Ok(
               {
                 env: finalCtx.env,
-                types: zonkRecorded(st5.recorded, st5),
+                types: zonkRecorded(st5),
                 aliases: aliasMap,
                 letParams: resolveLetParams(st5)
               }

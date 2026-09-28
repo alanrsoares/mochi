@@ -203,10 +203,10 @@ export type Tok =
   | { _tag: "TEof" };
 export type PErr = { message: string; start: number; end: number };
 export type St = {
-  tv: Map<number, Ty>;
-  rv: Map<number, Row>;
+  tv: Map<number, Map<number, Ty>>;
+  rv: Map<number, Map<number, Row>>;
   next: number;
-  recorded: TypeAt[];
+  recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
 };
@@ -221,6 +221,7 @@ export type Row =
   | { _tag: "RowEmpty" }
   | { _tag: "RowVar"; id: number }
   | { _tag: "RowExtend"; label: string; fieldType: Ty; optional: boolean; rest: Row };
+export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
 export type TypeAt = { span: SpanAt; ty: Ty };
 export type SpanAt = { start: number; end: number };
 export type InferApi = {

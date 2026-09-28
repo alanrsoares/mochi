@@ -317,22 +317,24 @@ ${spaces(i)}`,
                                       ))(_v)
                             : _v._tag === "DGroup"
                               ? (({ doc: inner, breaks }) =>
-                                  breaks
-                                    ? _recur(
-                                        out,
-                                        pos,
-                                        WCons({ i: i, m: "break", d: inner }, tail),
-                                        sfx,
-                                      )
-                                    : ((cand: Work) =>
-                                        fits(width - pos, cand)
-                                          ? _recur(out, pos, cand, sfx)
-                                          : _recur(
-                                              out,
-                                              pos,
-                                              WCons({ i: i, m: "break", d: inner }, tail),
-                                              sfx,
-                                            ))(WCons({ i: i, m: "flat", d: inner }, tail)))(_v)
+                                  m === "flat"
+                                    ? _recur(out, pos, WCons({ i: i, m: m, d: inner }, tail), sfx)
+                                    : breaks
+                                      ? _recur(
+                                          out,
+                                          pos,
+                                          WCons({ i: i, m: "break", d: inner }, tail),
+                                          sfx,
+                                        )
+                                      : ((cand: Work) =>
+                                          fits(width - pos, cand)
+                                            ? _recur(out, pos, cand, sfx)
+                                            : _recur(
+                                                out,
+                                                pos,
+                                                WCons({ i: i, m: "break", d: inner }, tail),
+                                                sfx,
+                                              ))(WCons({ i: i, m: "flat", d: inner }, tail)))(_v)
                               : _v._tag === "DLineSuffix"
                                 ? (({ doc: inner }) =>
                                     _recur(

@@ -35,12 +35,18 @@ export type TypeAt = { span: SpanAt; ty: Ty };
  * reference identity, so the key is the value span's `"start:end"` instead —
  * unique per binding by construction, and the same string the TS backend's
  * `spanKey` builds when it looks the annotation back up.
+ *
+ * `St` is copied on every step, so its growing parts are chunked:
+ * `tv` / `rv` hold `ID_CHUNK` variable ids per inner map (`idGet` / `idSet`),
+ * and `recorded` appends to a short `cur` array that moves to `full` when it
+ * reaches `ID_CHUNK` entries (`recordedTypes` flattens it).
  */
+export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
 export type St = {
-  tv: Map<number, Ty>;
-  rv: Map<number, Row>;
+  tv: Map<number, Map<number, Ty>>;
+  rv: Map<number, Map<number, Row>>;
   next: number;
-  recorded: TypeAt[];
+  recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
 };
@@ -54,11 +60,15 @@ import {
   Ok,
   Some,
   _Array_append,
+  _Array_concat,
+  _Array_flatMap,
   _Array_get,
   _Array_prepend,
   _Map_get,
+  _Map_getOr,
   _Map_keys,
   _Map_set,
+  _Map_values,
   _Result_flatMap,
   _Result_map,
   _Str_join,
@@ -66,7 +76,9 @@ import {
   _tuple,
   and,
   eq,
+  floor,
   length,
+  lt,
   map,
   not,
   or,
@@ -353,23 +365,73 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
 );
 
 export const mkSt: (start: number) => St = (start: number) => ({
-  tv: new Map<number, Ty>(),
-  rv: new Map<number, Row>(),
+  tv: new Map<number, Map<number, Ty>>(),
+  rv: new Map<number, Map<number, Row>>(),
   next: start,
-  recorded: [] as TypeAt[],
+  recorded: { cur: [] as TypeAt[], full: [] as TypeAt[][] },
   letSpans: new Map<string, SpanAt>(),
   letUses: new Map<string, Ty[]>(),
 });
+const ID_CHUNK: number = 64;
 /**
- * Prepend an inferred node type onto the threaded record log.
+ * The binding for variable `id` in a chunked substitution.
+ */
+export const idGet: <A>(id: number, m: Map<number, Map<number, A>>) => Option<A> = _curry(
+  2,
+  <A>(id: number, m: Map<number, Map<number, A>>) =>
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: chunk }) => _Map_get(id, chunk))(_v)
+        : _v._tag === "None"
+          ? None
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(floor(id / ID_CHUNK), m)),
+);
+/**
+ * Bind `id`, copying the outer map and one chunk rather than every binding.
+ */
+export const idSet: <A>(
+  id: number,
+  v: A,
+  m: Map<number, Map<number, A>>,
+) => Map<number, Map<number, A>> = _curry(
+  3,
+  <A>(id: number, v: A, m: Map<number, Map<number, A>>) => {
+    const k: number = floor(id / ID_CHUNK);
+    return _Map_set(k, _Map_set(id, v, _Map_getOr(new Map<number, A>(), k, m)), m);
+  },
+);
+/**
+ * Every bound id.
+ */
+export const idKeys: <A, B, C>(m: Map<A, Map<B, C>>) => B[] = <A, B, C>(m: Map<A, Map<B, C>>) =>
+  _Array_flatMap(_Map_keys, _Map_values(m));
+/**
+ * Append an inferred node type to the threaded record log.
  */
 export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
   3,
-  (span: SpanAt, t: Ty, st: St) => ({
-    ...st,
-    recorded: _Array_prepend({ span: span, ty: t }, st.recorded),
-  }),
+  (span: SpanAt, t: Ty, st: St) => {
+    const rec: Recorded = st.recorded;
+    const at: TypeAt = { span: span, ty: t };
+    return {
+      ...st,
+      recorded:
+        length(rec.cur) < ID_CHUNK
+          ? { cur: _Array_append(at, rec.cur), full: rec.full }
+          : { cur: [at], full: _Array_append(rec.cur, rec.full) },
+    };
+  },
 );
+/**
+ * The record log in the order it was written.
+ */
+export const recordedTypes: (st: St) => TypeAt[] = (st: St) =>
+  _Array_concat(
+    _Array_flatMap((c: TypeAt[]) => c, st.recorded.full),
+    st.recorded.cur,
+  );
 const spanKeyOf: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
   sp: { start: A; end: B } & C,
 ) => `${show(sp.start)}:${show(sp.end)}`;
@@ -425,7 +487,7 @@ export const resolve: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
                 ? t
                 : (() => {
                     throw new Error("non-exhaustive match");
-                  })())(_Map_get(id, st.tv)))(_v)
+                  })())(idGet(id, st.tv)))(_v)
       : t)(t),
 );
 const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, (r: Row, st: St) =>
@@ -439,7 +501,7 @@ const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, (r: Row, st: St) =>
                 ? r
                 : (() => {
                     throw new Error("non-exhaustive match");
-                  })())(_Map_get(id, st.rv)))(_v)
+                  })())(idGet(id, st.rv)))(_v)
       : r)(r),
 );
 /**
@@ -617,14 +679,18 @@ const isLitOnlyUnion: (members: Ty[]) => boolean = (members: Ty[]) =>
             _v as [Extract<Ty[][number], { _tag: "TySingleton" }>, ...Ty[]],
           )
         : false)(members);
-const widenLitBindingsFrom: _Curry<[ids: number[], lit: Ty, st: St], St> = _curry(
-  3,
-  (ids: number[], lit: Ty, st: St) =>
+/**
+ * Walks `ids` by index: a `[id, ...rest]` walk copies the rest of the array at
+ * every step, and `ids` is every bound variable.
+ */
+const widenLitBindingsFrom: _Curry<[ids: number[], i: number, lit: Ty, st: St], St> = _curry(
+  4,
+  (ids: number[], i: number, lit: Ty, st: St) =>
     ((_v) =>
-      _v.length === 0
+      _v._tag === "None"
         ? st
-        : _v.length >= 1
-          ? (([id, ...rest]) =>
+        : _v._tag === "Some"
+          ? (({ value: id }) =>
               ((_v) =>
                 _v._tag === "Some"
                   ? (({ value: t }) =>
@@ -635,24 +701,24 @@ const widenLitBindingsFrom: _Curry<[ids: number[], lit: Ty, st: St], St> = _curr
                                 _v._tag === "TySingleton"
                                   ? (({ base: lbase, value: lvalue }) =>
                                       and(eq(base, lbase), eq(value, lvalue))
-                                        ? widenLitBindingsFrom(rest, lit, {
+                                        ? widenLitBindingsFrom(ids, i + 1, lit, {
                                             ...st,
-                                            tv: _Map_set(id, tPrim(base), st.tv),
+                                            tv: idSet(id, tPrim(base), st.tv),
                                           })
-                                        : widenLitBindingsFrom(rest, lit, st))(_v)
-                                  : widenLitBindingsFrom(rest, lit, st))(lit))(_v)
-                          : widenLitBindingsFrom(rest, lit, st))(resolve(t, st)))(_v)
+                                        : widenLitBindingsFrom(ids, i + 1, lit, st))(_v)
+                                  : widenLitBindingsFrom(ids, i + 1, lit, st))(lit))(_v)
+                          : widenLitBindingsFrom(ids, i + 1, lit, st))(resolve(t, st)))(_v)
                   : _v._tag === "None"
-                    ? widenLitBindingsFrom(rest, lit, st)
+                    ? widenLitBindingsFrom(ids, i + 1, lit, st)
                     : (() => {
                         throw new Error("non-exhaustive match");
-                      })())(_Map_get(id, st.tv)))(_v)
+                      })())(idGet(id, st.tv)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
-            })())(ids),
+            })())(_Array_get(i, ids)),
 );
 const widenLitBindings: _Curry<[lit: Ty, st: St], St> = _curry(2, (lit: Ty, st: St) =>
-  widenLitBindingsFrom(_Map_keys(st.tv), lit, st),
+  widenLitBindingsFrom(idKeys(st.tv), 0, lit, st),
 );
 const litInUnionFrom: _Curry<
   [lit: Ty, members: Ty[], i: number, st: St],
@@ -871,7 +937,7 @@ const bindVar: _Curry<[id: number, t: Ty, st: St], Result<St, TypeErr>> = _curry
   (id: number, t: Ty, st: St) =>
     occurs(id, t, st)
       ? fail(`infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}`)
-      : (Ok({ ...st, tv: _Map_set(id, t, st.tv) }) as Result<St, TypeErr>),
+      : (Ok({ ...st, tv: idSet(id, t, st.tv) }) as Result<St, TypeErr>),
 );
 /**
  * Bring `label` to the head of a row, extending an open tail if needed.
@@ -900,7 +966,7 @@ const rewriteRow: _Curry<
                   Ok(
                     _tuple(freshT, false, freshTail, {
                       ...st2,
-                      rv: _Map_set(rid, rExtend(label, freshT, freshTail), st2.rv),
+                      rv: idSet(rid, rExtend(label, freshT, freshTail), st2.rv),
                     }),
                   ) as Result<[Ty, boolean, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st)))(
               _v,
@@ -970,7 +1036,7 @@ const bindRowVar: _Curry<[id: number, row: Row, st: St], Result<St, TypeErr>> = 
         : ((r) =>
             rowVarOccurs(id, r, st)
               ? fail("infinite record type")
-              : (Ok({ ...st, rv: _Map_set(id, r, st.rv) }) as Result<St, TypeErr>))(_v))(
+              : (Ok({ ...st, rv: idSet(id, r, st.rv) }) as Result<St, TypeErr>))(_v))(
       resolveRow(row, st),
     ),
 );

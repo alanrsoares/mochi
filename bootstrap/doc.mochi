@@ -190,7 +190,13 @@ export let render = (root, width) =>
               : Array.length(sfx) == 0
               ? recur("${out}\n${spaces(i)}", i, tail, [])
               : recur(out, pos, consItems(sfx, WCons({ i, m, d }, tail)), [])
-          | DGroup(inner, breaks) => breaks
+          | DGroup(inner, breaks) =>
+            // Inside a group printing flat, `fits` already measured this group
+            // with its parent, so it prints flat too. It cannot force a break:
+            // that would have broken the parent.
+            m == "flat"
+              ? recur(out, pos, WCons({ i, m, d: inner }, tail), sfx)
+              : breaks
               ? recur(out, pos, WCons({ i, m: "break", d: inner }, tail), sfx)
               : let cand = WCons({ i, m: "flat", d: inner }, tail) in
                 fits(width - pos, cand)

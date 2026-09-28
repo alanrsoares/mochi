@@ -160,7 +160,6 @@ import {
   _Array_get,
   _Array_head,
   _Array_prepend,
-  _Array_reverse,
   _Map_delete,
   _Map_get,
   _Map_getOr,
@@ -223,6 +222,7 @@ import {
   freshRowVar,
   resolve,
   zonk,
+  recordedTypes,
   unify,
   fits,
 } from "./types";
@@ -5391,20 +5391,8 @@ const qualAliasSeed: <D, E, F>(
  * once the whole program's substitution is settled, and later records win when
  * two nodes share a span.
  */
-const zonkRecorded: <B>(
-  recorded: ({ ty: Ty; span: { end: number; start: number } } & B)[],
-  st: St,
-) => TypeAt[] = _curry(
-  2,
-  <B>(recorded: ({ ty: Ty; span: { end: number; start: number } } & B)[], st: St) =>
-    map(
-      (r: { ty: Ty; span: { end: number; start: number } } & B) => ({
-        span: r.span,
-        ty: zonk(r.ty, st),
-      }),
-      _Array_reverse(recorded),
-    ),
-);
+const zonkRecorded: (st: St) => TypeAt[] = (st: St) =>
+  map((r: TypeAt) => ({ span: r.span, ty: zonk(r.ty, st) }), recordedTypes(st));
 /**
  * A type with no free type OR row vars — the only kind worth annotating from:
  * a generic position has nowhere to bind letters at a `const` / IIFE param.
@@ -5583,7 +5571,7 @@ const runInferImports: <A, B, C>(
                       ? (({ value: st5 }) =>
                           Ok({
                             env: finalCtx.env,
-                            types: zonkRecorded(st5.recorded, st5),
+                            types: zonkRecorded(st5),
                             aliases: aliasMap,
                             letParams: resolveLetParams(st5),
                           }) as Result<
