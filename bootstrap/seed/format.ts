@@ -208,7 +208,7 @@ export const pattern: (p: Pattern) => string = (p: Pattern) =>
                       : _v._tag === "PCtor"
                         ? (({ ctor: ctorName, args, ns }) =>
                             ((head: string) =>
-                              eq(length(args), 0) ? head : `${head}(${commaJoin(pattern, args)})`)(
+                              length(args) === 0 ? head : `${head}(${commaJoin(pattern, args)})`)(
                               ((_v) =>
                                 _v._tag === "None"
                                   ? ctorName
@@ -243,9 +243,9 @@ const ctorField: (f: CtorField) => string = (f: CtorField) =>
             throw new Error("non-exhaustive match");
           })())(f.name);
 export const ctorText: (c: Ctor) => string = (c: Ctor) =>
-  eq(length(c.fields), 0) ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
+  length(c.fields) === 0 ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
 const generics: (params: string[]) => string = (params: string[]) =>
-  eq(length(params), 0) ? "" : `<${_Str_join(", ", params)}>`;
+  length(params) === 0 ? "" : `<${_Str_join(", ", params)}>`;
 /**
  * `extern x : T = "mod" "name"`, or one of the host conventions
  * (`global`/`send`/`get`/`set`/`new`), which print without the module string.
@@ -286,7 +286,7 @@ export const externStmt: _Curry<
           ? (({ value: convention }) =>
               ((first: string) =>
                 ((second: string) => `${head}${convention} ${strLit(first)}${second}`)(
-                  eq(imported, "") ? "" : ` ${strLit(imported)}`,
+                  imported === "" ? "" : ` ${strLit(imported)}`,
                 ))(_Str_slice(_Str_length(`mochi:${convention}:`), _Str_length(module), module)))(
               _v,
             )
@@ -302,7 +302,7 @@ const sepLine: Doc = cat([txt(","), line]);
 export const bracketed: _Curry<[open: string, close: string, items: Doc[]], Doc> = _curry(
   3,
   (open: string, close: string, items: Doc[]) =>
-    eq(length(items), 0)
+    length(items) === 0
       ? txt(`${open}${close}`)
       : group(
           cat([txt(open), indent(cat([softline, join(sepLine, items)])), softline, txt(close)]),
@@ -314,7 +314,7 @@ export const bracketed: _Curry<[open: string, close: string, items: Doc[]], Doc>
 export const braced: _Curry<[open: string, close: string, items: Doc[]], Doc> = _curry(
   3,
   (open: string, close: string, items: Doc[]) =>
-    eq(length(items), 0)
+    length(items) === 0
       ? txt(`${open}${close}`)
       : group(cat([txt(open), indent(cat([line, join(sepLine, items)])), line, txt(close)])),
 );
@@ -454,7 +454,7 @@ const lineEndFrom: _Curry<[src: string, i: number], number> = _curry(2, (src: st
  * comment ending in one. Space 32, tab 9, carriage return 13.
  */
 const trimEndFrom: _Curry<[s: string, n: number], string> = _curry(2, (s: string, n: number) =>
-  eq(n, 0)
+  n === 0
     ? ""
     : ((_v) =>
         _v._tag === "Some" && _v.value === 32
@@ -474,7 +474,7 @@ const commentAt: _Curry<[src: string, i: number, end: number], Comment> = _curry
       start: i,
       end: end,
       text: trimEnd(_Str_slice(i, end, src)),
-      blankAfter: eq(_Str_trim(_Str_slice(end + 1, lineEnd, src)), ""),
+      blankAfter: _Str_trim(_Str_slice(end + 1, lineEnd, src)) === "",
       trailing: false,
     };
   },
@@ -850,7 +850,7 @@ const withComments: _Curry<[cts: Ctx, kind: string, sp: SpanAt, doc: Doc], Doc> 
   (cts: Ctx, kind: string, sp: SpanAt, doc: Doc) => {
     const lead: Doc[] = leadingDocs(cts, kind, sp);
     const trail: Doc[] = trailingDocs(cts, kind, sp);
-    return and(eq(length(lead), 0), eq(length(trail), 0)) ? doc : cat([...lead, doc, ...trail]);
+    return and(length(lead) === 0, length(trail) === 0) ? doc : cat([...lead, doc, ...trail]);
   },
 );
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -908,7 +908,7 @@ const arityOfDef: (def: string) => number = (def: string) => {
   const curried: number = indexOfFrom("_curry(", def, 0);
   return curried >= 0
     ? ((digits: string) =>
-        eq(_Str_length(digits), 0) ? 0 : _Option_unwrapOr(0, _Str_toNumber(digits)))(
+        _Str_length(digits) === 0 ? 0 : _Option_unwrapOr(0, _Str_toNumber(digits)))(
         curryArityFrom(def, curried + 7, ""),
       )
     : ((open: number) =>
@@ -918,7 +918,7 @@ const arityOfDef: (def: string) => number = (def: string) => {
               close < 0
                 ? 0
                 : ((params: string) =>
-                    eq(_Str_length(params), 0) ? 0 : commaCountFrom(params, 0, 1))(
+                    _Str_length(params) === 0 ? 0 : commaCountFrom(params, 0, 1))(
                     _Str_trim(_Str_slice(open + 3, close, def)),
                   ))(indexOfFrom(") =>", def, open)))(indexOfFrom("= (", def, 0));
 };
@@ -1574,7 +1574,7 @@ const binaryD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(
                       ((_v) =>
                         _v.length === 2
                           ? (([l, r]) =>
-                              eq(info.symbol, "++")
+                              info.symbol === "++"
                                 ? (Some(concatD(cts, l, r)) as Option<Doc>)
                                 : (Some(
                                     group(
@@ -1650,20 +1650,20 @@ const etaPartial: _Curry<[ctx: Ctx, params: LamParam[], body: Expr], Option<Expr
                                   _v._tag === "ECall" && _v.origin._tag === "None"
                                     ? (({ fn, args, span: sp }) =>
                                         ((n: number) =>
-                                          eq(n, 0)
+                                          n === 0
                                             ? (None as Option<Expr>)
                                             : ((_v) =>
                                                 _v._tag === "Some" && _v.value._tag === "ERef"
                                                   ? (({ value: { name: lastName } }) =>
-                                                      not(eq(lastName, name))
+                                                      !eq(lastName, name)
                                                         ? (None as Option<Expr>)
                                                         : ((prefix: Expr[]) =>
                                                             and(
                                                               and(
                                                                 and(isInert(fn), allInert(prefix)),
-                                                                not(mentionsRef(fn, name)),
+                                                                !mentionsRef(fn, name),
                                                               ),
-                                                              not(anyMentions(prefix, name)),
+                                                              !anyMentions(prefix, name),
                                                             )
                                                               ? ((_v) =>
                                                                   _v._tag === "Some"
@@ -1737,7 +1737,7 @@ const etaPartial: _Curry<[ctx: Ctx, params: LamParam[], body: Expr], Option<Expr
         : (None as Option<Expr>))(params),
 );
 const allInert: (args: Expr[]) => boolean = (args: Expr[]) =>
-  eq(length(filter((a: Expr) => not(isInert(a)), args)), 0);
+  length(filter((a: Expr) => !isInert(a), args)) === 0;
 const anyMentions: _Curry<[args: Expr[], name: string], boolean> = _curry(
   2,
   (args: Expr[], name: string) => length(filter((a: Expr) => mentionsRef(a, name), args)) > 0,
@@ -1812,7 +1812,7 @@ const flattenCallSpine: _Curry<[ctx: Ctx, e: Expr], Option<Expr>> = _curry(2, (c
           })())(spineGroups(e, [] as Expr[][])),
 );
 const anyEmptyGroup: <A>(groups: A[][]) => boolean = <A>(groups: A[][]) =>
-  length(filter((g: A[]) => eq(length(g), 0), groups)) > 0;
+  length(filter((g: A[]) => length(g) === 0, groups)) > 0;
 const anyUnit: (args: Expr[]) => boolean = (args: Expr[]) =>
   length(filter((a: Expr) => ((_v) => (_v._tag === "EUnit" ? true : false))(a), args)) > 0;
 /**
@@ -2163,7 +2163,7 @@ const discardedFrom: _Curry<[e: Expr, acc: Expr[]], Option<Expr[]>> = _curry(
     ((_v) =>
       _v._tag === "ELetIn" && _v.name === "_"
         ? (({ value, body }) => discardedFrom(body, _Array_append(value, acc)))(_v)
-        : eq(length(acc), 0)
+        : length(acc) === 0
           ? (None as Option<Expr[]>)
           : (Some(_Array_append(e, acc)) as Option<Expr[]>))(e),
 );
@@ -2251,7 +2251,7 @@ const plainLambdaD: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Doc> = _c
               ? (({ value: exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)]))(_v)
               : _v._tag === "None"
                 ? ((_v) =>
-                    _v._tag === "EMatch" && not(hasLead(cts, EXPR, exprSpan(body)))
+                    _v._tag === "EMatch" && !hasLead(cts, EXPR, exprSpan(body))
                       ? cat([head, txt(" "), exprD(cts, body)])
                       : group(cat([head, indent(cat([line, exprD(cts, body)]))])))(body)
                 : (() => {
@@ -2546,9 +2546,7 @@ const plainCallD: _Curry<
                         fnD,
                         txt("("),
                         join(txt(", "), argDocs),
-                        or(lastArgHugs(lbody), not(asCallee))
-                          ? txt(")")
-                          : cat([softline, txt(")")]),
+                        or(lastArgHugs(lbody), !asCallee) ? txt(")") : cat([softline, txt(")")]),
                       ]),
                     ))(
                     _v as Extract<Option<Expr>, { _tag: "Some" }> & {
@@ -2627,14 +2625,14 @@ const pipeD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
 const letBindHead: _Curry<[cts: Ctx, monad: string, param: LamParam], string> = _curry(
   3,
   (cts: Ctx, monad: string, param: LamParam) =>
-    `let${eq(monad, "Task") ? "!" : "?"} ${paramText(cts, param)}`,
+    `let${monad === "Task" ? "!" : "?"} ${paramText(cts, param)}`,
 );
 /**
  * Plugin `format` hooks may rewrite a node before layout (ADR 0109), except
  * when a comment sits inside it: the rewrite would drop or duplicate it.
  */
 const hooked: _Curry<[cts: Ctx, e: Expr], Expr> = _curry(2, (cts: Ctx, e: Expr) =>
-  eq(length(cts.formatHooks), 0)
+  length(cts.formatHooks) === 0
     ? e
     : ((sp: SpanAt) =>
         _Option_isSome(_Array_find((s: number) => and(s > sp.start, s < sp.end), cts.commentStarts))
@@ -2657,7 +2655,7 @@ const formatApi: (cts: Ctx) => FormatApi = (cts: Ctx) => ({
  */
 const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) => {
   const node: Expr = hooked(cts, e);
-  return eq(length(cts.formatDocHooks), 0)
+  return length(cts.formatDocHooks) === 0
     ? exprRawOf(cts, node)
     : ((_v) =>
         _v._tag === "Some"
@@ -2851,7 +2849,7 @@ export const typeStmtD: _Curry<
               _v._tag === "Some"
                 ? (({ value: te }) => txt(`${head} = ${showTypeExpr(te)}`))(_v)
                 : _v._tag === "None"
-                  ? eq(length(ctors), 0)
+                  ? length(ctors) === 0
                     ? txt(`extern ${head}`)
                     : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))])
                   : (() => {
@@ -3228,7 +3226,7 @@ const inErrorSpan: _Curry<[stmts: Stmt[], c: Comment], boolean> = _curry(
 const hasOpenDirective: (src: string) => boolean = (src: string) =>
   ((_v) =>
     _v._tag === "Some"
-      ? (({ value: first }) => eq(_Str_trim(first), '"use open"'))(_v)
+      ? (({ value: first }) => _Str_trim(first) === '"use open"')(_v)
       : _v._tag === "None"
         ? false
         : (() => {
@@ -3252,7 +3250,7 @@ export const formatProgramWith: _Curry<[stmts: Stmt[], src: string, hooks: Forma
     const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
     const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
     const comments: Comment[] = filter(
-      (c: Comment) => not(inErrorSpan(stmts, c)),
+      (c: Comment) => !inErrorSpan(stmts, c),
       collectComments(src),
     );
     const base: Ctx = {

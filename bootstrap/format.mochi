@@ -600,7 +600,7 @@ let withComments = (cts: Ctx, kind, sp, doc) =>
 // runtime actually accepts, which `unit` domains and callback results make
 // differ from the HM signature.
 
-extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 

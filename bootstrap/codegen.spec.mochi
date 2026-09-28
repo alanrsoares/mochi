@@ -3,7 +3,7 @@ import { codegen, codegenWith, jsGenOpts } from "./codegen.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 
-extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 

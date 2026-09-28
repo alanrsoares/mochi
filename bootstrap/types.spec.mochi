@@ -1,7 +1,12 @@
 import { assertEq, ok, test } from "@mochi/test"
 import {
+  idGet,
+  idKeys,
+  idSet,
   isUnit,
   mkSt,
+  recordAt,
+  recordedTypes,
   showType,
   tArrow,
   tPrim,
@@ -30,3 +35,41 @@ test("unify unit with number fails", () => switch unify(tUnit, tPrim("number"), 
   | Err(e) => e.message |> assertEq("cannot unify () with number")
   | Ok(_) => false |> ok
 })
+
+// The substitution is chunked by id; bindings either side of a chunk boundary
+// must stay independent and all come back from `idKeys`.
+let chunked = #{}
+  |> idSet(63, "a")
+  |> idSet(64, "b")
+  |> idSet(130, "c")
+  |> idSet(64, "B")
+
+test("a chunked substitution keeps bindings across chunk boundaries", () =>
+  assertEq(
+    [Some("a"), Some("B"), Some("c"), None],
+    [
+      idGet(63, chunked),
+      idGet(64, chunked),
+      idGet(130, chunked),
+      idGet(65, chunked)
+    ]
+  ))
+
+test("idKeys lists every bound id", () =>
+  assertEq([63, 64, 130], Array.sort(idKeys(chunked))))
+
+// `recordAt` moves full chunks aside; the log must still read in write order.
+test("the record log keeps write order across chunks", () =>
+  let st = loop (n = 0, acc = mkSt(0)) {
+    n == 150 ? acc : recur(n + 1, recordAt({ start: n, end: n }, tUnit, acc))
+  } in
+  let starts = recordedTypes(st) |> map(r => r.span.start) in
+    assertEq(
+      (150, Some(0), Some(64), Some(149)),
+      (
+        Array.length(starts),
+        Array.get(0, starts),
+        Array.get(64, starts),
+        Array.get(149, starts)
+      )
+    ))

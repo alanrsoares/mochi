@@ -159,6 +159,8 @@ What else was on the table and why not.
 | [0112](0112-bootstrap-format-doc-hook.md) | Bootstrap plugins may lay a node out themselves | Accepted |
 | [0113](0113-switch-lowers-to-ternaries.md) | `switch` lowers to a ternary chain | Accepted |
 | [0114](0114-bootstrap-formatter-ships.md) | The self-hosted formatter ships; the TypeScript one is retired | Accepted |
+| [0115](0115-curry-fast-paths-and-exact-comparisons.md) | `_curry` fast paths, and exact comparisons as operators | Accepted |
+| [0116](0116-compose-lexes-as-two-gt.md) | `>>` lexes as two `>`; nested type arguments close without a space | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

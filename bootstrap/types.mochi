@@ -230,22 +230,62 @@ export type TypeAt = { span: SpanAt, ty: Ty }
 /// reference identity, so the key is the value span's `"start:end"` instead —
 /// unique per binding by construction, and the same string the TS backend's
 /// `spanKey` builds when it looks the annotation back up.
+///
+/// `St` is copied on every step, so its growing parts are chunked:
+/// `tv` / `rv` hold `ID_CHUNK` variable ids per inner map (`idGet` / `idSet`),
+/// and `recorded` appends to a short `cur` array that moves to `full` when it
+/// reaches `ID_CHUNK` entries (`recordedTypes` flattens it).
+export type Recorded = { cur: [TypeAt], full: [[TypeAt]] }
 export type St = {
-  tv: Map<number, Ty>,
-  rv: Map<number, Row>,
+  tv: Map<number, Map<number, Ty>>,
+  rv: Map<number, Map<number, Row>>,
   next: number,
-  recorded: [TypeAt],
+  recorded: Recorded,
   letSpans: Map<string, SpanAt>,
   letUses: Map<string, [Ty]>
 }
 export type TypeErr = { message: string }
 
 export let mkSt : number -> St = start =>
-  { tv: #{}, rv: #{}, next: start, recorded: [], letSpans: #{}, letUses: #{} }
+  {
+    tv: #{},
+    rv: #{},
+    next: start,
+    recorded: { cur: [], full: [] },
+    letSpans: #{},
+    letUses: #{}
+  }
 
-/// Prepend an inferred node type onto the threaded record log.
+let ID_CHUNK = 64
+
+/// The binding for variable `id` in a chunked substitution.
+export let idGet = (id, m) => switch Map.get(floor(id / ID_CHUNK), m) {
+  | Some(chunk) => Map.get(id, chunk)
+  | None => None
+}
+
+/// Bind `id`, copying the outer map and one chunk rather than every binding.
+export let idSet = (id, v, m) =>
+  let k = floor(id / ID_CHUNK) in
+    Map.set(k, Map.set(id, v, Map.getOr(#{}, k, m)), m)
+
+/// Every bound id.
+export let idKeys = m => Map.values(m) |> Array.flatMap(Map.keys)
+
+/// Append an inferred node type to the threaded record log.
 export let recordAt = (span, t, st: St) =>
-  { ...st, recorded: Array.prepend({ span, ty: t }, st.recorded) }
+  let rec = st.recorded in
+  let at = { span, ty: t } in
+    {
+      ...st,
+      recorded: Array.length(rec.cur) < ID_CHUNK
+        ? { cur: Array.append(at, rec.cur), full: rec.full }
+        : { cur: [at], full: Array.append(rec.cur, rec.full) }
+    }
+
+/// The record log in the order it was written.
+export let recordedTypes = (st: St) =>
+  Array.concat(Array.flatMap(c => c, st.recorded.full), st.recorded.cur)
 
 let spanKeyOf = sp => "${show(sp.start)}:${show(sp.end)}"
 
@@ -278,7 +318,7 @@ export let freshRowVar = st => (rVar(st.next), { ...st, next: st.next + 1 })
 // ---- resolution: follow a variable chain one level to a head ----
 
 export let resolve = (t, st: St) => switch t {
-  | TyVar(id) => switch Map.get(id, st.tv) {
+  | TyVar(id) => switch idGet(id, st.tv) {
       | Some(next) => resolve(next, st)
       | None => t
     }
@@ -286,7 +326,7 @@ export let resolve = (t, st: St) => switch t {
 }
 
 let resolveRow = (r, st: St) => switch r {
-  | RowVar(id) => switch Map.get(id, st.rv) {
+  | RowVar(id) => switch idGet(id, st.rv) {
       | Some(next) => resolveRow(next, st)
       | None => r
     }
@@ -423,28 +463,31 @@ let isLitOnlyUnion = members => switch members {
   | _ => false
 }
 
-let widenLitBindingsFrom = (ids, lit, st: St) => switch ids {
-  | [] => st
-  | [id, ...rest] => switch Map.get(id, st.tv) {
+/// Walks `ids` by index: a `[id, ...rest]` walk copies the rest of the array at
+/// every step, and `ids` is every bound variable.
+let widenLitBindingsFrom = (ids, i, lit, st: St) => switch Array.get(i, ids) {
+  | None => st
+  | Some(id) => switch idGet(id, st.tv) {
       | Some(t) => switch resolve(t, st) {
           | TySingleton(base, value) => switch lit {
               | TySingleton(lbase, lvalue) => base == lbase && value == lvalue
                   ? widenLitBindingsFrom(
-                    rest,
+                    ids,
+                    i + 1,
                     lit,
-                    { ...st, tv: Map.set(id, tPrim(base), st.tv) }
+                    { ...st, tv: idSet(id, tPrim(base), st.tv) }
                   )
-                  : widenLitBindingsFrom(rest, lit, st)
-              | _ => widenLitBindingsFrom(rest, lit, st)
+                  : widenLitBindingsFrom(ids, i + 1, lit, st)
+              | _ => widenLitBindingsFrom(ids, i + 1, lit, st)
             }
-          | _ => widenLitBindingsFrom(rest, lit, st)
+          | _ => widenLitBindingsFrom(ids, i + 1, lit, st)
         }
-      | None => widenLitBindingsFrom(rest, lit, st)
+      | None => widenLitBindingsFrom(ids, i + 1, lit, st)
     }
 }
 
 let widenLitBindings = (lit, st: St) =>
-  widenLitBindingsFrom(Map.keys(st.tv), lit, st)
+  widenLitBindingsFrom(idKeys(st.tv), 0, lit, st)
 
 let litInUnionFrom = (lit, members, i, st: St) => switch Array.get(i, members) {
   | None => fail(
@@ -577,7 +620,7 @@ export let unify = (a, b, st: St) =>
 let bindVar = (id, t, st: St) =>
   occurs(id, t, st)
     ? fail("infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}")
-    : Ok({ ...st, tv: Map.set(id, t, st.tv) })
+    : Ok({ ...st, tv: idSet(id, t, st.tv) })
 
 // ---- row unification ----
 
@@ -596,7 +639,7 @@ let rewriteRow = (row, label, st: St) => switch resolveRow(row, st) {
         freshT,
         false,
         freshTail,
-        { ...st2, rv: Map.set(rid, rExtend(label, freshT, freshTail), st2.rv) }
+        { ...st2, rv: idSet(rid, rExtend(label, freshT, freshTail), st2.rv) }
       ))
 }
 
@@ -631,7 +674,7 @@ let bindRowVar = (id, row, st: St) => switch resolveRow(row, st) {
   | RowVar(rid) when rid == id => Ok(st)
   | r => rowVarOccurs(id, r, st)
       ? fail("infinite record type")
-      : Ok({ ...st, rv: Map.set(id, r, st.rv) })
+      : Ok({ ...st, rv: idSet(id, r, st.rv) })
 }
 
 /// Directional record check: `actual` may be used where `expected` is required

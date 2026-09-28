@@ -271,9 +271,9 @@ const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
               : _v._tag === "PTuple"
                 ? (({ elems }) => allOf(isCatchAll, elems))(_v)
                 : _v._tag === "PArr"
-                  ? (({ elems, rest }) => and(eq(length(elems), 0), _Option_isSome(rest)))(_v)
+                  ? (({ elems, rest }) => and(length(elems) === 0, _Option_isSome(rest)))(_v)
                   : _v._tag === "PList"
-                    ? (({ elems, rest }) => and(eq(length(elems), 0), _Option_isSome(rest)))(_v)
+                    ? (({ elems, rest }) => and(length(elems) === 0, _Option_isSome(rest)))(_v)
                     : false)(p);
 const isPList: (p: Pattern) => boolean = (p: Pattern) =>
   ((_v) => (_v._tag === "PList" ? true : false))(p);
@@ -671,7 +671,7 @@ const checkSeqExhaustive: <A>(
       arms,
     ),
   );
-  return eq(length(seqs), 0)
+  return length(seqs) === 0
     ? (SeqNotSeq as SeqCheck)
     : ((hasEmpty: boolean) =>
         ((hasCons: boolean) =>
@@ -687,7 +687,7 @@ const checkSeqExhaustive: <A>(
             (p: Pattern) =>
               ((_v) =>
                 _v._tag === "Some"
-                  ? (({ value: [elems, rest] }) => and(eq(length(elems), 1), _Option_isSome(rest)))(
+                  ? (({ value: [elems, rest] }) => and(length(elems) === 1, _Option_isSome(rest)))(
                       _v as Extract<Option<[Pattern[], Option<Pattern>]>, { _tag: "Some" }>,
                     )
                   : _v._tag === "None"
@@ -702,7 +702,7 @@ const checkSeqExhaustive: <A>(
           (p: Pattern) =>
             ((_v) =>
               _v._tag === "Some"
-                ? (({ value: [elems, rest] }) => and(eq(length(elems), 0), _Option_isNone(rest)))(
+                ? (({ value: [elems, rest] }) => and(length(elems) === 0, _Option_isNone(rest)))(
                     _v as Extract<Option<[Pattern[], Option<Pattern>]>, { _tag: "Some" }>,
                   )
                 : _v._tag === "None"
@@ -746,7 +746,7 @@ const ctorLoop: <A, B, C, D>(
                               >)
                             : _v._tag === "Some"
                               ? (({ value: info }) =>
-                                  not(eq(length(args), info.arity))
+                                  !eq(length(args), info.arity)
                                     ? (Err(
                                         checkErr(
                                           `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
@@ -755,7 +755,7 @@ const ctorLoop: <A, B, C, D>(
                                       ) as Result<[Option<string>, Set<string>], PErr>)
                                     : ((_v) =>
                                         _v._tag === "Some" &&
-                                        (({ value: own }) => not(eq(own, info.owner)))(_v)
+                                        (({ value: own }) => !eq(own, info.owner))(_v)
                                           ? (({ value: own }) =>
                                               Err(
                                                 checkErr(
@@ -847,7 +847,7 @@ const matrixVerdict: <A, D, E>(
                 ((own: string) =>
                   ((named: Set<string>) =>
                     ((absent: string[]) =>
-                      and(and(isWideWitnessM(w), not(eq(own, ""))), length(absent) > 0)
+                      and(and(isWideWitnessM(w), own !== ""), length(absent) > 0)
                         ? Some(
                             checkErr(
                               `non-exhaustive switch on '${own}': missing ${_Str_join(", ", absent)}`,
@@ -861,7 +861,7 @@ const matrixVerdict: <A, D, E>(
                             ),
                           ))(
                       filter(
-                        (c: string) => not(_Set_has(c, named)),
+                        (c: string) => !_Set_has(c, named),
                         _Map_getOr([] as string[], own, reg.types),
                       ),
                     ))(namedUnguarded(leaves)))(_Option_unwrapOr("", ownerOpt)))(_v)
@@ -945,7 +945,7 @@ const checkMatch: <A>(
                     : (() => {
                         throw new Error("non-exhaustive match");
                       })())(guardErrs(arms, listSwitch)))(
-              someOf((a: MatchArm) => and(isPList(a.pattern), not(isCatchAll(a.pattern))), arms),
+              someOf((a: MatchArm) => and(isPList(a.pattern), !isCatchAll(a.pattern)), arms),
             )
           : (() => {
               throw new Error("non-exhaustive match");
@@ -2264,14 +2264,14 @@ const checkLoopExpr: _Curry<
                 ? (Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>)
                 : _v._tag === "Some"
                   ? (({ value: current }) =>
-                      not(tail)
+                      !tail
                         ? (Some(
                             checkErr("'recur' must be in tail position of its enclosing loop", sp),
                           ) as Option<PErr>)
-                        : not(eq(length(args), current.arity))
+                        : !eq(length(args), current.arity)
                           ? (Some(
                               checkErr(
-                                `'recur' takes ${show(current.arity)} argument${eq(current.arity, 1) ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                                `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
                                 sp,
                               ),
                             ) as Option<PErr>)
@@ -2544,7 +2544,7 @@ const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean],
                     ? [checkErr("'recur' is only legal inside a loop body", sp)]
                     : _v._tag === "Some"
                       ? (({ value: current }) => [
-                          ...(not(tail)
+                          ...(!tail
                             ? [
                                 checkErr(
                                   "'recur' must be in tail position of its enclosing loop",
@@ -2552,10 +2552,10 @@ const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean],
                                 ),
                               ]
                             : ([] as PErr[])),
-                          ...(not(eq(length(args), current.arity))
+                          ...(!eq(length(args), current.arity)
                             ? [
                                 checkErr(
-                                  `'recur' takes ${show(current.arity)} argument${eq(current.arity, 1) ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                                  `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
                                   sp,
                                 ),
                               ]
@@ -2873,7 +2873,7 @@ export const checkAllWith: <A, B>(
       _v._tag === "Err"
         ? (({ error: e }) =>
             ((errors: PErr[]) =>
-              eq(length(errors), 0)
+              length(errors) === 0
                 ? (Ok(stmts) as Result<Stmt[], PErr[]>)
                 : (Err(errors) as Result<Stmt[], PErr[]>))([
               ...checkReservedNamesAll(stmts),
@@ -2887,7 +2887,7 @@ export const checkAllWith: <A, B>(
           ? (({ value: reg0 }) =>
               ((reg: Registry) =>
                 ((errors: PErr[]) =>
-                  eq(length(errors), 0)
+                  length(errors) === 0
                     ? (Ok(stmts) as Result<Stmt[], PErr[]>)
                     : (Err(errors) as Result<Stmt[], PErr[]>))([
                   ...checkReservedNamesAll(stmts),

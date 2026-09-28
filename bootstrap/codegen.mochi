@@ -21,6 +21,7 @@
 //   xs)` cursor loops (matches check.mochi/infer.mochi's established idiom).
 
 import * as Ast from "./ast.mochi"
+import { localBinderNames } from "./local-names.mochi"
 
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -71,13 +72,13 @@ type CtorFieldLike = { name: Option<string>, fieldType: Ast.TypeExpr }
 type CtorLike = { name: string, fields: [CtorFieldLike], span: Ast.Span }
 
 type GenOpts = {
-  annotateLet: Option<string -> Ast.Expr -> Option<string> >,
-  annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs> >,
+  annotateLet: Option<string -> Ast.Expr -> Option<string>>,
+  annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs>>,
   annotateParams: Option<Ast.Span -> number -> ParamAnnots>,
-  annotateEmpty: Option<Ast.Expr -> Option<string> >,
-  annotateLetin: Option<Ast.Expr -> Option<string> >,
-  annotateCall: Option<Ast.Expr -> Option<string> >,
-  guardBaseType: Option<Ast.Expr -> Option<string> >,
+  annotateEmpty: Option<Ast.Expr -> Option<string>>,
+  annotateLetin: Option<Ast.Expr -> Option<string>>,
+  annotateCall: Option<Ast.Expr -> Option<string>>,
+  guardBaseType: Option<Ast.Expr -> Option<string>>,
   flattenPipe: bool,
   tupleHelper: bool,
   preserveInfix: bool,
@@ -94,20 +95,21 @@ type GenOpts = {
 /// once per function instead of naming it.
 type GCtx = {
   keys: Map<string, [string]>,
-  ns: Map<string, Map<string, string> >,
-  annotateLet: Option<string -> Ast.Expr -> Option<string> >,
-  annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs> >,
+  ns: Map<string, Map<string, string>>,
+  annotateLet: Option<string -> Ast.Expr -> Option<string>>,
+  annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs>>,
   annotateParams: Option<Ast.Span -> number -> ParamAnnots>,
-  annotateEmpty: Option<Ast.Expr -> Option<string> >,
-  annotateLetin: Option<Ast.Expr -> Option<string> >,
-  annotateCall: Option<Ast.Expr -> Option<string> >,
-  guardBaseType: Option<Ast.Expr -> Option<string> >,
+  annotateEmpty: Option<Ast.Expr -> Option<string>>,
+  annotateLetin: Option<Ast.Expr -> Option<string>>,
+  annotateCall: Option<Ast.Expr -> Option<string>>,
+  guardBaseType: Option<Ast.Expr -> Option<string>>,
   flattenPipe: bool,
   tupleHelper: bool,
   preserveInfix: bool,
   preserveJsx: bool,
   moduleExt: string,
   valueRefs: Set<string>,
+  userNames: Set<string>,
   docs: bool
 }
 
@@ -351,13 +353,51 @@ let collapseLambda = (params, body) =>
 
 // ---- expressions -----------------------------------------------------------
 
-/// The numeric calls whose saturated runtime behavior is exactly JavaScript's
-/// infix behavior. `eq` is structural and `mod` is true modulo, so neither
-/// belongs here.
+/// A string, number or bool literal.
+let isPrimLit = e => switch e {
+  | Ast.ENum(_, _, _) => true
+  | Ast.EStr(_, _) => true
+  | Ast.EBool(_, _) => true
+  | _ => false
+}
+
+/// Structural `eq` as a JavaScript comparison, where the two agree exactly
+/// (ADR 0115): against a primitive literal it is `===`, and against a nullary
+/// ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+let eqTest = (ctx: GCtx, left, right, op) => switch (left, right) {
+  | (_, Ast.ERef(c, _)) when isNullaryCtor(c, ctx.keys) => Some(
+      "(${ctx->genMember(left)}._tag ${op} \"${c}\")"
+    )
+  | (Ast.ERef(c, _), _) when isNullaryCtor(c, ctx.keys) => Some(
+      "(${ctx->genMember(right)}._tag ${op} \"${c}\")"
+    )
+  | _ => isPrimLit(left) || isPrimLit(right)
+      ? Some("(${ctx->genExpr(left)} ${op} ${ctx->genExpr(right)})")
+      : None
+}
+
+/// A call to a name the module binds itself, not the prelude function.
+let isUserCall = (ctx: GCtx, fn) => switch fn {
+  | Ast.ERef(name, _) => Set.has(name, ctx.userNames)
+  | _ => false
+}
+
+/// The calls whose saturated runtime behavior is exactly JavaScript's infix
+/// behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
+/// `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
+/// belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
 let tsInfix = (ctx: GCtx, fn, args) =>
-  !ctx.preserveInfix
+  !ctx.preserveInfix || isUserCall(ctx, fn)
     ? None
     : switch (fn, args) {
+      | (Ast.ERef("eq", _), [left, right]) => ctx->eqTest(left, right, "===")
+      | (Ast.ERef("not", _), [operand]) => switch operand {
+          | Ast.ECall(Ast.ERef("eq", _), [left, right], _, _) when !Set.has("eq", ctx.userNames) => switch ctx->eqTest(left, right, "!==") {
+              | Some(test) => Some(test)
+              | None => Some("!(${ctx->genExpr(operand)})")
+            }
+          | _ => Some("!(${ctx->genExpr(operand)})")
+        }
       | (Ast.ERef(name, _), [left, right]) => switch name {
           | "add" => Some("(${ctx->genExpr(left)} + ${ctx->genExpr(right)})")
           | "sub" => Some("(${ctx->genExpr(left)} - ${ctx->genExpr(right)})")
@@ -2194,10 +2234,17 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     preserveJsx: opts.preserveJsx,
     moduleExt: opts.moduleExt,
     valueRefs: Set.fromArray([]),
+    userNames: Set.fromArray([]),
     docs: opts.docs
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
-  let ctx = { ...ctx0, valueRefs } in
+  // Names the module binds at any scope. An operator call on one of them is
+  // the user's function, so `tsInfix` leaves it a call.
+  let userNames = Set.union(
+    boundNames(valueRefs, stmts),
+    localBinderNames(stmts)
+  ) in
+  let ctx = { ...ctx0, valueRefs, userNames } in
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => ctx->usesMatchLib(value)
@@ -2236,6 +2283,7 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     preserveJsx: false,
     moduleExt: ".js",
     valueRefs: Set.fromArray([]),
+    userNames: Set.fromArray([]),
     docs: false
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in

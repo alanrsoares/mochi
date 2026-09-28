@@ -26,7 +26,8 @@ import {
   rField,
   freshVar,
   freshRowVar,
-  zonk
+  zonk,
+  idGet
 } from "./types.mochi"
 import * as Types from "./types.mochi"
 import { primTypeNames } from "./ctors.mochi"
@@ -70,9 +71,12 @@ export let collect = (t, acc) => switch t {
   | TySingleton(_, _) => acc
   | TyOneOf(members) => collectArgs(members, acc)
 }
-let collectArgs = (args, acc) => switch args {
-  | [] => acc
-  | [a, ...rest] => collectArgs(rest, collect(a, acc))
+// The walks over arrays go by index: `[a, ...rest]` copies the rest at every
+// step, which is quadratic over an environment's schemes.
+let collectArgs = (args, acc) => collectArgsFrom(args, 0, acc)
+let collectArgsFrom = (args, i, acc) => switch Array.get(i, args) {
+  | None => acc
+  | Some(a) => collectArgsFrom(args, i + 1, collect(a, acc))
 }
 let collectRow = (row, acc) => switch row {
   | RowVar(id) => { tv: acc.tv, rv: Set.add(id, acc.rv) }
@@ -95,7 +99,7 @@ export let freeInType = t => collect(t, emptyVarSets)
 let collectFree = (t, bound: VarSets, st: Types.St, acc) => switch t {
   | TyVar(id) => Set.has(id, bound.tv)
       ? acc
-      : switch Map.get(id, st.tv) {
+      : switch idGet(id, st.tv) {
         | Some(next) => collectFree(next, bound, st, acc)
         | None => { tv: Set.add(id, acc.tv), rv: acc.rv }
       }
@@ -110,10 +114,13 @@ let collectFree = (t, bound: VarSets, st: Types.St, acc) => switch t {
   | TySingleton(_, _) => acc
   | TyOneOf(members) => collectFreeArgs(members, bound, st, acc)
 }
-let collectFreeArgs = (args, bound: VarSets, st: Types.St, acc) => switch args {
-  | [] => acc
-  | [a, ...rest] => collectFreeArgs(
-      rest,
+let collectFreeArgs = (args, bound: VarSets, st: Types.St, acc) =>
+  collectFreeArgsFrom(args, 0, bound, st, acc)
+let collectFreeArgsFrom = (args, i, bound: VarSets, st: Types.St, acc) => switch Array.get(i, args) {
+  | None => acc
+  | Some(a) => collectFreeArgsFrom(
+      args,
+      i + 1,
       bound,
       st,
       collectFree(a, bound, st, acc)
@@ -122,7 +129,7 @@ let collectFreeArgs = (args, bound: VarSets, st: Types.St, acc) => switch args {
 let collectFreeRow = (row, bound: VarSets, st: Types.St, acc) => switch row {
   | RowVar(id) => Set.has(id, bound.rv)
       ? acc
-      : switch Map.get(id, st.rv) {
+      : switch idGet(id, st.rv) {
         | Some(next) => collectFreeRow(next, bound, st, acc)
         | None => { tv: acc.tv, rv: Set.add(id, acc.rv) }
       }
@@ -143,16 +150,21 @@ let freeInScheme = (sc, st: Types.St, acc) =>
     acc
   )
 
-let freeInEnvFrom = (schemes, st: Types.St, acc) => switch schemes {
-  | [] => acc
-  | [sc, ...rest] => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc))
+let freeInEnvFrom = (schemes, i, st: Types.St, acc) => switch Array.get(i, schemes) {
+  | None => acc
+  | Some(sc) => freeInEnvFrom(schemes, i + 1, st, freeInScheme(sc, st, acc))
 }
 let freeInEnv = (env, st: Types.St) =>
-  freeInEnvFrom(Map.values(env), st, emptyVarSets)
+  freeInEnvFrom(Map.values(env), 0, st, emptyVarSets)
 
+/// A type with no free variables generalizes to itself, whatever the env
+/// holds, so the env walk is skipped.
 export let generalize = (env, t, st: Types.St, widen) =>
   let zt = widen ? widenLits(zonk(t, st)) : zonk(t, st) in
-  let free = diffVarSets(freeInType(zt), freeInEnv(env, st)) in
+  let own = freeInType(zt) in
+  let free = Set.size(own.tv) == 0 && Set.size(own.rv) == 0
+    ? own
+    : diffVarSets(own, freeInEnv(env, st)) in
     { vars: Set.toArray(free.tv), rvars: Set.toArray(free.rv), ty: zt }
 
 /// Bare string/number singletons widen to their base prim at generalization

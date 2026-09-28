@@ -562,7 +562,7 @@ const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
               ((_v) =>
                 _v._tag === "Some"
                   ? (({ value: prior }) =>
-                      not(eq(prior.owner, info.owner))
+                      !eq(prior.owner, info.owner)
                         ? Err({
                             message: `duplicate constructor '${name}'`,
                             start: span.start,
@@ -979,7 +979,7 @@ const compileAll: _Curry<
                   ? (({ value: ctx1 }) => compileAll(ctx1, rest, opts))(_v)
                   : (() => {
                       throw new Error("non-exhaustive match");
-                    })())(compileOne(ctx, m, false, eq(length(rest), 0), opts)))(_v)
+                    })())(compileOne(ctx, m, false, length(rest) === 0, opts)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(graph),
@@ -1157,7 +1157,7 @@ const compileAllRecovering: _Curry<
       : _v.length >= 1
         ? (([m, ...rest]) =>
             ((next: RecoveryGraphState) => compileAllRecovering(next.ctx, rest, next.errors, opts))(
-              recoverOne(ctx, m, eq(length(rest), 0), errors, opts),
+              recoverOne(ctx, m, length(rest) === 0, errors, opts),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -1838,7 +1838,7 @@ export const buildModulesWith: _Curry<
       : _v._tag === "Ok"
         ? (({ value: graph }) =>
             ((recovered: GraphRecovery) =>
-              eq(length(recovered.errors), 0)
+              length(recovered.errors) === 0
                 ? _Result_mapErr((e: StageErr) => [e], compileGraphWith(graph, opts))
                 : (Err(recovered.errors) as Result<ModuleOutput[], StageErr[]>))(
               compileGraphRecoveringWith(graph, opts),
@@ -1863,19 +1863,19 @@ const isIdentChar: (c: string) => boolean = (c: string) =>
             or(
               or(
                 or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)),
-                eq(n, 95),
+                n === 95,
               ),
-              eq(n, 36),
+              n === 36,
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(_Str_codeAt(0, c));
 const endsAtBoundary: (part: string) => boolean = (part: string) =>
-  eq(_Str_length(part), 0)
+  _Str_length(part) === 0
     ? true
-    : not(isIdentChar(_Option_unwrapOr("", _Str_get(_Str_length(part) - 1, part))));
+    : !isIdentChar(_Option_unwrapOr("", _Str_get(_Str_length(part) - 1, part)));
 const startsAtBoundary: (part: string) => boolean = (part: string) =>
-  eq(_Str_length(part), 0) ? true : not(isIdentChar(_Option_unwrapOr("", _Str_get(0, part))));
+  _Str_length(part) === 0 ? true : !isIdentChar(_Option_unwrapOr("", _Str_get(0, part)));
 const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
   2,
   (parts: string[], i: number) =>
@@ -1996,7 +1996,7 @@ const nullaryDeclared: <A, B, C, D>(
     _v._tag === "None"
       ? false
       : _v._tag === "Some"
-        ? (({ value: info }) => and(eq(length(info.params), 0), length(info.fields) > 0))(_v)
+        ? (({ value: info }) => and(length(info.params) === 0, length(info.fields) > 0))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(_Map_get(name, local)),
@@ -2093,7 +2093,7 @@ const groupByOwner: <A>(
             or(eq(owner, ctx.importer), _Set_has(name, ctx.localTypes)),
             _Set_has(name, ctx.bound),
           ),
-          not(occursAsWord(name, ctx.ts)),
+          !occursAsWord(name, ctx.ts),
         )
           ? acc
           : ((spec: string) =>
@@ -2342,7 +2342,7 @@ const compileOneTs: <A, B>(
                                         },
                                         StageErr
                                       >)(
-                                      eq(length(lines), 0)
+                                      length(lines) === 0
                                         ? body
                                         : `${_Str_join("\n", lines)}
 
@@ -2811,7 +2811,7 @@ export const buildModulesTsWith: _Curry<
       : _v._tag === "Ok"
         ? (({ value: graph }) =>
             ((recovered: GraphRecovery) =>
-              eq(length(recovered.errors), 0)
+              length(recovered.errors) === 0
                 ? _Result_mapErr(
                     (e: StageErr) => [e],
                     compileGraphTsWith(graph, runtimeImport, opts),

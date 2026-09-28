@@ -9,9 +9,9 @@
 
 import * as Ast from "./ast.mochi"
 
-let addNames = (names, out) => switch names {
+let addBinderNames = (names, out) => switch names {
   | [] => out
-  | [n, ...rest] => addNames(rest, Set.add(n, out))
+  | [n, ...rest] => addBinderNames(rest, Set.add(n, out))
 }
 
 let patternNamesOpt = (p, out) => switch p {
@@ -93,19 +93,19 @@ let armNames = (arms, out) => switch arms {
       armNames(rest, exprNames(arm.body, out2))
 }
 
-let loopParamNames = (params, out) => switch params {
+let loopBinderNames = (params, out) => switch params {
   | [] => out
-  | [p, ...rest] => loopParamNames(
+  | [p, ...rest] => loopBinderNames(
       rest,
       exprNames(p.init, Set.add(p.name, out))
     )
 }
 
-let paramNames = (p, out) => switch p {
-  | Ast.LPSpanned(inner, _) => paramNames(inner, out)
+let paramBinderNames = (p, out) => switch p {
+  | Ast.LPSpanned(inner, _) => paramBinderNames(inner, out)
   | Ast.LPName(name, _) => Set.add(name, out)
-  | Ast.LPTuple(names) => addNames(names, out)
-  | Ast.LPRecord(fields) => addNames(fields, out)
+  | Ast.LPTuple(names) => addBinderNames(names, out)
+  | Ast.LPRecord(fields) => addBinderNames(fields, out)
   | Ast.LPLabeled(name, _, _, defaultValue) => exprNamesOpt(
       defaultValue,
       Set.add(name, out)
@@ -114,7 +114,7 @@ let paramNames = (p, out) => switch p {
 
 let paramNamesAll = (params, out) => switch params {
   | [] => out
-  | [p, ...rest] => paramNamesAll(rest, paramNames(p, out))
+  | [p, ...rest] => paramNamesAll(rest, paramBinderNames(p, out))
 }
 
 let exprNames = (e, out) => switch e {
@@ -132,7 +132,7 @@ let exprNames = (e, out) => switch e {
     )
   | Ast.ELetBind(param, _, _, value, body, _) => exprNames(
       body,
-      paramNames(param, exprNames(value, out))
+      paramBinderNames(param, exprNames(value, out))
     )
   | Ast.EPipe(left, right, _, _) => exprNames(right, exprNames(left, out))
   | Ast.EDo(exprs, _) => exprNamesAll(exprs, out)
@@ -146,7 +146,7 @@ let exprNames = (e, out) => switch e {
       exprNamesOpt(spread, out)
     )
   | Ast.EField(target, _, _, _) => exprNames(target, out)
-  | Ast.ELoop(params, body, _) => exprNames(body, loopParamNames(params, out))
+  | Ast.ELoop(params, body, _) => exprNames(body, loopBinderNames(params, out))
   | Ast.ERecur(args, _) => exprNamesAll(args, out)
   | Ast.ETuple(elements, _) => exprNamesAll(elements, out)
   | Ast.EArr(elements, _) => seqNames(elements, out)

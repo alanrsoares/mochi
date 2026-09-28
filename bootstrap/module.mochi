@@ -30,8 +30,8 @@ import { openMode } from "./compile.mochi"
 // Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
 // into inferProgramImports / codegen; module.mochi never inspects them.
 extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
-extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
-extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern namespaces : Map<string, Map<string, a>> = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
@@ -532,9 +532,9 @@ type RecoveryQualScope = {
 type RecoveryScheme = { vars: [number], rvars: [number], ty: Ty }
 
 type RecoveryCtx = {
-  exportsByPath: Map<string, Map<string, RecoveryScheme> >,
+  exportsByPath: Map<string, Map<string, RecoveryScheme>>,
   regByPath: Map<string, Registry>,
-  keysByPath: Map<string, Map<string, [string]> >,
+  keysByPath: Map<string, Map<string, [string]>>,
   qualsByPath: Map<string, RecoveryQualScope>,
   outputs: [ModuleOutput]
 }

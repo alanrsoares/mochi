@@ -198,7 +198,7 @@ export const collectValueRefs = (prog: Program): Set<string> => {
  * when its factory is emitted: an unused local `| Some(value: a)` drops its
  * `const Some`, and a runtime `_Map_get` still needs the builtin one.
  */
-const boundNames = (prog: Program, valueRefs: ReadonlySet<string>): Set<string> => {
+export const boundNames = (prog: Program, valueRefs: ReadonlySet<string>): Set<string> => {
   const bound = new Set<string>();
   for (const s of prog.stmts) {
     if (s.kind === "let" || s.kind === "extern") bound.add(s.name);
@@ -238,7 +238,8 @@ export const collectRuntimeDeps = (prog: Program): string[] => {
   const queue = [...refs];
   for (let i = 0; i < queue.length; i++) {
     const r = queue[i]!;
-    for (const d of runtimeDeps[r] ?? [])
+    // `hasOwn`: a user name like `valueOf` must not find `Object.prototype`.
+    for (const d of Object.hasOwn(runtimeDeps, r) ? runtimeDeps[r]! : [])
       if (!refs.has(d)) {
         refs.add(d);
         queue.push(d);

@@ -20,7 +20,6 @@ export type Tok =
   | { t: "arrow" } // =>
   | { t: "tarrow" } // -> (type arrow)
   | { t: "pipe" } // |>
-  | { t: "compose" } // >>
   | { t: "concat" } // ++
   | { t: "bar" } // |
   | { t: "lparen" }
@@ -106,7 +105,6 @@ export const keywordText = (tk: Tok): string | null => KEYWORD_TEXT.get(tk.t) ??
 /** Two-char operators, checked before single chars. */
 const DIGRAPHS: Record<string, Tok | undefined> = {
   "|>": { t: "pipe" },
-  ">>": { t: "compose" },
   "++": { t: "concat" },
   "==": { t: "eqeq" },
   "!=": { t: "neq" },
@@ -391,7 +389,12 @@ export function lex(src: string): Result<Located[], Diagnostic> {
       let j = i;
       while (j < src.length && /[A-Za-z0-9_$]/.test(src[j]!)) j++;
       const word = src.slice(i, j);
-      emit(KEYWORDS[word] ?? { t: "id", v: word }, i, j);
+      // `hasOwn`: a plain-object lookup finds `valueOf`, `toString`, … on the prototype.
+      emit(
+        (Object.hasOwn(KEYWORDS, word) ? KEYWORDS[word] : undefined) ?? { t: "id", v: word },
+        i,
+        j,
+      );
       i = j;
       continue;
     }

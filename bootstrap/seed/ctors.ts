@@ -25,7 +25,6 @@ import {
   filter,
   length,
   map,
-  not,
   show,
 } from "@mochi/compiler/runtime";
 
@@ -126,7 +125,7 @@ export const builtinDeclsFor: (
   stmts: Stmt[],
 ) => { name: string; params: string[]; ctors: Ctor[] }[] = (stmts: Stmt[]) =>
   filter(
-    (bt: { name: string; params: string[]; ctors: Ctor[] }) => not(declaresType(stmts, 0, bt.name)),
+    (bt: { name: string; params: string[]; ctors: Ctor[] }) => !declaresType(stmts, 0, bt.name),
     builtinTypeDecls,
   );
 const seedRegCtorsFrom: <A, B, D>(

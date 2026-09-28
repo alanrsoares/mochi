@@ -35,12 +35,18 @@ export type TypeAt = { span: SpanAt; ty: Ty };
  * reference identity, so the key is the value span's `"start:end"` instead —
  * unique per binding by construction, and the same string the TS backend's
  * `spanKey` builds when it looks the annotation back up.
+ *
+ * `St` is copied on every step, so its growing parts are chunked:
+ * `tv` / `rv` hold `ID_CHUNK` variable ids per inner map (`idGet` / `idSet`),
+ * and `recorded` appends to a short `cur` array that moves to `full` when it
+ * reaches `ID_CHUNK` entries (`recordedTypes` flattens it).
  */
+export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
 export type St = {
-  tv: Map<number, Ty>;
-  rv: Map<number, Row>;
+  tv: Map<number, Map<number, Ty>>;
+  rv: Map<number, Map<number, Row>>;
   next: number;
-  recorded: TypeAt[];
+  recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
 };
@@ -54,11 +60,15 @@ import {
   Ok,
   Some,
   _Array_append,
+  _Array_concat,
+  _Array_flatMap,
   _Array_get,
   _Array_prepend,
   _Map_get,
+  _Map_getOr,
   _Map_keys,
   _Map_set,
+  _Map_values,
   _Result_flatMap,
   _Result_map,
   _Str_join,
@@ -66,7 +76,9 @@ import {
   _tuple,
   and,
   eq,
+  floor,
   length,
+  lt,
   map,
   not,
   or,
@@ -258,7 +270,7 @@ export const tUnit = TyCon(UNIT, [] as Ty[]);
 export const isUnit: (t: Ty) => boolean = (t: Ty) =>
   ((_v) =>
     _v._tag === "TyCon"
-      ? (({ name, args }) => and(eq(name, UNIT), eq(length(args), 0)))(_v)
+      ? (({ name, args }) => and(eq(name, UNIT), length(args) === 0))(_v)
       : false)(t);
 export const rVar: (id: number) => Row = (id: number) => RowVar(id);
 export const rExtend: _Curry<[label: string, fieldType: Ty, rest: Row], Row> = _curry(
@@ -281,13 +293,13 @@ export const showType: (t: Ty) => string = (t: Ty) =>
       : _v._tag === "TyCon"
         ? (({ name, args }) =>
             ((_v) =>
-              _v.length === 1 && (([elem]) => eq(name, "Array"))(_v)
+              _v.length === 1 && (([elem]) => name === "Array")(_v)
                 ? (([elem]) => `[${showType(elem)}]`)(_v)
                 : _v.length === 0 && eq(name, UNIT)
                   ? "()"
                   : eq(name, TUPLE)
                     ? `(${showTypeArgs(args)})`
-                    : eq(length(args), 0)
+                    : length(args) === 0
                       ? name
                       : `${name}<${showTypeArgs(args)}>`)(args))(_v)
         : _v._tag === "TyFn"
@@ -298,7 +310,7 @@ export const showType: (t: Ty) => string = (t: Ty) =>
           : _v._tag === "TyRecord"
             ? (({ row }) => showRow(row))(_v)
             : _v._tag === "TySingleton"
-              ? (({ base, value }) => (eq(base, "string") ? show(value) : value))(_v)
+              ? (({ base, value }) => (base === "string" ? show(value) : value))(_v)
               : _v._tag === "TyOneOf"
                 ? (({ members }) => _Str_join(" | ", map(showType, members)))(_v)
                 : (() => {
@@ -327,15 +339,13 @@ const showRow: (row: Row) => string = (row: Row) =>
   (([fields, tailId]: [string[], Option<number>]) => {
     const tail: string = ((_v) =>
       _v._tag === "Some"
-        ? (({ value: id }) => `${eq(length(fields), 0) ? "" : " "}| 'r${show(id)}`)(_v)
+        ? (({ value: id }) => `${length(fields) === 0 ? "" : " "}| 'r${show(id)}`)(_v)
         : _v._tag === "None"
           ? ""
           : (() => {
               throw new Error("non-exhaustive match");
             })())(tailId);
-    return and(eq(length(fields), 0), eq(tail, ""))
-      ? "{}"
-      : `{ ${_Str_join(", ", fields)}${tail} }`;
+    return and(length(fields) === 0, tail === "") ? "{}" : `{ ${_Str_join(", ", fields)}${tail} }`;
   })(showRowFields(row));
 const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
   3,
@@ -355,23 +365,73 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
 );
 
 export const mkSt: (start: number) => St = (start: number) => ({
-  tv: new Map<number, Ty>(),
-  rv: new Map<number, Row>(),
+  tv: new Map<number, Map<number, Ty>>(),
+  rv: new Map<number, Map<number, Row>>(),
   next: start,
-  recorded: [] as TypeAt[],
+  recorded: { cur: [] as TypeAt[], full: [] as TypeAt[][] },
   letSpans: new Map<string, SpanAt>(),
   letUses: new Map<string, Ty[]>(),
 });
+const ID_CHUNK: number = 64;
 /**
- * Prepend an inferred node type onto the threaded record log.
+ * The binding for variable `id` in a chunked substitution.
+ */
+export const idGet: <A>(id: number, m: Map<number, Map<number, A>>) => Option<A> = _curry(
+  2,
+  <A>(id: number, m: Map<number, Map<number, A>>) =>
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: chunk }) => _Map_get(id, chunk))(_v)
+        : _v._tag === "None"
+          ? None
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(floor(id / ID_CHUNK), m)),
+);
+/**
+ * Bind `id`, copying the outer map and one chunk rather than every binding.
+ */
+export const idSet: <A>(
+  id: number,
+  v: A,
+  m: Map<number, Map<number, A>>,
+) => Map<number, Map<number, A>> = _curry(
+  3,
+  <A>(id: number, v: A, m: Map<number, Map<number, A>>) => {
+    const k: number = floor(id / ID_CHUNK);
+    return _Map_set(k, _Map_set(id, v, _Map_getOr(new Map<number, A>(), k, m)), m);
+  },
+);
+/**
+ * Every bound id.
+ */
+export const idKeys: <A, B, C>(m: Map<A, Map<B, C>>) => B[] = <A, B, C>(m: Map<A, Map<B, C>>) =>
+  _Array_flatMap(_Map_keys, _Map_values(m));
+/**
+ * Append an inferred node type to the threaded record log.
  */
 export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
   3,
-  (span: SpanAt, t: Ty, st: St) => ({
-    ...st,
-    recorded: _Array_prepend({ span: span, ty: t }, st.recorded),
-  }),
+  (span: SpanAt, t: Ty, st: St) => {
+    const rec: Recorded = st.recorded;
+    const at: TypeAt = { span: span, ty: t };
+    return {
+      ...st,
+      recorded:
+        length(rec.cur) < ID_CHUNK
+          ? { cur: _Array_append(at, rec.cur), full: rec.full }
+          : { cur: [at], full: _Array_append(rec.cur, rec.full) },
+    };
+  },
 );
+/**
+ * The record log in the order it was written.
+ */
+export const recordedTypes: (st: St) => TypeAt[] = (st: St) =>
+  _Array_concat(
+    _Array_flatMap((c: TypeAt[]) => c, st.recorded.full),
+    st.recorded.cur,
+  );
 const spanKeyOf: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
   sp: { start: A; end: B } & C,
 ) => `${show(sp.start)}:${show(sp.end)}`;
@@ -427,7 +487,7 @@ export const resolve: _Curry<[t: Ty, st: St], Ty> = _curry(2, (t: Ty, st: St) =>
                 ? t
                 : (() => {
                     throw new Error("non-exhaustive match");
-                  })())(_Map_get(id, st.tv)))(_v)
+                  })())(idGet(id, st.tv)))(_v)
       : t)(t),
 );
 const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, (r: Row, st: St) =>
@@ -441,7 +501,7 @@ const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, (r: Row, st: St) =>
                 ? r
                 : (() => {
                     throw new Error("non-exhaustive match");
-                  })())(_Map_get(id, st.rv)))(_v)
+                  })())(idGet(id, st.rv)))(_v)
       : r)(r),
 );
 /**
@@ -542,34 +602,34 @@ const rowVarOccursInType: _Curry<[id: number, t: Ty, st: St], boolean> = _curry(
 );
 const isArrowT: (t: Ty) => boolean = (t: Ty) => ((_v) => (_v._tag === "TyFn" ? true : false))(t);
 const isCollection: (name: string) => boolean = (name: string) =>
-  or(or(or(eq(name, "Array"), eq(name, "List")), eq(name, "Set")), eq(name, "Map"));
+  or(or(or(name === "Array", name === "List"), name === "Set"), name === "Map");
 const isTupleT: (t: Ty) => boolean = (t: Ty) =>
   ((_v) => (_v._tag === "TyCon" ? (({ name }) => eq(name, TUPLE))(_v) : false))(t);
 const tupleParenMsg: _Curry<[a: Ty, b: Ty, shown: string], string> = _curry(
   3,
   (a: Ty, b: Ty, shown: string) =>
-    not(eq(isTupleT(a), isTupleT(b)))
+    !eq(isTupleT(a), isTupleT(b))
       ? `${shown} — ((a, b)) => takes one tuple; (a, b) => takes two arguments`
       : shown,
 );
 const collectionUnifyMsg: _Curry<[aname: string, bname: string, shown: string], string> = _curry(
   3,
   (aname: string, bname: string, shown: string) =>
-    or(or(eq(aname, bname), not(isCollection(aname))), not(isCollection(bname)))
+    or(or(eq(aname, bname), !isCollection(aname)), !isCollection(bname))
       ? shown
       : ((other: string) =>
           ((hint: string) => `${shown} — ${hint}`)(
-            eq(other, "List")
+            other === "List"
               ? "unqualified map/filter/length expect Array; use List.map"
-              : eq(other, "Set")
+              : other === "Set"
                 ? "unqualified map/filter/length expect Array; convert with Set.toArray or use Set.*"
-                : eq(other, "Map")
+                : other === "Map"
                   ? "unqualified map/filter/length expect Array; use Map.*"
                   : `${aname} and ${bname} are distinct collections`,
-          ))(eq(aname, "Array") ? bname : eq(bname, "Array") ? aname : ""),
+          ))(aname === "Array" ? bname : bname === "Array" ? aname : ""),
 );
 const unifyMismatch: <A>(ra: Ty, rb: Ty) => Result<A, TypeErr> = _curry(2, <A>(ra: Ty, rb: Ty) =>
-  not(eq(isArrowT(ra), isArrowT(rb)))
+  !eq(isArrowT(ra), isArrowT(rb))
     ? (([fn, val]: [Ty, Ty]) =>
         fail(
           tupleParenMsg(
@@ -607,7 +667,7 @@ const unifyArgs: _Curry<[as_: Ty[], bs: Ty[], i: number, st: St], Result<St, Typ
 const isPrimT: _Curry<[t: Ty, name: string], boolean> = _curry(2, (t: Ty, name: string) =>
   ((_v) =>
     _v._tag === "TyCon"
-      ? (({ name: n, args }) => and(eq(n, name), eq(length(args), 0)))(_v)
+      ? (({ name: n, args }) => and(eq(n, name), length(args) === 0))(_v)
       : false)(t),
 );
 const isLitOnlyUnion: (members: Ty[]) => boolean = (members: Ty[]) =>
@@ -619,14 +679,18 @@ const isLitOnlyUnion: (members: Ty[]) => boolean = (members: Ty[]) =>
             _v as [Extract<Ty[][number], { _tag: "TySingleton" }>, ...Ty[]],
           )
         : false)(members);
-const widenLitBindingsFrom: _Curry<[ids: number[], lit: Ty, st: St], St> = _curry(
-  3,
-  (ids: number[], lit: Ty, st: St) =>
+/**
+ * Walks `ids` by index: a `[id, ...rest]` walk copies the rest of the array at
+ * every step, and `ids` is every bound variable.
+ */
+const widenLitBindingsFrom: _Curry<[ids: number[], i: number, lit: Ty, st: St], St> = _curry(
+  4,
+  (ids: number[], i: number, lit: Ty, st: St) =>
     ((_v) =>
-      _v.length === 0
+      _v._tag === "None"
         ? st
-        : _v.length >= 1
-          ? (([id, ...rest]) =>
+        : _v._tag === "Some"
+          ? (({ value: id }) =>
               ((_v) =>
                 _v._tag === "Some"
                   ? (({ value: t }) =>
@@ -637,24 +701,24 @@ const widenLitBindingsFrom: _Curry<[ids: number[], lit: Ty, st: St], St> = _curr
                                 _v._tag === "TySingleton"
                                   ? (({ base: lbase, value: lvalue }) =>
                                       and(eq(base, lbase), eq(value, lvalue))
-                                        ? widenLitBindingsFrom(rest, lit, {
+                                        ? widenLitBindingsFrom(ids, i + 1, lit, {
                                             ...st,
-                                            tv: _Map_set(id, tPrim(base), st.tv),
+                                            tv: idSet(id, tPrim(base), st.tv),
                                           })
-                                        : widenLitBindingsFrom(rest, lit, st))(_v)
-                                  : widenLitBindingsFrom(rest, lit, st))(lit))(_v)
-                          : widenLitBindingsFrom(rest, lit, st))(resolve(t, st)))(_v)
+                                        : widenLitBindingsFrom(ids, i + 1, lit, st))(_v)
+                                  : widenLitBindingsFrom(ids, i + 1, lit, st))(lit))(_v)
+                          : widenLitBindingsFrom(ids, i + 1, lit, st))(resolve(t, st)))(_v)
                   : _v._tag === "None"
-                    ? widenLitBindingsFrom(rest, lit, st)
+                    ? widenLitBindingsFrom(ids, i + 1, lit, st)
                     : (() => {
                         throw new Error("non-exhaustive match");
-                      })())(_Map_get(id, st.tv)))(_v)
+                      })())(idGet(id, st.tv)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
-            })())(ids),
+            })())(_Array_get(i, ids)),
 );
 const widenLitBindings: _Curry<[lit: Ty, st: St], St> = _curry(2, (lit: Ty, st: St) =>
-  widenLitBindingsFrom(_Map_keys(st.tv), lit, st),
+  widenLitBindingsFrom(idKeys(st.tv), 0, lit, st),
 );
 const litInUnionFrom: _Curry<
   [lit: Ty, members: Ty[], i: number, st: St],
@@ -873,7 +937,7 @@ const bindVar: _Curry<[id: number, t: Ty, st: St], Result<St, TypeErr>> = _curry
   (id: number, t: Ty, st: St) =>
     occurs(id, t, st)
       ? fail(`infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}`)
-      : (Ok({ ...st, tv: _Map_set(id, t, st.tv) }) as Result<St, TypeErr>),
+      : (Ok({ ...st, tv: idSet(id, t, st.tv) }) as Result<St, TypeErr>),
 );
 /**
  * Bring `label` to the head of a row, extending an open tail if needed.
@@ -902,7 +966,7 @@ const rewriteRow: _Curry<
                   Ok(
                     _tuple(freshT, false, freshTail, {
                       ...st2,
-                      rv: _Map_set(rid, rExtend(label, freshT, freshTail), st2.rv),
+                      rv: idSet(rid, rExtend(label, freshT, freshTail), st2.rv),
                     }),
                   ) as Result<[Ty, boolean, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st)))(
               _v,
@@ -972,7 +1036,7 @@ const bindRowVar: _Curry<[id: number, row: Row, st: St], Result<St, TypeErr>> = 
         : ((r) =>
             rowVarOccurs(id, r, st)
               ? fail("infinite record type")
-              : (Ok({ ...st, rv: _Map_set(id, r, st.rv) }) as Result<St, TypeErr>))(_v))(
+              : (Ok({ ...st, rv: idSet(id, r, st.rv) }) as Result<St, TypeErr>))(_v))(
       resolveRow(row, st),
     ),
 );
@@ -1031,7 +1095,7 @@ const fitsRows: _Curry<[actual: Row, expected: Row, st: St], Result<St, TypeErr>
                       : _v._tag === "Ok"
                         ? (({ value: hit }) =>
                             (([htype, hopt, hrest, s1]: [Ty, boolean, Row, St]) =>
-                              and(hopt, not(eopt))
+                              and(hopt, !eopt)
                                 ? fail(
                                     `record field '${elabel}' is required but missing or optional`,
                                   )

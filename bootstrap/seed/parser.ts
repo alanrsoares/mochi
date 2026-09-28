@@ -84,7 +84,6 @@ import {
   TArrow,
   TTarrow,
   TPipe,
-  TCompose,
   TConcat,
   TBar,
   TLparen,
@@ -158,108 +157,105 @@ const tokName: (t: Tok) => string = (t: Tok) =>
                             ? "tarrow"
                             : _v._tag === "TPipe"
                               ? "pipe"
-                              : _v._tag === "TCompose"
-                                ? "compose"
-                                : _v._tag === "TConcat"
-                                  ? "concat"
-                                  : _v._tag === "TBar"
-                                    ? "bar"
-                                    : _v._tag === "TLparen"
-                                      ? "lparen"
-                                      : _v._tag === "TRparen"
-                                        ? "rparen"
-                                        : _v._tag === "TLbrace"
-                                          ? "lbrace"
-                                          : _v._tag === "TRbrace"
-                                            ? "rbrace"
-                                            : _v._tag === "TLbracket"
-                                              ? "lbracket"
-                                              : _v._tag === "TRbracket"
-                                                ? "rbracket"
-                                                : _v._tag === "TSpread"
-                                                  ? "spread"
-                                                  : _v._tag === "TPlus"
-                                                    ? "plus"
-                                                    : _v._tag === "TMinus"
-                                                      ? "minus"
-                                                      : _v._tag === "TStar"
-                                                        ? "star"
-                                                        : _v._tag === "TSlash"
-                                                          ? "slash"
-                                                          : _v._tag === "TPercent"
-                                                            ? "percent"
-                                                            : _v._tag === "TAt"
-                                                              ? "at"
-                                                              : _v._tag === "THash"
-                                                                ? "hash"
-                                                                : _v._tag === "TTilde"
-                                                                  ? "tilde"
-                                                                  : _v._tag === "TDot"
-                                                                    ? "dot"
-                                                                    : _v._tag === "TColon"
-                                                                      ? "colon"
-                                                                      : _v._tag === "TQuestion"
-                                                                        ? "question"
-                                                                        : _v._tag === "TEqeq"
-                                                                          ? "eqeq"
-                                                                          : _v._tag === "TNeq"
-                                                                            ? "neq"
-                                                                            : _v._tag === "TLte"
-                                                                              ? "lte"
-                                                                              : _v._tag === "TGte"
-                                                                                ? "gte"
-                                                                                : _v._tag === "TLt"
-                                                                                  ? "lt"
+                              : _v._tag === "TConcat"
+                                ? "concat"
+                                : _v._tag === "TBar"
+                                  ? "bar"
+                                  : _v._tag === "TLparen"
+                                    ? "lparen"
+                                    : _v._tag === "TRparen"
+                                      ? "rparen"
+                                      : _v._tag === "TLbrace"
+                                        ? "lbrace"
+                                        : _v._tag === "TRbrace"
+                                          ? "rbrace"
+                                          : _v._tag === "TLbracket"
+                                            ? "lbracket"
+                                            : _v._tag === "TRbracket"
+                                              ? "rbracket"
+                                              : _v._tag === "TSpread"
+                                                ? "spread"
+                                                : _v._tag === "TPlus"
+                                                  ? "plus"
+                                                  : _v._tag === "TMinus"
+                                                    ? "minus"
+                                                    : _v._tag === "TStar"
+                                                      ? "star"
+                                                      : _v._tag === "TSlash"
+                                                        ? "slash"
+                                                        : _v._tag === "TPercent"
+                                                          ? "percent"
+                                                          : _v._tag === "TAt"
+                                                            ? "at"
+                                                            : _v._tag === "THash"
+                                                              ? "hash"
+                                                              : _v._tag === "TTilde"
+                                                                ? "tilde"
+                                                                : _v._tag === "TDot"
+                                                                  ? "dot"
+                                                                  : _v._tag === "TColon"
+                                                                    ? "colon"
+                                                                    : _v._tag === "TQuestion"
+                                                                      ? "question"
+                                                                      : _v._tag === "TEqeq"
+                                                                        ? "eqeq"
+                                                                        : _v._tag === "TNeq"
+                                                                          ? "neq"
+                                                                          : _v._tag === "TLte"
+                                                                            ? "lte"
+                                                                            : _v._tag === "TGte"
+                                                                              ? "gte"
+                                                                              : _v._tag === "TLt"
+                                                                                ? "lt"
+                                                                                : _v._tag === "TGt"
+                                                                                  ? "gt"
                                                                                   : _v._tag ===
-                                                                                      "TGt"
-                                                                                    ? "gt"
+                                                                                      "TAndand"
+                                                                                    ? "andand"
                                                                                     : _v._tag ===
-                                                                                        "TAndand"
-                                                                                      ? "andand"
+                                                                                        "TOror"
+                                                                                      ? "oror"
                                                                                       : _v._tag ===
-                                                                                          "TOror"
-                                                                                        ? "oror"
+                                                                                          "TBang"
+                                                                                        ? "bang"
                                                                                         : _v._tag ===
-                                                                                            "TBang"
-                                                                                          ? "bang"
+                                                                                            "TBacktick"
+                                                                                          ? "backtick"
                                                                                           : _v._tag ===
-                                                                                              "TBacktick"
-                                                                                            ? "backtick"
+                                                                                              "TComma"
+                                                                                            ? "comma"
                                                                                             : _v._tag ===
-                                                                                                "TComma"
-                                                                                              ? "comma"
+                                                                                                "TSemi"
+                                                                                              ? "semi"
                                                                                               : _v._tag ===
-                                                                                                  "TSemi"
-                                                                                                ? "semi"
+                                                                                                  "TNum"
+                                                                                                ? "num"
                                                                                                 : _v._tag ===
-                                                                                                    "TNum"
-                                                                                                  ? "num"
+                                                                                                    "TBool"
+                                                                                                  ? "bool"
                                                                                                   : _v._tag ===
-                                                                                                      "TBool"
-                                                                                                    ? "bool"
+                                                                                                      "TStr"
+                                                                                                    ? "str"
                                                                                                     : _v._tag ===
-                                                                                                        "TStr"
-                                                                                                      ? "str"
+                                                                                                        "TTmplStart"
+                                                                                                      ? "tmplstart"
                                                                                                       : _v._tag ===
-                                                                                                          "TTmplStart"
-                                                                                                        ? "tmplstart"
+                                                                                                          "TTmplMid"
+                                                                                                        ? "tmplmid"
                                                                                                         : _v._tag ===
-                                                                                                            "TTmplMid"
-                                                                                                          ? "tmplmid"
+                                                                                                            "TTmplEnd"
+                                                                                                          ? "tmplend"
                                                                                                           : _v._tag ===
-                                                                                                              "TTmplEnd"
-                                                                                                            ? "tmplend"
+                                                                                                              "TId"
+                                                                                                            ? "id"
                                                                                                             : _v._tag ===
-                                                                                                                "TId"
-                                                                                                              ? "id"
-                                                                                                              : _v._tag ===
-                                                                                                                  "TEof"
-                                                                                                                ? "eof"
-                                                                                                                : (() => {
-                                                                                                                    throw new Error(
-                                                                                                                      "non-exhaustive match",
-                                                                                                                    );
-                                                                                                                  })())(
+                                                                                                                "TEof"
+                                                                                                              ? "eof"
+                                                                                                              : (() => {
+                                                                                                                  throw new Error(
+                                                                                                                    "non-exhaustive match",
+                                                                                                                  );
+                                                                                                                })())(
     t,
   );
 /**
@@ -380,7 +376,7 @@ const expectIn: _Curry<[toks: LocTok[], pos: number], Result<number, PErr>> = _c
   (toks: LocTok[], pos: number) =>
     _Result_flatMap(
       ([kw, p]) =>
-        eq(kw.name, "in")
+        kw.name === "in"
           ? (Ok(p) as Result<number, PErr>)
           : errAt(`expected 'in' after let binding, got '${kw.name}'`, tokAt(toks, p)),
       expectId(toks, pos),
@@ -407,7 +403,7 @@ const sepBy: <B, C>(
     _Result_flatMap(
       ([item, p]: [B, number]) => {
         const items = _Array_append(item, acc);
-        return eq(tokAt(toks, p).tok, TComma as Tok)
+        return tokAt(toks, p).tok._tag === "TComma"
           ? sepBy(parseItem, toks, p + 1, items)
           : Ok(_tuple(items, p));
       },
@@ -437,7 +433,7 @@ const sepByH: <B, C, D>(
     _Result_flatMap(
       ([item, p]: [C, number]) => {
         const items = _Array_append(item, acc);
-        return eq(tokAt(toks, p).tok, TComma as Tok)
+        return tokAt(toks, p).tok._tag === "TComma"
           ? sepByH(parseItem, toks, p + 1, items, hooks)
           : Ok(_tuple(items, p));
       },
@@ -493,8 +489,8 @@ const scanLambdaDepth: _Curry<[toks: LocTok[], k: number, depth: number], boolea
       _v._tag === "TLparen"
         ? scanLambdaDepth(toks, k + 1, depth + 1)
         : _v._tag === "TRparen"
-          ? eq(depth, 1)
-            ? eq(tokAt(toks, k + 1).tok, TArrow as Tok)
+          ? depth === 1
+            ? tokAt(toks, k + 1).tok._tag === "TArrow"
             : scanLambdaDepth(toks, k + 1, depth - 1)
           : _v._tag === "TEof"
             ? false
@@ -505,7 +501,7 @@ const looksLikeLambda: _Curry<[toks: LocTok[], pos: number], boolean> = _curry(
   (toks: LocTok[], pos: number) =>
     ((_v) =>
       _v._tag === "TId"
-        ? eq(tokAt(toks, pos + 1).tok, TArrow as Tok)
+        ? tokAt(toks, pos + 1).tok._tag === "TArrow"
         : _v._tag === "TLparen"
           ? scanLambdaDepth(toks, pos, 0)
           : false)(tokAt(toks, pos).tok),
@@ -637,7 +633,7 @@ const parseParam: _Curry<[toks: LocTok[], pos: number], Result<[LamParam, number
             )
           : _Result_flatMap(
               ([nm, p]) =>
-                eq(tokAt(toks, p).tok, TColon as Tok)
+                tokAt(toks, p).tok._tag === "TColon"
                   ? _Result_map(
                       ([annot, p2]: [TypeExpr, number]) =>
                         _tuple(
@@ -692,7 +688,7 @@ const parseLabeledParam: _Curry<
               ((p2: number) =>
                 _Result_flatMap(
                   ([annot, p3]) =>
-                    eq(tokAt(toks, p3).tok, TEq as Tok)
+                    tokAt(toks, p3).tok._tag === "TEq"
                       ? _Result_map(
                           ([d, k]: [Expr, number]) =>
                             _tuple(
@@ -713,7 +709,7 @@ const parseLabeledParam: _Curry<
                             p3,
                           ),
                         ) as Result<[LamParam, number], PErr>),
-                  eq(tokAt(toks, p2).tok, TColon as Tok)
+                  tokAt(toks, p2).tok._tag === "TColon"
                     ? _Result_map(
                         ([t, k]: [TypeExpr, number]) => _tuple(Some(t) as Option<TypeExpr>, k),
                         parseTypeExpr(toks, p2 + 1),
@@ -722,7 +718,7 @@ const parseLabeledParam: _Curry<
                         [Option<TypeExpr>, number],
                         PErr
                       >),
-                ))(optional ? p1 + 1 : p1))(eq(tokAt(toks, p1).tok, TQuestion as Tok)),
+                ))(optional ? p1 + 1 : p1))(tokAt(toks, p1).tok._tag === "TQuestion"),
           expectLabel(toks, p0),
         ),
       expectTok(TTilde as Tok, toks, pos),
@@ -750,7 +746,7 @@ const parseLamParam: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    eq(tokAt(toks, pos).tok, TTilde as Tok)
+    tokAt(toks, pos).tok._tag === "TTilde"
       ? parseLabeledParam(toks, pos, hooks)
       : parseParam(toks, pos),
 );
@@ -774,7 +770,7 @@ const labeledTrailing: _Curry<[params: LamParam[], seen: boolean], boolean> = _c
           ? (([p, ...rest]) =>
               isLabeledParam(p)
                 ? labeledTrailing(rest, true)
-                : and(not(seen), labeledTrailing(rest, false)))(_v)
+                : and(!seen, labeledTrailing(rest, false)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(params),
@@ -876,7 +872,7 @@ const parseLambdaBody: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    and(eq(tokAt(toks, pos).tok, TLbrace as Tok), arrowBodyIsDoBlock(toks, pos, 0))
+    and(tokAt(toks, pos).tok._tag === "TLbrace", arrowBodyIsDoBlock(toks, pos, 0))
       ? parseDoBlock(toks, pos, hooks)
       : parseExpr(toks, pos, hooks),
 );
@@ -887,11 +883,11 @@ const arrowBodyIsDoBlock: _Curry<[toks: LocTok[], pos: number, depth: number], b
       _v._tag === "TLbrace"
         ? arrowBodyIsDoBlock(toks, pos + 1, depth + 1)
         : _v._tag === "TRbrace"
-          ? eq(depth, 1)
+          ? depth === 1
             ? false
             : arrowBodyIsDoBlock(toks, pos + 1, depth - 1)
           : _v._tag === "TSemi"
-            ? or(eq(depth, 1), arrowBodyIsDoBlock(toks, pos + 1, depth))
+            ? or(depth === 1, arrowBodyIsDoBlock(toks, pos + 1, depth))
             : _v._tag === "TEof"
               ? false
               : arrowBodyIsDoBlock(toks, pos + 1, depth))(tokAt(toks, pos).tok),
@@ -921,7 +917,7 @@ const parseLetIn: _Curry<
     const start: SpanAt = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
-        or(eq(tokAt(toks, p).tok, TQuestion as Tok), eq(tokAt(toks, p).tok, TBang as Tok))
+        or(tokAt(toks, p).tok._tag === "TQuestion", tokAt(toks, p).tok._tag === "TBang")
           ? ((monad: string) =>
               ((paramSpan: SpanAt) =>
                 _Result_flatMap(
@@ -957,9 +953,9 @@ const parseLetIn: _Curry<
                     ),
                   parseParam(toks, p + 1),
                 ))(spanOf(tokAt(toks, p + 1))))(
-              eq(tokAt(toks, p).tok, TQuestion as Tok) ? "Result" : "Task",
+              tokAt(toks, p).tok._tag === "TQuestion" ? "Result" : "Task",
             )
-          : eq(tokAt(toks, p).tok, TLparen as Tok)
+          : tokAt(toks, p).tok._tag === "TLparen"
             ? ((paramStart: SpanAt) =>
                 _Result_flatMap(
                   ([param, p1]) =>
@@ -1028,7 +1024,7 @@ const parseLetIn: _Curry<
                           ),
                         expectTok(TEq as Tok, toks, pA),
                       ),
-                    eq(tokAt(toks, p1).tok, TColon as Tok)
+                    tokAt(toks, p1).tok._tag === "TColon"
                       ? _Result_map(
                           ([ty, k]: [TypeExpr, number]) => _tuple(Some(ty) as Option<TypeExpr>, k),
                           parseTypeExpr(toks, p1 + 1),
@@ -1042,6 +1038,19 @@ const parseLetIn: _Curry<
               ),
       expectTok(TLet as Tok, toks, pos),
     );
+  },
+);
+/**
+ * `>>` lexes as two `>` so nested type arguments close one at a time
+ * (`Map<string, Map<string, a>>`). In an expression, two touching `>` are the
+ * composition operator.
+ */
+const composeAt: _Curry<[toks: LocTok[], pos: number], boolean> = _curry(
+  2,
+  (toks: LocTok[], pos: number) => {
+    const a = tokAt(toks, pos);
+    const b = tokAt(toks, pos + 1);
+    return and(and(a.tok._tag === "TGt", b.tok._tag === "TGt"), eq(a.end, b.start));
   },
 );
 const PIPE_BP: number = 5;
@@ -1128,7 +1137,7 @@ const sectionBody: _Curry<[opTok: Tok, x: Expr, y: Expr, opSpan: SpanAt], Expr> 
   4,
   (opTok: Tok, x: Expr, y: Expr, opSpan: SpanAt) => {
     const full: SpanAt = spanning(exprSpan(x), exprSpan(y));
-    return eq(opTok, TNeq as Tok)
+    return opTok._tag === "TNeq"
       ? Ast.ECall(
           Ast.ERef("not", opSpan),
           [mkBinCall("eq", opSpan, x, y)],
@@ -1224,7 +1233,7 @@ const binCallOrLeftSection: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
+    tokAt(toks, pos + 1).tok._tag === "TRparen"
       ? (Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) as Result<
           { left: Expr; p: number; matched: boolean },
           PErr
@@ -1291,7 +1300,7 @@ const parseInfix: _Curry<
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const lt = tokAt(toks, pos);
-    return and(eq(lt.tok, TPipe as Tok), PIPE_BP >= minBp)
+    return and(lt.tok._tag === "TPipe", PIPE_BP >= minBp)
       ? _Result_flatMap(
           ([right, p]) =>
             Ok({
@@ -1301,7 +1310,7 @@ const parseInfix: _Curry<
             }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>,
           parseAtomOrCall(toks, pos + 1, hooks),
         )
-      : and(eq(lt.tok, TTarrow as Tok), FAST_PIPE_BP >= minBp)
+      : and(lt.tok._tag === "TTarrow", FAST_PIPE_BP >= minBp)
         ? _Result_flatMap(
             ([right, p]) =>
               ((_v) =>
@@ -1315,7 +1324,7 @@ const parseInfix: _Curry<
                   : errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt))(right),
             parseAtomOrCall(toks, pos + 1, hooks),
           )
-        : and(eq(lt.tok, TCompose as Tok), COMPOSE_BP >= minBp)
+        : and(composeAt(toks, pos), COMPOSE_BP >= minBp)
           ? _Result_flatMap(
               ([right, p]) =>
                 ((opSpan: SpanAt) =>
@@ -1341,11 +1350,11 @@ const parseInfix: _Curry<
                         ),
                       ))(Ast.ECall(left, [xRef], None as Option<string>, exprSpan(left))))(
                     Ast.ERef("$x", opSpan),
-                  ))(spanOf(lt)),
-              parseExprBp(toks, COMPOSE_BP + 1, pos + 1, hooks),
+                  ))({ start: lt.start, end: lt.start + 2 }),
+              parseExprBp(toks, COMPOSE_BP + 1, pos + 2, hooks),
             )
-          : and(isCmpTok(lt.tok), CMP_BP >= minBp)
-            ? eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
+          : and(and(isCmpTok(lt.tok), !composeAt(toks, pos)), CMP_BP >= minBp)
+            ? tokAt(toks, pos + 1).tok._tag === "TRparen"
               ? (Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) as Result<
                   { left: Expr; p: number; matched: boolean },
                   PErr
@@ -1359,7 +1368,7 @@ const parseInfix: _Curry<
                             { left: Expr; p: number; matched: boolean },
                             PErr
                           >)(
-                          eq(lt.tok, TNeq as Tok)
+                          lt.tok._tag === "TNeq"
                             ? Ast.ECall(
                                 Ast.ERef("not", opSpan),
                                 [inner],
@@ -1371,17 +1380,17 @@ const parseInfix: _Curry<
                   parseExprBp(toks, CMP_BP + 1, pos + 1, hooks),
                 )
             : and(
-                  or(eq(lt.tok, TAndand as Tok), eq(lt.tok, TOror as Tok)),
-                  (eq(lt.tok, TAndand as Tok) ? AND_BP : OR_BP) >= minBp,
+                  or(lt.tok._tag === "TAndand", lt.tok._tag === "TOror"),
+                  (lt.tok._tag === "TAndand" ? AND_BP : OR_BP) >= minBp,
                 )
               ? ((bp: number) =>
                   ((fnName: string) =>
                     binCallOrLeftSection(toks, left, lt, pos, bp, fnName, hooks))(
-                    eq(lt.tok, TAndand as Tok) ? "and" : "or",
-                  ))(eq(lt.tok, TAndand as Tok) ? AND_BP : OR_BP)
-              : and(eq(lt.tok, TConcat as Tok), CONCAT_BP >= minBp)
+                    lt.tok._tag === "TAndand" ? "and" : "or",
+                  ))(lt.tok._tag === "TAndand" ? AND_BP : OR_BP)
+              : and(lt.tok._tag === "TConcat", CONCAT_BP >= minBp)
                 ? binCallOrLeftSection(toks, left, lt, pos, CONCAT_BP, "concat", hooks)
-                : and(eq(lt.tok, TBacktick as Tok), BACKTICK_BP >= minBp)
+                : and(lt.tok._tag === "TBacktick", BACKTICK_BP >= minBp)
                   ? _Result_flatMap(
                       ([fnExpr, p1]) =>
                         _Result_flatMap(
@@ -1404,23 +1413,23 @@ const parseInfix: _Curry<
                         ),
                       parseAtomOrCall(toks, pos + 1, hooks),
                     )
-                  : and(or(eq(lt.tok, TPlus as Tok), eq(lt.tok, TMinus as Tok)), ADD_BP >= minBp)
+                  : and(or(lt.tok._tag === "TPlus", lt.tok._tag === "TMinus"), ADD_BP >= minBp)
                     ? ((fnName: string) =>
                         binCallOrLeftSection(toks, left, lt, pos, ADD_BP, fnName, hooks))(
-                        eq(lt.tok, TPlus as Tok) ? "add" : "sub",
+                        lt.tok._tag === "TPlus" ? "add" : "sub",
                       )
                     : and(
                           or(
-                            eq(lt.tok, TStar as Tok),
-                            or(eq(lt.tok, TSlash as Tok), eq(lt.tok, TPercent as Tok)),
+                            lt.tok._tag === "TStar",
+                            or(lt.tok._tag === "TSlash", lt.tok._tag === "TPercent"),
                           ),
                           MUL_BP >= minBp,
                         )
                       ? ((fnName: string) =>
                           binCallOrLeftSection(toks, left, lt, pos, MUL_BP, fnName, hooks))(
-                          eq(lt.tok, TStar as Tok)
+                          lt.tok._tag === "TStar"
                             ? "mul"
-                            : eq(lt.tok, TSlash as Tok)
+                            : lt.tok._tag === "TSlash"
                               ? "div"
                               : "mod",
                         )
@@ -1488,7 +1497,7 @@ const ternaryTail: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    eq(tokAt(toks, pos).tok, TQuestion as Tok)
+    tokAt(toks, pos).tok._tag === "TQuestion"
       ? _Result_flatMap(
           ([thenE, p1]) =>
             _Result_flatMap(
@@ -1536,13 +1545,13 @@ const parseExprBp: _Curry<
     ((_v) =>
       _v._tag === "TLet"
         ? parseLetIn(toks, pos, hooks)
-        : and(eq(minBp, 0), looksLikeLambda(toks, pos))
+        : and(minBp === 0, looksLikeLambda(toks, pos))
           ? parseLambda(toks, pos, hooks)
           : _Result_flatMap(
               ([left, p]) =>
                 _Result_flatMap(
                   ([left2, p2]) =>
-                    eq(minBp, 0)
+                    minBp === 0
                       ? ternaryTail(toks, left2, p2, hooks)
                       : (Ok(_tuple(left2, p2)) as Result<[Expr, number], PErr>),
                   infixLoop(toks, minBp, left, p, hooks),
@@ -1605,10 +1614,10 @@ const parseCallPart: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    eq(tokAt(toks, pos).tok, TTilde as Tok)
+    tokAt(toks, pos).tok._tag === "TTilde"
       ? _Result_flatMap(
           ([nm, p]) =>
-            eq(tokAt(toks, p).tok, TEq as Tok)
+            tokAt(toks, p).tok._tag === "TEq"
               ? _Result_map(
                   ([v, k]: [Expr, number]) => _tuple(CPLab(nm.name, v, nm.span), k),
                   parseExpr(toks, p + 1, hooks),
@@ -1792,7 +1801,7 @@ const parseAtomOrCall: _Curry<
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const lt = tokAt(toks, pos);
-    return or(eq(lt.tok, TMinus as Tok), eq(lt.tok, TBang as Tok))
+    return or(lt.tok._tag === "TMinus", lt.tok._tag === "TBang")
       ? _Result_flatMap(
           ([operand, p]) =>
             ((fnName: string) =>
@@ -1806,7 +1815,7 @@ const parseAtomOrCall: _Curry<
                   ),
                   p,
                 ),
-              ) as Result<[Expr, number], PErr>)(eq(lt.tok, TMinus as Tok) ? "negate" : "not"),
+              ) as Result<[Expr, number], PErr>)(lt.tok._tag === "TMinus" ? "negate" : "not"),
           parseAtomOrCall(toks, pos + 1, hooks),
         )
       : _Result_flatMap(([e, p]) => postfixLoop(toks, e, p, hooks), parseAtom(toks, pos, hooks));
@@ -1888,7 +1897,7 @@ const parseAtom: _Curry<
                                                     ) as Result<[Expr, number], PErr>)(_v)
                                                 : _v._tag === "TLparen"
                                                   ? ((nxt) =>
-                                                      eq(nxt.tok, TRparen as Tok)
+                                                      nxt.tok._tag === "TRparen"
                                                         ? (Ok(
                                                             _tuple(
                                                               Ast.EUnit(toEnd(sp, toks, pos + 2)),
@@ -1897,7 +1906,7 @@ const parseAtom: _Curry<
                                                           ) as Result<[Expr, number], PErr>)
                                                         : and(
                                                               isSectionOp(nxt.tok),
-                                                              not(eq(nxt.tok, TMinus as Tok)),
+                                                              nxt.tok._tag !== "TMinus",
                                                             )
                                                           ? parseRightSection(
                                                               toks,
@@ -1907,10 +1916,7 @@ const parseAtom: _Curry<
                                                             )
                                                           : _Result_flatMap(
                                                               ([first, p]) =>
-                                                                eq(
-                                                                  tokAt(toks, p).tok,
-                                                                  TComma as Tok,
-                                                                )
+                                                                tokAt(toks, p).tok._tag === "TComma"
                                                                   ? _Result_flatMap(
                                                                       ([elements, p2]) =>
                                                                         _Result_flatMap(
@@ -2083,13 +2089,13 @@ const parseField: _Curry<
     const lt = tokAt(toks, pos);
     return _Result_flatMap(
       ([nm, p]) =>
-        eq(tokAt(toks, p).tok, TColon as Tok)
+        tokAt(toks, p).tok._tag === "TColon"
           ? _Result_flatMap(
               ([value, p2]) =>
                 Ok(_tuple({ name: nm.name, value: value }, p2)) as Result<[Field, number], PErr>,
               parseExpr(toks, p + 1, hooks),
             )
-          : not(eq(keywordText(lt.tok), None as Option<string>))
+          : keywordText(lt.tok)._tag !== "None"
             ? errAt(`'${nm.name}' is a keyword — write '${nm.name}: <expr>'`, lt)
             : (Ok(_tuple({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p)) as Result<
                 [Field, number],
@@ -2124,7 +2130,7 @@ const parseRecord: _Curry<
     const start: SpanAt = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
-        eq(tokAt(toks, p).tok, TSpread as Tok)
+        tokAt(toks, p).tok._tag === "TSpread"
           ? _Result_flatMap(
               ([spreadExpr, p1]) =>
                 _Result_flatMap(
@@ -2147,7 +2153,7 @@ const parseRecord: _Curry<
                         ),
                       listUntilH(TRbrace as Tok, parseField, toks, p2, hooks),
                     ),
-                  eq(tokAt(toks, p1).tok, TRbrace as Tok)
+                  tokAt(toks, p1).tok._tag === "TRbrace"
                     ? (Ok(p1) as Result<number, PErr>)
                     : expectTok(TComma as Tok, toks, p1),
                 ),
@@ -2190,7 +2196,7 @@ const parseSeqElem: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    eq(tokAt(toks, pos).tok, TSpread as Tok)
+    tokAt(toks, pos).tok._tag === "TSpread"
       ? _Result_flatMap(
           ([ex, p]) => Ok(_tuple(Ast.SESpread(ex), p)) as Result<[SeqElem, number], PErr>,
           parseExpr(toks, pos + 1, hooks),
@@ -2349,7 +2355,7 @@ const parseHash: _Curry<
       (p) =>
         _Result_flatMap(
           (p1) =>
-            eq(tokAt(toks, p1).tok, TRbrace as Tok)
+            tokAt(toks, p1).tok._tag === "TRbrace"
               ? _Result_flatMap(
                   (p2) =>
                     Ok(_tuple(Ast.EMap([] as MapEntry[], toEnd(start, toks, p2)), p2)) as Result<
@@ -2358,7 +2364,7 @@ const parseHash: _Curry<
                     >,
                   expectTok(TRbrace as Tok, toks, p1),
                 )
-              : eq(tokAt(toks, p1).tok, TSpread as Tok)
+              : tokAt(toks, p1).tok._tag === "TSpread"
                 ? _Result_flatMap(
                     ([elements, p2]) =>
                       _Result_flatMap(
@@ -2373,7 +2379,7 @@ const parseHash: _Curry<
                   )
                 : _Result_flatMap(
                     ([first, p2]) =>
-                      eq(tokAt(toks, p2).tok, TColon as Tok)
+                      tokAt(toks, p2).tok._tag === "TColon"
                         ? _Result_flatMap(
                             (p3) =>
                               _Result_flatMap(
@@ -2393,7 +2399,7 @@ const parseHash: _Curry<
                                           ) as Result<[Expr, number], PErr>,
                                         expectTok(TRbrace as Tok, toks, p5),
                                       ),
-                                    eq(tokAt(toks, p4).tok, TComma as Tok)
+                                    tokAt(toks, p4).tok._tag === "TComma"
                                       ? listUntilH(
                                           TRbrace as Tok,
                                           parseMapEntry,
@@ -2425,7 +2431,7 @@ const parseHash: _Curry<
                                   ) as Result<[Expr, number], PErr>,
                                 expectTok(TRbrace as Tok, toks, p3),
                               ),
-                            eq(tokAt(toks, p2).tok, TComma as Tok)
+                            tokAt(toks, p2).tok._tag === "TComma"
                               ? listUntilH(TRbrace as Tok, parseSeqElem, toks, p2 + 1, hooks)
                               : (Ok(_tuple([] as SeqElem[], p2)) as Result<
                                   [SeqElem[], number],
@@ -2507,7 +2513,7 @@ const altsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: Pattern[], lastSpan: SpanAt],
   Result<[Pattern[], number, SpanAt], PErr>
 > = _curry(4, (toks: LocTok[], pos: number, acc: Pattern[], lastSpan: SpanAt) =>
-  eq(tokAt(toks, pos).tok, TBar as Tok)
+  tokAt(toks, pos).tok._tag === "TBar"
     ? _Result_flatMap(
         ([alt, p1]) => altsLoop(toks, p1, _Array_append(alt, acc), patSpan(alt)),
         parsePattern(toks, pos + 1),
@@ -2538,7 +2544,7 @@ const armsLoop: _Curry<
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) =>
-    eq(tokAt(toks, pos).tok, TBar as Tok)
+    tokAt(toks, pos).tok._tag === "TBar"
       ? _Result_flatMap(
           ([first, p1]) =>
             _Result_flatMap(
@@ -2562,7 +2568,7 @@ const armsLoop: _Curry<
                       ),
                     parseGuard(toks, p2, hooks),
                   ))(
-                  eq(length(alts), 1) ? first : Ast.POr(alts, spanning(patSpan(first), lastSpan)),
+                  length(alts) === 1 ? first : Ast.POr(alts, spanning(patSpan(first), lastSpan)),
                 ),
               altsLoop(toks, p1, [first], patSpan(first)),
             ),
@@ -2648,11 +2654,11 @@ const parseDoBlockFrom: _Curry<
   ) =>
     _Result_flatMap(
       (p1) =>
-        eq(tokAt(toks, p1).tok, TRbrace as Tok)
+        tokAt(toks, p1).tok._tag === "TRbrace"
           ? errAt("do block needs a final expression", tokAt(toks, p1))
           : _Result_flatMap(
               ([exprs, p2]) =>
-                eq(tokAt(toks, p2).tok, TSemi as Tok)
+                tokAt(toks, p2).tok._tag === "TSemi"
                   ? errAt("do block cannot end with a semicolon", tokAt(toks, p2))
                   : _Result_flatMap(
                       (p3) =>
@@ -2694,7 +2700,7 @@ const parseDoExprs: _Curry<
     _Result_flatMap(
       ([expr, p]) =>
         ((next: Expr[]) =>
-          eq(tokAt(toks, p).tok, TSemi as Tok)
+          tokAt(toks, p).tok._tag === "TSemi"
             ? parseDoExprs(toks, p + 1, next, hooks)
             : (Ok(_tuple(next, p)) as Result<[Expr[], number], PErr>))(_Array_append(expr, acc)),
       parseExpr(toks, pos, hooks),
@@ -2897,7 +2903,7 @@ const parseCtorArgs: _Curry<
   [toks: LocTok[], ctor: string, ns: Option<string>, nameSpan: SpanAt, pos: number],
   Result<[Pattern, number], PErr>
 > = _curry(5, (toks: LocTok[], ctor: string, ns: Option<string>, nameSpan: SpanAt, pos: number) =>
-  eq(tokAt(toks, pos).tok, TLparen as Tok)
+  tokAt(toks, pos).tok._tag === "TLparen"
     ? _Result_flatMap(
         ([args, p]) =>
           _Result_flatMap(
@@ -2932,7 +2938,7 @@ const parsePatternAtom: _Curry<
           ? (({ value }) =>
               Ok(_tuple(Ast.PStr(value, sp), pos + 1)) as Result<[Pattern, number], PErr>)(_v)
           : _v._tag === "TLparen"
-            ? eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
+            ? tokAt(toks, pos + 1).tok._tag === "TRparen"
               ? (Ok(_tuple(Ast.PUnit(toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
                   [Pattern, number],
                   PErr
@@ -2974,7 +2980,7 @@ const parsePatternAtom: _Curry<
                     ? (Ok(_tuple(Ast.PWild(sp), pos + 1)) as Result<[Pattern, number], PErr>)
                     : _v._tag === "TId"
                       ? (({ value: name }) =>
-                          eq(tokAt(toks, pos + 1).tok, TDot as Tok)
+                          tokAt(toks, pos + 1).tok._tag === "TDot"
                             ? _Result_flatMap(
                                 ([c, p1]) =>
                                   isUpper(c.name)
@@ -3049,7 +3055,7 @@ const patElemsLoop: _Curry<
       : _Result_flatMap(
           ([pat, p]) =>
             ((elems: Pattern[]) =>
-              eq(tokAt(toks, p).tok, TComma as Tok)
+              tokAt(toks, p).tok._tag === "TComma"
                 ? patElemsLoop(toks, p + 1, elems)
                 : (Ok(_tuple(elems, None as Option<Pattern>, p)) as Result<
                     [Pattern[], Option<Pattern>, number],
@@ -3065,7 +3071,7 @@ const parseArrPattern: _Curry<
   const start: SpanAt = spanOf(tokAt(toks, pos));
   return _Result_flatMap(
     (p) =>
-      eq(tokAt(toks, p).tok, TRbracket as Tok)
+      tokAt(toks, p).tok._tag === "TRbracket"
         ? (Ok(
             _tuple(
               Ast.PArr([] as Pattern[], None as Option<Pattern>, toEnd(start, toks, p + 1)),
@@ -3094,7 +3100,7 @@ const parseListPattern: _Curry<
     (p) =>
       _Result_flatMap(
         (p1) =>
-          eq(tokAt(toks, p1).tok, TRbrace as Tok)
+          tokAt(toks, p1).tok._tag === "TRbrace"
             ? (Ok(
                 _tuple(
                   Ast.PList([] as Pattern[], None as Option<Pattern>, toEnd(start, toks, p1 + 1)),
@@ -3123,13 +3129,13 @@ const parsePatField: _Curry<
   const lt = tokAt(toks, pos);
   return _Result_flatMap(
     ([nm, p]) =>
-      eq(tokAt(toks, p).tok, TColon as Tok)
+      tokAt(toks, p).tok._tag === "TColon"
         ? _Result_flatMap(
             ([pat, p2]) =>
               Ok(_tuple({ label: nm.name, pat: pat }, p2)) as Result<[PatField, number], PErr>,
             parsePattern(toks, p + 1),
           )
-        : not(eq(keywordText(lt.tok), None as Option<string>))
+        : keywordText(lt.tok)._tag !== "None"
           ? errAt(`'${nm.name}' is a keyword — write '${nm.name}: <pattern>'`, lt)
           : (Ok(_tuple({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p)) as Result<
               [PatField, number],
@@ -3146,14 +3152,14 @@ const parseTypeAtom: _Curry<
   const sp: SpanAt = spanOf(lt);
   return ((_v) =>
     _v._tag === "TLparen"
-      ? eq(tokAt(toks, pos + 1).tok, TRparen as Tok)
+      ? tokAt(toks, pos + 1).tok._tag === "TRparen"
         ? (Ok(_tuple(Ast.TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
             [TypeExpr, number],
             PErr
           >)
         : _Result_flatMap(
             ([inner, p]) =>
-              eq(tokAt(toks, p).tok, TComma as Tok)
+              tokAt(toks, p).tok._tag === "TComma"
                 ? _Result_flatMap(
                     ([elems, p2]) =>
                       _Result_flatMap(
@@ -3190,7 +3196,7 @@ const parseTypeAtom: _Curry<
               Ok(_tuple(Ast.TyLit(value, sp), pos + 1)) as Result<[TypeExpr, number], PErr>)(_v)
           : _Result_flatMap(
               ([nm, p]) =>
-                and(isUpper(nm.name), eq(tokAt(toks, p).tok, TDot as Tok))
+                and(isUpper(nm.name), tokAt(toks, p).tok._tag === "TDot")
                   ? _Result_flatMap(
                       ([q, p2]) =>
                         isUpper(q.name)
@@ -3251,7 +3257,7 @@ const parseTypeApp: _Curry<
       ((_v) =>
         _v._tag === "TyName" && (({ name, span: sp }) => isUpper(name))(_v)
           ? (({ name, span: sp }) =>
-              eq(tokAt(toks, p).tok, TLt as Tok)
+              tokAt(toks, p).tok._tag === "TLt"
                 ? _Result_flatMap(
                     ([args, p1]) =>
                       _Result_flatMap(
@@ -3281,7 +3287,7 @@ const parseTypeApp: _Curry<
                   ))(_v)
           : _v._tag === "TyQual"
             ? (({ alias, name: nm, nameSpan, span: sp }) =>
-                eq(tokAt(toks, p).tok, TLt as Tok)
+                tokAt(toks, p).tok._tag === "TLt"
                   ? _Result_flatMap(
                       ([args, p1]) =>
                         _Result_flatMap(
@@ -3322,7 +3328,7 @@ const parseTypeUnionRest: _Curry<
   [toks: LocTok[], pos: number, acc: TypeExpr[], lastSp: SpanAt],
   Result<[TypeExpr[], SpanAt, number], PErr>
 > = _curry(4, (toks: LocTok[], pos: number, acc: TypeExpr[], lastSp: SpanAt) =>
-  eq(tokAt(toks, pos).tok, TBar as Tok)
+  tokAt(toks, pos).tok._tag === "TBar"
     ? _Result_flatMap(
         ([m, p]) => parseTypeUnionRest(toks, p, _Array_append(m, acc), tySpan(m)),
         parseTypeApp(toks, pos + 1),
@@ -3335,7 +3341,7 @@ const parseTypeUnion: _Curry<
 > = _curry(2, (toks: LocTok[], pos: number) =>
   _Result_flatMap(
     ([first, p]) =>
-      eq(tokAt(toks, p).tok, TBar as Tok)
+      tokAt(toks, p).tok._tag === "TBar"
         ? _Result_flatMap(
             ([members, lastSp, p2]) =>
               Ok(_tuple(Ast.TyUnion(members, spanning(tySpan(first), lastSp)), p2)) as Result<
@@ -3354,7 +3360,7 @@ const parseTypeExpr: _Curry<
 > = _curry(2, (toks: LocTok[], pos: number) =>
   _Result_flatMap(
     ([from, p]) =>
-      eq(tokAt(toks, p).tok, TTarrow as Tok)
+      tokAt(toks, p).tok._tag === "TTarrow"
         ? _Result_flatMap(
             ([to, p2]) =>
               Ok(_tuple(Ast.TyArrow(from, to, spanning(tySpan(from), tySpan(to))), p2)) as Result<
@@ -3372,7 +3378,7 @@ const parseCtorField: _Curry<
   Result<[CtorField, number], PErr>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const isLabel: boolean = ((_v) =>
-    _v._tag === "TId" ? eq(tokAt(toks, pos + 1).tok, TColon as Tok) : false)(tokAt(toks, pos).tok);
+    _v._tag === "TId" ? tokAt(toks, pos + 1).tok._tag === "TColon" : false)(tokAt(toks, pos).tok);
   return isLabel
     ? _Result_flatMap(
         ([nm, p]) =>
@@ -3396,7 +3402,7 @@ const parseCtor: _Curry<[toks: LocTok[], pos: number], Result<[Ctor, number], PE
   (toks: LocTok[], pos: number) =>
     _Result_flatMap(
       ([nm, p]) =>
-        eq(tokAt(toks, p).tok, TLparen as Tok)
+        tokAt(toks, p).tok._tag === "TLparen"
           ? _Result_flatMap(
               ([fields, p2]) =>
                 _Result_flatMap(
@@ -3422,7 +3428,7 @@ const ctorsLoop: _Curry<
   _Result_flatMap(
     ([c, p]) =>
       ((cs: Ctor[]) =>
-        eq(tokAt(toks, p).tok, TBar as Tok)
+        tokAt(toks, p).tok._tag === "TBar"
           ? ctorsLoop(toks, p + 1, cs)
           : (Ok(_tuple(cs, p)) as Result<[Ctor[], number], PErr>))(_Array_append(c, acc)),
     parseCtor(toks, pos),
@@ -3447,7 +3453,7 @@ const parseAliasField: _Curry<
                 parseTypeExpr(toks, p2),
               ),
             expectTok(TColon as Tok, toks, p1),
-          ))(optional ? p + 1 : p))(eq(tokAt(toks, p).tok, TQuestion as Tok)),
+          ))(optional ? p + 1 : p))(tokAt(toks, p).tok._tag === "TQuestion"),
     expectLabel(toks, pos),
   ),
 );
@@ -3482,7 +3488,7 @@ const parseTypeParams: _Curry<
   [toks: LocTok[], pos: number],
   Result<[string[], number], PErr>
 > = _curry(2, (toks: LocTok[], pos: number) =>
-  eq(tokAt(toks, pos).tok, TLt as Tok)
+  tokAt(toks, pos).tok._tag === "TLt"
     ? _Result_flatMap(
         ([names, p]) =>
           _Result_map(
@@ -3518,7 +3524,7 @@ const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PE
               ([params, p2]) =>
                 _Result_flatMap(
                   (p3) =>
-                    eq(tokAt(toks, p3).tok, TLbrace as Tok)
+                    tokAt(toks, p3).tok._tag === "TLbrace"
                       ? _Result_map(
                           ([alias, p4]: [AliasField[], number]) =>
                             _tuple(
@@ -3573,7 +3579,7 @@ const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PE
                                   p4,
                                 ),
                               ctorsLoop(toks, afterBar, [] as Ctor[]),
-                            ))(eq(tokAt(toks, p3).tok, TBar as Tok) ? p3 + 1 : p3),
+                            ))(tokAt(toks, p3).tok._tag === "TBar" ? p3 + 1 : p3),
                   expectTok(TEq as Tok, toks, p2),
                 ),
               parseTypeParams(toks, p1),
@@ -3590,7 +3596,7 @@ const parseExtern: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
     const start: SpanAt = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
-        eq(tokAt(toks, p).tok, TType as Tok)
+        tokAt(toks, p).tok._tag === "TType"
           ? _Result_flatMap(
               (p1) =>
                 _Result_flatMap(
@@ -3679,8 +3685,8 @@ const parseExtern: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
                                                       ((_v) =>
                                                         _v._tag === "TStr"
                                                           ? or(
-                                                              eq(convention.name, "global"),
-                                                              eq(convention.name, "new"),
+                                                              convention.name === "global",
+                                                              convention.name === "new",
                                                             )
                                                           : false)(tokAt(toks, p7).tok),
                                                     ),
@@ -3721,7 +3727,7 @@ const parseExtern: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
                         ),
                       expectTok(TColon as Tok, toks, p2),
                     ),
-                  eq(tokAt(toks, p1).tok, TLt as Tok)
+                  tokAt(toks, p1).tok._tag === "TLt"
                     ? _Result_flatMap(
                         ([names, pParams]) =>
                           _Result_flatMap(
@@ -3753,12 +3759,12 @@ const parseImportNs: <B>(
   <B>(toks: LocTok[], start: { start: number } & B, pos: number) =>
     _Result_flatMap(
       ([asKw, p1]) =>
-        eq(asKw.name, "as")
+        asKw.name === "as"
           ? _Result_flatMap(
               ([alias, p2]) =>
                 _Result_flatMap(
                   ([kw, p3]) =>
-                    eq(kw.name, "from")
+                    kw.name === "from"
                       ? _Result_map(
                           ([path, p4]: [string, number]) =>
                             _tuple(Ast.SImportNs(alias, path, toEnd(start, toks, p4)), p4),
@@ -3779,7 +3785,7 @@ const parseImport: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
     const start: SpanAt = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
-        eq(tokAt(toks, p).tok, TStar as Tok)
+        tokAt(toks, p).tok._tag === "TStar"
           ? _Result_flatMap(
               (p1) => parseImportNs(toks, start, p1),
               expectTok(TStar as Tok, toks, p),
@@ -3792,7 +3798,7 @@ const parseImport: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
                       (p3) =>
                         _Result_flatMap(
                           ([kw, p4]) =>
-                            eq(kw.name, "from")
+                            kw.name === "from"
                               ? _Result_map(
                                   ([path, p5]: [string, number]) =>
                                     _tuple(Ast.SImport(names, path, toEnd(start, toks, p5)), p5),
@@ -3922,7 +3928,7 @@ const parseLet: _Curry<
     const start: SpanAt = spanOf(tokAt(toks, pos));
     return _Result_flatMap(
       (p) =>
-        eq(tokAt(toks, p).tok, TLbrace as Tok)
+        tokAt(toks, p).tok._tag === "TLbrace"
           ? parseRecordDestructure(toks, start, p, tmp, hooks)
           : _Result_flatMap(
               ([nm, p1]) =>
@@ -3953,7 +3959,7 @@ const parseLet: _Curry<
                         ),
                       expectTok(TEq as Tok, toks, pA),
                     ),
-                  eq(tokAt(toks, p1).tok, TColon as Tok)
+                  tokAt(toks, p1).tok._tag === "TColon"
                     ? _Result_map(
                         ([ty, p]: [TypeExpr, number]) => _tuple(Some(ty) as Option<TypeExpr>, p),
                         parseTypeExpr(toks, p1 + 1),
@@ -4024,7 +4030,7 @@ const parseExprStmt: <B>(
     return _Result_flatMap(
       ([value, p]) =>
         ((p2: number) => Ok(_tuple([Ast.SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp)))(
-          eq(tokAt(toks, p).tok, TSemi as Tok) ? p + 1 : p,
+          tokAt(toks, p).tok._tag === "TSemi" ? p + 1 : p,
         ),
       parseExpr(toks, pos, hooks),
     );
@@ -4185,9 +4191,9 @@ const isSyncTok: (t: Tok) => boolean = (t: Tok) =>
               ? true
               : false)(t);
 const isOpener: (t: Tok) => boolean = (t: Tok) =>
-  or(or(eq(t, TLparen as Tok), eq(t, TLbrace as Tok)), eq(t, TLbracket as Tok));
+  or(or(t._tag === "TLparen", t._tag === "TLbrace"), t._tag === "TLbracket");
 const isCloser: (t: Tok) => boolean = (t: Tok) =>
-  or(or(eq(t, TRparen as Tok), eq(t, TRbrace as Tok)), eq(t, TRbracket as Tok));
+  or(or(t._tag === "TRparen", t._tag === "TRbrace"), t._tag === "TRbracket");
 /**
  * Hard stop on pathological input, so one keystroke cannot publish a novel of
  * diagnostics (ADR 0045 decision 5).
@@ -4202,7 +4208,9 @@ const maxParseErrors: number = 100;
 const resumeAt: _Curry<[toks: LocTok[], pos: number, at: number], number> = _curry(
   3,
   (toks: LocTok[], pos: number, at: number) =>
-    and(pos + 1 < length(toks), tokAt(toks, pos).start < at) ? resumeAt(toks, pos + 1, at) : pos,
+    and(lt(pos + 1, length(toks)), lt(tokAt(toks, pos).start, at))
+      ? resumeAt(toks, pos + 1, at)
+      : pos,
 );
 /**
  * Panic-mode skip: stop at the first sync token whose bracket depth relative to
@@ -4213,7 +4221,7 @@ const skipToSync: _Curry<[toks: LocTok[], pos: number, depth: number], number> =
   3,
   (toks: LocTok[], pos: number, depth: number) => {
     const t: Tok = tokAt(toks, pos).tok;
-    return or(eq(t, TEof as Tok), and(eq(depth, 0), isSyncTok(t)))
+    return or(t._tag === "TEof", and(depth === 0, isSyncTok(t)))
       ? pos
       : skipToSync(
           toks,
@@ -4281,7 +4289,7 @@ const stmtsLoop: _Curry<
     let acc: Stmt[] = acc0;
     let diags: PErr[] = diags0;
     while (true) {
-      if (eq(tokAt(toks, pos).tok, TEof as Tok)) {
+      if (tokAt(toks, pos).tok._tag === "TEof") {
         return { stmts: acc, diagnostics: diags };
       } else {
         {
@@ -4431,7 +4439,7 @@ export const parseRecovering: <A, B, C, D, E>(
     ) => Result<Option<[Expr, number]>, PErr>)[] = parseHooksOf(resolvePluginsDefault(pluginsOpt));
     return stmtsLoop(
       toks,
-      ((_v) => (_v._tag === "TStr" ? (({ value }) => (eq(value, "use open") ? 1 : 0))(_v) : 0))(
+      ((_v) => (_v._tag === "TStr" ? (({ value }) => (value === "use open" ? 1 : 0))(_v) : 0))(
         tokAt(toks, 0).tok,
       ),
       0,

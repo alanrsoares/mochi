@@ -328,7 +328,7 @@ export const emitTsModule = (prog: Program, ctx: TsEmitContext): string => {
   // text once emitted (ADR 0036), like `builtinDeclsIn` above.
   const allDeps = (body.includes("_tuple(") ? [...deps, "_tuple"] : deps).filter(
     (name) =>
-      !["add", "sub", "mul", "div", "lt", "lte", "gt", "gte"].includes(name) ||
+      !["add", "sub", "mul", "div", "lt", "lte", "gt", "gte", "eq", "not"].includes(name) ||
       new RegExp(`\\b${name}\\b`).test(body),
   );
   const runtimeLine = allDeps.length

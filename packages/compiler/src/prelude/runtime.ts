@@ -38,12 +38,52 @@ export type _Curry<A extends unknown[], R> = [A] extends [[]]
     ) => [_CurryDrop<A, T>] extends [[]] ? R : _Curry<_CurryDrop<A, T>, R>;
 
 export const _list = <T>(g: () => Iterator<T>): Iterable<T> => ({ [Symbol.iterator]: g });
-export const _curry = (n: number, f: (...args: any[]) => any): ((...args: any[]) => any) =>
-  function c(...a: any[]): any {
-    if (a.length < n) return (...b: any[]) => c(...a, ...b);
-    if (a.length === n) return f(...a);
-    return a.slice(n).reduce((g: any, x: any) => g(x), f(...a.slice(0, n)));
+export const _curry = (n: number, f: (...args: any[]) => any): ((...args: any[]) => any) => {
+  // `f` applied to `a`, spelled out for the common arities: a spread call is
+  // several times slower.
+  const apply = (a: any[]): any => {
+    switch (a.length) {
+      case 2:
+        return f(a[0], a[1]);
+      case 3:
+        return f(a[0], a[1], a[2]);
+      case 4:
+        return f(a[0], a[1], a[2], a[3]);
+      case 5:
+        return f(a[0], a[1], a[2], a[3], a[4]);
+      case 6:
+        return f(a[0], a[1], a[2], a[3], a[4], a[5]);
+      default:
+        return f(...a);
+    }
   };
+  function c(...a: any[]): any {
+    if (a.length === n) return apply(a);
+    if (a.length < n) return (...b: any[]) => c(...a, ...b);
+    return a.slice(n).reduce((g: any, x: any) => g(x), apply(a.slice(0, n)));
+  }
+  // Saturated calls and one-short partials are the common cases for the two
+  // commonest arities, so they skip the generic path's spreads.
+  if (n === 2)
+    return (...a: any[]): any => {
+      if (a.length === 2) return f(a[0], a[1]);
+      if (a.length !== 1) return c(...a);
+      const x = a[0];
+      return (...b: any[]): any => (b.length === 1 ? f(x, b[0]) : c(x, ...b));
+    };
+  if (n === 3)
+    return (...a: any[]): any => {
+      if (a.length === 3) return f(a[0], a[1], a[2]);
+      if (a.length === 2) {
+        const [x, y] = a;
+        return (...b: any[]): any => (b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b));
+      }
+      if (a.length !== 1) return c(...a);
+      const x = a[0];
+      return _curry(2, (y: any, z: any) => f(x, y, z));
+    };
+  return c;
+};
 export const _tuple = <T extends unknown[]>(...xs: T): T => xs;
 export const _recur = <A extends unknown[]>(...args: A): { _tag: "recur"; args: A } => ({
   _tag: "recur",

@@ -106,6 +106,16 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
   let tmpCount = 0; // supplies fresh names for destructuring temporaries
   let last: Located = toks[0]!; // most recently consumed token (for end spans)
   const peek = () => toks[pos]!;
+  /**
+   * `>>` lexes as two `>` so nested type arguments close one at a time
+   * (`Map<string, Map<string, a>>`). In an expression, two touching `>` are the
+   * composition operator.
+   */
+  const composeAt = (): boolean => {
+    const a = toks[pos];
+    const b = toks[pos + 1];
+    return a?.t === "gt" && b?.t === "gt" && a.span.end === b.span.start;
+  };
   /** True at the `eof` token *or* past it — a failed statement may have consumed `eof` itself. */
   const atEnd = () => pos >= toks.length || toks[pos]!.t === "eof";
   const next = () => {
@@ -517,7 +527,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         tk.t === "neq" ||
         tk.t === "lt" ||
         tk.t === "lte" ||
-        tk.t === "gt" ||
+        (tk.t === "gt" && !composeAt()) ||
         tk.t === "gte") &&
       CMP_BP >= minBp
     ) {
@@ -602,10 +612,11 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
         };
       fail("fast pipe needs a call on the right, like `a -> f(b)`");
     }
-    if (tk.t === "compose" && COMPOSE_BP >= minBp) {
+    if (composeAt() && COMPOSE_BP >= minBp) {
+      next();
       next();
       const right = parseExpr(COMPOSE_BP + 1);
-      const paramSpan = tk.span;
+      const paramSpan = { start: tk.span.start, end: tk.span.start + 2 };
       const fn: Expr = {
         kind: "lambda",
         params: [{ kind: "name", name: "$x", span: paramSpan }],

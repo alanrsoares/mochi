@@ -1168,7 +1168,7 @@ export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string
     : deps0 in
   let deps = deps
     |> filter(d =>
-      d != "add" && d != "sub" && d != "mul" && d != "div" && d != "lt" && d != "lte" && d != "gt" && d != "gte" || Str.contains(
+      d != "add" && d != "sub" && d != "mul" && d != "div" && d != "lt" && d != "lte" && d != "gt" && d != "gte" && d != "eq" && d != "not" || Str.contains(
         d,
         body
       )) in

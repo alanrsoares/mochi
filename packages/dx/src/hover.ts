@@ -69,7 +69,6 @@ const TOKEN_HINTS: readonly TokenHint[] = [
     token: "pipe",
     info: { code: "|>", doc: "Pipes the left value into the function on the right." },
   },
-  { token: "compose", info: { code: ">>", doc: "Composes two functions right-to-left." } },
   { token: "concat", info: { code: "++", doc: "Concatenates strings." } },
   {
     token: "spread",
@@ -82,11 +81,25 @@ const TOKEN_HINTS: readonly TokenHint[] = [
   },
 ];
 
+const COMPOSE_HINT: HoverInfo = { code: ">>", doc: "Composes two functions right-to-left." };
+
+/** `>>` lexes as two touching `>` (the parser glues them in expressions). */
+const touchingGt = (tokens: Located[], token: Located): boolean => {
+  const i = tokens.indexOf(token);
+  const prev = tokens[i - 1];
+  const next = tokens[i + 1];
+  return (
+    (next?.t === "gt" && token.span.end === next.span.start) ||
+    (prev?.t === "gt" && prev.span.end === token.span.start)
+  );
+};
+
 const tokenHoverAt = (tokens: Located[], offset: number): HoverInfo | null => {
   const token = tokens.find((current) => spanContains(current.span, offset));
   if (!token) return null;
   if (token.t === "str" && token.v === "use open")
     return { code: '"use open"', doc: "Permits unresolved names as host globals in this module." };
+  if (token.t === "gt" && touchingGt(tokens, token)) return COMPOSE_HINT;
   return TOKEN_HINTS.find((hint) => hint.token === token.t)?.info ?? null;
 };
 

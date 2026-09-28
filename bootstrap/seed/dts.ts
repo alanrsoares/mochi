@@ -37,7 +37,6 @@ import {
   _curry,
   add,
   and,
-  eq,
   gt,
   length,
   map,
@@ -400,7 +399,7 @@ const typeDeclsFrom: _Curry<
                                     rest,
                                   ))(_v)
                               : _v._tag === "None"
-                                ? eq(length(ctors), 0)
+                                ? length(ctors) === 0
                                   ? _Array_prepend(`${docComment}${opaqueTypeDecl(name)}`, rest)
                                   : _Array_prepend(
                                       `${docComment}${typeDecl(
@@ -548,7 +547,7 @@ const nsTypeImportsFrom: _Curry<
       ? ([] as string[])
       : _v._tag === "Some" && _v.value._tag === "SImportNs"
         ? (({ value: { alias, from } }) =>
-            or(_Set_has(alias.name, seen), not(_Str_contains(`${alias.name}.`, body)))
+            or(_Set_has(alias.name, seen), !_Str_contains(`${alias.name}.`, body))
               ? nsTypeImportsFrom(stmts, body, seen, i + 1)
               : _Array_prepend(
                   `import type * as ${alias.name} from "${mochiDtsSpec(from)}";`,
@@ -594,9 +593,7 @@ const blankNonLocal: <A>(
                     ? (({ value: name }) =>
                         blankNonLocal(
                           keys,
-                          and(not(eq(name, "")), not(_Set_has(name, locals)))
-                            ? _Map_set(k, "", recs)
-                            : recs,
+                          and(name !== "", !_Set_has(name, locals)) ? _Map_set(k, "", recs) : recs,
                           locals,
                           i + 1,
                         ))(_v)
@@ -665,7 +662,7 @@ const qualConRecs: <A, B, C, D, E>(
                                       _v._tag === "Some"
                                         ? recs
                                         : _v._tag === "None"
-                                          ? and(length(info.fields) > 0, not(_Map_has(name, recs)))
+                                          ? and(length(info.fields) > 0, !_Map_has(name, recs))
                                             ? _Map_set(name, qual, recs)
                                             : recs
                                           : (() => {
@@ -740,7 +737,7 @@ export const emitDtsFromTypedWith: <A>(
       curry,
       nsTypeImportsFrom(stmts, body, _Set_fromArray([] as string[]), 0),
     );
-    return eq(length(imports), 0)
+    return length(imports) === 0
       ? body
       : `${_Str_join("\n", imports)}
 ${body}`;

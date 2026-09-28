@@ -153,7 +153,7 @@ const genericHead: <A>(params: A[], i: number, acc: string[]) => string = _curry
   <A>(params: A[], i: number, acc: string[]) =>
     ((_v) =>
       _v._tag === "None"
-        ? eq(length(acc), 0)
+        ? length(acc) === 0
           ? ""
           : `<${_Str_join(", ", acc)}>`
         : _v._tag === "Some"
@@ -228,7 +228,7 @@ const ctorVariant: _Curry<
   4,
   (c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
-    return eq(length(fields), 0)
+    return length(fields) === 0
       ? `{ _tag: "${c.name}" }`
       : `{ _tag: "${c.name}"; ${_Str_join("; ", fields)} }`;
   },
@@ -345,7 +345,7 @@ export const recordAliasDecl: _Curry<
   ) => {
     const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
     const body: string[] = aliasFieldsFrom(fields, params, aliases, recs, 0);
-    return eq(length(body), 0)
+    return length(body) === 0
       ? `export type ${head} = {};`
       : `export type ${head} = { ${_Str_join("; ", body)} };`;
   },
@@ -523,7 +523,7 @@ export const ctorCallTs: _Curry<[t: Ty, recs: Map<string, string>], Option<strin
     ((_v) =>
       _v._tag === "TyCon"
         ? (({ args }) =>
-            or(eq(length(args), 0), not(isConcrete(t)))
+            or(length(args) === 0, !isConcrete(t))
               ? (None as Option<string>)
               : (Some(tsOf(t, recsEnv(recs))) as Option<string>))(_v)
         : (None as Option<string>))(t),
@@ -600,7 +600,7 @@ export const genericLambdaParams: <A>(
     arity: number,
     recs: Map<string, string>,
   ) =>
-    eq(_Map_size(genericNames(sc)), 0)
+    _Map_size(genericNames(sc)) === 0
       ? (None as Option<ParamAnnots>)
       : ((rendered: { env: TsEnv; head: string; pins: Map<number, string> }) =>
           Some({
@@ -680,7 +680,7 @@ export const ctorFactoryTs: _Curry<
       generics: head,
       paramTypes: ctorParamTypes(c.fields, params, aliases, recs, 0),
       ret: `${typeName}${head}`,
-      retMono: eq(length(monos), 0) ? typeName : `${typeName}<${_Str_join(", ", monos)}>`,
+      retMono: length(monos) === 0 ? typeName : `${typeName}<${_Str_join(", ", monos)}>`,
     };
   },
 );
@@ -703,7 +703,7 @@ const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamPara
  * Longest first, so the flat all-at-once signature is emitted LAST.
  */
 const compositions: (n: number) => number[][] = (n: number) =>
-  eq(n, 0) ? [[] as number[]] : compositionsFrom(n, 1);
+  n === 0 ? [[] as number[]] : compositionsFrom(n, 1);
 const compositionsFrom: _Curry<[n: number, k: number], number[][]> = _curry(
   2,
   (n: number, k: number) =>
@@ -798,7 +798,7 @@ const flatParamsFrom: _Curry<
   ((_v) =>
     _v._tag === "ELambda"
       ? (({ params, body }) =>
-          eq(length(params), 0)
+          length(params) === 0
             ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
                 ((_v) =>
                   _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
@@ -845,7 +845,7 @@ const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
     ((_v) =>
       _v._tag === "ELambda"
         ? (({ params, body }) =>
-            eq(length(params), 0)
+            length(params) === 0
               ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
                   ((_v) =>
                     _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
@@ -918,7 +918,7 @@ const coreBindingTsType: <A>(
     );
     return ((_v) =>
       _v._tag === "ELambda"
-        ? eq(rendered.head, "")
+        ? rendered.head === ""
           ? (([params, ret]: [string[], string]) => curriedFnType(params, ret))(
               flatParamsFrom(sc.ty, value, rendered.env, 0, [] as string[]),
             )
@@ -1046,7 +1046,7 @@ export const nullaryLocalNames: _Curry<
             nullaryLocalNames(
               stmts,
               i + 1,
-              and(eq(length(params), 0), length(fields) > 0) ? _Set_add(name, acc) : acc,
+              and(length(params) === 0, length(fields) > 0) ? _Set_add(name, acc) : acc,
             ))(
             _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
               value: Extract<
@@ -1129,7 +1129,7 @@ export const builtinTypeNamesFor: _Curry<
         ? (({ value: bt }) =>
             ((rest: string[]) =>
               and(
-                not(_Set_has(bt.name, declared)),
+                !_Set_has(bt.name, declared),
                 or(_Set_has(bt.name, wanted), _Str_contains(bt.name, body)),
               )
                 ? _Array_prepend(bt.name, rest)
@@ -1206,7 +1206,7 @@ const indexAlias: <A>(
                 _v._tag === "Some"
                   ? acc
                   : _v._tag === "None"
-                    ? or(not(eq(length(info.params), 0)), eq(length(info.fields), 0))
+                    ? or(length(info.params) !== 0, length(info.fields) === 0)
                       ? acc
                       : ((_v) =>
                           _v._tag === "Some"
@@ -1324,8 +1324,8 @@ const printableName: _Curry<
                                 ? acc
                                 : _v._tag === "None"
                                   ? or(
-                                      or(_Set_has(bare, bad), not(eq(length(info.params), 0))),
-                                      eq(length(info.fields), 0),
+                                      or(_Set_has(bare, bad), length(info.params) !== 0),
+                                      length(info.fields) === 0,
                                     )
                                     ? acc
                                     : ((_v) =>
@@ -1380,7 +1380,7 @@ const dropAmbiguous: _Curry<
                   ? (({ value: name }) =>
                       dropAmbiguous(
                         keys,
-                        and(_Set_has(name, bad), not(_Set_has(name, localNames)))
+                        and(_Set_has(name, bad), !_Set_has(name, localNames))
                           ? _Map_set(k, printableName(aliasKeys, k, aliases, bad, "", 0), recs)
                           : recs,
                         aliases,
@@ -1485,7 +1485,7 @@ const typeHeaderFrom: _Curry<
                                     rest,
                                   ))(_v)
                               : _v._tag === "None"
-                                ? eq(length(ctors), 0)
+                                ? length(ctors) === 0
                                   ? _Array_prepend(
                                       `declare const ${name}: unique symbol;
 ${docComment}type ${name} = { readonly [${name}]: never };`,
@@ -1542,7 +1542,7 @@ const genericLambdasFrom: <A, B, C>(
                 env,
                 i + 1,
                 ((_v) =>
-                  _v._tag === "ELambda" && (({ span: sp }) => not(_Str_startsWith("$", name)))(_v)
+                  _v._tag === "ELambda" && (({ span: sp }) => !_Str_startsWith("$", name))(_v)
                     ? (({ span: sp }) =>
                         ((_v) =>
                           _v._tag === "Some"
@@ -1616,7 +1616,7 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) =>
                       : _v._tag === "EField"
                         ? (({ target, name, span: sp }) =>
                             ((rest: SpanAt[]) =>
-                              and(eq(name, "empty"), isRefExpr(target))
+                              and(name === "empty", isRefExpr(target))
                                 ? _Array_prepend(sp, rest)
                                 : rest)(scopedSpans(target)))(_v)
                         : _v._tag === "ETuple"
@@ -1630,7 +1630,7 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) =>
                                 : _v._tag === "EMap"
                                   ? (({ entries, span: sp }) =>
                                       ((inner: SpanAt[]) =>
-                                        eq(length(entries), 0) ? _Array_prepend(sp, inner) : inner)(
+                                        length(entries) === 0 ? _Array_prepend(sp, inner) : inner)(
                                         scopedSpansInEntries(entries, 0),
                                       ))(_v)
                                   : _v._tag === "ELoop"
@@ -1748,7 +1748,7 @@ const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: SpanAt], SpanAt[]> = _c
   2,
   (elements: SeqElem[], sp: SpanAt) => {
     const inner: SpanAt[] = scopedSpansInElems(elements, 0);
-    return eq(length(elements), 0) ? _Array_prepend(sp, inner) : inner;
+    return length(elements) === 0 ? _Array_prepend(sp, inner) : inner;
   },
 );
 const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], SpanAt[]> = _curry(
@@ -1839,7 +1839,7 @@ const scopedNamesFrom: <A>(
                 recs,
                 i + 1,
                 ((_v) =>
-                  _v._tag === "ELambda" && not(_Str_startsWith("$", name))
+                  _v._tag === "ELambda" && !_Str_startsWith("$", name)
                     ? ((_v) =>
                         _v._tag === "Some"
                           ? (({ value: sc }) =>
@@ -2220,7 +2220,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
                 `${hasJsxStmts(stmts) ? "/** @jsx h */\n\n" : ""}${_Str_join(
                   "\n\n",
                   filter(
-                    (part: string) => not(eq(part, "")),
+                    (part: string) => part !== "",
                     [
                       _Str_join("\n", header),
                       _Str_join("\n", importLines),
@@ -2232,7 +2232,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
                 )}`,
                 "\n",
               ))(
-              eq(length(typeDeps), 0)
+              length(typeDeps) === 0
                 ? ""
                 : `import type { ${_Str_join(", ", _Array_sort(typeDeps))} } from "${runtimeImport}";`,
             ))(
@@ -2247,7 +2247,7 @@ ${body}`,
               builtinTypeNamesFor(declared, wanted, body, 0),
             ),
           ))(typeHeader))(
-        eq(length(deps), 0)
+        length(deps) === 0
           ? ""
           : `import { ${_Str_join(", ", _Array_sort(deps))} } from "${runtimeImport}";`,
       ))(
@@ -2259,16 +2259,19 @@ ${body}`,
                 and(
                   and(
                     and(
-                      and(and(not(eq(d, "add")), not(eq(d, "sub"))), not(eq(d, "mul"))),
-                      not(eq(d, "div")),
+                      and(
+                        and(and(and(d !== "add", d !== "sub"), d !== "mul"), d !== "div"),
+                        d !== "lt",
+                      ),
+                      d !== "lte",
                     ),
-                    not(eq(d, "lt")),
+                    d !== "gt",
                   ),
-                  not(eq(d, "lte")),
+                  d !== "gte",
                 ),
-                not(eq(d, "gt")),
+                d !== "eq",
               ),
-              not(eq(d, "gte")),
+              d !== "not",
             ),
             _Str_contains(d, body),
           ),
@@ -2394,7 +2397,7 @@ const anyFor: <A>(ids: A[]) => Map<A, string> = <A>(ids: A[]) =>
 const genericHeadOf: <A, B>(ids: A[], names: Map<B, string>) => string = _curry(
   2,
   <A, B>(ids: A[], names: Map<B, string>) =>
-    eq(length(ids), 0) ? "" : `<${_Str_join(", ", _Map_values(names))}>`,
+    length(ids) === 0 ? "" : `<${_Str_join(", ", _Map_values(names))}>`,
 );
 /**
  * Arrows on the spine — the extern's declared arity.
@@ -2453,7 +2456,7 @@ const flatHostType: _Curry<[t: Ty, arity: number], string> = _curry(2, (t: Ty, a
   const ids: number[] = freeIdsIn(t, [] as number[]);
   const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
   const head: string = genericHeadOf(ids, names);
-  return eq(arity, 0)
+  return arity === 0
     ? `${head}${tsOf(t, plainEnv(names))}`
     : curriedOverloads(
         head,
@@ -2473,7 +2476,7 @@ const externDecl: <A, B>(
   const n: number = arrowCount(t);
   return and(n >= 1, e.curried)
     ? `export declare const ${e.imported}: ${curriedHostType(t, n)};`
-    : eq(n, 0)
+    : n === 0
       ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, [] as number[]))))};`
       : `export declare const ${e.imported}: ${flatHostType(t, n)};`;
 };

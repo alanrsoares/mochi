@@ -1,4 +1,4 @@
-import { assertEq, test } from "@mochi/test"
+import { assertEq, test, testEach } from "@mochi/test"
 import * as Ast from "./ast.mochi"
 import { check } from "./check.mochi"
 import { lex } from "./lexer.mochi"
@@ -359,8 +359,8 @@ test("a zero-param lambda consumes the erased unit arrow", () =>
 // ---- end-to-end module emission --------------------------------------------
 
 extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
-extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
-extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern namespaces : Map<string, Map<string, a>> = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
@@ -435,6 +435,28 @@ test("typed emit re-folds numeric calls and parser JSX", () => {
       |> Str.contains("<button disabled>{\"go\"}</button>")
   )
 })
+
+// ADR 0115: only where structural `eq` and `===` agree exactly.
+testEach("typed emit writes exact comparisons as operators", [
+  ("let f = s => s == \"a\"", "(s === \"a\")"),
+  ("let f = n => 1 != n", "(1 !== n)"),
+  ("type T = A | B(number)\nlet f = t => t == A", "(t._tag === \"A\")"),
+  ("type T = A | B(number)\nlet f = t => A != t", "(t._tag !== \"A\")"),
+  ("let f = b => !b", "!(b)")
+], ((src, out)) => assertEq(true, tsOf(src) |> Str.contains(out)))
+
+// An operator whose prelude name the module rebinds calls the user's function.
+testEach("typed emit keeps a shadowed operator a call", [
+  ("let eq = (a, b) => false\nlet f = s => s == \"a\"", "eq(s, \"a\")"),
+  ("let not = b => b\nlet f = b => !b", "not(b)"),
+  ("let f = (add, x) => x + 1", "add(x, 1)")
+], ((src, out)) => assertEq(true, tsOf(src) |> Str.contains(out)))
+
+test("typed emit keeps structural eq between two non-literals", () =>
+  assertEq(
+    true,
+    tsOf("let f = (a, b) => a == [b]") |> Str.contains("eq(a, [b])")
+  ))
 
 test("a referenced builtin variant rides the runtime type import", () =>
   assertEq(

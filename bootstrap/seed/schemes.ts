@@ -17,6 +17,7 @@ import {
   None,
   Some,
   _Array_contains,
+  _Array_get,
   _Array_prepend,
   _Map_get,
   _Map_getOr,
@@ -26,12 +27,13 @@ import {
   _Set_diff,
   _Set_fromArray,
   _Set_has,
+  _Set_size,
   _Set_toArray,
   _Str_codeAt,
   _curry,
   _tuple,
+  add,
   and,
-  eq,
   map,
 } from "@mochi/compiler/runtime";
 
@@ -59,6 +61,7 @@ import {
   freshVar,
   freshRowVar,
   zonk,
+  idGet,
 } from "./types";
 import * as Types from "./types";
 import { primTypeNames } from "./ctors";
@@ -118,15 +121,19 @@ export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, (t: Ty,
 );
 const collectArgs: _Curry<[args: Ty[], acc: VarSets], VarSets> = _curry(
   2,
-  (args: Ty[], acc: VarSets) =>
+  (args: Ty[], acc: VarSets) => collectArgsFrom(args, 0, acc),
+);
+const collectArgsFrom: _Curry<[args: Ty[], i: number, acc: VarSets], VarSets> = _curry(
+  3,
+  (args: Ty[], i: number, acc: VarSets) =>
     ((_v) =>
-      _v.length === 0
+      _v._tag === "None"
         ? acc
-        : _v.length >= 1
-          ? (([a, ...rest]) => collectArgs(rest, collect(a, acc)))(_v)
+        : _v._tag === "Some"
+          ? (({ value: a }) => collectArgsFrom(args, i + 1, collect(a, acc)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
-            })())(args),
+            })())(_Array_get(i, args)),
 );
 const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, (row: Row, acc: VarSets) =>
   ((_v) =>
@@ -165,7 +172,7 @@ const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets
                       ? { tv: _Set_add(id, acc.tv), rv: acc.rv }
                       : (() => {
                           throw new Error("non-exhaustive match");
-                        })())(_Map_get(id, st.tv)))(_v)
+                        })())(idGet(id, st.tv)))(_v)
         : _v._tag === "TyCon"
           ? (({ args }) => collectFreeArgs(args, bound, st, acc))(_v)
           : _v._tag === "TyFn"
@@ -184,14 +191,21 @@ const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets
 const collectFreeArgs: _Curry<[args: Ty[], bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
   (args: Ty[], bound: VarSets, st: St, acc: VarSets) =>
-    ((_v) =>
-      _v.length === 0
-        ? acc
-        : _v.length >= 1
-          ? (([a, ...rest]) => collectFreeArgs(rest, bound, st, collectFree(a, bound, st, acc)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(args),
+    collectFreeArgsFrom(args, 0, bound, st, acc),
+);
+const collectFreeArgsFrom: _Curry<
+  [args: Ty[], i: number, bound: VarSets, st: St, acc: VarSets],
+  VarSets
+> = _curry(5, (args: Ty[], i: number, bound: VarSets, st: St, acc: VarSets) =>
+  ((_v) =>
+    _v._tag === "None"
+      ? acc
+      : _v._tag === "Some"
+        ? (({ value: a }) =>
+            collectFreeArgsFrom(args, i + 1, bound, st, collectFree(a, bound, st, acc)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, args)),
 );
 const collectFreeRow: _Curry<[row: Row, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
@@ -208,7 +222,7 @@ const collectFreeRow: _Curry<[row: Row, bound: VarSets, st: St, acc: VarSets], V
                       ? { tv: acc.tv, rv: _Set_add(id, acc.rv) }
                       : (() => {
                           throw new Error("non-exhaustive match");
-                        })())(_Map_get(id, st.rv)))(_v)
+                        })())(idGet(id, st.rv)))(_v)
         : _v._tag === "RowExtend"
           ? (({ fieldType, rest }) =>
               collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc)))(_v)
@@ -229,23 +243,25 @@ const freeInScheme: <A>(
 );
 const freeInEnvFrom: <A>(
   schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[],
+  i: number,
   st: St,
   acc: VarSets,
 ) => VarSets = _curry(
-  3,
-  <A>(schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[], st: St, acc: VarSets) =>
-    match(schemes)
-      .with(
-        (_v) => _v.length === 0,
-        () => acc,
-      )
-      .with(
-        (_v) => _v.length >= 1,
-        ([sc, ...rest]) => freeInEnvFrom(rest, st, freeInScheme(sc, st, acc)),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+  4,
+  <A>(
+    schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[],
+    i: number,
+    st: St,
+    acc: VarSets,
+  ) =>
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: sc }) => freeInEnvFrom(schemes, i + 1, st, freeInScheme(sc, st, acc)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, schemes)),
 );
 const freeInEnv: <A, B>(
   env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
@@ -253,8 +269,12 @@ const freeInEnv: <A, B>(
 ) => VarSets = _curry(
   2,
   <A, B>(env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>, st: St) =>
-    freeInEnvFrom(_Map_values(env), st, emptyVarSets),
+    freeInEnvFrom(_Map_values(env), 0, st, emptyVarSets),
 );
+/**
+ * A type with no free variables generalizes to itself, whatever the env
+ * holds, so the env walk is skipped.
+ */
 export const generalize: <A, B>(
   env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
   t: Ty,
@@ -269,7 +289,10 @@ export const generalize: <A, B>(
     widen: boolean,
   ) => {
     const zt: Ty = widen ? widenLits(zonk(t, st)) : zonk(t, st);
-    const free: VarSets = diffVarSets(freeInType(zt), freeInEnv(env, st));
+    const own: VarSets = freeInType(zt);
+    const free: VarSets = and(_Set_size(own.tv) === 0, _Set_size(own.rv) === 0)
+      ? own
+      : diffVarSets(own, freeInEnv(env, st));
     return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
   },
 );

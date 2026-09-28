@@ -16,7 +16,6 @@ export type Tok =
   | { _tag: "TArrow" }
   | { _tag: "TTarrow" }
   | { _tag: "TPipe" }
-  | { _tag: "TCompose" }
   | { _tag: "TConcat" }
   | { _tag: "TBar" }
   | { _tag: "TLparen" }
@@ -113,7 +112,6 @@ export const TEq: Tok = { _tag: "TEq" };
 export const TArrow: Tok = { _tag: "TArrow" };
 export const TTarrow: Tok = { _tag: "TTarrow" };
 export const TPipe: Tok = { _tag: "TPipe" };
-export const TCompose: Tok = { _tag: "TCompose" };
 export const TConcat: Tok = { _tag: "TConcat" };
 export const TBar: Tok = { _tag: "TBar" };
 export const TLparen: Tok = { _tag: "TLparen" };
@@ -165,7 +163,7 @@ const PlainOwn = (stop: number): Comment => ({ _tag: "PlainOwn", stop });
 const Trailing = (stop: number): Comment => ({ _tag: "Trailing", stop });
 const cr: string = _Str_fromCode(13);
 const isSpace: (c: string) => boolean = (c: string) =>
-  or(eq(c, " "), or(eq(c, "\t"), or(eq(c, "\n"), eq(c, cr))));
+  or(c === " ", or(c === "\t", or(c === "\n", eq(c, cr))));
 const inRange: _Curry<[lo: number, hi: number, n: number], boolean> = _curry(
   3,
   (lo: number, hi: number, n: number) => and(n >= lo, n <= hi),
@@ -174,11 +172,11 @@ const isDigit: (c: string) => boolean = (c: string) =>
   _Option_exists(inRange(48, 57), _Str_codeAt(0, c));
 const isIdStart: (c: string) => boolean = (c: string) =>
   _Option_exists(
-    (n: number) => or(inRange(65, 90, n), or(inRange(97, 122, n), or(eq(n, 95), eq(n, 36)))),
+    (n: number) => or(inRange(65, 90, n), or(inRange(97, 122, n), or(n === 95, n === 36))),
     _Str_codeAt(0, c),
   );
 const isIdChar: (c: string) => boolean = (c: string) => or(isIdStart(c), isDigit(c));
-const isNumChar: (c: string) => boolean = (c: string) => or(isDigit(c), eq(c, "."));
+const isNumChar: (c: string) => boolean = (c: string) => or(isDigit(c), c === ".");
 const keywordTok: (word: string) => Option<Tok> = (word: string) =>
   ((_v) =>
     _v === "let"
@@ -210,27 +208,25 @@ const digraphTok: (two: string) => Option<Tok> = (two: string) =>
   ((_v) =>
     _v === "|>"
       ? (Some(TPipe as Tok) as Option<Tok>)
-      : _v === ">>"
-        ? (Some(TCompose as Tok) as Option<Tok>)
-        : _v === "++"
-          ? (Some(TConcat as Tok) as Option<Tok>)
-          : _v === "=="
-            ? (Some(TEqeq as Tok) as Option<Tok>)
-            : _v === "!="
-              ? (Some(TNeq as Tok) as Option<Tok>)
-              : _v === "<="
-                ? (Some(TLte as Tok) as Option<Tok>)
-                : _v === ">="
-                  ? (Some(TGte as Tok) as Option<Tok>)
-                  : _v === "&&"
-                    ? (Some(TAndand as Tok) as Option<Tok>)
-                    : _v === "||"
-                      ? (Some(TOror as Tok) as Option<Tok>)
-                      : _v === "=>"
-                        ? (Some(TArrow as Tok) as Option<Tok>)
-                        : _v === "->"
-                          ? (Some(TTarrow as Tok) as Option<Tok>)
-                          : (None as Option<Tok>))(two);
+      : _v === "++"
+        ? (Some(TConcat as Tok) as Option<Tok>)
+        : _v === "=="
+          ? (Some(TEqeq as Tok) as Option<Tok>)
+          : _v === "!="
+            ? (Some(TNeq as Tok) as Option<Tok>)
+            : _v === "<="
+              ? (Some(TLte as Tok) as Option<Tok>)
+              : _v === ">="
+                ? (Some(TGte as Tok) as Option<Tok>)
+                : _v === "&&"
+                  ? (Some(TAndand as Tok) as Option<Tok>)
+                  : _v === "||"
+                    ? (Some(TOror as Tok) as Option<Tok>)
+                    : _v === "=>"
+                      ? (Some(TArrow as Tok) as Option<Tok>)
+                      : _v === "->"
+                        ? (Some(TTarrow as Tok) as Option<Tok>)
+                        : (None as Option<Tok>))(two);
 const punctTok: (c: string) => Option<Tok> = (c: string) =>
   ((_v) =>
     _v === "|"
@@ -302,9 +298,9 @@ const PHole = _curry(2, (start, end) => ({ _tag: "PHole", start, end })) as (
 const literalTok: _Curry<[idx: number, total: number, value: string], Tok> = _curry(
   3,
   (idx: number, total: number, value: string) =>
-    eq(total, 1)
+    total === 1
       ? TStr(value)
-      : eq(idx, 0)
+      : idx === 0
         ? TTmplStart(value)
         : eq(idx, total - 1)
           ? TTmplEnd(value)
@@ -366,7 +362,7 @@ const scanTemplate: _Curry<
   [src: string, i: number],
   Option<{ parts: TPart[]; end: number }>
 > = _curry(2, (src: string, i: number) => scanTemplateLoop(src, i + 1, "", [] as TPart[]));
-const notNewline: (c: string) => boolean = (c: string) => not(eq(c, "\n"));
+const notNewline: (c: string) => boolean = (c: string) => c !== "\n";
 const scanComment: _Curry<[src: string, start: number, lineTok: boolean], Comment> = _curry(
   3,
   (src: string, start: number, lineTok: boolean) => {
@@ -423,7 +419,7 @@ const numValue: (raw: string) => number = (raw: string) =>
 const numStart: _Curry<[src: string, i: number, c: string], boolean> = _curry(
   3,
   (src: string, i: number, c: string) =>
-    or(isDigit(c), and(eq(c, "-"), _Option_exists(isDigit, _Str_get(i + 1, src)))),
+    or(isDigit(c), and(c === "-", _Option_exists(isDigit, _Str_get(i + 1, src)))),
 );
 const offsetLocTok: <C>(
   lt: { doc: Option<string>; end: number; start: number; tok: Tok } & C,
@@ -454,7 +450,7 @@ const spliceHoleToks: <A>(
         : _v._tag === "Some"
           ? (({ value: ht }) =>
               ((toks2: LocTok[][]) => spliceHoleToks(_Array_tail(holeToks), by, toks2))(
-                eq(ht.tok, TEof as Tok) ? toks : pushTok(offsetLocTok(ht, by), toks),
+                ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks),
               ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -601,10 +597,10 @@ const go: _Curry<
           >)
         : _v._tag === "Some" && (({ value: c }) => isSpace(c))(_v)
           ? (({ value: c }) =>
-              eq(c, "\n")
+              c === "\n"
                 ? ((n: number) =>
                     ((kept: string[]) => go(src, i + 1, kept, n, false, toks))(
-                      n < 2 ? doc : ([] as string[]),
+                      lt(n, 2) ? doc : ([] as string[]),
                     ))(nlRun + 1)
                 : go(src, i + 1, doc, nlRun, lineTok, toks))(_v)
           : _v._tag === "Some" && _v.value === "/" && _Option_contains("/", _Str_get(i + 1, src))
@@ -621,13 +617,13 @@ const go: _Curry<
                         })())(scanComment(src, i, lineTok))
             : _v._tag === "Some"
               ? (({ value: c }) =>
-                  eq(_Str_slice(i, i + 3, src), "...")
+                  _Str_slice(i, i + 3, src) === "..."
                     ? emit(src, TSpread as Tok, i, i + 3, doc, toks)
                     : ((_v) =>
                         _v._tag === "Some"
                           ? (({ value: t }) => emit(src, t, i, i + 2, doc, toks))(_v)
                           : _v._tag === "None"
-                            ? eq(c, '"')
+                            ? c === '"'
                               ? lexString(src, i, doc, toks)
                               : numStart(src, i, c)
                                 ? ((j: number) =>

@@ -13,7 +13,7 @@ import {
   freshRowVar
 } from "../types.mochi"
 
-extern intrinsicElements : Map<string, Map<string, string> > = "./jsx-schema.gen.mjs" "intrinsicElements"
+extern intrinsicElements : Map<string, Map<string, string>> = "./jsx-schema.gen.mjs" "intrinsicElements"
 
 let isTwFactory = fn => switch fn {
   | Ast.EField(Ast.ERef("tw", _), _, _, _) => true

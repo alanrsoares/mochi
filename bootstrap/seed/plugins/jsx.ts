@@ -236,7 +236,7 @@ const jxAttrNameFrom: _Curry<[toks: LocTok[], pos: number, acc: Name], [Name, nu
     const minusTok = jxTokAt(toks, pos);
     const partTok = jxTokAt(toks, pos + 1);
     return and(
-      and(eq(minusTok.tok, TMinus as Tok), eq(minusTok.start, acc.span.end)),
+      and(minusTok.tok._tag === "TMinus", eq(minusTok.start, acc.span.end)),
       eq(partTok.start, minusTok.end),
     )
       ? ((_v) =>
@@ -381,12 +381,12 @@ const parseJsxAttributes: _Curry<
   ) => {
     const tk: Tok = jxTokAt(toks, pos).tok;
     const nxt: Tok = jxTokAt(toks, pos + 1).tok;
-    return or(eq(tk, TGt as Tok), and(eq(tk, TSlash as Tok), eq(nxt, TGt as Tok)))
+    return or(tk._tag === "TGt", and(tk._tag === "TSlash", nxt._tag === "TGt"))
       ? (Ok(_tuple(fieldsAcc, spreadAcc, pos)) as Result<
           [Field[], Option<Expr>, number],
           { message: string; start: number; end: number }
         >)
-      : eq(tk, TLbrace as Tok)
+      : tk._tag === "TLbrace"
         ? _Result_flatMap(
             (p1) =>
               _Result_flatMap(
@@ -418,7 +418,7 @@ const parseJsxAttributes: _Curry<
                   parseExpr,
                 );
               })(
-                eq(jxTokAt(toks, p1).tok, TEq as Tok)
+                jxTokAt(toks, p1).tok._tag === "TEq"
                   ? ((pEq: number) =>
                       ((_v) =>
                         _v._tag === "TStr"
@@ -476,10 +476,10 @@ const parseJsxChildren: _Curry<
   ) => {
     const lt = jxTokAt(toks, pos);
     const nxt = jxTokAt(toks, pos + 1);
-    return eq(lt.tok, TEof as Tok)
-      ? jxErrAt(eq(expectedTag, "") ? "unclosed JSX fragment" : "unclosed JSX tag", lt)
-      : and(eq(lt.tok, TLt as Tok), eq(nxt.tok, TSlash as Tok))
-        ? eq(expectedTag, "")
+    return lt.tok._tag === "TEof"
+      ? jxErrAt(expectedTag === "" ? "unclosed JSX fragment" : "unclosed JSX tag", lt)
+      : and(lt.tok._tag === "TLt", nxt.tok._tag === "TSlash")
+        ? expectedTag === ""
           ? _Result_flatMap(
               (p1) =>
                 Ok(_tuple(acc, p1)) as Result<
@@ -502,7 +502,7 @@ const parseJsxChildren: _Curry<
                 ),
               jxExpectId(toks, pos + 2),
             )
-        : eq(lt.tok, TLt as Tok)
+        : lt.tok._tag === "TLt"
           ? _Result_flatMap(
               ([childJsx, p1]: [Expr, number]) =>
                 parseJsxChildren(
@@ -514,8 +514,8 @@ const parseJsxChildren: _Curry<
                 ),
               parseJsx(toks, pos, parseExpr),
             )
-          : eq(lt.tok, TLbrace as Tok)
-            ? eq(nxt.tok, TSpread as Tok)
+          : lt.tok._tag === "TLbrace"
+            ? nxt.tok._tag === "TSpread"
               ? _Result_flatMap(
                   ([spChild, p1]: [Expr, number]) =>
                     _Result_flatMap(
@@ -608,7 +608,7 @@ const parseJsx: _Curry<
   ) => {
     const startTok = jxTokAt(toks, pos);
     const nxt = jxTokAt(toks, pos + 1);
-    return eq(nxt.tok, TGt as Tok)
+    return nxt.tok._tag === "TGt"
       ? _Result_flatMap(
           ([children, p1]: [SeqElem[], number]) =>
             Ok(
@@ -633,7 +633,7 @@ const parseJsx: _Curry<
               ((tagNameStr: string) =>
                 _Result_flatMap(
                   ([fields, spreadOpt, p2]: [Field[], Option<Expr>, number]) => {
-                    const isSelfClosing: boolean = eq(jxTokAt(toks, p2).tok, TSlash as Tok);
+                    const isSelfClosing: boolean = jxTokAt(toks, p2).tok._tag === "TSlash";
                     return _Result_flatMap(
                       (p3) =>
                         isSelfClosing
@@ -713,7 +713,7 @@ export const parseJsxAtom: _Curry<
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ) =>
-    eq(jxTokAt(toks, pos).tok, TLt as Tok)
+    jxTokAt(toks, pos).tok._tag === "TLt"
       ? _Result_map(
           (claim: [Expr, number]) => Some(claim) as Option<[Expr, number]>,
           parseJsx(toks, pos, parseExpr),
@@ -843,7 +843,7 @@ const jsxPropsWithSynthesizedChildren: _Curry<
             ((_v) =>
               _v._tag === "TyRecord"
                 ? (({ row: prow }) =>
-                    or(recordHasAttr(propsExpr, "children"), eq(jsxChildCount(restArgs), 0))
+                    or(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0)
                       ? propsT
                       : tRecord(rExtend("children", expectedChildren, prow)))(_v)
                 : propsT)(propsT))(_v)
@@ -857,15 +857,15 @@ import { intrinsicElements as jsxIntrinsicElements } from "./jsx-schema.gen.mjs"
  * SHAPE checks rather than unifications, so they carry no expected type here.
  */
 const attrKindType: (kind: string) => Option<Ty> = (kind: string) =>
-  eq(kind, "string")
+  kind === "string"
     ? (Some(tPrim("string")) as Option<Ty>)
-    : eq(kind, "number")
+    : kind === "number"
       ? (Some(tPrim("number")) as Option<Ty>)
-      : eq(kind, "bool")
+      : kind === "bool"
         ? (Some(tPrim("bool")) as Option<Ty>)
-        : eq(kind, "string|number")
+        : kind === "string|number"
           ? (Some(tUnion([tPrim("string"), tPrim("number")])) as Option<Ty>)
-          : eq(kind, "string|bool")
+          : kind === "string|bool"
             ? (Some(tUnion([tPrim("string"), tPrim("bool")])) as Option<Ty>)
             : _Str_startsWith("enum:", kind)
               ? (Some(
@@ -967,7 +967,7 @@ const isFnOrOpen: (t: Ty) => boolean = (t: Ty) =>
       : _v._tag === "TyVar"
         ? true
         : _v._tag === "TyCon"
-          ? (({ name }) => eq(name, "any"))(_v)
+          ? (({ name }) => name === "any")(_v)
           : false)(t);
 const checkHandler: <A, B, C>(
   name: string,
@@ -1059,9 +1059,9 @@ const inferIntrinsicFields: <A, B>(
                                       ? unknownProp(tag, f.name, f.value, m)
                                       : _v._tag === "Some"
                                         ? (({ value: kind }) =>
-                                            eq(kind, "event")
+                                            kind === "event"
                                               ? checkHandler(f.name, f.value, st, api, cont)
-                                              : eq(kind, "any")
+                                              : kind === "any"
                                                 ? _Result_flatMap(
                                                     ([_, st1]) => cont(st1),
                                                     api.inferExpr(f.value, st),
@@ -1136,7 +1136,7 @@ const inferFragmentFields: <A, B, C, D>(
       .with(
         (_v) => _v.length >= 1,
         ([f, ...rest]) =>
-          eq(f.name, "key")
+          f.name === "key"
             ? _Result_flatMap(
                 ([_, st1]) => inferFragmentFields(rest, st1, api),
                 api.inferExpr(f.value, st),
@@ -1186,7 +1186,7 @@ const inferStringTag: <A, B>(
       unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
     } & B,
   ) =>
-    eq(tagName, "Fragment")
+    tagName === "Fragment"
       ? inferFragmentFields(fields, st, api)
       : ((_v) =>
           _v._tag === "Some"
@@ -1315,7 +1315,7 @@ export const inferJsxCallHook: <A, B>(
     ((_v) =>
       _v._tag === "Some"
         ? (({ value: o }) =>
-            eq(o, "jsx")
+            o === "jsx"
               ? ((_v) =>
                   _v.length >= 2
                     ? (([tagExpr, propsExpr, ...rest]) =>
@@ -1409,13 +1409,13 @@ const componentPropsTs: <A>(row: Row, api: { tsType: (a: Ty) => string } & A) =>
   2,
   <A>(row: Row, api: { tsType: (a: Ty) => string } & A) =>
     (([fields0, open]: [string[], boolean]) => {
-      const fields1: string[] = and(open, not(hasField(fields0, "children")))
+      const fields1: string[] = and(open, !hasField(fields0, "children"))
         ? _Array_append("children?: any", fields0)
         : fields0;
-      const fields: string[] = and(open, not(hasField(fields1, "className")))
+      const fields: string[] = and(open, !hasField(fields1, "className"))
         ? _Array_append("className?: string", fields1)
         : fields1;
-      return eq(length(fields), 0) ? "{}" : `{ ${_Str_join("; ", fields)} }`;
+      return length(fields) === 0 ? "{}" : `{ ${_Str_join("; ", fields)} }`;
     })(propFieldsFrom(row, api, [] as string[])),
 );
 const componentPropsParamTs: <A>(
@@ -1486,7 +1486,7 @@ const componentSig: <A>(
         ? (({ from: fromT, to: toT }) =>
             ((props: string) =>
               ((extras: string[]) =>
-                eq(length(extras), 0)
+                length(extras) === 0
                   ? `(${props}) => any`
                   : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], any>`)(
                 extraParamsFrom(toT, api, 1, [] as string[]),
@@ -1572,7 +1572,7 @@ const jsxAttrD: _Curry<[name: string, value: Expr, api: FormatApi], Doc> = _curr
 const jsxOpenD: _Curry<[tag: string, attrs: Doc[], selfClosing: boolean], Doc> = _curry(
   3,
   (tag: string, attrs: Doc[], selfClosing: boolean) =>
-    eq(length(attrs), 0)
+    length(attrs) === 0
       ? txt(selfClosing ? `<${tag} />` : `<${tag}>`)
       : group(
           cat([
@@ -1629,7 +1629,7 @@ export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
               ((fragment: boolean) =>
                 ((tag: string) =>
                   ((attrs: Doc[]) =>
-                    and(eq(length(shape.children), 0), not(fragment))
+                    and(length(shape.children) === 0, !fragment)
                       ? (Some(jsxOpenD(tag, attrs, true)) as Option<Doc>)
                       : (Some(
                           group(
