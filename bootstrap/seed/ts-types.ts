@@ -327,11 +327,19 @@ const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: 
     )
     .exhaustive(),
 );
+/**
+ * A `unit` result renders `void`, not `undefined`: a declared fn type has to
+ * accept the host's ordinary `() => void` callbacks (ADR 0055). Standalone
+ * `unit` values stay `undefined`, which is what codegen emits.
+ */
+const tsReturn: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, (t: Ty, env: TsEnv) =>
+  isUnit(t) ? "void" : tsOfRaw(t, env),
+);
 const tsArrow: _Curry<[fromT: Ty, toT: Ty, env: TsEnv], string> = _curry(
   3,
   (fromT: Ty, toT: Ty, env: TsEnv) =>
     isUnit(fromT)
-      ? `() => ${tsOfRaw(toT, env)}`
+      ? `() => ${tsReturn(toT, env)}`
       : tsArrowParams(fromT, toT, env, 0, [] as string[]),
 );
 const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]], string> =
@@ -350,7 +358,7 @@ const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: 
         },
         ({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1),
       )
-      .otherwise(() => `(${_Str_join(", ", params1)}) => ${tsOfRaw(toT, env)}`);
+      .otherwise(() => `(${_Str_join(", ", params1)}) => ${tsReturn(toT, env)}`);
   });
 /**
  * Render an already-zonked HM type into strict TypeScript syntax. Bare

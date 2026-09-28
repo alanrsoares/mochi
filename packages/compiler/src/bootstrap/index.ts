@@ -110,6 +110,7 @@ export type BootstrapCore = {
     entry: string,
     src: string,
     readFile: (path: string) => Promise<string>,
+    plugins?: readonly BootstrapPlugin[],
   ) => Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>>;
   /** Infer source spans through the bootstrap graph with the entry served from an editor buffer. */
   inferGraphTypes: (
@@ -117,12 +118,14 @@ export type BootstrapCore = {
     src: string,
     readFile: (path: string) => Promise<string>,
     cache?: BootstrapGraphCache,
+    plugins?: readonly BootstrapPlugin[],
   ) => Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>>;
   /** Check a graph using seed lexer/parser/infer, with the entry served from an editor buffer. */
   checkGraph: (
     entry: string,
     src: string,
     readFile: (path: string) => Promise<string>,
+    plugins?: readonly BootstrapPlugin[],
   ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
 };
 
@@ -146,10 +149,11 @@ export {
 } from "./module.ts";
 export { inferTypesBootstrapSync } from "./sync.ts";
 
+import { type BootstrapPlugin, toSeedPlugins } from "./options.ts";
 import {
   lex as bootstrapLex,
-  parse as bootstrapParse,
   parseRecovering as bootstrapParseRecovering,
+  parseWith as bootstrapParseWith,
 } from "./syntax.ts";
 
 /**
@@ -203,6 +207,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     entry: string,
     src: string,
     readFile: (path: string) => Promise<string>,
+    plugins?: readonly BootstrapPlugin[],
   ): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> => {
     const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
     const { createRequire } = await import("node:module");
@@ -237,7 +242,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
         error: BootstrapDiagnostic;
       };
       if (lexed._tag === "Err") return lexed.error;
-      const parsed = bootstrapParse(lexed.value) as {
+      const parsed = bootstrapParseWith(lexed.value, toSeedPlugins(plugins)) as {
         _tag: "Ok" | "Err";
         value: Array<{ _tag?: string; from?: string }>;
         error: BootstrapDiagnostic;
@@ -268,8 +273,9 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     src: string,
     readFile: (path: string) => Promise<string>,
     cache?: BootstrapGraphCache,
+    plugins?: readonly BootstrapPlugin[],
   ): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> => {
-    const loaded = await loadGraph(entry, src, readFile);
+    const loaded = await loadGraph(entry, src, readFile, plugins);
     if (loaded._tag === "Err") return loaded;
     const graphKey = JSON.stringify(loaded.value.map(({ path, src: source }) => [path, source]));
     const cached = cache?.entries.get(graphKey);
@@ -278,7 +284,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
     let result: BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
     if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
-      const inferred = inferTypesBootstrapSync(src);
+      const inferred = inferTypesBootstrapSync(src, plugins);
       result =
         inferred._tag === "Err"
           ? { _tag: "Err", error: inferred.error[0]! }
@@ -302,7 +308,7 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
         }
       }
       for (let index = prefixLength; index < loaded.value.length; index++) {
-        const next = inferGraphTypesFromBootstrap(state, [loaded.value[index]!]);
+        const next = inferGraphTypesFromBootstrap(state, [loaded.value[index]!], plugins);
         if (next._tag === "Err") {
           result = next;
           cache?.entries.set(graphKey, result);
@@ -317,10 +323,10 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
     return result;
   };
 
-  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile) => {
-    const loaded = await loadGraph(entry, src, readFile);
+  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile, plugins) => {
+    const loaded = await loadGraph(entry, src, readFile, plugins);
     if (loaded._tag === "Err") return loaded;
-    const result = compileGraphBootstrap(loaded.value);
+    const result = compileGraphBootstrap(loaded.value, plugins);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
       : { _tag: "Err", error: enrich(decodeModulePath(result.error), src) };
@@ -347,30 +353,37 @@ const decodeModulePath = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
   return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
 };
 
-/** Dependency-ordered bootstrap parse graph for host query façades. */
+/**
+ * Dependency-ordered bootstrap parse graph for host query façades. `plugins`
+ * means what it does in `BootstrapOptions` (ADR 0109); a cache is only valid
+ * for the one plugin list it was filled under.
+ */
 export const loadBootstrapGraph = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
+  plugins?: readonly BootstrapPlugin[],
 ): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
-  (await loadBootstrapCore()).loadGraph(entry, src, readFile);
+  (await loadBootstrapCore()).loadGraph(entry, src, readFile, plugins);
 
 /** Narrow graph-checking seam for editor integrations. */
 export const checkGraphBootstrap = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
+  plugins?: readonly BootstrapPlugin[],
 ): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
-  (await loadBootstrapCore()).checkGraph(entry, src, readFile);
+  (await loadBootstrapCore()).checkGraph(entry, src, readFile, plugins);
 
-/** Graph typed-query seam for builtin editor integrations. */
+/** Graph typed-query seam for editor integrations. */
 export const inferEntryGraphTypesBootstrap = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
   cache?: BootstrapGraphCache,
+  plugins?: readonly BootstrapPlugin[],
 ): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> =>
-  (await loadBootstrapCore()).inferGraphTypes(entry, src, readFile, cache);
+  (await loadBootstrapCore()).inferGraphTypes(entry, src, readFile, cache, plugins);
 
 /** Graph check seam that preserves every recoverable parse diagnostic in the entry buffer. */
 export const checkGraphBootstrapRecovering = async (
@@ -378,12 +391,14 @@ export const checkGraphBootstrapRecovering = async (
   src: string,
   readFile: (path: string) => Promise<string>,
   cache?: BootstrapRecoveryGraphCache,
+  plugins?: readonly BootstrapPlugin[],
 ): Promise<BootstrapDiagnostic[]> => {
+  const pluginsOpt = toSeedPlugins(plugins);
   const lexed = bootstrapLex(src) as
     | { _tag: "Ok"; value: unknown }
     | { _tag: "Err"; error: BootstrapDiagnostic };
   if (lexed._tag === "Err") return [lexed.error];
-  const recovered = bootstrapParseRecovering(lexed.value, { _tag: "None" }) as {
+  const recovered = bootstrapParseRecovering(lexed.value, pluginsOpt) as {
     stmts: Array<{ _tag?: string; from?: string }>;
     diagnostics: BootstrapDiagnostic[];
   };
@@ -441,7 +456,7 @@ export const checkGraphBootstrapRecovering = async (
       visiting.delete(absolute);
       return;
     }
-    const dependencyParsed = bootstrapParseRecovering(dependencyLexed.value, { _tag: "None" }) as {
+    const dependencyParsed = bootstrapParseRecovering(dependencyLexed.value, pluginsOpt) as {
       stmts: Array<{ _tag?: string; from?: string }>;
       diagnostics: BootstrapDiagnostic[];
     };
@@ -463,7 +478,7 @@ export const checkGraphBootstrapRecovering = async (
       (statement) => statement._tag === "SImport" || statement._tag === "SImportNs",
     )
   ) {
-    const strict = await checkGraphBootstrap(entry, src, readFile);
+    const strict = await checkGraphBootstrap(entry, src, readFile, plugins);
     return strict._tag === "Ok" ? [] : [strict.error];
   }
   const graph = [...loaded.entries()].map(([path, module]) => ({
@@ -478,7 +493,7 @@ export const checkGraphBootstrapRecovering = async (
     const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
     return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
   };
-  const strict = await inferEntryGraphTypesBootstrap(entry, src, readFile, cache?.types);
+  const strict = await inferEntryGraphTypesBootstrap(entry, src, readFile, cache?.types, plugins);
   const strictErrors = strict._tag === "Err" ? [decode(strict.error)] : [];
   const prefixKey = (end: number): string =>
     JSON.stringify(graph.slice(0, end).map(({ path, src: source }) => [path, source]));
@@ -493,7 +508,7 @@ export const checkGraphBootstrapRecovering = async (
     }
   }
   for (let index = prefixLength; index < graph.length; index++) {
-    state = recoverGraphFromBootstrap(state, [graph[index]!]);
+    state = recoverGraphFromBootstrap(state, [graph[index]!], plugins);
     cache?.prefixes.set(prefixKey(index + 1), state);
   }
   const recoveredErrors = state.errors.map(decode);

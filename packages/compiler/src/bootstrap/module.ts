@@ -57,6 +57,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   type BootstrapOptions,
+  type BootstrapPlugin,
   defaultBootstrapOptions,
   editorBootstrapOptions,
   type SeedOptions,
@@ -111,13 +112,15 @@ export const buildModulesTsBootstrap = (
 
 export const compileGraphBootstrap = (
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
-  seed.compileGraphWith(modules, toSeedOptions(editorBootstrapOptions));
+  seed.compileGraphWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
 export const inferGraphTypesBootstrap = (
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic> =>
-  seed.inferGraphTypesWith(modules, toSeedOptions(defaultBootstrapOptions));
+  seed.inferGraphTypesWith(modules, toSeedOptions({ ...defaultBootstrapOptions, plugins }));
 
 export const freshInferGraphStateBootstrap = (): BootstrapGraphInferState =>
   seed.freshInferGraphState();
@@ -125,8 +128,13 @@ export const freshInferGraphStateBootstrap = (): BootstrapGraphInferState =>
 export const inferGraphTypesFromBootstrap = (
   state: BootstrapGraphInferState,
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic> =>
-  seed.inferGraphTypesFromWith(state, modules, toSeedOptions(defaultBootstrapOptions));
+  seed.inferGraphTypesFromWith(
+    state,
+    modules,
+    toSeedOptions({ ...defaultBootstrapOptions, plugins }),
+  );
 
 export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState =>
   seed.freshRecoveryGraphState();
@@ -134,13 +142,15 @@ export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState 
 export const recoverGraphFromBootstrap = (
   state: BootstrapRecoveryGraphState,
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapRecoveryGraphState =>
-  seed.recoverGraphFromWith(state, modules, toSeedOptions(editorBootstrapOptions));
+  seed.recoverGraphFromWith(state, modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapGraphRecovery =>
-  seed.compileGraphRecoveringWith(modules, toSeedOptions(editorBootstrapOptions));
+  seed.compileGraphRecoveringWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
 export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins =>
   seed.exportedOrigins(stmts);

@@ -2,6 +2,7 @@ import * as seed from "../../../../bootstrap/seed/compile.bundle.mjs";
 import type { BootstrapDiagnostic, BootstrapInferResult, BootstrapResult } from "./index.ts";
 import {
   type BootstrapOptions,
+  type BootstrapPlugin,
   defaultBootstrapOptions,
   type SeedOptions,
   toSeedOptions,
@@ -47,5 +48,6 @@ export const compileTsBootstrapSync = (
 
 export const inferTypesBootstrapSync = (
   src: string,
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
-  seedCompile.inferTypesWith(src, toSeedOptions(defaultBootstrapOptions));
+  seedCompile.inferTypesWith(src, toSeedOptions({ ...defaultBootstrapOptions, plugins }));

@@ -8581,13 +8581,14 @@ var tsRow = _curry18(2, (row, env) => match17(aliasNameFor(row, env)).with({ _ta
   const body = eq16(length13(fields), 0) ? "{}" : `{ ${_Str_join7("; ", fields)} }`;
   return match17(tail).with({ _tag: "None" }, () => body).with({ _tag: "Some" }, ({ value: id }) => match17(_Map_get8(id, env.vars)).with({ _tag: "None" }, () => body).with({ _tag: "Some" }, ({ value: name }) => eq16(length13(fields), 0) ? name : `(${body} & ${name})`).exhaustive()).exhaustive();
 })(tsRowFields(row, env))).exhaustive());
-var tsArrow = _curry18(3, (fromT, toT, env) => isUnit(fromT) ? `() => ${tsOfRaw(toT, env)}` : tsArrowParams(fromT, toT, env, 0, []));
+var tsReturn = _curry18(2, (t, env) => isUnit(t) ? "void" : tsOfRaw(t, env));
+var tsArrow = _curry18(3, (fromT, toT, env) => isUnit(fromT) ? `() => ${tsReturn(toT, env)}` : tsArrowParams(fromT, toT, env, 0, []));
 var tsArrowParams = _curry18(5, (fromT, toT, env, i, params) => {
   const params1 = _Array_append12(`${_Str_fromCode2(97 + i)}: ${tsOfRaw(fromT, env)}`, params);
   return match17(toT).with((_v) => {
     const _g = _v;
     return _g._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => not11(isUnit(nextFrom)))(_g);
-  }, ({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1)).otherwise(() => `(${_Str_join7(", ", params1)}) => ${tsOfRaw(toT, env)}`);
+  }, ({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1)).otherwise(() => `(${_Str_join7(", ", params1)}) => ${tsReturn(toT, env)}`);
 });
 var tsOf = _curry18(2, (t, env) => tsOfRaw(widenLits(t), env));
 var tsOfRaw = _curry18(2, (t, env) => match17(t).with({ _tag: "TyVar" }, ({ id }) => _Option_unwrapOr9("unknown", _Map_get8(id, env.vars))).with((_v) => {

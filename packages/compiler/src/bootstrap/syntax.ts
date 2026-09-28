@@ -4,6 +4,7 @@ import { loadSeed } from "./seed-path.ts";
 type SeedSyntax = {
   lex: (src: string) => unknown;
   parse: (tokens: unknown) => unknown;
+  parseWith: (tokens: unknown, plugins: unknown) => unknown;
   parseRecovering: (tokens: unknown, plugins?: unknown) => unknown;
   formatProgramWith: (stmts: unknown, src: string, formatHooks: unknown) => string;
   formatHooksFor: (pluginsOpt: unknown) => unknown;
@@ -13,6 +14,7 @@ const seed = loadSeed<SeedSyntax>("syntax.bundle.cjs");
 
 export const lex = seed.lex;
 export const parse = seed.parse;
+export const parseWith = seed.parseWith;
 export const parseRecovering = seed.parseRecovering;
 
 type Lexed = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: unknown };
