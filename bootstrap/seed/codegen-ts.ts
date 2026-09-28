@@ -811,6 +811,13 @@ const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
       .otherwise(() => tsOf(t, env)),
 );
 /**
+ * What a `bindingType` or `dtsBinding` hook renders with (ADR 0055, 0109).
+ */
+export const tsApiFor: (recs: Map<string, string>) => TsApi = (recs: Map<string, string>) => ({
+  tsType: (t: Ty) => tsOf(t, recsEnv(recs)),
+  aliasOf: (row: Row) => rowAliasName(row, recs),
+});
+/**
  * The TS type of a binding, WITHOUT the `const name:` wrapper — the piece the
  * declaration writer and the TS backend share.
  *
@@ -836,16 +843,11 @@ export const bindingTsType: <A>(
     value: Expr,
     recs: Map<string, string>,
     bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
-  ) => {
-    const api: TsApi = {
-      tsType: (t: Ty) => tsOf(t, recsEnv(recs)),
-      aliasOf: (row: Row) => rowAliasName(row, recs),
-    };
-    return match(runBindingHooks(bindingHooks, value, sc.ty, api))
+  ) =>
+    match(runBindingHooks(bindingHooks, value, sc.ty, tsApiFor(recs)))
       .with({ _tag: "Some" }, ({ value: ts }) => ts)
       .with({ _tag: "None" }, () => coreBindingTsType(sc, value, recs))
-      .exhaustive();
-  },
+      .exhaustive(),
 );
 const coreBindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,

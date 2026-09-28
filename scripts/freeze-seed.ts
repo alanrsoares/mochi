@@ -131,7 +131,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "./types.ts";\n',
+  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, tRecord, tUnion, UNIT, zonk } from "./types.ts";\nexport { tBool, tNumber, tString } from "./schemes.ts";\n',
 );
 execFileSync(
   "bun",
@@ -156,12 +156,39 @@ rmSync(join(tmp, "syntax-entry.ts"), { force: true });
 // never compile the seed itself under their own, stricter flags.
 writeFileSync(
   join(tmp, "host-types.d.ts"),
-  hostTypesDts(tmp, [
-    { file: "ast.ts", names: ["Expr", "Field", "Pattern", "Span", "Stmt", "TypeExpr"] },
-    { file: "infer.ts", names: ["IErr", "InferApi", "LocTok"] },
-    { file: "lexer.ts", names: ["Tok"] },
-    { file: "types.ts", names: ["Row", "St", "Ty"] },
-  ]),
+  hostTypesDts(
+    tmp,
+    [
+      { file: "ast.ts", names: ["Expr", "Field", "Pattern", "Span", "Stmt", "TypeExpr"] },
+      { file: "infer.ts", names: ["HostPlugin", "IErr", "InferApi", "LocTok", "TsApi"] },
+      { file: "lexer.ts", names: ["Tok"] },
+      { file: "types.ts", names: ["Row", "St", "Ty"] },
+    ],
+    [
+      {
+        name: "SeedTypeCtors",
+        values: [
+          {
+            file: "types.ts",
+            names: [
+              "tCon",
+              "tArrow",
+              "tRecord",
+              "tLit",
+              "tUnion",
+              "tPrim",
+              "UNIT",
+              "rExtend",
+              "freshVar",
+              "freshRowVar",
+              "zonk",
+            ],
+          },
+          { file: "schemes.ts", names: ["tNumber", "tString", "tBool"] },
+        ],
+      },
+    ],
+  ),
 );
 
 const hashesOf = (dir: string): Record<string, string> => {

@@ -1,0 +1,15 @@
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+export extern useContainer : a -> b = "@re-reduced/preact" "useContainer"
+export extern useSelect : a -> b -> c = "@re-reduced/preact" "useSelect"
+export extern useWatch : a -> b -> c -> d = "@re-reduced/preact" "useWatch"
+export extern Intent : a = "./runtime" "Intent"
+export extern fetchScore : string -> Task<number, string> = "./host" "fetchScore"
+
+let bad = Intent.query(
+  {
+    key: ["score"],
+    task: fetchScore("ada"),
+    onOk: n => n ++ "!",
+    onErr: e => e
+  }
+)

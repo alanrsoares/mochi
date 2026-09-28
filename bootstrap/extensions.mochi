@@ -107,11 +107,11 @@ export let runFormatHooks = (hooks, e) => switch hooks {
 }
 
 /// First hook to claim wins: `Some(ts)` is the binding's declared type text.
-export let runDtsHooks = (hooks, name, value) => switch hooks {
+export let runDtsHooks = (hooks, name, value, ty, api) => switch hooks {
   | [] => None
-  | [hook, ...rest] => switch hook(name, value) {
+  | [hook, ...rest] => switch hook(name, value, ty, api) {
       | Some(ts) => Some(ts)
-      | None => rest->runDtsHooks(name, value)
+      | None => rest->runDtsHooks(name, value, ty, api)
     }
 }
 

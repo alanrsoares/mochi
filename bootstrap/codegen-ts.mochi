@@ -433,6 +433,13 @@ let declType = (t, value, env) => switch value {
   | _ => tsOf(t, env)
 }
 
+/// What a `bindingType` or `dtsBinding` hook renders with (ADR 0055, 0109).
+export let tsApiFor = recs =>
+  {
+    tsType: t => tsOf(t, recsEnv(recs)),
+    aliasOf: row => rowAliasName(row, recs)
+  }
+
 /// The TS type of a binding, WITHOUT the `const name:` wrapper — the piece the
 /// declaration writer and the TS backend share.
 ///
@@ -445,15 +452,10 @@ let declType = (t, value, env) => switch value {
 /// escaped vars fall back to `unknown` — except variables the alias pin
 /// resolved, which print as that concrete text.
 /// A plugin `bindingType` hook (ADR 0055) may replace the whole type first.
-export let bindingTsType = (sc, value, recs, bindingHooks) =>
-  let api = {
-    tsType: t => tsOf(t, recsEnv(recs)),
-    aliasOf: row => rowAliasName(row, recs)
-  } in
-    switch runBindingHooks(bindingHooks, value, sc.ty, api) {
-      | Some(ts) => ts
-      | None => coreBindingTsType(sc, value, recs)
-    }
+export let bindingTsType = (sc, value, recs, bindingHooks) => switch runBindingHooks(bindingHooks, value, sc.ty, tsApiFor(recs)) {
+  | Some(ts) => ts
+  | None => coreBindingTsType(sc, value, recs)
+}
 
 let coreBindingTsType = (sc, value, recs) =>
   let rendered = schemeRender(sc, recs) in

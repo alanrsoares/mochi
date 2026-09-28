@@ -25,7 +25,14 @@
       "styled-cva-format",
       "styled-cva-format-paths",
       "styled-cva-format-comments",
-      "styled-cva-dts"
+      "styled-cva-dts",
+      "re-reduced-compile",
+      "re-reduced-dts",
+      "re-reduced-config-dts",
+      "re-reduced-bad-payload",
+      "re-reduced-bad-on-action",
+      "re-reduced-bad-query",
+      "re-reduced-bad-patch-label"
     ],
     "pending": []
   },
@@ -193,6 +200,69 @@
       "expect": "styled-cva-format-comments.expect.mochi",
       "plugins": [
         "styled-cva"
+      ]
+    },
+    {
+      "id": "re-reduced-compile",
+      "kind": "compile",
+      "source": "re-reduced/full.mochi",
+      "expect": "re-reduced-compile.expect.js",
+      "plugins": [
+        "re-reduced"
+      ]
+    },
+    {
+      "id": "re-reduced-dts",
+      "kind": "dts",
+      "expect": "re-reduced-dts.expect.txt",
+      "plugins": [
+        "re-reduced"
+      ],
+      "entry": "re-reduced/full.mochi"
+    },
+    {
+      "id": "re-reduced-config-dts",
+      "kind": "dts",
+      "expect": "re-reduced-config-dts.expect.txt",
+      "plugins": [
+        "re-reduced"
+      ],
+      "entry": "re-reduced/config-binding.mochi"
+    },
+    {
+      "id": "re-reduced-bad-payload",
+      "kind": "diagnostic",
+      "source": "re-reduced/bad-payload.mochi",
+      "expect": "re-reduced-bad-payload.expect.json",
+      "plugins": [
+        "re-reduced"
+      ]
+    },
+    {
+      "id": "re-reduced-bad-on-action",
+      "kind": "diagnostic",
+      "source": "re-reduced/bad-on-action.mochi",
+      "expect": "re-reduced-bad-on-action.expect.json",
+      "plugins": [
+        "re-reduced"
+      ]
+    },
+    {
+      "id": "re-reduced-bad-query",
+      "kind": "diagnostic",
+      "source": "re-reduced/bad-query.mochi",
+      "expect": "re-reduced-bad-query.expect.json",
+      "plugins": [
+        "re-reduced"
+      ]
+    },
+    {
+      "id": "re-reduced-bad-patch-label",
+      "kind": "diagnostic",
+      "source": "re-reduced/bad-patch-label.mochi",
+      "expect": "re-reduced-bad-patch-label.expect.json",
+      "plugins": [
+        "re-reduced"
       ]
     }
   ]

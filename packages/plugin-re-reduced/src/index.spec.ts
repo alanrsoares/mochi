@@ -194,6 +194,11 @@ let demo = () =>
   expect(errorsOf(src).join("\n")).toContain("string");
 });
 
+test("a patch label absent from state is rejected, even beside a valid one", () => {
+  const src = FULL.replace("{ count: s.count + 1 }", "{ count: s.count + 1, cout: 1 }");
+  expect(errorsOf(src)).toEqual(["action patch field 'cout' is not in the container state"]);
+});
+
 test("derived signals are readable through a two-parameter selector", () => {
   const src = `${FULL}
 let demo = () =>

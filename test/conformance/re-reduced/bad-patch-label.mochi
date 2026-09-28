@@ -1,0 +1,9 @@
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+
+export let counter = defineContainer(
+  "counter",
+  {
+    state: { count: 0 },
+    actions: on => { increment: on(s => { count: s.count + 1, cout: 1 }) }
+  }
+)

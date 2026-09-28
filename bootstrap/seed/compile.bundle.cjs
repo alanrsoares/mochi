@@ -6489,7 +6489,7 @@ var dtsHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins
 var runFormatHooks = _curry8(2, (hooks, e) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(e)).with({ _tag: "Some" }, ({ value: out }) => Some7(out)).with({ _tag: "None" }, () => runFormatHooks(rest, e)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var runDtsHooks = _curry8(3, (hooks, name, value) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(name, value)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value)).exhaustive()).otherwise(() => {
+var runDtsHooks = _curry8(5, (hooks, name, value, ty, api) => match7(hooks).with((_v) => _v.length === 0, () => None7).with((_v) => _v.length >= 1, ([hook, ...rest]) => match7(hook(name, value, ty, api)).with({ _tag: "Some" }, ({ value: ts }) => Some7(ts)).with({ _tag: "None" }, () => runDtsHooks(rest, name, value, ty, api)).exhaustive()).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var bindingHooksFrom = _curry8(3, (plugins, i, acc) => match7(_Array_get5(i, plugins)).with({ _tag: "None" }, () => acc).with({ _tag: "Some" }, ({ value: p }) => match7(p.bindingType).with({ _tag: "Some" }, ({ value: hook }) => bindingHooksFrom(plugins, i + 1, _Array_append5(hook, acc))).with({ _tag: "None" }, () => bindingHooksFrom(plugins, i + 1, acc)).exhaustive()).exhaustive());
@@ -8715,10 +8715,8 @@ var declType = _curry19(3, (t, value, env) => match18(value).with({ _tag: "ELamb
   const _g = _v;
   return _g._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_g);
 }, ({ from: fromT, to: toT }) => toT).otherwise(() => t)) : (([t1, _n, ps]) => `(${_Str_join8(", ", ps)}) => ${declType(t1, body, env)}`)(takeParams(t, params, env, 0, 0, []))).otherwise(() => tsOf(t, env)));
-var bindingTsType = _curry19(4, (sc, value, recs, bindingHooks) => {
-  const api = { tsType: (t) => tsOf(t, recsEnv(recs)), aliasOf: (row) => rowAliasName(row, recs) };
-  return match18(runBindingHooks(bindingHooks, value, sc.ty, api)).with({ _tag: "Some" }, ({ value: ts }) => ts).with({ _tag: "None" }, () => coreBindingTsType(sc, value, recs)).exhaustive();
-});
+var tsApiFor = (recs) => ({ tsType: (t) => tsOf(t, recsEnv(recs)), aliasOf: (row) => rowAliasName(row, recs) });
+var bindingTsType = _curry19(4, (sc, value, recs, bindingHooks) => match18(runBindingHooks(bindingHooks, value, sc.ty, tsApiFor(recs))).with({ _tag: "Some" }, ({ value: ts }) => ts).with({ _tag: "None" }, () => coreBindingTsType(sc, value, recs)).exhaustive());
 var coreBindingTsType = _curry19(3, (sc, value, recs) => {
   const rendered = schemeRender(sc, recs);
   return match18(value).with({ _tag: "ELambda" }, () => eq17(rendered.head, "") ? (([params, ret]) => curriedFnType(params, ret))(flatParamsFrom(sc.ty, value, rendered.env, 0, [])) : `${rendered.head}${declType(sc.ty, value, rendered.env)}`).otherwise(() => tsOf(sc.ty, tsEnv(rendered.pins, recs)));

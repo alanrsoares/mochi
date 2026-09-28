@@ -35,6 +35,11 @@ The bootstrap AST is Mochi's only AST, including at public host boundaries.
   `@mochi/compiler/bootstrap/types` façade (ADR 0101). The seed freeze copies
   those aliases out of the emit into `bootstrap/seed/host-types.d.ts`, so hosts
   never compile seed files under their own compiler flags.
+  The same freeze copies the emitted signatures of the type constructors
+  the façade re-exports, and the seed's `HostPlugin` record. Host hook types
+  are derived from `HostPlugin` rather than restated, so a hook or constructor
+  changed in Mochi is a host type error. Hosts build primitive types only
+  through the exported `tNumber`/`tString`/`tBool`/`tUnit`, never by name.
   `packages/compiler/src/ast/` is deleted along with the rest of the core.
 - **Plugins.** `LanguagePlugin` is redefined over the bootstrap values and hook
   shapes. `bootstrap/extensions.mochi` gains the hooks host plugins use today,
@@ -45,7 +50,12 @@ The bootstrap AST is Mochi's only AST, including at public host boundaries.
     print path consults the hooks, and the formatter skips them on a node with
     a comment inside it: comments attach by span, so a rewrite could otherwise
     drop or duplicate one.
-  - `dtsBinding` supplies a binding's `.d.ts` type text from its name and value.
+  - `dtsBinding` supplies a binding's `.d.ts` type text from its name, value,
+    inferred type, and a `TsApi` that renders a type as the core would (the
+    same record the builtin `bindingType` hook gets). re-reduced reads the
+    inferred config to print `ContainerDef<S, R, D, I>`.
+  - `InferApi` stays `inferExpr` + `unify`. The type façade exports `zonk`,
+    so a hook reads a solved type from the state it threads.
   - `inferCall` keeps its existing signature. Hooks filter calls themselves, so
     the TypeScript `refs`/`memberTargets` dispatch lists are not ported.
   - `completeMembers` moves with DX (#103).

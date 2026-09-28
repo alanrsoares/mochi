@@ -1,0 +1,43 @@
+export extern defineContainer : a = "@re-reduced/preact" "defineContainer"
+export extern useContainer : a -> b = "@re-reduced/preact" "useContainer"
+export extern useSelect : a -> b -> c = "@re-reduced/preact" "useSelect"
+export extern useWatch : a -> b -> c -> d = "@re-reduced/preact" "useWatch"
+export extern Intent : a = "./runtime" "Intent"
+export extern fetchScore : string -> Task<number, string> = "./host" "fetchScore"
+
+export let game = defineContainer(
+  "game",
+  {
+    state: { count: 0, name: "" },
+    actions: on =>
+      {
+        bump: on(s => { count: s.count + 1 }),
+        setName: on((s, n) => { name: n })
+      },
+    derive: s => { doubled: () => s.count.value * 2 },
+    effects: fx =>
+      [
+        fx.onAction("setName", (n, ctx) => [Intent.storageSet("name", n)]),
+        fx.onChange(s => s.count.value, (value, prev, ctx) => []),
+        fx.onEnter(s =>
+          s.count.value > 9, ctx => [Intent.timeout(10, () => ())])
+      ]
+  }
+)
+
+export let doubled = () =>
+  let store = useContainer(game) in useSelect(store, (s, d) => d.doubled.value)
+
+export let count = () =>
+  let store = useContainer(game) in useSelect(store, s => s.count.value)
+
+export let watched = () =>
+  let store = useContainer(game) in
+    useWatch(store, s => s.count.value, n => n + 1)
+
+export let rename = () =>
+  let store = useContainer(game) in store.actions.setName("ada")
+
+export let score = Intent.query(
+  { key: ["score"], task: fetchScore("ada"), onOk: n => n + 1, onErr: e => e }
+)
