@@ -18,10 +18,16 @@ import { type ProjectPlugins, pluginsForDocument } from "@mochi/lsp/load-plugins
 const root = resolve(".");
 const globs = process.argv.slice(2).filter((a) => !a.startsWith("-"));
 
-/** `fixtures/` is deliberately broken input — `let x = notAName` is the test. */
+/**
+ * `fixtures/` and `test/conformance/` are deliberately broken input:
+ * `let x = notAName` is the test. The conformance runner compiles each case
+ * under the plugins its manifest names and checks the diagnostics it expects
+ * (ADR 0105); a sweep with no plugins would report them again as errors.
+ */
 const isExempt = (file: string): boolean =>
   file.split("/").some((part) => part === "node_modules" || part === "dist") ||
-  file.includes("/fixtures/");
+  file.includes("/fixtures/") ||
+  file.startsWith("test/conformance/");
 
 const files = (globs.length > 0 ? globs : ["**/*.mochi"])
   .flatMap((g) => [...new Bun.Glob(g).scanSync({ cwd: root })])
