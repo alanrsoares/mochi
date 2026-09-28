@@ -45,7 +45,7 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | `infer/` | Algorithm W (SCC), `unify`, `schemes`, `show-type-expr`, `suggest` |
 | `codegen/` | **pure, non-failing** AST → JS; `codegen-ts` wraps it for strict-clean TS (ADR 0026) |
 | `extensions/` | `LanguagePlugin` seam (ADR 0011); `plugins/jsx` builtin |
-| `doc/` | Wadler-style `Doc` IR + layout engine, shared by `@mochi/dx` format and plugin hooks |
+| `doc/` | Wadler-style `Doc` IR + layout engine for hover type text; the formatter is `bootstrap/format.mochi` (ADR 0114) |
 | `module/` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
 | `prelude/` | builtin HM signatures + namespace tables; `runtime.ts` is the runtime source of truth, `js-defs.gen.ts` its stripped JS view (ADR 0075) |
 | `dts/` | `.d.ts` emit (TS backend shares printers) |

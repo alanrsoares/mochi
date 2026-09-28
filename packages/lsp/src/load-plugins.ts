@@ -43,7 +43,7 @@ export type PluginLoadOptions = {
 /**
  * What a manifest supplies. `plugins` (the `default` or named `plugins` export)
  * runs on the self-hosted core (ADR 0109). `dxPlugins` is the optional
- * TypeScript-core copy that hover, completion, navigation, and formatting still
+ * TypeScript-core copy that hover, completion, and navigation still
  * read until #103 moves them; it goes away then.
  */
 export type ProjectPlugins = {

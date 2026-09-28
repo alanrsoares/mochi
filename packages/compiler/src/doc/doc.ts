@@ -1,12 +1,7 @@
 /**
- * Wadler/Prettier-style document IR and layout engine (ADR 0025) — the
- * formatter's output language, split out of `format.ts` so it is a shared
- * vocabulary rather than a private one.
- *
- * `format.ts` lowers the AST to a `Doc` and renders it at 80 columns; a
- * `LanguagePlugin`'s `format` hook (ADR 0011, #27) builds `Doc`s too, which is
- * why the combinators live here: a hook that returned a raw string would lose
- * line-breaking and indentation the moment its output landed inside a group.
+ * Wadler/Prettier-style document IR and layout engine (ADR 0025). The
+ * formatter itself is `bootstrap/doc.mochi` + `bootstrap/format.mochi` (ADR
+ * 0114); this TypeScript copy lays out type text for hover (`dx/hover-type.ts`).
  */
 
 /**

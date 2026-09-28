@@ -176,6 +176,9 @@ unbound names), filtered to the diagnostics overlapping the requested range. A f
   compiled, and closing a document retracts its diagnostics.
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
+  It is the self-hosted `bootstrap/format.mochi`, run from the seed by `mochi fmt`, the
+  LSP and `bun run fmt:mochi` ([ADR 0114](adr/0114-bootstrap-formatter-ships.md)). Vendor
+  `format` hooks come from the manifest's self-hosted-core `plugins`.
 - **`bun run lint:mochi [globs…]`** — the same `moduleDiagnostics` the LSP publishes, run
   over the repo's `.mochi` sources from the command line. Each file resolves its own
   `mochi.plugins.ts` by the upward walk `pluginsForDocument` does for the editor: sweeping
@@ -208,8 +211,8 @@ and the LSP (the extension walks upward from each open `.mochi` file; loads only
 in a **trusted** workspace and only when the manifest resolves inside a workspace
 folder). Export `default` or named `plugins` as the self-hosted-core list
 (`BootstrapPlugin[]`, from each vendor's `/bootstrap` entry), plus an optional
-`dxPlugins` TypeScript-core copy that hover, completion, navigation, and formatting
-read until #103 ([ADR 0110](adr/0110-plugin-manifest-bootstrap-first.md)). Vite may
+`dxPlugins` TypeScript-core copy that hover, completion, and navigation read
+until #103 ([ADR 0110](adr/0110-plugin-manifest-bootstrap-first.md)). Vite may
 also import a project-specific alias (`docsVendorPlugins`, …). A legacy `mochi.plugins.mjs`
 beside it still works as a fallback. JSX needs no entry —
 `jsxPlugin` is a builtin, registered by default; passing `plugins: []` is the non-UI

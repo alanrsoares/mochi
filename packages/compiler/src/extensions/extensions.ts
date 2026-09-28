@@ -15,7 +15,6 @@ import type { Result } from "@onrails/result";
 import type { Expr } from "../ast/ast";
 import type { Span } from "../ast/span";
 import type { AliasDef, Row, Type } from "../ast/types";
-import type { Doc } from "../doc/doc";
 import { checkErr, type Diagnostic } from "../errors/errors";
 import type { Scheme } from "../infer/schemes";
 import type { Located, Tok } from "../lexer/lexer";
@@ -25,8 +24,8 @@ import { jsxPlugin } from "./plugins/jsx";
 /**
  * Capabilities a `parse` hook may use: the token cursor, the expression parser,
  * span closing, and error signalling — the closure state `parser.ts` otherwise
- * keeps private, exposed as a narrow surface (as `InferCallApi` / `FormatApi`
- * do for their passes).
+ * keeps private, exposed as a narrow surface (as `InferCallApi`
+ * does for its pass).
  *
  * Deliberately absent: the `ParseAbort` marker. `fail` raises it *inside* the
  * parser, so the only `throw` in the compiler stays parser-owned and the public
@@ -115,33 +114,6 @@ export type InferCallDecl = {
 };
 
 /**
- * Capabilities a `format` hook may use — the formatter's recursive printers,
- * without exposing its module-level comment tables. The `Doc` combinators
- * themselves (`txt`, `cat`, `indent`, `softline`, …) are plain functions in
- * `doc.ts`, so a hook imports those directly rather than receiving them here.
- */
-export type FormatApi = {
-  /** Print a sub-expression (comments attached, plugin hooks re-entered). */
-  exprD: (e: Expr) => Doc;
-  /** Print an expression in member/callee position, parenthesized when dropping parens would reparse differently. */
-  memberD: (e: Expr) => Doc;
-  /** Render a document on a single line (every group flat). */
-  flat: (d: Doc) => string;
-  /** A mochi string literal, escaped so it re-lexes to the same value. */
-  strLit: (s: string) => string;
-};
-
-/**
- * Re-fold a desugared expression back to this plugin's surface syntax (JSX's
- * `h(tag, props, children)` → `<tag …>`), or `null` to fall through to the next
- * hook / the core printer. Returns a `Doc`, not a string: the formatter is a
- * Wadler-style pretty-printer, so a raw string would be an opaque atom that
- * cannot break or indent inside the enclosing group (ADR 0011 reconciliation).
- * Hooks see the AST only — `format` never typechecks.
- */
-export type FormatHook = (e: Expr, api: FormatApi) => Doc | null;
-
-/**
  * Capabilities a `bindingType` hook may use: the binding's scheme type with
  * structural rows already folded to alias names, plus the HM → TS renderer
  * (`dts.ts`'s, with no generic letters in scope — free vars render `unknown`).
@@ -213,7 +185,6 @@ export type LanguagePlugin = {
    */
   syncTokens?: readonly Tok["t"][];
   inferCall?: InferCallDecl;
-  format?: FormatHook;
   bindingType?: BindingTypeHook;
   dtsBinding?: DtsBindingHook;
   completeMembers?: CompleteMemberHook;
@@ -414,15 +385,6 @@ export const runInferCallHooks = (
  */
 export const bindingTypeHooks = (plugins: LanguagePlugin[]): BindingTypeHook[] =>
   plugins.flatMap((p) => (p.bindingType ? [p.bindingType] : []));
-
-/** Run format hooks in order; `null` from all → caller uses the core printer. */
-export const runFormatHooks = (hooks: FormatHook[], e: Expr, api: FormatApi): Doc | null => {
-  for (const hook of hooks) {
-    const d = hook(e, api);
-    if (d !== null) return d;
-  }
-  return null;
-};
 
 /** First binding-type hook that returns a string wins; `null` from all → core rendering. */
 export const runBindingTypeHooks = (

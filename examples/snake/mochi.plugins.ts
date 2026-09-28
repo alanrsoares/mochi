@@ -4,7 +4,7 @@
  *
  * `plugins` (also the default export) runs on the self-hosted core (ADR 0109).
  * `dxPlugins` is the same list for the TypeScript core, which still answers
- * hover, completion, navigation, and formatting until #103 moves them.
+ * hover, completion, and navigation until #103 moves them.
  */
 
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";

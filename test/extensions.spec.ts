@@ -81,9 +81,9 @@ test("a hook-less jsx stub removes JSX syntax end-to-end (parse fails)", () => {
   expect(isErr(parse(unwrapOk(lex(src)), { plugins: [vendorA] }))).toBe(false);
 });
 
-// Slices 27–28 (ADR 0011 decision 2): ALL of JSX — parse, infer, format,
+// Slices 27–28 (ADR 0011 decision 2): ALL of JSX — parse, infer,
 // binding-type — lives in the builtin `jsxPlugin`, not in `parser.ts` /
-// `infer.ts` / `format.ts` / `dts.ts`. Each guard below pairs the default (no
+// `infer.ts` / `dts.ts` (its format re-fold is `bootstrap/plugins/jsx.mochi`'s). Each guard below pairs the default (no
 // configuration → JSX works) with the empty-list opt-out. Since #28 the opt-out
 // removes the *syntax*, so every downstream surface reports the same plain parse
 // Diagnostic — which is the strongest form of "the knowledge really moved".
@@ -92,12 +92,11 @@ const COMPONENT = 'let Card = props => <div className="card">{props.title}</div>
 /** Same, but `concat` pins `title` to `string` — so a bad attr is a type error, not just an open row. */
 const STRICT_COMPONENT = 'let Card = props => <div>{concat(props.title, "!")}</div>';
 
-test("jsxPlugin is a registered builtin carrying the parse/infer/format/dts hooks", () => {
+test("jsxPlugin is a registered builtin carrying the parse/infer/dts hooks", () => {
   expect(jsxNamed.length).toBe(1);
   const jsx = jsxNamed[0]!;
   expect(jsx.parse).toBeDefined();
   expect(jsx.inferCall).toBeDefined();
-  expect(jsx.format).toBeDefined();
   expect(jsx.bindingType).toBeDefined();
 });
 

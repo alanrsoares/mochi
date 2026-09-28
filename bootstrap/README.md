@@ -36,6 +36,6 @@ declaration emit, IDE/LSP, Vite, codemods, and apps remain outside the
 self-hosted graph. The formatter joined it with `mochic fmt`: `format.mochi`
 reaches fixpoint and stays strict-tsc clean like any other module, and it is
 Mochi-first as of [ADR 0078](../docs/adr/0078-mochi-first-self-hosted-core.md)'s
-2026-09-02 amendment. `packages/dx/src/format.ts` is still the *shipped*
-formatter and the parity oracle — mochi-first sets which one leads a change,
-not which one users run.
+2026-09-02 amendment, and since [ADR 0114](../docs/adr/0114-bootstrap-formatter-ships.md)
+it is the only formatter: `mochi fmt`, the LSP and `bun run fmt:mochi` all run
+the seed's copy through `@mochi/dx/format`.

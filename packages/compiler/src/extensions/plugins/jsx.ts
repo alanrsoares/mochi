@@ -20,7 +20,7 @@
  * tokens, and the grammar that gives them JSX meaning is entirely below.
  */
 import { err, isErr, ok, type Result } from "@onrails/result";
-import { type Expr, type Field, isCtorName, type RecordExpr, type SeqElem } from "../../ast/ast";
+import { type Expr, type Field, isCtorName, type SeqElem } from "../../ast/ast";
 import { type Span, spanning } from "../../ast/span";
 import {
   type ArrowType,
@@ -37,14 +37,11 @@ import {
   tString,
   tUnion,
 } from "../../ast/types";
-import { cat, type Doc, group, indent, line, seq, softline, txt } from "../../doc/doc";
 import type { Diagnostic } from "../../errors/errors";
 import { closestName } from "../../infer/suggest";
 import type {
   BindingTypeApi,
   BindingTypeHook,
-  FormatApi,
-  FormatHook,
   InferCallApi,
   InferCallHook,
   LanguagePlugin,
@@ -90,7 +87,7 @@ const isJsxCall = (e: CallExpr): boolean => e.origin === "jsx" && e.args.length 
 
 /**
  * `h(tag, props, children)` with sugar provenance — the one place `origin:
- * "jsx"` is written, and the shape `formatJsx` / `inferJsxCall` below expect.
+ * "jsx"` is written, and the shape `inferJsxCall` below expects.
  */
 const makeJsxCall = (
   api: ParserApi,
@@ -521,75 +518,6 @@ const inferJsxCall: InferCallHook = (
   return ok(tCon("VNode"));
 };
 
-// --------------------------------------------------------------- format
-
-type JsxShape = { tag: Expr; props: RecordExpr; children: SeqElem[] };
-
-/** The exact call shape the parser emits — anything else prints as a plain call. */
-const jsxShape = (e: Expr): JsxShape | null =>
-  e.kind !== "call" ||
-  e.origin !== "jsx" ||
-  e.fn.kind !== "ref" ||
-  e.fn.name !== PRAGMA ||
-  e.args.length !== 3 ||
-  e.args[1]!.kind !== "record" ||
-  e.args[2]!.kind !== "arr"
-    ? null
-    : { tag: e.args[0]!, props: e.args[1]!, children: e.args[2]!.elements };
-
-const jsxTag = (tag: Expr, api: FormatApi): string =>
-  tag.kind === "str" ? tag.value : api.flat(api.memberD(tag));
-
-const jsxAttrD = (name: string, value: Expr, nameStart: number, api: FormatApi): Doc => {
-  if (value.kind === "bool" && value.value && value.span.start === nameStart) return txt(name);
-  if (value.kind === "str") return txt(`${name}=${api.strLit(value.value)}`);
-  return seq(txt(`${name}={`), api.exprD(value), txt("}"));
-};
-
-const jsxOpenD = (tag: string, attrs: Doc[], selfClosing: boolean): Doc => {
-  if (attrs.length === 0) return txt(selfClosing ? `<${tag} />` : `<${tag}>`);
-  return group(
-    seq(
-      txt(`<${tag}`),
-      indent(cat(attrs.map((attr) => seq(line, attr)))),
-      selfClosing ? line : softline,
-      txt(selfClosing ? "/>" : ">"),
-    ),
-  );
-};
-
-const jsxChildD = (child: SeqElem, api: FormatApi): Doc => {
-  if (child.kind === "expr" && jsxShape(child.expr)) return api.exprD(child.expr);
-  return seq(txt(child.kind === "spread" ? "{..." : "{"), api.exprD(child.expr), txt("}"));
-};
-
-/** Re-fold a parser-produced `h(tag, props, children)` while retaining normal call formatting for source-written `h(...)`. */
-const formatJsx: FormatHook = (e: Expr, api: FormatApi): Doc | null => {
-  const shape = jsxShape(e);
-  if (!shape) return null;
-  const fragment = shape.tag.kind === "str" && shape.tag.value === FRAGMENT;
-  const tag = fragment ? "" : jsxTag(shape.tag, api);
-  const attrs = [
-    ...(shape.props.spread ? [seq(txt("{..."), api.exprD(shape.props.spread), txt("}"))] : []),
-    ...shape.props.fields.map((field) =>
-      jsxAttrD(field.name, field.value, field.nameSpan.start, api),
-    ),
-  ];
-
-  if (shape.children.length === 0 && !fragment) return jsxOpenD(tag, attrs, true);
-
-  const open = fragment ? txt("<>") : jsxOpenD(tag, attrs, false);
-  const close = txt(fragment ? "</>" : `</${tag}>`);
-  return group(
-    seq(
-      open,
-      indent(cat(shape.children.map((child) => seq(softline, jsxChildD(child, api))))),
-      softline,
-      close,
-    ),
-  );
-};
-
 // ------------------------------------------------------------ binding type
 
 /** True when the (folded) type is an arrow whose final return is `VNode` —
@@ -667,6 +595,5 @@ export const jsxPlugin: LanguagePlugin = {
   // No ref/memberTarget claims: the hook keys off `origin: "jsx"` provenance,
   // not a callee name — a hand-written `h(...)` is deliberately not claimed.
   inferCall: { hook: inferJsxCall },
-  format: formatJsx,
   bindingType: componentBindingTs,
 };
