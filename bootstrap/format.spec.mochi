@@ -7,6 +7,7 @@ import {
   exprD,
   noComments,
   externStmt,
+  formatProgram,
   importNsStmtD,
   importStmtD,
   pattern,
@@ -237,6 +238,16 @@ testEach("an expression round-trips", [
   "loop (i = 0) { recur(i) }",
   "recur(1)"
 ], src => assertEq(exprText(src), src))
+
+// A curried call flattens (ADR 0065) and then re-folds to its operator in the
+// same pass, so formatting is idempotent.
+test("a curried prelude binary prints as its operator", () =>
+  assertEq(
+    Ok("let f = x => x > 2\n"),
+    lex("let f = x => gt(x)(2)")
+      |> Result.flatMap(parse)
+      |> Result.map(stmts => formatProgram(stmts, "let f = x => gt(x)(2)"))
+  ))
 
 // A `do` block always breaks (`hardline` between exprs), like the TS printer.
 test("a do block prints one expression per line", () =>

@@ -548,13 +548,13 @@ export function startServer(opts: ServerOptions = {}): void {
     return actions;
   });
 
-  /** Run `format` on the document — with the server's plugins, so sugar a plugin owns (JSX) re-folds here exactly as `mochi fmt` does — and return a single full-document replacement edit. */
+  /** Run `format` on the document — with the project's self-hosted-core plugins, so sugar a plugin owns (JSX) re-folds here exactly as `mochi fmt` does — and return a single full-document replacement edit. */
   connection.onDocumentFormatting(async ({ textDocument }): Promise<TextEdit[]> => {
     const doc = documents.get(textDocument.uri);
     if (!doc) return [];
     const path = docPath(textDocument.uri);
     const text = doc.getText();
-    const formatted = format(text, await dxOpts(path));
+    const formatted = format(text, { plugins: (await projectPlugins(path))?.plugins });
     if (!isOk(formatted)) return [];
     const fullRange = {
       start: doc.positionAt(0),

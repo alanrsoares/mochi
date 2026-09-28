@@ -143,8 +143,8 @@ test("mochic build renders every independent graph checker diagnostic", () => {
 
 // ---- `mochic fmt [--write] <file>` — the self-hosted formatter -------------
 //
-// Byte parity with @mochi/dx's formatter is the subject of
-// test/bootstrap-format-file.spec.ts; what is checked here is the CLI seam:
+// The formatter's layout is covered by bootstrap/format.spec.mochi and the dx
+// format specs; what is checked here is the CLI seam:
 // stdout carries the formatted source verbatim (no added newline, nothing on
 // it but the source), and `--write` puts the same bytes back over the file.
 

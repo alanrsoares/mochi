@@ -1,10 +1,9 @@
 // bootstrap/format.mochi — the source formatter, in mochi (ADR 0025 / 0048).
 //
-// packages/dx/src/format.ts is the SHIPPED formatter; this is the self-hosted
-// port, reached from `mochic fmt`. The two are kept in step by hand, and
-// test/bootstrap-format-file.spec.ts holds them there: every .mochi file in
-// the repo must format byte-identically through both, so a one-sided change
-// fails the default gate.
+// The only formatter (ADR 0114): `mochic fmt` runs it from the graph, and
+// `mochi fmt`, the LSP and `bun run fmt:mochi` run the seed's copy through
+// `@mochi/dx/format`. `bun run fmt:check` holds every .mochi file in the repo
+// at its fixed point.
 //
 // Plugin hooks either rewrite a node before layout (`format`) or lay it out
 // themselves (`formatDoc`, ADR 0112); the builtin JSX plugin re-folds its
@@ -166,11 +165,9 @@ export let braced = (open, close, items) =>
 
 // --- expressions -------------------------------------------------------------
 //
-// Mirrors format.ts's exprCore and the printers it dispatches to. Two things it
-// deliberately does NOT do yet: re-fold desugared sugar (binary/unary calls,
-// operator sections, eta-partials, `>>` composition — every `refoldCall` branch),
-// so `a + b` still prints as `add(a, b)`; and attach comments, which needs a
-// span-keyed side table rather than TS's node-keyed WeakMaps.
+// `exprCore` and the printers it dispatches to. Desugared sugar (binary and
+// unary calls, operator sections, eta-partials, `>>` composition) re-folds to
+// its surface form here; comments attach by span (`anchorIndex` below).
 
 let parenIf = (cond, d) => cond ? cat([txt("("), d, txt(")")]) : d
 
@@ -1650,7 +1647,7 @@ let callArgsD = (cts, fn, args, origin, asCallee) => switch cts->refoldCall(fn, 
     // `f(a)(b)` -> `f(a, b)` for a flat callable (ADR 0065). The result carries a
     // single argument group, so this recurses at most once.
     switch cts->flattenCallSpine(Ast.ECall(fn, args, origin, { start: 0, end: 0 })) {
-      | Some(Ast.ECall(ffn, fargs, forigin, _)) => cts->plainCallD(
+      | Some(Ast.ECall(ffn, fargs, forigin, _)) => cts->callArgsD(
           ffn,
           fargs,
           forigin,

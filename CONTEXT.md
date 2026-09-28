@@ -168,17 +168,16 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 ## Language plugins ([ADR 0011](docs/adr/0011-language-plugins.md))
 
 - **Core (surface)** — HM + rows + variants + `Expr.call`; no kit-specific or
-  JSX-specific knowledge lives in `parser.ts` / `infer.ts` / `format.ts` /
+  JSX-specific knowledge lives in `parser.ts` / `infer.ts` / `format.mochi` /
   `dts.ts` (ADR 0011).
 - **`LanguagePlugin`** — the cross-pass registration seam (`src/extensions.ts`):
-  optional `parse` / `inferCall` / `format` / `bindingType` / `dtsBinding` hooks,
+  optional `parse` / `inferCall` / `bindingType` / `dtsBinding` hooks,
   consumed by `compile`, the module
   graph, `dts`, the Vite plugin, and the LSP. A `parse` hook is consulted at atom
   position *after* core's own prefix tokens (so a plugin extends the grammar but
   never shadows it) and signals errors via `ParserApi.fail` — the `ParseAbort`
-  marker stays private to `parser.ts`. A `format` hook returns a **`Doc`**
-  (`src/doc.ts`), never a string — the formatter is a Wadler pretty-printer, so
-  a string could not break or indent. `bindingType` sits inside the
+  marker stays private to `parser.ts`. Formatting hooks live on the
+  self-hosted core's `BootstrapPlugin` only (ADR 0114). `bindingType` sits inside the
   `bindingTsType` both the `.d.ts` writer and the TS backend share, so a plugin
   cannot type a binding one way in `.d.ts` and another in emitted `.ts`.
   `HostExtension` is a back-compat alias/subset of `LanguagePlugin`.

@@ -2509,7 +2509,7 @@ const callArgsD: _Curry<
         ? ((_v) =>
             _v._tag === "Some" && _v.value._tag === "ECall"
               ? (({ value: { fn: ffn, args: fargs, origin: forigin } }) =>
-                  plainCallD(cts, ffn, fargs, forigin, asCallee))(
+                  callArgsD(cts, ffn, fargs, forigin, asCallee))(
                   _v as Extract<Option<Expr>, { _tag: "Some" }> & {
                     value: Extract<
                       Extract<Option<Expr>, { _tag: "Some" }>["value"],
