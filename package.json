@@ -13,7 +13,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test --parallel --path-ignore-patterns 'test/bootstrap-fixpoint-binary.spec.ts' --path-ignore-patterns 'test/bootstrap-seed-alias.spec.ts' --path-ignore-patterns 'test/bootstrap-self-tsc.spec.ts' --path-ignore-patterns 'test/bootstrap-tsc.spec.ts'",
+    "test": "bun test --parallel --timings .cache/test-timings.json --update-timings --path-ignore-patterns 'test/bootstrap-fixpoint-binary.spec.ts' --path-ignore-patterns 'test/bootstrap-seed-alias.spec.ts' --path-ignore-patterns 'test/bootstrap-self-tsc.spec.ts' --path-ignore-patterns 'test/bootstrap-tsc.spec.ts'",
     "test:full": "bun run test && bun run test:north-star",
     "test:north-star": "bun test --bail test/bootstrap-fixpoint-binary.spec.ts test/bootstrap-seed-alias.spec.ts test/bootstrap-self-tsc.spec.ts test/bootstrap-tsc.spec.ts",
     "test:mochi:coverage": "bun scripts/mochi-coverage.ts",

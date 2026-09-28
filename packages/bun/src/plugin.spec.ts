@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileMochiFile, mochiPlugin } from "./plugin.ts";
@@ -73,4 +73,58 @@ test("a later Bun.build recompiles an edited .mochi source", async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+type GraphPaths = { dep: string; user: string; cache: string };
+
+/** A two-module graph plus a private cache dir, removed afterwards. */
+const withCachedGraph = async (run: (paths: GraphPaths) => Promise<void>): Promise<void> => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-bun-cache-"));
+  const previous = process.env.MOCHI_BUN_CACHE_DIR;
+  const paths: GraphPaths = {
+    dep: join(dir, "dep.mochi"),
+    user: join(dir, "user.mochi"),
+    cache: join(dir, "cache"),
+  };
+  process.env.MOCHI_BUN_CACHE_DIR = paths.cache;
+  try {
+    writeFileSync(paths.dep, "export let answer = 42\n");
+    writeFileSync(
+      paths.user,
+      'import { answer } from "./dep.mochi"\n\nexport let doubled = answer * 2\n',
+    );
+    await run(paths);
+  } finally {
+    if (previous === undefined) delete process.env.MOCHI_BUN_CACHE_DIR;
+    else process.env.MOCHI_BUN_CACHE_DIR = previous;
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+/** Swap one module's cached output for `marker`, so a cache hit is observable. */
+const markCachedOutput = (cache: string, path: string, marker: string): void => {
+  const [file] = readdirSync(cache).filter((f) => f.endsWith(".json"));
+  const entry = JSON.parse(readFileSync(join(cache, file!), "utf8"));
+  entry.outputs[path] = marker;
+  writeFileSync(join(cache, file!), JSON.stringify(entry));
+};
+
+test("a cached graph is reused until any module in it changes", async () => {
+  await withCachedGraph(async ({ dep, user, cache }) => {
+    expect(await compileMochiFile(user)).toContain("export const doubled");
+    markCachedOutput(cache, user, "// from cache");
+    expect(await compileMochiFile(user)).toBe("// from cache");
+    // An edit to an imported module, not just the entry, misses.
+    writeFileSync(dep, "export let answer = 21\n");
+    expect(await compileMochiFile(user)).toContain("export const doubled");
+  });
+});
+
+test("a corrupt cache entry is a miss, not an error", async () => {
+  await withCachedGraph(async ({ user, cache }) => {
+    await compileMochiFile(user);
+    const [file] = readdirSync(cache);
+    writeFileSync(join(cache, file!), "{ not json");
+    expect(await compileMochiFile(user)).toContain("export const doubled");
+  });
 });
