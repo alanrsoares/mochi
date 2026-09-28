@@ -95,6 +95,30 @@ const inferUseRef: Hook = (s, fn, args) => {
   return ok(tRecord(rExtend("current", solved(s, initR.value), { _tag: "RowEmpty" })));
 };
 
+/**
+ * The dependency list after a hook's callback: one array, as Preact takes it.
+ * A claimed call skips core application, so nothing else would reject
+ * `useEffect(fn, 42)` or a surplus argument.
+ */
+const inferDeps = (s: Solver, args: readonly Expr[], name: string): Step<null> => {
+  const surplus = args[2];
+  if (surplus)
+    return {
+      _tag: "Err",
+      error: {
+        message: `${name} takes one dependency array after its callback`,
+        start: surplus.span.start,
+        end: surplus.span.end,
+        help: none,
+        suggestions: [],
+      },
+    };
+  const deps = args[1]!;
+  const depsR = inferIn(s, deps);
+  if (isErr(depsR)) return depsR;
+  return unifyIn(s, depsR.value, arrOf(fresh(s)), deps.span);
+};
+
 const effectLike =
   (name: string): Hook =>
   (s, fn, args) => {
@@ -106,8 +130,8 @@ const effectLike =
     if (isErr(uni)) return uni;
     // Curried: `useEffect(fn)(hookDeps…)` — deps come in a second call.
     if (args.length === 1) return ok(tArrow(arrOf(fresh(s)), tUnit));
-    const restR = inferAll(s, args.slice(1));
-    return isErr(restR) ? restR : ok(tUnit);
+    const depsR = inferDeps(s, args, name);
+    return isErr(depsR) ? depsR : ok(tUnit);
   };
 
 const inferUseCallback: Hook = (s, fn, args) => {
@@ -116,8 +140,8 @@ const inferUseCallback: Hook = (s, fn, args) => {
   if (isErr(fnR)) return fnR;
   const fnT = solved(s, fnR.value);
   if (args.length === 1) return ok(tArrow(arrOf(fresh(s)), fnT));
-  const restR = inferAll(s, args.slice(1));
-  return isErr(restR) ? restR : ok(fnT);
+  const depsR = inferDeps(s, args, "useCallback");
+  return isErr(depsR) ? depsR : ok(fnT);
 };
 
 const inferUseMemo: Hook = (s, fn, args) => {
@@ -128,8 +152,8 @@ const inferUseMemo: Hook = (s, fn, args) => {
   const uni = unifyIn(s, thunkR.value, tArrow(tUnit, resultT), args[0]!.span);
   if (isErr(uni)) return uni;
   if (args.length === 1) return ok(tArrow(arrOf(fresh(s)), solved(s, resultT)));
-  const restR = inferAll(s, args.slice(1));
-  return isErr(restR) ? restR : ok(solved(s, resultT));
+  const depsR = inferDeps(s, args, "useMemo");
+  return isErr(depsR) ? depsR : ok(solved(s, resultT));
 };
 
 const HOOK_DEPS_ARITY: Readonly<Record<string, number>> = {

@@ -310,7 +310,7 @@ export const showType: (t: Ty) => string = (t: Ty) =>
 const showRowFields: (row: Row) => [string[], Option<number>] = (row: Row) =>
   match(row)
     .with({ _tag: "RowExtend" }, ({ label, fieldType, optional, rest }) =>
-      (([fields, tailId]) =>
+      (([fields, tailId]: [string[], Option<number>]) =>
         _tuple(
           _Array_prepend(`${label}${optional ? "?" : ""}: ${showType(fieldType)}`, fields),
           tailId,
@@ -320,7 +320,7 @@ const showRowFields: (row: Row) => [string[], Option<number>] = (row: Row) =>
     .with({ _tag: "RowEmpty" }, () => _tuple([] as string[], None as Option<number>))
     .exhaustive();
 const showRow: (row: Row) => string = (row: Row) =>
-  (([fields, tailId]) => {
+  (([fields, tailId]: [string[], Option<number>]) => {
     const tail: string = match(tailId)
       .with(
         { _tag: "Some" },
@@ -531,7 +531,7 @@ const collectionUnifyMsg: _Curry<[aname: string, bname: string, shown: string], 
 );
 const unifyMismatch: <A>(ra: Ty, rb: Ty) => Result<A, TypeErr> = _curry(2, <A>(ra: Ty, rb: Ty) =>
   not(eq(isArrowT(ra), isArrowT(rb)))
-    ? (([fn, val]) =>
+    ? (([fn, val]: [Ty, Ty]) =>
         fail(
           tupleParenMsg(
             ra,
@@ -840,8 +840,8 @@ const rewriteRow: _Curry<
             ),
     )
     .with({ _tag: "RowVar" }, ({ id: rid }) =>
-      (([freshT, st1]) =>
-        (([freshTail, st2]) =>
+      (([freshT, st1]: [Ty, St]) =>
+        (([freshTail, st2]: [Row, St]) =>
           Ok(
             _tuple(freshT, false, freshTail, {
               ...st2,
@@ -959,7 +959,7 @@ const fitsRows: _Curry<[actual: Row, expected: Row, st: St], Result<St, TypeErr>
                 eopt ? fitsRows(act, erest, st) : fail(`record missing field '${elabel}'`),
               )
               .with({ _tag: "Ok" }, ({ value: hit }) =>
-                (([htype, hopt, hrest, s1]) =>
+                (([htype, hopt, hrest, s1]: [Ty, boolean, Row, St]) =>
                   and(hopt, not(eopt))
                     ? fail(`record field '${elabel}' is required but missing or optional`)
                     : _Result_flatMap(

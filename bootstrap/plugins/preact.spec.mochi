@@ -39,3 +39,18 @@ test("useMemo returns its thunk result", () => switch typecheck("extern useMemo 
   | Err(_) => true |> ok
   | Ok(_) => false |> ok
 })
+
+test("useEffect rejects a non-array dependency list", () => switch typecheck("extern useEffect : (() -> c) -> d -> e = \"preact/hooks\" \"useEffect\"\nlet x = useEffect(() => (), 42)\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useMemo rejects a surplus argument", () => switch typecheck("extern useMemo : (() -> a) -> b -> a = \"preact/hooks\" \"useMemo\"\nlet x = useMemo(() => 1, [], 2)\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useEffect accepts an array dependency list", () => switch typecheck("extern useEffect : (() -> c) -> d -> e = \"preact/hooks\" \"useEffect\"\nlet x = useEffect(() => (), [])\n", [preactPlugin]) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
+})

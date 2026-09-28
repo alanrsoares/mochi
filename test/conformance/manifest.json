@@ -38,7 +38,8 @@
       "preact-bad-setter",
       "preact-bad-lazy",
       "preact-bad-ref",
-      "preact-bad-memo"
+      "preact-bad-memo",
+      "preact-bad-deps"
     ],
     "pending": []
   },
@@ -318,6 +319,15 @@
       "kind": "diagnostic",
       "source": "preact/bad-memo.mochi",
       "expect": "preact-bad-memo.expect.json",
+      "plugins": [
+        "preact"
+      ]
+    },
+    {
+      "id": "preact-bad-deps",
+      "kind": "diagnostic",
+      "source": "preact/bad-deps.mochi",
+      "expect": "preact-bad-deps.expect.json",
       "plugins": [
         "preact"
       ]

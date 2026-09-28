@@ -360,7 +360,7 @@ const parseJsxAttributes: _Curry<
           )
         : _Result_flatMap(
             ([attrId, p1]) =>
-              (([valExpr, p2]) => {
+              (([valExpr, p2]: [Expr, number]) => {
                 const field: Field = { name: attrId.name, value: valExpr };
                 return parseJsxAttributes(
                   toks,
@@ -1377,7 +1377,7 @@ const hasField: _Curry<[fields: string[], name: string], boolean> = _curry(
 const componentPropsTs: <A>(row: Row, api: { tsType: (a: Ty) => string } & A) => string = _curry(
   2,
   <A>(row: Row, api: { tsType: (a: Ty) => string } & A) =>
-    (([fields0, open]) => {
+    (([fields0, open]: [string[], boolean]) => {
       const fields1: string[] = and(open, not(hasField(fields0, "children")))
         ? _Array_append("children?: any", fields0)
         : fields0;

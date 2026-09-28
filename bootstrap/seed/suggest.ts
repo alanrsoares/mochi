@@ -152,7 +152,8 @@ const closestFrom: _Curry<
     match(_Array_get(i, names))
       .with({ _tag: "None" }, () => best)
       .with({ _tag: "Some" }, ({ value: n }) =>
-        (([next, dist]) => closestFrom(want, names, i + 1, budget, next, dist))(
+        (([next, dist]: [Option<string>, number]) =>
+          closestFrom(want, names, i + 1, budget, next, dist))(
           consider(want, budget, best, bestDist, n),
         ),
       )

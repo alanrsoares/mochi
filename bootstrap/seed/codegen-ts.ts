@@ -14,7 +14,7 @@ import type {
   Stmt,
   TypeExpr,
 } from "./ast";
-import type { Row, SpanAt, Ty } from "./types";
+import type { Row, SpanAt, St, Ty } from "./types";
 import type { LocTok, QualAliasInfo, TsApi } from "./infer";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "./ts-types";
@@ -163,7 +163,7 @@ const fieldTs: _Curry<
   (te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>) => {
     const vars: Map<string, Ty> = paramVarsFrom(params, 0);
     const names: Map<number, string> = paramNamesFrom(params, 0);
-    return (([t, _vars, _st]) => tsOf(t, tsEnv(names, recs)))(
+    return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => tsOf(t, tsEnv(names, recs)))(
       typeExprToType(te, vars, mkSt(length(params)), aliases, _Set_fromArray([] as string[])),
     );
   },
@@ -754,7 +754,7 @@ const flatParamsFrom: _Curry<
               )
               .otherwise(() => t),
           )
-        : (([t1, n1, acc1]) => flatParamsFrom(t1, body, env, n1, acc1))(
+        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
             takeParams(t, params, env, 0, n, acc),
           ),
     )
@@ -803,7 +803,8 @@ const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
                 )
                 .otherwise(() => t),
             )
-          : (([t1, _n, ps]) => `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
+          : (([t1, _n, ps]: [Ty, number, string[]]) =>
+              `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
               takeParams(t, params, env, 0, 0, [] as string[]),
             ),
       )
@@ -866,7 +867,7 @@ const coreBindingTsType: <A>(
     return match(value)
       .with({ _tag: "ELambda" }, () =>
         eq(rendered.head, "")
-          ? (([params, ret]) => curriedFnType(params, ret))(
+          ? (([params, ret]: [string[], string]) => curriedFnType(params, ret))(
               flatParamsFrom(sc.ty, value, rendered.env, 0, [] as string[]),
             )
           : `${rendered.head}${declType(sc.ty, value, rendered.env)}`,
@@ -1080,7 +1081,8 @@ const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>,
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => RowEmpty as Row)
       .with({ _tag: "Some" }, ({ value: f }) =>
-        (([t, _vars, _st]) => RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+          RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
           typeExprToType(
             f.fieldType,
             new Map<string, Ty>(),

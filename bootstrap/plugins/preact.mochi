@@ -106,6 +106,29 @@ let inferUseRef = (fn, args, st, api) =>
     }
     : Ok(None)
 
+// The dependency list after a hook's callback: one array, as Preact takes it.
+// A claimed call skips core application, so nothing else would reject
+// `useEffect(fn, 42)` or a surplus argument.
+let inferDeps = (args, st, api, name) => switch Array.get(2, args) {
+  | Some(surplus) => let sp = preactSpan(surplus) in
+      Err(
+        {
+          message: "${name} takes one dependency array after its callback",
+          start: sp.start,
+          end: sp.end,
+          help: None,
+          suggestions: []
+        }
+      )
+  | None => switch Array.get(1, args) {
+      | None => Ok(st)
+      | Some(deps) => api.inferExpr(deps, st)
+          |> Result.flatMap(((depsT, st1)) =>
+            let (elem, st2) = freshVar(st1) in
+              api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))
+    }
+}
+
 let inferEffectLike = (fn, args, st, api, name) =>
   isRef(fn, name) && Array.length(args) >= 1
     ? switch Array.get(0, args) {
@@ -123,7 +146,7 @@ let inferEffectLike = (fn, args, st, api, name) =>
                   Array.length(args) == 1
                     ? let (dep, st4) = freshVar(st3) in
                       Ok(Some((tArrow(arrOf(dep), tUnit), st4)))
-                    : inferArgs(Array.drop(1, args), st3, api.inferExpr)
+                    : inferDeps(args, st3, api, name)
                       |> Result.map(st4 => Some((tUnit, st4)))))
     }
     : Ok(None)
@@ -137,7 +160,7 @@ let inferUseCallback = (fn, args, st, api) =>
             Array.length(args) == 1
               ? let (dep, st2) = freshVar(st1) in
                 Ok(Some((tArrow(arrOf(dep), zonk(callbackT, st2)), st2)))
-              : inferArgs(Array.drop(1, args), st1, api.inferExpr)
+              : inferDeps(args, st1, api, "useCallback")
                 |> Result.map(st2 => Some((zonk(callbackT, st2), st2))))
     }
     : Ok(None)
@@ -154,7 +177,7 @@ let inferUseMemo = (fn, args, st, api) =>
                   Array.length(args) == 1
                     ? let (dep, st4) = freshVar(st3) in
                       Ok(Some((tArrow(arrOf(dep), zonk(value, st4)), st4)))
-                    : inferArgs(Array.drop(1, args), st3, api.inferExpr)
+                    : inferDeps(args, st3, api, "useMemo")
                       |> Result.map(st4 => Some((zonk(value, st4), st4)))))
     }
     : Ok(None)

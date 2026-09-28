@@ -353,7 +353,8 @@ const aliasRowFrom: <A>(
     match(_Array_get(i, fields))
       .with({ _tag: "None" }, () => RowEmpty as Row)
       .with({ _tag: "Some" }, ({ value: f }) =>
-        (([t, _vars, _st]) => rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+          rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
           typeExprToType(
             f.fieldType,
             new Map<string, Ty>(),
@@ -675,8 +676,9 @@ const bindParamNamesFrom: <A>(
     .with(
       (_v) => _v.length >= 1,
       ([n, ...rest]) =>
-        (([t, st1]) =>
-          (([restTs, env2, st2]) => _tuple(_Array_prepend(t, restTs), env2, st2))(
+        (([t, st1]: [Ty, St]) =>
+          (([restTs, env2, st2]: [Ty[], Map<A, Scheme>, St]) =>
+            _tuple(_Array_prepend(t, restTs), env2, st2))(
             bindParamNamesFrom(rest, _Map_set(n, mono(t), env), st1),
           ))(freshVar(st)),
     )
@@ -702,7 +704,7 @@ const bindParamFieldsFrom: _Curry<
         return _g.length >= 1;
       },
       ([f, ...rest]) =>
-        (([ft, st1]) =>
+        (([ft, st1]: [Ty, St]) =>
           bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
           freshVar(st),
         ),
@@ -718,21 +720,21 @@ const bindParam: _Curry<
   match(p)
     .with({ _tag: "LPSpanned" }, ({ param: inner }) => bindParam(inner, env, st))
     .with({ _tag: "LPName" }, ({ name }) =>
-      (([t, st1]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
+      (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
     )
     .with({ _tag: "LPTuple" }, ({ names }) =>
-      (([elems, env1, st1]) => _tuple(tTuple(elems), env1, st1))(
+      (([elems, env1, st1]: [Ty[], Map<string, Scheme>, St]) => _tuple(tTuple(elems), env1, st1))(
         bindParamNamesFrom(names, env, st),
       ),
     )
     .with({ _tag: "LPRecord" }, ({ fields }) =>
-      (([rowBase, st1]) =>
-        (([row, env1, st2]) => _tuple(tRecord(row), env1, st2))(
+      (([rowBase, st1]: [Row, St]) =>
+        (([row, env1, st2]: [Row, Map<string, Scheme>, St]) => _tuple(tRecord(row), env1, st2))(
           bindParamFieldsFrom(fields, env, rowBase, st1),
         ))(freshRowVar(st)),
     )
     .with({ _tag: "LPLabeled" }, ({ name }) =>
-      (([t, st1]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
+      (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)),
     )
     .exhaustive(),
 );
@@ -754,10 +756,11 @@ const bindParamsFrom: _Curry<
         return _g.length >= 1;
       },
       ([p, ...rest]) =>
-        (([t, env1, st1]) =>
-          (([restTs, env2, st2]) => _tuple(_Array_prepend(t, restTs), env2, st2))(
-            bindParamsFrom(rest, env1, st1),
-          ))(bindParam(p, env, st)),
+        (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
+          (([restTs, env2, st2]: [Ty[], Map<string, Scheme>, St]) =>
+            _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
+          bindParam(p, env, st),
+        ),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -902,7 +905,7 @@ const constrainParamAnnotsFrom: <A>(
                         annot: { value: te },
                       },
                     }) =>
-                      (([annotT, vars1, st1]) =>
+                      (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                         _Result_flatMap(
                           (st2) => constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
                           checkFits(ctx, paramT, annotT, st1, annotSpan(te)),
@@ -1598,7 +1601,8 @@ const inferRecur: <A>(
         },
         ([frame]) =>
           _Result_flatMap(
-            (st1) => (([t, st2]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(freshVar(st1)),
+            (st1) =>
+              (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(freshVar(st1)),
             unifyRecurArgsFrom(ctx, args, frame, 0, st),
           ),
       )
@@ -1770,7 +1774,7 @@ const labFieldsFrom: <A>(
                 labFieldsFrom(ctx, [inner, ...rest], env, vars, st),
               )
               .with({ _tag: "LPLabeled" }, ({ name, annot, optional, defaultValue }) =>
-                (([fieldT, vars1, st1]) =>
+                (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                   _Result_flatMap(
                     ([fieldT1, st2]) =>
                       ((bodyT: Ty) =>
@@ -1851,7 +1855,9 @@ const labFieldsFrom: <A>(
                     .with({ _tag: "Some" }, ({ value: te }) =>
                       typeExprToType(te, vars, st, ctx.aliasMap, _Set_fromArray([] as string[])),
                     )
-                    .with({ _tag: "None" }, () => (([t, s1]) => _tuple(t, vars, s1))(freshVar(st)))
+                    .with({ _tag: "None" }, () =>
+                      (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
+                    )
                     .exhaustive(),
                 ),
               )
@@ -1999,14 +2005,14 @@ const inferCallArgs: <A>(
                         (st2) => inferCallArgs(ctx, toT, rest, st2, callSpan),
                         checkFits(ctx, argT, fromT, st1, exprSpan(arg)),
                       )
-                    : (([resultT, st2]) =>
+                    : (([resultT, st2]: [Ty, St]) =>
                         _Result_flatMap(
                           (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
                           u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
                         ))(freshVar(st1)),
                 )
                 .otherwise(() =>
-                  (([resultT, st2]) =>
+                  (([resultT, st2]: [Ty, St]) =>
                     _Result_flatMap(
                       (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
                       u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
@@ -2061,10 +2067,11 @@ const inferTupleLet: <A>(
   },
   param: LamParam,
   body: Expr,
+  lamSpan: SpanAt,
   value: Expr,
   st: St,
 ) => Result<[Ty, St], IErr> = _curry(
-  5,
+  6,
   <A>(
     ctx: {
       env: Map<string, Scheme>;
@@ -2102,14 +2109,23 @@ const inferTupleLet: <A>(
     },
     param: LamParam,
     body: Expr,
+    lamSpan: SpanAt,
     value: Expr,
     st: St,
   ) =>
     _Result_flatMap(
       ([valueT, st1]) =>
-        (([paramT, bodyEnv, st2]) =>
+        (([paramT, bodyEnv, st2]: [Ty, Map<string, Scheme>, St]) =>
           _Result_flatMap(
-            (st3) => inferExpr(ctxWithEnv(ctx, bodyEnv), body, st3),
+            (st3) =>
+              _Result_flatMap(
+                ([bodyT, st4]) =>
+                  Ok(_tuple(bodyT, recordAt(lamSpan, tArrow(paramT, bodyT), st4))) as Result<
+                    [Ty, St],
+                    IErr
+                  >,
+                inferExpr(ctxWithEnv(ctx, bodyEnv), body, st3),
+              ),
             u(ctx, paramT, valueT, st2, exprSpan(value)),
           ))(bindParam(param, ctx.env, st1)),
       inferExpr(ctx, value, st),
@@ -2210,14 +2226,14 @@ const inferApplied: <A>(
                         (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
                         checkFits(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
                       )
-                    : (([resultT, st2]) =>
+                    : (([resultT, st2]: [Ty, St]) =>
                         _Result_flatMap(
                           (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
                           u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                         ))(freshVar(st1)),
                 )
                 .otherwise(() =>
-                  (([resultT, st2]) =>
+                  (([resultT, st2]: [Ty, St]) =>
                     _Result_flatMap(
                       (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
                       u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
@@ -2317,11 +2333,12 @@ const inferNormalCall: <A>(
           {
             params: [param],
             body,
+            span: lamSpan,
           },
           [value],
         ]) =>
           isTupleParam(param)
-            ? inferTupleLet(ctx, param, body, value, st)
+            ? inferTupleLet(ctx, param, body, lamSpan, value, st)
             : inferApplied(ctx, fn, args, st),
       )
       .otherwise(() => inferApplied(ctx, fn, args, st)),
@@ -2513,12 +2530,12 @@ const inferBindBody: <A>(
     mkBody: (a: Ty) => Ty,
     st: St,
   ) =>
-    (([paramT, bodyEnv, st1]) =>
+    (([paramT, bodyEnv, st1]: [Ty, Map<string, Scheme>, St]) =>
       _Result_flatMap(
         (st2) =>
           _Result_flatMap(
             ([bodyT, st3]) =>
-              (([resT, st4]) => {
+              (([resT, st4]: [Ty, St]) => {
                 const wantBody: Ty = mkBody(resT);
                 return _Result_flatMap(
                   (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
@@ -2617,8 +2634,8 @@ const inferTwoSlotBind: <A>(
     ctor: string,
     st: St,
   ) =>
-    (([payloadT, st1]) =>
-      (([errT, st2]) =>
+    (([payloadT, st1]: [Ty, St]) =>
+      (([errT, st2]: [Ty, St]) =>
         _Result_flatMap(
           (st3) =>
             inferBindBody(
@@ -2729,7 +2746,7 @@ const inferQuestionBind: <A>(
       .with({ _tag: "TyCon" }, ({ name }) =>
         eq(name, "Option")
           ? (($written) =>
-              (([payloadT, st1]) =>
+              (([payloadT, st1]: [Ty, St]) =>
                 _Result_flatMap(
                   (st2) =>
                     inferBindBody(
@@ -3185,8 +3202,8 @@ const inferDuckField: <A>(
     sp: SpanAt,
     st: St,
   ) =>
-    (([fieldT, st2]) =>
-      (([restRow, st3]) =>
+    (([fieldT, st2]: [Ty, St]) =>
+      (([restRow, st3]: [Row, St]) =>
         _Result_flatMap(
           (st4) => Ok(_tuple(fieldT, st4)) as Result<[Ty, St], IErr>,
           u(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
@@ -3275,7 +3292,7 @@ const inferNsField: <A>(
   ) =>
     match(_Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)))
       .with({ _tag: "Some" }, ({ value: sc }) =>
-        (([t, st1]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+        (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
       )
       .with(
         { _tag: "None" },
@@ -3698,7 +3715,7 @@ const inferSeqSlots: <A>(
     elements: SeqElem[],
     st: St,
   ) =>
-    (([elem, st1]) =>
+    (([elem, st1]: [Ty, St]) =>
       _Result_flatMap(
         (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
         inferSeqSlotsElems(ctx, con, elem, elements, st1),
@@ -3897,8 +3914,8 @@ const inferMapExpr: <A>(
     entries: MapEntry[],
     st: St,
   ) =>
-    (([k, st1]) =>
-      (([v, st2]) =>
+    (([k, st1]: [Ty, St]) =>
+      (([v, st2]: [Ty, St]) =>
         _Result_flatMap(
           (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
           inferMapEntries(ctx, k, v, entries, st2),
@@ -4168,7 +4185,7 @@ const inferMatch: <A>(
   ) =>
     _Result_flatMap(
       ([scrutT, st1]) =>
-        (([resultT, st2]) =>
+        (([resultT, st2]: [Ty, St]) =>
           _Result_flatMap(
             (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
             inferArms(ctx, scrutT, resultT, arms, st2),
@@ -4348,7 +4365,7 @@ const inferExprRaw: <A>(
       .with({ _tag: "ERef" }, ({ name, span: sp }) =>
         match(_Map_get(name, ctx.env))
           .with({ _tag: "Some" }, ({ value: sc }) =>
-            (([t, st1]) =>
+            (([t, st1]: [Ty, St]) =>
               Ok(
                 _tuple(
                   t,
@@ -4369,7 +4386,9 @@ const inferExprRaw: <A>(
                       "it is bound elsewhere in this file, but not around this use — check the binder's extent",
                     ),
                   ) as Result<[Ty, St], IErr>)
-                : (([t, st1]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
+                : (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
+                    freshVar(st),
+                  )
               : match(closestName(name, _Map_keys(ctx.env)))
                   .with(
                     { _tag: "Some" },
@@ -4399,8 +4418,8 @@ const inferExprRaw: <A>(
           .exhaustive(),
       )
       .with({ _tag: "ELambda" }, ({ params, body }) =>
-        (([posParams, labParams]) =>
-          (([paramTypes, bodyEnv, st1]) =>
+        (([posParams, labParams]: [LamParam[], LamParam[]]) =>
+          (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
             _Result_flatMap(
               ([annotVars, st2]) =>
                 _Result_flatMap(
@@ -4463,7 +4482,7 @@ const inferExprRaw: <A>(
                     ),
                   match(annot)
                     .with({ _tag: "Some" }, ({ value: te }) =>
-                      (([at, _, stA]) =>
+                      (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
                         _Result_map(
                           (stB: St) => _tuple(at, stB),
                           checkFits(ctx, valT, at, stA, annotSpan(te)),
@@ -4532,7 +4551,7 @@ const inferExprRaw: <A>(
               ([row, st1]) =>
                 _Result_flatMap(
                   ([baseT, st2]) =>
-                    (([tailVar, st3]) =>
+                    (([tailVar, st3]: [Row, St]) =>
                       _Result_flatMap(
                         (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], IErr>,
                         u(ctx, baseT, tRecord(rWithTail(row, tailVar)), st3, sp),
@@ -4873,7 +4892,7 @@ const inferPatRecord: <A>(
     fields: PatField[],
     st: St,
   ) =>
-    (([rowBase, st1]) =>
+    (([rowBase, st1]: [Row, St]) =>
       _Result_flatMap(
         ([row, bindings, st2]) =>
           Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
@@ -5404,7 +5423,7 @@ const inferSeqPat: <A>(
     restPat: Option<Pattern>,
     st: St,
   ) =>
-    (([elem, st1]) => {
+    (([elem, st1]: [Ty, St]) => {
       const seqT: Ty = tCon(con, [elem]);
       return _Result_flatMap(
         ([bindings, st2]) =>
@@ -5611,7 +5630,7 @@ const inferPatRaw: <A>(
         ),
       )
       .with({ _tag: "PWild" }, () =>
-        (([t, st1]) =>
+        (([t, st1]: [Ty, St]) =>
           Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
           freshVar(st),
         ),
@@ -5640,7 +5659,7 @@ const inferPatRaw: <A>(
           >,
       )
       .with({ _tag: "PBind" }, ({ name }) =>
-        (([t, st1]) =>
+        (([t, st1]: [Ty, St]) =>
           Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
             [Ty, Map<string, Ty>, St],
             IErr
@@ -5660,7 +5679,7 @@ const inferPatRaw: <A>(
                   >,
               )
               .with({ _tag: "Some" }, ({ value: sc }) =>
-                (([curT, st1]) =>
+                (([curT, st1]: [Ty, St]) =>
                   inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                   instantiate(sc, st),
                 ),
@@ -5678,7 +5697,7 @@ const inferPatRaw: <A>(
                   >,
               )
               .with({ _tag: "Some" }, ({ value: sc }) =>
-                (([curT, st1]) =>
+                (([curT, st1]: [Ty, St]) =>
                   inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                   instantiate(sc, st),
                 ),
@@ -6687,7 +6706,7 @@ const registerCtorsFrom: <A, B>(
       .with(
         (_v) => _v.length >= 1,
         ([c, ...rest]) =>
-          (([sc, st1]) =>
+          (([sc, st1]: [Scheme, St]) =>
             registerCtorsFrom(rest, typeName, params, aliasMap, _Map_set(c.name, sc, env), st1))(
             ctorScheme(typeName, params, c, st, aliasMap),
           ),
@@ -6718,7 +6737,8 @@ const registerUserCtorsFrom: _Curry<
         ([s, ...rest]) =>
           match(s)
             .with({ _tag: "SType" }, ({ name, params, ctors }) =>
-              (([env1, st1]) => registerUserCtorsFrom(rest, aliasMap, env1, st1))(
+              (([env1, st1]: [Map<string, Scheme>, St]) =>
+                registerUserCtorsFrom(rest, aliasMap, env1, st1))(
                 registerCtorsFrom(ctors, name, params, aliasMap, env, st),
               ),
             )
@@ -6755,7 +6775,7 @@ const registerBuiltinCtorGroup: <A, B>(
         ([c, ...rest]) =>
           _Map_has(c.name, env)
             ? registerBuiltinCtorGroup(rest, typeName, params, aliasMap, env, st)
-            : (([sc, st1]) =>
+            : (([sc, st1]: [Scheme, St]) =>
                 registerBuiltinCtorGroup(
                   rest,
                   typeName,
@@ -6798,7 +6818,8 @@ const registerBuiltinCtorsFrom: <A, B, C>(
       .with(
         (_v) => _v.length >= 1,
         ([d, ...rest]) =>
-          (([env1, st1]) => registerBuiltinCtorsFrom(rest, aliasMap, env1, st1))(
+          (([env1, st1]: [Map<A, Scheme>, St]) =>
+            registerBuiltinCtorsFrom(rest, aliasMap, env1, st1))(
             registerBuiltinCtorGroup(d.ctors, d.name, d.params, aliasMap, env, st),
           ),
       )
@@ -6828,8 +6849,8 @@ const registerExternsFrom: _Curry<
         ([s, ...rest]) =>
           match(s)
             .with({ _tag: "SExtern" }, ({ name, params, typeExpr }) =>
-              (([vars, st0]) =>
-                (([t, _, st1]) =>
+              (([vars, st0]: [Map<string, Ty>, St]) =>
+                (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
                   registerExternsFrom(
                     rest,
                     aliasMap,
@@ -6840,7 +6861,7 @@ const registerExternsFrom: _Curry<
                 ))(
                 reduce(
                   _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
-                    (([v, s1]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
+                    (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
                   ),
                   _tuple(new Map<string, Ty>(), st),
                   params,
@@ -7008,7 +7029,9 @@ const preBindGroupFrom: _Curry<
       ([s, ...rest]) =>
         match(s)
           .with({ _tag: "SLet" }, ({ name }) =>
-            (([v, st1]) => preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)),
+            (([v, st1]: [Ty, St]) => preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(
+              freshVar(st),
+            ),
           )
           .otherwise(() => preBindGroupFrom(rest, env, st)),
     )
@@ -7127,7 +7150,7 @@ const inferGroupFrom: <A>(
                               ),
                             match(annot)
                               .with({ _tag: "Some" }, ({ value: te }) =>
-                                (([at, _, stA]) =>
+                                (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
                                   _Result_map(
                                     (stB: St) => _tuple(at, stB),
                                     checkFits(ctx, t, at, stA, annotSpan(te)),
@@ -7406,12 +7429,12 @@ const processGroupsFrom: <A>(
         },
         ([comp, ...restSccs]) =>
           ((group: Stmt[]) =>
-            (([preEnv, st1]) => {
+            (([preEnv, st1]: [Map<string, Scheme>, St]) => {
               const preCtx = ctxWithEnv(ctx, preEnv);
               return _Result_flatMap(
                 ([bodyTypes, st2]) =>
                   ((finalEnv: Map<string, Scheme>) =>
-                    (([finalOwner, st3]) =>
+                    (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
                       processGroupsFrom(
                         ctxWithLets(ctx, finalEnv, finalOwner),
                         restSccs,
@@ -7965,9 +7988,9 @@ const runInferImports: <A, B, C>(
       stmts,
       qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>()),
     );
-    return (([env1, st1]) =>
-      (([env2, st2]) =>
-        (([env3, st3]) => {
+    return (([env1, st1]: [Map<string, Scheme>, St]) =>
+      (([env2, st2]: [Map<string, Scheme>, St]) =>
+        (([env3, st3]: [Map<string, Scheme>, St]) => {
           const env4: Map<string, Scheme> = seedImportsFrom(_Map_keys(imports), imports, env3);
           const lets: Stmt[] = letsOfFrom(stmts);
           const idxOf: Map<string, number> = idxOfMap(lets);
