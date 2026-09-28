@@ -1,3 +1,4 @@
 import { doubled } from "./user.mochi";
 
-console.log(doubled);
+// Not `console.log`: under FORCE_COLOR it colours numbers, and the specs compare stdout.
+process.stdout.write(`${doubled}\n`);

@@ -100,11 +100,18 @@ export const meter = (
   return `${color}${body}${reset}${gray}${"░".repeat(Math.max(0, width - Bun.stringWidth(body)))}${reset}`;
 };
 
-export const fit = (text: string, cols: number = columns()): string => {
+/** Clip `text` to one row under `cols` columns, ending in `…` when cut. */
+export const clip = (text: string, cols: number): string => {
   const max = cols - 1;
   return Bun.stringWidth(text) <= max
     ? text
     : `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
 };
+
+/**
+ * `clip` to the terminal width. Unary on purpose: an optional width here read
+ * `.map(fit)`'s index as the width, cutting row i of the status block to i - 1.
+ */
+export const fit = (text: string): string => clip(text, columns());
 
 export const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
