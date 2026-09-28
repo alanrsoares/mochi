@@ -1,7 +1,7 @@
 import type { Stmt } from "../../../../bootstrap/seed/host-types";
+import * as seedModule from "../../../../bootstrap/seed/syntax.bundle.mjs";
 import type { BootstrapDiagnostic, BootstrapResult } from "./index.ts";
 import { type BootstrapPlugin, toSeedPlugins } from "./options.ts";
-import { loadSeed } from "./seed-path.ts";
 
 type SeedSyntax = {
   lex: (src: string) => unknown;
@@ -12,7 +12,8 @@ type SeedSyntax = {
   formatHooksFor: (pluginsOpt: unknown) => unknown;
 };
 
-const seed = loadSeed<SeedSyntax>("syntax.bundle.cjs");
+// A static ESM import, not `loadSeed`: `@mochi/dx/format` runs in the browser.
+const seed = seedModule as unknown as SeedSyntax;
 
 export const lex = seed.lex;
 export const parse = seed.parse;

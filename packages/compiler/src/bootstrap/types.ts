@@ -5,7 +5,7 @@
  * the same freeze copies (`SeedTypeCtors`), so nothing here is hand-typed. Host
  * plugins build and inspect bootstrap values through this module only.
  */
-import { loadSeed } from "./seed-path.ts";
+import * as seedModule from "../../../../bootstrap/seed/syntax.bundle.mjs";
 
 export type {
   Expr,
@@ -28,7 +28,7 @@ export type {
 import type { SeedTypeCtors, Ty } from "../../../../bootstrap/seed/host-types";
 
 // Typed by the freeze, from the seed's own emitted signatures (ADR 0109).
-const seed = loadSeed<SeedTypeCtors>("syntax.bundle.cjs");
+const seed = seedModule as unknown as SeedTypeCtors;
 
 export const tCon = seed.tCon;
 export const tArrow = seed.tArrow;

@@ -30,6 +30,32 @@ import { hostTypesDts } from "./lib/host-types";
 // CLI writes into *user* TS emit, and it does not resolve in-repo. Nested
 // seed modules (`plugins/jsx.ts`) cannot share one relative path.
 const RUNTIME = "@mochi/compiler/runtime";
+/** What `syntax-entry.ts` re-exports; the ESM twin's `.d.mts` declares these. */
+const SYNTAX_EXPORTS = [
+  "lex",
+  "parse",
+  "parseRecovering",
+  "parseWith",
+  "formatProgram",
+  "formatProgramWith",
+  "formatHooksFor",
+  "freshRowVar",
+  "freshVar",
+  "rExtend",
+  "tArrow",
+  "tCon",
+  "tLit",
+  "tPrim",
+  "tRecord",
+  "tTuple",
+  "tUnion",
+  "UNIT",
+  "zonk",
+  "tBool",
+  "tNumber",
+  "tString",
+  "widenLits",
+] as const;
 
 // `--check` re-emits into a temp directory and diffs against the committed
 // seed instead of overwriting it. Nothing else notices a stale seed: the
@@ -133,15 +159,20 @@ writeFileSync(
   join(tmp, "syntax-entry.ts"),
   'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering, parseWith } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, tRecord, tTuple, tUnion, UNIT, zonk } from "./types.ts";\nexport { tBool, tNumber, tString, widenLits } from "./schemes.ts";\n',
 );
+// ESM, imported statically by the host façades (`bootstrap/syntax.ts`,
+// `bootstrap/types.ts`), so the formatter and the type constructors also run in
+// the browser (the docs playground). A runtime `loadSeed` needs Node.
 execFileSync(
   "bun",
   [
     "build",
     join(tmp, "syntax-entry.ts"),
     "--outfile",
-    join(tmp, "syntax.bundle.cjs"),
+    join(tmp, "syntax.bundle.mjs"),
     "--target",
-    "bun",
+    "browser",
+    "--format",
+    "esm",
     "--external",
     "@mochi/compiler/runtime",
     "--external",
@@ -149,7 +180,11 @@ execFileSync(
   ],
   { cwd: REPO_ROOT, stdio: "inherit" },
 );
-stripBundleSourceLabels(join(tmp, "syntax.bundle.cjs"));
+stripBundleSourceLabels(join(tmp, "syntax.bundle.mjs"));
+writeFileSync(
+  join(tmp, "syntax.bundle.d.mts"),
+  `${SYNTAX_EXPORTS.map((name) => `export declare const ${name}: unknown;`).join("\n")}\n`,
+);
 rmSync(join(tmp, "syntax-entry.ts"), { force: true });
 
 // Types host plugins build against (ADR 0109), copied out of the emit so hosts
