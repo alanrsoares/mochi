@@ -64,7 +64,7 @@ for (const file of files) {
   // single-file `emitDts` reports as unbound.
   const r = emitDtsForFileBootstrapWith(file, "@mochi/runtime", {
     ...defaultBootstrapOptions,
-    plugins: plugins ?? [],
+    plugins,
   });
   if (r._tag === "Err") {
     console.error(`dts error in ${file}: ${r.error.kind ?? "type"}: ${r.error.message}`);
