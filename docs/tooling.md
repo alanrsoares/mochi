@@ -20,7 +20,7 @@ bun run mochi --open <file.mochi>   # allow intentional host globals
 bun run mochi ts [--open] <file.mochi> # emit typed, strict-clean TypeScript
 bun run mochi fmt  <file.mochi>     # pretty-print (add --write to edit in place)
 bun run mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>
-                                    #   AST codemod: lex/parse → user transform → format
+                                    #   AST codemod: bootstrap parse → user transform → bootstrap format
 bun run mochi dts [--open] <file.mochi> # emit a .d.ts
 bun run mochi dts --write <file|dir>  # write X.d.mochi.ts beside each module (host TS types)
 bun run mochi build [--open] <entry.mochi> # compile a module graph, writing a .js beside each source
@@ -30,6 +30,11 @@ bun run mochi build [--open] <entry.mochi> # compile a module graph, writing a .
 `extern` bindings name a host module by path (`extern log : … = "./host.mjs" "log"`);
 codegen emits that specifier verbatim, so host runtimes are plain `.mjs` files Bun
 resolves at runtime, and the TS backend emits a matching `.d.mts` for them.
+
+A codemod transform module exports `(prog, ctx) => prog`, where `prog` is the bootstrap
+parser's `readonly Stmt[]` ([ADR 0109](adr/0109-bootstrap-ast-is-the-public-ast.md)).
+`mapProgramExprs` from `@mochi/codemod` maps every expression. Output goes through the
+bootstrap formatter, so comments, JSX, and unparsable regions come back as written.
 
 ## Mochi in a Bun TypeScript codebase
 

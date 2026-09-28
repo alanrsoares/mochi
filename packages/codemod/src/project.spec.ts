@@ -13,7 +13,7 @@ test("transformProject --check reports drift without writing", () => {
       [path],
       (prog) =>
         mapProgramExprs(prog, (e) =>
-          e.kind === "ref" && e.name === "x" ? { ...e, name: "n" } : e,
+          e._tag === "ERef" && e.name === "x" ? { ...e, name: "n" } : e,
         ),
       { check: true },
     );
