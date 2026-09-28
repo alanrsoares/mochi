@@ -103,9 +103,17 @@ export const meter = (
 /** Clip `text` to one row under `cols` columns, ending in `…` when cut. */
 export const clip = (text: string, cols: number): string => {
   const max = cols - 1;
-  return Bun.stringWidth(text) <= max
-    ? text
-    : `${Bun.stripANSI(text).slice(0, Math.max(0, max - 1))}…`;
+  if (Bun.stringWidth(text) <= max) return text;
+  // By display width, not code units: a wide glyph takes two columns.
+  let kept = "";
+  let width = 0;
+  for (const ch of Bun.stripANSI(text)) {
+    const w = Bun.stringWidth(ch);
+    if (width + w > max - 1) break;
+    kept += ch;
+    width += w;
+  }
+  return `${kept}…`;
 };
 
 /**
