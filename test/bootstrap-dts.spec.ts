@@ -45,6 +45,8 @@ const cases: Record<string, string> = {
   "a builtin ctor call in a binding": "let opt = x => Some(x)",
   "a curried definition keeps its shape": "let add = a => b => a + b",
   "a record-destructuring param": "let dx = ({ x, y }) => x + y",
+  "a unit-returning callback field renders void":
+    "type Props = { onClick: () -> (), onKey: string -> () }",
 };
 
 for (const [name, src] of Object.entries(cases)) {
