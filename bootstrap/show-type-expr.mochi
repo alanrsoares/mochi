@@ -17,11 +17,6 @@ let escChar = c => switch c {
 
 let strLit = s => "\"${Str.join("", Str.chars(s) |> map(escChar))}\""
 
-// `>>` is mochi's composition token, so adjacent closing generic delimiters must
-// be separated in source: `Map<string, Map<string, a> >`.
-let typeArg = te =>
-  let shown = showTypeExpr(te) in Str.endsWith(">", shown) ? "${shown} " : shown
-
 let joinWith = (f, sep, tes) => Str.join(sep, tes |> map(f))
 
 /// The left side of an arrow is parenthesised when it is itself an arrow
@@ -30,13 +25,13 @@ export let showTypeExpr = te => switch te {
   | Ast.TyName(name, _) =>
     // `()` in TypeExpr lowers to the reserved name `unit` (ADR 0014 / 0015).
     name == "unit" ? "()" : name
-  | Ast.TyApp(ctor, args, _) => "${ctor}<${joinWith(typeArg, ", ", args)}>"
+  | Ast.TyApp(ctor, args, _) => "${ctor}<${joinWith(showTypeExpr, ", ", args)}>"
   | Ast.TyTuple(elems, _) => "(${joinWith(showTypeExpr, ", ", elems)})"
   | Ast.TyList(elem, _) => "[${showTypeExpr(elem)}]"
   | Ast.TyQual(alias, name, _, args, _) => let head = "${alias}.${name}" in
       Array.length(args) == 0
         ? head
-        : "${head}<${joinWith(typeArg, ", ", args)}>"
+        : "${head}<${joinWith(showTypeExpr, ", ", args)}>"
   | Ast.TyLit(value, _) => strLit(value)
   | Ast.TyUnion(members, _) => joinWith(parenArrow, " | ", members)
   | Ast.TyArrow(from, to, _) => "${parenArrow(from)} -> ${showTypeExpr(to)}"

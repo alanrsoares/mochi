@@ -39,15 +39,11 @@ test("an arrow on the left of an arrow keeps its parens", () =>
 test("an arrow member of a union keeps its parens", () =>
   assertEq(shown("\"a\" | (number -> string)"), "\"a\" | (number -> string)"))
 
-// `>>` is the composition token, so adjacent closing generics must stay apart.
-test("adjacent closing generics are separated", () =>
-  assertEq(
-    shown("Map<string, Map<string, a> >"),
-    "Map<string, Map<string, a> >"
-  ))
-
-// The separator is added after ANY argument ending in `>`, not only one that a
-// `>` actually follows, so this does not round-trip. Matches src/infer/
-// show-type-expr.ts exactly; widening the condition is a change to both.
-test("a nested generic argument is padded even mid-list", () =>
-  assertEq(shown("Result<Option<a>, string>"), "Result<Option<a> , string>"))
+// `>>` lexes as two `>`, so nested generics close without a space, and the
+// old `> >` spelling still parses (ADR 0116).
+testEach("nested generics round-trip without padding", [
+  ("Map<string, Map<string, a>>", "Map<string, Map<string, a>>"),
+  ("Map<string, Map<string, a> >", "Map<string, Map<string, a>>"),
+  ("Result<Option<a>, string>", "Result<Option<a>, string>"),
+  ("Option<Option<Option<a>>>", "Option<Option<Option<a>>>")
+], ((src, out)) => assertEq(shown(src), out))

@@ -72,7 +72,6 @@ const TAG_TO_T: Record<string, string> = {
   TLbracket: "lbracket",
   TRbracket: "rbracket",
   TSpread: "spread",
-  TCompose: "compose",
   TPlus: "plus",
   TMinus: "minus",
   TStar: "star",

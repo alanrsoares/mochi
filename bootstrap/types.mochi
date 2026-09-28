@@ -237,8 +237,8 @@ export type TypeAt = { span: SpanAt, ty: Ty }
 /// reaches `ID_CHUNK` entries (`recordedTypes` flattens it).
 export type Recorded = { cur: [TypeAt], full: [[TypeAt]] }
 export type St = {
-  tv: Map<number, Map<number, Ty> >,
-  rv: Map<number, Map<number, Row> >,
+  tv: Map<number, Map<number, Ty>>,
+  rv: Map<number, Map<number, Row>>,
   next: number,
   recorded: Recorded,
   letSpans: Map<string, SpanAt>,

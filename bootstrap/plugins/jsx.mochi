@@ -430,7 +430,7 @@ let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs)
 // arrangement `prelude.gen.mjs` uses for the prelude tables (ADR 0075). The
 // plugin only looks attributes up, never matches over the schema's shape, so a
 // flat `Map` per element is enough and the graph stays free of 600 lines of table.
-extern jsxIntrinsicElements : Map<string, Map<string, string> > = "./jsx-schema.gen.mjs" "intrinsicElements"
+extern jsxIntrinsicElements : Map<string, Map<string, string>> = "./jsx-schema.gen.mjs" "intrinsicElements"
 
 /// A kind string from the generated schema as an HM type. `event` and `any` are
 /// SHAPE checks rather than unifications, so they carry no expected type here.

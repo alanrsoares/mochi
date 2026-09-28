@@ -238,7 +238,8 @@ export const collectRuntimeDeps = (prog: Program): string[] => {
   const queue = [...refs];
   for (let i = 0; i < queue.length; i++) {
     const r = queue[i]!;
-    for (const d of runtimeDeps[r] ?? [])
+    // `hasOwn`: a user name like `valueOf` must not find `Object.prototype`.
+    for (const d of Object.hasOwn(runtimeDeps, r) ? runtimeDeps[r]! : [])
       if (!refs.has(d)) {
         refs.add(d);
         queue.push(d);

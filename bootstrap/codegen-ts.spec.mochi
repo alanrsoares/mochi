@@ -359,8 +359,8 @@ test("a zero-param lambda consumes the erased unit arrow", () =>
 // ---- end-to-end module emission --------------------------------------------
 
 extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
-extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
-extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern namespaces : Map<string, Map<string, a>> = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
