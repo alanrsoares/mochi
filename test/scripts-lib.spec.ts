@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -109,4 +109,17 @@ test("terminal helpers format durations, meters, and text clipping", () => {
   const styles = createTerminalStyles(false);
   expect(styles.RESET).toBe("");
   expect(styles.PHASE_ICON.passed).toBe("✔");
+});
+
+test("gen-mochi-dts keeps builtin JSX in a tree with no vendor plugins", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-gen-dts-"));
+  try {
+    writeFileSync(join(dir, "view.mochi"), "export let v = <div />\n");
+    const run = Bun.spawnSync(["bun", repoPath("scripts/gen-mochi-dts.ts"), dir]);
+    expect(run.stderr.toString()).not.toContain("dts error");
+    expect(run.exitCode).toBe(0);
+    expect(readFileSync(join(dir, "view.d.mochi.ts"), "utf8")).toContain("export declare const v:");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

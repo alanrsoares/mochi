@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { format } from "@mochi/dx/format";
 import { isErr, unwrapOk } from "@onrails/result";
-import { vendorPluginsFor } from "./lib";
+import { vendorDxPluginsFor } from "./lib";
 
 const check = process.argv.includes("--check");
 
@@ -15,7 +15,7 @@ const files = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: "." })]
 const drift: string[] = [];
 for (const f of files) {
   const src = readFileSync(f, "utf8");
-  const plugins = vendorPluginsFor(f);
+  const plugins = vendorDxPluginsFor(f);
   const r = format(src, { plugins: plugins ? [...plugins] : undefined });
   if (isErr(r)) {
     console.error(`format error in ${f}: ${r.error.map((e) => e.message).join("; ")}`);

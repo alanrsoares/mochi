@@ -88,7 +88,7 @@ test("bootstrap graph typed-query cache keys every dependency source", async () 
   const again = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
   expect(again).toBe(first);
   expect(cache.entries).toHaveLength(1);
-  expect(cache.prefixes).toHaveLength(2);
+  expect(cache.modules).toHaveLength(2);
 
   const peer = await inferEntryGraphTypesBootstrap(
     "/virtual/peer.mochi",
@@ -97,8 +97,8 @@ test("bootstrap graph typed-query cache keys every dependency source", async () 
     cache,
   );
   expect(peer).toMatchObject({ _tag: "Ok" });
-  // The dependency state is the shared prefix; only the peer entry adds one.
-  expect(cache.prefixes).toHaveLength(3);
+  // The dependency's slice is shared; only the peer entry adds one.
+  expect(cache.modules).toHaveLength(3);
 
   dep = 'export let value = "changed"';
   const changed = await inferEntryGraphTypesBootstrap(entry, src, read, cache);
@@ -106,7 +106,7 @@ test("bootstrap graph typed-query cache keys every dependency source", async () 
   expect(cache.entries).toHaveLength(3);
 });
 
-test("bootstrap recovery cache reuses healthy dependency prefixes", async () => {
+test("bootstrap recovery cache reuses healthy dependency slices", async () => {
   const cache = createBootstrapRecoveryGraphCache();
   const read = async (path: string): Promise<string> => {
     if (path === "/virtual/dep.mochi") return "export let value = 42";
@@ -125,7 +125,7 @@ test("bootstrap recovery cache reuses healthy dependency prefixes", async () => 
     cache,
   );
   expect(again).toBe(first);
-  expect(cache.prefixes).toHaveLength(2);
+  expect(cache.modules).toHaveLength(2);
 
   const peer = await checkGraphBootstrapRecovering(
     "/virtual/peer.mochi",
@@ -134,7 +134,36 @@ test("bootstrap recovery cache reuses healthy dependency prefixes", async () => 
     cache,
   );
   expect(peer).toEqual([]);
-  expect(cache.prefixes).toHaveLength(3);
+  expect(cache.modules).toHaveLength(3);
+});
+
+test("bootstrap caches share modules whatever order an entry imports them in", async () => {
+  const cache = createBootstrapRecoveryGraphCache();
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/a.mochi") return "export let a = 1";
+    if (path === "/virtual/b.mochi") return "export let b = 2";
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const ab = 'import { a } from "./a"\nimport { b } from "./b"\nlet ab = a + b';
+  const ba = 'import { b } from "./b"\nimport { a } from "./a"\nlet ba = b + a';
+  expect(await checkGraphBootstrapRecovering("/virtual/ab.mochi", ab, read, cache)).toEqual([]);
+  expect(await checkGraphBootstrapRecovering("/virtual/ba.mochi", ba, read, cache)).toEqual([]);
+  // `a` and `b` once each, plus the two entries: no ordered prefix is shared.
+  expect(cache.modules).toHaveLength(4);
+  expect(cache.types.modules).toHaveLength(4);
+});
+
+test("bootstrap recovery judges only the entry strictly", async () => {
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/host.mochi") return '"use open"\nexport let v = hostGlobal';
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const src = 'import { v } from "./host"\nlet w = v';
+  expect(await checkGraphBootstrapRecovering("/virtual/main.mochi", src, read)).toEqual([]);
+  const typo = 'import { v } from "./host"\nlet w = vv';
+  expect(await checkGraphBootstrapRecovering("/virtual/main.mochi", typo, read)).toMatchObject([
+    { message: "unbound variable 'vv'" },
+  ]);
 });
 
 test("bootstrap runtime checks an editor buffer through its graph", async () => {

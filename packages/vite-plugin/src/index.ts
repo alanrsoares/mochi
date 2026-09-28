@@ -6,10 +6,10 @@
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
 import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
+import type { BootstrapOptions, BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { compileBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
-import { compile } from "@mochi/compiler/compile";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import {
   capability,
   createComponentHost,
@@ -22,12 +22,12 @@ import type { Plugin, ViteDevServer } from "vite";
 
 /** The capability through which a live host supplies compiler plugins. */
 export const languagePluginsCapability =
-  capability<readonly LanguagePlugin[]>("mochi.language-plugins");
+  capability<readonly BootstrapPlugin[]>("mochi.language-plugins");
 
 /** Create the resource-owning runtime component for a static plugin list. */
 export const languagePluginsComponent = (
   name: string,
-  plugins: readonly LanguagePlugin[],
+  plugins: readonly BootstrapPlugin[],
 ): RuntimeComponent => ({
   name,
   provides: [languagePluginsCapability],
@@ -59,10 +59,10 @@ export type MochiPluginOptions = {
    */
   runtime?: boolean;
   /**
-   * Plugins to run (styled-cva, …). `undefined` → builtins; `[]` → hard
-   * opt-out; non-empty → builtins + this list (`resolvePlugins`, ADR 0011).
+   * Self-hosted-core plugins to run (styled-cva, …; ADR 0109). `undefined` →
+   * builtins; `[]` → hard opt-out; non-empty → builtins + this list (ADR 0011).
    */
-  plugins?: LanguagePlugin[];
+  plugins?: readonly BootstrapPlugin[];
   /** Permit host globals across transformed files; prefer per-file `"use open"`. */
   open?: boolean;
   /**
@@ -72,6 +72,11 @@ export type MochiPluginOptions = {
    */
   runtimePlugins?: RuntimePluginSource;
 };
+
+const compileFailure = (id: string, errors: readonly BootstrapDiagnostic[]): SyntaxError =>
+  new SyntaxError(
+    `Mochi compilation failed for ${id}:\n${errors.map((error) => `[${error.kind ?? "type"}] ${error.message}`).join("\n")}`,
+  );
 
 export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
   const jsxHeader =
@@ -137,43 +142,24 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
 
       // Keep sibling imports as `.mochi` so Vite re-enters this plugin
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
+      const opts: BootstrapOptions = {
+        open: options.open ?? false,
+        runtime,
+        docs: true,
+        moduleExt: ".mochi",
+        strictEntry: false,
+        plugins,
+      };
       let transformedCode: string;
-      if (plugins === undefined) {
-        if (/^\s*import\b/m.test(code) && existsSync(id)) {
-          const graph = buildModulesBootstrapWith(id, {
-            open: options.open ?? false,
-            runtime,
-            docs: true,
-            moduleExt: ".mochi",
-            strictEntry: false,
-          });
-          if (graph._tag === "Err")
-            throw new SyntaxError(
-              `Mochi compilation failed for ${id}:\n${graph.error.map((error) => `[type] ${error.message}`).join("\n")}`,
-            );
-          const output = graph.value.find((module) => resolve(module.path) === resolve(id));
-          if (!output) throw new SyntaxError(`Mochi compilation omitted ${id}`);
-          transformedCode = output.js;
-        } else {
-          const res = compileBootstrapSyncWith(code, {
-            open: options.open ?? false,
-            runtime,
-            docs: true,
-            moduleExt: ".mochi",
-            strictEntry: false,
-          });
-          if (res._tag === "Err")
-            throw new SyntaxError(
-              `Mochi compilation failed for ${id}:\n${res.error.map((error) => `[type] ${error.message}`).join("\n")}`,
-            );
-          transformedCode = res.value;
-        }
+      if (/^\s*import\b/m.test(code) && existsSync(id)) {
+        const graph = buildModulesBootstrapWith(id, opts);
+        if (graph._tag === "Err") throw compileFailure(id, graph.error);
+        const output = graph.value.find((module) => resolve(module.path) === resolve(id));
+        if (!output) throw new SyntaxError(`Mochi compilation omitted ${id}`);
+        transformedCode = output.js;
       } else {
-        const res = compile(code, { runtime, moduleExt: ".mochi", plugins, open: options.open });
-        if (isErr(res)) {
-          const errorMessages = res.error.map((d) => `[${d.kind}] ${d.message}`).join("\n");
-          throw new SyntaxError(`Mochi compilation failed for ${id}:\n${errorMessages}`);
-        }
+        const res = compileBootstrapSyncWith(code, opts);
+        if (res._tag === "Err") throw compileFailure(id, res.error);
         transformedCode = res.value;
       }
 

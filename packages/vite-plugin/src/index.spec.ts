@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
-import { tCon } from "@mochi/compiler/types";
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
+import { tString } from "@mochi/compiler/bootstrap/types";
 import { repoRoot } from "@mochi/test-support";
 import { languagePluginsComponent, mochiPlugin } from "@mochi/vite-plugin";
-import { ok, ResultAsync } from "@onrails/result";
+import { ResultAsync } from "@onrails/result";
 import type { HmrContext, Plugin, ViteDevServer } from "vite";
 
 /**
@@ -26,12 +26,12 @@ type TestPlugin = Omit<
 const testPlugin = (...args: Parameters<typeof mochiPlugin>): TestPlugin =>
   mochiPlugin(...args) as TestPlugin;
 
-const runtimeLanguagePlugin: LanguagePlugin = {
+const runtimeLanguagePlugin: BootstrapPlugin = {
   name: "runtime-test",
-  inferCall: {
-    refs: ["dynamic"],
-    hook: () => ok(tCon("string")),
-  },
+  inferCall: (fn, _args, _origin, st) =>
+    fn._tag === "ERef" && fn.name === "dynamic"
+      ? { _tag: "Ok", value: { _tag: "Some", value: [tString, st] } }
+      : { _tag: "Ok", value: { _tag: "None" } },
 };
 
 describe("vite-plugin-mochi", () => {

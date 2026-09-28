@@ -33,11 +33,25 @@ type SeedModule = {
     modules: BootstrapGraphModule[],
     opts: SeedOptions,
   ) => BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic>;
+  inferSliceOf: (state: BootstrapGraphInferState, path: string) => BootstrapGraphInferState;
+  mergeInferStates: (
+    a: BootstrapGraphInferState,
+    b: BootstrapGraphInferState,
+  ) => BootstrapGraphInferState;
   freshRecoveryGraphState: () => BootstrapRecoveryGraphState;
-  recoverGraphFromWith: (
+  recoverModuleWith: (
     state: BootstrapRecoveryGraphState,
-    modules: BootstrapGraphModule[],
+    module: BootstrapGraphModule,
+    isEntry: boolean,
     opts: SeedOptions,
+  ) => BootstrapRecoveryGraphState;
+  recoverySliceOf: (
+    state: BootstrapRecoveryGraphState,
+    path: string,
+  ) => BootstrapRecoveryGraphState;
+  mergeRecoveryStates: (
+    a: BootstrapRecoveryGraphState,
+    b: BootstrapRecoveryGraphState,
   ) => BootstrapRecoveryGraphState;
   compileGraphRecoveringWith: (
     modules: BootstrapGraphModule[],
@@ -57,6 +71,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   type BootstrapOptions,
+  type BootstrapPlugin,
   defaultBootstrapOptions,
   editorBootstrapOptions,
   type SeedOptions,
@@ -111,13 +126,15 @@ export const buildModulesTsBootstrap = (
 
 export const compileGraphBootstrap = (
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
-  seed.compileGraphWith(modules, toSeedOptions(editorBootstrapOptions));
+  seed.compileGraphWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
 export const inferGraphTypesBootstrap = (
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic> =>
-  seed.inferGraphTypesWith(modules, toSeedOptions(defaultBootstrapOptions));
+  seed.inferGraphTypesWith(modules, toSeedOptions({ ...defaultBootstrapOptions, plugins }));
 
 export const freshInferGraphStateBootstrap = (): BootstrapGraphInferState =>
   seed.freshInferGraphState();
@@ -125,22 +142,63 @@ export const freshInferGraphStateBootstrap = (): BootstrapGraphInferState =>
 export const inferGraphTypesFromBootstrap = (
   state: BootstrapGraphInferState,
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic> =>
-  seed.inferGraphTypesFromWith(state, modules, toSeedOptions(defaultBootstrapOptions));
+  seed.inferGraphTypesFromWith(
+    state,
+    modules,
+    toSeedOptions({ ...defaultBootstrapOptions, plugins }),
+  );
 
 export const freshRecoveryGraphStateBootstrap = (): BootstrapRecoveryGraphState =>
   seed.freshRecoveryGraphState();
 
-export const recoverGraphFromBootstrap = (
+/**
+ * Recover one module over a state holding its dependencies. `isEntry` says
+ * whether it is the graph entry, which `strictEntry` judges strictly.
+ */
+export const recoverModuleBootstrap = (
   state: BootstrapRecoveryGraphState,
-  modules: BootstrapGraphModule[],
+  module: BootstrapGraphModule,
+  isEntry: boolean,
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapRecoveryGraphState =>
-  seed.recoverGraphFromWith(state, modules, toSeedOptions(editorBootstrapOptions));
+  seed.recoverModuleWith(
+    state,
+    module,
+    isEntry,
+    toSeedOptions({ ...editorBootstrapOptions, plugins }),
+  );
+
+/** The entries `path` published into `state`, with no errors (ADR 0111). */
+export const recoverySliceOfBootstrap = (
+  state: BootstrapRecoveryGraphState,
+  path: string,
+): BootstrapRecoveryGraphState => seed.recoverySliceOf(state, path);
+
+/** `b`'s modules after `a`'s. */
+export const mergeRecoveryStatesBootstrap = (
+  a: BootstrapRecoveryGraphState,
+  b: BootstrapRecoveryGraphState,
+): BootstrapRecoveryGraphState => seed.mergeRecoveryStates(a, b);
+
+/** The entries and typed output `path` added to `state` (ADR 0111). */
+export const inferSliceOfBootstrap = (
+  state: BootstrapGraphInferState,
+  path: string,
+): BootstrapGraphInferState => seed.inferSliceOf(state, path);
+
+/** `b`'s modules after `a`'s. */
+export const mergeInferStatesBootstrap = (
+  a: BootstrapGraphInferState,
+  b: BootstrapGraphInferState,
+): BootstrapGraphInferState => seed.mergeInferStates(a, b);
 
 export const compileGraphBootstrapRecovering = (
   modules: BootstrapGraphModule[],
+  plugins?: readonly BootstrapPlugin[],
 ): BootstrapGraphRecovery =>
-  seed.compileGraphRecoveringWith(modules, toSeedOptions(editorBootstrapOptions));
+  seed.compileGraphRecoveringWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
 export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins =>
   seed.exportedOrigins(stmts);

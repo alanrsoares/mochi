@@ -28,14 +28,18 @@ What it teaches today:
 ## Register it
 
 ```ts
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
+import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { reReducedExtension } from "@mochi/plugin-re-reduced";
+import { reReducedBootstrap } from "@mochi/plugin-re-reduced/bootstrap";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
-import type { HostExtension } from "../../src/extensions";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 
-export const docsVendorPlugins: HostExtension[] = [
-  styledCvaExtension,
-  reReducedExtension,
-];
+export const docsVendorPlugins: BootstrapPlugin[] = [styledCvaBootstrap, reReducedBootstrap];
+export const plugins = docsVendorPlugins;
+export default plugins;
+/** TypeScript-core copy for hover/completion until #103 (ADR 0110). */
+export const dxPlugins: LanguagePlugin[] = [styledCvaExtension, reReducedExtension];
 ```
 
 Authoring stays an opaque seam `extern` (ADR 0009):

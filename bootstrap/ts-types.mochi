@@ -196,9 +196,14 @@ let tsRow = (row, env: TsEnv) => switch aliasNameFor(row, env) {
       }
 }
 
+/// A `unit` result renders `void`, not `undefined`: a declared fn type has to
+/// accept the host's ordinary `() => void` callbacks (ADR 0055). Standalone
+/// `unit` values stay `undefined`, which is what codegen emits.
+let tsReturn = (t, env: TsEnv) => isUnit(t) ? "void" : tsOfRaw(t, env)
+
 let tsArrow = (fromT, toT, env: TsEnv) =>
   isUnit(fromT)
-    ? "() => ${tsOfRaw(toT, env)}"
+    ? "() => ${tsReturn(toT, env)}"
     : tsArrowParams(fromT, toT, env, 0, [])
 
 let tsArrowParams = (fromT, toT, env: TsEnv, i, params) =>
@@ -214,7 +219,7 @@ let tsArrowParams = (fromT, toT, env: TsEnv, i, params) =>
           i + 1,
           params1
         )
-      | _ => "(${Str.join(", ", params1)}) => ${tsOfRaw(toT, env)}"
+      | _ => "(${Str.join(", ", params1)}) => ${tsReturn(toT, env)}"
     }
 
 /// Render an already-zonked HM type into strict TypeScript syntax. Bare

@@ -8,10 +8,12 @@
 // command would take.
 import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import { createBootstrapRecoveryGraphCache } from "@mochi/compiler/bootstrap";
-import { createModuleCache } from "@mochi/compiler/module";
+import {
+  type BootstrapRecoveryGraphCache,
+  createBootstrapRecoveryGraphCache,
+} from "@mochi/compiler/bootstrap";
 import { moduleDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
-import { pluginsForDocument } from "@mochi/lsp/load-plugins";
+import { type ProjectPlugins, pluginsForDocument } from "@mochi/lsp/load-plugins";
 
 const root = resolve(".");
 const globs = process.argv.slice(2).filter((a) => !a.startsWith("-"));
@@ -61,9 +63,18 @@ const report = (file: string, d: PublishDiagnostic): string => {
 };
 
 // Neighbouring entries share almost all of their graph — without this the
-// 34-file `bootstrap/` sweep infers the whole compiler 34 times.
-const cache = createModuleCache();
-const bootstrapCache = createBootstrapRecoveryGraphCache();
+// 34-file `bootstrap/` sweep infers the whole compiler 34 times. A cache is only
+// valid for one plugin list, so each manifest gets its own.
+const builtinCache = createBootstrapRecoveryGraphCache();
+const projectCaches = new Map<ProjectPlugins, BootstrapRecoveryGraphCache>();
+const cacheFor = (project: ProjectPlugins | undefined): BootstrapRecoveryGraphCache => {
+  if (project === undefined) return builtinCache;
+  const hit = projectCaches.get(project);
+  if (hit) return hit;
+  const fresh = createBootstrapRecoveryGraphCache();
+  projectCaches.set(project, fresh);
+  return fresh;
+};
 
 const started = Date.now();
 let failures = 0;
@@ -75,13 +86,13 @@ for (const file of files) {
   // A tree's `mochi.plugins.ts` decides what its vendor calls mean: sweeping
   // without it reports the host kit's own call sites as type errors. Same
   // upward walk (and cache) the language server does.
-  const plugins = await pluginsForDocument(path, {
+  const project = await pluginsForDocument(path, {
     allowedRoots: [root],
     onError: (manifest, error) => {
       console.error(`${relative(root, manifest)}: failed to load — ${String(error)}`);
     },
   });
-  const opts = plugins === undefined ? { bootstrapCache } : { plugins, cache };
+  const opts = { bootstrapCache: cacheFor(project), bootstrapPlugins: project?.plugins };
   for (const d of await moduleDiagnostics(path, await read(path), read, opts)) {
     failures += 1;
     clearProgress();

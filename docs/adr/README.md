@@ -154,6 +154,8 @@ What else was on the table and why not.
 | [0107](0107-prefer-printable-record-alias.md) | Prefer a printable alias when the winning name is ambiguous | Accepted |
 | [0108](0108-bun-mochi-loader.md) | The Bun `.mochi` loader ships in `@mochi/bun` | Accepted |
 | [0109](0109-bootstrap-ast-is-the-public-ast.md) | The bootstrap AST is the public AST | Accepted |
+| [0110](0110-plugin-manifest-bootstrap-first.md) | Plugin manifests list self-hosted-core plugins first | Accepted |
+| [0111](0111-bootstrap-graph-per-module-slices.md) | Bootstrap graph caches hold one slice per module | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

@@ -12197,6 +12197,7 @@ export {
   lex,
   parse,
   parseRecovering,
+  parseWith,
   rExtend,
   tArrow,
   tBool,

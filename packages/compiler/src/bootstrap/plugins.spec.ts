@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { checkGraphBootstrapRecovering } from "./index.ts";
 import { buildModulesBootstrapWith } from "./module.ts";
 import {
   type BootstrapInferCallHook,
@@ -54,4 +55,20 @@ test("graph builds hand the plugin list to every module", () => {
   expect(res._tag).toBe("Ok");
   if (res._tag === "Ok")
     expect(res.value.map((m) => m.path.split("/").pop())).toEqual(["dep.mochi", "main.mochi"]);
+});
+
+test("editor graph checks run the plugin list over every module", async () => {
+  const entry = join(dir, "main.mochi");
+  const read = (path: string) => Bun.file(path).text();
+  const src = await read(entry);
+  expect(await checkGraphBootstrapRecovering(entry, src, read)).not.toEqual([]);
+  expect(await checkGraphBootstrapRecovering(entry, src, read, undefined, [magicPlugin])).toEqual(
+    [],
+  );
+  const single = join(dir, "single.mochi");
+  writeFileSync(single, magicSrc);
+  expect(await checkGraphBootstrapRecovering(single, magicSrc, read)).not.toEqual([]);
+  expect(
+    await checkGraphBootstrapRecovering(single, magicSrc, read, undefined, [magicPlugin]),
+  ).toEqual([]);
 });

@@ -120,9 +120,13 @@ test("watched plugin manifests reload diagnostics without an LSP restart", async
     writeFileSync(
       manifest,
       [
+        'import { tString } from "@mochi/compiler/bootstrap/types";',
         "export default [{",
         '  name: "dynamic-as-string",',
-        '  inferCall: { refs: ["dynamic"], hook: () => ({ _tag: "Ok", value: { kind: "con", name: "string", args: [] } }) },',
+        "  inferCall: (fn, _args, _origin, st) =>",
+        '    fn._tag === "ERef" && fn.name === "dynamic"',
+        '      ? { _tag: "Ok", value: { _tag: "Some", value: [tString, st] } }',
+        '      : { _tag: "Ok", value: { _tag: "None" } },',
         "}];",
         "",
       ].join("\n"),
