@@ -31,9 +31,8 @@ composition makes sense.
 
 ## Consequences
 
-- `f >> g` means what it did. `f > > g` is now two comparisons (a parse
-  error), where before the space made no difference to the lexer, and it was
-  also an error then.
+- Expressions are unchanged: `f >> g` is composition, and `f > > g` is still
+  two `>` tokens and a parse error.
 - The repo's `> >` spellings are reformatted to `>>`.
 - Found while fixing this: the TypeScript lexer looked keywords up in a plain
   object, so identifiers such as `valueOf` and `toString` found
