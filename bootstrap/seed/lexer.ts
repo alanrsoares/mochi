@@ -16,7 +16,6 @@ export type Tok =
   | { _tag: "TArrow" }
   | { _tag: "TTarrow" }
   | { _tag: "TPipe" }
-  | { _tag: "TCompose" }
   | { _tag: "TConcat" }
   | { _tag: "TBar" }
   | { _tag: "TLparen" }
@@ -113,7 +112,6 @@ export const TEq: Tok = { _tag: "TEq" };
 export const TArrow: Tok = { _tag: "TArrow" };
 export const TTarrow: Tok = { _tag: "TTarrow" };
 export const TPipe: Tok = { _tag: "TPipe" };
-export const TCompose: Tok = { _tag: "TCompose" };
 export const TConcat: Tok = { _tag: "TConcat" };
 export const TBar: Tok = { _tag: "TBar" };
 export const TLparen: Tok = { _tag: "TLparen" };
@@ -210,27 +208,25 @@ const digraphTok: (two: string) => Option<Tok> = (two: string) =>
   ((_v) =>
     _v === "|>"
       ? (Some(TPipe as Tok) as Option<Tok>)
-      : _v === ">>"
-        ? (Some(TCompose as Tok) as Option<Tok>)
-        : _v === "++"
-          ? (Some(TConcat as Tok) as Option<Tok>)
-          : _v === "=="
-            ? (Some(TEqeq as Tok) as Option<Tok>)
-            : _v === "!="
-              ? (Some(TNeq as Tok) as Option<Tok>)
-              : _v === "<="
-                ? (Some(TLte as Tok) as Option<Tok>)
-                : _v === ">="
-                  ? (Some(TGte as Tok) as Option<Tok>)
-                  : _v === "&&"
-                    ? (Some(TAndand as Tok) as Option<Tok>)
-                    : _v === "||"
-                      ? (Some(TOror as Tok) as Option<Tok>)
-                      : _v === "=>"
-                        ? (Some(TArrow as Tok) as Option<Tok>)
-                        : _v === "->"
-                          ? (Some(TTarrow as Tok) as Option<Tok>)
-                          : (None as Option<Tok>))(two);
+      : _v === "++"
+        ? (Some(TConcat as Tok) as Option<Tok>)
+        : _v === "=="
+          ? (Some(TEqeq as Tok) as Option<Tok>)
+          : _v === "!="
+            ? (Some(TNeq as Tok) as Option<Tok>)
+            : _v === "<="
+              ? (Some(TLte as Tok) as Option<Tok>)
+              : _v === ">="
+                ? (Some(TGte as Tok) as Option<Tok>)
+                : _v === "&&"
+                  ? (Some(TAndand as Tok) as Option<Tok>)
+                  : _v === "||"
+                    ? (Some(TOror as Tok) as Option<Tok>)
+                    : _v === "=>"
+                      ? (Some(TArrow as Tok) as Option<Tok>)
+                      : _v === "->"
+                        ? (Some(TTarrow as Tok) as Option<Tok>)
+                        : (None as Option<Tok>))(two);
 const punctTok: (c: string) => Option<Tok> = (c: string) =>
   ((_v) =>
     _v === "|"

@@ -60,3 +60,29 @@ testEach("parse rejects malformed declarations", [
   | Err(e) => e.message |> Str.contains(row.want) |> ok
   | Ok(_) => false |> ok
 })
+
+// `>>` lexes as two `>` (ADR 0116). Touching, they are composition, which
+// binds looser than `&&`; with a space between they are two comparisons.
+let valueOf = src => switch parseSrc(src) {
+  | Ok([Ast.SLet(_, _, _, value, _, _, _)]) => Some(value)
+  | _ => None
+}
+
+let isLambda = e => switch e {
+  | Some(Ast.ELambda(_, _, _)) => true
+  | _ => false
+}
+
+testEach("touching `>` compose", [
+  "let h = f >> g",
+  "let h = x && f >> g",
+  "let h = f >> g >> k"
+], src => valueOf(src) |> isLambda |> ok)
+
+test("`> >` with a space is not composition", () =>
+  parseSrc("let h = f > > g") |> Result.isErr |> ok)
+
+test("a single `>` is still a comparison", () => switch valueOf("let b = a > c") {
+  | Some(Ast.ECall(Ast.ERef("gt", _), [_, _], _, _)) => true |> ok
+  | _ => false |> ok
+})

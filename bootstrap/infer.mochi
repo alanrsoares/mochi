@@ -2149,12 +2149,12 @@ type TsApi = {
 /// an opaque brand, not a transparent type.
 type Plugin<t> = {
   name: string,
-  parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
-  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
-  format: Option<Ast.Expr -> Option<Ast.Expr> >,
-  formatDoc: Option<Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc> >,
-  dtsBinding: Option<string -> Ast.Expr -> Types.Ty -> TsApi -> Option<string> >,
-  bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string> >
+  parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)>, HookErr>>,
+  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)>, IErr>>,
+  format: Option<Ast.Expr -> Option<Ast.Expr>>,
+  formatDoc: Option<Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc>>,
+  dtsBinding: Option<string -> Ast.Expr -> Types.Ty -> TsApi -> Option<string>>,
+  bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string>>
 }
 
 /// `Plugin` at the lexer's token type: the list a host hands the compile and
@@ -2162,12 +2162,12 @@ type Plugin<t> = {
 /// because only a parameterless alias folds to its name in the TS backend.
 export type HostPlugin = {
   name: string,
-  parse: Option<[LocTok<Lexer.Tok>] -> number -> ([LocTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)> , HookErr> >,
-  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)> , IErr> >,
-  format: Option<Ast.Expr -> Option<Ast.Expr> >,
-  formatDoc: Option<Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc> >,
-  dtsBinding: Option<string -> Ast.Expr -> Types.Ty -> TsApi -> Option<string> >,
-  bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string> >
+  parse: Option<[LocTok<Lexer.Tok>] -> number -> ([LocTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)>, HookErr>>,
+  inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)>, IErr>>,
+  format: Option<Ast.Expr -> Option<Ast.Expr>>,
+  formatDoc: Option<Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc>>,
+  dtsBinding: Option<string -> Ast.Expr -> Types.Ty -> TsApi -> Option<string>>,
+  bindingType: Option<Ast.Expr -> Types.Ty -> TsApi -> Option<string>>
 }
 
 /// The context threaded through Algorithm W. Declared and annotated at every
@@ -2178,7 +2178,7 @@ export type HostPlugin = {
 type Ctx<p> = {
   env: Map<string, Schemes.Scheme>,
   open: bool,
-  ns: Map<string, Map<string, Schemes.Scheme> >,
+  ns: Map<string, Map<string, Schemes.Scheme>>,
   aliasMap: Map<string, QualAliasInfo>,
   plugins: [Plugin<p>],
   loopStack: [[Types.Ty]],

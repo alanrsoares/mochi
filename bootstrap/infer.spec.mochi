@@ -6,7 +6,7 @@ import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 
 extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
-extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
+extern namespaces : Map<string, Map<string, a>> = "./prelude.gen.mjs" "namespaces"
 
 let inferSrc = src =>
   lex(src)

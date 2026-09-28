@@ -11,7 +11,6 @@
 
 // Explicit real-file subpath (like `@mochi/compiler/types` below): a value
 // import, so Node/Vite's config loader must resolve it without a bundler.
-import type { Expr } from "@mochi/compiler/ast";
 import type { Diagnostic } from "@mochi/compiler/errors";
 import type {
   CompleteMemberHook,

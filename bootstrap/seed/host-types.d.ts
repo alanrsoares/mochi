@@ -160,7 +160,6 @@ export type Tok =
   | { _tag: "TArrow" }
   | { _tag: "TTarrow" }
   | { _tag: "TPipe" }
-  | { _tag: "TCompose" }
   | { _tag: "TConcat" }
   | { _tag: "TBar" }
   | { _tag: "TLparen" }

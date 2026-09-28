@@ -84,7 +84,6 @@ import {
   TArrow,
   TTarrow,
   TPipe,
-  TCompose,
   TConcat,
   TBar,
   TLparen,
@@ -158,108 +157,105 @@ const tokName: (t: Tok) => string = (t: Tok) =>
                             ? "tarrow"
                             : _v._tag === "TPipe"
                               ? "pipe"
-                              : _v._tag === "TCompose"
-                                ? "compose"
-                                : _v._tag === "TConcat"
-                                  ? "concat"
-                                  : _v._tag === "TBar"
-                                    ? "bar"
-                                    : _v._tag === "TLparen"
-                                      ? "lparen"
-                                      : _v._tag === "TRparen"
-                                        ? "rparen"
-                                        : _v._tag === "TLbrace"
-                                          ? "lbrace"
-                                          : _v._tag === "TRbrace"
-                                            ? "rbrace"
-                                            : _v._tag === "TLbracket"
-                                              ? "lbracket"
-                                              : _v._tag === "TRbracket"
-                                                ? "rbracket"
-                                                : _v._tag === "TSpread"
-                                                  ? "spread"
-                                                  : _v._tag === "TPlus"
-                                                    ? "plus"
-                                                    : _v._tag === "TMinus"
-                                                      ? "minus"
-                                                      : _v._tag === "TStar"
-                                                        ? "star"
-                                                        : _v._tag === "TSlash"
-                                                          ? "slash"
-                                                          : _v._tag === "TPercent"
-                                                            ? "percent"
-                                                            : _v._tag === "TAt"
-                                                              ? "at"
-                                                              : _v._tag === "THash"
-                                                                ? "hash"
-                                                                : _v._tag === "TTilde"
-                                                                  ? "tilde"
-                                                                  : _v._tag === "TDot"
-                                                                    ? "dot"
-                                                                    : _v._tag === "TColon"
-                                                                      ? "colon"
-                                                                      : _v._tag === "TQuestion"
-                                                                        ? "question"
-                                                                        : _v._tag === "TEqeq"
-                                                                          ? "eqeq"
-                                                                          : _v._tag === "TNeq"
-                                                                            ? "neq"
-                                                                            : _v._tag === "TLte"
-                                                                              ? "lte"
-                                                                              : _v._tag === "TGte"
-                                                                                ? "gte"
-                                                                                : _v._tag === "TLt"
-                                                                                  ? "lt"
+                              : _v._tag === "TConcat"
+                                ? "concat"
+                                : _v._tag === "TBar"
+                                  ? "bar"
+                                  : _v._tag === "TLparen"
+                                    ? "lparen"
+                                    : _v._tag === "TRparen"
+                                      ? "rparen"
+                                      : _v._tag === "TLbrace"
+                                        ? "lbrace"
+                                        : _v._tag === "TRbrace"
+                                          ? "rbrace"
+                                          : _v._tag === "TLbracket"
+                                            ? "lbracket"
+                                            : _v._tag === "TRbracket"
+                                              ? "rbracket"
+                                              : _v._tag === "TSpread"
+                                                ? "spread"
+                                                : _v._tag === "TPlus"
+                                                  ? "plus"
+                                                  : _v._tag === "TMinus"
+                                                    ? "minus"
+                                                    : _v._tag === "TStar"
+                                                      ? "star"
+                                                      : _v._tag === "TSlash"
+                                                        ? "slash"
+                                                        : _v._tag === "TPercent"
+                                                          ? "percent"
+                                                          : _v._tag === "TAt"
+                                                            ? "at"
+                                                            : _v._tag === "THash"
+                                                              ? "hash"
+                                                              : _v._tag === "TTilde"
+                                                                ? "tilde"
+                                                                : _v._tag === "TDot"
+                                                                  ? "dot"
+                                                                  : _v._tag === "TColon"
+                                                                    ? "colon"
+                                                                    : _v._tag === "TQuestion"
+                                                                      ? "question"
+                                                                      : _v._tag === "TEqeq"
+                                                                        ? "eqeq"
+                                                                        : _v._tag === "TNeq"
+                                                                          ? "neq"
+                                                                          : _v._tag === "TLte"
+                                                                            ? "lte"
+                                                                            : _v._tag === "TGte"
+                                                                              ? "gte"
+                                                                              : _v._tag === "TLt"
+                                                                                ? "lt"
+                                                                                : _v._tag === "TGt"
+                                                                                  ? "gt"
                                                                                   : _v._tag ===
-                                                                                      "TGt"
-                                                                                    ? "gt"
+                                                                                      "TAndand"
+                                                                                    ? "andand"
                                                                                     : _v._tag ===
-                                                                                        "TAndand"
-                                                                                      ? "andand"
+                                                                                        "TOror"
+                                                                                      ? "oror"
                                                                                       : _v._tag ===
-                                                                                          "TOror"
-                                                                                        ? "oror"
+                                                                                          "TBang"
+                                                                                        ? "bang"
                                                                                         : _v._tag ===
-                                                                                            "TBang"
-                                                                                          ? "bang"
+                                                                                            "TBacktick"
+                                                                                          ? "backtick"
                                                                                           : _v._tag ===
-                                                                                              "TBacktick"
-                                                                                            ? "backtick"
+                                                                                              "TComma"
+                                                                                            ? "comma"
                                                                                             : _v._tag ===
-                                                                                                "TComma"
-                                                                                              ? "comma"
+                                                                                                "TSemi"
+                                                                                              ? "semi"
                                                                                               : _v._tag ===
-                                                                                                  "TSemi"
-                                                                                                ? "semi"
+                                                                                                  "TNum"
+                                                                                                ? "num"
                                                                                                 : _v._tag ===
-                                                                                                    "TNum"
-                                                                                                  ? "num"
+                                                                                                    "TBool"
+                                                                                                  ? "bool"
                                                                                                   : _v._tag ===
-                                                                                                      "TBool"
-                                                                                                    ? "bool"
+                                                                                                      "TStr"
+                                                                                                    ? "str"
                                                                                                     : _v._tag ===
-                                                                                                        "TStr"
-                                                                                                      ? "str"
+                                                                                                        "TTmplStart"
+                                                                                                      ? "tmplstart"
                                                                                                       : _v._tag ===
-                                                                                                          "TTmplStart"
-                                                                                                        ? "tmplstart"
+                                                                                                          "TTmplMid"
+                                                                                                        ? "tmplmid"
                                                                                                         : _v._tag ===
-                                                                                                            "TTmplMid"
-                                                                                                          ? "tmplmid"
+                                                                                                            "TTmplEnd"
+                                                                                                          ? "tmplend"
                                                                                                           : _v._tag ===
-                                                                                                              "TTmplEnd"
-                                                                                                            ? "tmplend"
+                                                                                                              "TId"
+                                                                                                            ? "id"
                                                                                                             : _v._tag ===
-                                                                                                                "TId"
-                                                                                                              ? "id"
-                                                                                                              : _v._tag ===
-                                                                                                                  "TEof"
-                                                                                                                ? "eof"
-                                                                                                                : (() => {
-                                                                                                                    throw new Error(
-                                                                                                                      "non-exhaustive match",
-                                                                                                                    );
-                                                                                                                  })())(
+                                                                                                                "TEof"
+                                                                                                              ? "eof"
+                                                                                                              : (() => {
+                                                                                                                  throw new Error(
+                                                                                                                    "non-exhaustive match",
+                                                                                                                  );
+                                                                                                                })())(
     t,
   );
 /**
@@ -1044,6 +1040,19 @@ const parseLetIn: _Curry<
     );
   },
 );
+/**
+ * `>>` lexes as two `>` so nested type arguments close one at a time
+ * (`Map<string, Map<string, a>>`). In an expression, two touching `>` are the
+ * composition operator.
+ */
+const composeAt: _Curry<[toks: LocTok[], pos: number], boolean> = _curry(
+  2,
+  (toks: LocTok[], pos: number) => {
+    const a = tokAt(toks, pos);
+    const b = tokAt(toks, pos + 1);
+    return and(and(a.tok._tag === "TGt", b.tok._tag === "TGt"), eq(a.end, b.start));
+  },
+);
 const PIPE_BP: number = 5;
 const COMPOSE_BP: number = 6;
 const OR_BP: number = 7;
@@ -1315,7 +1324,7 @@ const parseInfix: _Curry<
                   : errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt))(right),
             parseAtomOrCall(toks, pos + 1, hooks),
           )
-        : and(lt.tok._tag === "TCompose", COMPOSE_BP >= minBp)
+        : and(composeAt(toks, pos), COMPOSE_BP >= minBp)
           ? _Result_flatMap(
               ([right, p]) =>
                 ((opSpan: SpanAt) =>
@@ -1341,10 +1350,10 @@ const parseInfix: _Curry<
                         ),
                       ))(Ast.ECall(left, [xRef], None as Option<string>, exprSpan(left))))(
                     Ast.ERef("$x", opSpan),
-                  ))(spanOf(lt)),
-              parseExprBp(toks, COMPOSE_BP + 1, pos + 1, hooks),
+                  ))({ start: lt.start, end: lt.start + 2 }),
+              parseExprBp(toks, COMPOSE_BP + 1, pos + 2, hooks),
             )
-          : and(isCmpTok(lt.tok), CMP_BP >= minBp)
+          : and(and(isCmpTok(lt.tok), !composeAt(toks, pos)), CMP_BP >= minBp)
             ? tokAt(toks, pos + 1).tok._tag === "TRparen"
               ? (Ok({ left: sectionLeft(left, lt), p: pos + 1, matched: true }) as Result<
                   { left: Expr; p: number; matched: boolean },

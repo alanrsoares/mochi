@@ -1,6 +1,6 @@
 import type { TypeExpr } from "./ast";
 
-import { _Str_chars, _Str_endsWith, _Str_join, _curry, length, map } from "@mochi/compiler/runtime";
+import { _Str_chars, _Str_join, _curry, length, map } from "@mochi/compiler/runtime";
 
 import * as Ast from "./ast";
 const escChar: (c: string) => string = (c: string) =>
@@ -8,10 +8,6 @@ const escChar: (c: string) => string = (c: string) =>
     _v === "\\" ? "\\\\" : _v === '"' ? '\\"' : _v === "\n" ? "\\n" : _v === "\t" ? "\\t" : c)(c);
 const strLit: (s: string) => string = (s: string) =>
   `"${_Str_join("", map(escChar, _Str_chars(s)))}"`;
-const typeArg: (te: TypeExpr) => string = (te: TypeExpr) => {
-  const shown: string = showTypeExpr(te);
-  return _Str_endsWith(">", shown) ? `${shown} ` : shown;
-};
 const joinWith: <A>(f: (a: A) => string, sep: string, tes: A[]) => string = _curry(
   3,
   <A>(f: (a: A) => string, sep: string, tes: A[]) => _Str_join(sep, map(f, tes)),
@@ -25,7 +21,7 @@ export const showTypeExpr: (te: TypeExpr) => string = (te: TypeExpr) =>
     _v._tag === "TyName"
       ? (({ name }) => (name === "unit" ? "()" : name))(_v)
       : _v._tag === "TyApp"
-        ? (({ ctor, args }) => `${ctor}<${joinWith(typeArg, ", ", args)}>`)(_v)
+        ? (({ ctor, args }) => `${ctor}<${joinWith(showTypeExpr, ", ", args)}>`)(_v)
         : _v._tag === "TyTuple"
           ? (({ elems }) => `(${joinWith(showTypeExpr, ", ", elems)})`)(_v)
           : _v._tag === "TyList"
@@ -33,7 +29,7 @@ export const showTypeExpr: (te: TypeExpr) => string = (te: TypeExpr) =>
             : _v._tag === "TyQual"
               ? (({ alias, name, args }) =>
                   ((head: string) =>
-                    length(args) === 0 ? head : `${head}<${joinWith(typeArg, ", ", args)}>`)(
+                    length(args) === 0 ? head : `${head}<${joinWith(showTypeExpr, ", ", args)}>`)(
                     `${alias}.${name}`,
                   ))(_v)
               : _v._tag === "TyLit"

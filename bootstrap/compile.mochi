@@ -20,8 +20,8 @@ import { widenLits } from "./schemes.mochi"
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
 // unify with whatever inferProgram expects (the opaque threading of 0002).
 extern builtins : Map<string, a> = "./prelude.gen.mjs" "builtins"
-extern namespaces : Map<string, Map<string, a> > = "./prelude.gen.mjs" "namespaces"
-extern namespaceRuntime : Map<string, Map<string, string> > = "./prelude.gen.mjs" "namespaceRuntime"
+extern namespaces : Map<string, Map<string, a>> = "./prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
 
