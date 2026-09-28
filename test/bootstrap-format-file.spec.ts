@@ -12,16 +12,14 @@
 // packages/dx/src/format.ts or bootstrap/format.mochi now fails `bun run check`.
 // Passing it was the precondition for ADR 0078's amendment making the formatter
 // Mochi-first, so format.mochi now leads a change and format.ts follows — this
-// spec is what holds the oracle to it.
+// spec is what holds the oracle to it. JSX files are compared too: the builtin
+// JSX plugin re-folds its calls to tags through a `formatDoc` hook (ADR 0112).
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx";
 import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
-import { isErr, unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
 
@@ -37,27 +35,6 @@ beforeAll(async () => {
   alFormatProgram = (await import(join(root, "bootstrap/format.js"))).formatProgram;
 }, BOOTSTRAP_BUILD_HOOK_MS);
 
-/**
- * JSX is the one documented exclusion: plugin `format` hooks re-fold `h(...)`
- * back to `<tag>` and stay a TypeScript-host seam (ADR 0011 §6), so the
- * bootstrap printer emits the underlying call by design. Detected from the AST
- * (`origin: "jsx"`, set only by the plugin's parse hook) rather than by
- * sniffing text, where `a < b` and `Map<string, a>` both look like a tag.
- */
-const hasJsxOrigin = (node: unknown): boolean => {
-  if (Array.isArray(node)) return node.some(hasJsxOrigin);
-  if (typeof node !== "object" || node === null) return false;
-  const rec = node as Record<string, unknown>;
-  return rec.origin === "jsx" ? true : Object.values(rec).some(hasJsxOrigin);
-};
-
-const hasJsx = (src: string): boolean => {
-  const lexed = lex(src);
-  if (isErr(lexed)) return false;
-  const parsed = parse(unwrapOk(lexed));
-  return isErr(parsed) ? false : hasJsxOrigin(unwrapOk(parsed).stmts);
-};
-
 const corpus = [...new Bun.Glob("**/*.mochi").scanSync({ cwd: root })]
   .filter((p) => !p.includes("node_modules"))
   .sort();
@@ -70,7 +47,6 @@ const alFormat = (src: string): string => {
 
 for (const file of corpus) {
   const src = readFileSync(join(root, file), "utf8");
-  if (hasJsx(src)) continue;
   test(`formatters agree byte for byte on ${file}`, () => {
     const ts = format(src);
     if (ts._tag !== "Ok") throw new Error("ts formatter failed");
@@ -81,6 +57,5 @@ for (const file of corpus) {
 }
 
 test("the corpus covers a meaningful number of files", () => {
-  const compared = corpus.filter((f) => !hasJsx(readFileSync(join(root, f), "utf8"))).length;
-  expect(compared).toBeGreaterThan(70);
+  expect(corpus.length).toBeGreaterThan(70);
 });

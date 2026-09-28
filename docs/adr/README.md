@@ -156,6 +156,7 @@ What else was on the table and why not.
 | [0109](0109-bootstrap-ast-is-the-public-ast.md) | The bootstrap AST is the public AST | Accepted |
 | [0110](0110-plugin-manifest-bootstrap-first.md) | Plugin manifests list self-hosted-core plugins first | Accepted |
 | [0111](0111-bootstrap-graph-per-module-slices.md) | Bootstrap graph caches hold one slice per module | Accepted |
+| [0112](0112-bootstrap-format-doc-hook.md) | Bootstrap plugins may lay a node out themselves | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

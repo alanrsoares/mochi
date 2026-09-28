@@ -1,6 +1,8 @@
 import type { Tok } from "../lexer";
 import type { Expr, Field, Name, SeqElem } from "../ast";
 import type { Row, SpanAt, St, Ty } from "../types";
+import type { Doc } from "../doc";
+import type { FormatApi } from "../format-api";
 import type { Ctx } from "../format";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
@@ -12,6 +14,7 @@ export type BoundErr = {
   help: Option<string>;
   suggestions: Hint[];
 };
+export type JsxShape = { tag: Expr; fields: Field[]; spread: Option<Expr>; children: SeqElem[] };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -71,6 +74,8 @@ import {
   RowVar,
 } from "../types";
 import { closestName } from "../suggest";
+import * as Fmt from "../format-api";
+import { cat, group, indent, line, softline, txt } from "../doc";
 import * as Lexer from "../lexer";
 import {
   TLet,
@@ -1480,11 +1485,147 @@ export const componentBindingTs: <A>(
           : (None as Option<string>),
       ),
 );
+
+/**
+ * The exact call shape the parser emits; anything else prints as a plain call.
+ */
+const jsxShape: (e: Expr) => Option<JsxShape> = (e: Expr) =>
+  match(e)
+    .with(
+      (
+        _v,
+      ): _v is Extract<Expr, { _tag: "ECall" }> & {
+        fn: Extract<Extract<Expr, { _tag: "ECall" }>["fn"], { _tag: "ERef" }>;
+        args: [
+          Extract<Expr, { _tag: "ECall" }>["args"][number],
+          Extract<Extract<Expr, { _tag: "ECall" }>["args"][number], { _tag: "ERecord" }>,
+          Extract<Extract<Expr, { _tag: "ECall" }>["args"][number], { _tag: "EArr" }>,
+        ];
+        origin: Extract<Extract<Expr, { _tag: "ECall" }>["origin"], { _tag: "Some" }>;
+      } => {
+        const _g: any = _v;
+        return (
+          _g._tag === "ECall" &&
+          _g.fn._tag === "ERef" &&
+          _g.fn.name === "h" &&
+          _g.args.length === 3 &&
+          _g.args[1]._tag === "ERecord" &&
+          _g.args[2]._tag === "EArr" &&
+          _g.origin._tag === "Some" &&
+          _g.origin.value === "jsx"
+        );
+      },
+      ({ args: [tag, { fields, spread }, { elements: children }] }) =>
+        Some({ tag: tag, fields: fields, spread: spread, children: children }) as Option<JsxShape>,
+    )
+    .otherwise(() => None as Option<JsxShape>);
+const isFragment: (tag: Expr) => boolean = (tag: Expr) =>
+  match(tag)
+    .with({ _tag: "EStr", value: "Fragment" }, () => true)
+    .otherwise(() => false);
+const jsxTag: _Curry<[tag: Expr, api: FormatApi], string> = _curry(2, (tag: Expr, api: FormatApi) =>
+  match(tag)
+    .with({ _tag: "EStr" }, ({ value }) => value)
+    .otherwise(() => api.flat(api.memberD(tag))),
+);
+const jsxHoleD: _Curry<[open: string, e: Expr, api: FormatApi], Doc> = _curry(
+  3,
+  (open: string, e: Expr, api: FormatApi) => cat([txt(open), api.exprD(e), txt("}")]),
+);
+/**
+ * A valueless attribute parses to `true` spanning its own name, so the name
+ * still reads back from the source; an explicit `={true}` does not.
+ */
+const jsxAttrD: _Curry<[name: string, value: Expr, api: FormatApi], Doc> = _curry(
+  3,
+  (name: string, value: Expr, api: FormatApi) =>
+    match(value)
+      .with({ _tag: "EBool", value: true }, ({ span: sp }) =>
+        eq(api.sourceText(sp.start, sp.end), name) ? txt(name) : jsxHoleD(`${name}={`, value, api),
+      )
+      .with({ _tag: "EStr" }, ({ value: v }) => txt(`${name}=${api.strLit(v)}`))
+      .otherwise(() => jsxHoleD(`${name}={`, value, api)),
+);
+const jsxOpenD: _Curry<[tag: string, attrs: Doc[], selfClosing: boolean], Doc> = _curry(
+  3,
+  (tag: string, attrs: Doc[], selfClosing: boolean) =>
+    eq(length(attrs), 0)
+      ? txt(selfClosing ? `<${tag} />` : `<${tag}>`)
+      : group(
+          cat([
+            txt(`<${tag}`),
+            indent(cat(map((attr: Doc) => cat([line, attr]), attrs))),
+            selfClosing ? line : softline,
+            txt(selfClosing ? "/>" : ">"),
+          ]),
+        ),
+);
+const jsxChildD: _Curry<[child: SeqElem, api: FormatApi], Doc> = _curry(
+  2,
+  (child: SeqElem, api: FormatApi) =>
+    match(child)
+      .with({ _tag: "SEExpr" }, ({ expr: e }) =>
+        _Option_isSome(jsxShape(e)) ? api.exprD(e) : jsxHoleD("{", e, api),
+      )
+      .with({ _tag: "SESpread" }, ({ expr: e }) => jsxHoleD("{...", e, api))
+      .exhaustive(),
+);
+const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
+  2,
+  (shape: JsxShape, api: FormatApi) => {
+    const spreadD: Doc[] = match(shape.spread)
+      .with({ _tag: "Some" }, ({ value: sp }) => [jsxHoleD("{...", sp, api)])
+      .with({ _tag: "None" }, () => [] as Doc[])
+      .exhaustive();
+    return _Array_concat(
+      spreadD,
+      map((f: Field) => jsxAttrD(f.name, f.value, api), shape.fields),
+    );
+  },
+);
+/**
+ * Re-fold a parser-produced `h(tag, props, children)` into a tag; a
+ * hand-written `h(...)` has no `jsx` origin and keeps call formatting.
+ */
+export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
+  2,
+  (e: Expr, api: FormatApi) =>
+    match(jsxShape(e))
+      .with({ _tag: "None" }, () => None as Option<Doc>)
+      .with({ _tag: "Some" }, ({ value: shape }) =>
+        ((fragment: boolean) =>
+          ((tag: string) =>
+            ((attrs: Doc[]) =>
+              and(eq(length(shape.children), 0), not(fragment))
+                ? (Some(jsxOpenD(tag, attrs, true)) as Option<Doc>)
+                : (Some(
+                    group(
+                      cat([
+                        fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
+                        indent(
+                          cat(
+                            map(
+                              (child: SeqElem) => cat([softline, jsxChildD(child, api)]),
+                              shape.children,
+                            ),
+                          ),
+                        ),
+                        softline,
+                        txt(fragment ? "</>" : `</${tag}>`),
+                      ]),
+                    ),
+                  ) as Option<Doc>))(jsxAttrsD(shape, api)))(
+            fragment ? "" : jsxTag(shape.tag, api),
+          ))(isFragment(shape.tag)),
+      )
+      .exhaustive(),
+);
 export const jsxPlugin = {
   name: "jsx",
   parse: Some(parseJsxAtom),
   inferCall: Some(inferJsxCallHook),
   format: None,
+  formatDoc: Some(formatJsx) as Option<(a: Expr, b: FormatApi) => Option<Doc>>,
   dtsBinding: None,
   bindingType: Some(componentBindingTs),
 };

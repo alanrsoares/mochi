@@ -17,8 +17,9 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { SpanAt } from "./types";
-import type { Plugin } from "./infer";
 import type { Doc } from "./doc";
+import type { FormatApi } from "./format-api";
+import type { Plugin } from "./infer";
 
 export type Comment = {
   start: number;
@@ -27,6 +28,13 @@ export type Comment = {
   blankAfter: boolean;
   trailing: boolean;
 };
+/**
+ * A plugin list's two kinds of format hook (`formatHooksFor`, ADR 0112).
+ */
+export type FormatHooks = {
+  rewrite: ((a: Expr) => Option<Expr>)[];
+  layout: ((a: Expr, b: FormatApi) => Option<Doc>)[];
+};
 export type Ctx = {
   leading: Map<string, Comment[]>;
   trailing: Map<string, Comment[]>;
@@ -34,7 +42,9 @@ export type Ctx = {
   shadowed: Set<string>;
   etaSkip: boolean;
   formatHooks: ((a: Expr) => Option<Expr>)[];
+  formatDocHooks: ((a: Expr, b: FormatApi) => Option<Doc>)[];
   commentStarts: number[];
+  src: string;
 };
 export type Attached = { table: Ctx; tail: Comment[] };
 export type StmtDoc = { doc: Doc; consumed: number };
@@ -119,7 +129,9 @@ import {
 } from "./doc";
 import { skipStringLiteral } from "./str-scan";
 import { showTypeExpr } from "./show-type-expr";
-import { runFormatHooks } from "./extensions";
+import * as Layout from "./doc";
+import * as Fmt from "./format-api";
+import { formatHooksFor, runFormatDocHooks, runFormatHooks } from "./extensions";
 /**
  * `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
  * interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
@@ -340,7 +352,9 @@ export const noComments: Ctx = {
   shadowed: _Set_fromArray([] as string[]),
   etaSkip: false,
   formatHooks: [] as ((a: Expr) => Option<Expr>)[],
+  formatDocHooks: [] as ((a: Expr, b: FormatApi) => Option<Doc>)[],
   commentStarts: [] as number[],
+  src: "",
 };
 /**
  * A statement and its expression can carry the SAME span (`test(…)` as an
@@ -2555,11 +2569,28 @@ const hooked: _Curry<[cts: Ctx, e: Expr], Expr> = _curry(2, (cts: Ctx, e: Expr) 
           : _Option_unwrapOr(e, runFormatHooks(cts.formatHooks, e)))(exprSpan(e)),
 );
 /**
- * Every expression prints through here, so every path sees the hooks.
+ * What a `formatDoc` hook is handed: the printers below, bound to `cts`.
  */
-const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
-  exprRawOf(cts, hooked(cts, e)),
-);
+const formatApi: (cts: Ctx) => FormatApi = (cts: Ctx) => ({
+  exprD: (e: Expr) => exprD(cts, e),
+  memberD: (e: Expr) => memberD(cts, e),
+  flat: flat,
+  strLit: strLit,
+  sourceText: _curry(2, (start: number, end: number) => _Str_slice(start, end, cts.src)),
+});
+/**
+ * Every expression prints through here, so every path sees the hooks. A
+ * `formatDoc` hook sees the node after any `format` rewrite.
+ */
+const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) => {
+  const node: Expr = hooked(cts, e);
+  return eq(length(cts.formatDocHooks), 0)
+    ? exprRawOf(cts, node)
+    : match(runFormatDocHooks(cts.formatDocHooks, node, formatApi(cts)))
+        .with({ _tag: "Some" }, ({ value: doc }) => doc)
+        .with({ _tag: "None" }, () => exprRawOf(cts, node))
+        .exhaustive();
+});
 const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
   match(e)
     .with({ _tag: "ENum" }, ({ raw }) => txt(raw))
@@ -3017,40 +3048,42 @@ const hasOpenDirective: (src: string) => boolean = (src: string) =>
  */
 export const formatProgram: _Curry<[stmts: Stmt[], src: string], string> = _curry(
   2,
-  (stmts: Stmt[], src: string) =>
-    formatProgramWith(stmts, src, [] as ((a: Expr) => Option<Expr>)[]),
+  (stmts: Stmt[], src: string) => {
+    const hooks: FormatHooks = formatHooksFor(None);
+    return formatProgramWith(stmts, src, hooks);
+  },
 );
 /**
- * `formatProgram` with plugin `format` hooks (`formatHooksFor`).
+ * `formatProgram` with a plugin list's format hooks (`formatHooksFor`).
  */
-export const formatProgramWith: _Curry<
-  [stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]],
-  string
-> = _curry(3, (stmts: Stmt[], src: string, formatHooks: ((a: Expr) => Option<Expr>)[]) => {
-  const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
-  const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
-  const comments: Comment[] = filter(
-    (c: Comment) => not(inErrorSpan(stmts, c)),
-    collectComments(src),
-  );
-  const base: Ctx = {
-    ...noComments,
-    flatArity: buildFlatArity(stmts, innerBound),
-    shadowed: shadowed,
-    formatHooks: formatHooks,
-    commentStarts: map((c: Comment) => c.start, comments),
-  };
-  const attached: Attached = attachFrom(
-    comments,
-    0,
-    sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
-    src,
-    { table: base, tail: [] as Comment[] },
-  );
-  const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
-  return hasOpenDirective(src)
-    ? `"use open"
+export const formatProgramWith: _Curry<[stmts: Stmt[], src: string, hooks: FormatHooks], string> =
+  _curry(3, (stmts: Stmt[], src: string, hooks: FormatHooks) => {
+    const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
+    const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
+    const comments: Comment[] = filter(
+      (c: Comment) => not(inErrorSpan(stmts, c)),
+      collectComments(src),
+    );
+    const base: Ctx = {
+      ...noComments,
+      flatArity: buildFlatArity(stmts, innerBound),
+      shadowed: shadowed,
+      formatHooks: hooks.rewrite,
+      formatDocHooks: hooks.layout,
+      commentStarts: map((c: Comment) => c.start, comments),
+      src: src,
+    };
+    const attached: Attached = attachFrom(
+      comments,
+      0,
+      sortAnchors(_Array_flatMap(stmtAnchors, stmts)),
+      src,
+      { table: base, tail: [] as Comment[] },
+    );
+    const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
+    return hasOpenDirective(src)
+      ? `"use open"
 
 ${body}`
-    : body;
-});
+      : body;
+  });

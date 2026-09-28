@@ -1,5 +1,6 @@
 // bootstrap/plugins/jsx.mochi — builtin JSX LanguagePlugin (Wave 8 / ADR 0011 §6).
-// Mirrors src/plugins/jsx.ts parse + inferCall only (bootstrap has no format/dts).
+// Mirrors src/plugins/jsx.ts parse, inferCall, format (as `formatDoc`, ADR 0112)
+// and bindingType.
 // Parse hooks are Result/(toks, pos) + a `parseExpr` callback for `{…}` holes.
 
 import * as Ast from "../ast.mochi"
@@ -19,6 +20,8 @@ import {
   RowVar
 } from "../types.mochi"
 import { closestName } from "../suggest.mochi"
+import * as Fmt from "../format-api.mochi"
+import { cat, group, indent, line, softline, txt } from "../doc.mochi"
 import * as Lexer from "../lexer.mochi"
 import {
   TLet,
@@ -807,11 +810,111 @@ export let componentBindingTs = (value, t, api) => switch t {
       : None
 }
 
+// ---------------------------------------------------------------- format
+
+type JsxShape = {
+  tag: Ast.Expr,
+  fields: [Ast.Field],
+  spread: Option<Ast.Expr>,
+  children: [Ast.SeqElem]
+}
+
+/// The exact call shape the parser emits; anything else prints as a plain call.
+let jsxShape = e => switch e {
+  | Ast.ECall(Ast.ERef("h", _), [tag, Ast.ERecord(fields, spread, _), Ast.EArr(children, _)], Some("jsx"), _) => Some(
+      { tag, fields, spread, children }
+    )
+  | _ => None
+}
+
+let isFragment = tag => switch tag {
+  | Ast.EStr("Fragment", _) => true
+  | _ => false
+}
+
+let jsxTag = (tag, api: Fmt.FormatApi) => switch tag {
+  | Ast.EStr(value, _) => value
+  | _ => api.flat(api.memberD(tag))
+}
+
+let jsxHoleD = (open, e, api: Fmt.FormatApi) =>
+  cat([txt(open), api.exprD(e), txt("}")])
+
+/// A valueless attribute parses to `true` spanning its own name, so the name
+/// still reads back from the source; an explicit `={true}` does not.
+let jsxAttrD = (name, value, api: Fmt.FormatApi) => switch value {
+  | Ast.EBool(true, sp) => api.sourceText(sp.start, sp.end) == name
+      ? txt(name)
+      : jsxHoleD("${name}={", value, api)
+  | Ast.EStr(v, _) => txt("${name}=${api.strLit(v)}")
+  | _ => jsxHoleD("${name}={", value, api)
+}
+
+let jsxOpenD = (tag, attrs, selfClosing) =>
+  Array.length(attrs) == 0
+    ? txt(selfClosing ? "<${tag} />" : "<${tag}>")
+    : group(
+      cat(
+        [
+          txt("<${tag}"),
+          indent(cat(attrs |> map(attr => cat([line, attr])))),
+          selfClosing ? line : softline,
+          txt(selfClosing ? "/>" : ">")
+        ]
+      )
+    )
+
+let jsxChildD = (child, api: Fmt.FormatApi) => switch child {
+  | Ast.SEExpr(e) => Option.isSome(jsxShape(e))
+      ? api.exprD(e)
+      : jsxHoleD("{", e, api)
+  | Ast.SESpread(e) => jsxHoleD("{...", e, api)
+}
+
+let jsxAttrsD = (shape: JsxShape, api: Fmt.FormatApi) =>
+  let spreadD = switch shape.spread {
+    | Some(sp) => [jsxHoleD("{...", sp, api)]
+    | None => []
+  } in
+    Array.concat(
+      spreadD,
+      shape.fields |> map(f => jsxAttrD(f.name, f.value, api))
+    )
+
+/// Re-fold a parser-produced `h(tag, props, children)` into a tag; a
+/// hand-written `h(...)` has no `jsx` origin and keeps call formatting.
+export let formatJsx = (e, api: Fmt.FormatApi) => switch jsxShape(e) {
+  | None => None
+  | Some(shape) => let fragment = isFragment(shape.tag) in
+    let tag = fragment ? "" : jsxTag(shape.tag, api) in
+    let attrs = jsxAttrsD(shape, api) in
+      Array.length(shape.children) == 0 && !fragment
+        ? Some(jsxOpenD(tag, attrs, true))
+        : Some(
+          group(
+            cat(
+              [
+                fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
+                indent(
+                  cat(
+                    shape.children
+                      |> map(child => cat([softline, jsxChildD(child, api)]))
+                  )
+                ),
+                softline,
+                txt(fragment ? "</>" : "</${tag}>")
+              ]
+            )
+          )
+        )
+}
+
 export let jsxPlugin = {
   name: "jsx",
   parse: Some(parseJsxAtom),
   inferCall: Some(inferJsxCallHook),
   format: None,
+  formatDoc: Some(formatJsx),
   dtsBinding: None,
   bindingType: Some(componentBindingTs)
 }

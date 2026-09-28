@@ -19,6 +19,8 @@ import type {
   TypeExpr,
 } from "./ast";
 import type { Row, SpanAt, St, Ty } from "./types";
+import type { Doc } from "./doc";
+import type { FormatApi } from "./format-api";
 import type { BoundErr } from "./plugins/jsx";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
@@ -4191,6 +4193,7 @@ export const parseRecovering: <A, B, C, D, E>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<B>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<C>;
       bindingType: Option<
         (
@@ -4228,6 +4231,7 @@ export const parseRecovering: <A, B, C, D, E>(
           ) => Result<Option<[Ty, St]>, BoundErr>
         >;
         format: Option<B>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<C>;
         bindingType: Option<
           (
@@ -4288,6 +4292,7 @@ export const parseWith: <A, B, C, D, E>(
         ) => Result<Option<[Ty, St]>, BoundErr>
       >;
       format: Option<B>;
+      formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
       dtsBinding: Option<C>;
       bindingType: Option<
         (
@@ -4325,6 +4330,7 @@ export const parseWith: <A, B, C, D, E>(
           ) => Result<Option<[Ty, St]>, BoundErr>
         >;
         format: Option<B>;
+        formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
         dtsBinding: Option<C>;
         bindingType: Option<
           (

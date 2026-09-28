@@ -1,6 +1,8 @@
 import type { Tok } from "./lexer";
 import type { AliasField, Ctor, CtorField, Expr, Span, Stmt, TypeExpr } from "./ast";
 import type { Row, St, Ty, TypeAt } from "./types";
+import type { Doc } from "./doc";
+import type { FormatApi } from "./format-api";
 import type { Scheme } from "./schemes";
 import type { IErr, InferApi, QualAliasInfo, TsApi } from "./infer";
 import type { StageErr, Stamped } from "./compile";
@@ -820,6 +822,7 @@ export const emitDtsTextWith: _Curry<
             ) => Result<Option<[Ty, St]>, IErr>
           >;
           format: Option<(a: Expr) => Option<Expr>>;
+          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
           dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
@@ -861,6 +864,7 @@ export const emitDtsTextWith: _Curry<
             ) => Result<Option<[Ty, St]>, IErr>
           >;
           format: Option<(a: Expr) => Option<Expr>>;
+          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
           dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]

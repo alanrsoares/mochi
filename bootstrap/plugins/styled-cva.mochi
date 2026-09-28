@@ -93,6 +93,7 @@ export let styledCvaPlugin = {
   parse: None,
   inferCall: Some(inferStyledCvaCall),
   format: None,
+  formatDoc: None,
   dtsBinding: None,
   bindingType: None
 }

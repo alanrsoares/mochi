@@ -2,12 +2,13 @@
 //
 // packages/dx/src/format.ts is the SHIPPED formatter; this is the self-hosted
 // port, reached from `mochic fmt`. The two are kept in step by hand, and
-// test/bootstrap-format-file.spec.ts holds them there: every non-JSX .mochi
-// file in the repo must format byte-identically through both, so a one-sided
-// change fails the default gate.
+// test/bootstrap-format-file.spec.ts holds them there: every .mochi file in
+// the repo must format byte-identically through both, so a one-sided change
+// fails the default gate.
 //
-// Plugin `format` hooks stay a TypeScript-host seam — bootstrap has no format
-// hook protocol (ADR 0011 §6) — which is why JSX files are the one exclusion.
+// Plugin hooks either rewrite a node before layout (`format`) or lay it out
+// themselves (`formatDoc`, ADR 0112); the builtin JSX plugin re-folds its
+// `h(...)` calls back to tags through the second.
 
 import * as Ast from "./ast.mochi"
 import {
@@ -27,7 +28,13 @@ import {
 } from "./doc.mochi"
 import { skipStringLiteral } from "./str-scan.mochi"
 import { showTypeExpr } from "./show-type-expr.mochi"
-import { runFormatHooks } from "./extensions.mochi"
+import * as Layout from "./doc.mochi"
+import * as Fmt from "./format-api.mochi"
+import {
+  formatHooksFor,
+  runFormatDocHooks,
+  runFormatHooks
+} from "./extensions.mochi"
 
 /// `JSON.stringify` escaping, plus `${` — which would otherwise reopen an
 /// interpolation hole on re-lex (ADR 0023), so a hole-free string round-trips
@@ -224,6 +231,12 @@ type Comment = {
   trailing: bool
 }
 
+/// A plugin list's two kinds of format hook (`formatHooksFor`, ADR 0112).
+export type FormatHooks = {
+  rewrite: [Ast.Expr -> Option<Ast.Expr>],
+  layout: [Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc>]
+}
+
 export type Ctx = {
   leading: Map<string, [Comment]>,
   trailing: Map<string, [Comment]>,
@@ -231,7 +244,9 @@ export type Ctx = {
   shadowed: Set<string>,
   etaSkip: bool,
   formatHooks: [Ast.Expr -> Option<Ast.Expr>],
-  commentStarts: [number]
+  formatDocHooks: [Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc>],
+  commentStarts: [number],
+  src: string
 }
 // Program-level facts for the ADR 0065 / 0091 re-folds: how many arguments a
 // callable takes in one flat call, and which names the file rebinds.
@@ -246,7 +261,9 @@ export let noComments : Ctx = {
   shadowed: Set.fromArray([]),
   etaSkip: false,
   formatHooks: [],
-  commentStarts: []
+  formatDocHooks: [],
+  commentStarts: [],
+  src: ""
 }
 
 /// A statement and its expression can carry the SAME span (`test(…)` as an
@@ -1712,8 +1729,26 @@ let hooked = (cts: Ctx, e) =>
         ? e
         : runFormatHooks(cts.formatHooks, e) |> Option.unwrapOr(e)
 
-/// Every expression prints through here, so every path sees the hooks.
-let exprRaw = (cts, e) => cts->exprRawOf(cts->hooked(e))
+/// What a `formatDoc` hook is handed: the printers below, bound to `cts`.
+let formatApi = (cts: Ctx) =>
+  {
+    exprD: e => cts->exprD(e),
+    memberD: e => cts->memberD(e),
+    flat,
+    strLit,
+    sourceText: (start, end) => Str.slice(start, end, cts.src)
+  }
+
+/// Every expression prints through here, so every path sees the hooks. A
+/// `formatDoc` hook sees the node after any `format` rewrite.
+let exprRaw = (cts, e) =>
+  let node = cts->hooked(e) in
+    Array.length(cts.formatDocHooks) == 0
+      ? cts->exprRawOf(node)
+      : switch runFormatDocHooks(cts.formatDocHooks, node, formatApi(cts)) {
+        | Some(doc) => doc
+        | None => cts->exprRawOf(node)
+      }
 
 let exprRawOf = (cts, e) => switch e {
   | Ast.ENum(_, raw, _) => txt(raw)
@@ -2048,10 +2083,12 @@ let hasOpenDirective = src => switch Array.get(0, Str.split("\n", Str.trim(src))
 }
 
 /// Print an already-parsed program with comment and blank-line fidelity to `src`.
-export let formatProgram = (stmts, src) => formatProgramWith(stmts, src, [])
+export let formatProgram = (stmts, src) =>
+  let hooks : FormatHooks = formatHooksFor(None) in
+    formatProgramWith(stmts, src, hooks)
 
-/// `formatProgram` with plugin `format` hooks (`formatHooksFor`).
-export let formatProgramWith = (stmts, src, formatHooks) =>
+/// `formatProgram` with a plugin list's format hooks (`formatHooksFor`).
+export let formatProgramWith = (stmts, src, hooks: FormatHooks) =>
   // The two re-folds need program-level facts: a name the file rebinds must
   // not be regrouped against the prelude entry it shadows.
   let innerBound = Set.fromArray(Array.flatMap(stmtInnerNames, stmts)) in
@@ -2064,8 +2101,10 @@ export let formatProgramWith = (stmts, src, formatHooks) =>
     ...noComments,
     flatArity: buildFlatArity(stmts, innerBound),
     shadowed,
-    formatHooks,
-    commentStarts: comments |> map(c => c.start)
+    formatHooks: hooks.rewrite,
+    formatDocHooks: hooks.layout,
+    commentStarts: comments |> map(c => c.start),
+    src
   } in
   let attached = attachFrom(
     comments,

@@ -33,6 +33,7 @@ test("all bootstrap modules in the fixpoint graph are covered", () => {
       "doc",
       "show-type-expr",
       "format",
+      "format-api",
       "ctors",
       "extensions",
       "infer",
