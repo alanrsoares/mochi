@@ -1,15 +1,19 @@
-import type { Program } from "@mochi/compiler/ast";
-import { type Diagnostic, oneDiag } from "@mochi/compiler/errors";
-import { lex } from "@mochi/compiler/lexer";
-import { parse, parseRecovering } from "@mochi/compiler/parser";
-import { type FormatOptions, formatProgram } from "@mochi/dx/format";
-import { err, isErr, ok, type Result } from "@onrails/result";
+import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
+import { formatStmts, parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import type { Stmt } from "@mochi/compiler/bootstrap/types";
+import { err, ok, type Result } from "@onrails/result";
+
+/** A module's statements, as the bootstrap parser builds them (ADR 0109). */
+export type Program = readonly Stmt[];
 
 export type CodemodContext = { src: string; path?: string };
 
 export type CodemodTransform = (prog: Program, ctx: CodemodContext) => Program;
 
-export type CodemodOptions = FormatOptions & {
+export type CodemodOptions = {
+  /** Host plugins, added to the builtins (JSX); `[]` turns the builtins off too. */
+  plugins?: readonly BootstrapPlugin[];
   /** Source path (passed through to transform context). */
   path?: string;
   /** Fail when parse recovery reports diagnostics (default false). */
@@ -21,16 +25,12 @@ export const transformSource = (
   src: string,
   transform: CodemodTransform,
   opts: CodemodOptions = {},
-): Result<string, Diagnostic[]> => {
-  const lexed = lex(src);
-  if (isErr(lexed)) return err(oneDiag(lexed.error));
+): Result<string, BootstrapDiagnostic[]> => {
+  const parsed = parseProgram(src, opts.plugins);
+  if (parsed._tag === "Err") return err([parsed.error]);
+  const { stmts, diagnostics } = parsed.value;
+  if (opts.strict && diagnostics.length) return err([...diagnostics]);
 
   const ctx: CodemodContext = { src, path: opts.path };
-  if (opts.strict) {
-    const parsed = parse(lexed.value, { plugins: opts.plugins });
-    return isErr(parsed) ? parsed : ok(formatProgram(transform(parsed.value, ctx), src, opts));
-  }
-
-  const recovered = parseRecovering(lexed.value, { plugins: opts.plugins });
-  return ok(formatProgram(transform(recovered.program, ctx), src, opts));
+  return ok(formatStmts(transform(stmts, ctx), src, opts.plugins));
 };

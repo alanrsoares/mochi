@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@mochi/compiler": "workspace:*",
-    "@mochi/dx": "workspace:*",
     "@onrails/result": "^0.4.0"
   },
   "devDependencies": {

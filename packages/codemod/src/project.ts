@@ -1,12 +1,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import type { Diagnostic } from "@mochi/compiler/errors";
-import { formatError } from "@mochi/compiler/errors";
+import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
 import { isErr } from "@onrails/result";
 import { type CodemodOptions, type CodemodTransform, transformSource } from "./transform.ts";
 
 export type PathTransformResult =
   | { ok: true; path: string; changed: boolean; out: string }
-  | { ok: false; path: string; diagnostics: Diagnostic[] };
+  | { ok: false; path: string; diagnostics: BootstrapDiagnostic[] };
 
 export type ProjectOptions = CodemodOptions & {
   /** Apply changes in place. */
@@ -18,7 +17,7 @@ export type ProjectOptions = CodemodOptions & {
 export type ProjectReport = {
   changed: string[];
   unchanged: string[];
-  errors: { path: string; diagnostics: Diagnostic[] }[];
+  errors: { path: string; diagnostics: BootstrapDiagnostic[] }[];
 };
 
 const defaultIgnore = (part: string) =>
@@ -80,11 +79,19 @@ export const transformProject = (
   return report;
 };
 
+/** `path:line:col: message`, as the CLI prints the bootstrap graph's diagnostics. */
+export const formatDiagnostic = (path: string, src: string, d: BootstrapDiagnostic): string => {
+  const before = src.slice(0, d.start);
+  const line = before.split("\n").length;
+  const col = d.start - before.lastIndexOf("\n");
+  return `${path}:${line}:${col}: ${d.message}`;
+};
+
 export const printProjectErrors = (report: ProjectReport): void => {
   for (const { path, diagnostics } of report.errors) {
     const src = readFileSync(path, "utf8");
     for (const d of diagnostics) {
-      console.error(`${path}: ${formatError(d, src)}`);
+      console.error(formatDiagnostic(path, src, d));
     }
   }
 };
