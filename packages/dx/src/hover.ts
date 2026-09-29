@@ -277,11 +277,37 @@ const hoverFrom = (
     () => null,
   );
 
+/** The TS table's `SymbolInfo` for a bootstrap binder record, so `lead`/`docAt` serve both. */
+const symbolOf = (at: BootstrapTypeAt): SymbolInfo | undefined =>
+  at.sym._tag === "None"
+    ? undefined
+    : {
+        kind: at.sym.value.kind,
+        name: at.sym.value.name,
+        ...(at.sym.value.doc._tag === "Some" ? { doc: at.sym.value.doc.value } : {}),
+      };
+
+/**
+ * Alias folding is part of the hover presentation contract, and only the TS
+ * host folds yet. A record alias can only fold a closed record, so a type that
+ * prints no `{` is safe under an alias map holding record aliases alone; any
+ * transparent alias (`type Id = number`) could rename anything.
+ */
+const foldsUnder = (aliases: ReadonlyMap<string, unknown>, display: string): boolean =>
+  aliases.size > 0 &&
+  (display.includes("{") ||
+    [...aliases.values()].some(
+      (info) => (info as { expr?: { _tag: string } }).expr?._tag === "Some",
+    ));
+
 /**
  * Bootstrap's rendered type DTO is intentionally opaque: it lets the normal
- * builtin hover path avoid importing the TypeScript HM representation. Rich
- * declarations still fall through to `hoverFrom` until bootstrap carries the
- * corresponding symbol and layout metadata.
+ * builtin hover path avoid importing the TypeScript HM representation. A
+ * binder or field read carries its symbol (ADR 0119), so it leads with
+ * `let x: T` / `(parameter) x: T` / `(property) x: T` like the TS table does.
+ * What still falls through to `hoverFrom`: alias folding, externs (their lead
+ * keeps the source signature), free type and row variables (the host's
+ * renderer spells them) and leads past its width-aware layout.
  */
 export const bootstrapHoverFrom = (
   types: BootstrapTypeAt[],
@@ -290,33 +316,36 @@ export const bootstrapHoverFrom = (
   src: string,
   path: string,
 ): HoverInfo | null => {
-  // Alias folding is part of the established hover presentation contract.
-  if (aliases.size > 0) return null;
-  const lexed = lex(src);
-  if (isErr(lexed)) return null;
-  const key = path.startsWith("<") ? path : resolve(path);
-  const occurrence = indexProgram(key, parseRecovering(lexed.value).program).at(offset);
-  // Definitions and field-name occurrences need hover's richer symbol label.
-  // Their enclosing bootstrap expression/pattern span is not specific enough
-  // to distinguish the name from its parent yet.
-  const before = src.slice(0, offset + 1);
-  const tokenStart = before.search(/[A-Za-z_][A-Za-z0-9_]*$/);
-  const beforeToken = tokenStart === -1 ? "" : src.slice(0, tokenStart).trimEnd();
-  const arrow = src.indexOf("=>", offset);
-  const inLambdaParams = arrow !== -1 && !src.slice(offset, arrow).includes("\n");
-  if (
-    occurrence?.role === "def" ||
-    occurrence?.binding.space === "field" ||
-    beforeToken.endsWith(".") ||
-    inLambdaParams
-  )
-    return null;
   const hit = tightestHit(types, offset, spanContainsClosed);
   if (hit._tag === "None") return null;
-  // Free vars need the host's letter-scoping renderer; long output needs its
-  // width-aware Doc layout. Both remain compatibility fallbacks for now.
-  if (hit.value.display.includes("'t") || hit.value.display.length > 72) return null;
-  return { code: hit.value.display, doc: docAt(src, path, offset, undefined) };
+  const { display } = hit.value;
+  const symbol = symbolOf(hit.value);
+  if (foldsUnder(aliases, display) || symbol?.kind === "extern") return null;
+  const code = lead(display, symbol);
+  // Free type/row vars need the host's renderer; a lead past the layout width
+  // needs its line breaks.
+  if (/'[tr]\d/.test(display) || code.length > 72) return null;
+  if (!symbol) {
+    const lexed = lex(src);
+    if (isErr(lexed)) return null;
+    const key = path.startsWith("<") ? path : resolve(path);
+    const occurrence = indexProgram(key, parseRecovering(lexed.value).program).at(offset);
+    // A definition or field name without its own record: the tightest record
+    // is its parent's, so it would show the wrong type.
+    const before = src.slice(0, offset + 1);
+    const tokenStart = before.search(/[A-Za-z_][A-Za-z0-9_]*$/);
+    const beforeToken = tokenStart === -1 ? "" : src.slice(0, tokenStart).trimEnd();
+    const arrow = src.indexOf("=>", offset);
+    const inLambdaParams = arrow !== -1 && !src.slice(offset, arrow).includes("\n");
+    if (
+      occurrence?.role === "def" ||
+      occurrence?.binding.space === "field" ||
+      beforeToken.endsWith(".") ||
+      inLambdaParams
+    )
+      return null;
+  }
+  return { code, doc: docAt(src, path, offset, symbol) };
 };
 
 /**
