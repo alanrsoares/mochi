@@ -1936,7 +1936,7 @@ let stmtDoc = (cts: Ctx, stmts, i, src) => switch Array.get(i, stmts) {
           doc: importNsStmtD(alias.name, from),
           consumed: 1
         }
-      | Ast.SType(name, params, ctors, alias, aliasType, exported, _, _) => {
+      | Ast.SType(name, _, params, ctors, alias, aliasType, exported, _, _) => {
           doc: cat(
             [
               txt(expPrefix(exported)),
@@ -1992,7 +1992,7 @@ let stmtDoc = (cts: Ctx, stmts, i, src) => switch Array.get(i, stmts) {
 
 let stmtSpan = s => switch s {
   | Ast.SLet(_, _, _, _, _, _, sp) => sp
-  | Ast.SType(_, _, _, _, _, _, _, sp) => sp
+  | Ast.SType(_, _, _, _, _, _, _, _, sp) => sp
   | Ast.SExtern(_, _, _, _, _, _, _, _, _, sp) => sp
   | Ast.SImport(_, _, sp) => sp
   | Ast.SImportNs(_, _, sp) => sp
@@ -2084,7 +2084,7 @@ let stmtAnchors = s =>
     switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => exprAnchors(value)
       | Ast.SExpr(value, _) => exprAnchors(value)
-      | Ast.SType(_, _, ctors, _, _, _, _, _) =>
+      | Ast.SType(_, _, _, ctors, _, _, _, _, _) =>
         // A comment between two constructors anchors to the one it precedes.
         ctors |> map((c: Ast.Ctor) => { kind: CTOR, sp: c.span })
       | _ => []

@@ -436,7 +436,12 @@ const qualScopeOf: <A, B, C>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          fields: ({
+            optional: boolean;
+            fieldType: TypeExpr;
+            nameSpan: SpanAt;
+            name: string;
+          } & A)[];
           params: string[];
         } & B
       >;
@@ -453,7 +458,12 @@ const qualScopeOf: <A, B, C>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            fields: ({
+              optional: boolean;
+              fieldType: TypeExpr;
+              nameSpan: SpanAt;
+              name: string;
+            } & A)[];
             params: string[];
           } & B
         >;
@@ -2033,7 +2043,12 @@ const addDupMarkers: <A, B, E>(
                       `dup.${name}`,
                       {
                         params: ["_"],
-                        fields: [] as { fieldType: TypeExpr; name: string; optional: boolean }[],
+                        fields: [] as {
+                          fieldType: TypeExpr;
+                          name: string;
+                          nameSpan: { end: number; start: number };
+                          optional: boolean;
+                        }[],
                         expr: None,
                       },
                       acc,

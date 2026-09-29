@@ -108,7 +108,7 @@ let exportedOriginsFrom = (stmts, i, origins) => switch Array.get(i, stmts) {
         ctors: origins.ctors
       }
     )
-  | Some(Ast.SType(name, _, ctors, _, _, true, _, span)) => exportedOriginsFrom(
+  | Some(Ast.SType(name, _, _, ctors, _, _, true, _, span)) => exportedOriginsFrom(
       stmts,
       i + 1,
       {
@@ -253,7 +253,7 @@ let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
 let exportedTypeNames = stmts =>
   stmts
     |> Array.flatMap(s => switch s {
-      | Ast.SType(name, _, _, _, _, true, _, _) => [name]
+      | Ast.SType(name, _, _, _, _, _, true, _, _) => [name]
       | _ => []
     })
     |> Set.fromArray
@@ -264,9 +264,9 @@ let aliasesOf = stmts =>
   stmts
     |> Array.reduce(
       (acc, s) => switch s {
-        | Ast.SType(name, params, _, Some(fields), _, _, _, _) => acc
+        | Ast.SType(name, _, params, _, Some(fields), _, _, _, _) => acc
             |> Map.set(name, { params, fields, expr: None })
-        | Ast.SType(name, params, _, _, Some(te), _, _, _) => acc
+        | Ast.SType(name, _, params, _, _, Some(te), _, _, _) => acc
             |> Map.set(name, { params, fields: [], expr: Some(te) })
         | _ => acc
       },
@@ -910,7 +910,7 @@ let ownTypesInto = (stmts, path, acc) =>
   stmts
     |> Array.reduce(
       (a, s) => switch s {
-        | Ast.SType(name, _, _, _, _, _, _, _) => Map.has(name, a.owner)
+        | Ast.SType(name, _, _, _, _, _, _, _, _) => Map.has(name, a.owner)
             ? {
               owner: Map.set(name, path, a.owner),
               dups: Set.add(name, a.dups),
@@ -971,7 +971,7 @@ let aliasesForTs = (merged, local, dupNames) =>
 let localTypeNames = stmts =>
   stmts
     |> Array.flatMap(s => switch s {
-      | Ast.SType(name, _, _, _, _, _, _, _) => [name]
+      | Ast.SType(name, _, _, _, _, _, _, _, _) => [name]
       | _ => []
     })
     |> Set.fromArray

@@ -99,7 +99,7 @@ let writtenQualsFrom = (stmts, local, acc, i) => switch Array.get(i, stmts) {
       },
       i + 1
     )
-  | Some(Ast.SType(_, _, ctors, alias, aliasType, _, _, _)) => let acc1 = ctorQualsFrom(
+  | Some(Ast.SType(_, _, _, ctors, alias, aliasType, _, _, _)) => let acc1 = ctorQualsFrom(
       ctors,
       local,
       acc,
@@ -194,6 +194,7 @@ let qualifyCtor = (c: Ast.Ctor, qualify) =>
 let qualifyAliasField = (f: Ast.AliasField, qualify) =>
   {
     name: f.name,
+    nameSpan: f.nameSpan,
     fieldType: qualifyTe(f.fieldType, qualify),
     optional: f.optional
   }
@@ -203,7 +204,7 @@ let qualifyAliasField = (f: Ast.AliasField, qualify) =>
 /// an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
 let typeDeclsFrom = (stmts, aliases, recs, qualify, docs, i) => switch Array.get(i, stmts) {
   | None => []
-  | Some(Ast.SType(name, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeDeclsFrom(
+  | Some(Ast.SType(name, _, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeDeclsFrom(
       stmts,
       aliases,
       recs,

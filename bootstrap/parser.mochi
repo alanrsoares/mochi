@@ -832,8 +832,8 @@ let splitCallParts = (parts, positional, labeled) => switch parts {
 }
 
 let labeledField = p => switch p {
-  | CPLab(name, value, _) => { name, value }
-  | CPPos(value) => { name: "", value }
+  | CPLab(name, value, labelSpan) => { name, nameSpan: labelSpan, value }
+  | CPPos(value) => { name: "", nameSpan: exprSpan(value), value }
 }
 
 let unionSpans = (parts, acc) => switch parts {
@@ -1004,10 +1004,13 @@ let parseField = (toks, pos, hooks) =>
   let? (nm, p) = toks->expectLabel(pos) in
     tokAt(toks, p).tok == TColon
       ? let? (value, p2) = toks->parseExpr(p + 1, hooks) in
-        Ok(({ name: nm.name, value }, p2))
+        Ok(({ name: nm.name, nameSpan: nm.span, value }, p2))
       : keywordText(lt.tok) != None
       ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <expr>'", lt)
-      : Ok(({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p))
+      : Ok((
+        { name: nm.name, nameSpan: nm.span, value: Ast.ERef(nm.name, nm.span) },
+        p
+      ))
 
 // A leading `...base` (ADR 0021) makes this a record update: only one spread,
 // only at the front; any fields after it need a comma (mirrors src/parser.ts's
@@ -1337,10 +1340,17 @@ let parsePatField = (toks, pos) =>
   let? (nm, p) = expectLabel(toks, pos) in
     tokAt(toks, p).tok == TColon
       ? let? (pat, p2) = parsePattern(toks, p + 1) in
-        Ok(({ label: nm.name, pat }, p2))
+        Ok(({ label: nm.name, labelSpan: nm.span, pat }, p2))
       : keywordText(lt.tok) != None
       ? errAt("'${nm.name}' is a keyword — write '${nm.name}: <pattern>'", lt)
-      : Ok(({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p))
+      : Ok((
+        {
+          label: nm.name,
+          labelSpan: nm.span,
+          pat: Ast.PBind(nm.name, nm.span)
+        },
+        p
+      ))
 
 // --- type expressions (extern signatures + ctor fields) ---
 
@@ -1511,7 +1521,7 @@ let parseAliasField = (toks, pos) =>
   let p1 = optional ? p + 1 : p in
   let? p2 = expectTok(TColon, toks, p1) in
   let? (t, p3) = parseTypeExpr(toks, p2) in
-    Ok(({ name: nm.name, fieldType: t, optional }, p3))
+    Ok(({ name: nm.name, nameSpan: nm.span, fieldType: t, optional }, p3))
 
 // The `{ x: T, y: U }` body of a transparent record alias.
 let parseAliasBody = (toks, pos) =>
@@ -1553,6 +1563,7 @@ let parseType = (toks, pos) =>
           (
             Ast.SType(
               nm.name,
+              nm.span,
               params,
               [],
               Some(alias),
@@ -1568,6 +1579,7 @@ let parseType = (toks, pos) =>
         Ok((
           Ast.SType(
             nm.name,
+            nm.span,
             params,
             [],
             None,
@@ -1584,6 +1596,7 @@ let parseType = (toks, pos) =>
             (
               Ast.SType(
                 nm.name,
+                nm.span,
                 params,
                 ctors,
                 None,
@@ -1605,6 +1618,7 @@ let parseExtern = (toks, pos) =>
         Ok((
           Ast.SType(
             nm.name,
+            nm.span,
             [],
             [],
             None,
@@ -1790,8 +1804,9 @@ let setLetMeta = (exported, doc, s) => switch s {
   | other => other
 }
 let setTypeMeta = (exported, doc, s) => switch s {
-  | Ast.SType(name, params, ctors, alias, aliasType, _, _, span) => Ast.SType(
+  | Ast.SType(name, nameSpan, params, ctors, alias, aliasType, _, _, span) => Ast.SType(
       name,
+      nameSpan,
       params,
       ctors,
       alias,
@@ -1815,8 +1830,9 @@ let setExternMeta = (exported, doc, s) => switch s {
       doc,
       span
     )
-  | Ast.SType(name, params, ctors, alias, aliasType, _, _, span) => Ast.SType(
+  | Ast.SType(name, nameSpan, params, ctors, alias, aliasType, _, _, span) => Ast.SType(
       name,
+      nameSpan,
       params,
       ctors,
       alias,
@@ -1897,8 +1913,9 @@ let widenToExport = (start, s) => switch s {
       doc,
       spanning(start, span)
     )
-  | Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span) => Ast.SType(
+  | Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span) => Ast.SType(
       name,
+      nameSpan,
       params,
       ctors,
       alias,

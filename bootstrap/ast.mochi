@@ -23,13 +23,13 @@ export type LamParam =
   // remain spanless while editor-facing binders never need reconstructed text.
   | LPSpanned(param: LamParam, nameSpans: [Span])
 
-export type Field = { name: string, value: Expr }
+export type Field = { name: string, nameSpan: Span, value: Expr }
 type MapEntry = { key: Expr, value: Expr }
 type MatchArm = { pattern: Pattern, guard: Option<Expr>, body: Expr }
 
 // One `name = init` binder in a `loop (...)` head (ADR 0056).
 type LoopParam = { name: string, nameSpan: Span, init: Expr }
-type PatField = { label: string, pat: Pattern }
+type PatField = { label: string, labelSpan: Span, pat: Pattern }
 
 /// One slot in an Array / List / Set literal (ADR 0001).
 export type SeqElem =
@@ -109,11 +109,16 @@ export type TypeExpr =
 
 export type CtorField = { name: Option<string>, fieldType: TypeExpr }
 export type Ctor = { name: string, fields: [CtorField], span: Span }
-export type AliasField = { name: string, fieldType: TypeExpr, optional: bool }
+export type AliasField = {
+  name: string,
+  nameSpan: Span,
+  fieldType: TypeExpr,
+  optional: bool
+}
 
 export type Stmt =
   | SLet(name: string, nameSpan: Span, annot: Option<TypeExpr>, value: Expr, exported: bool, doc: Option<string>, span: Span)
-  | SType(name: string, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, aliasType: Option<TypeExpr>, exported: bool, doc: Option<string>, span: Span)
+  | SType(name: string, nameSpan: Span, params: [string], ctors: [Ctor], alias: Option<[AliasField]>, aliasType: Option<TypeExpr>, exported: bool, doc: Option<string>, span: Span)
   // `curried` marks a host written `a => b => c` rather than `(a, b) => c` — a
   // calling convention like `send`/`new`, not a property of the type (ADR 0064).
   | SExtern(name: string, nameSpan: Span, params: [string], typeExpr: TypeExpr, module: string, imported: string, curried: bool, exported: bool, doc: Option<string>, span: Span)

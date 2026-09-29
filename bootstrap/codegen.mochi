@@ -1683,7 +1683,7 @@ let genCtorsFrom = (s, ctors, h, refs, exported, i) => switch Array.get(i, ctors
 }
 
 let genType = (ctx: GCtx, s) => switch s {
-  | Ast.SType(_, _, ctors, _, _, exported, _, _) => Str.join(
+  | Ast.SType(_, _, _, ctors, _, _, exported, _, _) => Str.join(
       "\n",
       genCtorsFrom(s, ctors, ctx.annotateCtor, ctx.valueRefs, exported, 0)
     )
@@ -1812,7 +1812,9 @@ let genStmt = (ctx: GCtx, s) => switch s {
     "throw new Error(\"codegen invariant: error node reached codegen at ${show(sp.start)}\");"
   | Ast.SImport(_, _, _) => genImport(s, ctx.moduleExt)
   | Ast.SImportNs(_, _, _) => genImport(s, ctx.moduleExt)
-  | Ast.SType(_, _, _, _, _, exported, _, _) => let decls = ctx->genType(s) in
+  | Ast.SType(_, _, _, _, _, _, exported, _, _) => let decls = ctx->genType(
+      s
+    ) in
       decls == ""
         ? "" // record alias, or every ctor is pattern-only
         : exported
@@ -2098,7 +2100,7 @@ let boundNamesFrom = (valueRefs, stmts, i, acc) => switch Array.get(i, stmts) {
       switch s {
         | Ast.SLet(name, _, _, _, _, _, _) => Set.add(name, acc)
         | Ast.SExtern(name, _, _, _, _, _, _, _, _, _) => Set.add(name, acc)
-        | Ast.SType(_, _, ctors, _, _, exported, _, _) => Set.union(
+        | Ast.SType(_, _, _, ctors, _, _, exported, _, _) => Set.union(
             acc,
             Set.fromArray(
               ctors
@@ -2139,7 +2141,7 @@ let collectValueRefs = (ctx: GCtx, stmts, i, acc) => switch Array.get(i, stmts) 
 let refsForStmt = (ctx: GCtx, s) => switch s {
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
   | Ast.SExpr(value, _) => ctx->exprRefs(value, Set.fromArray([]))
-  | Ast.SType(_, _, ctors, _, _, exported, _, _) =>
+  | Ast.SType(_, _, _, ctors, _, _, exported, _, _) =>
     // A multi-field constructor lowers to `_curry(...)` in genType (which
     // exprRefs never walks), so seed the dep here — but only for factories
     // that will actually be emitted (exported, or used as a value).

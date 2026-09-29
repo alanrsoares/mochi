@@ -208,7 +208,11 @@ let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
             | _ => (Ast.EBool(true, attrId.span), pEq)
           }
         : (Ast.EBool(true, attrId.span), p1) in
-      let field = { name: attrId.name, value: valExpr } in
+      let field = {
+        name: attrId.name,
+        nameSpan: attrId.span,
+        value: valExpr
+      } in
         parseJsxAttributes(
           toks,
           p2,

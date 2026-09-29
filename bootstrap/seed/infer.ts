@@ -30,7 +30,12 @@ export type IErr = {
   help: Option<string>;
   suggestions: Suggestion[];
 };
-export type QualAliasField = { name: string; fieldType: TypeExpr; optional: boolean };
+export type QualAliasField = {
+  name: string;
+  nameSpan: SpanAt;
+  fieldType: TypeExpr;
+  optional: boolean;
+};
 export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type QualScope = { aliases: Map<string, QualAliasInfo> };
 /**
@@ -5417,74 +5422,111 @@ const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeE
                         ))(_v)
                     : te)(te),
 );
-const qualifyField: <C, D>(
-  fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
+const qualifyField: <D, E>(
+  fld: {
+    optional: boolean;
+    fieldType: TypeExpr;
+    nameSpan: { end: number; start: number };
+    name: string;
+  } & E,
   alias: string,
-  from: Map<string, C>,
+  from: Map<string, D>,
 ) => AliasField = _curry(
   3,
-  <C, D>(
-    fld: { optional: boolean; fieldType: TypeExpr; name: string } & D,
+  <D, E>(
+    fld: {
+      optional: boolean;
+      fieldType: TypeExpr;
+      nameSpan: { end: number; start: number };
+      name: string;
+    } & E,
     alias: string,
-    from: Map<string, C>,
+    from: Map<string, D>,
   ) => ({
     name: fld.name,
+    nameSpan: fld.nameSpan,
     fieldType: qualifyTe(fld.fieldType, alias, from),
     optional: fld.optional,
   }),
 );
-const qualifyInfo: <D, E, F>(
+const qualifyInfo: <E, F, G>(
   info: {
     expr: Option<TypeExpr>;
-    fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & E)[];
+    fields: ({
+      optional: boolean;
+      fieldType: TypeExpr;
+      nameSpan: { end: number; start: number };
+      name: string;
+    } & F)[];
     params: string[];
-  } & F,
+  } & G,
   alias: string,
-  from: Map<string, D>,
+  from: Map<string, E>,
 ) => QualAliasInfo = _curry(
   3,
-  <D, E, F>(
+  <E, F, G>(
     info: {
       expr: Option<TypeExpr>;
-      fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & E)[];
+      fields: ({
+        optional: boolean;
+        fieldType: TypeExpr;
+        nameSpan: { end: number; start: number };
+        name: string;
+      } & F)[];
       params: string[];
-    } & F,
+    } & G,
     alias: string,
-    from: Map<string, D>,
+    from: Map<string, E>,
   ) => ({
     params: info.params,
     fields: map(
-      (f: { optional: boolean; fieldType: TypeExpr; name: string } & E) =>
-        qualifyField(f, alias, from),
+      (
+        f: {
+          optional: boolean;
+          fieldType: TypeExpr;
+          nameSpan: { end: number; start: number };
+          name: string;
+        } & F,
+      ) => qualifyField(f, alias, from),
       info.fields,
     ),
     expr: _Option_map((te: TypeExpr) => qualifyTe(te, alias, from), info.expr),
   }),
 );
-const qualAliasSeedFrom: <D, E>(
+const qualAliasSeedFrom: <E, F>(
   names: string[],
   alias: string,
   from: Map<
     string,
     {
       expr: Option<TypeExpr>;
-      fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+      fields: ({
+        optional: boolean;
+        fieldType: TypeExpr;
+        nameSpan: { end: number; start: number };
+        name: string;
+      } & E)[];
       params: string[];
-    } & E
+    } & F
   >,
   acc: Map<string, QualAliasInfo>,
 ) => Map<string, QualAliasInfo> = _curry(
   4,
-  <D, E>(
+  <E, F>(
     names: string[],
     alias: string,
     from: Map<
       string,
       {
         expr: Option<TypeExpr>;
-        fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+        fields: ({
+          optional: boolean;
+          fieldType: TypeExpr;
+          nameSpan: { end: number; start: number };
+          name: string;
+        } & E)[];
         params: string[];
-      } & E
+      } & F
     >,
     acc: Map<string, QualAliasInfo>,
   ) =>
@@ -5511,7 +5553,7 @@ const qualAliasSeedFrom: <D, E>(
               throw new Error("non-exhaustive match");
             })())(names),
 );
-const qualAliasSeed: <D, E, F>(
+const qualAliasSeed: <E, F, G>(
   stmts: Stmt[],
   quals: Map<
     string,
@@ -5520,16 +5562,21 @@ const qualAliasSeed: <D, E, F>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+          fields: ({
+            optional: boolean;
+            fieldType: TypeExpr;
+            nameSpan: { end: number; start: number };
+            name: string;
+          } & E)[];
           params: string[];
-        } & E
+        } & F
       >;
-    } & F
+    } & G
   >,
   acc: Map<string, QualAliasInfo>,
 ) => Map<string, QualAliasInfo> = _curry(
   3,
-  <D, E, F>(
+  <E, F, G>(
     stmts: Stmt[],
     quals: Map<
       string,
@@ -5538,11 +5585,16 @@ const qualAliasSeed: <D, E, F>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & D)[];
+            fields: ({
+              optional: boolean;
+              fieldType: TypeExpr;
+              nameSpan: { end: number; start: number };
+              name: string;
+            } & E)[];
             params: string[];
-          } & E
+          } & F
         >;
-      } & F
+      } & G
     >,
     acc: Map<string, QualAliasInfo>,
   ) =>
@@ -5673,7 +5725,12 @@ const runInferImports: <A, B, C>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          fields: ({
+            optional: boolean;
+            fieldType: TypeExpr;
+            nameSpan: SpanAt;
+            name: string;
+          } & A)[];
           params: string[];
         } & B
       >;
@@ -5704,7 +5761,12 @@ const runInferImports: <A, B, C>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            fields: ({
+              optional: boolean;
+              fieldType: TypeExpr;
+              nameSpan: SpanAt;
+              name: string;
+            } & A)[];
             params: string[];
           } & B
         >;
@@ -5862,7 +5924,12 @@ export const scopeAliases: <A, B, C>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          fields: ({
+            optional: boolean;
+            fieldType: TypeExpr;
+            nameSpan: SpanAt;
+            name: string;
+          } & A)[];
           params: string[];
         } & B
       >;
@@ -5879,7 +5946,12 @@ export const scopeAliases: <A, B, C>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            fields: ({
+              optional: boolean;
+              fieldType: TypeExpr;
+              nameSpan: SpanAt;
+              name: string;
+            } & A)[];
             params: string[];
           } & B
         >;
@@ -5905,7 +5977,12 @@ export const inferProgramImports: <A, B, C>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          fields: ({
+            optional: boolean;
+            fieldType: TypeExpr;
+            nameSpan: SpanAt;
+            name: string;
+          } & A)[];
           params: string[];
         } & B
       >;
@@ -5928,7 +6005,12 @@ export const inferProgramImports: <A, B, C>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            fields: ({
+              optional: boolean;
+              fieldType: TypeExpr;
+              nameSpan: SpanAt;
+              name: string;
+            } & A)[];
             params: string[];
           } & B
         >;
@@ -5995,7 +6077,12 @@ export const inferProgramImportsTypes: <A, B, C>(
         string,
         {
           expr: Option<TypeExpr>;
-          fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+          fields: ({
+            optional: boolean;
+            fieldType: TypeExpr;
+            nameSpan: SpanAt;
+            name: string;
+          } & A)[];
           params: string[];
         } & B
       >;
@@ -6026,7 +6113,12 @@ export const inferProgramImportsTypes: <A, B, C>(
           string,
           {
             expr: Option<TypeExpr>;
-            fields: ({ optional: boolean; fieldType: TypeExpr; name: string } & A)[];
+            fields: ({
+              optional: boolean;
+              fieldType: TypeExpr;
+              nameSpan: SpanAt;
+              name: string;
+            } & A)[];
             params: string[];
           } & B
         >;

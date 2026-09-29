@@ -1673,9 +1673,9 @@ const splitCallParts: _Curry<
 const labeledField: (p: CallPart) => Field = (p: CallPart) =>
   ((_v) =>
     _v._tag === "CPLab"
-      ? (({ name, value }) => ({ name: name, value: value }))(_v)
+      ? (({ name, value, labelSpan }) => ({ name: name, nameSpan: labelSpan, value: value }))(_v)
       : _v._tag === "CPPos"
-        ? (({ value }) => ({ name: "", value: value }))(_v)
+        ? (({ value }) => ({ name: "", nameSpan: exprSpan(value), value: value }))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(p);
@@ -2092,15 +2092,17 @@ const parseField: _Curry<
         tokAt(toks, p).tok._tag === "TColon"
           ? _Result_flatMap(
               ([value, p2]) =>
-                Ok(_tuple({ name: nm.name, value: value }, p2)) as Result<[Field, number], PErr>,
+                Ok(_tuple({ name: nm.name, nameSpan: nm.span, value: value }, p2)) as Result<
+                  [Field, number],
+                  PErr
+                >,
               parseExpr(toks, p + 1, hooks),
             )
           : keywordText(lt.tok)._tag !== "None"
             ? errAt(`'${nm.name}' is a keyword — write '${nm.name}: <expr>'`, lt)
-            : (Ok(_tuple({ name: nm.name, value: Ast.ERef(nm.name, nm.span) }, p)) as Result<
-                [Field, number],
-                PErr
-              >),
+            : (Ok(
+                _tuple({ name: nm.name, nameSpan: nm.span, value: Ast.ERef(nm.name, nm.span) }, p),
+              ) as Result<[Field, number], PErr>),
       expectLabel(toks, pos),
     );
   },
@@ -3132,15 +3134,17 @@ const parsePatField: _Curry<
       tokAt(toks, p).tok._tag === "TColon"
         ? _Result_flatMap(
             ([pat, p2]) =>
-              Ok(_tuple({ label: nm.name, pat: pat }, p2)) as Result<[PatField, number], PErr>,
+              Ok(_tuple({ label: nm.name, labelSpan: nm.span, pat: pat }, p2)) as Result<
+                [PatField, number],
+                PErr
+              >,
             parsePattern(toks, p + 1),
           )
         : keywordText(lt.tok)._tag !== "None"
           ? errAt(`'${nm.name}' is a keyword — write '${nm.name}: <pattern>'`, lt)
-          : (Ok(_tuple({ label: nm.name, pat: Ast.PBind(nm.name, nm.span) }, p)) as Result<
-              [PatField, number],
-              PErr
-            >),
+          : (Ok(
+              _tuple({ label: nm.name, labelSpan: nm.span, pat: Ast.PBind(nm.name, nm.span) }, p),
+            ) as Result<[PatField, number], PErr>),
     expectLabel(toks, pos),
   );
 });
@@ -3446,10 +3450,12 @@ const parseAliasField: _Curry<
             (p2) =>
               _Result_flatMap(
                 ([t, p3]) =>
-                  Ok(_tuple({ name: nm.name, fieldType: t, optional: optional }, p3)) as Result<
-                    [AliasField, number],
-                    PErr
-                  >,
+                  Ok(
+                    _tuple(
+                      { name: nm.name, nameSpan: nm.span, fieldType: t, optional: optional },
+                      p3,
+                    ),
+                  ) as Result<[AliasField, number], PErr>,
                 parseTypeExpr(toks, p2),
               ),
             expectTok(TColon as Tok, toks, p1),
@@ -3530,6 +3536,7 @@ const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PE
                             _tuple(
                               Ast.SType(
                                 nm.name,
+                                nm.span,
                                 params,
                                 [] as Ctor[],
                                 Some(alias) as Option<AliasField[]>,
@@ -3549,6 +3556,7 @@ const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PE
                                 _tuple(
                                   Ast.SType(
                                     nm.name,
+                                    nm.span,
                                     params,
                                     [] as Ctor[],
                                     None as Option<AliasField[]>,
@@ -3568,6 +3576,7 @@ const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PE
                                 _tuple(
                                   Ast.SType(
                                     nm.name,
+                                    nm.span,
                                     params,
                                     ctors,
                                     None as Option<AliasField[]>,
@@ -3605,6 +3614,7 @@ const parseExtern: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], 
                       _tuple(
                         Ast.SType(
                           nm.name,
+                          nm.span,
                           [] as string[],
                           [] as Ctor[],
                           None as Option<AliasField[]>,
@@ -3989,8 +3999,8 @@ const setTypeMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stm
   (exported: boolean, doc: Option<string>, s: Stmt) =>
     ((_v) =>
       _v._tag === "SType"
-        ? (({ name, params, ctors, alias, aliasType, span }) =>
-            Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span))(_v)
+        ? (({ name, nameSpan, params, ctors, alias, aliasType, span }) =>
+            Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span))(_v)
         : ((other) => other)(_v))(s),
 );
 const setExternMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
@@ -4001,8 +4011,8 @@ const setExternMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], S
         ? (({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) =>
             Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span))(_v)
         : _v._tag === "SType"
-          ? (({ name, params, ctors, alias, aliasType, span }) =>
-              Ast.SType(name, params, ctors, alias, aliasType, exported, doc, span))(_v)
+          ? (({ name, nameSpan, params, ctors, alias, aliasType, span }) =>
+              Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span))(_v)
           : ((other) => other)(_v))(s),
 );
 const parseExprStmt: <B>(
@@ -4126,9 +4136,10 @@ const widenToExport: <A>(start: { start: number } & A, s: Stmt) => Stmt = _curry
         ? (({ name, nameSpan, annot, value, exported, doc, span }) =>
             Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span)))(_v)
         : _v._tag === "SType"
-          ? (({ name, params, ctors, alias, aliasType, exported, doc, span }) =>
+          ? (({ name, nameSpan, params, ctors, alias, aliasType, exported, doc, span }) =>
               Ast.SType(
                 name,
+                nameSpan,
                 params,
                 ctors,
                 alias,

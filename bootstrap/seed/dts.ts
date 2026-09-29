@@ -341,6 +341,7 @@ const qualifyAliasField: _Curry<[f: AliasField, qualify: Map<string, string>], A
   2,
   (f: AliasField, qualify: Map<string, string>) => ({
     name: f.name,
+    nameSpan: f.nameSpan,
     fieldType: qualifyTe(f.fieldType, qualify),
     optional: f.optional,
   }),

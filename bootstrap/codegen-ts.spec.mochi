@@ -100,8 +100,18 @@ test("a record alias renders structurally", () =>
       "Point",
       [],
       [
-        { name: "x", fieldType: Ast.TyName("number", sp), optional: false },
-        { name: "y", fieldType: Ast.TyName("number", sp), optional: false }
+        {
+          name: "x",
+          nameSpan: sp,
+          fieldType: Ast.TyName("number", sp),
+          optional: false
+        },
+        {
+          name: "y",
+          nameSpan: sp,
+          fieldType: Ast.TyName("number", sp),
+          optional: false
+        }
       ],
       #{},
       #{}
@@ -114,7 +124,14 @@ test("an optional alias field renders with ?", () =>
     recordAliasDecl(
       "Props",
       [],
-      [{ name: "id", fieldType: Ast.TyName("string", sp), optional: true }],
+      [
+        {
+          name: "id",
+          nameSpan: sp,
+          fieldType: Ast.TyName("string", sp),
+          optional: true
+        }
+      ],
       #{},
       #{}
     )
@@ -516,11 +533,13 @@ test("recordAliasIndex keys a nullary record alias by sorted shape", () =>
           fields: [
             {
               name: "start",
+              nameSpan: sp,
               fieldType: Ast.TyName("number", sp),
               optional: false
             },
             {
               name: "end",
+              nameSpan: sp,
               fieldType: Ast.TyName("number", sp),
               optional: false
             }
@@ -540,7 +559,12 @@ test("recordAliasIndex skips a parameterised alias", () =>
         "Box": {
           params: ["a"],
           fields: [
-            { name: "value", fieldType: Ast.TyName("a", sp), optional: false }
+            {
+              name: "value",
+              nameSpan: sp,
+              fieldType: Ast.TyName("a", sp),
+              optional: false
+            }
           ],
           expr: None
         }
@@ -552,15 +576,30 @@ let spanAliases = #{
   "Span": {
     params: [],
     fields: [
-      { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
-      { name: "end", fieldType: Ast.TyName("number", sp), optional: false }
+      {
+        name: "start",
+        nameSpan: sp,
+        fieldType: Ast.TyName("number", sp),
+        optional: false
+      },
+      {
+        name: "end",
+        nameSpan: sp,
+        fieldType: Ast.TyName("number", sp),
+        optional: false
+      }
     ],
     expr: None
   },
   "Other.Span": {
     params: ["a"],
     fields: [
-      { name: "value", fieldType: Ast.TyName("a", sp), optional: false }
+      {
+        name: "value",
+        nameSpan: sp,
+        fieldType: Ast.TyName("a", sp),
+        optional: false
+      }
     ],
     expr: None
   }
@@ -592,11 +631,27 @@ test("a parameterised local homonym does not print a dep's nullary name", () =>
   let dep = {
     params: [],
     fields: [
-      { name: "tok", fieldType: Ast.TyName("string", sp), optional: false },
-      { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
-      { name: "end", fieldType: Ast.TyName("number", sp), optional: false },
+      {
+        name: "tok",
+        nameSpan: sp,
+        fieldType: Ast.TyName("string", sp),
+        optional: false
+      },
+      {
+        name: "start",
+        nameSpan: sp,
+        fieldType: Ast.TyName("number", sp),
+        optional: false
+      },
+      {
+        name: "end",
+        nameSpan: sp,
+        fieldType: Ast.TyName("number", sp),
+        optional: false
+      },
       {
         name: "doc",
+        nameSpan: sp,
         fieldType: Ast.TyApp("Option", [Ast.TyName("string", sp)], sp),
         optional: false
       }
@@ -651,13 +706,24 @@ test("a unique alias keeps a shape a duplicate name would blank", () =>
   let fld = {
     params: [],
     fields: [
-      { name: "name", fieldType: Ast.TyName("string", sp), optional: false },
+      {
+        name: "name",
+        nameSpan: sp,
+        fieldType: Ast.TyName("string", sp),
+        optional: false
+      },
       {
         name: "fieldType",
+        nameSpan: sp,
         fieldType: Ast.TyName("TypeExpr", sp),
         optional: false
       },
-      { name: "optional", fieldType: Ast.TyName("bool", sp), optional: false }
+      {
+        name: "optional",
+        nameSpan: sp,
+        fieldType: Ast.TyName("bool", sp),
+        optional: false
+      }
     ],
     expr: None
   } in
@@ -667,16 +733,19 @@ test("a unique alias keeps a shape a duplicate name would blank", () =>
       fields: [
         {
           name: "params",
+          nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
           optional: false
         },
         {
           name: "fields",
+          nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
           optional: false
         },
         {
           name: "expr",
+          nameSpan: sp,
           fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
           optional: false
         }
@@ -711,13 +780,24 @@ test("the module that declares the duplicate alias still prints it", () =>
   let fld = {
     params: [],
     fields: [
-      { name: "name", fieldType: Ast.TyName("string", sp), optional: false },
+      {
+        name: "name",
+        nameSpan: sp,
+        fieldType: Ast.TyName("string", sp),
+        optional: false
+      },
       {
         name: "fieldType",
+        nameSpan: sp,
         fieldType: Ast.TyName("TypeExpr", sp),
         optional: false
       },
-      { name: "optional", fieldType: Ast.TyName("bool", sp), optional: false }
+      {
+        name: "optional",
+        nameSpan: sp,
+        fieldType: Ast.TyName("bool", sp),
+        optional: false
+      }
     ],
     expr: None
   } in
@@ -727,16 +807,19 @@ test("the module that declares the duplicate alias still prints it", () =>
       fields: [
         {
           name: "params",
+          nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
           optional: false
         },
         {
           name: "fields",
+          nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
           optional: false
         },
         {
           name: "expr",
+          nameSpan: sp,
           fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
           optional: false
         }

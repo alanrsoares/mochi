@@ -30,19 +30,11 @@ export const bootstrapDocumentSymbolsAt = (src: string): DocSymbol[] => {
         });
       continue;
     }
-    if (stmt._tag !== "SType" || !stmt.name || !stmt.span) continue;
+    if (stmt._tag !== "SType" || !stmt.name || !stmt.nameSpan || !stmt.span) continue;
+    out.push({ name: stmt.name, kind: "type", span: stmt.nameSpan });
     const tokens = lexed.value.filter(
       (token) => stmt.span!.start <= token.start && token.end <= stmt.span!.end,
     );
-    const typeName = tokens.find(
-      (token, index) => tokens[index - 1]?.tok._tag === "TType" && token.tok._tag === "TId",
-    );
-    if (typeName)
-      out.push({
-        name: stmt.name,
-        kind: "type",
-        span: { start: typeName.start, end: typeName.end },
-      });
     for (const ctor of stmt.ctors ?? []) {
       const ctorToken = tokens.find(
         (token, index) =>
