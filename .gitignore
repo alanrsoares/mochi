@@ -89,3 +89,6 @@ test/.mochi-cli-*/
 
 .claude
 test/conformance/.candidate/
+
+# Local agent notes and handoffs; never committed.
+/.scratch/
