@@ -85,7 +85,7 @@ const timeAsync = async <A>(timings: Timings, key: string, f: () => Promise<A>):
 const FORMAT_FILES = [
   "bootstrap/parser.mochi",
   "bootstrap/infer.mochi",
-  "examples/snake/src/app.mochi",
+  "examples/snake/src/App.mochi",
 ];
 
 const repoMochiFiles = (): string[] =>
