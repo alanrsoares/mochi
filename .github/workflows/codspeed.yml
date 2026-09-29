@@ -1,0 +1,46 @@
+name: CodSpeed
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets CodSpeed backfill history for earlier commits.
+  workflow_dispatch:
+
+concurrency:
+  group: codspeed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The `bun run bench` cases (scripts/lib/bench-suites.ts), bundled for Node
+  # and run by CodSpeed in simulation mode: instruction counts under Valgrind,
+  # so a result does not move with the runner's load. See bench/codspeed.ts
+  # for why they run in a worker thread.
+  codspeed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC authentication with CodSpeed
+    steps:
+      # The job runs pull-request code and never pushes, so the token stays out
+      # of .git/config.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun scripts/build-codspeed.ts
+
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          run: node .cache/codspeed/bench.mjs
