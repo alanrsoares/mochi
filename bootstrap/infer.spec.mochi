@@ -120,6 +120,45 @@ test("inference records every node, not just top-level bindings", () => switch t
   | Err(_) => false |> ok
 })
 
+// ---- binder records (ADR 0119) ----
+
+/// The binder recorded at exactly `start..end`, as `kind name: type`.
+let binderAt = (src, start, end) =>
+  typesOf(src)
+    |> Result.unwrapOr([])
+    |> Array.filter(r => r.span.start == start && r.span.end == end)
+    |> Array.flatMap(r => switch r.sym {
+      | Some(s) => ["${s.kind} ${s.name}: ${showType(r.ty)}"]
+      | None => []
+    })
+    |> lastOf
+    |> Option.unwrapOr("<none>")
+
+testEach("a binder's name span carries its symbol", [
+  ("let n = 1", 4, 5, "let n: number"),
+  ("let f = (x: number) => x", 9, 10, "parameter x: number"),
+  ("let f = ((a, b)) => add(a, b)", 10, 11, "parameter a: number"),
+  ("let f = (~k = 1) => k", 10, 11, "parameter k: number"),
+  ("let n = let y = 1 in y", 12, 13, "let y: number"),
+  ("let g = r => r.q + 1", 13, 16, "property q: number"),
+  (
+    "let n = switch Some(1) { | Some(v) as o => v | None => 0 }",
+    32,
+    33,
+    "parameter v: number"
+  ),
+  ("let n = loop (i = 0) { i }", 14, 15, "let i: number")
+], ((src, start, end, want)) => assertEq(want, binderAt(src, start, end)))
+
+test("a top-level let's binder carries its doc", () => switch typesOf("/// the answer\nlet n = 42") {
+  | Ok(types) => types
+      |> Array.flatMap(r => switch r.sym { | Some(s) => [s.doc] | None => [] })
+      |> Array.get(0)
+      |> Option.flatMap(d => d)
+      |> assertEq(Some("the answer"))
+  | Err(_) => false |> ok
+})
+
 test("unbound name suggests a close binding", () => switch lex("let count = 1\nlet n = coun") |> Result.flatMap(parse) |> Result.flatMap(check) {
   | Err(_) => false |> ok
   | Ok(stmts) => switch inferProgram(stmts, builtins, namespaces, false) {

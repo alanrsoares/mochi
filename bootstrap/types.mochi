@@ -218,7 +218,14 @@ let someOf = (f, xs) => someOfFrom(f, xs, 0)
 /// this shape rather than being imported.
 export type SpanAt = { start: number, end: number }
 
-export type TypeAt = { span: SpanAt, ty: Ty }
+/// Who a binder span names, for hover's `let x: T` / `(parameter) x: T` lead
+/// (ADR 0119). Mirrors src/infer.ts's `SymbolInfo`: `kind` is "let",
+/// "parameter", "property" or "extern"; `doc` is a top-level `///` comment.
+export type BinderSym = { kind: string, name: string, doc: Option<string> }
+
+/// `sym` is set only where a name is bound (or a field read), never on a
+/// plain expression or pattern node.
+export type TypeAt = { span: SpanAt, ty: Ty, sym: Option<BinderSym> }
 
 /// `recorded` accumulates one entry per inferred Expr/Pattern node, newest
 /// first (prepend is O(1)); `inferProgramImports` reverses it once so later
@@ -272,16 +279,23 @@ export let idSet = (id, v, m) =>
 /// Every bound id.
 export let idKeys = m => Map.values(m) |> Array.flatMap(Map.keys)
 
-/// Append an inferred node type to the threaded record log.
-export let recordAt = (span, t, st: St) =>
+/// Append an inferred type, and the binder it names if any, to the record log.
+let recordSymAt = (span, t, sym, st: St) =>
   let rec = st.recorded in
-  let at = { span, ty: t } in
+  let at = { span, ty: t, sym } in
     {
       ...st,
       recorded: Array.length(rec.cur) < ID_CHUNK
         ? { cur: Array.append(at, rec.cur), full: rec.full }
         : { cur: [at], full: Array.append(rec.cur, rec.full) }
     }
+
+/// Append an inferred node type to the threaded record log.
+export let recordAt = (span, t, st: St) => recordSymAt(span, t, None, st)
+
+/// Record the type bound at a binder's name span (ADR 0119).
+export let recordBinder = (span, t, kind, name, doc, st: St) =>
+  recordSymAt(span, t, Some({ kind, name, doc }), st)
 
 /// The record log in the order it was written.
 export let recordedTypes = (st: St) =>

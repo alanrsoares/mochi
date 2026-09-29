@@ -521,3 +521,140 @@ export let ctorScheme = (typeName, params, c, st: Types.St, aliases: Map<string,
   let (ty, st2) = ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result) in
   let sets = collect(ty, emptyVarSets) in
     ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty }, st2)
+
+// ============================================================
+// Alias folding for go-to-type (ADR 0119). The twin of src/ast/types.ts's
+// `matchTemplate` / `foldAliases`, at the head only: the record alias a
+// recorded type folds back to, if any.
+// ============================================================
+
+let matchTysFrom = (tpls, actuals, params, binds: Map<number, Types.Ty>, i) => switch (Array.get(i, tpls), Array.get(i, actuals)) {
+  | (Some(tpl), Some(actual)) => matchTy(tpl, actual, params, binds)
+      |> Option.flatMap(b => matchTysFrom(tpls, actuals, params, b, i + 1))
+  | _ => Some(binds)
+}
+
+/// A closed row's fields; `None` for an open one, which never folds.
+let closedFieldsOf = (row, acc) => switch row {
+  | RowEmpty => Some(acc)
+  | RowVar(_) => None
+  | RowExtend(label, fieldType, optional, rest) => closedFieldsOf(
+      rest,
+      Array.append({ label, fieldType, optional }, acc)
+    )
+}
+
+let matchFieldsFrom = (tpls, actuals, params, binds: Map<number, Types.Ty>, i) => switch Array.get(i, tpls) {
+  | None => Some(binds)
+  | Some(t) => switch Array.find(a => a.label == t.label, actuals) {
+      | Some(a) => a.optional == t.optional
+          ? matchTy(t.fieldType, a.fieldType, params, binds)
+            |> Option.flatMap(b =>
+              matchFieldsFrom(tpls, actuals, params, b, i + 1))
+          : None
+      | None => None
+    }
+}
+
+/// Does `actual` fit the template `tpl`? A var in `params` binds, and a repeat
+/// must agree; a record matches only closed, with the same labels.
+let matchTy = (tpl, actual, params, binds: Map<number, Types.Ty>) => switch (tpl, actual) {
+  | (TyVar(id), _) when Set.has(id, params) => switch Map.get(id, binds) {
+      | Some(prev) => Types.showType(prev) == Types.showType(actual)
+          ? Some(binds)
+          : None
+      | None => Some(Map.set(id, actual, binds))
+    }
+  | (TyVar(a), TyVar(b)) => a == b ? Some(binds) : None
+  | (TyCon(n, targs), TyCon(m, aargs)) => n == m && Array.length(
+      targs
+    ) == Array.length(aargs)
+      ? matchTysFrom(targs, aargs, params, binds, 0)
+      : None
+  | (TyFn(tf, tt), TyFn(af, at)) => matchTy(tf, af, params, binds)
+      |> Option.flatMap(b => matchTy(tt, at, params, b))
+  | (TyRecord(trow), TyRecord(arow)) => switch (closedFieldsOf(trow, []), closedFieldsOf(arow, [])) {
+      | (Some(tfs), Some(afs)) => Array.length(tfs) == Array.length(afs)
+          ? matchFieldsFrom(tfs, afs, params, binds, 0)
+          : None
+      | _ => None
+    }
+  | (TySingleton(tb, tv), TySingleton(ab, av)) => tb == ab && tv == av
+      ? Some(binds)
+      : None
+  | (TyOneOf(_), TyOneOf(_)) => Types.showType(tpl) == Types.showType(actual)
+      ? Some(binds)
+      : None
+  | _ => None
+}
+
+let templateRowFrom = (fields: [Ast.AliasField], vars, aliases: Map<string, AliasInfo>, i) => switch Array.get(i, fields) {
+  | None => RowEmpty
+  | Some(f) => let (t, _vars, _st) = typeExprToType(
+      f.fieldType,
+      vars,
+      Types.mkSt(0),
+      aliases,
+      Set.fromArray([])
+    ) in
+      RowExtend(
+        f.name,
+        t,
+        f.optional,
+        templateRowFrom(fields, vars, aliases, i + 1)
+      )
+}
+
+/// Template ids sit far below the inferrer's (which start at 1000), so a
+/// template var never collides with a var of the type it is matched against.
+let templateVars = params =>
+  Array.reduce(
+    ((vs, ids), p) =>
+      let id = -1000000 - Array.length(ids) in
+        (Map.set(p, TyVar(id), vs), Array.append(id, ids)),
+    (#{}, []),
+    params
+  )
+
+let allBound = (ids, binds: Map<number, Types.Ty>) =>
+  Array.length(Array.filter(id => !Map.has(id, binds), ids)) == 0
+
+let bareAliasName = key =>
+  let parts = Str.split(".", key) in
+    Option.unwrapOr(key, Array.get(Array.length(parts) - 1, parts))
+
+let foldingAliasFrom = (t, keys, aliases: Map<string, AliasInfo>, i) => switch Array.get(i, keys) {
+  | None => None
+  | Some(key) => let next = () => foldingAliasFrom(t, keys, aliases, i + 1) in
+      switch Map.get(key, aliases) {
+        | Some(info) => switch info.expr {
+            | Some(_) => next()
+            | None => let (vars, ids) = templateVars(info.params) in
+              let tpl = TyRecord(
+                templateRowFrom(info.fields, vars, aliases, 0)
+              ) in
+                switch matchTy(tpl, t, Set.fromArray(ids), #{}) {
+                  | Some(binds) => allBound(ids, binds)
+                      ? Some(bareAliasName(key))
+                      : next()
+                  | None => next()
+                }
+          }
+        | None => next()
+      }
+}
+
+/// The declared type a recorded type names, for go-to-type: a capitalised
+/// constructor head, or the first record alias (in declaration order) whose
+/// closed row it fits once literals widen. A phantom alias param cannot be
+/// named from the row, so that alias is skipped, as in src/ast/types.ts.
+export let nominalTypeName = (t, aliases: Map<string, AliasInfo>) => switch widenLits(t) {
+  | TyCon(name, _) => isUpperStart(name) ? Some(name) : None
+  | TyRecord(row) => foldingAliasFrom(
+      TyRecord(row),
+      Map.keys(aliases),
+      aliases,
+      0
+    )
+  | _ => None
+}

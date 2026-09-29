@@ -23,7 +23,17 @@ export type Row =
  * this shape rather than being imported.
  */
 export type SpanAt = { start: number; end: number };
-export type TypeAt = { span: SpanAt; ty: Ty };
+/**
+ * Who a binder span names, for hover's `let x: T` / `(parameter) x: T` lead
+ * (ADR 0119). Mirrors src/infer.ts's `SymbolInfo`: `kind` is "let",
+ * "parameter", "property" or "extern"; `doc` is a top-level `///` comment.
+ */
+export type BinderSym = { kind: string; name: string; doc: Option<string> };
+/**
+ * `sym` is set only where a name is bound (or a field read), never on a
+ * plain expression or pattern node.
+ */
+export type TypeAt = { span: SpanAt; ty: Ty; sym: Option<BinderSym> };
 /**
  * `recorded` accumulates one entry per inferred Expr/Pattern node, newest
  * first (prepend is O(1)); `inferProgramImports` reverses it once so later
@@ -408,13 +418,13 @@ export const idSet: <A>(
 export const idKeys: <A, B, C>(m: Map<A, Map<B, C>>) => B[] = <A, B, C>(m: Map<A, Map<B, C>>) =>
   _Array_flatMap(_Map_keys, _Map_values(m));
 /**
- * Append an inferred node type to the threaded record log.
+ * Append an inferred type, and the binder it names if any, to the record log.
  */
-export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
-  3,
-  (span: SpanAt, t: Ty, st: St) => {
+const recordSymAt: _Curry<[span: SpanAt, t: Ty, sym: Option<BinderSym>, st: St], St> = _curry(
+  4,
+  (span: SpanAt, t: Ty, sym: Option<BinderSym>, st: St) => {
     const rec: Recorded = st.recorded;
-    const at: TypeAt = { span: span, ty: t };
+    const at: TypeAt = { span: span, ty: t, sym: sym };
     return {
       ...st,
       recorded:
@@ -423,6 +433,22 @@ export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
           : { cur: [at], full: _Array_append(rec.cur, rec.full) },
     };
   },
+);
+/**
+ * Append an inferred node type to the threaded record log.
+ */
+export const recordAt: _Curry<[span: SpanAt, t: Ty, st: St], St> = _curry(
+  3,
+  (span: SpanAt, t: Ty, st: St) => recordSymAt(span, t, None as Option<BinderSym>, st),
+);
+/**
+ * Record the type bound at a binder's name span (ADR 0119).
+ */
+export const recordBinder: _Curry<
+  [span: SpanAt, t: Ty, kind: string, name: string, doc: Option<string>, st: St],
+  St
+> = _curry(6, (span: SpanAt, t: Ty, kind: string, name: string, doc: Option<string>, st: St) =>
+  recordSymAt(span, t, Some({ kind: kind, name: name, doc: doc }) as Option<BinderSym>, st),
 );
 /**
  * The record log in the order it was written.

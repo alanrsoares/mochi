@@ -44,6 +44,7 @@ import {
   showType,
   mkSt,
   recordAt,
+  recordBinder,
   noteLet,
   noteUse,
   freshVar,
@@ -324,8 +325,52 @@ let bindParamFieldsFrom = (fields, env, row, st: Types.St) => switch fields {
       )
 }
 
+// Record each destructured name at its span, as src/infer.ts's `bindParam`
+// does for tuple and record params. A plain name is recorded by its binder
+// (`let?` as `let`, a lambda as `parameter`), so it is skipped here.
+let recordParamNamesFrom = (names, spans, types, i, st: Types.St) => switch (Array.get(i, names), Array.get(i, spans), Array.get(i, types)) {
+  | (Some(n), Some(sp), Some(t)) => recordParamNamesFrom(
+      names,
+      spans,
+      types,
+      i + 1,
+      recordBinder(sp, t, "parameter", n, None, st)
+    )
+  | _ => st
+}
+
+let envTypesOf = (names, env) =>
+  names
+    |> Array.flatMap(n => switch Map.get(n, env) {
+      | Some(sc) => [sc.ty]
+      | None => []
+    })
+
 let bindParam = (p, env, st: Types.St) => switch p {
-  | Ast.LPSpanned(inner, _) => bindParam(inner, env, st)
+  | Ast.LPSpanned(inner, spans) => let (t, env1, st1) = bindParam(
+      inner,
+      env,
+      st
+    ) in
+      switch inner {
+        | Ast.LPTuple(names) => let elems = switch t {
+            | TyCon(_, ts) => ts
+            | _ => []
+          } in
+            (t, env1, recordParamNamesFrom(names, spans, elems, 0, st1))
+        | Ast.LPRecord(fields) => (
+            t,
+            env1,
+            recordParamNamesFrom(
+              fields,
+              spans,
+              envTypesOf(fields, env1),
+              0,
+              st1
+            )
+          )
+        | _ => (t, env1, st1)
+      }
   | Ast.LPName(name, _) => let (t, st1) = freshVar(st) in
       (t, Map.set(name, mono(t), env), st1)
   | Ast.LPTuple(names) => let (elems, env1, st1) = bindParamNamesFrom(
@@ -462,7 +507,7 @@ let inferLoopParamsFrom = (ctx: Ctx<a>, params, i, envAcc, frameAcc, ownerAcc, s
         Map.set(p.name, mono(t), envAcc),
         Array.append(t, frameAcc),
         Map.set(p.name, sp, ownerAcc),
-        noteLet(sp, st1)
+        noteLet(sp, recordBinder(p.nameSpan, t, "let", p.name, None, st1))
       )
 }
 
@@ -608,6 +653,31 @@ let envWithLabFields = (fields, env) => switch fields {
     )
 }
 
+/// Each labeled param at its name span, typed as the body sees it.
+let recordLabParamsFrom = (labs, fields, st: Types.St) => switch labs {
+  | [] => st
+  | [Ast.LPSpanned(Ast.LPLabeled(name, _, _, _), [sp, ..._]), ...rest] => recordLabParamsFrom(
+      rest,
+      fields,
+      switch Array.find(f => f.name == name, fields) {
+        | Some(f) => recordBinder(sp, f.bodyType, "parameter", name, None, st)
+        | None => st
+      }
+    )
+  | [_, ...rest] => recordLabParamsFrom(rest, fields, st)
+}
+
+/// Each plain positional name at its span, after the body has constrained it.
+let recordNameParamsFrom = (params, types, st: Types.St) => switch (params, types) {
+  | ([Ast.LPSpanned(Ast.LPName(name, _), [sp, ..._]), ...rest], [t, ...ts]) => recordNameParamsFrom(
+      rest,
+      ts,
+      recordBinder(sp, t, "parameter", name, None, st)
+    )
+  | ([_, ...rest], [_, ...ts]) => recordNameParamsFrom(rest, ts, st)
+  | _ => st
+}
+
 let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch args {
   | [] => Ok((fnT, st))
   | [arg, ...rest] => let? (argT, st1) = ctx->inferExpr(arg, st) in
@@ -688,10 +758,21 @@ let inferTernary = (ctx: Ctx<a>, cond, thenE, elseE, st: Types.St) =>
 
 // Shared tail of `let?` / `let!`: bind `param` to the payload, then unify the
 // body against `mkBody(resT)` (Option b / Result b e / Task b e).
+// A `let?` / `let!` over a plain name records it as a `let` at the payload type.
+let bindNameOf = p => switch p {
+  | Ast.LPSpanned(inner, _) => bindNameOf(inner)
+  | Ast.LPName(name, _) => Some(name)
+  | _ => None
+}
+
 let inferBindBody = (ctx: Ctx<a>, param, paramSpan, body, payloadT, mkBody, st: Types.St) =>
   let (paramT, bodyEnv, st1) = bindParam(param, ctx.env, st) in
   let? st2 = ctx->u(paramT, payloadT, st1, paramSpan) in
-  let? (bodyT, st3) = ctx->ctxWithEnv(bodyEnv)->inferExpr(body, st2) in
+  let stNamed = switch bindNameOf(param) {
+    | Some(name) => recordBinder(paramSpan, payloadT, "let", name, None, st2)
+    | None => st2
+  } in
+  let? (bodyT, st3) = ctx->ctxWithEnv(bodyEnv)->inferExpr(body, stNamed) in
   let (resT, st4) = freshVar(st3) in
   let wantBody = mkBody(resT) in
   let? st5 = ctx->u(bodyT, wantBody, st4, exprSpan(body)) in Ok((wantBody, st5))
@@ -936,7 +1017,20 @@ let inferMatch = (ctx: Ctx<a>, scrutinee, arms, st: Types.St) =>
 /// so the TS backend can annotate lambda params and empty literals (ADR 0090).
 let inferExpr = (ctx: Ctx<a>, e, st: Types.St) =>
   let? (t, st1) = ctx->inferExprRaw(e, st) in
-    Ok((t, recordAt(exprSpan(e), t, st1)))
+    Ok((
+      t,
+      switch e {
+        | Ast.EField(_, name, _, sp) => recordBinder(
+            sp,
+            t,
+            "property",
+            name,
+            None,
+            st1
+          )
+        | _ => recordAt(exprSpan(e), t, st1)
+      }
+    ))
 
 let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
   | Ast.ENum(_, _, _) => Ok((tNumber, st))
@@ -1001,11 +1095,15 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
       | [] => paramTypes
       | _ => Array.append(tRecord(rowOfLabFields(labFields)), paramTypes)
     } in
+    let st3Labs = recordLabParamsFrom(labParams, labFields, st3) in
     let? (bodyT, st4) = ctx->ctxWithEnv(
       envWithLabFields(labFields, bodyEnv)
-    )->inferExpr(body, st3) in
-      Ok((arrowChain(allTypes, bodyT), st4))
-  | Ast.ELetIn(name, _nameSpan, annot, value, body, _span) => switch value {
+    )->inferExpr(body, st3Labs) in
+      Ok((
+        arrowChain(allTypes, bodyT),
+        recordNameParamsFrom(posParams, paramTypes, st4)
+      ))
+  | Ast.ELetIn(name, nameSpan, annot, value, body, _span) => switch value {
       | Ast.ELambda(_, _, _) =>
         // Adjacent lambda locals share the top-level SCC machinery (ADR 0067):
         // pre-bind monomorphically, infer dependency-first, then generalize.
@@ -1041,7 +1139,10 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
           Map.set(name, sc, ctx.env),
           Map.set(name, vsp, ctx.letOwner)
         ) in
-          $ctx->inferExpr(body, noteLet(vsp, st2))
+          $ctx->inferExpr(
+            body,
+            noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None, st2))
+          )
     }
   | Ast.ELetBind(param, paramSpan, monad, value, body, _) => ctx->inferLetBind(
       e,
@@ -1155,7 +1256,7 @@ let inferPatRecordFrom = (ctx: Ctx<a>, fields, row, bindings, st: Types.St) => s
         rest,
         rExtend(f.label, subT, row),
         mergeBindingMaps(bindings, subBindings),
-        st1
+        recordBinder(f.labelSpan, subT, "property", f.label, None, st1)
       )
 }
 let inferPatRecord = (ctx: Ctx<a>, fields, st: Types.St) =>
@@ -1232,14 +1333,32 @@ let inferSeqPat = (ctx: Ctx<a>, con, elems, restPat, st: Types.St) =>
 /// and type, so a pattern-bound param can be annotated by span.
 let inferPat = (ctx: Ctx<a>, p, st: Types.St) =>
   let? (t, bindings, st1) = ctx->inferPatRaw(p, st) in
-    Ok((t, bindings, recordAt(patSpan(p), t, st1)))
+    Ok((
+      t,
+      bindings,
+      switch p {
+        | Ast.PBind(name, sp) => recordBinder(
+            sp,
+            t,
+            "parameter",
+            name,
+            None,
+            st1
+          )
+        | _ => recordAt(patSpan(p), t, st1)
+      }
+    ))
 
 let inferPatRaw = (ctx: Ctx<a>, p, st: Types.St) => switch p {
-  | Ast.PAs(pat, name, _, _) => let? (t, bindings, st1) = ctx->inferPat(
+  | Ast.PAs(pat, name, nameSpan, _) => let? (t, bindings, st1) = ctx->inferPat(
       pat,
       st
     ) in
-      Ok((t, Map.set(name, t, bindings), st1))
+      Ok((
+        t,
+        Map.set(name, t, bindings),
+        recordBinder(nameSpan, t, "parameter", name, None, st1)
+      ))
   | Ast.PWild(_) => let (t, st1) = freshVar(st) in Ok((t, #{}, st1))
   | Ast.PUnit(_) => Ok((tUnit, #{}, st))
   | Ast.PLit(_, _, _) => Ok((tNumber, #{}, st))
@@ -1516,8 +1635,8 @@ let freeRefs = (e, bound, acc) => switch e {
 // arrive pre-built (`Map string Ty` / `Map string (Map string Ty)`) — the
 // differential harness converts TS's `preludeEnv`/`preludeNamespaces` into
 // these shapes rather than this file reimplementing the prelude tables
-// (locked decision 3). Dropped vs TS: hover recording (`record`/`TypeAt`),
-// `imports` (cross-module env seeding — Slice F), and `AliasDef` display
+// (locked decision 3). Dropped vs TS: `imports` (cross-module env seeding —
+// Slice F, since added via `inferProgramImports`), and `AliasDef` display
 // templates (decision 4) — this file only needs an alias's structural
 // row for typeExprToType, never its display-fold form.
 // ============================================================
@@ -1685,7 +1804,7 @@ let registerBuiltinCtorsFrom = (decls, aliasMap: Map<string, QualAliasInfo>, env
 let registerExternsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
-      | Ast.SExtern(name, _, params, typeExpr, _, _, _, _, _, _) => let (vars, st0) = Array.reduce(
+      | Ast.SExtern(name, nameSpan, params, typeExpr, _, _, _, _, doc, _) => let (vars, st0) = Array.reduce(
           ((vs, s), param) =>
             let (v, s1) = freshVar(s) in (Map.set(param, v, vs), s1),
           (#{}, st),
@@ -1698,11 +1817,12 @@ let registerExternsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, st:
           aliasMap,
           Set.fromArray([])
         ) in
+        let sc = generalize(env, t, st1, false) in
           registerExternsFrom(
             rest,
             aliasMap,
-            Map.set(name, generalize(env, t, st1, false), env),
-            st1
+            Map.set(name, sc, env),
+            recordBinder(nameSpan, sc.ty, "extern", name, doc, st1)
           )
       | _ => registerExternsFrom(rest, aliasMap, env, st)
     }
@@ -1790,7 +1910,7 @@ let preBindGroupFrom = (group, env, st: Types.St) => switch group {
 let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
   | [] => Ok((#{}, st))
   | [s, ...rest] => switch s {
-      | Ast.SLet(name, _, annot, value, _, _, span) => let? (t, st1) = ctx->inferExpr(
+      | Ast.SLet(name, nameSpan, annot, value, _, doc, span) => let? (t, st1) = ctx->inferExpr(
           value,
           st
         ) in
@@ -1811,7 +1931,12 @@ let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
                       |> Result.map(stB => (at, stB))
                 | None => Ok((t, st2))
               } in
-              let? (restTypes, st4) = ctx->inferGroupFrom(rest, st3) in
+              // The name itself, so hover leads with `let x: T` (+ its `///`).
+              // Synthetic destructure temps (`$d…`) are skipped.
+              let stNamed = Str.startsWith("$", name)
+                ? st3
+                : recordBinder(nameSpan, pinned, "let", name, doc, st3) in
+              let? (restTypes, st4) = ctx->inferGroupFrom(rest, stNamed) in
                 Ok((Map.set(name, pinned, restTypes), st4))
             | None => Err(
                 typeErr("internal: missing self-binding for '${name}'", span)
@@ -2040,7 +2165,8 @@ let qualAliasSeed = (stmts, quals, acc) => switch stmts {
 /// once the whole program's substitution is settled, and later records win when
 /// two nodes share a span.
 let zonkRecorded = (st: Types.St) =>
-  recordedTypes(st) |> map(r => { span: r.span, ty: zonk(r.ty, st) })
+  recordedTypes(st)
+    |> map(r => { span: r.span, ty: zonk(r.ty, st), sym: r.sym })
 
 /// A type with no free type OR row vars — the only kind worth annotating from:
 /// a generic position has nowhere to bind letters at a `const` / IIFE param.
@@ -2070,14 +2196,20 @@ let resolveLetParamsFrom = (keys, st: Types.St) => switch keys {
         | None => tail
         | Some(first) => allSameConcrete(showType(first), uses)
             ? switch Map.get(k, st.letSpans) {
-              | Some(span) => Array.prepend({ span, ty: first }, tail)
+              | Some(span) => Array.prepend(
+                  { span, ty: first, sym: None },
+                  tail
+                )
               | None => tail
             }
             : tail
       }
 }
 
-let resolveLetParams = st => resolveLetParamsFrom(Map.keys(st.letSpans), st)
+// Annotated: the entries carry `sym: None`, which alone leaves the element
+// type open; pinned, they are the same table type as `types`.
+let resolveLetParams : Types.St -> [Types.TypeAt] = st =>
+  resolveLetParamsFrom(Map.keys(st.letSpans), st)
 
 /// Full inference result — the metadata the TS backend needs on top of `env`
 /// (ADR 0090), including `letParams` (ADR 0035).

@@ -19,6 +19,10 @@ type SeedCompile = {
     src: string,
     opts: SeedOptions,
   ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
+  nominalTypeName: (
+    ty: unknown,
+    aliases: Map<string, unknown>,
+  ) => { _tag: "Some"; value: string } | { _tag: "None" };
 };
 
 const seedCompile = seed as unknown as SeedCompile;
@@ -66,4 +70,17 @@ export const checkBootstrapSync = (
     toSeedOptions({ ...defaultBootstrapOptions, open: false, plugins }),
   );
   return r._tag === "Err" ? r.error : [];
+};
+
+/**
+ * The declared type a recorded type names, for go-to-type (ADR 0119): its
+ * capitalised constructor head, or the nullary record alias its row folds back
+ * to under `aliases` (an inference result's own map). Otherwise null.
+ */
+export const nominalTypeNameBootstrap = (
+  ty: unknown,
+  aliases: Map<string, unknown>,
+): string | null => {
+  const name = seedCompile.nominalTypeName(ty, aliases);
+  return name._tag === "Some" ? name.value : null;
 };

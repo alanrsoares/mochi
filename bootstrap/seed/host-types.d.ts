@@ -222,8 +222,9 @@ export type Row =
   | { _tag: "RowVar"; id: number }
   | { _tag: "RowExtend"; label: string; fieldType: Ty; optional: boolean; rest: Row };
 export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
-export type TypeAt = { span: SpanAt; ty: Ty };
+export type TypeAt = { span: SpanAt; ty: Ty; sym: Option<BinderSym> };
 export type SpanAt = { start: number; end: number };
+export type BinderSym = { kind: string; name: string; doc: Option<string> };
 export type InferApi = {
   inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
   unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, IErr>;
