@@ -1,43 +1,43 @@
 /**
- * Navigation queries over the lexical symbol index — free of LSP/protocol
- * types so Bun unit tests can assert on Locations/spans. The language server
- * is a thin adapter (ADR 0003). Go-to-type also consults the infer table when
- * typecheck succeeds.
+ * Navigation queries over the bootstrap symbol index (ADR 0118) — free of
+ * LSP/protocol types so Bun unit tests can assert on Locations/spans. The
+ * language server is a thin adapter (ADR 0003). Go-to-type also consults the
+ * infer table when typecheck succeeds.
  */
 import { dirname, resolve } from "node:path";
 import {
   type BootstrapGraphCache,
   inferEntryGraphTypesBootstrap,
   loadBootstrapGraph,
+  resolveImportBootstrap,
 } from "@mochi/compiler/bootstrap";
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
+import { lex as bootstrapLex } from "@mochi/compiler/bootstrap/syntax";
+import type { Stmt } from "@mochi/compiler/bootstrap/types";
 import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import type { InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import {
-  loadModuleGraph,
-  type ModuleCache,
-  moduleContext,
-  resolveImport,
-} from "@mochi/compiler/module";
+import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import type { Location, Span } from "@mochi/compiler/span";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
+import { foldAliases, type Type } from "@mochi/compiler/types";
+import { isErr, isOk } from "@onrails/result";
 import {
   type Binding,
   emptyOrigins,
-  indexProgram,
+  type FileIndex,
+  indexModule,
+  indexSource,
+  indexStmts,
   mergeOrigins,
-  type Occurrence,
-  type Origins,
-  originsOf,
-  type SymbolIndex,
-} from "@mochi/compiler/symbols";
-import { foldAliases, type Type } from "@mochi/compiler/types";
-import { flatMap, fromNullable, map, match as matchMaybe, none, some } from "@onrails/maybe";
-import { isErr, isOk } from "@onrails/result";
+  originsForEntry,
+  parseStmts,
+} from "./bootstrap-index";
+import { bootstrapDocumentSymbolsAt, bootstrapWorkspaceSymbolsAt } from "./bootstrap-symbols";
 
 export type Highlight = { span: Span; role: "def" | "use" };
 export type Ref = { location: Location; role: "def" | "use" };
@@ -67,7 +67,7 @@ type ReadFile = (path: string) => Promise<string>;
  * single buffer.
  *
  * References and rename need DEPENDENTS, and the module graph only has
- * dependencies: `loadModuleGraph(entry)` walks imports downward, so a query
+ * dependencies: loading `entry`'s graph walks imports downward, so a query
  * raised on a definition sees only what that file imports — never the modules
  * that import IT. Without this list, "find all references" on an exported
  * binding returns just its own definition, and rename silently misses every
@@ -75,55 +75,42 @@ type ReadFile = (path: string) => Promise<string>;
  */
 export type ListFiles = () => Promise<readonly string[]>;
 
-/** One module as `loadModuleGraph` yields it. */
-type ModuleOf<G> = G extends readonly (infer R)[]
-  ? R extends { readonly _tag: "Ok"; readonly value: readonly (infer M)[] }
-    ? M
-    : never
-  : never;
+type BootstrapToken = { tok: { _tag: string; value?: string }; start: number; end: number };
 
-// Recovering: symbols/definitions on the intact declarations survive a hole
-// elsewhere in the file (C9 slice e).
-const parseProgram = (src: string) => {
-  const lexed = lex(src);
-  return isErr(lexed) ? null : parseRecovering(lexed.value).program;
-};
-
-const indexSrc = (path: string, src: string, origins?: Origins) => {
-  const prog = parseProgram(src);
-  return !prog ? null : indexProgram(resolve(path), prog, origins);
-};
+/** A relative `import` resolves as the graph loader resolves it; an extern names its file. */
+const relativeTarget = (path: string, stmt: Stmt, spec: string): string =>
+  stmt._tag === "SExtern"
+    ? resolve(dirname(path), spec)
+    : resolve(dirname(path), `${spec.replace(/\.mochi$/, "")}.mochi`);
 
 /** Relative import/extern module specifiers, including a possible extern member. */
 const relativeModuleSpecifiers = (src: string, path: string): RelativeModuleSpecifier[] => {
-  const lexed = lex(src);
-  if (isErr(lexed)) return [];
-  const { program } = parseRecovering(lexed.value);
-  return program.stmts.flatMap((stmt): RelativeModuleSpecifier[] => {
-    if (stmt.kind !== "import" && stmt.kind !== "extern") return [];
-    const spec = stmt.kind === "import" ? stmt.from : stmt.module;
+  const lexed = bootstrapLex(src) as { _tag: "Ok"; value: BootstrapToken[] } | { _tag: "Err" };
+  const stmts = parseStmts(src);
+  if (lexed._tag === "Err" || !stmts) return [];
+  return stmts.flatMap((stmt): RelativeModuleSpecifier[] => {
+    if (stmt._tag !== "SImport" && stmt._tag !== "SImportNs" && stmt._tag !== "SExtern") return [];
+    const spec = stmt._tag === "SExtern" ? stmt.module : stmt.from;
     if (!spec.startsWith("./") && !spec.startsWith("../")) return [];
     const stringTokenAt = (value: string) =>
       lexed.value.find(
         (token) =>
-          token.t === "str" &&
-          token.v === value &&
-          stmt.span.start <= token.span.start &&
-          token.span.end <= stmt.span.end,
+          token.tok._tag === "TStr" &&
+          token.tok.value === value &&
+          stmt.span.start <= token.start &&
+          token.end <= stmt.span.end,
       );
     const stringToken = stringTokenAt(spec);
     if (!stringToken) return [];
-    const extern = stmt.kind === "extern" ? stmt : null;
-    const externMemberToken = extern ? stringTokenAt(extern.imported) : undefined;
+    const memberToken = stmt._tag === "SExtern" ? stringTokenAt(stmt.imported) : undefined;
     const externMember =
-      extern && externMemberToken
-        ? { name: extern.imported, span: externMemberToken.span }
+      stmt._tag === "SExtern" && memberToken
+        ? { name: stmt.imported, span: { start: memberToken.start, end: memberToken.end } }
         : undefined;
     return [
       {
-        span: stringToken.span,
-        targetPath:
-          stmt.kind === "import" ? resolveImport(path, spec) : resolve(dirname(path), spec),
+        span: { start: stringToken.start, end: stringToken.end },
+        targetPath: relativeTarget(path, stmt, spec),
         ...(externMember ? { externMember } : {}),
       },
     ];
@@ -185,137 +172,93 @@ const externMemberDefinitionAt = async (
   }
 };
 
-/** Origins from every dependency of `entry` (not the entry itself). */
-const originsForEntry = async (
-  entry: string,
-  readFile: ReadFile,
-  liveSrc?: string,
-): Promise<Origins> => {
-  const entryPath = resolve(entry);
-  const read = (p: string): Promise<string> =>
-    resolve(p) === entryPath && liveSrc !== undefined ? Promise.resolve(liveSrc) : readFile(p);
-  const graph = await loadModuleGraph(entryPath, read);
-  const origins = emptyOrigins();
-  if (isErr(graph)) return origins;
-  for (const { path, prog } of graph.value) {
-    if (path === entryPath) continue;
-    mergeOrigins(origins, originsOf(path, prog));
-  }
-  return origins;
-};
-
-/** Imported symbol origins from the frozen bootstrap parser graph. */
-const bootstrapOriginsForEntry = async (
-  entry: string,
-  src: string,
-  readFile: ReadFile,
-): Promise<Origins> => {
-  const graph = await loadBootstrapGraph(entry, src, readFile);
-  const origins = emptyOrigins();
-  if (graph._tag === "Err") return origins;
-  const entryPath = resolve(entry);
-  for (const module of graph.value) {
-    if (module.path === entryPath) continue;
-    for (const [name, span] of module.origins.values)
-      origins.value.set(name, { path: module.path, span });
-    for (const [name, span] of module.origins.types)
-      origins.type.set(name, { path: module.path, span });
-    for (const [name, span] of module.origins.ctors)
-      origins.ctor.set(name, { path: module.path, span });
-  }
-  return origins;
-};
-
-const indexModule = async (
-  path: string,
-  src: string,
-  readFile?: ReadFile,
-): Promise<SymbolIndex | null> => {
-  const origins = readFile ? await originsForEntry(path, readFile, src) : undefined;
-  return indexSrc(path, src, origins);
-};
-
-/** Hit under `offset` in an index, or None. */
-const hitAt = (idx: SymbolIndex, offset: number) => fromNullable(idx.at(offset));
-
 /** Go-to-definition at `offset`. Unknown names → null; prelude → virtual Location. */
 export const definitionAt = (src: string, offset: number, path = "<buffer>"): Location | null =>
-  matchMaybe(
-    flatMap(fromNullable(indexSrc(path, src)), (idx) => hitAt(idx, offset)),
-    (hit) => hit.binding.def,
-    () => null,
-  );
+  indexSource(path, src)?.at(offset)?.binding.def ?? null;
 
 /** Tightest inferred type span containing `offset` (closed ends; ties → first). */
 const tightestType = (types: TypeAt[], offset: number) =>
   tightestHit(types, offset, spanContainsClosed);
 
-/** Nominal type head (`Shape`, `Option`, …). Structural / primitives → None. */
-const nominalName = (t: Type) =>
-  fromNullable(t.kind === "con" && /^[A-Z]/.test(t.name) ? t.name : null);
+/** Nominal type head (`Shape`, `Option`, …). Structural / primitives → null. */
+const nominalName = (t: Type): string | null =>
+  t.kind === "con" && /^[A-Z]/.test(t.name) ? t.name : null;
+
+/** A type name's declaration: one in scope (local, imported, prelude), else any export origin. */
+const typeDeclOf = (name: string, idx: FileIndex, origins?: Map<string, Location>) =>
+  idx.binding("type", name)?.def ?? origins?.get(name) ?? null;
 
 const typeDefFrom = (
   res: InferResult,
   offset: number,
-  idx: SymbolIndex,
-  origins?: Origins,
-): Location | null =>
-  matchMaybe(
-    flatMap(tightestType(res.types, offset), (hit) =>
-      flatMap(nominalName(foldAliases(hit.type, res.aliases)), (name) =>
-        // Prefer a binding in scope (local / imported / prelude); fall back to any
-        // export origin so go-to-type works when only ctors were imported.
-        fromNullable(idx.binding("type", name)?.def ?? origins?.type.get(name) ?? null),
-      ),
-    ),
-    (loc) => loc,
-    () => null,
-  );
+  idx: FileIndex,
+  origins?: Map<string, Location>,
+): Location | null => {
+  const hit = tightestType(res.types, offset);
+  const name = hit._tag === "Some" ? nominalName(foldAliases(hit.value.type, res.aliases)) : null;
+  return name ? typeDeclOf(name, idx, origins) : null;
+};
 
 const bootstrapNominalName = (display: string): string | null =>
   display.match(/[A-Z][A-Za-z0-9_]*/g)?.at(-1) ?? null;
 
-/** Bootstrap-native module go-to-type for builtin-only workspaces. */
+/** Export origins of `path`'s dependency graph, keyed as Locations. */
+const typeOrigins = async (path: string, src: string, readFile: ReadFile) => {
+  const origins = await originsForEntry(path, src, readFile);
+  return new Map(
+    [...origins.types].map(([name, at]) => [
+      name,
+      { path: at.path, span: { start: at.start, end: at.end } },
+    ]),
+  );
+};
+
+/** Bootstrap-native module go-to-type. */
 const bootstrapTypeDefinitionAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: ReadFile,
   cache?: BootstrapGraphCache,
+  plugins?: readonly BootstrapPlugin[],
 ): Promise<Location | null> => {
-  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile, cache);
+  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile, cache, plugins);
   if (inferred._tag === "Err") return null;
   const entryPath = resolve(path);
   const entry = inferred.value.find((module) => module.path === entryPath);
   const hit = entry && tightestHit(entry.types, offset, spanContainsClosed);
   const name = hit && hit._tag === "Some" ? bootstrapNominalName(hit.value.display) : null;
-  return !name
-    ? null
-    : ((await bootstrapOriginsForEntry(path, src, readFile)).type.get(name) ?? null);
+  return !name ? null : ((await typeOrigins(path, src, readFile)).get(name) ?? null);
 };
 
 /**
  * Go-to-type at `offset`: jump to the nominal type decl of the expression under
  * the cursor (variant / record alias / prelude). Needs a successful typecheck;
  * structural types and failed inference → null.
+ *
+ * The TS infer table still answers here: it records binder spans (`let c`),
+ * which the bootstrap one does not yet.
  */
 export const typeDefinitionAt = (
   src: string,
   offset: number,
   path = "<buffer>",
 ): Location | null => {
-  const idx = indexSrc(path, src);
+  const idx = indexSource(path, src);
   if (!idx) return null;
   const typed = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
   return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
 };
 
-/** Options threaded into module-* nav helpers that typecheck — `plugins` (styled-cva, …), same list hover/diagnostics take. */
+/** Options threaded into module-* nav helpers that typecheck. */
 export type ModuleNavOptions = {
+  /** TS-host plugins for the go-to-type fallback (styled-cva, …). */
   plugins?: LanguagePlugin[];
   cache?: ModuleCache;
-  /** Caller-owned bootstrap graph memo for builtin-only type queries. */
+  /** Caller-owned bootstrap graph memo, valid for one `bootstrapPlugins` list. */
   bootstrapCache?: BootstrapGraphCache;
+  /** Project plugins for the bootstrap graph (ADR 0109); omitted means the builtins. */
+  bootstrapPlugins?: readonly BootstrapPlugin[];
 };
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
@@ -326,18 +269,16 @@ export const moduleTypeDefinitionAt = async (
   readFile: ReadFile,
   opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
-  if (opts.plugins === undefined) {
-    const bootstrap = await bootstrapTypeDefinitionAt(
-      path,
-      src,
-      offset,
-      readFile,
-      opts.bootstrapCache,
-    );
-    if (bootstrap) return bootstrap;
-  }
-  const origins = await originsForEntry(path, readFile, src);
-  const idx = indexSrc(path, src, origins);
+  const bootstrap = await bootstrapTypeDefinitionAt(
+    path,
+    src,
+    offset,
+    readFile,
+    opts.bootstrapCache,
+    opts.bootstrapPlugins,
+  );
+  if (bootstrap) return bootstrap;
+  const idx = await indexModule(path, src, readFile);
   if (!idx) return null;
 
   const lexed = lex(src);
@@ -354,7 +295,9 @@ export const moduleTypeDefinitionAt = async (
     plugins: opts.plugins,
     open: openMode(src),
   });
-  return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx, origins) : null;
+  return isOk(typed)
+    ? typeDefFrom(typed.value.res, offset, idx, await typeOrigins(path, src, readFile))
+    : null;
 };
 
 export const moduleDefinitionAt = async (
@@ -367,68 +310,48 @@ export const moduleDefinitionAt = async (
   if (externMember) return externMember;
   const modulePath = relativeModulePathAt(src, offset, path);
   if (modulePath) return modulePath;
-  const origins = await bootstrapOriginsForEntry(path, src, readFile);
-  return matchMaybe(
-    flatMap(fromNullable(indexSrc(path, src, origins)), (idx) => hitAt(idx, offset)),
-    (hit) => hit.binding.def,
-    () => null,
-  );
+  return (await indexModule(path, src, readFile))?.at(offset)?.binding.def ?? null;
+};
+
+const highlightsIn = (idx: FileIndex | null, offset: number): Highlight[] => {
+  const hit = idx?.at(offset);
+  return !idx || !hit
+    ? []
+    : idx.occurrences(hit.binding).map((o) => ({ span: o.span, role: o.role }));
 };
 
 /** Document highlights for the binding under `offset` (occurrences in this file). */
 export const highlightsAt = (src: string, offset: number, path = "<buffer>"): Highlight[] =>
-  matchMaybe(
-    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
-      map(hitAt(idx, offset), (hit) =>
-        idx.occurrences(hit.binding).map((o: Occurrence) => ({ span: o.span, role: o.role })),
-      ),
-    ),
-    (hs) => hs,
-    () => [],
-  );
+  highlightsIn(indexSource(path, src), offset);
 
 export const moduleHighlightsAt = async (
   path: string,
   src: string,
   offset: number,
   readFile: ReadFile,
-): Promise<Highlight[]> =>
-  matchMaybe(
-    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) =>
-      map(hitAt(idx, offset), (hit) =>
-        idx.occurrences(hit.binding).map((o) => ({ span: o.span, role: o.role })),
-      ),
-    ),
-    (hs) => hs,
-    () => [],
-  );
+): Promise<Highlight[]> => highlightsIn(await indexModule(path, src, readFile), offset);
 
 /** Ensure the def Location is present (prelude defs live outside the file index). */
 const withDefRef = (binding: Binding, refs: Ref[]): Ref[] =>
   refs.some((r) => r.role === "def") ? refs : [{ location: binding.def, role: "def" }, ...refs];
 
 /** Find-all-references for the binding under `offset` (this file only). */
-export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] =>
-  matchMaybe(
-    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
-      map(hitAt(idx, offset), (hit) => {
-        const refs = idx.occurrences(hit.binding).map((o) => ({
-          location: { path: resolve(path), span: o.span },
-          role: o.role,
-        }));
-        return withDefRef(hit.binding, refs);
-      }),
-    ),
-    (refs) => refs,
-    () => [],
-  );
+export const referencesAt = (src: string, offset: number, path = "<buffer>"): Ref[] => {
+  const idx = indexSource(path, src);
+  const hit = idx?.at(offset);
+  if (!idx || !hit) return [];
+  const refs = idx.occurrences(hit.binding).map((o) => ({
+    location: { path: resolve(path), span: o.span },
+    role: o.role,
+  }));
+  return withDefRef(hit.binding, refs);
+};
 
 /**
  * Project files whose import closure reaches `target`, plus `target` itself.
  *
  * One parse per file and a reverse walk, rather than a module-graph load per
- * candidate: the graph loader resolves and typechecks, and only the import
- * edges matter here.
+ * candidate: only the import edges matter here.
  */
 const dependentsOf = async (
   target: string,
@@ -439,11 +362,11 @@ const dependentsOf = async (
   await Promise.all(
     files.map(async (file) => {
       const src = await read(file).catch(() => null);
-      const prog = src === null ? null : parseProgram(src);
-      if (!prog) return;
-      for (const st of prog.stmts) {
-        if (st.kind !== "import") continue;
-        const dep = resolveImport(file, st.from);
+      const stmts = src === null ? null : parseStmts(src);
+      if (!stmts) return;
+      for (const st of stmts) {
+        if (st._tag !== "SImport" && st._tag !== "SImportNs") continue;
+        const dep = await resolveImportBootstrap(file, st.from);
         const at = importers.get(dep);
         if (at) at.push(file);
         else importers.set(dep, [file]);
@@ -466,6 +389,12 @@ const dependentsOf = async (
   return [...seen];
 };
 
+type GraphModule = {
+  path: string;
+  stmts: readonly Stmt[];
+  origins: Parameters<typeof mergeOrigins>[1];
+};
+
 const collectGraphRefs = async (
   entryPath: string,
   entrySrc: string,
@@ -485,33 +414,33 @@ const collectGraphRefs = async (
       ? await dependentsOf(defPath, await listFiles(), read)
       : [entryPath];
   if (!entries.includes(entryPath)) entries.push(entryPath);
-  const graphs = await Promise.all(entries.map((e) => loadModuleGraph(e, read)));
-  const byPath = new Map<string, ModuleOf<typeof graphs>>();
+  const graphs = await Promise.all(
+    entries.map(async (e) => loadBootstrapGraph(e, await read(e).catch(() => ""), read)),
+  );
+  const byPath = new Map<string, GraphModule>();
   for (const g of graphs) {
-    if (isErr(g)) continue;
-    for (const m of g.value) if (!byPath.has(m.path)) byPath.set(m.path, m);
+    if (g._tag === "Err") continue;
+    for (const m of g.value) {
+      if (!byPath.has(m.path))
+        byPath.set(m.path, { path: m.path, stmts: m.stmts as Stmt[], origins: m.origins });
+    }
   }
   // Every entry failed to load (unreadable dep, cycle): fall back to the file
   // in hand rather than reporting nothing.
   if (byPath.size === 0) {
-    return (
-      indexSrc(entryPath, entrySrc)
-        ?.occurrences(binding)
-        .map((o) => ({ location: { path: entryPath, span: o.span }, role: o.role })) ?? []
-    );
+    const idx = indexSource(entryPath, entrySrc);
+    return (idx?.occurrences(binding) ?? []).map((o) => ({
+      location: { path: entryPath, span: o.span },
+      role: o.role,
+    }));
   }
   const modules = [...byPath.values()];
 
   const refs: Ref[] = [];
-  for (const { path, prog } of modules) {
-    const src = path === entryPath ? entrySrc : await read(path);
-    const fileOrigins = emptyOrigins();
-    for (const dep of modules) {
-      if (dep.path === path) continue;
-      mergeOrigins(fileOrigins, originsOf(dep.path, dep.prog));
-    }
-    const fileIdx = indexProgram(path, parseProgram(src) ?? prog, fileOrigins);
-    for (const o of fileIdx.occurrences(binding)) {
+  for (const { path, stmts } of modules) {
+    const origins = emptyOrigins();
+    for (const dep of modules) if (dep.path !== path) mergeOrigins(origins, dep.origins);
+    for (const o of indexStmts(path, stmts, origins).occurrences(binding)) {
       refs.push({ location: { path, span: o.span }, role: o.role });
     }
   }
@@ -540,11 +469,7 @@ export const moduleReferencesAt = async (
   listFiles?: ListFiles,
 ): Promise<Ref[]> => {
   const entryPath = resolve(path);
-  const hit = matchMaybe(
-    flatMap(fromNullable(await indexModule(entryPath, src, readFile)), (idx) => hitAt(idx, offset)),
-    (h) => h,
-    () => null,
-  );
+  const hit = (await indexModule(entryPath, src, readFile))?.at(offset);
   return !hit
     ? []
     : withDefRef(
@@ -553,26 +478,23 @@ export const moduleReferencesAt = async (
       );
 };
 
+/** `$`-prefixed names are compiler-owned, `_`-prefixed ones deliberately unused. */
 const isRenameableName = (name: string): boolean =>
   !name.startsWith("$") && !name.startsWith("_") && /^[A-Za-z][A-Za-z0-9_]*$/.test(name);
 
 const canRename = (b: Binding): boolean =>
   isRenameableName(b.name) && !isPreludePath(b.def.path) && b.space !== "field";
 
+const prepareIn = (idx: FileIndex | null, offset: number): { span: Span; name: string } | null => {
+  const hit = idx?.at(offset);
+  return hit && canRename(hit.binding) ? { span: hit.span, name: hit.binding.name } : null;
+};
+
 export const prepareRenameAt = (
   src: string,
   offset: number,
   path = "<buffer>",
-): { span: Span; name: string } | null =>
-  matchMaybe(
-    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
-      flatMap(hitAt(idx, offset), (hit) =>
-        canRename(hit.binding) ? some({ span: hit.span, name: hit.binding.name }) : none(),
-      ),
-    ),
-    (prep) => prep,
-    () => null,
-  );
+): { span: Span; name: string } | null => prepareIn(indexSource(path, src), offset);
 
 export const modulePrepareRenameAt = async (
   path: string,
@@ -580,15 +502,7 @@ export const modulePrepareRenameAt = async (
   offset: number,
   readFile: ReadFile,
 ): Promise<{ span: Span; name: string } | null> =>
-  matchMaybe(
-    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) =>
-      flatMap(hitAt(idx, offset), (hit) =>
-        canRename(hit.binding) ? some({ span: hit.span, name: hit.binding.name }) : none(),
-      ),
-    ),
-    (prep) => prep,
-    () => null,
-  );
+  prepareIn(await indexModule(path, src, readFile), offset);
 
 /** Rename the binding under `offset` to `newName`. Same-file only. */
 export const renameAt = (
@@ -598,16 +512,11 @@ export const renameAt = (
   path = "<buffer>",
 ): RenameEdit[] | null => {
   if (!isRenameableName(newName)) return null;
-  const hit = matchMaybe(
-    flatMap(fromNullable(indexSrc(path, src)), (idx) =>
-      map(hitAt(idx, offset), (h) => ({ idx, hit: h })),
-    ),
-    (x) => x,
-    () => null,
-  );
-  if (!hit || !canRename(hit.hit.binding)) return null;
-  if (hit.hit.binding.name === newName) return [];
-  return hit.idx.occurrences(hit.hit.binding).map((o) => ({
+  const idx = indexSource(path, src);
+  const hit = idx?.at(offset);
+  if (!idx || !hit || !canRename(hit.binding)) return null;
+  if (hit.binding.name === newName) return [];
+  return idx.occurrences(hit.binding).map((o) => ({
     location: { path: resolve(path), span: o.span },
     newText: newName,
   }));
@@ -624,11 +533,7 @@ export const moduleRenameAt = async (
 ): Promise<RenameEdit[] | null> => {
   if (!isRenameableName(newName)) return null;
   const entryPath = resolve(path);
-  const hit = matchMaybe(
-    flatMap(fromNullable(await indexModule(path, src, readFile)), (idx) => hitAt(idx, offset)),
-    (h) => h,
-    () => null,
-  );
+  const hit = (await indexModule(path, src, readFile))?.at(offset);
   if (!hit || !canRename(hit.binding)) return null;
   if (hit.binding.name === newName) return [];
   const refs = await collectGraphRefs(entryPath, src, hit.binding, readFile, listFiles);
@@ -636,47 +541,13 @@ export const moduleRenameAt = async (
 };
 
 /** Top-level document symbols for outline. */
-export const documentSymbolsAt = (src: string): DocSymbol[] => {
-  const prog = parseProgram(src);
-  if (!prog) return [];
-  const out: DocSymbol[] = [];
-  for (const s of prog.stmts) {
-    if (s.kind === "let" && !s.name.startsWith("$"))
-      out.push({ name: s.name, kind: "let", span: s.nameSpan });
-    else if (s.kind === "extern") out.push({ name: s.name, kind: "extern", span: s.nameSpan });
-    else if (s.kind === "type") {
-      out.push({ name: s.name, kind: "type", span: s.nameSpan });
-      for (const c of s.ctors)
-        out.push({ name: c.name, kind: "ctor", span: c.span, detail: s.name });
-    }
-  }
-  return out;
-};
+export const documentSymbolsAt = (src: string): DocSymbol[] => bootstrapDocumentSymbolsAt(src);
 
 /** Workspace symbol search over the module graph from `entry`. */
-export const workspaceSymbolsAt = async (
+export const workspaceSymbolsAt = (
   entry: string,
   query: string,
   readFile: ReadFile,
   liveSrc?: string,
-): Promise<WorkspaceSymbol[]> => {
-  const entryPath = resolve(entry);
-  const read = (p: string): Promise<string> =>
-    resolve(p) === entryPath && liveSrc !== undefined ? Promise.resolve(liveSrc) : readFile(p);
-  const graph = await loadModuleGraph(entryPath, read);
-  if (isErr(graph)) {
-    const src = liveSrc ?? (await readFile(entryPath).catch(() => ""));
-    return documentSymbolsAt(src)
-      .filter((s) => s.name.toLowerCase().includes(query.toLowerCase()))
-      .map((s) => ({ ...s, path: entryPath }));
-  }
-  const q = query.toLowerCase();
-  const out: WorkspaceSymbol[] = [];
-  for (const { path } of graph.value) {
-    const src = path === entryPath && liveSrc !== undefined ? liveSrc : await read(path);
-    for (const s of documentSymbolsAt(src)) {
-      if (!q || s.name.toLowerCase().includes(q)) out.push({ ...s, path });
-    }
-  }
-  return out;
-};
+): Promise<WorkspaceSymbol[]> =>
+  bootstrapWorkspaceSymbolsAt(resolve(entry), query, readFile, liveSrc);

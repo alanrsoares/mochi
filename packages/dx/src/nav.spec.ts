@@ -99,3 +99,58 @@ test("renameAt rejects invalid new names", () => {
   expect(renameAt(src, pos(src, "x"), "1bad")).toBeNull();
   expect(renameAt(src, pos(src, "x"), "$tmp")).toBeNull();
 });
+
+test("highlightsAt keeps a shadowing let distinct from the outer one", () => {
+  const src = "let x = 1\nlet f = let x = 2 in x\nlet g = x";
+  expect(highlightsAt(src, pos(src, "x", 1)).map((h) => h.span.start)).toEqual([22, 31]);
+  expect(highlightsAt(src, pos(src, "x", 3)).map((h) => h.span.start)).toEqual([4, 41]);
+});
+
+test("highlightsAt binds a lambda parameter from its own span", () => {
+  const src = "let f = a => a + 1";
+  expect(highlightsAt(src, pos(src, "a"))).toEqual([
+    { span: { start: 8, end: 9 }, role: "def" },
+    { span: { start: 13, end: 14 }, role: "use" },
+  ]);
+});
+
+test("highlightsAt resolves nothing off a binding, and survives a lex error", () => {
+  expect(highlightsAt("let x = 1", 0)).toEqual([]);
+  expect(highlightsAt("let x = @", 4)).toEqual([]);
+});
+
+test("referencesAt reports every use of a local, with an absolute path", () => {
+  const src = "let f = a => a + a";
+  expect(referencesAt(src, pos(src, "a"), "/t.mochi")).toEqual([
+    { location: { path: resolve("/t.mochi"), span: { start: 8, end: 9 } }, role: "def" },
+    { location: { path: resolve("/t.mochi"), span: { start: 13, end: 14 } }, role: "use" },
+    { location: { path: resolve("/t.mochi"), span: { start: 17, end: 18 } }, role: "use" },
+  ]);
+});
+
+test("prepareRenameAt offers the name under the cursor, and refuses parked names", () => {
+  const src = "let f = a => a + 1";
+  expect(prepareRenameAt(src, pos(src, "a", 1))).toEqual({
+    span: { start: 13, end: 14 },
+    name: "a",
+  });
+  const parked = "let f = _x => _x";
+  expect(prepareRenameAt(parked, pos(parked, "_x"))).toBeNull();
+});
+
+test("renameAt rewrites the binding's occurrences and no others", () => {
+  const src = "let x = 1\nlet f = let x = 2 in x + 1";
+  expect(renameAt(src, pos(src, "x", 1), "y", "/t.mochi")).toEqual([
+    { location: { path: resolve("/t.mochi"), span: { start: 22, end: 23 } }, newText: "y" },
+    { location: { path: resolve("/t.mochi"), span: { start: 31, end: 32 } }, newText: "y" },
+  ]);
+});
+
+test("renameAt on a labeled parameter rewrites only its name", () => {
+  const src = "let f = (~size: number = 1) => size";
+  const edits = renameAt(src, pos(src, "size"), "n", "/t.mochi");
+  expect(edits?.map((e) => src.slice(e.location.span.start, e.location.span.end))).toEqual([
+    "size",
+    "size",
+  ]);
+});
