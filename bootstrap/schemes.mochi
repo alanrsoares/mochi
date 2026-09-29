@@ -658,3 +658,75 @@ export let nominalTypeName = (t, aliases: Map<string, AliasInfo>) => switch wide
     )
   | _ => None
 }
+
+// ============================================================
+// Alias folding for hover (#103). The twin of src/ast/types.ts's
+// `foldAliases` over the whole type: every node that fits an alias's
+// expansion prints as the alias name.
+// ============================================================
+
+/// One alias's display template: its expansion with each type param held by
+/// a template var, as src/infer/infer.ts builds `AliasDef.template`.
+type FoldTemplate = { name: string, ids: [number], tpl: Types.Ty }
+
+let foldTemplatesFrom = (keys, aliases: Map<string, AliasInfo>, i, acc) => switch Array.get(i, keys) {
+  | None => acc
+  | Some(key) => switch Map.get(key, aliases) {
+      | None => foldTemplatesFrom(keys, aliases, i + 1, acc)
+      | Some(info) => let (_vars, ids) = templateVars(info.params) in
+        let name = bareAliasName(key) in
+        let (tpl, _st) = aliasRow(
+          name,
+          info,
+          Array.map(id => TyVar(id), ids),
+          Types.mkSt(0),
+          aliases,
+          Set.fromArray([])
+        ) in
+          foldTemplatesFrom(
+            keys,
+            aliases,
+            i + 1,
+            Array.append({ name, ids, tpl }, acc)
+          )
+    }
+}
+
+/// The first template (declaration order) `t` fits, as the alias name and its
+/// arguments. A phantom param cannot be read off `t`, so that alias is skipped.
+let foldHeadFrom = (t, tpls: [FoldTemplate], i) => switch Array.get(i, tpls) {
+  | None => None
+  | Some(a) => switch matchTy(a.tpl, t, Set.fromArray(a.ids), #{}) {
+      | Some(binds) => allBound(a.ids, binds)
+          ? Some((a.name, Array.map(id => Map.getOr(t, id, binds), a.ids)))
+          : foldHeadFrom(t, tpls, i + 1)
+      | None => foldHeadFrom(t, tpls, i + 1)
+    }
+}
+
+/// Top-down: a node is tried whole first, then its children fold too.
+let foldWith = (t, tpls: [FoldTemplate]) => switch foldHeadFrom(t, tpls, 0) {
+  | Some((name, args)) => tCon(name, Array.map(a => foldWith(a, tpls), args))
+  | None => switch t {
+      | TyCon(name, args) => tCon(name, Array.map(a => foldWith(a, tpls), args))
+      | TyFn(fromT, toT) => tArrow(foldWith(fromT, tpls), foldWith(toT, tpls))
+      | TyRecord(row) => tRecord(foldRowWith(row, tpls))
+      | TyOneOf(members) => tUnion(Array.map(m => foldWith(m, tpls), members))
+      | _ => t
+    }
+}
+
+let foldRowWith = (row, tpls: [FoldTemplate]) => switch row {
+  | RowExtend(label, fieldType, optional, rest) => RowExtend(
+      label,
+      foldWith(fieldType, tpls),
+      optional,
+      foldRowWith(rest, tpls)
+    )
+  | _ => row
+}
+
+/// `t` with every node that fits an alias rewritten to `Name<args>`. Fold
+/// before widening literals, as hover does: a literal fits no primitive.
+export let foldAliases = (t, aliases: Map<string, AliasInfo>) =>
+  foldWith(t, foldTemplatesFrom(Map.keys(aliases), aliases, 0, []))

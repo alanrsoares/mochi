@@ -26,13 +26,12 @@ import {
   type Binding,
   emptyOrigins,
   type FileIndex,
-  indexModule,
   indexSource,
   indexStmts,
   mergeOrigins,
-  originsForEntry,
   parseStmts,
 } from "./bootstrap-index";
+import { indexModule, originsForEntry } from "./bootstrap-module-index";
 import { bootstrapDocumentSymbolsAt, bootstrapWorkspaceSymbolsAt } from "./bootstrap-symbols";
 
 export type Highlight = { span: Span; role: "def" | "use" };

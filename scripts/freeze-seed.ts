@@ -55,6 +55,7 @@ const SYNTAX_EXPORTS = [
   "tNumber",
   "tString",
   "widenLits",
+  "foldAliases",
 ] as const;
 
 // `--check` re-emits into a temp directory and diffs against the committed
@@ -157,7 +158,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering, parseWith } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, tRecord, tTuple, tUnion, UNIT, zonk } from "./types.ts";\nexport { tBool, tNumber, tString, widenLits } from "./schemes.ts";\n',
+  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering, parseWith } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, tRecord, tTuple, tUnion, UNIT, zonk } from "./types.ts";\nexport { foldAliases, tBool, tNumber, tString, widenLits } from "./schemes.ts";\n',
 );
 // ESM, imported statically by the host façades (`bootstrap/syntax.ts`,
 // `bootstrap/types.ts`), so the formatter and the type constructors also run in
@@ -220,7 +221,10 @@ writeFileSync(
               "zonk",
             ],
           },
-          { file: "schemes.ts", names: ["tNumber", "tString", "tBool", "widenLits"] },
+          {
+            file: "schemes.ts",
+            names: ["tNumber", "tString", "tBool", "widenLits", "foldAliases"],
+          },
         ],
       },
     ],

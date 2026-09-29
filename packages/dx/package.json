@@ -10,6 +10,7 @@
     "./bootstrap-hover": "./src/bootstrap-hover.ts",
     "./bootstrap-symbols": "./src/bootstrap-symbols.ts",
     "./bootstrap-index": "./src/bootstrap-index.ts",
+    "./bootstrap-module-index": "./src/bootstrap-module-index.ts",
     "./complete": "./src/complete.ts",
     "./complete-triggers": "./src/complete-triggers.ts",
     "./bootstrap-complete": "./src/bootstrap-complete.ts",

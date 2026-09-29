@@ -51,6 +51,7 @@ import {
   map,
   not,
   or,
+  reduce,
   show,
   sub,
 } from "@mochi/compiler/runtime";
@@ -59,6 +60,7 @@ import { match } from "@onrails/pattern";
 
 import * as Ast from "../ast";
 import {
+  recordBinder,
   zonk,
   tPrim,
   tRecord,
@@ -1012,110 +1014,132 @@ const unknownProp: <A, B>(
     return jxTypeErr(`Property '${name}' does not exist on '<${tag}>'.${did}`, jxExprSpan(value));
   },
 );
-const inferIntrinsicFields: <A, B>(
+/**
+ * The prop type an attribute's name hovers with, as `(property) name: T`.
+ */
+const noteProp: _Curry<[f: Field, t: Ty, st: St], St> = _curry(3, (f: Field, t: Ty, st: St) =>
+  recordBinder(f.nameSpan, t, "property", f.name, None as Option<string>, st),
+);
+const handlerType: Ty = TyFn(tPrim("Event"), tPrim("unit"));
+const inferIntrinsicFields: <A>(
   tag: string,
-  fields: ({ name: string; value: Expr } & A)[],
+  fields: Field[],
   st: St,
   api: {
     inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
-  } & B,
+  } & A,
   schema: Option<Map<string, string>>,
 ) => Result<St, BoundErr> = _curry(
   5,
-  <A, B>(
+  <A>(
     tag: string,
-    fields: ({ name: string; value: Expr } & A)[],
+    fields: Field[],
     st: St,
     api: {
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
       unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
-    } & B,
+    } & A,
     schema: Option<Map<string, string>>,
   ) =>
-    match(fields)
-      .with(
-        (_v) => _v.length === 0,
-        () => Ok(st) as Result<St, BoundErr>,
-      )
-      .with(
-        (_v) => _v.length >= 1,
-        ([f, ...rest]) =>
-          ((cont: (a: St) => Result<St, BoundErr>) =>
-            ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v)
-                : _v._tag === "None"
-                  ? or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
-                    ? _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st))
-                    : ((_v) =>
-                        _v._tag === "None"
-                          ? _Result_flatMap(([_, st1]) => cont(st1), api.inferExpr(f.value, st))
-                          : _v._tag === "Some"
-                            ? (({ value: m }) =>
-                                ((expected: Option<string>) =>
-                                  ((_v) =>
-                                    _v._tag === "None"
-                                      ? unknownProp(tag, f.name, f.value, m)
-                                      : _v._tag === "Some"
-                                        ? (({ value: kind }) =>
-                                            kind === "event"
-                                              ? checkHandler(f.name, f.value, st, api, cont)
-                                              : kind === "any"
-                                                ? _Result_flatMap(
-                                                    ([_, st1]) => cont(st1),
-                                                    api.inferExpr(f.value, st),
-                                                  )
-                                                : ((_v) =>
-                                                    _v._tag === "Some"
-                                                      ? (({ value: expectedT }) =>
-                                                          _Result_flatMap(
-                                                            ([valT, st1]) =>
+    ((_v) =>
+      _v.length === 0
+        ? (Ok(st) as Result<St, BoundErr>)
+        : _v.length >= 1
+          ? (([f, ...rest]) =>
+              ((cont: (a: St) => Result<St, BoundErr>) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v)
+                    : _v._tag === "None"
+                      ? or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
+                        ? _Result_flatMap(
+                            ([valT, st1]) => cont(noteProp(f, valT, st1)),
+                            api.inferExpr(f.value, st),
+                          )
+                        : ((_v) =>
+                            _v._tag === "None"
+                              ? _Result_flatMap(
+                                  ([valT, st1]) => cont(noteProp(f, valT, st1)),
+                                  api.inferExpr(f.value, st),
+                                )
+                              : _v._tag === "Some"
+                                ? (({ value: m }) =>
+                                    ((expected: Option<string>) =>
+                                      ((_v) =>
+                                        _v._tag === "None"
+                                          ? unknownProp(tag, f.name, f.value, m)
+                                          : _v._tag === "Some"
+                                            ? (({ value: kind }) =>
+                                                kind === "event"
+                                                  ? checkHandler(
+                                                      f.name,
+                                                      f.value,
+                                                      st,
+                                                      api,
+                                                      (st1: St) =>
+                                                        cont(noteProp(f, handlerType, st1)),
+                                                    )
+                                                  : kind === "any"
+                                                    ? _Result_flatMap(
+                                                        ([_, st1]) =>
+                                                          cont(noteProp(f, tPrim("any"), st1)),
+                                                        api.inferExpr(f.value, st),
+                                                      )
+                                                    : ((_v) =>
+                                                        _v._tag === "Some"
+                                                          ? (({ value: expectedT }) =>
                                                               _Result_flatMap(
-                                                                (st2) => cont(st2),
-                                                                api.unify(
-                                                                  valT,
-                                                                  expectedT,
-                                                                  st1,
-                                                                  jxExprSpan(f.value),
-                                                                ),
-                                                              ),
-                                                            api.inferExpr(f.value, st),
-                                                          ))(_v)
-                                                      : _v._tag === "None"
-                                                        ? _Result_flatMap(
-                                                            ([_, st1]) => cont(st1),
-                                                            api.inferExpr(f.value, st),
-                                                          )
-                                                        : (() => {
-                                                            throw new Error("non-exhaustive match");
-                                                          })())(attrKindType(kind)))(_v)
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(expected))(
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: k }) => Some(k) as Option<string>)(_v)
-                                      : _v._tag === "None"
-                                        ? isHandlerName(f.name)
-                                          ? (Some("event") as Option<string>)
-                                          : (None as Option<string>)
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(_Map_get(f.name, m)),
-                                ))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(schema)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(mismatchHint(f.name)))((st1: St) =>
-            inferIntrinsicFields(tag, rest, st1, api, schema),
-          ),
-      )
-      .otherwise(() => {
-        throw new Error("non-exhaustive match");
-      }),
+                                                                ([valT, st1]) =>
+                                                                  _Result_flatMap(
+                                                                    (st2) =>
+                                                                      cont(
+                                                                        noteProp(f, expectedT, st2),
+                                                                      ),
+                                                                    api.unify(
+                                                                      valT,
+                                                                      expectedT,
+                                                                      st1,
+                                                                      jxExprSpan(f.value),
+                                                                    ),
+                                                                  ),
+                                                                api.inferExpr(f.value, st),
+                                                              ))(_v)
+                                                          : _v._tag === "None"
+                                                            ? _Result_flatMap(
+                                                                ([_, st1]) => cont(st1),
+                                                                api.inferExpr(f.value, st),
+                                                              )
+                                                            : (() => {
+                                                                throw new Error(
+                                                                  "non-exhaustive match",
+                                                                );
+                                                              })())(attrKindType(kind)))(_v)
+                                            : (() => {
+                                                throw new Error("non-exhaustive match");
+                                              })())(expected))(
+                                      ((_v) =>
+                                        _v._tag === "Some"
+                                          ? (({ value: k }) => Some(k) as Option<string>)(_v)
+                                          : _v._tag === "None"
+                                            ? isHandlerName(f.name)
+                                              ? (Some("event") as Option<string>)
+                                              : (None as Option<string>)
+                                            : (() => {
+                                                throw new Error("non-exhaustive match");
+                                              })())(_Map_get(f.name, m)),
+                                    ))(_v)
+                                : (() => {
+                                    throw new Error("non-exhaustive match");
+                                  })())(schema)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(mismatchHint(f.name)))((st1: St) =>
+                inferIntrinsicFields(tag, rest, st1, api, schema),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(fields),
 );
 const inferFragmentFields: <A, B, C, D>(
   fields: ({ name: string; value: Expr } & C)[],
@@ -1165,26 +1189,26 @@ const unknownTagErr: <A>(tagName: string, sp: SpanAt) => Result<A, BoundErr> = _
     return jxTypeErr(`Unknown JSX element '<${tagName}>'.${did}`, sp);
   },
 );
-const inferStringTag: <A, B>(
+const inferStringTag: <A>(
   tagName: string,
   tagExpr: Expr,
-  fields: ({ name: string; value: Expr } & A)[],
+  fields: Field[],
   st: St,
   api: {
     inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
-  } & B,
+  } & A,
 ) => Result<St, BoundErr> = _curry(
   5,
-  <A, B>(
+  <A>(
     tagName: string,
     tagExpr: Expr,
-    fields: ({ name: string; value: Expr } & A)[],
+    fields: Field[],
     st: St,
     api: {
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
       unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
-    } & B,
+    } & A,
   ) =>
     tagName === "Fragment"
       ? inferFragmentFields(fields, st, api)
@@ -1211,6 +1235,31 @@ const inferStringTag: <A, B>(
               : (() => {
                   throw new Error("non-exhaustive match");
                 })())(_Map_get(tagName, jsxIntrinsicElements)),
+);
+/**
+ * Each attribute of a component tag hovers with the prop type it fills.
+ */
+const noteComponentProps: _Curry<[propsExpr: Expr, expectedRow: Row, st: St], St> = _curry(
+  3,
+  (propsExpr: Expr, expectedRow: Row, st: St) =>
+    ((_v) =>
+      _v._tag === "ERecord"
+        ? (({ fields }) =>
+            reduce(
+              _curry(2, (acc: St, f: Field) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: t }) => noteProp(f, zonk(t, acc), acc))(_v)
+                    : _v._tag === "None"
+                      ? acc
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(rowField(expectedRow, f.name)),
+              ),
+              st,
+              fields,
+            ))(_v)
+        : st)(propsExpr),
 );
 const inferJsxCall: <A>(
   tagExpr: Expr,
@@ -1248,7 +1297,11 @@ const inferJsxCall: <A>(
                             ? (({ row: expectedRow }) =>
                                 ((propsForCheck: Ty) =>
                                   _Result_map(
-                                    (st4: St) => _tuple(zonk(to, st4), st4),
+                                    (st4: St) =>
+                                      _tuple(
+                                        zonk(to, st4),
+                                        noteComponentProps(propsExpr, expectedRow, st4),
+                                      ),
                                     api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
                                   ))(
                                   jsxPropsWithSynthesizedChildren(

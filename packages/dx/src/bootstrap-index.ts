@@ -1,17 +1,18 @@
 /**
- * Node-only symbol index over the frozen bootstrap graph (ADR 0118): the
+ * The symbol index over the frozen bootstrap core (ADR 0118): the
  * `bootstrap/symbols.mochi` occurrences, shaped as the def/use queries nav
- * asks of them. Imports resolve through the export origins of the entry's
- * dependency graph; builtins resolve to the virtual prelude.
+ * asks of them. Imports resolve through the `origins` the caller passes;
+ * builtins resolve to the virtual prelude. Browser-safe: it runs on the
+ * synchronous bundle, so docs-site hover can use it. The graph-wide variant
+ * is `bootstrap-module-index.ts`.
  */
 import { resolve } from "node:path";
-import {
-  type BootstrapExportOrigins,
-  type BootstrapLoc,
-  type BootstrapSymOccurrence,
-  loadBootstrapGraph,
-  symbolIndexBootstrap,
+import type {
+  BootstrapExportOrigins,
+  BootstrapLoc,
+  BootstrapSymOccurrence,
 } from "@mochi/compiler/bootstrap";
+import { symbolIndexBootstrapSync } from "@mochi/compiler/bootstrap/sync";
 import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import type { Stmt } from "@mochi/compiler/bootstrap/types";
 import { preludeBootstrap } from "@mochi/compiler/prelude-virtual";
@@ -39,8 +40,6 @@ export type FileIndex = {
    */
   bindingsAt: (offset: number) => Binding[];
 };
-
-type ReadFile = (path: string) => Promise<string>;
 
 export const emptyOrigins = (): BootstrapExportOrigins => ({
   values: new Map(),
@@ -88,7 +87,10 @@ export const indexStmts = (
   origins: BootstrapExportOrigins = emptyOrigins(),
 ): FileIndex => {
   const prelude = preludeBootstrap();
-  const index = symbolIndexBootstrap(resolve(path), origins, prelude, stmts);
+  // A virtual buffer (`<buffer>`) is not a file: the browser's `node:path`
+  // shim would need `process` to resolve it.
+  const key = path.startsWith("<") ? path : resolve(path);
+  const index = symbolIndexBootstrapSync(key, origins, prelude, stmts);
   const all = index.occurrences.map(toOccurrence);
   const at = (offset: number): Occurrence | null => {
     const hit = tightestHit(all, offset);
@@ -146,33 +148,4 @@ export const indexSource = (
 ): FileIndex | null => {
   const stmts = parseStmts(src);
   return stmts ? indexStmts(path, stmts, origins) : null;
-};
-
-/**
- * Export origins of every module in `entry`'s dependency graph but the entry
- * itself, the entry served from `src`. A graph that fails to load (an
- * unreadable dependency, a cycle, a parse error) resolves no imports.
- */
-export const originsForEntry = async (
-  entry: string,
-  src: string,
-  readFile: ReadFile,
-): Promise<BootstrapExportOrigins> => {
-  const graph = await loadBootstrapGraph(entry, src, readFile);
-  const origins = emptyOrigins();
-  if (graph._tag === "Err") return origins;
-  const entryPath = resolve(entry);
-  for (const module of graph.value)
-    if (module.path !== entryPath) mergeOrigins(origins, module.origins);
-  return origins;
-};
-
-/** Index `src` at `path` with its imports resolved across its dependency graph. */
-export const indexModule = async (
-  path: string,
-  src: string,
-  readFile: ReadFile,
-): Promise<FileIndex | null> => {
-  const stmts = parseStmts(src);
-  return stmts ? indexStmts(path, stmts, await originsForEntry(path, src, readFile)) : null;
 };

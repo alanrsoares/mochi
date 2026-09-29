@@ -1,5 +1,5 @@
 // @bun
-import { Err as Err12, None as None23, Ok as Ok13, Some as Some23, _Array_append as _Array_append17, _Array_concat as _Array_concat13, _Array_flatMap as _Array_flatMap7, _Array_get as _Array_get21, _Array_sort as _Array_sort3, _Map_delete as _Map_delete4, _Map_get as _Map_get12, _Map_getOr as _Map_getOr9, _Map_has as _Map_has8, _Map_keys as _Map_keys12, _Map_set as _Map_set11, _Option_mapOr, _Option_unwrapOr as _Option_unwrapOr14, _Result_flatMap as _Result_flatMap9, _Result_mapErr as _Result_mapErr2, _Set_add as _Set_add10, _Set_fromArray as _Set_fromArray10, _Set_has as _Set_has9, _Str_codeAt as _Str_codeAt10, _Str_get as _Str_get6, _Str_join as _Str_join10, _Str_length as _Str_length10, _Str_split as _Str_split7, _Str_startsWith as _Str_startsWith10, _Str_trim as _Str_trim3, _curry as _curry24, and as and18, eq as eq17, filter as filter9, length as length18, map as map15, or as or15, reduce as reduce7 } from "@mochi/compiler/runtime";
+import { Err as Err12, None as None23, Ok as Ok13, Some as Some23, _Array_append as _Array_append17, _Array_concat as _Array_concat13, _Array_flatMap as _Array_flatMap7, _Array_get as _Array_get21, _Array_sort as _Array_sort3, _Map_delete as _Map_delete4, _Map_get as _Map_get12, _Map_getOr as _Map_getOr9, _Map_has as _Map_has8, _Map_keys as _Map_keys12, _Map_set as _Map_set11, _Option_mapOr, _Option_unwrapOr as _Option_unwrapOr14, _Result_flatMap as _Result_flatMap9, _Result_mapErr as _Result_mapErr2, _Set_add as _Set_add10, _Set_fromArray as _Set_fromArray10, _Set_has as _Set_has9, _Str_codeAt as _Str_codeAt10, _Str_get as _Str_get6, _Str_join as _Str_join10, _Str_length as _Str_length10, _Str_split as _Str_split7, _Str_startsWith as _Str_startsWith10, _Str_trim as _Str_trim3, _curry as _curry24, and as and18, eq as eq17, filter as filter9, length as length18, map as map15, or as or15, reduce as reduce8 } from "@mochi/compiler/runtime";
 import { match as match11 } from "@onrails/pattern";
 
 import { Err, None as None2, Ok, Some as Some2, _Array_append, _Array_concat, _Array_flatMap, _Array_get, _Array_head, _Array_tail, _Array_take, _Option_contains as _Option_contains2, _Option_exists, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get as _Str_get2, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry as _curry2, _done as _done2, _recur as _recur2, and, eq, length, lt, or } from "@mochi/compiler/runtime";
@@ -255,7 +255,7 @@ var SError = (span) => ({ _tag: "SError", span });
 import { Err as Err6, None as None10, Ok as Ok6, Some as Some10, _Array_append as _Array_append7, _Array_concat as _Array_concat4, _Array_get as _Array_get9, _curry as _curry11, length as length8 } from "@mochi/compiler/runtime";
 import { match as match5 } from "@onrails/pattern";
 
-import { Err as Err3, None as None6, Ok as Ok3, Some as Some6, _Array_append as _Array_append5, _Array_concat as _Array_concat3, _Array_find, _Array_get as _Array_get5, _Map_get as _Map_get2, _Map_keys as _Map_keys2, _Option_exists as _Option_exists2, _Option_isSome, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap2, _Result_map as _Result_map2, _Str_codeAt as _Str_codeAt3, _Str_contains, _Str_join as _Str_join3, _Str_length as _Str_length4, _Str_slice as _Str_slice2, _Str_split as _Str_split2, _Str_startsWith as _Str_startsWith2, _curry as _curry7, _tuple as _tuple3, and as and5, eq as eq4, length as length4, map as map2, or as or5, show as show2 } from "@mochi/compiler/runtime";
+import { Err as Err3, None as None6, Ok as Ok3, Some as Some6, _Array_append as _Array_append5, _Array_concat as _Array_concat3, _Array_find, _Array_get as _Array_get5, _Map_get as _Map_get2, _Map_keys as _Map_keys2, _Option_exists as _Option_exists2, _Option_isSome, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap2, _Result_map as _Result_map2, _Str_codeAt as _Str_codeAt3, _Str_contains, _Str_join as _Str_join3, _Str_length as _Str_length4, _Str_slice as _Str_slice2, _Str_split as _Str_split2, _Str_startsWith as _Str_startsWith2, _curry as _curry7, _tuple as _tuple3, and as and5, eq as eq4, length as length4, map as map2, or as or5, reduce, show as show2 } from "@mochi/compiler/runtime";
 import { match } from "@onrails/pattern";
 
 import { Err as Err2, None as None3, Ok as Ok2, Some as Some3, _Array_append as _Array_append2, _Array_concat as _Array_concat2, _Array_flatMap as _Array_flatMap2, _Array_get as _Array_get2, _Array_prepend, _Map_get, _Map_getOr, _Map_keys, _Map_set, _Map_values, _Result_flatMap, _Result_map, _Str_join as _Str_join2, _curry as _curry4, _tuple, and as and2, eq as eq2, floor, length as length2, map, or as or2, show } from "@mochi/compiler/runtime";
@@ -6587,7 +6587,9 @@ var unknownProp = _curry7(4, (tag, name, value, schema) => {
   })())(hint);
   return jxTypeErr(`Property '${name}' does not exist on '<${tag}>'.${did}`, jxExprSpan(value));
 });
-var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => match(fields).with((_v) => _v.length === 0, () => Ok3(st)).with((_v) => _v.length >= 1, ([f, ...rest]) => ((cont) => ((_v) => _v._tag === "Some" ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v) : _v._tag === "None" ? or5(_Str_startsWith2("data-", f.name), _Str_startsWith2("aria-", f.name)) ? _Result_flatMap2(([_, st1]) => cont(st1), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "None" ? _Result_flatMap2(([_, st1]) => cont(st1), api.inferExpr(f.value, st)) : _v._tag === "Some" ? (({ value: m }) => ((expected) => ((_v) => _v._tag === "None" ? unknownProp(tag, f.name, f.value, m) : _v._tag === "Some" ? (({ value: kind }) => kind === "event" ? checkHandler(f.name, f.value, st, api, cont) : kind === "any" ? _Result_flatMap2(([_, st1]) => cont(st1), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "Some" ? (({ value: expectedT }) => _Result_flatMap2(([valT, st1]) => _Result_flatMap2((st2) => cont(st2), api.unify(valT, expectedT, st1, jxExprSpan(f.value))), api.inferExpr(f.value, st)))(_v) : _v._tag === "None" ? _Result_flatMap2(([_, st1]) => cont(st1), api.inferExpr(f.value, st)) : (() => {
+var noteProp = _curry7(3, (f, t, st) => recordBinder(f.nameSpan, t, "property", f.name, None6, st));
+var handlerType = TyFn(tPrim("Event"), tPrim("unit"));
+var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 ? (([f, ...rest]) => ((cont) => ((_v) => _v._tag === "Some" ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v) : _v._tag === "None" ? or5(_Str_startsWith2("data-", f.name), _Str_startsWith2("aria-", f.name)) ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "None" ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : _v._tag === "Some" ? (({ value: m }) => ((expected) => ((_v) => _v._tag === "None" ? unknownProp(tag, f.name, f.value, m) : _v._tag === "Some" ? (({ value: kind }) => kind === "event" ? checkHandler(f.name, f.value, st, api, (st1) => cont(noteProp(f, handlerType, st1))) : kind === "any" ? _Result_flatMap2(([_, st1]) => cont(noteProp(f, tPrim("any"), st1)), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "Some" ? (({ value: expectedT }) => _Result_flatMap2(([valT, st1]) => _Result_flatMap2((st2) => cont(noteProp(f, expectedT, st2)), api.unify(valT, expectedT, st1, jxExprSpan(f.value))), api.inferExpr(f.value, st)))(_v) : _v._tag === "None" ? _Result_flatMap2(([_, st1]) => cont(st1), api.inferExpr(f.value, st)) : (() => {
   throw new Error("non-exhaustive match");
 })())(attrKindType(kind)))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -6597,9 +6599,9 @@ var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => match(fi
   throw new Error("non-exhaustive match");
 })())(schema) : (() => {
   throw new Error("non-exhaustive match");
-})())(mismatchHint(f.name)))((st1) => inferIntrinsicFields(tag, rest, st1, api, schema))).otherwise(() => {
+})())(mismatchHint(f.name)))((st1) => inferIntrinsicFields(tag, rest, st1, api, schema)))(_v) : (() => {
   throw new Error("non-exhaustive match");
-}));
+})())(fields));
 var inferFragmentFields = _curry7(3, (fields, st, api) => match(fields).with((_v) => _v.length === 0, () => Ok3(st)).with((_v) => _v.length >= 1, ([f, ...rest]) => f.name === "key" ? _Result_flatMap2(([_, st1]) => inferFragmentFields(rest, st1, api), api.inferExpr(f.value, st)) : jxTypeErr(`JSX fragments only accept the 'key' prop, got '${f.name}'`, jxExprSpan(f.value))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
@@ -6613,9 +6615,12 @@ var unknownTagErr = _curry7(2, (tagName, sp) => {
 var inferStringTag = _curry7(5, (tagName, tagExpr, fields, st, api) => tagName === "Fragment" ? inferFragmentFields(fields, st, api) : ((_v) => _v._tag === "Some" ? (({ value: schema }) => inferIntrinsicFields(tagName, fields, st, api, Some6(schema)))(_v) : _v._tag === "None" ? _Str_contains("-", tagName) ? inferIntrinsicFields(tagName, fields, st, api, None6) : unknownTagErr(tagName, jxExprSpan(tagExpr)) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Map_get2(tagName, intrinsicElements)));
+var noteComponentProps = _curry7(3, (propsExpr, expectedRow, st) => ((_v) => _v._tag === "ERecord" ? (({ fields }) => reduce(_curry7(2, (acc, f) => ((_v) => _v._tag === "Some" ? (({ value: t }) => noteProp(f, zonk(t, acc), acc))(_v) : _v._tag === "None" ? acc : (() => {
+  throw new Error("non-exhaustive match");
+})())(rowField(expectedRow, f.name))), st, fields))(_v) : st)(propsExpr));
 var inferJsxCall = _curry7(5, (tagExpr, propsExpr, restArgs, st, api) => _Result_flatMap2(([tagT, st1]) => _Result_flatMap2(([propsT, st2]) => _Result_flatMap2((st3) => {
   const zonkedTag = zonk(tagT, st3);
-  return ((_v) => _v._tag === "TyFn" ? (({ from, to }) => ((_v) => _v._tag === "TyRecord" ? (({ row: expectedRow }) => ((propsForCheck) => _Result_map2((st4) => _tuple3(zonk(to, st4), st4), api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr))))(jsxPropsWithSynthesizedChildren(propsT, propsExpr, expectedRow, restArgs)))(_v) : Ok3(_tuple3(tPrim("VNode"), st3)))(from))(_v) : ((_v) => _v._tag === "EStr" ? (({ value: tagName }) => ((_v) => _v._tag === "ERecord" ? (({ fields }) => _Result_map2((st4) => _tuple3(tPrim("VNode"), st4), inferStringTag(tagName, tagExpr, fields, st3, api)))(_v) : Ok3(_tuple3(tPrim("VNode"), st3)))(propsExpr))(_v) : Ok3(_tuple3(tPrim("VNode"), st3)))(tagExpr))(zonkedTag);
+  return ((_v) => _v._tag === "TyFn" ? (({ from, to }) => ((_v) => _v._tag === "TyRecord" ? (({ row: expectedRow }) => ((propsForCheck) => _Result_map2((st4) => _tuple3(zonk(to, st4), noteComponentProps(propsExpr, expectedRow, st4)), api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr))))(jsxPropsWithSynthesizedChildren(propsT, propsExpr, expectedRow, restArgs)))(_v) : Ok3(_tuple3(tPrim("VNode"), st3)))(from))(_v) : ((_v) => _v._tag === "EStr" ? (({ value: tagName }) => ((_v) => _v._tag === "ERecord" ? (({ fields }) => _Result_map2((st4) => _tuple3(tPrim("VNode"), st4), inferStringTag(tagName, tagExpr, fields, st3, api)))(_v) : Ok3(_tuple3(tPrim("VNode"), st3)))(propsExpr))(_v) : Ok3(_tuple3(tPrim("VNode"), st3)))(tagExpr))(zonkedTag);
 }, inferJsxChildren(restArgs, st2, api.inferExpr)), api.inferExpr(propsExpr, st1)), api.inferExpr(tagExpr, st)));
 var inferJsxCallHook = _curry7(5, (_fn, args, origin, st, api) => ((_v) => _v._tag === "Some" ? (({ value: o }) => o === "jsx" ? ((_v) => _v.length >= 2 ? (([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some6(r), inferJsxCall(tagExpr, propsExpr, rest, st, api)))(_v) : Ok3(None6))(args) : Ok3(None6))(_v) : _v._tag === "None" ? Ok3(None6) : (() => {
   throw new Error("non-exhaustive match");
@@ -6666,7 +6671,7 @@ var jsxPlugin = { name: "jsx", parse: Some6(parseJsxAtom), inferCall: Some6(infe
 import { Err as Err5, None as None9, Ok as Ok5, Some as Some9, _Array_get as _Array_get8, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _curry as _curry10, _tuple as _tuple5, and as and7, eq as eq7, length as length7 } from "@mochi/compiler/runtime";
 import { match as match4 } from "@onrails/pattern";
 
-import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get3, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_unwrapOr as _Option_unwrapOr5, _Set_add, _Set_diff, _Set_fromArray, _Set_has, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt4, _Str_split as _Str_split3, _curry as _curry9, _tuple as _tuple4, and as and6, eq as eq6, filter as filter2, length as length6, map as map4, reduce } from "@mochi/compiler/runtime";
+import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get3, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_unwrapOr as _Option_unwrapOr5, _Set_add, _Set_diff, _Set_fromArray, _Set_has, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt4, _Str_split as _Str_split3, _curry as _curry9, _tuple as _tuple4, and as and6, eq as eq6, filter as filter2, length as length6, map as map4, reduce as reduce2 } from "@mochi/compiler/runtime";
 import { match as match3 } from "@onrails/pattern";
 
 import { Err as Err4, Ok as Ok4, Some as Some7, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Map_has, _Map_set as _Map_set2, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry8, _done as _done4, _recur as _recur4, eq as eq5, filter, length as length5, map as map3, show as show3 } from "@mochi/compiler/runtime";
@@ -6854,7 +6859,7 @@ var matchTy = _curry9(4, (tpl, actual, params, binds) => ((_v) => _v[0]._tag ===
 var templateRowFrom = _curry9(4, (fields, vars, aliases, i) => ((_v) => _v._tag === "None" ? RowEmpty : _v._tag === "Some" ? (({ value: f }) => (([t, _vars, _st]) => RowExtend(f.name, t, f.optional, templateRowFrom(fields, vars, aliases, i + 1)))(typeExprToType(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray([]))))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get7(i, fields)));
-var templateVars = (params) => reduce(_curry9(2, ([vs, ids], p) => {
+var templateVars = (params) => reduce2(_curry9(2, ([vs, ids], p) => {
   const id = -1e6 - length6(ids);
   return _tuple4(_Map_set3(p, TyVar(id), vs), _Array_append6(id, ids));
 }), _tuple4(new Map, []), params);
@@ -6876,6 +6881,24 @@ var foldingAliasFrom = _curry9(4, (t, keys, aliases, i) => ((_v) => _v._tag === 
   throw new Error("non-exhaustive match");
 })())(_Array_get7(i, keys)));
 var nominalTypeName = _curry9(2, (t, aliases) => ((_v) => _v._tag === "TyCon" ? (({ name }) => isUpperStart(name) ? Some8(name) : None8)(_v) : _v._tag === "TyRecord" ? (({ row }) => foldingAliasFrom(TyRecord(row), _Map_keys3(aliases), aliases, 0))(_v) : None8)(widenLits(t)));
+var foldTemplatesFrom = _curry9(4, (keys, aliases, i, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: key }) => ((_v) => _v._tag === "None" ? foldTemplatesFrom(keys, aliases, i + 1, acc) : _v._tag === "Some" ? (({ value: info }) => (([_vars, ids]) => {
+  const name = bareAliasName(key);
+  return (([tpl, _st]) => foldTemplatesFrom(keys, aliases, i + 1, _Array_append6({ name, ids, tpl }, acc)))(aliasRow(name, info, map4((id) => TyVar(id), ids), mkSt(0), aliases, _Set_fromArray([])));
+})(templateVars(info.params)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get3(key, aliases)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get7(i, keys)));
+var foldHeadFrom = _curry9(3, (t, tpls, i) => ((_v) => _v._tag === "None" ? None8 : _v._tag === "Some" ? (({ value: a }) => ((_v) => _v._tag === "Some" ? (({ value: binds }) => allBound(a.ids, binds) ? Some8(_tuple4(a.name, map4((id) => _Map_getOr2(t, id, binds), a.ids))) : foldHeadFrom(t, tpls, i + 1))(_v) : _v._tag === "None" ? foldHeadFrom(t, tpls, i + 1) : (() => {
+  throw new Error("non-exhaustive match");
+})())(matchTy(a.tpl, t, _Set_fromArray(a.ids), new Map)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get7(i, tpls)));
+var foldWith = _curry9(2, (t, tpls) => ((_v) => _v._tag === "Some" ? (({ value: [name, args] }) => tCon(name, map4((a) => foldWith(a, tpls), args)))(_v) : _v._tag === "None" ? ((_v) => _v._tag === "TyCon" ? (({ name, args }) => tCon(name, map4((a) => foldWith(a, tpls), args)))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => tArrow(foldWith(fromT, tpls), foldWith(toT, tpls)))(_v) : _v._tag === "TyRecord" ? (({ row }) => tRecord(foldRowWith(row, tpls)))(_v) : _v._tag === "TyOneOf" ? (({ members }) => tUnion(map4((m) => foldWith(m, tpls), members)))(_v) : t)(t) : (() => {
+  throw new Error("non-exhaustive match");
+})())(foldHeadFrom(t, tpls, 0)));
+var foldRowWith = _curry9(2, (row, tpls) => ((_v) => _v._tag === "RowExtend" ? (({ label, fieldType, optional, rest }) => RowExtend(label, foldWith(fieldType, tpls), optional, foldRowWith(rest, tpls)))(_v) : row)(row));
+var foldAliases = _curry9(2, (t, aliases) => foldWith(t, foldTemplatesFrom(_Map_keys3(aliases), aliases, 0, [])));
 
 var arrOf = (elem) => tCon("Array", [elem]);
 var setStateDomain = (state) => tUnion([state, tArrow(state, state)]);
@@ -7338,7 +7361,7 @@ var parseWith = _curry12(2, (toks, pluginsOpt) => {
 import { Err as Err8, None as None13, Ok as Ok8, Some as Some13, _Array_append as _Array_append10, _Array_contains as _Array_contains3, _Array_flatMap as _Array_flatMap4, _Array_get as _Array_get12, _Array_head as _Array_head3, _Map_get as _Map_get5, _Map_getOr as _Map_getOr4, _Map_has as _Map_has3, _Map_keys as _Map_keys5, _Map_set as _Map_set4, _Option_isNone, _Option_isSome as _Option_isSome3, _Option_orElse, _Option_unwrapOr as _Option_unwrapOr8, _Result_flatMap as _Result_flatMap6, _Set_add as _Set_add2, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Str_codeAt as _Str_codeAt6, _Str_join as _Str_join5, _curry as _curry14, _done as _done6, _recur as _recur6, _tuple as _tuple7, and as and10, eq as eq10, filter as filter4, length as length11, map as map7, or as or7, show as show6 } from "@mochi/compiler/runtime";
 import { match as match6 } from "@onrails/pattern";
 
-import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_contains as _Array_contains2, _Array_drop, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_head as _Array_head2, _Array_prepend as _Array_prepend5, _Array_tail as _Array_tail2, _Array_take as _Array_take2, _Map_get as _Map_get4, _Map_getOr as _Map_getOr3, _Map_keys as _Map_keys4, _Option_isSome as _Option_isSome2, _Option_unwrapOr as _Option_unwrapOr7, _Str_concat, _Str_endsWith, _Str_join as _Str_join4, _curry as _curry13, and as and9, eq as eq9, filter as filter3, length as length10, map as map6, reduce as reduce2, show as show5, sub as sub5 } from "@mochi/compiler/runtime";
+import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_contains as _Array_contains2, _Array_drop, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_head as _Array_head2, _Array_prepend as _Array_prepend5, _Array_tail as _Array_tail2, _Array_take as _Array_take2, _Map_get as _Map_get4, _Map_getOr as _Map_getOr3, _Map_keys as _Map_keys4, _Option_isSome as _Option_isSome2, _Option_unwrapOr as _Option_unwrapOr7, _Str_concat, _Str_endsWith, _Str_join as _Str_join4, _curry as _curry13, and as and9, eq as eq9, filter as filter3, length as length10, map as map6, reduce as reduce3, show as show5, sub as sub5 } from "@mochi/compiler/runtime";
 var MWild = { _tag: "MWild" };
 var MCtor = _curry13(2, (name, args) => ({ _tag: "MCtor", name, args }));
 var MBool = (value) => ({ _tag: "MBool", value });
@@ -7377,8 +7400,8 @@ var headsOf = (col) => _Array_flatMap3((mp) => ((_v) => _v._tag === "None" ? [] 
   throw new Error("non-exhaustive match");
 })())(headOf(mp)), col);
 var addLabel = _curry13(2, (acc, l) => _Array_contains2(l, acc) ? acc : _Array_append9(l, acc));
-var labelsOfMP = _curry13(2, (acc, mp) => ((_v) => _v._tag === "MRecord" ? (({ labels: ls }) => reduce2(addLabel, acc, ls))(_v) : acc)(mp));
-var recordLabelsOf = (col) => reduce2(labelsOfMP, [], col);
+var labelsOfMP = _curry13(2, (acc, mp) => ((_v) => _v._tag === "MRecord" ? (({ labels: ls }) => reduce3(addLabel, acc, ls))(_v) : acc)(mp));
+var recordLabelsOf = (col) => reduce3(labelsOfMP, [], col);
 var indexOfLabel = _curry13(3, (l, labels, i) => ((_v) => _v._tag === "None" ? sub5(0, 1) : _v._tag === "Some" ? (({ value: x }) => eq9(x, l) ? i : indexOfLabel(l, labels, i + 1))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get11(i, labels)));
@@ -7389,7 +7412,7 @@ var fieldOf = _curry13(3, (l, labels, pats) => {
 var arrShapeStep = _curry13(2, (acc, mp) => ((_v) => _v._tag === "MArr" ? (({ elems, rest }) => ((n) => rest ? { fixed: acc.fixed, restFrom: ((_v) => _v._tag === "None" ? Some12(n) : _v._tag === "Some" ? (({ value: m }) => Some12(m < n ? m : n))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(acc.restFrom) } : { fixed: _Array_contains2(n, acc.fixed) ? acc.fixed : _Array_append9(n, acc.fixed), restFrom: acc.restFrom })(length10(elems)))(_v) : acc)(mp));
-var arrShapeOf = (col) => reduce2(arrShapeStep, { fixed: [], restFrom: None12 }, col);
+var arrShapeOf = (col) => reduce3(arrShapeStep, { fixed: [], restFrom: None12 }, col);
 var rangeCovered = _curry13(3, (shape, i, n) => i >= n ? true : and9(_Array_contains2(i, shape.fixed), rangeCovered(shape, i + 1, n)));
 var arrComplete = (shape) => ((_v) => _v._tag === "None" ? false : _v._tag === "Some" ? (({ value: r }) => rangeCovered(shape, 0, r))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -7399,7 +7422,7 @@ var arrMissingLen = _curry13(2, (shape, n) => and9(!_Array_contains2(n, shape.fi
 })())(shape.restFrom)) ? n : arrMissingLen(shape, n + 1));
 var rangeArr = _curry13(2, (i, top) => i > top ? [] : _Array_prepend5(i, rangeArr(i + 1, top)));
 var arrLengths = (shape) => {
-  const top = reduce2(_curry13(2, (a, x) => x > a ? x : a), _Option_unwrapOr7(0, shape.restFrom), shape.fixed);
+  const top = reduce3(_curry13(2, (a, x) => x > a ? x : a), _Option_unwrapOr7(0, shape.restFrom), shape.fixed);
   return rangeArr(0, top);
 };
 var specializeRow = _curry13(3, (h, mp, labels) => ((_v) => _v._tag === "HCtor" ? (({ name }) => ((_v) => _v._tag === "MCtor" ? (({ name: n, args }) => eq9(n, name) ? Some12(args) : None12)(_v) : None12)(mp))(_v) : _v._tag === "HBool" ? (({ value: v }) => ((_v) => _v._tag === "MBool" ? (({ value: b }) => eq9(b, v) ? Some12([]) : None12)(_v) : None12)(mp))(_v) : _v._tag === "HNum" ? (({ value: v }) => ((_v) => _v._tag === "MNum" ? (({ value: x }) => eq9(x, v) ? Some12([]) : None12)(_v) : None12)(mp))(_v) : _v._tag === "HStr" ? (({ value: v }) => ((_v) => _v._tag === "MStr" ? (({ value: x }) => eq9(x, v) ? Some12([]) : None12)(_v) : None12)(mp))(_v) : _v._tag === "HTuple" ? ((_v) => _v._tag === "MTuple" ? (({ elems }) => Some12(elems))(_v) : None12)(mp) : _v._tag === "HRecord" ? ((_v) => _v._tag === "MRecord" ? (({ labels: ls, pats: ps }) => Some12(map6((l) => fieldOf(l, ls, ps), labels)))(_v) : None12)(mp) : _v._tag === "HArr" ? (({ len }) => ((_v) => _v._tag === "MArr" ? (({ elems, rest }) => ((k) => rest ? k <= len ? Some12(_Array_concat6(elems, mWilds(sub5(len, k)))) : None12 : eq9(k, len) ? Some12(elems) : None12)(length10(elems)))(_v) : None12)(mp))(_v) : (() => {
@@ -7439,7 +7462,7 @@ var arityOfCtor = _curry13(2, (reg, n) => ((_v) => _v._tag === "None" ? 0 : _v._
 var ownerOfCtor = _curry13(2, (reg, n) => ((_v) => _v._tag === "None" ? None12 : _v._tag === "Some" ? (({ value: info }) => Some12(info.owner))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(ctorInfoOf(reg, n)));
-var allNamesIn = _curry13(2, (all, names) => reduce2(_curry13(2, (acc, n) => and9(acc, _Array_contains2(n, names))), true, all));
+var allNamesIn = _curry13(2, (all, names) => reduce3(_curry13(2, (acc, n) => and9(acc, _Array_contains2(n, names))), true, all));
 var useful = _curry13(4, (m, width, reg, fuel) => fuel <= 0 ? UFuel : width === 0 ? length10(m) === 0 ? USome([], sub5(fuel, 1)) : UNone(sub5(fuel, 1)) : length10(m) === 0 ? USome(mWilds(width), sub5(fuel, 1)) : usefulSplit(m, width, reg, sub5(fuel, 1)));
 var usefulSplit = _curry13(4, (m, width, reg, fuel) => {
   const col = colOf(m);
@@ -7486,7 +7509,7 @@ var showFields = _curry13(3, (labels, pats, i) => ((_v) => _v._tag === "None" ? 
 var showWitness = (mp) => ((_v) => _v._tag === "MWild" ? "_" : _v._tag === "MOpaque" ? "_" : _v._tag === "MBool" ? (({ value: v }) => show5(v))(_v) : _v._tag === "MNum" ? (({ value: v }) => show5(v))(_v) : _v._tag === "MStr" ? (({ value: v }) => show5(v))(_v) : _v._tag === "MCtor" ? (({ name: n, args }) => length10(args) === 0 ? n : `${n}(${_Str_join4(", ", map6(showWitness, args))})`)(_v) : _v._tag === "MTuple" ? (({ elems }) => `(${_Str_join4(", ", map6(showWitness, elems))})`)(_v) : _v._tag === "MRecord" ? (({ labels, pats }) => `{ ${_Str_join4(", ", showFields(labels, pats, 0))} }`)(_v) : _v._tag === "MArr" ? (({ elems, rest }) => `[${_Str_join4(", ", _Array_concat6(map6(showWitness, elems), rest ? ["..."] : []))}]`)(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(mp);
-var isWideWitnessM = (mp) => ((_v) => _v._tag === "MWild" ? true : _v._tag === "MCtor" ? (({ args }) => reduce2(_curry13(2, (acc, a) => and9(acc, isWildMP(a))), true, args))(_v) : false)(mp);
+var isWideWitnessM = (mp) => ((_v) => _v._tag === "MWild" ? true : _v._tag === "MCtor" ? (({ args }) => reduce3(_curry13(2, (acc, a) => and9(acc, isWildMP(a))), true, args))(_v) : false)(mp);
 var checkExhaustiveM = _curry13(2, (patterns, reg) => {
   const rows = _Array_flatMap3((p) => map6((alt) => [toMP(alt)], explodePat(p)), patterns);
   return ((_v) => _v._tag === "UFuel" ? ExFuel : _v._tag === "UNone" ? ExOk : _v._tag === "USome" ? (({ row }) => ExWitness(_Option_unwrapOr7(MWild, _Array_head2(row))))(_v) : (() => {
@@ -7870,7 +7893,7 @@ var checkAllWith = _curry14(3, (stmts, imported, quals) => ((_v) => _v._tag === 
 })())(buildRegistry(stmts)));
 var checkAll = (stmts) => checkAllWith(stmts, { ctors: new Map, types: new Map }, emptyQuals);
 
-import { Err as Err9, None as None16, Ok as Ok9, Some as Some16, _Array_append as _Array_append12, _Array_concat as _Array_concat7, _Array_find as _Array_find3, _Array_flatMap as _Array_flatMap5, _Array_get as _Array_get15, _Array_head as _Array_head4, _Array_prepend as _Array_prepend6, _Map_delete, _Map_get as _Map_get6, _Map_getOr as _Map_getOr6, _Map_has as _Map_has5, _Map_keys as _Map_keys6, _Map_set as _Map_set6, _Option_map, _Option_unwrapOr as _Option_unwrapOr9, _Result_flatMap as _Result_flatMap7, _Result_map as _Result_map6, _Set_add as _Set_add5, _Set_fromArray as _Set_fromArray5, _Set_has as _Set_has4, _Set_size as _Set_size2, _Set_toArray as _Set_toArray2, _Str_length as _Str_length5, _Str_replace, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith3, _curry as _curry17, _done as _done8, _recur as _recur8, _tuple as _tuple8, and as and11, eq as eq12, length as length13, map as map8, or as or8, reduce as reduce3 } from "@mochi/compiler/runtime";
+import { Err as Err9, None as None16, Ok as Ok9, Some as Some16, _Array_append as _Array_append12, _Array_concat as _Array_concat7, _Array_find as _Array_find3, _Array_flatMap as _Array_flatMap5, _Array_get as _Array_get15, _Array_head as _Array_head4, _Array_prepend as _Array_prepend6, _Map_delete, _Map_get as _Map_get6, _Map_getOr as _Map_getOr6, _Map_has as _Map_has5, _Map_keys as _Map_keys6, _Map_set as _Map_set6, _Option_map, _Option_unwrapOr as _Option_unwrapOr9, _Result_flatMap as _Result_flatMap7, _Result_map as _Result_map6, _Set_add as _Set_add5, _Set_fromArray as _Set_fromArray5, _Set_has as _Set_has4, _Set_size as _Set_size2, _Set_toArray as _Set_toArray2, _Str_length as _Str_length5, _Str_replace, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith3, _curry as _curry17, _done as _done8, _recur as _recur8, _tuple as _tuple8, and as and11, eq as eq12, length as length13, map as map8, or as or8, reduce as reduce4 } from "@mochi/compiler/runtime";
 import { match as match8 } from "@onrails/pattern";
 
 import { _Array_get as _Array_get13, _Set_add as _Set_add3, _Set_fromArray as _Set_fromArray3, _curry as _curry15 } from "@mochi/compiler/runtime";
@@ -8258,7 +8281,7 @@ var lambdaBound = _curry17(2, (params, bound) => ((_v) => _v.length === 0 ? boun
 var labeledDefaultRefs = _curry17(3, (params, bound, acc) => ((_v) => _v.length === 0 ? acc : _v.length >= 1 ? (([p, ...rest]) => ((_v) => _v._tag === "LPSpanned" ? (({ param: inner }) => labeledDefaultRefs([inner, ...rest], bound, acc))(_v) : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some" ? (({ defaultValue: { value: d } }) => labeledDefaultRefs(rest, bound, freeRefs(d, bound, acc)))(_v) : labeledDefaultRefs(rest, bound, acc))(p))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(params));
-var loopBound = _curry17(2, (params, bound) => reduce3(_curry17(2, (b, p) => _Set_add5(p.name, b)), bound, params));
+var loopBound = _curry17(2, (params, bound) => reduce4(_curry17(2, (b, p) => _Set_add5(p.name, b)), bound, params));
 var loopInitRefsFrom = _curry17(4, (params, i, bound, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: p }) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get15(i, params)));
@@ -8325,7 +8348,7 @@ var registerBuiltinCtorsFrom = _curry17(4, (decls, aliasMap, env, st) => match8(
 var registerExternsFrom = _curry17(4, (stmts, aliasMap, env, st) => ((_v) => _v.length === 0 ? _tuple8(env, st) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SExtern" ? (({ name, nameSpan, params, typeExpr, doc }) => (([vars, st0]) => (([t, _, st1]) => {
   const sc = generalize(env, t, st1, false);
   return registerExternsFrom(rest, aliasMap, _Map_set6(name, sc, env), recordBinder(nameSpan, sc.ty, "extern", name, doc, st1));
-})(typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray5([]))))(reduce3(_curry17(2, ([vs, s], param) => (([v, s1]) => _tuple8(_Map_set6(param, v, vs), s1))(freshVar(s))), _tuple8(new Map, st), params)))(_v) : registerExternsFrom(rest, aliasMap, env, st))(s))(_v) : (() => {
+})(typeExprToType(typeExpr, vars, st0, aliasMap, _Set_fromArray5([]))))(reduce4(_curry17(2, ([vs, s], param) => (([v, s1]) => _tuple8(_Map_set6(param, v, vs), s1))(freshVar(s))), _tuple8(new Map, st), params)))(_v) : registerExternsFrom(rest, aliasMap, env, st))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(stmts));
 var letsOfFrom = (stmts) => ((_v) => _v.length === 0 ? [] : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? _Array_prepend6(s, letsOfFrom(rest)) : letsOfFrom(rest))(s))(_v) : (() => {
@@ -8479,7 +8502,7 @@ var exportedSchemesFrom = _curry17(4, (stmts, i0, env, acc0) => {
 });
 var exportedSchemes = _curry17(2, (stmts, env) => exportedSchemesFrom(stmts, 0, env, new Map));
 
-import { None as None17, Some as Some17, _Array_append as _Array_append13, _Array_concat as _Array_concat8, _Array_get as _Array_get16, _Array_head as _Array_head5, _Array_prepend as _Array_prepend7, _Map_get as _Map_get7, _Map_getOr as _Map_getOr7, _Map_keys as _Map_keys7, _Option_contains as _Option_contains3, _Option_exists as _Option_exists4, _Option_isNone as _Option_isNone2, _Option_isSome as _Option_isSome4, _Option_unwrapOr as _Option_unwrapOr10, _Set_add as _Set_add6, _Set_fromArray as _Set_fromArray6, _Set_has as _Set_has5, _Set_toArray as _Set_toArray3, _Set_union, _Str_chars, _Str_codeAt as _Str_codeAt7, _Str_concat as _Str_concat2, _Str_endsWith as _Str_endsWith2, _Str_join as _Str_join6, _Str_length as _Str_length6, _Str_replace as _Str_replace2, _Str_slice as _Str_slice3, _Str_split as _Str_split5, _Str_startsWith as _Str_startsWith4, _curry as _curry18, _done as _done9, _recur as _recur9, _tuple as _tuple9, and as and12, concat, eq as eq13, filter as filter5, length as length14, map as map9, or as or9, reduce as reduce4, show as show7, sub as sub7 } from "@mochi/compiler/runtime";
+import { None as None17, Some as Some17, _Array_append as _Array_append13, _Array_concat as _Array_concat8, _Array_get as _Array_get16, _Array_head as _Array_head5, _Array_prepend as _Array_prepend7, _Map_get as _Map_get7, _Map_getOr as _Map_getOr7, _Map_keys as _Map_keys7, _Option_contains as _Option_contains3, _Option_exists as _Option_exists4, _Option_isNone as _Option_isNone2, _Option_isSome as _Option_isSome4, _Option_unwrapOr as _Option_unwrapOr10, _Set_add as _Set_add6, _Set_fromArray as _Set_fromArray6, _Set_has as _Set_has5, _Set_toArray as _Set_toArray3, _Set_union, _Str_chars, _Str_codeAt as _Str_codeAt7, _Str_concat as _Str_concat2, _Str_endsWith as _Str_endsWith2, _Str_join as _Str_join6, _Str_length as _Str_length6, _Str_replace as _Str_replace2, _Str_slice as _Str_slice3, _Str_split as _Str_split5, _Str_startsWith as _Str_startsWith4, _curry as _curry18, _done as _done9, _recur as _recur9, _tuple as _tuple9, and as and12, concat, eq as eq13, filter as filter5, length as length14, map as map9, or as or9, reduce as reduce5, show as show7, sub as sub7 } from "@mochi/compiler/runtime";
 import { match as match9 } from "@onrails/pattern";
 var jsGenOpts = { annotateLet: None17, annotateCtor: None17, annotateParams: None17, annotateEmpty: None17, annotateLetin: None17, annotateCall: None17, guardBaseType: None17, flattenPipe: false, tupleHelper: false, preserveInfix: false, preserveJsx: false, moduleExt: ".js", docs: true };
 var hook1 = _curry18(2, (h, x) => ((_v) => _v._tag === "None" ? None17 : _v._tag === "Some" ? (({ value: f }) => f(x))(_v) : (() => {
@@ -8656,7 +8679,7 @@ var genLabeledFill = _curry18(3, (ctx, labVar, lab) => ((_v) => _v._tag === "LPS
   throw new Error("non-exhaustive match");
 })())(defaultValue))(`(${labVar} ?? {}).${name}`))(_v) : "")(lab));
 var genFillDecls = _curry18(2, (ctx, fills) => ((_v) => _v.length === 0 ? "" : `${_Str_join6(" ", map9((g) => _Str_join6(" ", map9((lab) => genLabeledFill(ctx, g.labVar, lab), g.labs)), fills))} `)(fills));
-var fillNames = _curry18(2, (fills, acc) => match9(fills).with((_v) => _v.length === 0, () => acc).with((_v) => _v.length >= 1, ([g, ...rest]) => fillNames(rest, reduce4(_curry18(2, (s, lab) => ((_v) => _v._tag === "LPSpanned" ? (({ param: inner }) => ((_v) => _v._tag === "LPLabeled" ? (({ name }) => _Set_add6(name, s))(_v) : s)(inner))(_v) : _v._tag === "LPLabeled" ? (({ name }) => _Set_add6(name, s))(_v) : s)(lab)), acc, g.labs))).otherwise(() => {
+var fillNames = _curry18(2, (fills, acc) => match9(fills).with((_v) => _v.length === 0, () => acc).with((_v) => _v.length >= 1, ([g, ...rest]) => fillNames(rest, reduce5(_curry18(2, (s, lab) => ((_v) => _v._tag === "LPSpanned" ? (({ param: inner }) => ((_v) => _v._tag === "LPLabeled" ? (({ name }) => _Set_add6(name, s))(_v) : s)(inner))(_v) : _v._tag === "LPLabeled" ? (({ name }) => _Set_add6(name, s))(_v) : s)(lab)), acc, g.labs))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var addNames = _curry18(3, (names, i, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: n }) => addNames(names, i + 1, _Set_add6(n, acc)))(_v) : (() => {
@@ -8918,7 +8941,7 @@ var exprRefsEntriesFrom = _curry18(4, (ctx, entries, i, acc) => ((_v) => _v._tag
 })())(_Array_get16(i, entries)));
 var exprRefs = _curry18(3, (ctx, e, acc) => ((_v) => _v._tag === "ENum" ? acc : _v._tag === "EUnit" ? acc : _v._tag === "EBool" ? acc : _v._tag === "EStr" ? acc : _v._tag === "ERef" ? (({ name }) => _Set_add6(name, acc))(_v) : _v._tag === "ECall" ? (({ fn, args }) => exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc)))(_v) : _v._tag === "ELambda" ? (({ params, body }) => (([cparams, cbody, fills]) => {
   const acc2 = length14(cparams) >= 2 ? _Set_add6("_curry", acc) : acc;
-  const acc3 = reduce4(_curry18(2, (a, g) => reduce4(_curry18(2, (b, lab) => ((_v) => _v._tag === "LPSpanned" && _v.param._tag === "LPLabeled" && _v.param.defaultValue._tag === "Some" ? (({ param: { defaultValue: { value: d } } }) => exprRefs(ctx, d, b))(_v) : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some" ? (({ defaultValue: { value: d } }) => exprRefs(ctx, d, b))(_v) : b)(lab)), a, g.labs)), acc2, fills);
+  const acc3 = reduce5(_curry18(2, (a, g) => reduce5(_curry18(2, (b, lab) => ((_v) => _v._tag === "LPSpanned" && _v.param._tag === "LPLabeled" && _v.param.defaultValue._tag === "Some" ? (({ param: { defaultValue: { value: d } } }) => exprRefs(ctx, d, b))(_v) : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some" ? (({ defaultValue: { value: d } }) => exprRefs(ctx, d, b))(_v) : b)(lab)), a, g.labs)), acc2, fills);
   return exprRefs(ctx, cbody, acc3);
 })(collapseLambda(params, body)))(_v) : _v._tag === "ELetIn" ? (({ value, body }) => exprRefs(ctx, body, exprRefs(ctx, value, acc)))(_v) : _v._tag === "ELetBind" ? (({ monad, value, body }) => exprRefs(ctx, body, exprRefs(ctx, value, _Set_add6(bindRuntime(monad), acc))))(_v) : _v._tag === "EPipe" ? (({ left, right }) => exprRefs(ctx, right, exprRefs(ctx, left, acc)))(_v) : _v._tag === "EDo" ? (({ exprs }) => exprRefsListFrom(ctx, exprs, 0, acc))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => exprRefs(ctx, elseE, exprRefs(ctx, thenE, exprRefs(ctx, cond, acc))))(_v) : _v._tag === "EMatch" ? (({ scrutinee, arms }) => ((acc1) => ((acc2) => exprRefsArmsFrom(ctx, arms, 0, acc2))(someOf3((a) => ((_v) => _v._tag === "PList" && _v.rest._tag === "Some" && _v.rest.value._tag === "PBind" ? true : false)(a.pattern), arms) ? _Set_add6("_list", acc1) : acc1))(exprRefs(ctx, scrutinee, acc)))(_v) : _v._tag === "ERecord" ? (({ fields, spread }) => exprRefsFieldsFrom(ctx, fields, 0, ((_v) => _v._tag === "Some" ? (({ value: s }) => exprRefs(ctx, s, acc))(_v) : _v._tag === "None" ? acc : (() => {
   throw new Error("non-exhaustive match");
@@ -8996,7 +9019,7 @@ var runtimeDepNames = _curry18(5, (stmts, imported, ns, jsDefs, runtimeDeps) => 
 });
 var codegen = _curry18(6, (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) => codegenWith(stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts));
 
-import { None as None19, Some as Some19, _Array_append as _Array_append15, _Array_concat as _Array_concat10, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get18, _Array_prepend as _Array_prepend9, _Array_reverse, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take4, _Map_delete as _Map_delete3, _Map_get as _Map_get9, _Map_keys as _Map_keys9, _Map_set as _Map_set8, _Map_size as _Map_size2, _Map_values as _Map_values3, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome5, _Option_map as _Option_map3, _Option_unwrapOr as _Option_unwrapOr12, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_contains as _Str_contains3, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join8, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith6, _curry as _curry20, _tuple as _tuple11, and as and14, concat as concat2, eq as eq15, filter as filter7, length as length16, map as map11, or as or11, reduce as reduce5, show as show9 } from "@mochi/compiler/runtime";
+import { None as None19, Some as Some19, _Array_append as _Array_append15, _Array_concat as _Array_concat10, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get18, _Array_prepend as _Array_prepend9, _Array_reverse, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take4, _Map_delete as _Map_delete3, _Map_get as _Map_get9, _Map_keys as _Map_keys9, _Map_set as _Map_set8, _Map_size as _Map_size2, _Map_values as _Map_values3, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome5, _Option_map as _Option_map3, _Option_unwrapOr as _Option_unwrapOr12, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_contains as _Str_contains3, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join8, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith6, _curry as _curry20, _tuple as _tuple11, and as and14, concat as concat2, eq as eq15, filter as filter7, length as length16, map as map11, or as or11, reduce as reduce6, show as show9 } from "@mochi/compiler/runtime";
 
 import { None as None18, Some as Some18, _Array_append as _Array_append14, _Array_concat as _Array_concat9, _Array_get as _Array_get17, _Array_prepend as _Array_prepend8, _Array_sort, _Map_delete as _Map_delete2, _Map_get as _Map_get8, _Map_has as _Map_has6, _Map_keys as _Map_keys8, _Map_set as _Map_set7, _Map_size, _Option_flatMap as _Option_flatMap2, _Option_map as _Option_map2, _Option_unwrapOr as _Option_unwrapOr11, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray7, _Set_has as _Set_has6, _Str_codeAt as _Str_codeAt8, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join7, _Str_length as _Str_length7, _Str_slice as _Str_slice4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry19, _tuple as _tuple10, and as and13, eq as eq14, filter as filter6, length as length15, map as map10, or as or10, show as show8 } from "@mochi/compiler/runtime";
 var tsEnv = _curry19(2, (vars, recs) => ({ vars, recs }));
@@ -9426,7 +9449,7 @@ var tsGenOpts = _curry20(6, (stmts, env, types, letParams, aliases, bindingHooks
     return _Option_flatMap3((t) => emptyCollTs(t, envAt(key)), _Map_get9(key, typeAt));
   }), annotateLetin: Some19((value) => _Option_flatMap3((t) => emptyCollTs(t, recsEnv(recs)), _Map_get9(spanKey(exprSpan3(value)), letParamAt))), annotateCall: Some19((e) => _Option_flatMap3((t) => ctorCallTs(t, recs), typeOf(e))), guardBaseType: Some19((e) => _Option_flatMap3((t) => guardParamTs(t, recs), typeOf(e))), flattenPipe: true, tupleHelper: true, preserveInfix: true, preserveJsx: true, moduleExt: "" };
 });
-var anyOf = _curry20(2, (f, xs) => reduce5(_curry20(2, (acc, x) => or11(acc, f(x))), false, xs));
+var anyOf = _curry20(2, (f, xs) => reduce6(_curry20(2, (acc, x) => or11(acc, f(x))), false, xs));
 var hasJsxExpr = (e) => ((_v) => _v._tag === "ECall" && _v.origin._tag === "Some" && _v.origin.value === "jsx" ? true : _v._tag === "ECall" ? (({ fn, args }) => or11(hasJsxExpr(fn), anyOf(hasJsxExpr, args)))(_v) : _v._tag === "ELambda" ? (({ body }) => hasJsxExpr(body))(_v) : _v._tag === "ELetIn" ? (({ value, body }) => or11(hasJsxExpr(value), hasJsxExpr(body)))(_v) : _v._tag === "ELetBind" ? (({ value, body }) => or11(hasJsxExpr(value), hasJsxExpr(body)))(_v) : _v._tag === "EPipe" ? (({ left, right }) => or11(hasJsxExpr(left), hasJsxExpr(right)))(_v) : _v._tag === "EDo" ? (({ exprs }) => anyOf(hasJsxExpr, exprs))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => or11(or11(hasJsxExpr(cond), hasJsxExpr(thenE)), hasJsxExpr(elseE)))(_v) : _v._tag === "EMatch" ? (({ scrutinee, arms }) => or11(hasJsxExpr(scrutinee), anyOf((a) => or11(((_v) => _v._tag === "Some" ? (({ value: g }) => hasJsxExpr(g))(_v) : _v._tag === "None" ? false : (() => {
   throw new Error("non-exhaustive match");
 })())(a.guard), hasJsxExpr(a.body)), arms)))(_v) : _v._tag === "ERecord" ? (({ fields, spread }) => or11(anyOf((f) => hasJsxExpr(f.value), fields), ((_v) => _v._tag === "Some" ? (({ value }) => hasJsxExpr(value))(_v) : _v._tag === "None" ? false : (() => {
@@ -9464,12 +9487,12 @@ var emitTsModule = _curry20(11, (stmts, env, types, letParams, aliases, imported
 var freeIdsIn = _curry20(2, (t, acc) => ((_v) => _v._tag === "TyVar" ? (({ id }) => _Array_contains4(id, acc) ? acc : _Array_append15(id, acc))(_v) : _v._tag === "TyCon" ? (({ args }) => freeIdsInAll(args, acc))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => freeIdsIn(toT, freeIdsIn(fromT, acc)))(_v) : _v._tag === "TyRecord" ? (({ row }) => freeIdsInRow(row, acc))(_v) : _v._tag === "TySingleton" ? acc : _v._tag === "TyOneOf" ? (({ members }) => freeIdsInAll(members, acc))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(t));
-var freeIdsInAll = _curry20(2, (ts, acc) => reduce5(_curry20(2, (a, t) => freeIdsIn(t, a)), acc, ts));
+var freeIdsInAll = _curry20(2, (ts, acc) => reduce6(_curry20(2, (a, t) => freeIdsIn(t, a)), acc, ts));
 var freeIdsInRow = _curry20(2, (row, acc) => ((_v) => _v._tag === "RowExtend" ? (({ fieldType, rest }) => freeIdsInRow(rest, freeIdsIn(fieldType, acc)))(_v) : acc)(row));
 var lettersFor = _curry20(3, (ids, i, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: id }) => lettersFor(ids, i + 1, _Map_set8(id, letterAt(i), acc)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get18(i, ids)));
-var anyFor = (ids) => reduce5(_curry20(2, (acc, id) => _Map_set8(id, "any", acc)), new Map, ids);
+var anyFor = (ids) => reduce6(_curry20(2, (acc, id) => _Map_set8(id, "any", acc)), new Map, ids);
 var genericHeadOf = _curry20(2, (ids, names) => length16(ids) === 0 ? "" : `<${_Str_join8(", ", _Map_values3(names))}>`);
 var arrowCount = (t) => ((_v) => _v._tag === "TyFn" ? (({ to: toT }) => 1 + arrowCount(toT))(_v) : 0)(t);
 var hostParams = _curry20(4, (t, arity, names, i) => i >= arity ? [] : ((_v) => _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => _Array_prepend9(`${_Str_fromCode3(97 + i)}: ${tsOf(fromT, plainEnv(names))}`, hostParams(toT, arity, names, i + 1)))(_v) : [])(t));
@@ -9477,7 +9500,7 @@ var hostReturn = _curry20(3, (t, arity, i) => i >= arity ? t : ((_v) => _v._tag 
 var curriedHostType = _curry20(2, (t, arity) => {
   const ids = freeIdsIn(t, []);
   const names = lettersFor(ids, 0, new Map);
-  return `${genericHeadOf(ids, names)}${reduce5(_curry20(2, (acc, p) => `(${p}) => ${acc}`), tsOf(hostReturn(t, arity, 0), plainEnv(names)), _Array_reverse(hostParams(t, arity, names, 0)))}`;
+  return `${genericHeadOf(ids, names)}${reduce6(_curry20(2, (acc, p) => `(${p}) => ${acc}`), tsOf(hostReturn(t, arity, 0), plainEnv(names)), _Array_reverse(hostParams(t, arity, names, 0)))}`;
 });
 var flatHostType = _curry20(2, (t, arity) => {
   const ids = freeIdsIn(t, []);
@@ -9491,13 +9514,13 @@ var externDecl = (e) => {
   return and14(n >= 1, e.curried) ? `export declare const ${e.imported}: ${curriedHostType(t, n)};` : n === 0 ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, []))))};` : `export declare const ${e.imported}: ${flatHostType(t, n)};`;
 };
 var externModuleDts = _curry20(2, (externs, aliases) => {
-  const wanted = reduce5(_curry20(2, (acc, e) => consInTy(e.scheme.ty, acc)), _Set_fromArray8([]), externs);
+  const wanted = reduce6(_curry20(2, (acc, e) => consInTy(e.scheme.ty, acc)), _Set_fromArray8([]), externs);
   return concat2(_Str_join8(`
 `, _Array_concat10(map11((bt) => typeDecl(bt.name, bt.params, bt.ctors, aliases, new Map), filter7((bt) => _Set_has7(bt.name, wanted), builtinTypeDecls)), map11(externDecl, _Array_dedupeBy((e) => e.imported, externs)))), `
 `);
 });
 
-import { None as None20, Some as Some20, _Array_append as _Array_append16, _Array_concat as _Array_concat11, _Array_contains as _Array_contains5, _Array_flatMap as _Array_flatMap6, _Array_get as _Array_get19, _Map_get as _Map_get10, _Map_keys as _Map_keys10, _Map_set as _Map_set9, _Map_size as _Map_size3, _Str_codeAt as _Str_codeAt9, _Str_length as _Str_length8, _Str_startsWith as _Str_startsWith7, _curry as _curry21, _tuple as _tuple12, and as and15, eq as eq16, filter as filter8, map as map12, or as or12, reduce as reduce6 } from "@mochi/compiler/runtime";
+import { None as None20, Some as Some20, _Array_append as _Array_append16, _Array_concat as _Array_concat11, _Array_contains as _Array_contains5, _Array_flatMap as _Array_flatMap6, _Array_get as _Array_get19, _Map_get as _Map_get10, _Map_keys as _Map_keys10, _Map_set as _Map_set9, _Map_size as _Map_size3, _Str_codeAt as _Str_codeAt9, _Str_length as _Str_length8, _Str_startsWith as _Str_startsWith7, _curry as _curry21, _tuple as _tuple12, and as and15, eq as eq16, filter as filter8, map as map12, or as or12, reduce as reduce7 } from "@mochi/compiler/runtime";
 import { match as match10 } from "@onrails/pattern";
 var emptyOrigins = { values: new Map, types: new Map, ctors: new Map };
 var occ = _curry21(5, (name, space, def, span, role) => ({ name, space, defPath: def.path, defStart: def.start, defEnd: def.end, start: span.start, end: span.end, role }));
@@ -9521,7 +9544,7 @@ var andThen = _curry21(2, (first, rest) => {
 });
 var prefixed = _curry21(2, (occs, w) => ({ occs: _Array_concat11(occs, w.occs), fields: w.fields, frames: w.frames }));
 var sameLoc = _curry21(2, (a, b) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: x }, { value: y }]) => and15(and15(eq16(x.start, y.start), eq16(x.end, y.end)), eq16(x.path, y.path)))(_v) : _v[0]._tag === "None" && _v[1]._tag === "None" ? true : false)(_tuple12(a, b)));
-var newBinds = _curry21(2, (outer, inner) => reduce6(_curry21(2, (acc, name) => or12(sameLoc(_Map_get10(name, outer.locals), _Map_get10(name, inner.locals)), parked(name)) ? acc : ((_v) => _v._tag === "Some" ? (({ value: def }) => _Map_set9(name, def, acc))(_v) : _v._tag === "None" ? acc : (() => {
+var newBinds = _curry21(2, (outer, inner) => reduce7(_curry21(2, (acc, name) => or12(sameLoc(_Map_get10(name, outer.locals), _Map_get10(name, inner.locals)), parked(name)) ? acc : ((_v) => _v._tag === "Some" ? (({ value: def }) => _Map_set9(name, def, acc))(_v) : _v._tag === "None" ? acc : (() => {
   throw new Error("non-exhaustive match");
 })())(_Map_get10(name, inner.locals))), new Map, _Map_keys10(inner.locals)));
 var framed = _curry21(4, (outer, inner, sp, w) => {
@@ -9670,7 +9693,7 @@ var indexWith = _curry21(4, (path, origins, prelude, stmts) => {
   const body = walkStmts({ path, top: tops.top, prelude, locals: new Map }, stmts, 0, tops.fields);
   return { occurrences: _Array_concat11(tops.occs, body.occs), top: tops.top, fields: body.fields, frames: body.frames };
 });
-var originsFrom = _curry21(4, (path, stmts, i, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" && _v.value._tag === "SLet" && _v.value.exported === true ? (({ value: { name, nameSpan } }) => originsFrom(path, stmts, i + 1, withValue(acc, name, { path, start: nameSpan.start, end: nameSpan.end })))(_v) : _v._tag === "Some" && _v.value._tag === "SExtern" && _v.value.exported === true ? (({ value: { name, nameSpan } }) => originsFrom(path, stmts, i + 1, withValue(acc, name, { path, start: nameSpan.start, end: nameSpan.end })))(_v) : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true ? (({ value: { name, nameSpan, ctors } }) => originsFrom(path, stmts, i + 1, reduce6(_curry21(2, (o, c) => {
+var originsFrom = _curry21(4, (path, stmts, i, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" && _v.value._tag === "SLet" && _v.value.exported === true ? (({ value: { name, nameSpan } }) => originsFrom(path, stmts, i + 1, withValue(acc, name, { path, start: nameSpan.start, end: nameSpan.end })))(_v) : _v._tag === "Some" && _v.value._tag === "SExtern" && _v.value.exported === true ? (({ value: { name, nameSpan } }) => originsFrom(path, stmts, i + 1, withValue(acc, name, { path, start: nameSpan.start, end: nameSpan.end })))(_v) : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true ? (({ value: { name, nameSpan, ctors } }) => originsFrom(path, stmts, i + 1, reduce7(_curry21(2, (o, c) => {
   const at = { path, start: c.span.start, end: c.span.end };
   return withValue(withCtor(o, c.name, at), c.name, at);
 }), withType(acc, name, { path, start: nameSpan.start, end: nameSpan.end }), ctors)))(_v) : _v._tag === "Some" ? originsFrom(path, stmts, i + 1, acc) : (() => {
@@ -14429,6 +14452,7 @@ var inferTypesRecoveringWith = _curry22(2, (src, opts) => ((_v) => _v._tag === "
   throw new Error("non-exhaustive match");
 })())(lex(src)));
 var nominalTypeName2 = _curry22(2, (ty, aliases) => nominalTypeName(ty, aliases));
+var symbolIndexSync = _curry22(4, (path, origins, prelude, stmts) => indexWith(path, origins, prelude, stmts));
 var compileWith = _curry22(2, (src, opts) => _Result_map7((prog) => codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }), pipelineWith(src, openMode(src, opts.open), opts.plugins)));
 var noImportedKeys = new Map;
 var compileTsWith = _curry22(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs, bindingHooksFor(opts.plugins)), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
@@ -14609,7 +14633,7 @@ var mergeInto2 = _curry24(3, (keys, from, into) => match11(keys).with((_v) => _v
 }));
 var mergeMap = _curry24(2, (from, into) => mergeInto2(_Map_keys12(from), from, into));
 var exportedTypeNames = (stmts) => _Set_fromArray10(_Array_flatMap7((s) => ((_v) => _v._tag === "SType" && _v.exported === true ? (({ name }) => [name])(_v) : [])(s), stmts));
-var aliasesOf = (stmts) => reduce7(_curry24(2, (acc, s) => ((_v) => _v._tag === "SType" && _v.alias._tag === "Some" ? (({ name, params, alias: { value: fields } }) => _Map_set11(name, { params, fields, expr: None23 }, acc))(_v) : _v._tag === "SType" && _v.aliasType._tag === "Some" ? (({ name, params, aliasType: { value: te } }) => _Map_set11(name, { params, fields: [], expr: Some23(te) }, acc))(_v) : acc)(s)), new Map, stmts);
+var aliasesOf = (stmts) => reduce8(_curry24(2, (acc, s) => ((_v) => _v._tag === "SType" && _v.alias._tag === "Some" ? (({ name, params, alias: { value: fields } }) => _Map_set11(name, { params, fields, expr: None23 }, acc))(_v) : _v._tag === "SType" && _v.aliasType._tag === "Some" ? (({ name, params, aliasType: { value: te } }) => _Map_set11(name, { params, fields: [], expr: Some23(te) }, acc))(_v) : acc)(s)), new Map, stmts);
 var qualScopeOf = _curry24(2, (stmts, quals) => ({ types: exportedTypeNames(stmts), aliases: scopeAliases(stmts, quals) }));
 var withNamedCtor = _curry24(5, (name, info, depReg, depKeys, res) => ({ imports: res.imports, nsImports: res.nsImports, reg: { ctors: _Map_set11(name, info, res.reg.ctors), types: ((_v) => _v._tag === "Some" ? (({ value: cs }) => _Map_set11(info.owner, cs, res.reg.types))(_v) : _v._tag === "None" ? res.reg.types : (() => {
   throw new Error("non-exhaustive match");
@@ -14691,7 +14715,7 @@ var compileGraphRecoveringWith = _curry24(2, (graph, opts) => {
   return { outputs: state.ctx.outputs, errors: state.errors };
 });
 var compileGraphRecovering = (graph) => compileGraphRecoveringWith(graph, defaultOpts2);
-var inferOne = _curry24(3, (ctx, loaded, opts) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? (({ value: res }) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? (({ value: r }) => Ok13({ exportsByPath: _Map_set11(loaded.path, exportedSchemes(loaded.stmts, r.env), ctx.exportsByPath), regByPath: _Map_set11(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set11(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set11(loaded.path, qualScopeOf(loaded.stmts, res.quals), ctx.qualsByPath), aliases: mergeMap(r.aliases, ctx.aliases), outputs: [...ctx.outputs, { path: loaded.path, types: map15((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)), sym: hit.sym }), r.types), aliases: mergeMap(r.aliases, ctx.aliases) }] }))(_v) : (() => {
+var inferOne = _curry24(3, (ctx, loaded, opts) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? (({ value: res }) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? (({ value: r }) => Ok13({ exportsByPath: _Map_set11(loaded.path, exportedSchemes(loaded.stmts, r.env), ctx.exportsByPath), regByPath: _Map_set11(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set11(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set11(loaded.path, qualScopeOf(loaded.stmts, res.quals), ctx.qualsByPath), aliases: mergeMap(r.aliases, ctx.aliases), outputs: [...ctx.outputs, { path: loaded.path, types: map15((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)), sym: hit.sym }), r.types), aliases: mergeMap(r.aliases, ctx.aliases), imports: res.imports, quals: res.quals }] }))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins)) : (() => {
   throw new Error("non-exhaustive match");
@@ -14729,15 +14753,15 @@ var importedBinding = (spec) => {
   const parts = _Str_split7(" as ", spec);
   return _Str_trim3(_Option_unwrapOr14(spec, _Array_get21(length18(parts) - 1, parts)));
 };
-var bindingsInLine = _curry24(2, (line, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: rest }) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: names }) => reduce7(_curry24(2, (a, n) => _Set_add10(importedBinding(n), a)), acc, _Str_split7(",", names)))(_v) : (() => {
+var bindingsInLine = _curry24(2, (line, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: rest }) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: names }) => reduce8(_curry24(2, (a, n) => _Set_add10(importedBinding(n), a)), acc, _Str_split7(",", names)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get21(0, _Str_split7("}", rest))))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get21(1, _Str_split7("{", line))));
-var valueImported = (ts) => reduce7(_curry24(2, (acc, line) => bindingsInLine(line, acc)), _Set_fromArray10([]), filter9(_Str_startsWith10("import {"), _Str_split7(`
+var valueImported = (ts) => reduce8(_curry24(2, (acc, line) => bindingsInLine(line, acc)), _Set_fromArray10([]), filter9(_Str_startsWith10("import {"), _Str_split7(`
 `, ts)));
-var ownTypesInto = _curry24(3, (stmts, path, acc) => reduce7(_curry24(2, (a, s) => ((_v) => _v._tag === "SType" ? (({ name }) => _Map_has8(name, a.owner) ? { owner: _Map_set11(name, path, a.owner), dups: _Set_add10(name, a.dups), dupNames: _Set_has9(name, a.dups) ? a.dupNames : _Array_append17(name, a.dupNames) } : { owner: _Map_set11(name, path, a.owner), dups: a.dups, dupNames: a.dupNames })(_v) : a)(s)), acc, stmts));
-var typeOwnerOf = (graph) => reduce7(_curry24(2, (acc, m) => ownTypesInto(m.stmts, m.path, acc)), { owner: new Map, dups: _Set_fromArray10([]), dupNames: [] }, graph);
+var ownTypesInto = _curry24(3, (stmts, path, acc) => reduce8(_curry24(2, (a, s) => ((_v) => _v._tag === "SType" ? (({ name }) => _Map_has8(name, a.owner) ? { owner: _Map_set11(name, path, a.owner), dups: _Set_add10(name, a.dups), dupNames: _Set_has9(name, a.dups) ? a.dupNames : _Array_append17(name, a.dupNames) } : { owner: _Map_set11(name, path, a.owner), dups: a.dups, dupNames: a.dupNames })(_v) : a)(s)), acc, stmts));
+var typeOwnerOf = (graph) => reduce8(_curry24(2, (acc, m) => ownTypesInto(m.stmts, m.path, acc)), { owner: new Map, dups: _Set_fromArray10([]), dupNames: [] }, graph);
 var nullaryDeclared = _curry24(2, (name, local) => ((_v) => _v._tag === "None" ? false : _v._tag === "Some" ? (({ value: info }) => and18(length18(info.params) === 0, length18(info.fields) > 0))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Map_get12(name, local)));
@@ -14746,7 +14770,7 @@ var addDupMarkers = _curry24(4, (names, local, acc, i) => ((_v) => _v._tag === "
 })())(_Array_get21(i, names)));
 var aliasesForTs = _curry24(3, (merged, local, dupNames) => addDupMarkers(dupNames, local, merged, 0));
 var localTypeNames = (stmts) => _Set_fromArray10(_Array_flatMap7((s) => ((_v) => _v._tag === "SType" ? (({ name }) => [name])(_v) : [])(s), stmts));
-var groupByOwner = _curry24(2, (names, ctx) => reduce7(_curry24(2, (acc, name) => {
+var groupByOwner = _curry24(2, (names, ctx) => reduce8(_curry24(2, (acc, name) => {
   const owner = _Map_getOr9("", name, ctx.typeOwner);
   return or15(or15(or15(eq17(owner, ctx.importer), _Set_has9(name, ctx.localTypes)), _Set_has9(name, ctx.bound)), !occursAsWord(name, ctx.ts)) ? acc : ((spec) => _Map_set11(spec, _Array_append17(name, _Map_getOr9([], spec, acc)), acc))(relSpec2(ctx.importer, owner));
 }), new Map, names));
@@ -14754,7 +14778,7 @@ var crossModuleTypeImports = _curry24(4, (ts, importer, localTypes, typeOwner) =
   const byOwner = groupByOwner(_Map_keys12(typeOwner), { ts, importer, localTypes, typeOwner, bound: valueImported(ts) });
   return map15((spec) => `import type { ${_Str_join10(", ", _Array_sort3(_Map_getOr9([], spec, byOwner)))} } from "${spec}";`, _Map_keys12(byOwner));
 });
-var externBindingsInto = _curry24(4, (stmts, path, env, acc) => reduce7(_curry24(2, (a, s) => ((_v) => _v._tag === "SExtern" ? (({ name, module: hostModule, imported, curried }) => _Str_startsWith10("mochi:", hostModule) ? a : ((_v) => _v._tag === "None" ? a : _v._tag === "Some" ? (({ value: sc }) => ((dp) => _Map_set11(dp, _Array_append17({ imported, scheme: sc, curried }, _Map_getOr9([], dp, a)), a))(externDtsPath2(path, hostModule)))(_v) : (() => {
+var externBindingsInto = _curry24(4, (stmts, path, env, acc) => reduce8(_curry24(2, (a, s) => ((_v) => _v._tag === "SExtern" ? (({ name, module: hostModule, imported, curried }) => _Str_startsWith10("mochi:", hostModule) ? a : ((_v) => _v._tag === "None" ? a : _v._tag === "Some" ? (({ value: sc }) => ((dp) => _Map_set11(dp, _Array_append17({ imported, scheme: sc, curried }, _Map_getOr9([], dp, a)), a))(externDtsPath2(path, hostModule)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Map_get12(name, env)))(_v) : a)(s)), acc, stmts));
 var compileOneTs = _curry24(3, (ctx, loaded, opts) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? (({ value: res }) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? ((_v) => _v._tag === "Err" ? (({ error: e }) => Err12(atPath(loaded.path, e)))(_v) : _v._tag === "Ok" ? (({ value: r }) => ((body) => ((lines) => ((ts) => Ok13({ exportsByPath: _Map_set11(loaded.path, exportedSchemes(loaded.stmts, r.env), ctx.exportsByPath), regByPath: _Map_set11(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath), keysByPath: _Map_set11(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath), qualsByPath: _Map_set11(loaded.path, qualScopeOf(loaded.stmts, res.quals), ctx.qualsByPath), aliases: mergeMap(r.aliases, ctx.aliases), typeOwner: ctx.typeOwner, dupNames: ctx.dupNames, runtimeImport: ctx.runtimeImport, externs: externBindingsInto(loaded.stmts, loaded.path, r.env, ctx.externs), outputs: [...ctx.outputs, { path: loaded.path, js: ts }] }))(length18(lines) === 0 ? body : `${_Str_join10(`

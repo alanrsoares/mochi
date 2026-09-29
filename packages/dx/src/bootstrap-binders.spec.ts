@@ -2,15 +2,15 @@
 // `let x: T` lead and go-to-type on a binder no longer need the TS table.
 import { expect, test } from "bun:test";
 import { inferTypesBootstrapSync } from "@mochi/compiler/bootstrap";
-import { bootstrapHoverFrom } from "@mochi/dx/hover";
+import { hoverAt, hoverFrom } from "@mochi/dx/hover";
 import { typeDefinitionAt } from "@mochi/dx/nav";
 import { pos } from "@mochi/test-support";
 
-/** Hover as the bootstrap table alone answers it; null means it defers to TS. */
+/** Hover as the bootstrap type table alone answers it, no declaration syntax. */
 const bootstrapHover = (src: string, offset: number) => {
   const inferred = inferTypesBootstrapSync(src);
   if (inferred._tag === "Err") throw new Error(inferred.error[0]?.message);
-  return bootstrapHoverFrom(inferred.value.types, inferred.value.aliases, offset, src, "<buffer>");
+  return hoverFrom(inferred.value.types, inferred.value.aliases, offset, src, "<buffer>");
 };
 
 test.each([
@@ -32,9 +32,9 @@ test("bootstrap hover carries a top-level let's doc", () => {
   });
 });
 
-test("bootstrap hover defers externs to the TS lead", () => {
+test("an extern hovers with its source signature and host binding", () => {
   const src = 'extern now : () -> number = "m" "now"';
-  expect(bootstrapHover(src, pos(src, "now"))).toBeNull();
+  expect(hoverAt(src, pos(src, "now"))?.code).toBe('extern now: () -> number\n= "m" "now"');
 });
 
 test("typeDefinitionAt folds a generic record alias on a binder", () => {

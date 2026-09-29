@@ -246,27 +246,13 @@ const binderLine = (
   ty: string,
 ) => `${start}:${end} ${kind} ${name} ${normalize(ty)}${doc === "" ? "" : ` /// ${doc}`}`;
 
-/** `start:end` of every JSX attribute name in `node`. */
-const jsxAttrSpans = (node: unknown, out = new Set<string>()): Set<string> => {
-  if (Array.isArray(node)) for (const child of node) jsxAttrSpans(child, out);
-  else if (node && typeof node === "object") {
-    const n = node as { kind?: string; origin?: string; args?: Expr[] };
-    const props = n.kind === "call" && n.origin === "jsx" ? n.args?.[1] : undefined;
-    if (props?.kind === "record")
-      for (const f of props.fields) out.add(`${f.nameSpan.start}:${f.nameSpan.end}`);
-    for (const child of Object.values(node)) jsxAttrSpans(child, out);
-  }
-  return out;
-};
-
 const tsBinders = (src: string): string[] | null => {
   const prog = unwrapOk(parse(unwrapOk(lex(src))));
   const r = inferProgramTypes(prog, preludeEnv, { open: true, namespaces: preludeNamespaces });
   if (isErr(r)) return null;
-  const jsxAttrs = jsxAttrSpans(prog.stmts);
   return r.value.types
     .flatMap(({ span, type, symbol }) =>
-      symbol && !symbol.name.startsWith("$") && !jsxAttrs.has(`${span.start}:${span.end}`)
+      symbol && !symbol.name.startsWith("$")
         ? [
             binderLine(
               span.start,

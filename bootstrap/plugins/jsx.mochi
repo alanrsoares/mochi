@@ -5,6 +5,7 @@
 
 import * as Ast from "../ast.mochi"
 import {
+  recordBinder,
   zonk,
   tPrim,
   tRecord,
@@ -558,6 +559,12 @@ let unknownProp = (tag, name, value, schema) =>
       jxExprSpan(value)
     )
 
+/// The prop type an attribute's name hovers with, as `(property) name: T`.
+let noteProp = (f: Ast.Field, t, st) =>
+  recordBinder(f.nameSpan, t, "property", f.name, None, st)
+
+let handlerType = TyFn(tPrim("Event"), tPrim("unit"))
+
 let inferIntrinsicFields = (tag, fields, st, api, schema) => switch fields {
   | [] => Ok(st)
   | [f, ...rest] => let cont = st1 =>
@@ -568,9 +575,11 @@ let inferIntrinsicFields = (tag, fields, st, api, schema) => switch fields {
             "data-",
             f.name
           ) || Str.startsWith("aria-", f.name)
-            ? let? (_, st1) = api.inferExpr(f.value, st) in cont(st1)
+            ? let? (valT, st1) = api.inferExpr(f.value, st) in
+              cont(noteProp(f, valT, st1))
             : switch schema {
-              | None => let? (_, st1) = api.inferExpr(f.value, st) in cont(st1)
+              | None => let? (valT, st1) = api.inferExpr(f.value, st) in
+                  cont(noteProp(f, valT, st1))
               | Some(m) => let expected = switch Map.get(f.name, m) {
                   | Some(k) => Some(k)
                   | None => isHandlerName(f.name) ? Some("event") : None
@@ -578,10 +587,11 @@ let inferIntrinsicFields = (tag, fields, st, api, schema) => switch fields {
                   switch expected {
                     | None => unknownProp(tag, f.name, f.value, m)
                     | Some(kind) => kind == "event"
-                        ? checkHandler(f.name, f.value, st, api, cont)
+                        ? checkHandler(f.name, f.value, st, api, st1 =>
+                          cont(noteProp(f, handlerType, st1)))
                         : kind == "any"
                         ? let? (_, st1) = api.inferExpr(f.value, st) in
-                          cont(st1)
+                          cont(noteProp(f, tPrim("any"), st1))
                         : switch attrKindType(kind) {
                           | Some(expectedT) => let? (valT, st1) = api.inferExpr(
                               f.value,
@@ -593,7 +603,7 @@ let inferIntrinsicFields = (tag, fields, st, api, schema) => switch fields {
                               st1,
                               jxExprSpan(f.value)
                             ) in
-                              cont(st2)
+                              cont(noteProp(f, expectedT, st2))
                           | None => let? (_, st1) = api.inferExpr(
                               f.value,
                               st
@@ -640,6 +650,19 @@ let inferStringTag = (tagName, tagExpr, fields, st, api) =>
           : unknownTagErr(tagName, jxExprSpan(tagExpr))
     }
 
+/// Each attribute of a component tag hovers with the prop type it fills.
+let noteComponentProps = (propsExpr, expectedRow, st) => switch propsExpr {
+  | Ast.ERecord(fields, _, _) => Array.reduce(
+      (acc, f) => switch rowField(expectedRow, f.name) {
+        | Some(t) => noteProp(f, zonk(t, acc), acc)
+        | None => acc
+      },
+      st,
+      fields
+    )
+  | _ => st
+}
+
 let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
   api.inferExpr(tagExpr, st)
     |> Result.flatMap(((tagT, st1)) =>
@@ -662,7 +685,11 @@ let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
                             st3,
                             jxExprSpan(propsExpr)
                           )
-                            |> Result.map(st4 => (zonk(to, st4), st4))
+                            |> Result.map(st4 =>
+                              (
+                                zonk(to, st4),
+                                noteComponentProps(propsExpr, expectedRow, st4)
+                              ))
                       | _ => Ok((tPrim("VNode"), st3))
                     }
                   | _ => switch tagExpr {

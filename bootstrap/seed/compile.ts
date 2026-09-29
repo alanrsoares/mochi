@@ -2,6 +2,7 @@ import type { Stmt } from "./ast";
 import type { BinderSym, SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
 import type { HostPlugin, IErr, QualAliasInfo } from "./infer";
+import type { Origins, SymIndex, SymPrelude } from "./symbols";
 
 /**
  * Caller-supplied knobs: `open` selects open-world inference (host globals
@@ -66,6 +67,7 @@ import { bindingHooksFor } from "./extensions";
 import { showType } from "./types";
 import { widenLits } from "./schemes";
 import * as Schemes from "./schemes";
+import { indexWith } from "./symbols";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -373,6 +375,17 @@ export const nominalTypeName: _Curry<
   Option<string>
 > = _curry(2, (ty: Ty, aliases: Map<string, QualAliasInfo>) =>
   Schemes.nominalTypeName(ty, aliases),
+);
+/**
+ * The symbol index (ADR 0118) in the synchronous bundle, which the browser
+ * loads too: hover resolves a builtin reference to its prelude docstring
+ * through it (#103). module.mochi's `symbolIndex` is the same query.
+ */
+export const symbolIndexSync: _Curry<
+  [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
+  SymIndex
+> = _curry(4, (path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]) =>
+  indexWith(path, origins, prelude, stmts),
 );
 /**
  * compileWith : string -> Opts -> Result string Err

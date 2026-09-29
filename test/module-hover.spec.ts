@@ -3,9 +3,9 @@
 // the dep registry the file fails `check` and hover is null everywhere.
 import { expect, test } from "bun:test";
 import { createBootstrapGraphCache } from "@mochi/compiler/bootstrap";
-import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
-import { hoverAt, moduleHoverAt } from "@mochi/dx/hover";
-import { styledCvaExtension } from "@mochi/plugin-styled-cva";
+import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
+import { hoverAt } from "@mochi/dx/hover";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 import { memRead } from "@mochi/test-support";
 
 const DEP = "/proj/ast.mochi";
@@ -35,13 +35,9 @@ test("hover on the scrutinee reports the imported variant type", async () => {
 test("bootstrap graph hover reports an imported constructor scheme", async () => {
   const src = 'import { A } from "./ast.mochi"\nlet f = A(1)';
   const aOff = src.lastIndexOf("A");
-  const info = await moduleBootstrapHoverAt(
-    ENTRY,
-    src,
-    aOff,
-    memRead({ [DEP]: DEP_SRC }),
-    createBootstrapGraphCache(),
-  );
+  const info = await moduleHoverAt(ENTRY, src, aOff, memRead({ [DEP]: DEP_SRC }), {
+    cache: createBootstrapGraphCache(),
+  });
   expect(info?.code).toBe("number -> E");
 });
 
@@ -79,7 +75,7 @@ const badgeUseOffset = TW_SRC.lastIndexOf("Badge");
 
 test("with plugins, hovering a tw.* factory binding shows a component scheme, not unknown/'t0", async () => {
   const info = await moduleHoverAt(ENTRY, TW_SRC, badgeUseOffset, memRead({}), {
-    plugins: [styledCvaExtension],
+    plugins: [styledCvaBootstrap],
   });
   expect(info?.code).toContain("VNode");
   expect(info?.code).not.toMatch(/'t\d/);
@@ -101,7 +97,7 @@ export let el = <Badge $tone="rose" />
 `;
   const off = src.lastIndexOf("$tone");
   const info = await moduleHoverAt(ENTRY, src, off + 1, memRead({}), {
-    plugins: [styledCvaExtension],
+    plugins: [styledCvaBootstrap],
   });
   expect(info?.code).toContain("(property) $tone:");
   expect(info?.code).toContain('"rose"');
