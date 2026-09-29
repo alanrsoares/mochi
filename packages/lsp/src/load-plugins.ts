@@ -9,7 +9,6 @@ import {
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { type LanguagePlugin, pluginClashes, resolvePlugins } from "@mochi/compiler/extensions";
 import {
   type ComponentHost,
   capability,
@@ -41,14 +40,12 @@ export type PluginLoadOptions = {
 };
 
 /**
- * What a manifest supplies. `plugins` (the `default` or named `plugins` export)
- * runs on the self-hosted core (ADR 0109). `dxPlugins` is the optional
- * TypeScript-core copy that hover, completion, and navigation still
- * read until #103 moves them; it goes away then.
+ * What a manifest supplies: `plugins` (the `default` or named `plugins`
+ * export), run on the self-hosted core by every editor query (ADR 0109, 0123).
+ * A legacy `dxPlugins` export is ignored.
  */
 export type ProjectPlugins = {
   readonly plugins: readonly BootstrapPlugin[];
-  readonly dxPlugins?: readonly LanguagePlugin[];
 };
 
 const cache = new Map<string, Promise<ProjectPlugins | undefined>>();
@@ -130,7 +127,7 @@ export const findPluginsFile = (startDir: string, stopAt?: string): string | nul
 };
 
 /** Bootstrap hooks are plain functions; TypeScript-core `inferCall` is a `{ refs, hook }` record. */
-const BOOTSTRAP_HOOKS = ["parse", "inferCall", "format", "dtsBinding"] as const;
+const BOOTSTRAP_HOOKS = ["parse", "inferCall", "format", "dtsBinding", "completeMembers"] as const;
 
 const assertNamedList = (plugins: unknown, file: string, exportName: string): unknown[] => {
   if (!Array.isArray(plugins)) {
@@ -159,7 +156,7 @@ const assertBootstrapPlugins = (plugins: unknown, file: string): BootstrapPlugin
     for (const hook of BOOTSTRAP_HOOKS) {
       if (plugin[hook] !== undefined && typeof plugin[hook] !== "function") {
         throw new Error(
-          `${file}: plugin "${String(plugin.name)}" \`${hook}\` must be a function — \`plugins\` takes self-hosted-core plugins (ADR 0109); TypeScript-core ones go in \`dxPlugins\``,
+          `${file}: plugin "${String(plugin.name)}" \`${hook}\` must be a function — \`plugins\` takes self-hosted-core plugins, from each vendor's \`/bootstrap\` entry (ADR 0109)`,
         );
       }
     }
@@ -168,14 +165,11 @@ const assertBootstrapPlugins = (plugins: unknown, file: string): BootstrapPlugin
 };
 
 /** A manifest module's exports, before validation. */
-type ManifestModule = { default?: unknown; plugins?: unknown; dxPlugins?: unknown };
+type ManifestModule = { default?: unknown; plugins?: unknown };
 
-const assertProjectPlugins = (mod: ManifestModule, file: string): ProjectPlugins => {
-  const plugins = assertBootstrapPlugins(mod.default ?? mod.plugins, file);
-  if (mod.dxPlugins === undefined) return { plugins };
-  const dxPlugins = assertNamedList(mod.dxPlugins, file, "`dxPlugins` as an") as LanguagePlugin[];
-  return { plugins, dxPlugins };
-};
+const assertProjectPlugins = (mod: ManifestModule, file: string): ProjectPlugins => ({
+  plugins: assertBootstrapPlugins(mod.default ?? mod.plugins, file),
+});
 
 /** Shadow-copy path for `file` at the current cache `generation` (same dir, so relative imports inside the manifest still resolve). */
 const shadowPathFor = (file: string, gen: number): string => {
@@ -185,8 +179,7 @@ const shadowPathFor = (file: string, gen: number): string => {
 };
 
 /**
- * Dynamic-import a plugin manifest (`export default` or named `plugins`, plus
- * an optional `dxPlugins`).
+ * Dynamic-import a plugin manifest (`export default` or named `plugins`).
  * Generation 0 (the common case — no reload has happened) imports `file`
  * directly, writing nothing to the workspace. After {@link clearPluginsCache}
  * the manifest path is already in the ESM loader's cache, so a reload imports
@@ -212,13 +205,6 @@ export const loadPluginsFile = async (file: string): Promise<ProjectPlugins> => 
       // generation writes a differently-named one).
     }
   }
-};
-
-/** Claim clashes (ADR 0050) are declared by TypeScript-core `inferCall.refs`, so only `dxPlugins` can clash. */
-const validatePlugins = (project: ProjectPlugins): ProjectPlugins => {
-  const clashes = project.dxPlugins ? pluginClashes(resolvePlugins([...project.dxPlugins])) : [];
-  if (clashes.length > 0) throw new Error(clashes.map((d) => d.message).join("; "));
-  return project;
 };
 
 const projectPluginsComponent = (project: ProjectPlugins): RuntimeComponent => ({
@@ -277,7 +263,7 @@ export const pluginsForDocument = async (
     const existingHost = manifestHosts.get(pluginsFile);
     const host = existingHost ?? createComponentHost();
     pending = (async () => {
-      const plugins = validatePlugins(await loadPluginsFile(pluginsFile));
+      const plugins = await loadPluginsFile(pluginsFile);
       const component = projectPluginsComponent(plugins);
       const transition = await (existingHost
         ? host.replace(component.name, component)

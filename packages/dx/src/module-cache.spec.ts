@@ -39,9 +39,7 @@ test("a shared cache does not change hover or go-to-type", async () => {
   expect(hover?.code).toBe("number -> Shape");
   expect(hover).toEqual(await moduleHoverAt("/app.mochi", src, atCtor, read));
 
-  const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, {
-    bootstrapCache: cache,
-  });
+  const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, { cache });
   expect(target?.path).toBe("/shapes.mochi");
   expect(target).toEqual(await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read));
 });
@@ -61,7 +59,7 @@ test("a shared bootstrap graph cache does not change completion or go-to-type", 
   expect(items.map((item) => item.label)).toEqual(["x", "y"]);
 
   const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, {
-    bootstrapCache,
+    cache: bootstrapCache,
   });
   expect(target?.path).toBe("/shapes.mochi");
   expect(target).toEqual(await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read));

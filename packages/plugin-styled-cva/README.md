@@ -21,15 +21,11 @@ all read. For the docs app that is `apps/docs/mochi.plugins.ts`:
 
 ```ts
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
-import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 
 export const docsVendorPlugins: BootstrapPlugin[] = [styledCvaBootstrap];
 export const plugins = docsVendorPlugins;
 export default plugins;
-/** TypeScript-core copy for hover/completion until #103 (ADR 0110). */
-export const dxPlugins: LanguagePlugin[] = [styledCvaExtension];
 ```
 
 Nothing else changes: `vite.config.ts`, `scripts/gen-mochi-dts.ts` and
