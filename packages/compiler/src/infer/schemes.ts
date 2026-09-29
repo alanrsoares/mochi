@@ -157,10 +157,41 @@ const freeInEnv = (env: Env, s: Subst): VarSets => {
   return acc;
 };
 
-export const generalize = (env: Env, t: Type, s: Subst, widen = true): Scheme => {
+const freeInNamed = (env: Env, names: readonly string[], s: Subst): VarSets => {
+  const acc: VarSets = { tv: new Set(), rv: new Set() };
+  for (const name of names) {
+    const sc = env.get(name);
+    if (sc === undefined) continue;
+    const f = freeInScheme(sc, s);
+    for (const v of f.tv) acc.tv.add(v);
+    for (const v of f.rv) acc.rv.add(v);
+  }
+  return acc;
+};
+
+export const generalize = (env: Env, t: Type, s: Subst, widen = true): Scheme =>
+  generalizeAgainst(() => freeInEnv(env, s), t, s, widen);
+
+/**
+ * `generalize`, reading free variables only from the env entries named in
+ * `names`. The caller promises every other entry is closed — a builtin, an
+ * import, a constructor, or a top-level `let` already generalized. Inference
+ * passes the program's local binder names plus the enclosing top-level group
+ * (see `Ctx.scopeNames`). Mirrors `bootstrap/schemes.mochi`.
+ */
+export const generalizeOver = (
+  env: Env,
+  names: readonly string[],
+  t: Type,
+  s: Subst,
+  widen = true,
+): Scheme => generalizeAgainst(() => freeInNamed(env, names, s), t, s, widen);
+
+const generalizeAgainst = (envFree: () => VarSets, t: Type, s: Subst, widen: boolean): Scheme => {
   const zt = widen ? widenLits(zonk(t, s)) : zonk(t, s);
   const free = freeInType(zt);
-  const bound = freeInEnv(env, s);
+  if (free.tv.size === 0 && free.rv.size === 0) return { vars: [], rvars: [], type: zt };
+  const bound = envFree();
   const vars = [...free.tv].filter((v) => !bound.tv.has(v));
   const rvars = [...free.rv].filter((v) => !bound.rv.has(v));
   return { vars, rvars, type: zt };

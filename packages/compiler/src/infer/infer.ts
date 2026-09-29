@@ -40,6 +40,7 @@ import {
   type Env,
   freeInType,
   generalize,
+  generalizeOver,
   instantiate,
   mono,
   type QualMap,
@@ -113,6 +114,10 @@ type Ctx = {
   // Names bound by SOME local binder in this program. Open mode uses it to tell
   // an out-of-scope ref apart from a host global (see `local-names.ts`).
   localNames: ReadonlySet<string>;
+  // Names whose env entry may hold free type variables: every local binder,
+  // plus the top-level group being inferred. Every other entry is closed, so
+  // `generalizeOver` reads only these instead of the whole prelude-sized env.
+  scopeNames: readonly string[];
 };
 
 const u = (a: Type, b: Type, ctx: Ctx, span?: Span): Result<Type, Diagnostic> => {
@@ -460,14 +465,14 @@ function inferLetIn(e: LetInExpr, ctx: Ctx): Result<Type, Diagnostic> {
     const at = typeExprToType(e.annot, new Map(), ctx.fresh, ctx.typeScope);
     const au = checkFits(valT.value, at, ctx, e.annot.span);
     if (isErr(au)) return au;
-    const scheme = generalize(ctx.env, at, ctx.subst, false);
+    const scheme = generalizeOver(ctx.env, ctx.scopeNames, at, ctx.subst, false);
     if (ctx.record) ctx.record(e.nameSpan, at, { kind: "let", name: e.name });
     const bodyEnv: Env = new Map(ctx.env);
     bodyEnv.set(e.name, scheme);
     ctx.noteLet?.(scheme, e.value.span);
     return infer(e.body, { ...ctx, env: bodyEnv });
   }
-  const scheme = generalize(ctx.env, valT.value, ctx.subst);
+  const scheme = generalizeOver(ctx.env, ctx.scopeNames, valT.value, ctx.subst);
   if (ctx.record) ctx.record(e.nameSpan, valT.value, { kind: "let", name: e.name });
   const bodyEnv: Env = new Map(ctx.env);
   bodyEnv.set(e.name, scheme);
@@ -524,7 +529,13 @@ function inferLocalLambdaGroup(first: LetInExpr, ctx: Ctx): Result<Type, Diagnos
     }
     for (const binding of group) env.delete(binding.name);
     for (const binding of group) {
-      const scheme = generalize(env, bodyTypes.get(binding.name)!, ctx.subst, !binding.annot);
+      const scheme = generalizeOver(
+        env,
+        ctx.scopeNames,
+        bodyTypes.get(binding.name)!,
+        ctx.subst,
+        !binding.annot,
+      );
       env.set(binding.name, scheme);
       ctx.noteLet?.(scheme, binding.value.span);
     }
@@ -1289,6 +1300,7 @@ function run(
 
   const allDiags: Diagnostic[] = [];
   const localNames = localBinderNames(prog);
+  const localNameList = [...localNames];
 
   for (const comp of stronglyConnected(adj)) {
     const group = comp.map((i) => lets[i]!);
@@ -1316,6 +1328,7 @@ function run(
         inferCallHooks,
         loopStack: [],
         localNames,
+        scopeNames: [...group.map((g) => g.name), ...localNameList],
       });
       // Collect-and-bail per member (ADR 0004): record the diag, leave the
       // pre-bound mono var, continue siblings / later SCCs.
@@ -1359,7 +1372,7 @@ function run(
         env.set(s.name, mono(selfVars.get(s.name)!));
         continue;
       }
-      const sc = generalize(env, bodyT, subst, !s.annot);
+      const sc = generalizeOver(env, localNameList, bodyT, subst, !s.annot);
       env.set(s.name, sc);
       // Track a top-level let the same way as `let … in` (ADR 0035): a
       // polymorphic-but-monomorphically-used value (e.g. `let emptyReg =
@@ -1387,6 +1400,7 @@ function run(
       inferCallHooks,
       loopStack: [],
       localNames,
+      scopeNames: localNameList,
     },
     allDiags,
   );

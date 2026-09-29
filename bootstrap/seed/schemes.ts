@@ -271,6 +271,60 @@ const freeInEnv: <A, B>(
   <A, B>(env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>, st: St) =>
     freeInEnvFrom(_Map_values(env), 0, st, emptyVarSets),
 );
+const freeInNamedFrom: <A, B>(
+  names: A[],
+  i: number,
+  env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
+  st: St,
+  acc: VarSets,
+) => VarSets = _curry(
+  5,
+  <A, B>(
+    names: A[],
+    i: number,
+    env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
+    st: St,
+    acc: VarSets,
+  ) =>
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some"
+          ? (({ value: n }) =>
+              freeInNamedFrom(
+                names,
+                i + 1,
+                env,
+                st,
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: sc }) => freeInScheme(sc, st, acc))(_v)
+                    : _v._tag === "None"
+                      ? acc
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(_Map_get(n, env)),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, names)),
+);
+const generalizeAgainst: <A>(
+  envFree: () => { rv: Set<number>; tv: Set<number> } & A,
+  t: Ty,
+  st: St,
+  widen: boolean,
+) => Scheme = _curry(
+  4,
+  <A>(envFree: () => { rv: Set<number>; tv: Set<number> } & A, t: Ty, st: St, widen: boolean) => {
+    const zt: Ty = widen ? widenLits(zonk(t, st)) : zonk(t, st);
+    const own: VarSets = freeInType(zt);
+    const free: VarSets = and(_Set_size(own.tv) === 0, _Set_size(own.rv) === 0)
+      ? own
+      : diffVarSets(own, envFree());
+    return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
+  },
+);
 /**
  * A type with no free variables generalizes to itself, whatever the env
  * holds, so the env walk is skipped.
@@ -287,14 +341,31 @@ export const generalize: <A, B>(
     t: Ty,
     st: St,
     widen: boolean,
-  ) => {
-    const zt: Ty = widen ? widenLits(zonk(t, st)) : zonk(t, st);
-    const own: VarSets = freeInType(zt);
-    const free: VarSets = and(_Set_size(own.tv) === 0, _Set_size(own.rv) === 0)
-      ? own
-      : diffVarSets(own, freeInEnv(env, st));
-    return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
-  },
+  ) => generalizeAgainst(() => freeInEnv(env, st), t, st, widen),
+);
+/**
+ * `generalize`, reading free variables only from the env entries named in
+ * `names`. The caller promises every other entry is closed — a builtin, an
+ * import, a constructor, or a top-level `let` already generalized — so
+ * skipping it changes nothing. Inference passes the module's local binder
+ * names plus the enclosing top-level group: the only bindings that can be
+ * monomorphic, or generalized under a lambda whose parameters they capture.
+ */
+export const generalizeOver: <A, B>(
+  env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
+  names: A[],
+  t: Ty,
+  st: St,
+  widen: boolean,
+) => Scheme = _curry(
+  5,
+  <A, B>(
+    env: Map<A, { ty: Ty; rvars: number[]; vars: number[] } & B>,
+    names: A[],
+    t: Ty,
+    st: St,
+    widen: boolean,
+  ) => generalizeAgainst(() => freeInNamedFrom(names, 0, env, st, emptyVarSets), t, st, widen),
 );
 /**
  * Bare string/number singletons widen to their base prim at generalization

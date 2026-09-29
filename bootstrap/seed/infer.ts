@@ -145,6 +145,7 @@ export type Ctx<A> = {
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
   localNames: Set<string>;
+  scopeNames: string[];
 };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -247,6 +248,7 @@ import {
   tBool,
   tString,
   generalize,
+  generalizeOver,
   instantiate,
   typeExprToType,
   ctorScheme,
@@ -565,6 +567,7 @@ const u: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     left: Ty,
     right: Ty,
@@ -584,6 +587,7 @@ const u: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     left: Ty,
     right: Ty,
@@ -614,6 +618,7 @@ const checkFits: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     actual: Ty,
     expected: Ty,
@@ -633,6 +638,7 @@ const checkFits: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     actual: Ty,
     expected: Ty,
@@ -750,6 +756,7 @@ const constrainParamAnnotsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     params: LamParam[],
     paramTypes: Ty[],
@@ -769,6 +776,7 @@ const constrainParamAnnotsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     params: LamParam[],
     paramTypes: Ty[],
@@ -855,6 +863,7 @@ const ctxWithEnv: <B>(
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
+    scopeNames: string[];
   },
   env: B,
 ) => {
@@ -866,6 +875,7 @@ const ctxWithEnv: <B>(
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
   localNames: Set<string>;
+  scopeNames: string[];
 } = _curry(
   2,
   <B>(
@@ -878,6 +888,7 @@ const ctxWithEnv: <B>(
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     env: B,
   ) => ({
@@ -889,6 +900,59 @@ const ctxWithEnv: <B>(
     loopStack: ctx.loopStack,
     letOwner: ctx.letOwner,
     localNames: ctx.localNames,
+    scopeNames: ctx.scopeNames,
+  }),
+);
+const ctxWithGroup: <B>(
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  env: B,
+  names: string[],
+) => {
+  env: B;
+  open: boolean;
+  ns: Map<string, Map<string, Scheme>>;
+  aliasMap: Map<string, QualAliasInfo>;
+  plugins: HostPlugin[];
+  loopStack: Ty[][];
+  letOwner: Map<string, SpanAt>;
+  localNames: Set<string>;
+  scopeNames: string[];
+} = _curry(
+  3,
+  <B>(
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    env: B,
+    names: string[],
+  ) => ({
+    env: env,
+    open: ctx.open,
+    ns: ctx.ns,
+    aliasMap: ctx.aliasMap,
+    plugins: ctx.plugins,
+    loopStack: ctx.loopStack,
+    letOwner: ctx.letOwner,
+    localNames: ctx.localNames,
+    scopeNames: _Array_concat(names, ctx.scopeNames),
   }),
 );
 const ctxWithLets: <B, C>(
@@ -901,6 +965,7 @@ const ctxWithLets: <B, C>(
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
+    scopeNames: string[];
   },
   env: B,
   letOwner: C,
@@ -913,6 +978,7 @@ const ctxWithLets: <B, C>(
   loopStack: Ty[][];
   letOwner: C;
   localNames: Set<string>;
+  scopeNames: string[];
 } = _curry(
   3,
   <B, C>(
@@ -925,6 +991,7 @@ const ctxWithLets: <B, C>(
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     env: B,
     letOwner: C,
@@ -937,6 +1004,7 @@ const ctxWithLets: <B, C>(
     loopStack: ctx.loopStack,
     letOwner: letOwner,
     localNames: ctx.localNames,
+    scopeNames: ctx.scopeNames,
   }),
 );
 const ctxWithLoop: <B, C>(
@@ -949,6 +1017,7 @@ const ctxWithLoop: <B, C>(
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
+    scopeNames: string[];
   },
   env: B,
   frame: Ty[],
@@ -962,6 +1031,7 @@ const ctxWithLoop: <B, C>(
   loopStack: Ty[][];
   letOwner: C;
   localNames: Set<string>;
+  scopeNames: string[];
 } = _curry(
   4,
   <B, C>(
@@ -974,6 +1044,7 @@ const ctxWithLoop: <B, C>(
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     env: B,
     frame: Ty[],
@@ -987,6 +1058,7 @@ const ctxWithLoop: <B, C>(
     loopStack: _Array_prepend(frame, ctx.loopStack),
     letOwner: letOwner,
     localNames: ctx.localNames,
+    scopeNames: ctx.scopeNames,
   }),
 );
 const inferLoopParamsFrom: _Curry<
@@ -1000,6 +1072,7 @@ const inferLoopParamsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     params: LoopParam[],
     i: number,
@@ -1021,6 +1094,7 @@ const inferLoopParamsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     params: LoopParam[],
     i: number,
@@ -1066,6 +1140,7 @@ const unifyRecurArgsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     args: Expr[],
     frame: Ty[],
@@ -1085,6 +1160,7 @@ const unifyRecurArgsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     args: Expr[],
     frame: Ty[],
@@ -1127,6 +1203,7 @@ const inferRecur: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     args: Expr[],
     sp: SpanAt,
@@ -1145,6 +1222,7 @@ const inferRecur: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     args: Expr[],
     sp: SpanAt,
@@ -1224,6 +1302,7 @@ const labFieldsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     labs: LamParam[],
     env: Map<string, Scheme>,
@@ -1243,6 +1322,7 @@ const labFieldsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     labs: LamParam[],
     env: Map<string, Scheme>,
@@ -1423,6 +1503,7 @@ const inferCallArgs: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fnT: Ty,
     args: Expr[],
@@ -1442,6 +1523,7 @@ const inferCallArgs: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fnT: Ty,
     args: Expr[],
@@ -1497,6 +1579,7 @@ const inferTupleLet: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     param: LamParam,
     body: Expr,
@@ -1517,6 +1600,7 @@ const inferTupleLet: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     param: LamParam,
     body: Expr,
@@ -1553,6 +1637,7 @@ const inferApplied: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fn: Expr,
     args: Expr[],
@@ -1571,6 +1656,7 @@ const inferApplied: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fn: Expr,
     args: Expr[],
@@ -1613,6 +1699,7 @@ const inferNormalCall: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fn: Expr,
     args: Expr[],
@@ -1631,6 +1718,7 @@ const inferNormalCall: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fn: Expr,
     args: Expr[],
@@ -1664,6 +1752,7 @@ const inferTernary: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     cond: Expr,
     thenE: Expr,
@@ -1683,6 +1772,7 @@ const inferTernary: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     cond: Expr,
     thenE: Expr,
@@ -1721,6 +1811,7 @@ const inferBindBody: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     param: LamParam,
     paramSpan: SpanAt,
@@ -1742,6 +1833,7 @@ const inferBindBody: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     param: LamParam,
     paramSpan: SpanAt,
@@ -1778,6 +1870,7 @@ const inferTwoSlotBind: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     param: LamParam,
     paramSpan: SpanAt,
@@ -1800,6 +1893,7 @@ const inferTwoSlotBind: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     param: LamParam,
     paramSpan: SpanAt,
@@ -1836,6 +1930,7 @@ const inferQuestionBind: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     bind: Expr,
     param: LamParam,
@@ -1858,6 +1953,7 @@ const inferQuestionBind: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     bind: Expr,
     param: LamParam,
@@ -1919,6 +2015,7 @@ const inferLetBind: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     bind: Expr,
     param: LamParam,
@@ -1941,6 +2038,7 @@ const inferLetBind: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     bind: Expr,
     param: LamParam,
@@ -1969,6 +2067,7 @@ const inferRecordRow: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fields: Field[],
     st: St,
@@ -1986,6 +2085,7 @@ const inferRecordRow: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fields: Field[],
     st: St,
@@ -2054,6 +2154,7 @@ const inferFieldAccess: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     field: Expr,
     target: Expr,
@@ -2074,6 +2175,7 @@ const inferFieldAccess: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     field: Expr,
     target: Expr,
@@ -2123,6 +2225,7 @@ const inferDuckField: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     targetT: Ty,
     name: string,
@@ -2142,6 +2245,7 @@ const inferDuckField: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     targetT: Ty,
     name: string,
@@ -2166,6 +2270,7 @@ const inferNsField: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     tname: string,
     name: string,
@@ -2185,6 +2290,7 @@ const inferNsField: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     tname: string,
     name: string,
@@ -2214,6 +2320,7 @@ const inferInterpParts: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     parts: InterpPart[],
     st: St,
@@ -2231,6 +2338,7 @@ const inferInterpParts: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     parts: InterpPart[],
     st: St,
@@ -2267,6 +2375,7 @@ const inferTupleElems: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elements: Expr[],
     st: St,
@@ -2284,6 +2393,7 @@ const inferTupleElems: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elements: Expr[],
     st: St,
@@ -2326,6 +2436,7 @@ const inferSeqSlotsElems: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     con: string,
     elem: Ty,
@@ -2345,6 +2456,7 @@ const inferSeqSlotsElems: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     con: string,
     elem: Ty,
@@ -2390,6 +2502,7 @@ const inferSeqSlots: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     con: string,
     elements: SeqElem[],
@@ -2408,6 +2521,7 @@ const inferSeqSlots: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     con: string,
     elements: SeqElem[],
@@ -2430,6 +2544,7 @@ const inferMapEntries: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     k: Ty,
     v: Ty,
@@ -2449,6 +2564,7 @@ const inferMapEntries: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     k: Ty,
     v: Ty,
@@ -2491,6 +2607,7 @@ const inferMapExpr: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     entries: MapEntry[],
     st: St,
@@ -2508,6 +2625,7 @@ const inferMapExpr: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     entries: MapEntry[],
     st: St,
@@ -2590,6 +2708,7 @@ const inferArms: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     scrutT: Ty,
     resultT: Ty,
@@ -2609,6 +2728,7 @@ const inferArms: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     scrutT: Ty,
     resultT: Ty,
@@ -2667,6 +2787,7 @@ const inferMatch: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     scrutinee: Expr,
     arms: MatchArm[],
@@ -2685,6 +2806,7 @@ const inferMatch: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     scrutinee: Expr,
     arms: MatchArm[],
@@ -2716,6 +2838,7 @@ const inferExpr: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     e: Expr,
     st: St,
@@ -2733,6 +2856,7 @@ const inferExpr: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     e: Expr,
     st: St,
@@ -2753,6 +2877,7 @@ const inferExprRaw: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     e: Expr,
     st: St,
@@ -2770,6 +2895,7 @@ const inferExprRaw: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     e: Expr,
     st: St,
@@ -2910,7 +3036,13 @@ const inferExprRaw: _Curry<
                                                 _Map_set(name, vsp, ctx.letOwner),
                                               ),
                                             ))(exprSpan(value)))(
-                                          generalize(ctx.env, pinned, st2, widen),
+                                          generalizeOver(
+                                            ctx.env,
+                                            ctx.scopeNames,
+                                            pinned,
+                                            st2,
+                                            widen,
+                                          ),
                                         ))(
                                         ((_v) =>
                                           _v._tag === "Some"
@@ -3136,6 +3268,7 @@ const inferDo: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     exprs: Expr[],
     st: St,
@@ -3153,6 +3286,7 @@ const inferDo: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     exprs: Expr[],
     st: St,
@@ -3182,6 +3316,7 @@ const inferPatRecordFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fields: PatField[],
     row: Row,
@@ -3201,6 +3336,7 @@ const inferPatRecordFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fields: PatField[],
     row: Row,
@@ -3238,6 +3374,7 @@ const inferPatRecord: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fields: PatField[],
     st: St,
@@ -3255,6 +3392,7 @@ const inferPatRecord: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     fields: PatField[],
     st: St,
@@ -3277,6 +3415,7 @@ const inferPatCtorArgs: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     ctor: string,
     curT: Ty,
@@ -3298,6 +3437,7 @@ const inferPatCtorArgs: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     ctor: string,
     curT: Ty,
@@ -3349,6 +3489,7 @@ const inferPatTupleFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elems: Pattern[],
     st: St,
@@ -3366,6 +3507,7 @@ const inferPatTupleFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elems: Pattern[],
     st: St,
@@ -3408,6 +3550,7 @@ const inferPatTuple: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elems: Pattern[],
     st: St,
@@ -3425,6 +3568,7 @@ const inferPatTuple: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elems: Pattern[],
     st: St,
@@ -3446,6 +3590,7 @@ const inferSeqPatElems: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elem: Ty,
     elems: Pattern[],
@@ -3464,6 +3609,7 @@ const inferSeqPatElems: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     elem: Ty,
     elems: Pattern[],
@@ -3505,6 +3651,7 @@ const inferSeqPat: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     con: string,
     elems: Pattern[],
@@ -3524,6 +3671,7 @@ const inferSeqPat: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     con: string,
     elems: Pattern[],
@@ -3572,6 +3720,7 @@ const inferPat: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     p: Pattern,
     st: St,
@@ -3589,6 +3738,7 @@ const inferPat: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     p: Pattern,
     st: St,
@@ -3613,6 +3763,7 @@ const inferPatRaw: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     p: Pattern,
     st: St,
@@ -3630,6 +3781,7 @@ const inferPatRaw: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     p: Pattern,
     st: St,
@@ -3756,6 +3908,7 @@ const unifyOrPatBinding: <B>(
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
+    scopeNames: string[];
   },
   name: B,
   altBindings: Map<B, Ty>,
@@ -3774,6 +3927,7 @@ const unifyOrPatBinding: <B>(
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     name: B,
     altBindings: Map<B, Ty>,
@@ -3808,6 +3962,7 @@ const unifyOrPatBindings: <B>(
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
     localNames: Set<string>;
+    scopeNames: string[];
   },
   names: B[],
   altBindings: Map<B, Ty>,
@@ -3826,6 +3981,7 @@ const unifyOrPatBindings: <B>(
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     names: B[],
     altBindings: Map<B, Ty>,
@@ -3861,6 +4017,7 @@ const inferOrPatAlts: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     alts: Pattern[],
     i: number,
@@ -3881,6 +4038,7 @@ const inferOrPatAlts: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     alts: Pattern[],
     i: number,
@@ -3927,6 +4085,7 @@ const inferOrPat: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     alts: Pattern[],
     sp: SpanAt,
@@ -3945,6 +4104,7 @@ const inferOrPat: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     alts: Pattern[],
     sp: SpanAt,
@@ -4855,6 +5015,7 @@ const inferGroupFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     group: Stmt[],
     st: St,
@@ -4872,6 +5033,7 @@ const inferGroupFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     group: Stmt[],
     st: St,
@@ -4954,46 +5116,65 @@ const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> =
               throw new Error("non-exhaustive match");
             })())(group),
 );
+const groupNamesFrom: _Curry<[group: Stmt[], acc: string[]], string[]> = _curry(
+  2,
+  (group: Stmt[], acc: string[]) =>
+    ((_v) =>
+      _v.length === 0
+        ? acc
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SLet"
+                  ? (({ name }) => groupNamesFrom(rest, _Array_append(name, acc)))(_v)
+                  : groupNamesFrom(rest, acc))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(group),
+);
 const generalizeGroupFrom: _Curry<
-  [group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St],
+  [group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, names: string[], st: St],
   Map<string, Scheme>
-> = _curry(4, (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, st: St) =>
-  ((_v) =>
-    _v.length === 0
-      ? env
-      : _v.length >= 1
-        ? (([s, ...rest]) =>
-            ((_v) =>
-              _v._tag === "SLet"
-                ? (({ name, annot }) =>
-                    ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: t }) =>
-                            ((widen: boolean) =>
-                              generalizeGroupFrom(
-                                rest,
-                                bodyTypes,
-                                _Map_set(name, generalize(env, t, st, widen), env),
-                                st,
-                              ))(
-                              ((_v) =>
-                                _v._tag === "None"
-                                  ? true
-                                  : _v._tag === "Some"
-                                    ? false
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(annot),
-                            ))(_v)
-                        : _v._tag === "None"
-                          ? generalizeGroupFrom(rest, bodyTypes, env, st)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(_Map_get(name, bodyTypes)))(_v)
-                : generalizeGroupFrom(rest, bodyTypes, env, st))(s))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(group),
+> = _curry(
+  5,
+  (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, names: string[], st: St) =>
+    ((_v) =>
+      _v.length === 0
+        ? env
+        : _v.length >= 1
+          ? (([s, ...rest]) =>
+              ((_v) =>
+                _v._tag === "SLet"
+                  ? (({ name, annot }) =>
+                      ((_v) =>
+                        _v._tag === "Some"
+                          ? (({ value: t }) =>
+                              ((widen: boolean) =>
+                                generalizeGroupFrom(
+                                  rest,
+                                  bodyTypes,
+                                  _Map_set(name, generalizeOver(env, names, t, st, widen), env),
+                                  names,
+                                  st,
+                                ))(
+                                ((_v) =>
+                                  _v._tag === "None"
+                                    ? true
+                                    : _v._tag === "Some"
+                                      ? false
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(annot),
+                              ))(_v)
+                          : _v._tag === "None"
+                            ? generalizeGroupFrom(rest, bodyTypes, env, names, st)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(_Map_get(name, bodyTypes)))(_v)
+                  : generalizeGroupFrom(rest, bodyTypes, env, names, st))(s))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(group),
 );
 const noteGroupLets: _Curry<
   [group: Stmt[], letOwner: Map<string, SpanAt>, st: St],
@@ -5027,6 +5208,7 @@ const processGroupsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     sccs: number[][],
     lets: Stmt[],
@@ -5043,6 +5225,7 @@ const processGroupsFrom: _Curry<
         loopStack: Ty[][];
         letOwner: Map<string, SpanAt>;
         localNames: Set<string>;
+        scopeNames: string[];
       },
       St,
     ],
@@ -5060,6 +5243,7 @@ const processGroupsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     sccs: number[][],
     lets: Stmt[],
@@ -5072,7 +5256,7 @@ const processGroupsFrom: _Curry<
           ? (([comp, ...restSccs]) =>
               ((group: Stmt[]) =>
                 (([preEnv, st1]: [Map<string, Scheme>, St]) => {
-                  const preCtx = ctxWithEnv(ctx, preEnv);
+                  const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom(group, [] as string[]));
                   return _Result_flatMap(
                     ([bodyTypes, st2]) =>
                       ((finalEnv: Map<string, Scheme>) =>
@@ -5083,7 +5267,13 @@ const processGroupsFrom: _Curry<
                             lets,
                             st3,
                           ))(noteGroupLets(group, ctx.letOwner, st2)))(
-                        generalizeGroupFrom(group, bodyTypes, dropGroupFrom(group, preEnv), st2),
+                        generalizeGroupFrom(
+                          group,
+                          bodyTypes,
+                          dropGroupFrom(group, preEnv),
+                          ctx.scopeNames,
+                          st2,
+                        ),
                       ),
                     inferGroupFrom(preCtx, group, st1),
                   );
@@ -5103,6 +5293,7 @@ const inferExprStmtsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     stmts: Stmt[],
     st: St,
@@ -5120,6 +5311,7 @@ const inferExprStmtsFrom: _Curry<
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
       localNames: Set<string>;
+      scopeNames: string[];
     },
     stmts: Stmt[],
     st: St,
@@ -5563,6 +5755,7 @@ const runInferImports: <A, B, C>(
           const lets: Stmt[] = letsOfFrom(stmts);
           const idxOf: Map<string, number> = idxOfMap(lets);
           const sccs: number[][] = stronglyConnected(adjOf(lets, idxOf));
+          const localNames: Set<string> = localBinderNames(stmts);
           return ((_v) =>
             _v._tag === "Ok"
               ? (({ value: [finalCtx, st4] }) =>
@@ -5609,6 +5802,7 @@ const runInferImports: <A, B, C>(
                           loopStack: Ty[][];
                           letOwner: Map<string, SpanAt>;
                           localNames: Set<string>;
+                          scopeNames: string[];
                         },
                         St,
                       ],
@@ -5640,7 +5834,8 @@ const runInferImports: <A, B, C>(
                 plugins: plugins,
                 loopStack: [] as Ty[][],
                 letOwner: new Map<string, SpanAt>(),
-                localNames: localBinderNames(stmts),
+                localNames: localNames,
+                scopeNames: _Set_toArray(localNames),
               },
               sccs,
               lets,

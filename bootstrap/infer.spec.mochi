@@ -61,6 +61,19 @@ testEach("inference rejects type conflicts", [
     label: "let-in value contradicts its annotation",
     src: "let r = let x : number = \"no\" in x",
     want: "unify"
+  },
+  {
+    label: // `generalizeOver` must still see a lambda parameter the `let` captures.
+    "let-in keeps a captured parameter monomorphic",
+    src: "let f = x => let y = x in (add(y, 1), not(y))",
+    want: "unify"
+  },
+  {
+    label: // …and the enclosing top-level group, bound monomorphically until it
+    // generalizes. Its name is not a local binder.
+    "let-in keeps the enclosing group's name monomorphic",
+    src: "let h = n => let k = h in (k(1), k(\"s\"))",
+    want: "unify"
   }
 ], row => switch inferSrc(row.src) {
   | Err(e) => e.message |> Str.contains(row.want) |> ok

@@ -157,15 +157,46 @@ let freeInEnvFrom = (schemes, i, st: Types.St, acc) => switch Array.get(i, schem
 let freeInEnv = (env, st: Types.St) =>
   freeInEnvFrom(Map.values(env), 0, st, emptyVarSets)
 
-/// A type with no free variables generalizes to itself, whatever the env
-/// holds, so the env walk is skipped.
-export let generalize = (env, t, st: Types.St, widen) =>
+let freeInNamedFrom = (names, i, env, st: Types.St, acc) => switch Array.get(i, names) {
+  | None => acc
+  | Some(n) => freeInNamedFrom(
+      names,
+      i + 1,
+      env,
+      st,
+      switch Map.get(n, env) {
+        | Some(sc) => freeInScheme(sc, st, acc)
+        | None => acc
+      }
+    )
+}
+
+let generalizeAgainst = (envFree, t, st: Types.St, widen) =>
   let zt = widen ? widenLits(zonk(t, st)) : zonk(t, st) in
   let own = freeInType(zt) in
   let free = Set.size(own.tv) == 0 && Set.size(own.rv) == 0
     ? own
-    : diffVarSets(own, freeInEnv(env, st)) in
+    : diffVarSets(own, envFree()) in
     { vars: Set.toArray(free.tv), rvars: Set.toArray(free.rv), ty: zt }
+
+/// A type with no free variables generalizes to itself, whatever the env
+/// holds, so the env walk is skipped.
+export let generalize = (env, t, st: Types.St, widen) =>
+  generalizeAgainst(() => freeInEnv(env, st), t, st, widen)
+
+/// `generalize`, reading free variables only from the env entries named in
+/// `names`. The caller promises every other entry is closed — a builtin, an
+/// import, a constructor, or a top-level `let` already generalized — so
+/// skipping it changes nothing. Inference passes the module's local binder
+/// names plus the enclosing top-level group: the only bindings that can be
+/// monomorphic, or generalized under a lambda whose parameters they capture.
+export let generalizeOver = (env, names, t, st: Types.St, widen) =>
+  generalizeAgainst(
+    () => freeInNamedFrom(names, 0, env, st, emptyVarSets),
+    t,
+    st,
+    widen
+  )
 
 /// Bare string/number singletons widen to their base prim at generalization
 /// of an unannotated binding (TypeScript `let`). Written types skip this
