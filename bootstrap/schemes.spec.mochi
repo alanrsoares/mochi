@@ -3,6 +3,7 @@ import * as Ast from "./ast.mochi"
 import {
   ctorScheme,
   generalize,
+  generalizeOver,
   instantiate,
   mono,
   widenLits
@@ -16,6 +17,15 @@ test("generalize quantifies variables not free in the environment", () =>
   let env = Map.set("fixed", mono(tVar(0)), #{}) in
   let sc = generalize(env, tArrow(tVar(0), tVar(1)), mkSt(2), false) in
     sc.vars |> assertEq([1]))
+
+test("generalizeOver reads free variables only from the named entries", () =>
+  let env = Map.set("fixed", mono(tVar(0)), #{}) in
+  let t = tArrow(tVar(0), tVar(1)) in
+    (
+      generalizeOver(env, ["fixed"], t, mkSt(2), false).vars,
+      generalizeOver(env, [], t, mkSt(2), false).vars
+    )
+      |> assertEq(([1], [0, 1])))
 
 test("instantiate makes each quantified variable fresh", () =>
   let (ty, st) = instantiate(

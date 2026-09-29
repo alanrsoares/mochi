@@ -310,3 +310,15 @@ let s = ("hi" ++ ctx)->gen(1)`;
   if (!isErr(r)) return;
   expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });
+
+// `generalizeOver` reads only local binders and the enclosing group from the
+// env; a `let … in` must still see a monomorphic variable from either.
+test("let-in keeps a captured lambda parameter monomorphic", () => {
+  const r = inferPrelude("let f = x => let y = x in (add(y, 1), not(y))");
+  expect(isErr(r)).toBe(true);
+});
+
+test("let-in keeps the enclosing top-level group's name monomorphic", () => {
+  const r = inferPrelude('let h = n => let k = h in (k(1), k("s"))');
+  expect(isErr(r)).toBe(true);
+});

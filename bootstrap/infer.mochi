@@ -101,6 +101,7 @@ import {
   tBool,
   tString,
   generalize,
+  generalizeOver,
   instantiate,
   typeExprToType,
   ctorScheme,
@@ -395,7 +396,24 @@ let ctxWithEnv = (ctx: Ctx<a>, env) =>
     plugins: ctx.plugins,
     loopStack: ctx.loopStack,
     letOwner: ctx.letOwner,
-    localNames: ctx.localNames
+    localNames: ctx.localNames,
+    scopeNames: ctx.scopeNames
+  }
+
+// Infer a top-level group's bodies with its names in `scopeNames`: they are
+// bound monomorphically until the group generalizes, so a `let … in` inside
+// one of the bodies must see their free variables.
+let ctxWithGroup = (ctx: Ctx<a>, env, names) =>
+  {
+    env,
+    open: ctx.open,
+    ns: ctx.ns,
+    aliasMap: ctx.aliasMap,
+    plugins: ctx.plugins,
+    loopStack: ctx.loopStack,
+    letOwner: ctx.letOwner,
+    localNames: ctx.localNames,
+    scopeNames: Array.concat(names, ctx.scopeNames)
   }
 
 // Enter a scope where `letOwner` also carries the bindings a group / a `let …
@@ -411,7 +429,8 @@ let ctxWithLets = (ctx: Ctx<a>, env, letOwner) =>
     plugins: ctx.plugins,
     loopStack: ctx.loopStack,
     letOwner,
-    localNames: ctx.localNames
+    localNames: ctx.localNames,
+    scopeNames: ctx.scopeNames
   }
 
 // Enter a loop body: params bound in env, frame pushed innermost-FIRST
@@ -425,7 +444,8 @@ let ctxWithLoop = (ctx: Ctx<a>, env, frame, letOwner) =>
     plugins: ctx.plugins,
     loopStack: Array.prepend(frame, ctx.loopStack),
     letOwner,
-    localNames: ctx.localNames
+    localNames: ctx.localNames,
+    scopeNames: ctx.scopeNames
   }
 
 // loop params: inits infer in the OUTER ctx; each binds monomorphic —
@@ -1015,7 +1035,7 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
           | None => Ok((valT, st1))
         } in
         let widen = switch annot { | Some(_) => false | None => true } in
-        let sc = generalize(ctx.env, pinned, st2, widen) in
+        let sc = generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen) in
         let vsp = exprSpan(value) in
         let $ctx = ctx->ctxWithLets(
           Map.set(name, sc, ctx.env),
@@ -1811,10 +1831,21 @@ let dropGroupFrom = (group, env) => switch group {
       | _ => dropGroupFrom(rest, env)
     }
 }
+let groupNamesFrom = (group, acc) => switch group {
+  | [] => acc
+  | [s, ...rest] => switch s {
+      | Ast.SLet(name, _, _, _, _, _, _) => groupNamesFrom(
+          rest,
+          Array.append(name, acc)
+        )
+      | _ => groupNamesFrom(rest, acc)
+    }
+}
+
 // generalize against the OUTER env — drop the mono self-bindings first, else
 // the group's own type vars look env-bound and stay ungeneralized.
 // Monomorphic recursion within the group, polymorphic use afterwards.
-let generalizeGroupFrom = (group, bodyTypes, env, st: Types.St) => switch group {
+let generalizeGroupFrom = (group, bodyTypes, env, names, st: Types.St) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
       | Ast.SLet(name, _, annot, _, _, _, _) => switch Map.get(name, bodyTypes) {
@@ -1825,12 +1856,13 @@ let generalizeGroupFrom = (group, bodyTypes, env, st: Types.St) => switch group 
               generalizeGroupFrom(
                 rest,
                 bodyTypes,
-                Map.set(name, generalize(env, t, st, widen), env),
+                Map.set(name, generalizeOver(env, names, t, st, widen), env),
+                names,
                 st
               )
-          | None => generalizeGroupFrom(rest, bodyTypes, env, st)
+          | None => generalizeGroupFrom(rest, bodyTypes, env, names, st)
         }
-      | _ => generalizeGroupFrom(rest, bodyTypes, env, st)
+      | _ => generalizeGroupFrom(rest, bodyTypes, env, names, st)
     }
 }
 
@@ -1855,12 +1887,13 @@ let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St) => switch sccs {
   | [] => Ok((ctx, st))
   | [comp, ...restSccs] => let group = groupOfFrom(comp, lets) in
     let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
-    let preCtx = ctx->ctxWithEnv(preEnv) in
+    let preCtx = ctx->ctxWithGroup(preEnv, groupNamesFrom(group, [])) in
     let? (bodyTypes, st2) = preCtx->inferGroupFrom(group, st1) in
     let finalEnv = generalizeGroupFrom(
       group,
       bodyTypes,
       dropGroupFrom(group, preEnv),
+      ctx.scopeNames,
       st2
     ) in
     let (finalOwner, st3) = noteGroupLets(group, ctx.letOwner, st2) in
@@ -2065,7 +2098,8 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
-    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: #{}, localNames: localBinderNames(stmts) }, sccs, lets, st3) {
+  let localNames = localBinderNames(stmts) in
+    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: #{}, localNames, scopeNames: Set.toArray(localNames) }, sccs, lets, st3) {
       | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
           | Ok(st5) => Ok(
               {
@@ -2183,9 +2217,13 @@ type Ctx<p> = {
   plugins: [Plugin<p>],
   loopStack: [[Types.Ty]],
   letOwner: Map<string, Ast.Span>,
-  localNames: Set<string>
+  localNames: Set<string>,
+  scopeNames: [string]
 }
-
+// Names whose env entry may hold free type variables: every local binder
+// in the module, plus the top-level group being inferred. Every other entry
+// is closed, so `generalizeOver` reads only these (the env holds the whole
+// prelude, and walking it at each `let` was a quarter of inference).
 let emptyQuals : Map<string, QualScope> = #{}
 
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
