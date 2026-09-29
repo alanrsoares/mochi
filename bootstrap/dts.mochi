@@ -35,7 +35,12 @@ import {
   TyVar
 } from "./types.mochi"
 import { jsDoc } from "./codegen.mochi"
-import { defaultOpts, typedProgramWith } from "./compile.mochi"
+import {
+  defaultOpts,
+  emitJsWith,
+  emitTsWith,
+  typedProgramWith
+} from "./compile.mochi"
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "./extensions.mochi"
 
 /// Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
@@ -486,3 +491,24 @@ export let emitDtsTextWith = (src, runtimeImport, opts) =>
 
 export let emitDtsText = (src, runtimeImport) =>
   emitDtsTextWith(src, runtimeImport, defaultOpts)
+
+/// Source -> JS, typed TS and `.d.ts` from one inference, so the three stay in
+/// lockstep at a third of the cost (the docs playground shows all of them).
+/// Ports src/compile/compile-targets.ts.
+export let compileTargetsWith = (src, runtimeImport, opts) =>
+  typedProgramWith(src, opts)
+    |> Result.map(((stmts, r)) =>
+      {
+        js: stmts->emitJsWith(opts),
+        ts: stmts->emitTsWith(r, runtimeImport, opts),
+        dts: emitDtsFromTypedWith(
+          stmts,
+          r.env,
+          r.aliases,
+          #{},
+          runtimeImport,
+          opts.docs,
+          dtsHooksFor(opts.plugins),
+          bindingHooksFor(opts.plugins)
+        )
+      })

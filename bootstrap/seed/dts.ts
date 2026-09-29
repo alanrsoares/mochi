@@ -73,7 +73,7 @@ import {
   TyVar,
 } from "./types";
 import { jsDoc } from "./codegen";
-import { defaultOpts, typedProgramWith } from "./compile";
+import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "./compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "./extensions";
 /**
  * Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
@@ -967,4 +967,117 @@ export const emitDtsText: _Curry<
   Result<string, Stamped[]>
 > = _curry(2, (src: string, runtimeImport: string) =>
   emitDtsTextWith(src, runtimeImport, defaultOpts),
+);
+/**
+ * Source -> JS, typed TS and `.d.ts` from one inference, so the three stay in
+ * lockstep at a third of the cost (the docs playground shows all of them).
+ * Ports src/compile/compile-targets.ts.
+ */
+export const compileTargetsWith: _Curry<
+  [
+    src: string,
+    runtimeImport: string,
+    opts: {
+      docs: boolean;
+      plugins: Option<
+        {
+          name: string;
+          parse: Option<
+            (
+              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+              b: number,
+              c: (
+                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                b: number,
+              ) => Result<[Expr, number], StageErr>,
+            ) => Result<Option<[Expr, number]>, StageErr>
+          >;
+          inferCall: Option<
+            (
+              a: Expr,
+              b: Expr[],
+              c: Option<string>,
+              d: St,
+              e: InferApi,
+            ) => Result<Option<[Ty, St]>, IErr>
+          >;
+          format: Option<(a: Expr) => Option<Expr>>;
+          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
+          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
+          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
+        }[]
+      >;
+      open: boolean;
+      runtime: boolean;
+      moduleExt: string;
+      strictEntry: boolean;
+    },
+  ],
+  Result<{ js: string; ts: string; dts: string }, Stamped[]>
+> = _curry(
+  3,
+  (
+    src: string,
+    runtimeImport: string,
+    opts: {
+      docs: boolean;
+      plugins: Option<
+        {
+          name: string;
+          parse: Option<
+            (
+              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+              b: number,
+              c: (
+                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                b: number,
+              ) => Result<[Expr, number], StageErr>,
+            ) => Result<Option<[Expr, number]>, StageErr>
+          >;
+          inferCall: Option<
+            (
+              a: Expr,
+              b: Expr[],
+              c: Option<string>,
+              d: St,
+              e: InferApi,
+            ) => Result<Option<[Ty, St]>, IErr>
+          >;
+          format: Option<(a: Expr) => Option<Expr>>;
+          formatDoc: Option<(a: Expr, b: FormatApi) => Option<Doc>>;
+          dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
+          bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
+        }[]
+      >;
+      open: boolean;
+      runtime: boolean;
+      moduleExt: string;
+      strictEntry: boolean;
+    },
+  ) =>
+    _Result_map(
+      ([stmts, r]: [
+        Stmt[],
+        {
+          env: Map<string, Scheme>;
+          aliases: Map<string, QualAliasInfo>;
+          types: TypeAt[];
+          letParams: TypeAt[];
+        },
+      ]) => ({
+        js: emitJsWith(stmts, opts),
+        ts: emitTsWith(stmts, r, runtimeImport, opts),
+        dts: emitDtsFromTypedWith(
+          stmts,
+          r.env,
+          r.aliases,
+          new Map<string, string>(),
+          runtimeImport,
+          opts.docs,
+          dtsHooksFor(opts.plugins),
+          bindingHooksFor(opts.plugins),
+        ),
+      }),
+      typedProgramWith(src, opts),
+    ),
 );

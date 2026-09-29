@@ -7002,6 +7002,7 @@ var dtsHooksFrom = _curry11(3, (plugins, i, acc) => ((_v) => _v._tag === "None" 
 })())(p.dtsBinding))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get9(i, plugins)));
+var dtsHooksFor = (pluginsOpt) => dtsHooksFrom(resolvePluginsDefault(pluginsOpt), 0, []);
 var runFormatHooks = _curry11(2, (hooks, e) => match5(hooks).with((_v) => _v.length === 0, () => None10).with((_v) => _v.length >= 1, ([hook, ...rest]) => ((_v) => _v._tag === "Some" ? (({ value: out }) => Some10(out))(_v) : _v._tag === "None" ? runFormatHooks(rest, e) : (() => {
   throw new Error("non-exhaustive match");
 })())(hook(e))).otherwise(() => {
@@ -9236,6 +9237,8 @@ var aliasTsDecl = _curry20(5, (name, params, template, aliases, recs) => {
   const head = `${name}${genericHead(params, 0, [])}`;
   return `export type ${head} = ${fieldTs(template, params, aliases, recs)};`;
 });
+var opaqueTypeDecl = (name) => `declare const ${name}: unique symbol;
+export type ${name} = { readonly [${name}]: never };`;
 var mergeInto = _curry20(4, (keys, src, acc, i) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: k }) => mergeInto(keys, src, ((_v) => _v._tag === "Some" ? (({ value: v }) => _Map_set8(k, v, acc))(_v) : _v._tag === "None" ? acc : (() => {
   throw new Error("non-exhaustive match");
 })())(_Map_get9(k, src)), i + 1))(_v) : (() => {
@@ -14439,17 +14442,128 @@ var inferTypesRecoveringWith = _curry22(2, (src, opts) => ((_v) => _v._tag === "
 var inferTypes = (src) => inferTypesWith(src, defaultOpts);
 var nominalTypeName2 = _curry22(2, (ty, aliases) => nominalTypeName(ty, aliases));
 var symbolIndexSync = _curry22(4, (path, origins, prelude, stmts) => indexWith(path, origins, prelude, stmts));
-var compileWith = _curry22(2, (src, opts) => _Result_map7((prog) => codegenWith(prog, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }), pipelineWith(src, openMode(src, opts.open), opts.plugins)));
+var emitJsWith = _curry22(2, (stmts, opts) => codegenWith(stmts, new Map, opts.runtime, namespaceRuntime, preludeJsDefs, runtimeDeps, { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }));
+var compileWith = _curry22(2, (src, opts) => _Result_map7((prog) => emitJsWith(prog, opts), pipelineWith(src, openMode(src, opts.open), opts.plugins)));
 var compile = (src) => compileWith(src, defaultOpts);
 var noImportedKeys = new Map;
-var compileTsWith = _curry22(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs, bindingHooksFor(opts.plugins)), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
+var emitTsWith = _curry22(4, (stmts, r, runtimeImport, opts) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs, bindingHooksFor(opts.plugins)));
+var compileTsWith = _curry22(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsWith(stmts, r, runtimeImport, opts), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var compileTs = _curry22(2, (src, runtimeImport) => compileTsWith(src, runtimeImport, defaultOpts));
+import { None as None22, _Array_concat as _Array_concat12, _Array_contains as _Array_contains6, _Array_get as _Array_get20, _Array_prepend as _Array_prepend10, _Map_get as _Map_get11, _Map_getOr as _Map_getOr8, _Map_has as _Map_has7, _Map_keys as _Map_keys11, _Map_set as _Map_set10, _Option_unwrapOr as _Option_unwrapOr13, _Result_map as _Result_map8, _Set_add as _Set_add9, _Set_fromArray as _Set_fromArray9, _Set_has as _Set_has8, _Set_toArray as _Set_toArray4, _Str_contains as _Str_contains4, _Str_endsWith as _Str_endsWith3, _Str_join as _Str_join9, _Str_length as _Str_length9, _Str_slice as _Str_slice5, _Str_startsWith as _Str_startsWith9, _curry as _curry23, and as and17, length as length17, map as map14, or as or14 } from "@mochi/compiler/runtime";
+var writtenQualsIn = _curry23(3, (te, local, acc) => ((_v) => _v._tag === "TyName" ? acc : _v._tag === "TyLit" ? acc : _v._tag === "TyArrow" ? (({ from, to }) => writtenQualsIn(to, local, writtenQualsIn(from, local, acc)))(_v) : _v._tag === "TyApp" ? (({ args }) => writtenQualsInAll(args, local, acc, 0))(_v) : _v._tag === "TyTuple" ? (({ elems }) => writtenQualsInAll(elems, local, acc, 0))(_v) : _v._tag === "TyList" ? (({ elem }) => writtenQualsIn(elem, local, acc))(_v) : _v._tag === "TyUnion" ? (({ members }) => writtenQualsInAll(members, local, acc, 0))(_v) : _v._tag === "TyQual" ? (({ alias, name, args }) => ((acc1) => writtenQualsInAll(args, local, acc1, 0))(or14(_Set_has8(name, local), _Map_has7(name, acc)) ? acc : _Map_set10(name, `${alias}.${name}`, acc)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(te));
+var writtenQualsInAll = _curry23(4, (tes, local, acc, i) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: te }) => writtenQualsInAll(tes, local, writtenQualsIn(te, local, acc), i + 1))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, tes)));
+var ctorQualsFrom = _curry23(4, (ctors, local, acc, i) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: c }) => ctorQualsFrom(ctors, local, writtenQualsInAll(map14((f) => f.fieldType, c.fields), local, acc, 0), i + 1))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, ctors)));
+var writtenQualsFrom = _curry23(4, (stmts, local, acc, i) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" && _v.value._tag === "SExtern" ? (({ value: { typeExpr: te } }) => writtenQualsFrom(stmts, local, writtenQualsIn(te, local, acc), i + 1))(_v) : _v._tag === "Some" && _v.value._tag === "SLet" ? (({ value: { annot } }) => writtenQualsFrom(stmts, local, ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: te }) => writtenQualsIn(te, local, acc))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(annot), i + 1))(_v) : _v._tag === "Some" && _v.value._tag === "SType" ? (({ value: { ctors, alias, aliasType } }) => ((acc1) => ((acc2) => ((acc3) => writtenQualsFrom(stmts, local, acc3, i + 1))(((_v) => _v._tag === "None" ? acc2 : _v._tag === "Some" ? (({ value: te }) => writtenQualsIn(te, local, acc2))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(aliasType)))(((_v) => _v._tag === "None" ? acc1 : _v._tag === "Some" ? (({ value: fields }) => writtenQualsInAll(map14((f) => f.fieldType, fields), local, acc1, 0))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(alias)))(ctorQualsFrom(ctors, local, acc, 0)))(_v) : _v._tag === "Some" ? writtenQualsFrom(stmts, local, acc, i + 1) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, stmts)));
+var qualifyRow = _curry23(2, (row, qualify) => ((_v) => _v._tag === "RowEmpty" ? RowEmpty : _v._tag === "RowVar" ? (({ id }) => RowVar(id))(_v) : _v._tag === "RowExtend" ? (({ label, fieldType, optional, rest }) => RowExtend(label, qualifyTy(fieldType, qualify), optional, qualifyRow(rest, qualify)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(row));
+var qualifyTy = _curry23(2, (t, qualify) => ((_v) => _v._tag === "TyVar" ? (({ id }) => TyVar(id))(_v) : _v._tag === "TyCon" ? (({ name, args }) => TyCon(_Map_getOr8(name, name, qualify), map14((a) => qualifyTy(a, qualify), args)))(_v) : _v._tag === "TyFn" ? (({ from, to }) => TyFn(qualifyTy(from, qualify), qualifyTy(to, qualify)))(_v) : _v._tag === "TyRecord" ? (({ row }) => TyRecord(qualifyRow(row, qualify)))(_v) : _v._tag === "TySingleton" ? (({ base, value }) => TySingleton(base, value))(_v) : _v._tag === "TyOneOf" ? (({ members }) => TyOneOf(map14((m) => qualifyTy(m, qualify), members)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(t));
+var qualifyTe2 = _curry23(2, (te, qualify) => ((_v) => _v._tag === "TyName" ? (({ name, span }) => TyName(_Map_getOr8(name, name, qualify), span))(_v) : _v._tag === "TyArrow" ? (({ from, to, span }) => TyArrow(qualifyTe2(from, qualify), qualifyTe2(to, qualify), span))(_v) : _v._tag === "TyApp" ? (({ ctor, args, span }) => TyApp(_Map_getOr8(ctor, ctor, qualify), map14((a) => qualifyTe2(a, qualify), args), span))(_v) : _v._tag === "TyTuple" ? (({ elems, span }) => TyTuple(map14((e) => qualifyTe2(e, qualify), elems), span))(_v) : _v._tag === "TyList" ? (({ elem, span }) => TyList(qualifyTe2(elem, qualify), span))(_v) : _v._tag === "TyQual" ? (({ alias, name, nameSpan, args, span }) => TyQual(alias, name, nameSpan, map14((a) => qualifyTe2(a, qualify), args), span))(_v) : _v._tag === "TyLit" ? (({ value, span }) => TyLit(value, span))(_v) : _v._tag === "TyUnion" ? (({ members, span }) => TyUnion(map14((m) => qualifyTe2(m, qualify), members), span))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(te));
+var qualifyField2 = _curry23(2, (f, qualify) => ({ name: f.name, fieldType: qualifyTe2(f.fieldType, qualify) }));
+var qualifyCtor = _curry23(2, (c, qualify) => ({ name: c.name, fields: map14((f) => qualifyField2(f, qualify), c.fields), span: c.span }));
+var qualifyAliasField = _curry23(2, (f, qualify) => ({ name: f.name, nameSpan: f.nameSpan, fieldType: qualifyTe2(f.fieldType, qualify), optional: f.optional }));
+var typeDeclsFrom = _curry23(6, (stmts, aliases, recs, qualify, docs, i) => ((_v) => _v._tag === "None" ? [] : _v._tag === "Some" && _v.value._tag === "SType" ? (({ value: { name, params, ctors, alias, aliasType, doc } }) => ((rest) => ((docComment) => ((_v) => _v._tag === "Some" ? (({ value: fields }) => _Array_prepend10(`${docComment}${recordAliasDecl(name, params, map14((f) => qualifyAliasField(f, qualify), fields), aliases, withoutOwnShape(fields, params, aliases, recs))}`, rest))(_v) : _v._tag === "None" ? ((_v) => _v._tag === "Some" ? (({ value: te }) => _Array_prepend10(`${docComment}${aliasTsDecl(name, params, qualifyTe2(te, qualify), aliases, recs)}`, rest))(_v) : _v._tag === "None" ? length17(ctors) === 0 ? _Array_prepend10(`${docComment}${opaqueTypeDecl(name)}`, rest) : _Array_prepend10(`${docComment}${typeDecl(name, params, map14((c) => qualifyCtor(c, qualify), ctors), aliases, recs)}`, rest) : (() => {
+  throw new Error("non-exhaustive match");
+})())(aliasType) : (() => {
+  throw new Error("non-exhaustive match");
+})())(alias))(docs ? jsDoc(doc) : ""))(typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1)))(_v) : _v._tag === "Some" ? typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, stmts)));
+var bindingDeclsFrom = _curry23(8, (stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i) => ((_v) => _v._tag === "None" ? [] : _v._tag === "Some" && _v.value._tag === "SLet" ? (({ value: { name, value, doc } }) => ((rest) => ((decl) => _Str_startsWith9("$", name) ? rest : ((_v) => _v._tag === "None" ? rest : _v._tag === "Some" ? (({ value: sc }) => ((ty) => _Array_prepend10(decl(_Option_unwrapOr13(bindingTsType({ vars: sc.vars, rvars: sc.rvars, ty }, value, recs, bindingHooks), runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs)))), rest))(qualifyTy(sc.ty, qualify)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get11(name, env)))((ts) => `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`))(bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i + 1)))(_v) : _v._tag === "Some" ? bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i + 1) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, stmts)));
+var builtinDeclsFor2 = _curry23(4, (names, aliases, recs, i) => ((_v) => _v._tag === "None" ? [] : _v._tag === "Some" ? (({ value: bt }) => ((rest) => _Array_contains6(bt.name, names) ? _Array_prepend10(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest) : rest)(builtinDeclsFor2(names, aliases, recs, i + 1)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, builtinTypeDecls)));
+var mochiDtsSpec = (from) => {
+  const bare = _Str_endsWith3(".mochi", from) ? _Str_slice5(0, _Str_length9(from) - 6, from) : from;
+  return or14(_Str_startsWith9("./", bare), _Str_startsWith9("../", bare)) ? `${bare}.mochi` : from;
+};
+var nsTypeImportsFrom = _curry23(4, (stmts, body, seen, i) => ((_v) => _v._tag === "None" ? [] : _v._tag === "Some" && _v.value._tag === "SImportNs" ? (({ value: { alias, from } }) => or14(_Set_has8(alias.name, seen), !_Str_contains4(`${alias.name}.`, body)) ? nsTypeImportsFrom(stmts, body, seen, i + 1) : _Array_prepend10(`import type * as ${alias.name} from "${mochiDtsSpec(from)}";`, nsTypeImportsFrom(stmts, body, _Set_add9(alias.name, seen), i + 1)))(_v) : _v._tag === "Some" ? nsTypeImportsFrom(stmts, body, seen, i + 1) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, stmts)));
+var blankNonLocal = _curry23(4, (keys, recs, locals, i) => ((_v) => _v._tag === "None" ? recs : _v._tag === "Some" ? (({ value: k }) => ((_v) => _v._tag === "None" ? blankNonLocal(keys, recs, locals, i + 1) : _v._tag === "Some" ? (({ value: name }) => blankNonLocal(keys, and17(name !== "", !_Set_has8(name, locals)) ? _Map_set10(k, "", recs) : recs, locals, i + 1))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get11(k, recs)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, keys)));
+var declarationRecs = _curry23(2, (stmts, aliases) => {
+  const locals = nullaryLocalNames(stmts, 0, _Set_fromArray9([]));
+  const indexed = recordAliasIndex(aliases);
+  return blankNonLocal(_Map_keys11(indexed), withoutAmbiguousAlias(indexed, aliases, locals), locals, 0);
+});
+var qualConRecs = _curry23(5, (keys, qualify, aliases, recs, i) => ((_v) => _v._tag === "None" ? recs : _v._tag === "Some" ? (({ value: name }) => qualConRecs(keys, qualify, aliases, ((_v) => _v._tag === "None" ? recs : _v._tag === "Some" ? (({ value: qual }) => ((_v) => _v._tag === "None" ? recs : _v._tag === "Some" ? (({ value: info }) => ((_v) => _v._tag === "Some" ? recs : _v._tag === "None" ? and17(length17(info.fields) > 0, !_Map_has7(name, recs)) ? _Map_set10(name, qual, recs) : recs : (() => {
+  throw new Error("non-exhaustive match");
+})())(info.expr))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get11(qual, aliases)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get11(name, qualify)), i + 1))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, keys)));
+var emitDtsFromTypedWith = _curry23(8, (stmts, env, aliases, qualify, runtimeImport, docs, dtsHooks, bindingHooks) => {
+  const local = declaredTypeNames(stmts, 0, _Set_fromArray9([]));
+  const quals = writtenQualsFrom(stmts, local, qualify, 0);
+  const recs = qualConRecs(_Map_keys11(quals), quals, aliases, declarationRecs(stmts, aliases), 0);
+  const types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
+  const bindings = bindingDeclsFrom(stmts, env, recs, quals, docs, dtsHooks, bindingHooks, 0);
+  const declared = declaredTypeNames(stmts, 0, _Set_fromArray9([]));
+  const wanted = referencedCons(stmts, env, 0, _Set_fromArray9([]));
+  const core = _Str_join9(`
+`, _Array_concat12(types, bindings));
+  const builtinNames = builtinTypeNamesFor(declared, wanted, core, 0);
+  const body = `${_Str_join9(`
+`, _Array_concat12(builtinDeclsFor2(builtinNames, aliases, recs, 0), _Array_concat12(types, bindings)))}
+`;
+  const curry = _Str_contains4("_Curry<", body) ? [`import type { _Curry } from "${runtimeImport}";`] : [];
+  const imports = _Array_concat12(curry, nsTypeImportsFrom(stmts, body, _Set_fromArray9([]), 0));
+  return length17(imports) === 0 ? body : `${_Str_join9(`
+`, imports)}
+${body}`;
+});
+var addQuals = _curry23(5, (alias, names, local, acc, i) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: name }) => addQuals(alias, names, local, or14(_Set_has8(name, local), _Map_has7(name, acc)) ? acc : _Map_set10(name, `${alias}.${name}`, acc), i + 1))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, names)));
+var qualsFromAliases = _curry23(5, (aliases, quals, local, acc, i) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" ? (({ value: alias }) => ((_v) => _v._tag === "None" ? qualsFromAliases(aliases, quals, local, acc, i + 1) : _v._tag === "Some" ? (({ value: scope }) => qualsFromAliases(aliases, quals, local, addQuals(alias, _Set_toArray4(scope.types), local, acc, 0), i + 1))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get11(alias, quals)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get20(i, aliases)));
+var qualifierMapOf = _curry23(2, (quals, local) => qualsFromAliases(_Map_keys11(quals), quals, local, new Map, 0));
+var emitDtsFromTyped = _curry23(5, (stmts, env, aliases, qualify, runtimeImport) => emitDtsFromTypedWith(stmts, env, aliases, qualify, runtimeImport, true, [], bindingHooksFor(None22)));
+var emitDtsTextWith = _curry23(3, (src, runtimeImport, opts) => _Result_map8(([stmts, r]) => emitDtsFromTypedWith(stmts, r.env, r.aliases, new Map, runtimeImport, opts.docs, dtsHooksFor(opts.plugins), bindingHooksFor(opts.plugins)), typedProgramWith(src, opts)));
+var emitDtsText = _curry23(2, (src, runtimeImport) => emitDtsTextWith(src, runtimeImport, defaultOpts));
+var compileTargetsWith = _curry23(3, (src, runtimeImport, opts) => _Result_map8(([stmts, r]) => ({ js: emitJsWith(stmts, opts), ts: emitTsWith(stmts, r, runtimeImport, opts), dts: emitDtsFromTypedWith(stmts, r.env, r.aliases, new Map, runtimeImport, opts.docs, dtsHooksFor(opts.plugins), bindingHooksFor(opts.plugins)) }), typedProgramWith(src, opts)));
 export {
   compile,
+  compileTargetsWith,
   compileTs,
   compileTsWith,
   compileWith,
   defaultOpts,
+  emitDtsTextWith,
+  emitJsWith,
+  emitTsWith,
   inferTypes,
   inferTypesRecoveringWith,
   inferTypesWith,

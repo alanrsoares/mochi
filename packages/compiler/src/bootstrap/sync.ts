@@ -15,9 +15,22 @@ import {
   toSeedOptions,
 } from "./options.ts";
 
+/** One file's JS, typed TS and `.d.ts`, printed from one inference. */
+export type BootstrapTargets = { js: string; ts: string; dts: string };
+
 type SeedCompile = {
   compileWith: (src: string, opts: SeedOptions) => BootstrapResult<string, BootstrapDiagnostic[]>;
   compileTsWith: (
+    src: string,
+    runtimeImport: string,
+    opts: SeedOptions,
+  ) => BootstrapResult<string, BootstrapDiagnostic[]>;
+  compileTargetsWith: (
+    src: string,
+    runtimeImport: string,
+    opts: SeedOptions,
+  ) => BootstrapResult<BootstrapTargets, BootstrapDiagnostic[]>;
+  emitDtsTextWith: (
     src: string,
     runtimeImport: string,
     opts: SeedOptions,
@@ -66,6 +79,22 @@ export const compileTsBootstrapSync = (
   runtimeImport: string,
 ): BootstrapResult<string, BootstrapDiagnostic[]> =>
   compileTsBootstrapSyncWith(src, runtimeImport, defaultBootstrapOptions);
+
+/** Single-file `.d.ts`; imports bind nothing (graphs use `emitDtsForFileBootstrapWith`). */
+export const emitDtsBootstrapSyncWith = (
+  src: string,
+  runtimeImport: string,
+  opts: BootstrapOptions,
+): BootstrapResult<string, BootstrapDiagnostic[]> =>
+  seedCompile.emitDtsTextWith(src, runtimeImport, toSeedOptions(opts));
+
+/** Every emit target from one inference, for the docs playground (browser-safe). */
+export const compileTargetsBootstrapSyncWith = (
+  src: string,
+  runtimeImport: string,
+  opts: BootstrapOptions,
+): BootstrapResult<BootstrapTargets, BootstrapDiagnostic[]> =>
+  seedCompile.compileTargetsWith(src, runtimeImport, toSeedOptions(opts));
 
 export const inferTypesBootstrapSync = (
   src: string,
