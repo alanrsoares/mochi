@@ -22,7 +22,7 @@ import * as Infer from "./infer.mochi"
 import { emitTsModuleWith, externModuleDts } from "./codegen-ts.mochi"
 import { showType, tVar } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
-import { index } from "./symbols.mochi"
+import { index, indexWith, originsOf } from "./symbols.mochi"
 import { emitDtsFromTypedWith, emitDtsText, qualifierMapOf } from "./dts.mochi"
 import { bindingHooksFor, dtsHooksFor } from "./extensions.mochi"
 import { openMode } from "./compile.mochi"
@@ -48,6 +48,14 @@ export let emitDts = (src, runtimeImport) => emitDtsText(src, runtimeImport)
 /// this re-export makes it reachable from the frozen graph without teaching
 /// host DX code about bootstrap's internal module layout.
 export let symbolOccurrences = stmts => index(stmts)
+
+/// Host-facing symbol index over all four spaces, imports resolved through
+/// `origins` and builtins through the host's virtual `prelude`.
+export let symbolIndex = (path, origins, prelude, stmts) =>
+  indexWith(path, origins, prelude, stmts)
+
+/// A module's export sites, the `origins` an importer's `symbolIndex` takes.
+export let exportedOrigins = (path, stmts) => originsOf(path, stmts)
 
 // Caller knobs, structurally identical to compile.mochi's `Opts` (ADR 0005),
 // so they unify across the module boundary without a type import.
@@ -83,45 +91,6 @@ type ExportOrigins = {
   types: Map<string, Span>,
   ctors: Map<string, Span>
 }
-
-let addCtorOrigins = (ctors, typeSpan, origins) =>
-  ctors
-    |> Array.reduce((acc, ctor) => Map.set(ctor.name, typeSpan, acc), origins)
-
-let exportedOriginsFrom = (stmts, i, origins) => switch Array.get(i, stmts) {
-  | None => origins
-  | Some(Ast.SLet(name, nameSpan, _, _, true, _, _)) => exportedOriginsFrom(
-      stmts,
-      i + 1,
-      {
-        values: Map.set(name, nameSpan, origins.values),
-        types: origins.types,
-        ctors: origins.ctors
-      }
-    )
-  | Some(Ast.SExtern(name, nameSpan, _, _, _, _, _, true, _, _)) => exportedOriginsFrom(
-      stmts,
-      i + 1,
-      {
-        values: Map.set(name, nameSpan, origins.values),
-        types: origins.types,
-        ctors: origins.ctors
-      }
-    )
-  | Some(Ast.SType(name, _, _, ctors, _, _, true, _, span)) => exportedOriginsFrom(
-      stmts,
-      i + 1,
-      {
-        values: origins.values,
-        types: Map.set(name, span, origins.types),
-        ctors: addCtorOrigins(ctors, span, origins.ctors)
-      }
-    )
-  | Some(_) => exportedOriginsFrom(stmts, i + 1, origins)
-}
-
-export let exportedOrigins = stmts =>
-  exportedOriginsFrom(stmts, 0, { values: #{}, types: #{}, ctors: #{} })
 
 // A driver error, shaped like the compiler's `CErr`; the graph phase has no
 // meaningful span, so both offsets are 0 (matching src/module.ts).

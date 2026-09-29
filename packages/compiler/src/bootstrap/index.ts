@@ -47,10 +47,35 @@ export type BootstrapGraphInferOutput = {
 };
 export type BootstrapGraphInferState = { outputs: BootstrapGraphInferOutput[] };
 export type BootstrapRecoveryGraphState = { ctx: unknown; errors: BootstrapDiagnostic[] };
+/** A declaration site: its file and name span. */
+export type BootstrapLoc = { path: string; start: number; end: number };
+/** A module's export sites per symbol space; a variant's ctors are also values. */
 export type BootstrapExportOrigins = {
-  values: Map<string, { start: number; end: number }>;
-  types: Map<string, { start: number; end: number }>;
-  ctors: Map<string, { start: number; end: number }>;
+  values: Map<string, BootstrapLoc>;
+  types: Map<string, BootstrapLoc>;
+  ctors: Map<string, BootstrapLoc>;
+};
+/** Builtin defs in the host's virtual prelude; `members` keyed `Ns.member`. */
+export type BootstrapPrelude = {
+  origins: BootstrapExportOrigins;
+  members: Map<string, BootstrapLoc>;
+};
+/** One def or use from the full symbol index (`bootstrap/symbols.mochi`). */
+export type BootstrapSymOccurrence = {
+  name: string;
+  space: "value" | "type" | "ctor" | "field";
+  defPath: string;
+  defStart: number;
+  defEnd: number;
+  start: number;
+  end: number;
+  role: "def" | "use";
+};
+/** A file's symbol index: occurrences in walk order, and its module scope. */
+export type BootstrapSymbolIndex = {
+  occurrences: BootstrapSymOccurrence[];
+  top: BootstrapExportOrigins;
+  fields: Map<string, BootstrapLoc>;
 };
 /** One lexical def/use occurrence recovered by the bootstrap symbol pass. */
 export type BootstrapOccurrence = {
@@ -201,7 +226,9 @@ import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync }
 export {
   emitDtsBootstrap,
   emitDtsForFileBootstrap,
+  exportedOriginsBootstrap,
   inferGraphTypesBootstrap,
+  symbolIndexBootstrap,
   symbolOccurrencesBootstrap,
 } from "./module.ts";
 export { checkBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
@@ -275,7 +302,7 @@ const loadGraphWith = async (
       path: abs,
       src: text,
       stmts: parsed.value,
-      origins: exportedOriginsBootstrap(parsed.value),
+      origins: exportedOriginsBootstrap(abs, parsed.value),
       deps,
     });
     return null;

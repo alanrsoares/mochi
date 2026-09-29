@@ -346,6 +346,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
       kind: "labeled",
       name: id.name,
       span: spanning(start, end),
+      nameSpan: id.span,
       annot,
       optional,
       default: def,
