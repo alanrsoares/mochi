@@ -7,6 +7,7 @@
 <p><em>Functional programming that plays nicely with TypeScript.</em></p>
 
 <a href="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml"><img src="https://github.com/alanrsoares/mochi/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+<a href="https://app.codspeed.io/alanrsoares/mochi?utm_source=badge"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed"/></a>
 
 </div>
 

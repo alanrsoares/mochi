@@ -26,6 +26,7 @@ bun run bootstrap:self-tsc    # north-star: self-hosted emitter emits itself wit
 bun run test | test:north-star | test:full | typecheck | lint | lint:fix | format | build:ext | loc
 bun run lint:mochi [globs…]     # LSP diagnostics over .mochi sources (graph-aware; not in the gate)
 bun run bench [suite…]          # fmt / fmt:repo / compile timings; --save, --compare, --profile (docs/tooling.md)
+codspeed run -m simulation      # CodSpeed cases (codspeed.yml → scripts/bench-case.ts), as CI runs them
 ```
 
 ## Pipeline

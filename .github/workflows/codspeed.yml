@@ -4,33 +4,61 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Lets CodSpeed backfill history for earlier commits.
+  # `workflow_dispatch` lets CodSpeed trigger backtest runs on older commits.
   workflow_dispatch:
 
 concurrency:
   group: codspeed-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  id-token: write # OIDC authentication with CodSpeed
+
+# Two jobs, one CodSpeed report: CodSpeed merges the results each job uploads
+# for a commit. Both run in CPU simulation (instruction counts, not wall time),
+# so results stay comparable on shared runners.
 jobs:
-  # The `bun run bench` cases (scripts/lib/bench-suites.ts), bundled for Node
-  # and run by CodSpeed in simulation mode: instruction counts under Valgrind,
-  # so a result does not move with the runner's load. See bench/codspeed.ts
-  # for why they run in a worker thread.
-  codspeed:
+  # The cases in codspeed.yml (scripts/bench-case.ts), one Bun process each:
+  # the runtime Mochi ships on. Each number includes start-up and seed loading;
+  # compare against `startup`.
+  bun:
+    name: Run benchmarks (Bun)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # OIDC authentication with CodSpeed
     steps:
       # The job runs pull-request code and never pushes, so the token stays out
       # of .git/config.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Pinned: instruction counts are only comparable across runs of the
+      # same JSC build. Bump deliberately, and expect one step change.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+
+  # `CODSPEED_SUITES` (scripts/lib/bench-suites.ts) bundled for Node and run
+  # through tinybench: the operation alone, no process start-up. See
+  # bench/codspeed.ts for why they run in a worker thread.
+  node:
+    name: Run benchmarks (Node)
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - uses: actions/setup-node@v6
         with:

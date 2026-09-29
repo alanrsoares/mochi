@@ -101,15 +101,20 @@ CI (`.github/workflows/bench.yml`) feeds `--json` to
 compared against it in the job summary. An alert (150% of the last `main` run) is
 advisory and never fails the job — shared runners are too noisy for a hard gate.
 
-**CodSpeed** (`.github/workflows/codspeed.yml`) runs small versions of the cases
-(`CODSPEED_SUITES`; Valgrind makes the full-size ones take over 25 minutes) under
-Node in simulation mode: CodSpeed counts instructions under Valgrind, so a result does not
-move with the runner's load, and it comments on pull requests. The cases live in
-`scripts/lib/bench-suites.ts`, shared by both harnesses. `scripts/build-codspeed.ts`
-bundles `bench/codspeed.ts` for Node, and `bun run bench:codspeed` runs it
-locally without instrumentation. The benchmarks run in a worker with a 512 MB
-stack: the self-hosted compiler relies on the proper tail calls JavaScriptCore
-implements and V8 does not.
+**CodSpeed** (`.github/workflows/codspeed.yml`) counts instructions under Valgrind
+(simulation mode), so a result does not move with the runner's load, and it
+comments on pull requests. Two jobs feed one report:
+
+- **Bun** — the cases in `codspeed.yml`, one `scripts/bench-case.ts` process each,
+  on the runtime Mochi ships on. A number includes start-up and seed loading;
+  compare against the `startup` case. Run locally with `codspeed run -m simulation`,
+  or one case uninstrumented with `bun scripts/bench-case.ts <case>`.
+- **Node** — small versions of the `bun run bench` cases (`CODSPEED_SUITES` in
+  `scripts/lib/bench-suites.ts`, since Valgrind makes the full-size ones take over
+  25 minutes) through tinybench: the operation alone. `scripts/build-codspeed.ts`
+  bundles `bench/codspeed.ts` for Node; `bun run bench:codspeed` runs it
+  uninstrumented. It runs in a worker with a 512 MB stack, because the self-hosted
+  compiler relies on the proper tail calls JavaScriptCore implements and V8 does not.
 
 ## Mochi specs (`*.spec.mochi`)
 
