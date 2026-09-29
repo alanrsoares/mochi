@@ -121,3 +121,27 @@ test("a prelude namespace member resolves to the prelude, not a field", () =>
       Ok([("value", "use", "mochi:/prelude.mochi", 7, 14)]),
       spacedWhere(noOrigins, prelude, o => o.role == "use", "let m = Array.map")
     ))
+
+// ---- scope frames (ADR 0120) ----
+
+/// Each local scope as `start-end: names`, in the order the walk closes them.
+let framesOf = src =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.map(stmts =>
+      indexWith("/m.mochi", noOrigins, noPrelude, stmts).frames
+        |> Array.map(f =>
+          "${show(f.start)}-${show(f.end)}: ${Str.join(",", Array.sort(Map.keys(f.binds)))}"))
+    |> Result.unwrapOr([])
+
+test("a lambda's frame spans the lambda and holds its params", () =>
+  assertEq(["8-19: a,b"], framesOf("let f = (a, b) => a")))
+
+test("a let … in frame spans only its body", () =>
+  assertEq(["21-22: y"], framesOf("let n = let y = 1 in y")))
+
+test("inner frames close before the scopes around them", () =>
+  assertEq(["26-27: y", "8-27: x"], framesOf("let f = x => let y = x in y")))
+
+test("a scope that binds nothing leaves no frame", () =>
+  assertEq([], framesOf("let f = () => 1")))

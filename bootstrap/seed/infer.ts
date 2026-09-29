@@ -318,7 +318,7 @@ export const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
                                                   : (() => {
                                                       throw new Error("non-exhaustive match");
                                                     })())(e);
-const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
+export const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
   ((_v) =>
     _v._tag === "PWild"
       ? (({ span: sp }) => sp)(_v)

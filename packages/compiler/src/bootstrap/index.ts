@@ -79,11 +79,14 @@ export type BootstrapSymOccurrence = {
   end: number;
   role: "def" | "use";
 };
-/** A file's symbol index: occurrences in walk order, and its module scope. */
+/** One local scope: the value binders it introduces, live across `start..end` (ADR 0120). */
+export type BootstrapScopeFrame = { start: number; end: number; binds: Map<string, BootstrapLoc> };
+/** A file's symbol index: occurrences in walk order, its module scope, and its local scopes. */
 export type BootstrapSymbolIndex = {
   occurrences: BootstrapSymOccurrence[];
   top: BootstrapExportOrigins;
   fields: Map<string, BootstrapLoc>;
+  frames: BootstrapScopeFrame[];
 };
 /** One lexical def/use occurrence recovered by the bootstrap symbol pass. */
 export type BootstrapOccurrence = {
@@ -239,7 +242,12 @@ export {
   symbolIndexBootstrap,
   symbolOccurrencesBootstrap,
 } from "./module.ts";
-export { checkBootstrapSync, inferTypesBootstrapSync, nominalTypeNameBootstrap } from "./sync.ts";
+export {
+  checkBootstrapSync,
+  inferTypesBootstrapSync,
+  inferTypesRecoveringBootstrapSync,
+  nominalTypeNameBootstrap,
+} from "./sync.ts";
 
 import { type BootstrapPlugin, toSeedPlugins } from "./options.ts";
 import {

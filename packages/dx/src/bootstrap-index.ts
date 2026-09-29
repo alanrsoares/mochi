@@ -7,6 +7,7 @@
 import { resolve } from "node:path";
 import {
   type BootstrapExportOrigins,
+  type BootstrapLoc,
   type BootstrapSymOccurrence,
   loadBootstrapGraph,
   symbolIndexBootstrap,
@@ -15,7 +16,7 @@ import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import type { Stmt } from "@mochi/compiler/bootstrap/types";
 import { preludeBootstrap } from "@mochi/compiler/prelude-virtual";
 import type { Location, Span } from "@mochi/compiler/span";
-import { tightestHit } from "@mochi/compiler/span";
+import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
 
 export type SymbolSpace = BootstrapSymOccurrence["space"];
 
@@ -31,6 +32,12 @@ export type FileIndex = {
   occurrences: (binding: Binding) => Occurrence[];
   /** The module-scope binding of `name` in `space` (prelude included), or null. */
   binding: (space: SymbolSpace, name: string) => Binding | null;
+  /**
+   * Value bindings visible at `offset`: module scope (prelude included), then
+   * every local scope containing it, widest first, so an inner binder shadows
+   * an outer one of the same name (ADR 0120).
+   */
+  bindingsAt: (offset: number) => Binding[];
 };
 
 type ReadFile = (path: string) => Promise<string>;
@@ -107,7 +114,28 @@ export const indexStmts = (
     }
     return null;
   };
-  return { at, occurrences, binding };
+  const toBinding = (name: string, def: BootstrapLoc): Binding => ({
+    name,
+    space: "value",
+    def: { path: def.path, span: { start: def.start, end: def.end } },
+  });
+  // Module scope is the same at every offset: build it once, on first ask.
+  let moduleScope: Map<string, Binding> | undefined;
+  const bindingsAt = (offset: number): Binding[] => {
+    moduleScope ??= new Map(
+      [prelude.origins.values, index.top.values].flatMap((scope) =>
+        [...scope].map(([name, def]) => [name, toBinding(name, def)] as const),
+      ),
+    );
+    const visible = new Map(moduleScope);
+    const frames = index.frames
+      .filter((f) => spanContainsClosed(f, offset))
+      .toSorted((a, c) => c.end - c.start - (a.end - a.start) || a.start - c.start);
+    for (const frame of frames)
+      for (const [name, def] of frame.binds) visible.set(name, toBinding(name, def));
+    return [...visible.values()];
+  };
+  return { at, occurrences, binding, bindingsAt };
 };
 
 /** Index `src` at `path`; null when it does not lex. */

@@ -13,6 +13,7 @@ import {
   symbolIndexBootstrap,
 } from "@mochi/compiler/bootstrap";
 import { lex as alLex, parse as alParse } from "@mochi/compiler/bootstrap/syntax";
+import type { Stmt } from "@mochi/compiler/bootstrap/types";
 import { lex } from "@mochi/compiler/lexer";
 import { resolveImport } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";
@@ -25,6 +26,7 @@ import {
   type Origins,
   originsOf,
 } from "@mochi/compiler/symbols";
+import { type Binding, indexStmts } from "@mochi/dx/bootstrap-index";
 import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 
@@ -81,33 +83,72 @@ test("corpus includes the symbol index itself", () => {
   expect(corpus).toContain("bootstrap/symbols.mochi");
 });
 
+/** Both sides' origins for `path`'s direct dependencies, each dep's pair alongside. */
+const originsFor = (path: string, src: string) => {
+  const ts = emptyOrigins();
+  const al: BootstrapExportOrigins = { values: new Map(), types: new Map(), ctors: new Map() };
+  const pairs: { ts: Origins; al: BootstrapExportOrigins }[] = [];
+  for (const dep of depsOf(path, src)) {
+    let depSrc: string;
+    try {
+      depSrc = readFileSync(dep, "utf8");
+    } catch {
+      continue; // a fixture importing a file that is not there
+    }
+    const tsDep = originsOf(dep, tsProgram(depSrc));
+    const alDep = exportedOriginsBootstrap(dep, alStmts(depSrc));
+    pairs.push({ ts: tsDep, al: alDep });
+    mergeOrigins(ts, tsDep);
+    for (const [k, v] of alDep.values) al.values.set(k, v);
+    for (const [k, v] of alDep.types) al.types.set(k, v);
+    for (const [k, v] of alDep.ctors) al.ctors.set(k, v);
+  }
+  return { ts, al, pairs };
+};
+
 for (const file of corpus) {
   test(`symbol indexes agree on ${file}`, () => {
     const path = join(root, file);
     const src = readFileSync(path, "utf8");
-    const tsOrigins = emptyOrigins();
-    const alOrigins: BootstrapExportOrigins = {
-      values: new Map(),
-      types: new Map(),
-      ctors: new Map(),
-    };
-    for (const dep of depsOf(path, src)) {
-      let depSrc: string;
-      try {
-        depSrc = readFileSync(dep, "utf8");
-      } catch {
-        continue; // a fixture importing a file that is not there
-      }
-      const tsDep = originsOf(dep, tsProgram(depSrc));
-      const alDep = exportedOriginsBootstrap(dep, alStmts(depSrc));
-      expect(alRows(alDep)).toEqual(tsRows(tsDep));
-      mergeOrigins(tsOrigins, tsDep);
-      for (const [k, v] of alDep.values) alOrigins.values.set(k, v);
-      for (const [k, v] of alDep.types) alOrigins.types.set(k, v);
-      for (const [k, v] of alDep.ctors) alOrigins.ctors.set(k, v);
-    }
-    const ts = indexProgram(path, tsProgram(src), tsOrigins).all().map(flat);
-    const al = symbolIndexBootstrap(path, alOrigins, preludeBootstrap(), alStmts(src)).occurrences;
+    const origins = originsFor(path, src);
+    for (const pair of origins.pairs) expect(alRows(pair.al)).toEqual(tsRows(pair.ts));
+    const ts = indexProgram(path, tsProgram(src), origins.ts).all().map(flat);
+    const al = symbolIndexBootstrap(path, origins.al, preludeBootstrap(), alStmts(src)).occurrences;
     expect(al).toEqual(ts);
+  });
+}
+
+// ---- scope frames (ADR 0120): the value bindings visible at a cursor, as
+// completion lists them. The bootstrap frames overlaid on module scope must
+// give the TS `bindingsAt` answer, same names resolved to the same
+// declarations. The answer only changes at a frame edge, so those are probed,
+// plus every occurrence start: a scope the bootstrap walk missed would still
+// hold a binder or a use. ----
+
+const bindingKey = (bindings: readonly Binding[]): string =>
+  bindings
+    .map((b) => `${b.name} ${b.def.path}:${b.def.span.start}-${b.def.span.end}`)
+    .sort()
+    .join("\n");
+
+for (const file of corpus) {
+  test(`visible bindings agree on ${file}`, () => {
+    const path = join(root, file);
+    const src = readFileSync(path, "utf8");
+    const origins = originsFor(path, src);
+    const stmts = alStmts(src) as Stmt[];
+    const ts = indexProgram(path, tsProgram(src), origins.ts);
+    const al = indexStmts(path, stmts, origins.al);
+    const raw = symbolIndexBootstrap(path, origins.al, preludeBootstrap(), stmts);
+    const offsets = new Set([
+      ...raw.frames.flatMap((f) => [f.start - 1, f.start, f.end, f.end + 1]),
+      ...raw.occurrences.map((o) => o.start),
+    ]);
+    const differing = [...offsets].flatMap((offset) => {
+      const got = bindingKey(al.bindingsAt(offset));
+      const want = bindingKey(ts.bindingsAt(offset, "value"));
+      return got === want ? [] : [{ offset, got, want }];
+    });
+    expect(differing.slice(0, 3)).toEqual([]);
   });
 }

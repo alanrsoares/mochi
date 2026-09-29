@@ -19,6 +19,10 @@ type SeedCompile = {
     src: string,
     opts: SeedOptions,
   ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
+  inferTypesRecoveringWith: (
+    src: string,
+    opts: SeedOptions,
+  ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
   nominalTypeName: (
     ty: unknown,
     aliases: Map<string, unknown>,
@@ -55,6 +59,16 @@ export const inferTypesBootstrapSync = (
   plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
   seedCompile.inferTypesWith(src, toSeedOptions({ ...defaultBootstrapOptions, plugins }));
+
+/**
+ * `inferTypesBootstrapSync` over the statements a recovering parse keeps, so a
+ * hole elsewhere in the buffer does not blank the whole table (ADR 0120).
+ */
+export const inferTypesRecoveringBootstrapSync = (
+  src: string,
+  plugins?: readonly BootstrapPlugin[],
+): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
+  seedCompile.inferTypesRecoveringWith(src, toSeedOptions({ ...defaultBootstrapOptions, plugins }));
 
 /**
  * Strict single-file check for editor diagnostics: every lex, parse (with
