@@ -1,8 +1,9 @@
 // Zero unused bindings in the compiler-owned .mochi sources (ADR 0070 / 0094).
 //
 // The LSP surfaces these in an editor; this is what stops a fourth one landing.
-// Lex + parse + symbol index only — no inference — so the whole sweep is a few
-// tens of milliseconds and rides `bun run check`.
+// Lex + parse + symbol index only, no inference, so it rides `bun run check`.
+// One test per file: on the bootstrap parser (#128) the whole sweep is ~40k
+// lines, which a single test ran past the 5s timeout on CI's loaded runners.
 //
 // EXEMPT roots, not exempt files: `examples/` and `apps/docs/` bind values to
 // demonstrate syntax and never read them, which is the point of a showcase (91
@@ -35,13 +36,12 @@ test("the sweep covers the self-hosted compiler", () => {
   expect(held).toContain("bootstrap/plugins/jsx.mochi");
 });
 
-test("no unused bindings in the compiler-owned .mochi sources", async () => {
-  const found: string[] = [];
-  for (const path of held) {
+for (const path of held) {
+  test(`no unused bindings in ${path}`, async () => {
     const src = await Bun.file(`${root}/${path}`).text();
-    for (const d of unusedBindingDiagnostics(src, path)) {
-      found.push(`${path}:${d.range.start.line + 1} ${d.message}`);
-    }
-  }
-  expect(found).toEqual([]);
-});
+    const found = unusedBindingDiagnostics(src, path).map(
+      (d) => `${path}:${d.range.start.line + 1} ${d.message}`,
+    );
+    expect(found).toEqual([]);
+  });
+}
