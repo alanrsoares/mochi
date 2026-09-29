@@ -12,6 +12,7 @@ import {
   fileSha256,
   findWorkspacePackages,
   fit,
+  inclusiveTop,
   meter,
   parseTscOutput,
   REPO_ROOT,
@@ -119,6 +120,36 @@ test("gen-mochi-dts keeps builtin JSX in a tree with no vendor plugins", () => {
     expect(run.stderr.toString()).not.toContain("dts error");
     expect(run.exitCode).toBe(0);
     expect(readFileSync(join(dir, "view.d.mochi.ts"), "utf8")).toContain("export declare const v:");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("inclusiveTop ranks by inclusive time and names bundle arrows by their var", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-prof-"));
+  try {
+    const src = join(dir, "bundle.cjs");
+    writeFileSync(src, "var outer = () => {\n  inner();\n};\nvar inner = () => 1;\n");
+    const frame = (functionName: string, lineNumber: number) => ({
+      functionName,
+      url: `file://${src}`,
+      lineNumber,
+    });
+    const profile = {
+      nodes: [
+        { id: 1, callFrame: { functionName: "(root)", url: "", lineNumber: -1 }, children: [2] },
+        { id: 2, callFrame: frame("", 0), children: [3] },
+        { id: 3, callFrame: frame("", 3) },
+      ],
+      samples: [2, 3, 3, 3],
+      timeDeltas: [1000, 1000, 1000, 1000],
+    };
+    const path = join(dir, "p.cpuprofile");
+    writeFileSync(path, JSON.stringify(profile));
+    expect(inclusiveTop(path, 5)).toEqual([
+      { name: "outer (bundle.cjs)", ms: 4, pct: 100 },
+      { name: "inner (bundle.cjs)", ms: 3, pct: 75 },
+    ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

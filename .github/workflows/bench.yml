@@ -1,0 +1,64 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # `bun run bench` (scripts/bench.ts) through github-action-benchmark. The
+  # history lives in an actions/cache entry, not a gh-pages branch: Pages
+  # already deploys the docs site from Actions. `main` pushes append to it; a
+  # pull request compares against the latest `main` entry and saves nothing.
+  # Advisory only: shared runners are noisy, so an alert shows in the job
+  # summary and never fails the run.
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      # The job runs pull-request code and never pushes, so the token stays out
+      # of .git/config.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run bench --json bench.json
+
+      # Cache entries are immutable, so each `main` run saves under a new key and
+      # restore picks the newest by prefix. PRs can read `main`'s caches.
+      - name: Restore benchmark history
+        uses: actions/cache/restore@v4
+        with:
+          path: ./bench-history
+          key: bench-history-${{ github.run_id }}
+          restore-keys: bench-history-
+
+      - uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: mochi
+          tool: customSmallerIsBetter
+          output-file-path: bench.json
+          external-data-json-path: ./bench-history/data.json
+          save-data-file: ${{ github.event_name == 'push' }}
+          alert-threshold: "150%"
+          fail-on-alert: false
+          summary-always: true
+
+      - name: Save benchmark history
+        if: github.event_name == 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: ./bench-history
+          key: bench-history-${{ github.run_id }}

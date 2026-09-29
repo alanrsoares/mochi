@@ -78,6 +78,29 @@ bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star:
 `check:north-star` and `test:mochi:coverage` as parallel jobs, so none shares
 cores with another.
 
+## Benchmarks
+
+```bash
+bun run bench                     # every suite: fmt, fmt:repo, compile (best of 8)
+bun run bench compile --runs 3    # one suite, fewer runs
+bun run bench --save main         # write .cache/bench/main.json
+bun run bench --compare main      # Δ of each case's best against that baseline
+bun run bench compile --profile   # rerun under --cpu-prof; rank functions by inclusive time
+```
+
+`scripts/bench.ts` is the one harness for perf numbers quoted in PRs and ADRs. A
+case reports best and median wall time over `--runs` runs in one warm process;
+best is the headline, being the least noisy. Case names stay fixed across commits
+(sizes go in a note) so history lines up. `--profile` names the anonymous arrows
+of the esbuild seed bundles after their `var` binding, so the ranking reads as
+compiler passes (`generalize`, `inferMatch`) rather than `_curry` wrappers.
+
+CI (`.github/workflows/bench.yml`) feeds `--json` to
+[github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark):
+`main` pushes append to a history kept in the Actions cache, and a pull request is
+compared against it in the job summary. An alert (150% of the last `main` run) is
+advisory and never fails the job — shared runners are too noisy for a hard gate.
+
 ## Mochi specs (`*.spec.mochi`)
 
 `@mochi/test` binds `bun:test` as typed `extern`s (`test`, `describe`,

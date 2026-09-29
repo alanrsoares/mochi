@@ -1,4 +1,5 @@
 export * from "./ci-report";
+export * from "./cpu-profile";
 export * from "./generated-file";
 export * from "./plugins";
 export * from "./repo";
