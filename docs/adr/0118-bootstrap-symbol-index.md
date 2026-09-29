@@ -52,7 +52,9 @@ matches bootstrap's `LPSpanned`.
 
 ## Consequences
 
-- DX navigation can move onto bootstrap next (#103). The index has no scope
+- DX navigation runs on this index: `packages/dx/src/nav.ts` through
+  `bootstrap-index.ts`. `bootstrap-nav.ts` from ADR 0103 is folded into it, and
+  the language server no longer picks an index per query. The index has no scope
   frames yet (`bindingsAt`), so completion keeps the TS index until a later
   slice adds them.
 - `exportedOrigins` now takes the module path and follows the oracle's
