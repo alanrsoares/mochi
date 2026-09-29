@@ -1,6 +1,6 @@
-// CodSpeed entry (.github/workflows/codspeed.yml). The same cases as
-// `bun run bench` (scripts/lib/bench-suites.ts), run under Node through
-// tinybench. In CI, CodSpeed counts instructions under simulation, so results
+// CodSpeed entry (.github/workflows/codspeed.yml). Small versions of the
+// `bun run bench` cases (`CODSPEED_SUITES` in scripts/lib/bench-suites.ts),
+// run under Node through tinybench. In CI, CodSpeed counts instructions under simulation, so results
 // do not depend on the runner's load. Outside CodSpeed, `withCodSpeed` falls
 // back to plain tinybench.
 //
@@ -15,7 +15,7 @@
 import { isMainThread, Worker } from "node:worker_threads";
 import { withCodSpeed } from "@codspeed/tinybench-plugin";
 import { Bench } from "tinybench";
-import { SUITES } from "../scripts/lib/bench-suites";
+import { CODSPEED_SUITES } from "../scripts/lib/bench-suites";
 
 const STACK_MB = 512;
 
@@ -25,7 +25,7 @@ const runBenchmarks = async (): Promise<void> => {
   const bench = withCodSpeed(
     new Bench({ iterations: 1, warmupIterations: 1, time: 0, warmupTime: 0 }),
   );
-  for (const suite of Object.values(SUITES)) {
+  for (const suite of Object.values(CODSPEED_SUITES)) {
     for (const c of await suite.cases(process.cwd())) {
       bench.add(c.name, async () => {
         await c.run();

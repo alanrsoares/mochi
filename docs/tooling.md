@@ -101,8 +101,9 @@ CI (`.github/workflows/bench.yml`) feeds `--json` to
 compared against it in the job summary. An alert (150% of the last `main` run) is
 advisory and never fails the job — shared runners are too noisy for a hard gate.
 
-**CodSpeed** (`.github/workflows/codspeed.yml`) runs the same cases under Node in
-simulation mode: CodSpeed counts instructions under Valgrind, so a result does not
+**CodSpeed** (`.github/workflows/codspeed.yml`) runs small versions of the cases
+(`CODSPEED_SUITES`; Valgrind makes the full-size ones take over 25 minutes) under
+Node in simulation mode: CodSpeed counts instructions under Valgrind, so a result does not
 move with the runner's load, and it comments on pull requests. The cases live in
 `scripts/lib/bench-suites.ts`, shared by both harnesses. `scripts/build-codspeed.ts`
 bundles `bench/codspeed.ts` for Node, and `bun run bench:codspeed` runs it

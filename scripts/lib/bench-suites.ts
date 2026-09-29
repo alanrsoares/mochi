@@ -55,19 +55,37 @@ const expectOk = <A>(r: SeedResult<A>, what: string): A => {
   return r.value as A;
 };
 
+const fmtCase = (root: string, rel: string): BenchCase => {
+  const src = readFileSync(join(root, rel), "utf8");
+  const plugins = vendorPluginsFor(rel);
+  return {
+    name: `fmt ${rel}`,
+    note: `${src.split("\n").length} lines`,
+    run: () => format(src, { plugins }),
+  };
+};
+
+/** Load (lex+parse) and check+infer+codegen of one entry's module graph, as two cases. */
+const compileCases = async (root: string, rel: string, label: string): Promise<BenchCase[]> => {
+  const entry = join(root, rel);
+  const src = readFileSync(entry, "utf8");
+  const load = () => loadBootstrapGraph(entry, src, (p) => readFile(p, "utf8"));
+  const graph = expectOk(await load(), "load");
+  return [
+    { name: `${label}: load (lex+parse)`, run: load },
+    {
+      name: `${label}: check+infer+codegen`,
+      note: `${graph.length} modules`,
+      run: () => expectOk(compileGraphBootstrap(graph), "compile"),
+    },
+  ];
+};
+
+/** Wall-time suites for `bun run bench`: real-sized inputs. */
 export const SUITES: Record<string, BenchSuite> = {
   fmt: {
     describe: "format three files of different sizes through @mochi/dx/format",
-    cases: async (root) =>
-      FORMAT_FILES.map((rel) => {
-        const src = readFileSync(join(root, rel), "utf8");
-        const plugins = vendorPluginsFor(rel);
-        return {
-          name: `fmt ${rel}`,
-          note: `${src.split("\n").length} lines`,
-          run: () => format(src, { plugins }),
-        };
-      }),
+    cases: async (root) => FORMAT_FILES.map((rel) => fmtCase(root, rel)),
   },
   "fmt:repo": {
     describe: "format every .mochi file in the repo, as fmt:check does",
@@ -89,19 +107,27 @@ export const SUITES: Record<string, BenchSuite> = {
   },
   compile: {
     describe: "load and compile the bootstrap/cli.mochi module graph",
-    cases: async (root) => {
-      const entry = join(root, "bootstrap/cli.mochi");
-      const src = readFileSync(entry, "utf8");
-      const load = () => loadBootstrapGraph(entry, src, (p) => readFile(p, "utf8"));
-      const graph = expectOk(await load(), "load");
-      return [
-        { name: "compile: load (lex+parse)", run: load },
-        {
-          name: "compile: check+infer+codegen",
-          note: `${graph.length} modules`,
-          run: () => expectOk(compileGraphBootstrap(graph), "compile"),
-        },
-      ];
-    },
+    cases: (root) => compileCases(root, "bootstrap/cli.mochi", "compile"),
+  },
+};
+
+/**
+ * Suites for CodSpeed's simulation mode (bench/codspeed.ts). Valgrind runs V8
+ * unoptimized and about 60x slower, so the full cases take over 25 minutes.
+ * Instruction counts are deterministic, so small inputs still show a relative
+ * change: a formatter file, a plugin-heavy component, and a two-module graph
+ * (`ctors.mochi` importing `ast.mochi`) for cross-module inference.
+ */
+export const CODSPEED_SUITES: Record<string, BenchSuite> = {
+  fmt: {
+    describe: "format a compiler module and a JSX component",
+    cases: async (root) => [
+      fmtCase(root, "bootstrap/scc.mochi"),
+      fmtCase(root, "examples/snake/src/App.mochi"),
+    ],
+  },
+  compile: {
+    describe: "load and compile the bootstrap/ctors.mochi module graph",
+    cases: (root) => compileCases(root, "bootstrap/ctors.mochi", "compile ctors"),
   },
 };
