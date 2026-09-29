@@ -462,9 +462,12 @@ const walkExpr: _Curry<[expr: Expr, env: Map<string, Binding>], Occurrence[]> = 
                     ((_v) => (_v._tag === "ELambda" ? true : false))(value),
                   ))(_v)
               : _v._tag === "ELetBind"
-                ? (({ value, body }) => _Array_concat(walkExpr(value, env), walkExpr(body, env)))(
-                    _v,
-                  )
+                ? (({ param, value, body }) =>
+                    ((bound: { env: Map<string, Binding>; occurrences: Occurrence[] }) =>
+                      _Array_concat(
+                        walkExpr(value, env),
+                        _Array_concat(bound.occurrences, walkExpr(body, bound.env)),
+                      ))(bindParam(param, env)))(_v)
                 : _v._tag === "EPipe"
                   ? (({ left, right }) => _Array_concat(walkExpr(left, env), walkExpr(right, env)))(
                       _v,

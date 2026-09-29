@@ -1,29 +1,23 @@
 /**
- * LSP-shaped publish diagnostics, computed from `compile` but free of any
- * editor/protocol dependency so it stays unit-testable under Bun. The language
- * server is a thin adapter that maps these onto vscode-languageserver types.
- * The compiler error type is `Diagnostic` (`errors.ts`); this file's
- * `PublishDiagnostic` is the wire-shaped DTO only (ADR 0003).
+ * LSP-shaped publish diagnostics, computed by the self-hosted compiler (the
+ * frozen bootstrap seed) and free of any editor/protocol dependency so they
+ * stay unit-testable under Bun. The language server is a thin adapter that
+ * maps these onto vscode-languageserver types. `PublishDiagnostic` is the
+ * wire-shaped DTO only (ADR 0003).
  */
 import { resolve } from "node:path";
-import type { ImportStmt, Program } from "@mochi/compiler/ast";
 import {
+  type BootstrapDiagnostic,
   type BootstrapRecoveryGraphCache,
+  checkBootstrapSync,
   checkGraphBootstrapRecovering,
+  resolveImportBootstrap,
 } from "@mochi/compiler/bootstrap";
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { toTypedProgram, toTypedProgramWith } from "@mochi/compiler/compile";
-import { checkErr, type Diagnostic } from "@mochi/compiler/errors";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
-import { lex } from "@mochi/compiler/lexer";
-import { type ModuleCache, moduleContext, resolveImport } from "@mochi/compiler/module";
-import { parse } from "@mochi/compiler/parser";
-import { preludeNamespaces } from "@mochi/compiler/prelude";
-import type { Env, Scheme } from "@mochi/compiler/schemes";
-import { lineCol, type Span } from "@mochi/compiler/span";
-import { indexProgram, type SymbolIndex } from "@mochi/compiler/symbols";
-import { tVar } from "@mochi/compiler/types";
-import { err, isErr, ok, type Result } from "@onrails/result";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import type { Diagnostic } from "@mochi/compiler/errors";
+import { lineCol } from "@mochi/compiler/span";
+import { unusedBindings } from "./bootstrap-unused";
 
 /** 0-based line/character — matches the LSP `Position` shape. */
 export type Position = { line: number; character: number };
@@ -103,120 +97,74 @@ export function toPublish(
   };
 }
 
-/** Options threaded into `moduleDiagnostics` / single-file `diagnostics` — `plugins` (styled-cva, …), same list Vite / `gen-mochi-dts` use. Omitted = default/builtin resolution (`resolvePlugins`, ADR 0011). `cache` reuses dependency inference across calls (`createModuleCache`); omitted = no reuse. */
+/**
+ * What every diagnostic entry point takes. `plugins` are the project's plugins
+ * in the self-hosted core's shape (ADR 0109), the same list Vite and
+ * `gen-mochi-dts` compile with: omitted means builtins (JSX on), `[]` the hard
+ * opt-out. `cache` reuses dependency results across calls; it is only valid
+ * for the one `plugins` list it was filled under.
+ */
 export type ModuleDiagnosticsOptions = {
-  plugins?: LanguagePlugin[];
-  /** TS-host graph memo, retained for plugins until their ABI is bootstrap-native. */
-  cache?: ModuleCache;
-  /** Bootstrap graph memo; only valid for the one `bootstrapPlugins` list it was filled under. */
-  bootstrapCache?: BootstrapRecoveryGraphCache;
-  /**
-   * Project plugins for the self-hosted core (ADR 0109). When set, graph
-   * diagnostics run on the bootstrap compiler with them, whatever `plugins`
-   * and `cache` say.
-   */
-  bootstrapPlugins?: readonly BootstrapPlugin[];
+  plugins?: readonly BootstrapPlugin[];
+  cache?: BootstrapRecoveryGraphCache;
 };
 
-/** Bootstrap owns the graph check unless only TypeScript-core plugins or a TS cache were given. */
-const onBootstrap = (opts: ModuleDiagnosticsOptions): boolean =>
-  opts.bootstrapPlugins !== undefined || (opts.plugins === undefined && opts.cache === undefined);
+type Kind = Diagnostic["kind"];
+type Span = { start: number; end: number };
+const KINDS: ReadonlySet<string> = new Set<Kind>(["lex", "parse", "check", "type"]);
+const kindOf = (error: BootstrapDiagnostic): Kind =>
+  error.kind !== undefined && KINDS.has(error.kind) ? (error.kind as Kind) : "type";
 
-/** Graph diagnostics through the frozen bootstrap compiler, with the project's bootstrap plugins. */
-export async function bootstrapModuleDiagnostics(
+const helpOf = (error: BootstrapDiagnostic, messageBody: string): string | undefined =>
+  (error.help?._tag === "Some" ? error.help.value : undefined) ??
+  error.suggestions?.[0]?.title.toLowerCase() ??
+  (/^unbound variable /.test(messageBody)
+    ? "bind the name before using it, or check the spelling"
+    : undefined);
+
+/** A seed diagnostic as a compiler `Diagnostic` located in `path`. */
+const fromBootstrap = (
+  error: BootstrapDiagnostic,
   path: string,
-  src: string,
-  readFile: (p: string) => Promise<string>,
-  cache?: BootstrapRecoveryGraphCache,
-  plugins?: readonly BootstrapPlugin[],
-): Promise<PublishDiagnostic[]> {
-  const errors = await checkGraphBootstrapRecovering(path, src, readFile, cache, plugins);
-  return errors.map((error) => {
-    const tagged = /^module '([^']+)': (.*)$/.exec(error.message);
-    const errorPath = error.path ?? tagged?.[1];
-    const messageBody = tagged?.[2] ?? error.message;
-    const dependency = errorPath && resolve(errorPath) !== resolve(path);
-    const imports = [...src.matchAll(/from\s+["']([^"']+)["']/g)];
-    const lineStart = src.lastIndexOf("\n", Math.max(0, error.start - 1)) + 1;
-    const nextLine = src.indexOf("\n", error.end);
-    const lineEnd = nextLine === -1 ? src.length : nextLine;
-    const importAtError = /^\s*import\b.*\bfrom\s+["']([^"']+)["']/.exec(
-      src.slice(lineStart, lineEnd),
-    );
-    let span = { start: error.start, end: error.end };
-    let message = messageBody;
-    if (dependency) {
-      const match = imports.find(
-        (candidate) => resolveImport(path, candidate[1]!) === resolve(errorPath!),
-      );
-      if (match) {
-        const start = src.lastIndexOf("\n", Math.max(0, match.index! - 1)) + 1;
-        const end = src.indexOf("\n", match.index!);
-        span = { start, end: end === -1 ? src.length : end };
-      }
-      message = `module '${match?.[1] ?? errorPath}' failed to compile: ${messageBody}`;
-    } else if (importAtError) {
-      span = { start: lineStart, end: lineEnd };
-      message = `module '${importAtError[1]}' failed to compile: ${messageBody}`;
-    }
-    const help =
-      error.suggestions?.[0]?.title.toLowerCase() ??
-      (/^unbound variable /.test(messageBody)
-        ? "bind the name before using it, or check the spelling"
-        : undefined);
-    return toPublish(
-      src,
-      {
-        kind: "type",
-        message,
-        span,
-        help,
-        suggestions: error.suggestions?.map((suggestion) => ({
-          title: suggestion.title,
-          replaceWith: suggestion.replaceWith,
-          location: { path, span: { start: suggestion.start, end: suggestion.end } },
-        })),
-      },
-      path,
-    );
-  });
-}
+  span: Span = { start: error.start, end: error.end },
+  message = error.message,
+): Diagnostic => ({
+  kind: kindOf(error),
+  message,
+  span,
+  help: helpOf(error, message),
+  suggestions: error.suggestions?.map((suggestion) => ({
+    title: suggestion.title,
+    replaceWith: suggestion.replaceWith,
+    location: { path, span: { start: suggestion.start, end: suggestion.end } },
+  })),
+});
 
 /**
- * Check + infer may emit several diagnostics (ADR 0004); so may parse, since
- * recovery reports every unparsable region (ADR 0045). Only lex still yields a
- * single one. Single-file: imports resolve to nothing, so a `switch` on an imported
- * variant reads as an unknown constructor. Use `moduleDiagnostics` when a path
- * is available.
+ * Single-file diagnostics: every lex, parse (ADR 0045) and check finding, else
+ * the first type error. Imports resolve to nothing, so a `switch` on an
+ * imported variant reads as an unknown constructor; use `moduleDiagnostics`
+ * when a path is available.
  *
- * **Strict unbound (`open: false`).** Emit/codegen stays open-world so bare host
- * globals still lower; the editor must flag typos (`useRefssss`, misspelled
- * locals). `opts.plugins` still reaches infer so vendor `inferCall` runs.
+ * **Strict unbound (`open: false`).** Emit stays open-world so bare host
+ * globals still lower; the editor must flag typos.
  */
 export function diagnostics(src: string, opts: ModuleDiagnosticsOptions = {}): PublishDiagnostic[] {
-  const r = toTypedProgram(src, {
-    open: false,
-    namespaces: preludeNamespaces,
-    plugins: opts.plugins,
-  });
-  return isErr(r) ? r.error.map((e) => toPublish(src, e)) : [];
+  return checkBootstrapSync(src, opts.plugins).map((e) =>
+    toPublish(src, fromBootstrap(e, "<buffer>")),
+  );
 }
 
 /**
  * Module-aware diagnostics: resolve `path`'s dependency graph (deps read from
  * disk via `readFile`, the edited file served from the live `src` buffer) and
- * check + infer the live program WITH the imported registry/schemes. This is
- * what stops a match on an imported constructor from being a false "unknown
- * constructor", and makes cross-module exhaustiveness real. `opts.plugins`
- * (styled-cva, …) reaches the same call, so a project's host kits don't
- * produce false type errors in the editor that Vite/`gen-mochi-dts` don't see.
+ * check + infer the entry against what its imports really export, so a match
+ * on an imported constructor is not a false "unknown constructor" and
+ * cross-module exhaustiveness is real.
  *
- * Degradation is deliberate: the entry's own lex/parse errors are always
- * reported (they never depend on deps). If the dep graph can't be resolved or a
- * dep fails to compile, the failure is surfaced at the entry's `import`
- * statement (`graphFailureDiagnostics`) and the entry itself degrades to
- * single-file checking with every imported name pre-bound (`fallbackDiagnostics`)
- * so the user sees the real cause, not an "unbound variable" cascade.
+ * The entry's own lex/parse errors are always reported, since they never
+ * depend on deps. A dependency that fails is surfaced at the entry's `import`
+ * statement that pulls it in, as `module '<spec>' failed to compile: …`.
  */
 export async function moduleDiagnostics(
   path: string,
@@ -224,79 +172,62 @@ export async function moduleDiagnostics(
   readFile: (p: string) => Promise<string>,
   opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
-  const parsed = parseForDiagnostics(src, path, opts);
-  if (isErr(parsed)) return parsed.error;
-  // The shipped seed handles the graph, including recovery and project plugins
-  // in their bootstrap shape. Callers with only TypeScript-core plugins or a TS
-  // cache stay on the TypeScript host until #103.
-  if (onBootstrap(opts))
-    return bootstrapModuleDiagnostics(
-      path,
-      src,
-      readFile,
-      opts.bootstrapCache,
-      opts.bootstrapPlugins,
-    );
-  return moduleDiagnosticsFor(parsed.value, src, path, readFile, opts);
+  const errors = await checkGraphBootstrapRecovering(path, src, readFile, opts.cache, opts.plugins);
+  const out: PublishDiagnostic[] = [];
+  for (const error of errors) out.push(toPublish(src, await locate(error, path, src), path));
+  return out;
 }
 
-/**
- * The front of every diagnostic pass: lex + parse once, with failures already
- * mapped onto the publish DTO. Callers that need both the graph diagnostics and
- * the liveness warnings ({@link documentDiagnostics}) share this one parse
- * instead of paying for two.
- */
-const parseForDiagnostics = (
-  src: string,
-  path: string,
-  opts: ModuleDiagnosticsOptions,
-): Result<Program, PublishDiagnostic[]> => {
-  const lexed = lex(src);
-  if (isErr(lexed)) return err([toPublish(src, lexed.error, path)]);
-  const parsed = parse(lexed.value, { plugins: opts.plugins });
-  // Every parse diagnostic, not just the first (ADR 0045).
-  return isErr(parsed) ? err(parsed.error.map((d) => toPublish(src, d, path))) : ok(parsed.value);
+const lineAround = (src: string, start: number, end: number): Span => {
+  const lineStart = src.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const nextLine = src.indexOf("\n", end);
+  return { start: lineStart, end: nextLine === -1 ? src.length : nextLine };
 };
 
-/** {@link moduleDiagnostics} past its lex/parse front — see that doc comment. */
-async function moduleDiagnosticsFor(
-  prog: Program,
-  src: string,
+/** Anchor a dependency's failure at the entry's import line that pulls it in. */
+const locate = async (
+  error: BootstrapDiagnostic,
   path: string,
-  readFile: (p: string) => Promise<string>,
-  opts: ModuleDiagnosticsOptions,
-): Promise<PublishDiagnostic[]> {
-  const entry = resolve(path);
-  const read = (p: string): Promise<string> =>
-    resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  // `entryOpen: false` mirrors the strict mode the entry is inferred with below,
-  // and is what lets `moduleContext` hand back a cached answer for the entry
-  // itself when the buffer matches what is already on disk (ADR 0095).
-  const ctx = await moduleContext(entry, read, {
-    plugins: opts.plugins,
-    cache: opts.cache,
-    entryOpen: false,
-  });
-  if (isErr(ctx))
-    return [
-      ...graphFailureDiagnostics(src, prog, entry, ctx.error),
-      ...fallbackDiagnostics(src, prog, entry, opts),
-    ];
-
-  const cached = ctx.value.entryDiagnostics;
-  if (cached) return cached.map((e) => toPublish(src, e, entry));
-  const typed = toTypedProgramWith(prog, ctx.value, {
-    plugins: opts.plugins,
-    open: false,
-  });
-  return isErr(typed) ? typed.error.map((e) => toPublish(src, e, entry)) : [];
-}
+  src: string,
+): Promise<Diagnostic> => {
+  const tagged = /^module '([^']+)': (.*)$/s.exec(error.message);
+  const errorPath = error.path ?? tagged?.[1];
+  const messageBody = tagged?.[2] ?? error.message;
+  if (errorPath !== undefined && resolve(errorPath) !== resolve(path)) {
+    for (const candidate of src.matchAll(/from\s+["']([^"']+)["']/g)) {
+      if ((await resolveImportBootstrap(path, candidate[1]!)) !== resolve(errorPath)) continue;
+      return fromBootstrap(
+        error,
+        path,
+        lineAround(src, candidate.index!, candidate.index!),
+        `module '${candidate[1]}' failed to compile: ${messageBody}`,
+      );
+    }
+    return fromBootstrap(
+      error,
+      path,
+      { start: error.start, end: error.end },
+      `module '${errorPath}' failed to compile: ${messageBody}`,
+    );
+  }
+  const line = lineAround(src, error.start, error.end);
+  const importAtError = /^\s*import\b.*\bfrom\s+["']([^"']+)["']/.exec(
+    src.slice(line.start, line.end),
+  );
+  return importAtError
+    ? fromBootstrap(
+        error,
+        path,
+        line,
+        `module '${importAtError[1]}' failed to compile: ${messageBody}`,
+      )
+    : fromBootstrap(error, path, { start: error.start, end: error.end }, messageBody);
+};
 
 /**
  * Everything the editor publishes for one buffer: {@link moduleDiagnostics}
- * plus the liveness warnings, off a single lex/parse. A buffer that does not
- * lex or parse has no bindings to judge, so its parse errors are the whole
- * answer — the same degradation the two passes had separately.
+ * plus the liveness warnings. A buffer that does not lex or parse has no
+ * bindings to judge, so its parse errors are the whole answer.
  */
 export async function documentDiagnostics(
   path: string,
@@ -304,167 +235,25 @@ export async function documentDiagnostics(
   readFile: (p: string) => Promise<string>,
   opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
-  const parsed = parseForDiagnostics(src, path, opts);
-  if (isErr(parsed)) return parsed.error;
-  return [
-    ...(onBootstrap(opts)
-      ? await bootstrapModuleDiagnostics(
-          path,
-          src,
-          readFile,
-          opts.bootstrapCache,
-          opts.bootstrapPlugins,
-        )
-      : await moduleDiagnosticsFor(parsed.value, src, path, readFile, opts)),
-    ...unusedBindingDiagnosticsFor(parsed.value, src, path),
-  ];
+  const graph = await moduleDiagnostics(path, src, readFile, opts);
+  return [...graph, ...unusedBindingDiagnostics(src, path, opts)];
 }
 
-/** Warning-only liveness diagnostics, derived from lexical binding identity. */
+/**
+ * Warning-only liveness diagnostics, from lexical binding identity
+ * (`bootstrap/symbols.mochi`). Nothing when the buffer does not lex or parse.
+ */
 export function unusedBindingDiagnostics(
   src: string,
-  path = "<buffer>",
+  _path = "<buffer>",
   opts: ModuleDiagnosticsOptions = {},
 ): PublishDiagnostic[] {
-  const parsed = parseForDiagnostics(src, path, opts);
-  return isErr(parsed) ? [] : unusedBindingDiagnosticsFor(parsed.value, src, path);
-}
-
-const unusedBindingDiagnosticsFor = (
-  prog: Program,
-  src: string,
-  path: string,
-): PublishDiagnostic[] => {
-  const idx = indexProgram(path, prog);
-  return [
-    ...unusedLocalDiagnosticsFromProgram(src, idx),
-    ...unusedTopLevelDiagnosticsFromProgram(src, prog, idx),
-  ];
-};
-
-const unusedLocalDiagnosticsFromProgram = (src: string, idx: SymbolIndex): PublishDiagnostic[] =>
-  idx.localBindings().flatMap((binding) => {
-    const used = idx.occurrences(binding).some((occurrence) => occurrence.role === "use");
-    return used
-      ? []
-      : [
-          {
-            range: spanRange(src, binding.def.span.start, binding.def.span.end),
-            message: `unused local binding '${binding.name}'`,
-            severity: "warning" as const,
-            code: "unused-local",
-          },
-        ];
-  });
-
-/**
- * A module-scope `let` that is not exported and never referenced is dead — only
- * this file can see it, so one file is the whole search. References from INSIDE
- * the binding's own statement do not count, or every self-recursive function
- * would keep itself alive. A mutually recursive dead pair still reads as used;
- * that blind spot is the same one `tsc` has, and closing it needs reachability,
- * not liveness.
- */
-const unusedTopLevelDiagnosticsFromProgram = (
-  src: string,
-  prog: Program,
-  idx: SymbolIndex,
-): PublishDiagnostic[] =>
-  prog.stmts.flatMap((s) => {
-    // `_`/`$` mirror the local convention: deliberately parked, and synthetic.
-    if (s.kind !== "let" || s.exported) return [];
-    if (s.name.startsWith("_") || s.name.startsWith("$")) return [];
-    const binding = idx.binding("value", s.name);
-    if (!binding || binding.def.span.start !== s.nameSpan.start) return [];
-    const usedElsewhere = idx
-      .occurrences(binding)
-      .some((o) => o.role === "use" && !spanWithin(o.span, s.span));
-    return usedElsewhere
-      ? []
-      : [
-          {
-            range: spanRange(src, s.nameSpan.start, s.nameSpan.end),
-            message: `unused binding '${s.name}'`,
-            severity: "warning" as const,
-            code: "unused-top-level",
-          },
-        ];
-  });
-
-const spanWithin = (inner: Span, outer: Span): boolean =>
-  outer.start <= inner.start && inner.end <= outer.end;
-
-const importsOf = (prog: Program): ImportStmt[] =>
-  prog.stmts.filter((s): s is ImportStmt => s.kind === "import");
-
-/**
- * Surface a module-graph failure IN the entry file: one diagnostic per failing
- * module, anchored at the entry's `import … from "<spec>"` statement that pulls
- * it in (matched by `resolveImport`; a transitive dep that no entry import
- * resolves to degrades to the first import statement, message prefixed with the
- * dep's absolute path). A failure the driver attributes to the entry itself —
- * `gatherImports` on the entry, e.g. a missing export — already spans an entry
- * import statement, so it anchors there; anything else publishes as-is.
- */
-function graphFailureDiagnostics(
-  src: string,
-  prog: Program,
-  entry: string,
-  errors: Diagnostic[],
-): PublishDiagnostic[] {
-  const imports = importsOf(prog);
-  const seen = new Set<string>();
-  const out: PublishDiagnostic[] = [];
-  for (const d of errors) {
-    const isDep = d.path !== undefined && resolve(d.path) !== entry;
-    const imp = isDep
-      ? imports.find((i) => resolveImport(entry, i.from) === resolve(d.path!))
-      : // Entry-attributed: the span (import name) sits inside an import stmt.
-        imports.find((i) => d.span && i.span.start <= d.span.start && d.span.end <= i.span.end);
-    if (!isDep && !imp) {
-      // Entry-attributed with a span of its own (e.g. an import cycle) — real range, publish as-is.
-      out.push(toPublish(src, d, entry));
-      continue;
-    }
-    // One wrapped diagnostic per failing module / per import statement.
-    const key = isDep ? resolve(d.path!) : `entry:${imp!.span.start}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const span = imp?.span ?? imports[0]?.span ?? { start: 0, end: 1 };
-    const spec = imp?.from ?? d.path!;
-    out.push(
-      toPublish(src, checkErr(`module '${spec}' failed to compile: ${d.message}`, span), entry),
-    );
-  }
-  return out;
-}
-
-/** `forall a. a` — what an import binds to when its module can't provide a real scheme. */
-const anyScheme = (): Scheme => ({ vars: [0], rvars: [], type: tVar(0) });
-
-/**
- * Single-file degradation for a broken module graph. Same strict (`open:
- * false`) check + infer as `diagnostics`, EXCEPT every name the entry imports
- * is pre-bound to `forall a. a`: those names are real — their module just
- * failed — so flagging each as an "unbound variable" would bury the one
- * diagnostic that matters (the graph failure) under cascade noise. Local typos
- * still surface. Plain `diagnostics()` keeps its strict behavior untouched.
- */
-function fallbackDiagnostics(
-  src: string,
-  prog: Program,
-  path: string,
-  opts: ModuleDiagnosticsOptions,
-): PublishDiagnostic[] {
-  const imports: Env = new Map();
-  for (const imp of importsOf(prog)) {
-    if (imp.alias) imports.set(imp.alias.name, anyScheme());
-    for (const n of imp.names) imports.set(n.name, anyScheme());
-  }
-  const typed = toTypedProgramWith(
-    prog,
-    { imports, importedReg: { ctor: new Map(), type: new Map() } },
-    { plugins: opts.plugins, open: false },
-  );
-  return isErr(typed) ? typed.error.map((e) => toPublish(src, e, path)) : [];
+  const parsed = parseProgram(src, opts.plugins);
+  if (parsed._tag === "Err" || parsed.value.diagnostics.length > 0) return [];
+  return unusedBindings(parsed.value.stmts).map((u) => ({
+    range: spanRange(src, u.span.start, u.span.end),
+    message: u.kind === "local" ? `unused local binding '${u.name}'` : `unused binding '${u.name}'`,
+    severity: "warning" as const,
+    code: u.kind === "local" ? "unused-local" : "unused-top-level",
+  }));
 }

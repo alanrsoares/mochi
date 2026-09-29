@@ -134,6 +134,10 @@ const graphResolver = async (): Promise<(from: string, spec: string) => string> 
   };
 };
 
+/** The module path an `import … from spec` in `from` resolves to, as the bootstrap graph resolves it. */
+export const resolveImportBootstrap = async (from: string, spec: string): Promise<string> =>
+  (await graphResolver())(from, spec);
+
 /** The paths a module's `import` statements resolve to. */
 const importsOf = (
   path: string,
@@ -200,7 +204,7 @@ export {
   inferGraphTypesBootstrap,
   symbolOccurrencesBootstrap,
 } from "./module.ts";
-export { inferTypesBootstrapSync } from "./sync.ts";
+export { checkBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
 
 import { type BootstrapPlugin, toSeedPlugins } from "./options.ts";
 import {
@@ -471,6 +475,16 @@ export const inferEntryGraphTypesBootstrap = async (
   (await loadBootstrapCore()).inferGraphTypes(entry, src, readFile, cache, plugins);
 
 /** Recovering lex + parse of one module, through `parses` when given. */
+type RecoveredParse = {
+  stmts: Array<{ _tag?: string; from?: string }>;
+  diagnostics: BootstrapDiagnostic[];
+};
+
+const stampParse = (parsed: unknown): RecoveredParse => {
+  const { stmts, diagnostics } = parsed as RecoveredParse;
+  return { stmts, diagnostics: diagnostics.map((d) => ({ ...d, kind: "parse" })) };
+};
+
 const recoverSource = (
   path: string,
   text: string,
@@ -483,15 +497,14 @@ const recoverSource = (
   const lexed = bootstrapLex(text) as
     | { _tag: "Ok"; value: unknown }
     | { _tag: "Err"; error: BootstrapDiagnostic };
+  // The seed's lex and parse errors carry no `kind`; stamp them, as
+  // `compile.mochi`'s `frontend` does, so the editor labels them `lex:`/`parse:`.
   const recovered: RecoveredSource =
     lexed._tag === "Err"
-      ? lexed
+      ? { _tag: "Err", error: { ...lexed.error, kind: "lex" } }
       : {
           _tag: "Ok",
-          value: bootstrapParseRecovering(lexed.value, toSeedPlugins(plugins)) as {
-            stmts: Array<{ _tag?: string; from?: string }>;
-            diagnostics: BootstrapDiagnostic[];
-          },
+          value: stampParse(bootstrapParseRecovering(lexed.value, toSeedPlugins(plugins))),
         };
   parses?.set(key, recovered);
   return recovered;

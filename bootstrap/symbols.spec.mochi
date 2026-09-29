@@ -39,3 +39,11 @@ test("lambda parameter uses resolve to the parameter declaration", () => switch 
       |> ok
   | Err(_) => false |> ok
 })
+
+test("a let? binder resolves its body uses to itself", () => switch indexed("let f = o => let? v = o in Some(v)") {
+  | Ok(occurrences) => occurrences
+      |> Array.filter(o => o.name == "v")
+      |> Array.map(o => (o.role, o.defStart, o.start))
+      |> assertEq([("def", 18, 18), ("use", 18, 32)])
+  | Err(_) => false |> ok
+})
