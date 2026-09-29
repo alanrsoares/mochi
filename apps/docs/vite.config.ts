@@ -23,14 +23,15 @@ type DocsPluginModule = { readonly docsVendorPlugins: typeof docsVendorPlugins }
 /**
  * Bun's module cache is path-keyed, so reload a generation-suffixed sibling
  * rather than importing the manifest path again. Keeping it beside the source
- * preserves relative-import resolution for future local docs plugins.
+ * preserves relative-import resolution for future local docs plugins. The pid
+ * keeps two processes (the root test run and `@mochi/docs:check`, in parallel)
+ * from writing and deleting the same shadow.
  */
+export const shadowPrefix = `.mochi.plugins.runtime-${process.pid}-`;
+
 const loadDocsVendorPlugins = async (): Promise<typeof docsVendorPlugins> => {
   pluginsGeneration += 1;
-  const shadow = path.resolve(
-    import.meta.dirname,
-    `.mochi.plugins.runtime-${pluginsGeneration}.ts`,
-  );
+  const shadow = path.resolve(import.meta.dirname, `${shadowPrefix}${pluginsGeneration}.ts`);
   await copyFile(pluginsFile, shadow);
   try {
     const mod = (await import(pathToFileURL(shadow).href)) as DocsPluginModule;
