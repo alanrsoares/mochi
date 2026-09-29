@@ -14,11 +14,10 @@
 import type { Result } from "@onrails/result";
 import type { Expr } from "../ast/ast";
 import type { Span } from "../ast/span";
-import type { AliasDef, Row, Type } from "../ast/types";
+import type { Located, Tok } from "../ast/token";
+import type { AliasDef, Row, Scheme, Type } from "../ast/types";
 import type { CompleteMemberApi, CompleteMemberHook, CompletionItem } from "../bootstrap/options";
 import { checkErr, type Diagnostic } from "../errors/errors";
-import type { Scheme } from "../infer/schemes";
-import type { Located, Tok } from "../lexer/lexer";
 import type { CallExpr } from "./plugin-kit";
 import { jsxPlugin } from "./plugins/jsx";
 

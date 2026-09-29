@@ -37,7 +37,7 @@
     "./schemes": "./src/infer/schemes.ts",
     "./show-type-expr": "./src/infer/show-type-expr.ts",
     "./span": "./src/ast/span.ts",
-    "./suggest": "./src/infer/suggest.ts",
+    "./suggest": "./src/errors/suggest.ts",
     "./symbols": "./src/check/symbols.ts",
     "./types": "./src/ast/types.ts",
     "./unify": "./src/infer/unify.ts"

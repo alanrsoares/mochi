@@ -168,6 +168,7 @@ What else was on the table and why not.
 | [0121](0121-bootstrap-complete-members.md) | Plugin member completion on the bootstrap core | Accepted |
 | [0122](0122-bootstrap-hover.md) | Hover on the bootstrap core | Accepted |
 | [0123](0123-manifest-drops-dx-plugins.md) | Plugin manifests drop `dxPlugins` | Accepted |
+| [0124](0124-plugin-seam-types-off-core.md) | Plugin-seam types live outside the TypeScript core | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

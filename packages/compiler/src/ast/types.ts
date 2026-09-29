@@ -15,6 +15,9 @@ export type Type =
   | { kind: "union"; members: Type[] }; // "rose" | "amber" (finite; ≥2 after normalize)
 
 /** Applied constructor (`number`, `List<'a>`, …). */
+/** A type generalised over `vars` (type variables) and `rvars` (row variables). */
+export type Scheme = { vars: number[]; rvars: number[]; type: Type };
+
 export type ArrowType = Extract<Type, { kind: "arrow" }>;
 export type RecordType = Extract<Type, { kind: "record" }>;
 export type ConType = Extract<Type, { kind: "con" }>;

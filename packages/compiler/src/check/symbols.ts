@@ -11,7 +11,13 @@ import type { Expr, LamParam, MatchArm, Pattern, Program, Stmt, TypeExpr } from 
 import { isCtorName } from "../ast/ast";
 import type { Location, Span } from "../ast/span";
 import { spanContainsClosed, spanning, tightestHit } from "../ast/span";
-import { fieldNameSpan, preludeNsMember, preludeOrigins } from "../prelude/prelude-virtual";
+import {
+  emptyOrigins,
+  fieldNameSpan,
+  type Origins,
+  preludeNsMember,
+  preludeOrigins,
+} from "../prelude/prelude-virtual";
 
 export type SymbolSpace = "value" | "type" | "ctor" | "field";
 
@@ -451,20 +457,7 @@ const sameBinding = (a: Binding, b: Binding): boolean =>
   a.def.span.start === b.def.span.start &&
   a.def.span.end === b.def.span.end;
 
-export { sameBinding };
-
-/** Export sites in `prog` at `path`, keyed by symbol space. */
-export type Origins = {
-  value: Map<string, Location>;
-  type: Map<string, Location>;
-  ctor: Map<string, Location>;
-};
-
-export const emptyOrigins = (): Origins => ({
-  value: new Map(),
-  type: new Map(),
-  ctor: new Map(),
-});
+export { emptyOrigins, type Origins, sameBinding };
 
 export const originsOf = (path: string, prog: Program): Origins => {
   const out = emptyOrigins();
