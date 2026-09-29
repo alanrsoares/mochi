@@ -21,7 +21,7 @@ const sources = (dir: string): string[] =>
     return /\.tsx?$/.test(name) && !/\.spec\.tsx?$/.test(name) ? [p] : [];
   });
 
-const SPECIFIER = /(?:from|import)\s*\(?\s*"([^"]+)"/g;
+const SPECIFIER = /(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g;
 
 /** The file a specifier names, when it lands in `packages/compiler/src`. */
 const target = (file: string, spec: string): string | null => {
@@ -50,7 +50,7 @@ const SURVIVORS = [
 test.each(SURVIVORS)("%s imports no TypeScript-core module", (dir) => {
   const hits = sources(join(root, dir)).flatMap((file) =>
     [...readFileSync(file, "utf8").matchAll(SPECIFIER)]
-      .map((m) => m[1] as string)
+      .map((m) => m[2] as string)
       .filter((spec) => {
         const path = target(file, spec);
         return path !== null && isCore(path);
