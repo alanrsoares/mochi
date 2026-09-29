@@ -322,12 +322,10 @@ export function startServer(opts: ServerOptions = {}): void {
     if (!doc) return [];
     const path = docPath(textDocument.uri);
     const project = await projectPlugins(path);
-    // Answered by the self-hosted core unless the project lists TS-core
-    // `dxPlugins`, whose completion hooks have no bootstrap form yet (ADR 0120).
+    // Answered by the self-hosted core with the project's plugins (ADR 0120).
     const items = await moduleCompleteAt(path, doc.getText(), doc.offsetAt(position), read, {
-      ...(await dxOpts(path)),
-      bootstrapCache: bootstrapCacheFor(project).types,
-      bootstrapPlugins: project?.plugins,
+      cache: bootstrapCacheFor(project).types,
+      plugins: project?.plugins,
     });
     return items.map((i) => ({
       label: i.label,

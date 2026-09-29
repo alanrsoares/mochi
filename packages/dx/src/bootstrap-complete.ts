@@ -14,9 +14,8 @@ import {
   loadBootstrapGraph,
   resolveImportBootstrap,
 } from "@mochi/compiler/bootstrap";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
+import type { BootstrapPlugin, CompletionItem } from "@mochi/compiler/bootstrap/options";
 import type { Row, Stmt, Ty } from "@mochi/compiler/bootstrap/types";
-import type { CompletionItem } from "@mochi/compiler/extensions";
 import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
@@ -204,12 +203,33 @@ export type BootstrapCompleteOptions = {
   plugins?: readonly BootstrapPlugin[];
 };
 
-/** Namespace, then the receiver's record fields (typed with `.prefix` cut). */
+/** The first plugin `completeMembers` answer for an opaque receiver (`tw.`). */
+const pluginMembers = (
+  trigger: MemberTrigger,
+  plugins: readonly BootstrapPlugin[] | undefined,
+): CompletionItem[] => {
+  const api = { receiver: trigger.receiver, prefix: trigger.prefix };
+  for (const plugin of plugins ?? []) {
+    const items = plugin.completeMembers?.(api);
+    if (items) return items;
+  }
+  return [];
+};
+
+/**
+ * Namespace, then the receiver's record fields (typed with `.prefix` cut),
+ * then plugin members when the receiver has no fields.
+ */
 const memberItems = (
   trigger: MemberTrigger,
   namespace: CompletionItem[] | null,
   receiver: () => Ty | null,
-): CompletionItem[] => filterPrefix(namespace ?? recordFieldItems(receiver()), trigger.prefix);
+  plugins: readonly BootstrapPlugin[] | undefined,
+): CompletionItem[] => {
+  if (namespace) return filterPrefix(namespace, trigger.prefix);
+  const fields = recordFieldItems(receiver());
+  return filterPrefix(fields.length > 0 ? fields : pluginMembers(trigger, plugins), trigger.prefix);
+};
 
 /**
  * Props for a component tag: the first candidate type that is a component.
@@ -280,8 +300,11 @@ export const bootstrapCompleteAt = (
   const member = memberTriggerAt(src, offset);
   if (member)
     return dedupeSort(
-      memberItems(member, preludeNamespaceMembers(member.receiver), () =>
-        singleTypeAt(withoutMemberSuffix(src, member), member.recvStart, opts.plugins),
+      memberItems(
+        member,
+        preludeNamespaceMembers(member.receiver),
+        () => singleTypeAt(withoutMemberSuffix(src, member), member.recvStart, opts.plugins),
+        opts.plugins,
       ),
     );
   const jsx = jsxAttrTriggerAt(src, offset);
@@ -333,7 +356,7 @@ export const moduleBootstrapCompleteAt = async (
     const receiver = namespace
       ? null
       : await graphTypeAt(path, withoutMemberSuffix(src, member), member.recvStart, readFile, opts);
-    return dedupeSort(memberItems(member, namespace, () => receiver));
+    return dedupeSort(memberItems(member, namespace, () => receiver, opts.plugins));
   }
   const jsx = jsxAttrTriggerAt(src, offset);
   if (jsx) {

@@ -32,9 +32,9 @@ const src = files["/app.mochi"];
 const atCtor = src.lastIndexOf("Circle") + 2;
 const atBinding = src.indexOf("let shape") + 5;
 
-test("a shared cache does not change hover, completion, or go-to-type", async () => {
-  // Diagnostics run on the bootstrap compiler with their own cache; hover,
-  // completion and go-to-type still share this TypeScript one (#103).
+test("a shared cache does not change hover or go-to-type", async () => {
+  // Diagnostics run on the bootstrap compiler with their own cache; hover and
+  // go-to-type still share this TypeScript one (#103).
   const cache = createModuleCache();
   const read = memRead(files);
   expect(await documentDiagnostics("/app.mochi", src, read)).toEqual([]);
@@ -42,10 +42,6 @@ test("a shared cache does not change hover, completion, or go-to-type", async ()
   const hover = await moduleHoverAt("/app.mochi", src, atCtor, read, { cache });
   expect(hover?.code).toBe("number -> Shape");
   expect(hover).toEqual(await moduleHoverAt("/app.mochi", src, atCtor, read));
-
-  const items = await moduleCompleteAt("/app.mochi", src, atCtor, read, { cache });
-  expect(items.length).toBeGreaterThan(0);
-  expect(items).toEqual(await moduleCompleteAt("/app.mochi", src, atCtor, read));
 
   const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, { cache });
   expect(target?.path).toBe("/shapes.mochi");
@@ -62,7 +58,7 @@ test("a shared bootstrap graph cache does not change completion or go-to-type", 
     recordSrc,
     recordSrc.length,
     async (path) => (path === "/point.mochi" ? "export let point = { x: 1, y: 2 }" : read(path)),
-    { bootstrapCache },
+    { cache: bootstrapCache },
   );
   expect(items.map((item) => item.label)).toEqual(["x", "y"]);
 

@@ -15,6 +15,7 @@ import type { Result } from "@onrails/result";
 import type { Expr } from "../ast/ast";
 import type { Span } from "../ast/span";
 import type { AliasDef, Row, Type } from "../ast/types";
+import type { CompleteMemberApi, CompleteMemberHook, CompletionItem } from "../bootstrap/options";
 import { checkErr, type Diagnostic } from "../errors/errors";
 import type { Scheme } from "../infer/schemes";
 import type { Located, Tok } from "../lexer/lexer";
@@ -152,20 +153,13 @@ export type DtsBindingHook = (
   api: DtsBindingApi,
 ) => string | null;
 
-/** Completion item kinds — shared by the compiler API and plugin member hooks (ADR 0013). */
-export type CompletionKind = "value" | "field" | "member" | "method" | "ctor" | "type" | "literal";
-
-/** One completion candidate — protocol-free so Bun unit tests can assert on it. */
-export type CompletionItem = { label: string; kind: CompletionKind; detail?: string };
-
-/** Context for a `completeMembers` hook — receiver name + typed prefix after `.`. */
-export type CompleteMemberApi = { receiver: string; prefix: string };
-
-/**
- * Suggest members after `receiver.` when core has none (opaque host externs like
- * `tw`). `null` falls through; first non-null wins (registration order).
- */
-export type CompleteMemberHook = (api: CompleteMemberApi) => CompletionItem[] | null;
+/** Completion items and member hooks are the bootstrap host's (ADR 0013, 0109). */
+export type {
+  CompleteMemberApi,
+  CompleteMemberHook,
+  CompletionItem,
+  CompletionKind,
+} from "../bootstrap/options";
 
 /**
  * A cross-pass adapter: builtin (`jsxPlugin`) or vendor (styled-cva, …).

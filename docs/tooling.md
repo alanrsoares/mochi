@@ -240,8 +240,9 @@ Completion (`completeAt` / `moduleCompleteAt`, [ADR 0013](adr/0013-lsp-completio
 lists prelude/`import * as` members, record fields, plugin-backed `tw.*` tags, JSX
 props, and the values visible at the cursor; the LSP is a thin adapter with
 `triggerCharacters: ["."]`. It runs on the self-hosted core
-([ADR 0120](adr/0120-bootstrap-completion.md)) unless the project lists TypeScript-core
-`dxPlugins`, whose completion hooks (`tw.*` tags) still need the TypeScript path.
+([ADR 0120](adr/0120-bootstrap-completion.md)); a `BootstrapPlugin`'s host-only
+`completeMembers` hook lists members of an opaque receiver such as `tw`
+([ADR 0121](adr/0121-bootstrap-complete-members.md)).
 
 ## Plugins
 

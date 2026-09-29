@@ -5,6 +5,7 @@ import { showScheme } from "@mochi/compiler/infer";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { completeAt } from "@mochi/dx/complete";
 import { isErr, unwrapOk } from "@onrails/result";
+import { reReducedBootstrap } from "./bootstrap";
 import { reReducedExtension } from "./index";
 
 const plugins = [reReducedExtension];
@@ -108,7 +109,7 @@ test("store. completes actions and $state", () => {
   const src = `${HOOKS}
 let demo = () =>
   let store = useContainer(counter) in store.`.trimEnd();
-  const labels = completeAt(src, src.length, { plugins }).map((i) => i.label);
+  const labels = completeAt(src, src.length, { plugins: [reReducedBootstrap] }).map((i) => i.label);
   expect(labels).toContain("actions");
   expect(labels).toContain("$state");
   expect(labels).toContain("$derived");
@@ -118,7 +119,7 @@ test("store.actions. completes action names as methods", () => {
   const src = `${HOOKS}
 let demo = () =>
   let store = useContainer(counter) in store.actions.`.trimEnd();
-  const items = completeAt(src, src.length, { plugins });
+  const items = completeAt(src, src.length, { plugins: [reReducedBootstrap] });
   expect(items.map((i) => i.label)).toEqual(["decrement", "increment"]);
   expect(items.every((i) => i.kind === "method")).toBe(true);
 });

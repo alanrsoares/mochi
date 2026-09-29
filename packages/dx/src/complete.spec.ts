@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { completeAt, moduleCompleteAt } from "@mochi/dx/complete";
-import { styledCvaExtension } from "@mochi/plugin-styled-cva";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 
 test("Task. lists prelude namespace members", () => {
   const src = "let x = Task.";
@@ -82,7 +82,7 @@ test("tw. without plugin yields no members", () => {
 
 test("tw. with styled-cva plugin lists HTML tags", () => {
   const src = 'extern tw : a = "@styled-cva/react" "default"\nlet x = tw.';
-  const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
+  const labels = completeAt(src, src.length, { plugins: [styledCvaBootstrap] }).map((i) => i.label);
   expect(labels).toContain("div");
   expect(labels).toContain("button");
   expect(labels).toContain("span");
@@ -90,7 +90,7 @@ test("tw. with styled-cva plugin lists HTML tags", () => {
 
 test("tw.d with plugin filters to matching tags", () => {
   const src = 'extern tw : a = "@styled-cva/react" "default"\nlet x = tw.d';
-  const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
+  const labels = completeAt(src, src.length, { plugins: [styledCvaBootstrap] }).map((i) => i.label);
   expect(labels).toEqual(["div"]);
 });
 
@@ -109,20 +109,20 @@ let BadgeShell = tw.div("base", {
 
 test("JSX attr name completes component props", () => {
   const src = `${TW}let el = <BadgeShell `;
-  const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
+  const labels = completeAt(src, src.length, { plugins: [styledCvaBootstrap] }).map((i) => i.label);
   expect(labels).toContain("$tone");
 });
 
 test('JSX $tone=" completes literal union members', () => {
   const src = `${TW}let el = <BadgeShell $tone="`;
-  const items = completeAt(src, src.length, { plugins: [styledCvaExtension] });
+  const items = completeAt(src, src.length, { plugins: [styledCvaBootstrap] });
   expect(items.map((i) => i.label).toSorted()).toEqual(["amber", "emerald", "rose"]);
   expect(items.every((i) => i.kind === "literal")).toBe(true);
 });
 
 test('JSX $tone="ro filters lit prefix', () => {
   const src = `${TW}let el = <BadgeShell $tone="ro`;
-  const labels = completeAt(src, src.length, { plugins: [styledCvaExtension] }).map((i) => i.label);
+  const labels = completeAt(src, src.length, { plugins: [styledCvaBootstrap] }).map((i) => i.label);
   expect(labels).toEqual(["rose"]);
 });
 

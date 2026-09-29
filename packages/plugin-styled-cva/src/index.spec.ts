@@ -6,6 +6,7 @@ import { moduleContext } from "@mochi/compiler/module";
 import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { moduleCompleteAt } from "@mochi/dx/complete";
 import { isErr, unwrapOk } from "@onrails/result";
+import { styledCvaBootstrap } from "./bootstrap";
 import { styledCvaExtension } from "./index";
 
 const exts = [styledCvaExtension];
@@ -99,7 +100,7 @@ export let Badge = tw.div("base", {
   };
   const src = files["/p/main.mochi"]!;
   const items = await moduleCompleteAt("/p/main.mochi", src, src.length, read, {
-    plugins: exts,
+    plugins: [styledCvaBootstrap],
   });
   expect(items.map((i) => i.label).toSorted()).toEqual(["amber", "rose"]);
 });

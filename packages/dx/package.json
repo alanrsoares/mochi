@@ -11,6 +11,7 @@
     "./bootstrap-symbols": "./src/bootstrap-symbols.ts",
     "./bootstrap-index": "./src/bootstrap-index.ts",
     "./complete": "./src/complete.ts",
+    "./complete-triggers": "./src/complete-triggers.ts",
     "./bootstrap-complete": "./src/bootstrap-complete.ts",
     "./nav": "./src/nav.ts",
     "./diagnostics": "./src/diagnostics.ts"
