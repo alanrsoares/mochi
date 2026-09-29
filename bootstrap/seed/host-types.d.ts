@@ -77,8 +77,8 @@ export type Pattern =
   | { _tag: "PArr"; elems: Pattern[]; rest: Option<Pattern>; span: Span }
   | { _tag: "PList"; elems: Pattern[]; rest: Option<Pattern>; span: Span }
   | { _tag: "POr"; alts: Pattern[]; span: Span };
-export type PatField = { label: string; pat: Pattern };
-export type Field = { name: string; value: Expr };
+export type PatField = { label: string; labelSpan: Span; pat: Pattern };
+export type Field = { name: string; nameSpan: Span; value: Expr };
 export type SeqElem = { _tag: "SEExpr"; expr: Expr } | { _tag: "SESpread"; expr: Expr };
 export type MapEntry = { key: Expr; value: Expr };
 export type LoopParam = { name: string; nameSpan: Span; init: Expr };
@@ -97,6 +97,7 @@ export type Stmt =
   | {
       _tag: "SType";
       name: string;
+      nameSpan: Span;
       params: string[];
       ctors: Ctor[];
       alias: Option<AliasField[]>;
@@ -124,7 +125,7 @@ export type Stmt =
   | { _tag: "SError"; span: Span };
 export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
-export type AliasField = { name: string; fieldType: TypeExpr; optional: boolean };
+export type AliasField = { name: string; nameSpan: Span; fieldType: TypeExpr; optional: boolean };
 export type Name = { name: string; span: Span };
 export type HostPlugin = {
   name: string;

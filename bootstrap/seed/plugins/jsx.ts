@@ -409,7 +409,7 @@ const parseJsxAttributes: _Curry<
         : _Result_flatMap(
             ([attrId, p1]) =>
               (([valExpr, p2]: [Expr, number]) => {
-                const field: Field = { name: attrId.name, value: valExpr };
+                const field: Field = { name: attrId.name, nameSpan: attrId.span, value: valExpr };
                 return parseJsxAttributes(
                   toks,
                   p2,

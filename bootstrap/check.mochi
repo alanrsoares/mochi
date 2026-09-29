@@ -714,7 +714,7 @@ let reservedErr = (name, sp) =>
 let checkReservedNames = stmts =>
   firstSome(
     s => switch s {
-      | Ast.SType(name, _, _, _, _, _, _, sp) => Array.contains(
+      | Ast.SType(name, _, _, _, _, _, _, _, sp) => Array.contains(
           name,
           redeclarableTypes
         )
@@ -763,7 +763,7 @@ let checkReservedNames = stmts =>
 let checkReservedNamesAll = stmts =>
   Array.flatMap(
     s => switch s {
-      | Ast.SType(name, _, _, _, _, _, _, sp) => Array.contains(
+      | Ast.SType(name, _, _, _, _, _, _, _, sp) => Array.contains(
           name,
           redeclarableTypes
         )
@@ -1021,7 +1021,7 @@ let checkReservedWordsAll = stmts =>
           name,
           nameSp
         )
-      | Ast.SType(_, _, ctors, _, _, _, _, _) => Array.flatMap(
+      | Ast.SType(_, _, _, ctors, _, _, _, _, _) => Array.flatMap(
           ctor =>
             Array.flatMap(
               field => switch field.name {
@@ -1072,7 +1072,7 @@ let strayTypeVar = (params, te) => switch te {
 let checkCtorFieldVars = stmts =>
   stmts
     |> firstSome(s => switch s {
-      | Ast.SType(name, params, ctors, _, _, _, _, _) => ctors
+      | Ast.SType(name, _, params, ctors, _, _, _, _, _) => ctors
           |> firstSome(c =>
             c.fields
               |> firstSome(f => switch params->strayTypeVar(f.fieldType) {
@@ -1090,7 +1090,7 @@ let checkCtorFieldVars = stmts =>
 let checkCtorFieldVarsAll = stmts =>
   Array.flatMap(
     s => switch s {
-      | Ast.SType(name, params, ctors, _, _, _, _, _) => Array.flatMap(
+      | Ast.SType(name, _, params, ctors, _, _, _, _, _) => Array.flatMap(
           c =>
             Array.flatMap(
               f => switch params->strayTypeVar(f.fieldType) {
@@ -1224,7 +1224,7 @@ let writtenTypeExprs = stmts =>
           ...letInAnnots(value)
         ]
       | Ast.SExpr(value, _) => letInAnnots(value)
-      | Ast.SType(_, _, ctors, alias, aliasType, _, _, _) => [
+      | Ast.SType(_, _, _, ctors, alias, aliasType, _, _, _) => [
           ...Array.flatMap(c => map(f => f.fieldType, c.fields), ctors),
           ...switch alias {
             | Some(fields) => map(f => f.fieldType, fields)

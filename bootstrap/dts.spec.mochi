@@ -5,8 +5,18 @@ import { declarationRecs } from "./dts.mochi"
 
 let sp = { start: 0, end: 0 }
 let spanFields = [
-  { name: "start", fieldType: Ast.TyName("number", sp), optional: false },
-  { name: "end", fieldType: Ast.TyName("number", sp), optional: false }
+  {
+    name: "start",
+    nameSpan: sp,
+    fieldType: Ast.TyName("number", sp),
+    optional: false
+  },
+  {
+    name: "end",
+    nameSpan: sp,
+    fieldType: Ast.TyName("number", sp),
+    optional: false
+  }
 ]
 let spanAlias = { params: [], fields: spanFields, expr: None }
 
@@ -37,6 +47,7 @@ test("a declaration does not print a namespace-only record alias bare", () =>
 test("a declaration keeps a record alias this file declares", () =>
   let local = Ast.SType(
     "Span",
+    sp,
     [],
     [],
     Some(spanFields),

@@ -12,11 +12,11 @@ export type LamParam =
       defaultValue: Option<Expr>;
     }
   | { _tag: "LPSpanned"; param: LamParam; nameSpans: Span[] };
-export type Field = { name: string; value: Expr };
+export type Field = { name: string; nameSpan: Span; value: Expr };
 export type MapEntry = { key: Expr; value: Expr };
 export type MatchArm = { pattern: Pattern; guard: Option<Expr>; body: Expr };
 export type LoopParam = { name: string; nameSpan: Span; init: Expr };
-export type PatField = { label: string; pat: Pattern };
+export type PatField = { label: string; labelSpan: Span; pat: Pattern };
 /**
  * One slot in an Array / List / Set literal (ADR 0001).
  */
@@ -87,7 +87,7 @@ export type TypeExpr =
   | { _tag: "TyUnion"; members: TypeExpr[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
 export type Ctor = { name: string; fields: CtorField[]; span: Span };
-export type AliasField = { name: string; fieldType: TypeExpr; optional: boolean };
+export type AliasField = { name: string; nameSpan: Span; fieldType: TypeExpr; optional: boolean };
 export type Stmt =
   | {
       _tag: "SLet";
@@ -102,6 +102,7 @@ export type Stmt =
   | {
       _tag: "SType";
       name: string;
+      nameSpan: Span;
       params: string[];
       ctors: Ctor[];
       alias: Option<AliasField[]>;
@@ -405,18 +406,23 @@ export const SLet = _curry(7, (name, nameSpan, annot, value, exported, doc, span
   doc: Option<string>,
   span: Span,
 ) => Stmt;
-export const SType = _curry(8, (name, params, ctors, alias, aliasType, exported, doc, span) => ({
-  _tag: "SType",
-  name,
-  params,
-  ctors,
-  alias,
-  aliasType,
-  exported,
-  doc,
-  span,
-})) as (
+export const SType = _curry(
+  9,
+  (name, nameSpan, params, ctors, alias, aliasType, exported, doc, span) => ({
+    _tag: "SType",
+    name,
+    nameSpan,
+    params,
+    ctors,
+    alias,
+    aliasType,
+    exported,
+    doc,
+    span,
+  }),
+) as (
   name: string,
+  nameSpan: Span,
   params: string[],
   ctors: Ctor[],
   alias: Option<AliasField[]>,

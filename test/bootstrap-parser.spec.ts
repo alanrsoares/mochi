@@ -164,7 +164,11 @@ const cExpr = (e: Expr): Canon => {
     case "record":
       return {
         kind: "record",
-        fields: e.fields.map((f) => ({ name: f.name, value: cExpr(f.value) })),
+        fields: e.fields.map((f) => ({
+          name: f.name,
+          nameSpan: cSpan(f.nameSpan),
+          value: cExpr(f.value),
+        })),
         spread: e.spread ? cExpr(e.spread) : null,
         span: cSpan(e.span),
       };
@@ -231,7 +235,11 @@ const cPat = (p: Pattern): Canon => {
     case "precord":
       return {
         kind: "precord",
-        fields: p.fields.map((f) => ({ label: f.label, pat: cPat(f.pat) })),
+        fields: p.fields.map((f) => ({
+          label: f.label,
+          labelSpan: cSpan(f.labelSpan),
+          pat: cPat(f.pat),
+        })),
         span: cSpan(p.span),
       };
     case "pctor":
@@ -290,6 +298,7 @@ const cCtor = (c: Ctor): Canon => ({
 
 const cAliasField = (f: AliasField): Canon => ({
   name: f.name,
+  nameSpan: cSpan(f.nameSpan),
   type: cTy(f.type),
   optional: f.optional,
 });
@@ -311,6 +320,7 @@ const cStmt = (s: Stmt): Canon => {
       return {
         kind: "type",
         name: s.name,
+        nameSpan: cSpan(s.nameSpan),
         params: s.params,
         ctors: s.ctors.map(cCtor),
         alias: s.alias ? s.alias.map(cAliasField) : null,
@@ -455,7 +465,11 @@ const A_EXPR: Record<string, (e: Al) => Canon> = {
   ERecur: (e) => ({ kind: "recur", args: e.args.map(aExpr), span: e.span }),
   ERecord: (e) => ({
     kind: "record",
-    fields: e.fields.map((f: Al) => ({ name: f.name, value: aExpr(f.value) })),
+    fields: e.fields.map((f: Al) => ({
+      name: f.name,
+      nameSpan: f.nameSpan,
+      value: aExpr(f.value),
+    })),
     spread: opt(e.spread, aExpr),
     span: e.span,
   }),
@@ -513,7 +527,11 @@ const A_PAT: Record<string, (p: Al) => Canon> = {
   PTuple: (p) => ({ kind: "ptuple", elems: p.elems.map(aPat), span: p.span }),
   PRecord: (p) => ({
     kind: "precord",
-    fields: p.fields.map((f: Al) => ({ label: f.label, pat: aPat(f.pat) })),
+    fields: p.fields.map((f: Al) => ({
+      label: f.label,
+      labelSpan: f.labelSpan,
+      pat: aPat(f.pat),
+    })),
     span: p.span,
   }),
   PCtor: (p) => ({
@@ -580,10 +598,16 @@ const A_STMT: Record<string, (s: Al) => Canon> = {
   SType: (s) => ({
     kind: "type",
     name: s.name,
+    nameSpan: s.nameSpan,
     params: s.params,
     ctors: s.ctors.map(aCtor),
     alias: opt(s.alias, (fs: Al) =>
-      fs.map((f: Al) => ({ name: f.name, type: aTy(f.fieldType), optional: f.optional })),
+      fs.map((f: Al) => ({
+        name: f.name,
+        nameSpan: f.nameSpan,
+        type: aTy(f.fieldType),
+        optional: f.optional,
+      })),
     ),
     aliasType: opt(s.aliasType, aTy),
     exported: s.exported,
@@ -735,12 +759,8 @@ const CANON_EXEMPT: Record<string, readonly string[]> = {
   name: ["span"],
   precord: ["fieldSpans"],
   ptuple: ["nameSpans"],
-  "precord.fields": ["labelSpan"],
-  "record.fields": ["nameSpan"],
   "loop.params": ["nameSpan"],
-  "type.alias": ["nameSpan"],
   "type.ctors": ["span"],
-  type: ["nameSpan"],
   tqual: ["nameSpan"],
 };
 

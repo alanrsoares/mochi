@@ -517,7 +517,7 @@ let consInRow = (row, acc) => switch row {
 
 export let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
-  | Some(Ast.SType(name, _, _, _, _, _, _, _)) => declaredTypeNames(
+  | Some(Ast.SType(name, _, _, _, _, _, _, _, _)) => declaredTypeNames(
       stmts,
       i + 1,
       Set.add(name, acc)
@@ -531,7 +531,7 @@ export let declaredTypeNames = (stmts, i, acc) => switch Array.get(i, stmts) {
 /// dep's nullary row, and `tsc` reports TS2314.
 export let nullaryLocalNames = (stmts, i, acc) => switch Array.get(i, stmts) {
   | None => acc
-  | Some(Ast.SType(name, params, _, Some(fields), _, _, _, _)) => nullaryLocalNames(
+  | Some(Ast.SType(name, _, params, _, Some(fields), _, _, _, _)) => nullaryLocalNames(
       stmts,
       i + 1,
       Array.length(params) == 0 && Array.length(fields) > 0
@@ -740,7 +740,7 @@ export let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<str
 
 let typeHeaderFrom = (stmts, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, stmts) {
   | None => []
-  | Some(Ast.SType(name, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeHeaderFrom(
+  | Some(Ast.SType(name, _, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeHeaderFrom(
       stmts,
       aliases,
       recs,
@@ -1013,7 +1013,7 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
                 |> Option.map(ts => ": ${ts}")
           }),
       annotateCtor: Some((s, c) => switch s {
-        | Ast.SType(name, params, _, _, _, _, _, _) => Some(
+        | Ast.SType(name, _, params, _, _, _, _, _, _) => Some(
             ctorFactoryTs(name, params, c, aliases, recs)
           )
         | _ => None
