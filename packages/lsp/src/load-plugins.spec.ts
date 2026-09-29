@@ -132,35 +132,7 @@ test("pluginsForDocument reports duplicate plugin names via onError", async () =
   }
 });
 
-test("pluginsForDocument reports a claim clash via onError (ADR 0050)", async () => {
-  const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
-  try {
-    const file = join(root, "mochi.plugins.mjs");
-    writeFileSync(
-      file,
-      [
-        "export default [];",
-        "export const dxPlugins = [",
-        '  { name: "a", inferCall: { refs: ["useThing"], hook: () => null } },',
-        '  { name: "b", inferCall: { refs: ["useThing"], hook: () => null } },',
-        "];",
-        "",
-      ].join("\n"),
-    );
-    clearPluginsCache();
-    const errors: Array<{ file: string; error: unknown }> = [];
-    const plugins = await pluginsForDocument(join(root, "app.mochi"), {
-      onError: (errFile, error) => errors.push({ file: errFile, error }),
-    });
-    expect(plugins).toBeUndefined();
-    expect(errors).toHaveLength(1);
-    expect(String((errors[0]?.error as Error)?.message)).toContain("clash");
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("loadPluginsFile reads a named dxPlugins list beside the bootstrap one", async () => {
+test("loadPluginsFile ignores a legacy dxPlugins export", async () => {
   const root = mkdtempSync(join(import.meta.dir, ".plugins-"));
   try {
     const file = join(root, "mochi.plugins.mjs");
@@ -170,8 +142,7 @@ test("loadPluginsFile reads a named dxPlugins list beside the bootstrap one", as
     );
     clearPluginsCache();
     const project = await loadPluginsFile(file);
-    expect(project.plugins.map((p) => p.name)).toEqual(["boot"]);
-    expect(project.dxPlugins?.map((p) => p.name)).toEqual(["dx"]);
+    expect(project).toEqual({ plugins: [{ name: "boot" }] });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -191,7 +162,7 @@ test("pluginsForDocument rejects a TypeScript-core plugin in the bootstrap list"
       onError: (errFile, error) => errors.push({ file: errFile, error }),
     });
     expect(plugins).toBeUndefined();
-    expect(String((errors[0]?.error as Error)?.message)).toContain("dxPlugins");
+    expect(String((errors[0]?.error as Error)?.message)).toContain("self-hosted-core plugins");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

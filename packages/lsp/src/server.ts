@@ -10,7 +10,6 @@ import {
   type BootstrapRecoveryGraphCache,
   createBootstrapRecoveryGraphCache,
 } from "@mochi/compiler/bootstrap";
-import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
 import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
@@ -123,8 +122,7 @@ const symbolKind = (kind: string): SymbolKind => {
  * Wire the LSP connection and start listening. `opts.plugins` is the
  * project's vendor plugins (styled-cva, …) — the same lists the project's
  * Vite plugin / `gen-mochi-dts` script run with. Diagnostics run its
- * self-hosted-core `plugins`; the DX queries still on the TypeScript core read
- * `dxPlugins` until #103. This file
+ * self-hosted-core `plugins`, and so does every other query (ADR 0123). This file
  * never imports a concrete plugin: the caller (a project's LSP launcher, or
  * #20's shared plugin-list module) supplies it, so hover/diagnostics stop
  * lying about a `tw.*` factory's type relative to what Vite actually emits.
@@ -180,7 +178,6 @@ export function startServer(opts: ServerOptions = {}): void {
   //
   // A bootstrap cache is only valid for the plugin list it was filled under, so
   // each manifest gets its own; `bootstrapCache` is the builtin-only one.
-  let cache = createModuleCache();
   let bootstrapCache = createBootstrapRecoveryGraphCache();
   let projectCaches = new WeakMap<ProjectPlugins, BootstrapRecoveryGraphCache>();
   const bootstrapCacheFor = (project: ProjectPlugins | undefined): BootstrapRecoveryGraphCache => {
@@ -206,14 +203,6 @@ export function startServer(opts: ServerOptions = {}): void {
           },
         })
       : fixedPlugins;
-  const dxOpts = async (path: string) => {
-    const dxPlugins = (await projectPlugins(path))?.dxPlugins;
-    return {
-      cache,
-      bootstrapCache: bootstrapCache.types,
-      plugins: dxPlugins ? [...dxPlugins] : undefined,
-    };
-  };
   // The whole graph is checked by the shipped bootstrap compiler, with the
   // project's self-hosted-core plugins (ADR 0109).
   const diagnosticsFor = async (path: string, src: string) => {
@@ -362,9 +351,8 @@ export function startServer(opts: ServerOptions = {}): void {
       const path = docPath(textDocument.uri);
       const project = await projectPlugins(path);
       const loc = await moduleTypeDefinitionAt(path, doc.getText(), doc.offsetAt(position), read, {
-        ...(await dxOpts(path)),
-        bootstrapCache: bootstrapCacheFor(project).types,
-        bootstrapPlugins: project?.plugins,
+        cache: bootstrapCacheFor(project).types,
+        plugins: project?.plugins,
       });
       return !loc ? null : rangeAtPath(loc.path, loc.span);
     },
@@ -592,7 +580,6 @@ export function startServer(opts: ServerOptions = {}): void {
     );
     if (!manifestChanged) return;
     clearPluginsCache();
-    cache = createModuleCache();
     bootstrapCache = createBootstrapRecoveryGraphCache();
     projectCaches = new WeakMap();
     for (const doc of documents.all()) {

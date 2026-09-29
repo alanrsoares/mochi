@@ -1,6 +1,6 @@
 # 0110 — Plugin manifests list self-hosted-core plugins first
 
-- **Status:** Accepted
+- **Status:** Accepted; `dxPlugins` superseded by [ADR 0123](0123-manifest-drops-dx-plugins.md)
 - **Date:** 2026-09-28
 - **Source:** [issue #106](https://github.com/alanrsoares/mochi/issues/106), [issue #103](https://github.com/alanrsoares/mochi/issues/103), [ADR 0109](0109-bootstrap-ast-is-the-public-ast.md), [ADR 0011](0011-language-plugins.md), [ADR 0050](0050-plugin-claims-table-dispatch.md)
 

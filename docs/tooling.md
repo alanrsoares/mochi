@@ -255,9 +255,9 @@ Apps keep one typed manifest — `mochi.plugins.ts` — read by Vite, `gen-mochi
 and the LSP (the extension walks upward from each open `.mochi` file; loads only
 in a **trusted** workspace and only when the manifest resolves inside a workspace
 folder). Export `default` or named `plugins` as the self-hosted-core list
-(`BootstrapPlugin[]`, from each vendor's `/bootstrap` entry), plus an optional
-`dxPlugins` TypeScript-core copy that hover, completion, and navigation read
-until #103 ([ADR 0110](adr/0110-plugin-manifest-bootstrap-first.md)). Vite may
+(`BootstrapPlugin[]`, from each vendor's `/bootstrap` entry); the build and every
+editor query read it ([ADR 0110](adr/0110-plugin-manifest-bootstrap-first.md),
+[ADR 0123](adr/0123-manifest-drops-dx-plugins.md)). Vite may
 also import a project-specific alias (`docsVendorPlugins`, …). A legacy `mochi.plugins.mjs`
 beside it still works as a fallback. JSX needs no entry —
 `jsxPlugin` is a builtin, registered by default; passing `plugins: []` is the non-UI

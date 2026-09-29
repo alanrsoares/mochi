@@ -17,8 +17,6 @@ import {
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { lex as bootstrapLex } from "@mochi/compiler/bootstrap/syntax";
 import type { Stmt } from "@mochi/compiler/bootstrap/types";
-import type { LanguagePlugin } from "@mochi/compiler/extensions";
-import type { ModuleCache } from "@mochi/compiler/module";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import type { Location, Span } from "@mochi/compiler/span";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
@@ -218,18 +216,12 @@ export const typeDefinitionAt = (
   return name ? typeDeclOf(name, idx) : null;
 };
 
-/** Options threaded into module-* nav helpers that typecheck. */
+/** Options threaded into module-aware go-to-type, which types the graph. */
 export type ModuleNavOptions = {
-  /**
-   * TS-host plugins and module cache. Go-to-type no longer reads them (it is
-   * bootstrap-only, ADR 0119); they stay so one DX options bag serves hover too.
-   */
-  plugins?: LanguagePlugin[];
-  cache?: ModuleCache;
-  /** Caller-owned bootstrap graph memo, valid for one `bootstrapPlugins` list. */
-  bootstrapCache?: BootstrapGraphCache;
+  /** Caller-owned bootstrap graph memo, valid for one `plugins` list. */
+  cache?: BootstrapGraphCache;
   /** Project plugins for the bootstrap graph (ADR 0109); omitted means the builtins. */
-  bootstrapPlugins?: readonly BootstrapPlugin[];
+  plugins?: readonly BootstrapPlugin[];
 };
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
@@ -244,8 +236,8 @@ export const moduleTypeDefinitionAt = async (
     path,
     src,
     readFile,
-    opts.bootstrapCache,
-    opts.bootstrapPlugins,
+    opts.cache,
+    opts.plugins,
   );
   if (inferred._tag === "Err") return null;
   const entryPath = resolve(path);

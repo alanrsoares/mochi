@@ -26,15 +26,12 @@ The language server discovers `mochi.plugins.ts` by walking upward from each ope
 The manifest must be plain ESM JavaScript (`.mjs`) — the server runs under the
 editor's Node runtime, so a `.mts` manifest would depend on Node's type-stripping
 support, which isn't a guaranteed contract. Export `default` or named `plugins`
-(self-hosted-core plugins), plus an optional `dxPlugins` TypeScript-core copy that
-hover and completion read until #103 (ADR 0110):
+(self-hosted-core plugins, ADR 0123):
 
 ```js
-import { styledCvaExtension } from "@mochi/plugin-styled-cva";
 import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 
 export default [styledCvaBootstrap];
-export const dxPlugins = [styledCvaExtension];
 ```
 
 Saving the manifest reloads it automatically and republishes diagnostics for
