@@ -23,11 +23,17 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
+      # The job runs pull-request code and never pushes, so the token stays out
+      # of .git/config.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
+      # Pinned: instruction counts are only comparable across runs of the
+      # same JSC build. Bump deliberately, and expect one step change.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - run: bun install --frozen-lockfile
 
