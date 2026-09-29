@@ -1,14 +1,15 @@
 // ADR 0120: completion moved onto the self-hosted core. On every import-free
 // .mochi file in the repo, the bootstrap answer must equal the TypeScript
-// core's at a sample of value, member and JSX-attribute positions. Passing an
-// (empty) `nsImports` is what routes `completeAt` down the TS path with the
-// default plugins. The sample keeps this in the default gate; a full sweep of
-// every position agreed when the path landed.
+// core's at a sample of value, member and JSX-attribute positions. The TS
+// answer now lives only in `test/oracles/complete-ts.ts` (#103), until #104
+// retires the oracle. The sample keeps this in the default gate; a full sweep
+// of every position agreed when the path landed.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { completeAt } from "@mochi/dx/complete";
 import { repoRoot } from "@mochi/test-support";
+import { completeAtTs } from "./oracles/complete-ts";
 
 const root = repoRoot(import.meta.url);
 
@@ -37,7 +38,7 @@ for (const file of corpus) {
   test(`completion agrees with the TS core on ${file}`, () => {
     const differing = probes(src).flatMap((offset) => {
       const got = completeAt(src, offset);
-      const want = completeAt(src, offset, { nsImports: new Map() });
+      const want = completeAtTs(src, offset, {});
       return JSON.stringify(got) === JSON.stringify(want) ? [] : [{ offset, got, want }];
     });
     expect(differing.slice(0, 2)).toEqual([]);

@@ -1,6 +1,6 @@
 // ADR 0120: completion answered by the self-hosted core. `completeAt` /
-// `moduleCompleteAt` without TS plugins route here; these pin what that path
-// adds beyond the shared complete.spec.ts cases.
+// `moduleCompleteAt` route here; these pin what that path adds beyond the
+// shared complete.spec.ts cases.
 import { expect, test } from "bun:test";
 import { bootstrapCompleteAt, moduleBootstrapCompleteAt } from "@mochi/dx/bootstrap-complete";
 import { type CompletionItem, moduleCompleteAt } from "@mochi/dx/complete";
@@ -63,7 +63,16 @@ export let Badge = tw.div("base", {
 test("a self-hosted-core plugin types JSX props with no TS plugin", async () => {
   const src = 'import { Badge } from "./ui"\nlet el = <Badge $tone="';
   const items = await moduleCompleteAt("/p/main.mochi", src, src.length, memRead(TW), {
-    bootstrapPlugins: [styledCvaBootstrap],
+    plugins: [styledCvaBootstrap],
   });
   expect(labels(items)).toEqual(["amber", "rose"]);
+});
+
+test("a plugin's completeMembers lists an opaque receiver's members", async () => {
+  const src = 'import { tw } from "./ui"\nlet B = tw.s';
+  const items = await moduleCompleteAt("/p/main.mochi", src, src.length, memRead(TW), {
+    plugins: [styledCvaBootstrap],
+  });
+  expect(labels(items)).toEqual(["section", "span"]);
+  expect(labels(bootstrapCompleteAt(src, src.length))).toEqual([]);
 });

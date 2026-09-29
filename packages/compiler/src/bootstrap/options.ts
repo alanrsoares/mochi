@@ -66,11 +66,26 @@ export type BootstrapFormatHook = Nullable<SeedHook<"format">>;
  */
 export type BootstrapDtsBindingHook = Nullable<SeedHook<"dtsBinding">>;
 
+/** What a completion item is, for the editor's icon. */
+export type CompletionKind = "value" | "member" | "field" | "method" | "literal" | "type" | "ctor";
+
+export type CompletionItem = { label: string; kind: CompletionKind; detail?: string };
+
+/** Context for a `completeMembers` hook: the receiver name and the typed prefix after `.`. */
+export type CompleteMemberApi = { receiver: string; prefix: string };
+
+/**
+ * Members after `receiver.` when the core has none (opaque host externs like
+ * `tw`). `null` falls through; the first non-null answer wins, in list order.
+ */
+export type CompleteMemberHook = (api: CompleteMemberApi) => CompletionItem[] | null;
+
 /**
  * A host plugin over the self-hosted core (ADR 0109). Every hook is optional;
  * `toSeedPlugins` turns the record into the seed's `Option`-shaped `Plugin`.
  * `bindingType` and `formatDoc` stay builtin-only (the JSX plugin's ADR 0055
- * rendering and tag re-fold, ADR 0112).
+ * rendering and tag re-fold, ADR 0112). `completeMembers` is host-only: the
+ * editor calls it, and the seed never sees it.
  */
 export type BootstrapPlugin = {
   name: string;
@@ -78,6 +93,7 @@ export type BootstrapPlugin = {
   inferCall?: BootstrapInferCallHook;
   format?: BootstrapFormatHook;
   dtsBinding?: BootstrapDtsBindingHook;
+  completeMembers?: CompleteMemberHook;
 };
 
 /** The options record as the seed reads it: `plugins` is an `Option`. */

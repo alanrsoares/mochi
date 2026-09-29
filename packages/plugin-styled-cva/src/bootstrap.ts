@@ -3,7 +3,7 @@
  * `styledCvaExtension` in `./index.ts`, written against bootstrap AST and type
  * values: `tw.tag(base, { variants })` types as props → VNode, the dts hook
  * prints `$tone?: "rose" | …` unions, and the format hook reflows class strings
- * (ADR 0057). Completion stays on the TypeScript host until DX moves (#103).
+ * (ADR 0057). `completeMembers` lists the `tw.<tag>` factories for the editor.
  *
  * Depends only on bootstrap façades, so the conformance runner can load it
  * without reaching the hand-authored TypeScript core.
@@ -13,6 +13,7 @@ import type {
   BootstrapFormatHook,
   BootstrapInferCallHook,
   BootstrapPlugin,
+  CompleteMemberHook,
 } from "@mochi/compiler/bootstrap/options";
 import type { Expr, Field, Span, St, Ty } from "@mochi/compiler/bootstrap/types";
 import {
@@ -205,9 +206,47 @@ const formatTwClassStrings: BootstrapFormatHook = (e) => {
   return changed ? { ...e, args } : null;
 };
 
+/**
+ * HTML element factories `tw.div` / `tw.button` / … — opaque `extern tw : a`
+ * carries no member list in HM (ADR 0009); completion is a plugin hook (ADR 0013).
+ */
+const TW_TAGS = [
+  "a",
+  "article",
+  "aside",
+  "button",
+  "div",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "header",
+  "img",
+  "input",
+  "label",
+  "li",
+  "main",
+  "nav",
+  "p",
+  "section",
+  "span",
+  "ul",
+] as const;
+
+export const twMembers: CompleteMemberHook = ({ receiver }) =>
+  receiver !== "tw"
+    ? null
+    : TW_TAGS.map((label) => ({
+        label,
+        kind: "member" as const,
+        detail: "styled-cva factory",
+      }));
+
 export const styledCvaBootstrap: BootstrapPlugin = {
   name: "styled-cva",
   inferCall: inferTwFactory,
   format: formatTwClassStrings,
   dtsBinding: styledCvaDts,
+  completeMembers: twMembers,
 };

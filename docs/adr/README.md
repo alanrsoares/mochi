@@ -165,6 +165,7 @@ What else was on the table and why not.
 | [0118](0118-bootstrap-symbol-index.md) | Full symbol index in bootstrap | Accepted |
 | [0119](0119-bootstrap-binder-records.md) | Binder records in bootstrap infer | Accepted |
 | [0120](0120-bootstrap-completion.md) | Completion on the bootstrap core | Accepted |
+| [0121](0121-bootstrap-complete-members.md) | Plugin member completion on the bootstrap core | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

@@ -13,7 +13,6 @@
 // import, so Node/Vite's config loader must resolve it without a bundler.
 import type { Diagnostic } from "@mochi/compiler/errors";
 import type {
-  CompleteMemberHook,
   DtsBindingHook,
   InferCallApi,
   InferCallHook,
@@ -27,6 +26,7 @@ import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
 import type { Row, Type } from "@mochi/compiler/types";
 import { rExtend, tArrow, tCon, tLit, tRecord, tUnion } from "@mochi/compiler/types";
 import { err, isErr, ok, type Result } from "@onrails/result";
+import { twMembers } from "./bootstrap";
 
 const isTwFactoryCall = (e: CallExpr): boolean =>
   e.fn.kind === "field" && e.fn.target.kind === "ref" && e.fn.target.name === "tw";
@@ -89,43 +89,6 @@ const styledCvaDts: DtsBindingHook = (_name, _sc, value): string | null => {
   // Open rest: host DOM attrs (onClick, type, aria-*) not modeled in Mochi.
   return `(props: { ${props.join("; ")} } & Record<string, unknown>) => any`;
 };
-
-/**
- * HTML element factories `tw.div` / `tw.button` / … — opaque `extern tw : a`
- * carries no member list in HM (ADR 0009); completion is a plugin hook (ADR 0013).
- */
-const TW_TAGS = [
-  "a",
-  "article",
-  "aside",
-  "button",
-  "div",
-  "footer",
-  "form",
-  "h1",
-  "h2",
-  "h3",
-  "header",
-  "img",
-  "input",
-  "label",
-  "li",
-  "main",
-  "nav",
-  "p",
-  "section",
-  "span",
-  "ul",
-] as const;
-
-const twMembers: CompleteMemberHook = ({ receiver }) =>
-  receiver !== "tw"
-    ? null
-    : TW_TAGS.map((label) => ({
-        label,
-        kind: "member" as const,
-        detail: "styled-cva factory",
-      }));
 
 export const styledCvaExtension: LanguagePlugin = {
   name: "styled-cva",
