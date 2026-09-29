@@ -158,31 +158,47 @@ export let typedProgramWith = (src, opts: Opts) =>
 
 export let typedProgram = src => src->typedProgramWith(defaultOpts)
 
+// The span table a typed query returns: every recorded node, with its type
+// rendered once for display.
+let typedQuery = (src, stmts, opts: Opts) =>
+  stmts->inferProgramTypesWith(
+    builtins,
+    namespaces,
+    openMode(src, opts.open),
+    opts.plugins
+  )
+    |> Result.map(r =>
+      {
+        env: r.env,
+        types: r.types
+          |> map(hit =>
+            {
+              span: hit.span,
+              ty: hit.ty,
+              display: hit.ty->widenLits()->showType(),
+              sym: hit.sym
+            }),
+        aliases: r.aliases,
+        letParams: r.letParams
+      })
+    |> Result.mapErr(e => [stampType(e)])
+
 /// inferTypes : string -> Result InferResult Err — strict typed-query seam
 /// for host DX. Keeps the recorded span -> type table instead of discarding it.
 export let inferTypesWith = (src, opts: Opts) =>
-  let? stmts = src->frontend(opts.plugins) in
-    stmts->inferProgramTypesWith(
-      builtins,
-      namespaces,
-      openMode(src, opts.open),
-      opts.plugins
-    )
-      |> Result.map(r =>
-        {
-          env: r.env,
-          types: r.types
-            |> map(hit =>
-              {
-                span: hit.span,
-                ty: hit.ty,
-                display: hit.ty->widenLits()->showType(),
-                sym: hit.sym
-              }),
-          aliases: r.aliases,
-          letParams: r.letParams
-        })
-      |> Result.mapErr(e => [stampType(e)])
+  let? stmts = src->frontend(opts.plugins) in typedQuery(src, stmts, opts)
+
+/// The typed query over the statements a recovering parse keeps, its parse
+/// diagnostics dropped (ADR 0120). Completion is most wanted mid-edit, when a
+/// hole elsewhere in the buffer would fail `inferTypesWith`. Mirrors
+/// src/compile.ts's `toTypedProgramRecovering`.
+export let inferTypesRecoveringWith = (src, opts: Opts) => switch lex(src) {
+  | Err(e) => Err([stampStage("lex", e)])
+  | Ok(tokens) => let parsed = parseRecovering(tokens, opts.plugins) in
+      checkAll(parsed.stmts)
+        |> Result.mapErr(es => es |> map(e => stampStage("check", e)))
+        |> Result.flatMap(stmts => typedQuery(src, stmts, opts))
+}
 
 export let inferTypes = src => src->inferTypesWith(defaultOpts)
 

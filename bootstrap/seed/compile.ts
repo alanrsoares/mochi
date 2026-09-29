@@ -256,6 +256,44 @@ export const typedProgram: (src: string) => Result<
   ],
   Stamped[]
 > = (src: string) => typedProgramWith(src, defaultOpts);
+const typedQuery: _Curry<
+  [src: string, stmts: Stmt[], opts: Opts],
+  Result<
+    {
+      env: Map<string, Scheme>;
+      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+      aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
+    },
+    Stamped[]
+  >
+> = _curry(3, (src: string, stmts: Stmt[], opts: Opts) =>
+  _Result_mapErr(
+    (e: IErr) => [stampType(e)],
+    _Result_map(
+      (r: {
+        letParams: TypeAt[];
+        aliases: Map<string, QualAliasInfo>;
+        types: TypeAt[];
+        env: Map<string, Scheme>;
+      }) => ({
+        env: r.env,
+        types: map(
+          (hit: TypeAt) => ({
+            span: hit.span,
+            ty: hit.ty,
+            display: showType(widenLits(hit.ty)),
+            sym: hit.sym,
+          }),
+          r.types,
+        ),
+        aliases: r.aliases,
+        letParams: r.letParams,
+      }),
+      inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins),
+    ),
+  ),
+);
 /**
  * inferTypes : string -> Result InferResult Err — strict typed-query seam
  * for host DX. Keeps the recorded span -> type table instead of discarding it.
@@ -272,41 +310,51 @@ export const inferTypesWith: _Curry<
     Stamped[]
   >
 > = _curry(2, (src: string, opts: Opts) =>
-  _Result_flatMap(
-    (stmts) =>
-      _Result_mapErr(
-        (e: IErr) => [stampType(e)],
-        _Result_map(
-          (r: {
-            letParams: TypeAt[];
-            aliases: Map<string, QualAliasInfo>;
-            types: TypeAt[];
-            env: Map<string, Scheme>;
-          }) => ({
-            env: r.env,
-            types: map(
-              (hit: TypeAt) => ({
-                span: hit.span,
-                ty: hit.ty,
-                display: showType(widenLits(hit.ty)),
-                sym: hit.sym,
-              }),
-              r.types,
-            ),
-            aliases: r.aliases,
-            letParams: r.letParams,
-          }),
-          inferProgramTypesWith(
-            stmts,
-            builtins,
-            namespaces,
-            openMode(src, opts.open),
-            opts.plugins,
-          ),
-        ),
-      ),
-    frontend(src, opts.plugins),
-  ),
+  _Result_flatMap((stmts) => typedQuery(src, stmts, opts), frontend(src, opts.plugins)),
+);
+/**
+ * The typed query over the statements a recovering parse keeps, its parse
+ * diagnostics dropped (ADR 0120). Completion is most wanted mid-edit, when a
+ * hole elsewhere in the buffer would fail `inferTypesWith`. Mirrors
+ * src/compile.ts's `toTypedProgramRecovering`.
+ */
+export const inferTypesRecoveringWith: _Curry<
+  [src: string, opts: Opts],
+  Result<
+    {
+      env: Map<string, Scheme>;
+      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+      aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
+    },
+    Stamped[]
+  >
+> = _curry(2, (src: string, opts: Opts) =>
+  ((_v) =>
+    _v._tag === "Err"
+      ? (({ error: e }) =>
+          Err([stampStage("lex", e)]) as Result<
+            {
+              env: Map<string, Scheme>;
+              types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+              aliases: Map<string, QualAliasInfo>;
+              letParams: TypeAt[];
+            },
+            Stamped[]
+          >)(_v)
+      : _v._tag === "Ok"
+        ? (({ value: tokens }) =>
+            ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
+              _Result_flatMap(
+                (stmts: Stmt[]) => typedQuery(src, stmts, opts),
+                _Result_mapErr(
+                  (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+                  checkAll(parsed.stmts),
+                ),
+              ))(parseRecovering(tokens, opts.plugins)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(lex(src)),
 );
 export const inferTypes: (src: string) => Result<
   {

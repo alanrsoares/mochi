@@ -144,7 +144,7 @@ export let exprSpan = e => switch e {
   | Ast.EInterp(_, sp) => sp
 }
 
-let patSpan = p => switch p {
+export let patSpan = p => switch p {
   | Ast.PWild(sp) => sp
   | Ast.PUnit(sp) => sp
   | Ast.PBind(_, sp) => sp

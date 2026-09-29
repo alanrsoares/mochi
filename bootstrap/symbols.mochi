@@ -11,6 +11,7 @@
 // resolved to their export sites through `origins`, and builtins resolved to
 // the host's virtual prelude through `prelude`.
 import * as Ast from "./ast.mochi"
+import { exprSpan, patSpan } from "./infer.mochi"
 
 /// A declaration site: the file it lives in and its name span.
 export type Loc = { path: string, start: number, end: number }
@@ -39,12 +40,19 @@ export type Origins = {
 /// `Ns.member` (`Array.map`).
 export type SymPrelude = { origins: Origins, members: Map<string, Loc> }
 
+/// One lexical scope below module scope: the value binders it introduces,
+/// live across `start..end` (a lambda, a `let … in` body, an arm, …).
+/// Completion overlays these on module scope, widest first (ADR 0120).
+export type ScopeFrame = { start: number, end: number, binds: Map<string, Loc> }
+
 /// A file's index. `top` holds its module-scope bindings, imports included;
-/// `fields` the record field names it declares or first mentions.
+/// `fields` the record field names it declares or first mentions; `frames`
+/// every local scope, inner scopes before the scopes that enclose them.
 export type SymIndex = {
   occurrences: [SymOccurrence],
   top: Origins,
-  fields: Map<string, Loc>
+  fields: Map<string, Loc>,
+  frames: [ScopeFrame]
 }
 
 /// Single-file value occurrence, as `index` reports it.
@@ -64,15 +72,21 @@ type SymEnv = {
   locals: Map<string, Loc>
 }
 
-/// A walk's occurrences, and the field table after it. Field names are one
-/// file-wide table: the first site is the def, every later site a use.
-type Walked = { occs: [SymOccurrence], fields: Map<string, Loc> }
+/// A walk's occurrences, the field table after it, and the scopes it met.
+/// Field names are one file-wide table: the first site is the def, every
+/// later site a use.
+type Walked = {
+  occs: [SymOccurrence],
+  fields: Map<string, Loc>,
+  frames: [ScopeFrame]
+}
 
 /// A pattern or parameter walk also yields the scope its binders extend.
 type BoundScope = {
   env: SymEnv,
   occs: [SymOccurrence],
-  fields: Map<string, Loc>
+  fields: Map<string, Loc>,
+  frames: [ScopeFrame]
 }
 
 let emptyOrigins : Origins = { values: #{}, types: #{}, ctors: #{} }
@@ -128,18 +142,57 @@ let use = (env: SymEnv, space: string, name: string, span: Ast.Span) => switch l
   | None => []
 }
 
-let walked = (occs: [SymOccurrence], fields: Map<string, Loc>) =>
-  { occs, fields }
+let walked : [SymOccurrence] -> Map<string, Loc> -> Walked = (occs, fields) =>
+  { occs, fields, frames: [] }
 
 let none = (fields: Map<string, Loc>) => walked([], fields)
 
 /// Run `rest` on the field table `first` leaves, and join their occurrences.
 let andThen = (first: Walked, rest: Map<string, Loc> -> Walked) =>
   let second = rest(first.fields) in
-    walked(Array.concat(first.occs, second.occs), second.fields)
+    {
+      occs: Array.concat(first.occs, second.occs),
+      fields: second.fields,
+      frames: Array.concat(first.frames, second.frames)
+    }
 
 let prefixed = (occs: [SymOccurrence], w: Walked) =>
-  walked(Array.concat(occs, w.occs), w.fields)
+  { occs: Array.concat(occs, w.occs), fields: w.fields, frames: w.frames }
+
+let sameLoc = (a: Option<Loc>, b: Option<Loc>) => switch (a, b) {
+  | (Some(x), Some(y)) => x.start == y.start && x.end == y.end && x.path == y.path
+  | (None, None) => true
+  | _ => false
+}
+
+/// The value binders `inner` holds that `outer` does not (or rebinds).
+let newBinds = (outer: SymEnv, inner: SymEnv) =>
+  Map.keys(inner.locals)
+    |> Array.reduce(
+      (acc, name) =>
+        sameLoc(
+          Map.get(name, outer.locals),
+          Map.get(name, inner.locals)
+        ) || parked(name)
+          ? acc
+          : switch Map.get(name, inner.locals) {
+            | Some(def) => Map.set(name, def, acc)
+            | None => acc
+          },
+      #{}
+    )
+
+/// Close a scope: record the binders `inner` added over `outer` as a frame
+/// live across `sp`, after the frames nested inside it.
+let framed = (outer: SymEnv, inner: SymEnv, sp: Ast.Span, w: Walked) =>
+  let binds = newBinds(outer, inner) in
+    Map.size(binds) == 0
+      ? w
+      : {
+        occs: w.occs,
+        fields: w.fields,
+        frames: Array.append({ start: sp.start, end: sp.end, binds }, w.frames)
+      }
 
 let touchField = (env: SymEnv, name: string, span: Ast.Span, fields: Map<string, Loc>) => switch Map.get(name, fields) {
   | Some(def) => walked([occ(name, "field", def, span, "use")], fields)
@@ -160,8 +213,12 @@ let bindLocal = (env: SymEnv, name: string, span: Ast.Span) =>
       occ: occ(name, "value", def, span, "def")
     }
 
-let bound = (env: SymEnv, occs: [SymOccurrence], fields: Map<string, Loc>) =>
-  { env, occs, fields }
+let bound : SymEnv -> [SymOccurrence] -> Map<string, Loc> -> BoundScope = (env, occs, fields) =>
+  { env, occs, fields, frames: [] }
+
+/// `bound`, keeping the frames of an expression walked on the way (a default).
+let boundWith = (env: SymEnv, occs: [SymOccurrence], w: Walked) =>
+  { env, occs, fields: w.fields, frames: w.frames }
 
 let bindName = (env: SymEnv, name: string, span: Ast.Span, fields: Map<string, Loc>) =>
   let b = bindLocal(env, name, span) in bound(b.env, [b.occ], fields)
@@ -169,7 +226,12 @@ let bindName = (env: SymEnv, name: string, span: Ast.Span, fields: Map<string, L
 /// Continue a binder walk: `rest` sees the scope and field table `first` left.
 let boundThen = (first: BoundScope, rest: SymEnv -> Map<string, Loc> -> BoundScope) =>
   let second = rest(first.env, first.fields) in
-    bound(second.env, Array.concat(first.occs, second.occs), second.fields)
+    {
+      env: second.env,
+      occs: Array.concat(first.occs, second.occs),
+      fields: second.fields,
+      frames: Array.concat(first.frames, second.frames)
+    }
 
 let bindNames = (env: SymEnv, names: [string], spans: [Ast.Span], i: number, fields: Map<string, Loc>) => switch (Array.get(i, names), Array.get(i, spans)) {
   | (Some(name), Some(span)) => boundThen(bindName(
@@ -239,9 +301,9 @@ let bindParam = (env: SymEnv, param: Ast.LamParam, fields: Map<string, Loc>) => 
     } in
     let before = Array.concat(annotOccs, dflt.occs) in
       parked(name)
-        ? bound(env, before, dflt.fields)
+        ? boundWith(env, before, dflt)
         : let b = bindLocal(env, name, span) in
-          bound(b.env, Array.append(b.occ, before), dflt.fields)
+          boundWith(b.env, Array.append(b.occ, before), dflt)
   | Ast.LPSpanned(Ast.LPTuple(names), spans) => bindNames(
       env,
       names,
@@ -263,7 +325,7 @@ let bindParam = (env: SymEnv, param: Ast.LamParam, fields: Map<string, Loc>) => 
       | Some(e) => walkExpr(env, e, fields)
       | None => none(fields)
     } in
-      bound(env, Array.concat(walkAnnot(env, annot), dflt.occs), dflt.fields)
+      boundWith(env, Array.concat(walkAnnot(env, annot), dflt.occs), dflt)
   | _ => bound(env, [], fields)
 }
 
@@ -466,11 +528,21 @@ let walkArms = (env: SymEnv, arms, i: number, fields: Map<string, Loc>) => switc
       | Some(g) => walkExpr(pat.env, g, pat.fields)
       | None => none(pat.fields)
     } in
-      andThen(andThen(prefixed(
-        pat.occs,
-        guard
-      ), fs =>
-        walkExpr(pat.env, arm.body, fs)), fs => walkArms(env, arms, i + 1, fs))
+    let body = andThen(prefixed(
+      pat.occs,
+      guard
+    ), fs => walkExpr(pat.env, arm.body, fs)) in
+    // Pattern binds are live across the guard and the body.
+    let armSpan = {
+      start: patSpan(arm.pattern).start,
+      end: exprSpan(arm.body).end
+    } in
+      andThen(framed(
+        env,
+        pat.env,
+        armSpan,
+        body
+      ), fs => walkArms(env, arms, i + 1, fs))
 }
 
 let walkLoopInits = (env: SymEnv, params, i: number, fields: Map<string, Loc>) => switch Array.get(i, params) {
@@ -529,14 +601,21 @@ let walkRunValues = (env: SymEnv, binders, i: number, fields: Map<string, Loc>) 
 
 let walkLetRun = (env: SymEnv, run: LetRun, fields: Map<string, Loc>) =>
   let scope = bindRun(env, run.binders, 0, fields) in
-    prefixed(
-      scope.occs,
-      andThen(walkRunValues(
-        scope.env,
-        run.binders,
-        0,
-        scope.fields
-      ), fs => walkExpr(scope.env, run.tail, fs))
+    // The oracle's frame is the tail's span: the run's own values see the
+    // binders (they are recursive) but completion inside them does not.
+    framed(
+      env,
+      scope.env,
+      exprSpan(run.tail),
+      prefixed(
+        scope.occs,
+        andThen(walkRunValues(
+          scope.env,
+          run.binders,
+          0,
+          scope.fields
+        ), fs => walkExpr(scope.env, run.tail, fs))
+      )
     )
 
 let fieldNameSpan = (span: Ast.Span, name: string) =>
@@ -567,24 +646,44 @@ let walkExpr = (env: SymEnv, expr: Ast.Expr, fields: Map<string, Loc>) => switch
       fn,
       fields
     ), fs => walkExprs(env, args, 0, fs))
-  | Ast.ELambda(params, body, _) => let scope = bindParams(
+  | Ast.ELambda(params, body, sp) => let scope = bindParams(
       env,
       params,
       0,
       fields
     ) in
-      prefixed(scope.occs, walkExpr(scope.env, body, scope.fields))
+    let inner = walkExpr(scope.env, body, scope.fields) in
+      framed(
+        env,
+        scope.env,
+        sp,
+        {
+          occs: Array.concat(scope.occs, inner.occs),
+          fields: inner.fields,
+          frames: Array.concat(scope.frames, inner.frames)
+        }
+      )
   | Ast.ELetIn(name, nameSpan, annot, value, body, _) => switch value {
       | Ast.ELambda(_, _, _) => walkLetRun(env, letRun(expr, []), fields)
       | _ => let v = walkExpr(env, value, fields) in
         let scope = bindName(env, name, nameSpan, v.fields) in
-          prefixed(
-            Array.concat(
-              v.occs,
-              Array.concat(walkAnnot(env, annot), scope.occs)
+        let inner = framed(
+          env,
+          scope.env,
+          exprSpan(body),
+          walkExpr(scope.env, body, scope.fields)
+        ) in
+          {
+            occs: Array.concat(
+              Array.concat(
+                v.occs,
+                Array.concat(walkAnnot(env, annot), scope.occs)
+              ),
+              inner.occs
             ),
-            walkExpr(scope.env, body, scope.fields)
-          )
+            fields: inner.fields,
+            frames: Array.concat(v.frames, inner.frames)
+          }
     }
   | Ast.ELetBind(param, _, _, value, body, _) => let v = walkExpr(
       env,
@@ -592,10 +691,17 @@ let walkExpr = (env: SymEnv, expr: Ast.Expr, fields: Map<string, Loc>) => switch
       fields
     ) in
     let scope = bindParam(env, param, v.fields) in
-      prefixed(
-        Array.concat(v.occs, scope.occs),
-        walkExpr(scope.env, body, scope.fields)
-      )
+    let inner = framed(
+      env,
+      scope.env,
+      exprSpan(body),
+      walkExpr(scope.env, body, scope.fields)
+    ) in
+      {
+        occs: Array.concat(Array.concat(v.occs, scope.occs), inner.occs),
+        fields: inner.fields,
+        frames: Array.concat(Array.concat(v.frames, scope.frames), inner.frames)
+      }
   | Ast.ELoop(params, body, _) => let inits = walkLoopInits(
       env,
       params,
@@ -603,10 +709,17 @@ let walkExpr = (env: SymEnv, expr: Ast.Expr, fields: Map<string, Loc>) => switch
       fields
     ) in
     let scope = bindLoopParams(env, params, 0, inits.fields) in
-      prefixed(
-        Array.concat(inits.occs, scope.occs),
-        walkExpr(scope.env, body, scope.fields)
-      )
+    let inner = framed(
+      env,
+      scope.env,
+      exprSpan(body),
+      walkExpr(scope.env, body, scope.fields)
+    ) in
+      {
+        occs: Array.concat(Array.concat(inits.occs, scope.occs), inner.occs),
+        fields: inner.fields,
+        frames: Array.concat(inits.frames, inner.frames)
+      }
   | Ast.ERecur(args, _) => walkExprs(env, args, 0, fields)
   | Ast.EPipe(left, right, _, _) => andThen(walkExpr(
       env,
@@ -845,7 +958,8 @@ export let indexWith = (path: string, origins: Origins, prelude: SymPrelude, stm
     {
       occurrences: Array.concat(tops.occs, body.occs),
       top: tops.top,
-      fields: body.fields
+      fields: body.fields,
+      frames: body.frames
     }
 
 // --- export sites ---

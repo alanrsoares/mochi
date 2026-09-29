@@ -50,10 +50,22 @@ export type Origins = {
  */
 export type SymPrelude = { origins: Origins; members: Map<string, Loc> };
 /**
- * A file's index. `top` holds its module-scope bindings, imports included;
- * `fields` the record field names it declares or first mentions.
+ * One lexical scope below module scope: the value binders it introduces,
+ * live across `start..end` (a lambda, a `let … in` body, an arm, …).
+ * Completion overlays these on module scope, widest first (ADR 0120).
  */
-export type SymIndex = { occurrences: SymOccurrence[]; top: Origins; fields: Map<string, Loc> };
+export type ScopeFrame = { start: number; end: number; binds: Map<string, Loc> };
+/**
+ * A file's index. `top` holds its module-scope bindings, imports included;
+ * `fields` the record field names it declares or first mentions; `frames`
+ * every local scope, inner scopes before the scopes that enclose them.
+ */
+export type SymIndex = {
+  occurrences: SymOccurrence[];
+  top: Origins;
+  fields: Map<string, Loc>;
+  frames: ScopeFrame[];
+};
 /**
  * Single-file value occurrence, as `index` reports it.
  */
@@ -67,14 +79,20 @@ export type Occurrence = {
 };
 export type SymEnv = { path: string; top: Origins; prelude: SymPrelude; locals: Map<string, Loc> };
 /**
- * A walk's occurrences, and the field table after it. Field names are one
- * file-wide table: the first site is the def, every later site a use.
+ * A walk's occurrences, the field table after it, and the scopes it met.
+ * Field names are one file-wide table: the first site is the def, every
+ * later site a use.
  */
-export type Walked = { occs: SymOccurrence[]; fields: Map<string, Loc> };
+export type Walked = { occs: SymOccurrence[]; fields: Map<string, Loc>; frames: ScopeFrame[] };
 /**
  * A pattern or parameter walk also yields the scope its binders extend.
  */
-export type BoundScope = { env: SymEnv; occs: SymOccurrence[]; fields: Map<string, Loc> };
+export type BoundScope = {
+  env: SymEnv;
+  occs: SymOccurrence[];
+  fields: Map<string, Loc>;
+  frames: ScopeFrame[];
+};
 /**
  * An adjacent run of lambda `let … in`s: one recursive scope (ADR 0067).
  */
@@ -95,24 +113,29 @@ import {
   _Array_flatMap,
   _Array_get,
   _Map_get,
+  _Map_keys,
   _Map_set,
+  _Map_size,
   _Str_codeAt,
   _Str_length,
   _Str_startsWith,
   _curry,
   _tuple,
+  add,
   and,
   eq,
   filter,
   lte,
   map,
   not,
+  or,
   reduce,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
 
 import * as Ast from "./ast";
+import { exprSpan, patSpan } from "./infer";
 
 const emptyOrigins: Origins = {
   values: new Map<string, Loc>(),
@@ -188,7 +211,11 @@ const use: _Curry<[env: SymEnv, space: string, name: string, span: SpanAt], SymO
   );
 const walked: _Curry<[occs: SymOccurrence[], fields: Map<string, Loc>], Walked> = _curry(
   2,
-  (occs: SymOccurrence[], fields: Map<string, Loc>) => ({ occs: occs, fields: fields }),
+  (occs: SymOccurrence[], fields: Map<string, Loc>) => ({
+    occs: occs,
+    fields: fields,
+    frames: [] as ScopeFrame[],
+  }),
 );
 const none: (fields: Map<string, Loc>) => Walked = (fields: Map<string, Loc>) =>
   walked([] as SymOccurrence[], fields);
@@ -199,12 +226,76 @@ const andThen: _Curry<[first: Walked, rest: (a: Map<string, Loc>) => Walked], Wa
   2,
   (first: Walked, rest: (a: Map<string, Loc>) => Walked) => {
     const second: Walked = rest(first.fields);
-    return walked(_Array_concat(first.occs, second.occs), second.fields);
+    return {
+      occs: _Array_concat(first.occs, second.occs),
+      fields: second.fields,
+      frames: _Array_concat(first.frames, second.frames),
+    };
   },
 );
 const prefixed: _Curry<[occs: SymOccurrence[], w: Walked], Walked> = _curry(
   2,
-  (occs: SymOccurrence[], w: Walked) => walked(_Array_concat(occs, w.occs), w.fields),
+  (occs: SymOccurrence[], w: Walked) => ({
+    occs: _Array_concat(occs, w.occs),
+    fields: w.fields,
+    frames: w.frames,
+  }),
+);
+const sameLoc: _Curry<[a: Option<Loc>, b: Option<Loc>], boolean> = _curry(
+  2,
+  (a: Option<Loc>, b: Option<Loc>) =>
+    ((_v) =>
+      _v[0]._tag === "Some" && _v[1]._tag === "Some"
+        ? (([{ value: x }, { value: y }]) =>
+            and(and(eq(x.start, y.start), eq(x.end, y.end)), eq(x.path, y.path)))(
+            _v as [
+              Extract<[Option<Loc>, Option<Loc>][0], { _tag: "Some" }>,
+              Extract<[Option<Loc>, Option<Loc>][1], { _tag: "Some" }>,
+            ],
+          )
+        : _v[0]._tag === "None" && _v[1]._tag === "None"
+          ? true
+          : false)(_tuple(a, b)),
+);
+/**
+ * The value binders `inner` holds that `outer` does not (or rebinds).
+ */
+const newBinds: _Curry<[outer: SymEnv, inner: SymEnv], Map<string, Loc>> = _curry(
+  2,
+  (outer: SymEnv, inner: SymEnv) =>
+    reduce(
+      _curry(2, (acc: Map<string, Loc>, name: string) =>
+        or(sameLoc(_Map_get(name, outer.locals), _Map_get(name, inner.locals)), parked(name))
+          ? acc
+          : ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: def }) => _Map_set(name, def, acc))(_v)
+                : _v._tag === "None"
+                  ? acc
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(_Map_get(name, inner.locals)),
+      ),
+      new Map<string, Loc>(),
+      _Map_keys(inner.locals),
+    ),
+);
+/**
+ * Close a scope: record the binders `inner` added over `outer` as a frame
+ * live across `sp`, after the frames nested inside it.
+ */
+const framed: _Curry<[outer: SymEnv, inner: SymEnv, sp: SpanAt, w: Walked], Walked> = _curry(
+  4,
+  (outer: SymEnv, inner: SymEnv, sp: SpanAt, w: Walked) => {
+    const binds: Map<string, Loc> = newBinds(outer, inner);
+    return _Map_size(binds) === 0
+      ? w
+      : {
+          occs: w.occs,
+          fields: w.fields,
+          frames: _Array_append({ start: sp.start, end: sp.end, binds: binds }, w.frames),
+        };
+  },
 );
 const touchField: _Curry<
   [env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>],
@@ -245,7 +336,20 @@ const bound: _Curry<[env: SymEnv, occs: SymOccurrence[], fields: Map<string, Loc
     env: env,
     occs: occs,
     fields: fields,
+    frames: [] as ScopeFrame[],
   }));
+/**
+ * `bound`, keeping the frames of an expression walked on the way (a default).
+ */
+const boundWith: _Curry<[env: SymEnv, occs: SymOccurrence[], w: Walked], BoundScope> = _curry(
+  3,
+  (env: SymEnv, occs: SymOccurrence[], w: Walked) => ({
+    env: env,
+    occs: occs,
+    fields: w.fields,
+    frames: w.frames,
+  }),
+);
 const bindName: _Curry<
   [env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>],
   BoundScope
@@ -261,7 +365,12 @@ const boundThen: _Curry<
   BoundScope
 > = _curry(2, (first: BoundScope, rest: (a: SymEnv, b: Map<string, Loc>) => BoundScope) => {
   const second: BoundScope = rest(first.env, first.fields);
-  return bound(second.env, _Array_concat(first.occs, second.occs), second.fields);
+  return {
+    env: second.env,
+    occs: _Array_concat(first.occs, second.occs),
+    fields: second.fields,
+    frames: _Array_concat(first.frames, second.frames),
+  };
 });
 const bindNames: _Curry<
   [env: SymEnv, names: string[], spans: SpanAt[], i: number, fields: Map<string, Loc>],
@@ -361,9 +470,9 @@ const bindParam: _Curry<[env: SymEnv, param: LamParam, fields: Map<string, Loc>]
                 ((dflt: Walked) =>
                   ((before: SymOccurrence[]) =>
                     parked(name)
-                      ? bound(env, before, dflt.fields)
+                      ? boundWith(env, before, dflt)
                       : ((b: { env: SymEnv; occ: SymOccurrence }) =>
-                          bound(b.env, _Array_append(b.occ, before), dflt.fields))(
+                          boundWith(b.env, _Array_append(b.occ, before), dflt))(
                           bindLocal(env, name, span),
                         ))(_Array_concat(annotOccs, dflt.occs)))(
                   ((_v) =>
@@ -406,7 +515,7 @@ const bindParam: _Curry<[env: SymEnv, param: LamParam, fields: Map<string, Loc>]
                 : _v._tag === "LPLabeled"
                   ? (({ annot, defaultValue }) =>
                       ((dflt: Walked) =>
-                        bound(env, _Array_concat(walkAnnot(env, annot), dflt.occs), dflt.fields))(
+                        boundWith(env, _Array_concat(walkAnnot(env, annot), dflt.occs), dflt))(
                         ((_v) =>
                           _v._tag === "Some"
                             ? (({ value: e }) => walkExpr(env, e, fields))(_v)
@@ -743,11 +852,14 @@ const walkArms: _Curry<
         ? (({ value: arm }) =>
             ((pat: BoundScope) =>
               ((guard: Walked) =>
-                andThen(
+                ((body: Walked) =>
+                  ((armSpan: SpanAt) =>
+                    andThen(framed(env, pat.env, armSpan, body), (fs: Map<string, Loc>) =>
+                      walkArms(env, arms, i + 1, fs),
+                    ))({ start: patSpan(arm.pattern).start, end: exprSpan(arm.body).end }))(
                   andThen(prefixed(pat.occs, guard), (fs: Map<string, Loc>) =>
                     walkExpr(pat.env, arm.body, fs),
                   ),
-                  (fs: Map<string, Loc>) => walkArms(env, arms, i + 1, fs),
                 ))(
                 ((_v) =>
                   _v._tag === "Some"
@@ -872,10 +984,15 @@ const walkLetRun: _Curry<[env: SymEnv, run: LetRun, fields: Map<string, Loc>], W
   3,
   (env: SymEnv, run: LetRun, fields: Map<string, Loc>) => {
     const scope: BoundScope = bindRun(env, run.binders, 0, fields);
-    return prefixed(
-      scope.occs,
-      andThen(walkRunValues(scope.env, run.binders, 0, scope.fields), (fs: Map<string, Loc>) =>
-        walkExpr(scope.env, run.tail, fs),
+    return framed(
+      env,
+      scope.env,
+      exprSpan(run.tail),
+      prefixed(
+        scope.occs,
+        andThen(walkRunValues(scope.env, run.binders, 0, scope.fields), (fs: Map<string, Loc>) =>
+          walkExpr(scope.env, run.tail, fs),
+        ),
       ),
     );
   },
@@ -923,9 +1040,14 @@ const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walk
                   walkExprs(env, args, 0, fs),
                 ))(_v)
             : _v._tag === "ELambda"
-              ? (({ params, body }) =>
+              ? (({ params, body, span: sp }) =>
                   ((scope: BoundScope) =>
-                    prefixed(scope.occs, walkExpr(scope.env, body, scope.fields)))(
+                    ((inner: Walked) =>
+                      framed(env, scope.env, sp, {
+                        occs: _Array_concat(scope.occs, inner.occs),
+                        fields: inner.fields,
+                        frames: _Array_concat(scope.frames, inner.frames),
+                      }))(walkExpr(scope.env, body, scope.fields)))(
                     bindParams(env, params, 0, fields),
                   ))(_v)
               : _v._tag === "ELetIn"
@@ -939,12 +1061,23 @@ const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walk
                           )
                         : ((v: Walked) =>
                             ((scope: BoundScope) =>
-                              prefixed(
-                                _Array_concat(
-                                  v.occs,
-                                  _Array_concat(walkAnnot(env, annot), scope.occs),
+                              ((inner: Walked) => ({
+                                occs: _Array_concat(
+                                  _Array_concat(
+                                    v.occs,
+                                    _Array_concat(walkAnnot(env, annot), scope.occs),
+                                  ),
+                                  inner.occs,
                                 ),
-                                walkExpr(scope.env, body, scope.fields),
+                                fields: inner.fields,
+                                frames: _Array_concat(v.frames, inner.frames),
+                              }))(
+                                framed(
+                                  env,
+                                  scope.env,
+                                  exprSpan(body),
+                                  walkExpr(scope.env, body, scope.fields),
+                                ),
                               ))(bindName(env, name, nameSpan, v.fields)))(
                             walkExpr(env, value, fields),
                           ))(value))(_v)
@@ -952,17 +1085,39 @@ const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walk
                   ? (({ param, value, body }) =>
                       ((v: Walked) =>
                         ((scope: BoundScope) =>
-                          prefixed(
-                            _Array_concat(v.occs, scope.occs),
-                            walkExpr(scope.env, body, scope.fields),
+                          ((inner: Walked) => ({
+                            occs: _Array_concat(_Array_concat(v.occs, scope.occs), inner.occs),
+                            fields: inner.fields,
+                            frames: _Array_concat(
+                              _Array_concat(v.frames, scope.frames),
+                              inner.frames,
+                            ),
+                          }))(
+                            framed(
+                              env,
+                              scope.env,
+                              exprSpan(body),
+                              walkExpr(scope.env, body, scope.fields),
+                            ),
                           ))(bindParam(env, param, v.fields)))(walkExpr(env, value, fields)))(_v)
                   : _v._tag === "ELoop"
                     ? (({ params, body }) =>
                         ((inits: Walked) =>
                           ((scope: BoundScope) =>
-                            prefixed(
-                              _Array_concat(inits.occs, scope.occs),
-                              walkExpr(scope.env, body, scope.fields),
+                            ((inner: Walked) => ({
+                              occs: _Array_concat(
+                                _Array_concat(inits.occs, scope.occs),
+                                inner.occs,
+                              ),
+                              fields: inner.fields,
+                              frames: _Array_concat(inits.frames, inner.frames),
+                            }))(
+                              framed(
+                                env,
+                                scope.env,
+                                exprSpan(body),
+                                walkExpr(scope.env, body, scope.fields),
+                              ),
                             ))(bindLoopParams(env, params, 0, inits.fields)))(
                           walkLoopInits(env, params, 0, fields),
                         ))(_v)
@@ -1321,7 +1476,12 @@ export const indexWith: _Curry<
     0,
     tops.fields,
   );
-  return { occurrences: _Array_concat(tops.occs, body.occs), top: tops.top, fields: body.fields };
+  return {
+    occurrences: _Array_concat(tops.occs, body.occs),
+    top: tops.top,
+    fields: body.fields,
+    frames: body.frames,
+  };
 });
 const originsFrom: _Curry<[path: string, stmts: Stmt[], i: number, acc: Origins], Origins> = _curry(
   4,
