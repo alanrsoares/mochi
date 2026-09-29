@@ -15,12 +15,15 @@ permissions:
   contents: read
   id-token: write # OIDC authentication with CodSpeed
 
+# Two jobs, one CodSpeed report: CodSpeed merges the results each job uploads
+# for a commit. Both run in CPU simulation (instruction counts, not wall time),
+# so results stay comparable on shared runners.
 jobs:
-  # The cases in codspeed.yml (scripts/bench-case.ts), one Bun process each,
-  # measured under CodSpeed's CPU simulation: instruction counts rather than
-  # wall time, so results stay comparable on shared runners.
-  benchmarks:
-    name: Run benchmarks
+  # The cases in codspeed.yml (scripts/bench-case.ts), one Bun process each:
+  # the runtime Mochi ships on. Each number includes start-up and seed loading;
+  # compare against `startup`.
+  bun:
+    name: Run benchmarks (Bun)
     runs-on: ubuntu-latest
     steps:
       # The job runs pull-request code and never pushes, so the token stays out
@@ -41,3 +44,31 @@ jobs:
         uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
+
+  # `CODSPEED_SUITES` (scripts/lib/bench-suites.ts) bundled for Node and run
+  # through tinybench: the operation alone, no process start-up. See
+  # bench/codspeed.ts for why they run in a worker thread.
+  node:
+    name: Run benchmarks (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun scripts/build-codspeed.ts
+
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          run: node .cache/codspeed/bench.mjs
