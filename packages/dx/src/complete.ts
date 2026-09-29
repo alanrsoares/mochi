@@ -1,20 +1,21 @@
 /**
- * LSP-shaped completion, computed from the compiler pipeline but free of any
- * editor/protocol dependency so it stays unit-testable under Bun (ADR 0013).
+ * LSP-shaped completion, free of any editor/protocol dependency so it stays
+ * unit-testable under Bun (ADR 0013).
  *
  * Member completions after `.` tolerate incomplete buffers (`Task.`, `r.ab`) via
  * a lexical rewrite that strips `.prefix` before typechecking. Value completions
- * include nested locals via `bindingsAt` on the symbol index. JSX attr names /
- * literal-union values (`$tone="…"`) read the component's prop row (Wave 12).
+ * include nested locals visible at the cursor. JSX attr names / literal-union
+ * values (`$tone="…"`) read the component's prop row (Wave 12).
+ *
+ * The self-hosted core answers by default (`bootstrap-complete.ts`, ADR 0120).
+ * The TypeScript core below answers only when TypeScript-core plugins or
+ * import schemes are passed in (`dxPlugins`, ADR 0109): their `inferCall` and
+ * `completeMembers` hooks have no bootstrap counterpart yet.
  */
 import { resolve } from "node:path";
 import type { Program } from "@mochi/compiler/ast";
-import {
-  type BootstrapGraphCache,
-  type BootstrapTypeAt,
-  inferEntryGraphTypesBootstrap,
-  loadBootstrapGraph,
-} from "@mochi/compiler/bootstrap";
+import type { BootstrapGraphCache } from "@mochi/compiler/bootstrap";
+import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import type { Registry } from "@mochi/compiler/check";
 import { toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type {
@@ -26,7 +27,7 @@ import type {
 import { resolvePlugins, runCompleteMemberHooks } from "@mochi/compiler/extensions";
 import type { Env, InferResult, TypeAt } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
-import { type ModuleCache, moduleContext, resolveImport } from "@mochi/compiler/module";
+import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
 import { parseRecovering } from "@mochi/compiler/parser";
 import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
@@ -36,6 +37,18 @@ import { indexProgram } from "@mochi/compiler/symbols";
 import { foldAliases, type Row, type Type } from "@mochi/compiler/types";
 import { map, match as matchMaybe } from "@onrails/maybe";
 import { isErr, isOk } from "@onrails/result";
+import { bootstrapCompleteAt, moduleBootstrapCompleteAt } from "./bootstrap-complete";
+import {
+  dedupeSort,
+  filterPrefix,
+  identPrefixAt,
+  type JsxAttrTrigger,
+  jsxAttrTriggerAt,
+  type MemberTrigger,
+  memberTriggerAt,
+  rewriteJsxTagToRef,
+  withoutMemberSuffix,
+} from "./complete-triggers";
 import { documentSymbolsAt } from "./nav";
 
 export type { CompletionItem, CompletionKind };
@@ -48,82 +61,6 @@ export type CompleteOptions = {
   imports?: Env;
   /** Cross-module variant registry for check (module-aware path). */
   importedReg?: Registry;
-};
-
-/** Lexical `receiver.prefix` ending at `offset` — incomplete buffers included. */
-type MemberTrigger = {
-  receiver: string;
-  prefix: string;
-  /** Index of `.` in `src`. */
-  dotStart: number;
-  /** Start of the receiver identifier. */
-  recvStart: number;
-};
-
-/** JSX open-tag attr name or string-value completion trigger. */
-type JsxAttrTrigger =
-  | { kind: "name"; tag: string; prefix: string; tagStart: number }
-  | { kind: "value"; tag: string; attr: string; prefix: string; tagStart: number };
-
-const memberTriggerAt = (src: string, offset: number): MemberTrigger | null => {
-  const before = src.slice(0, offset);
-  const m = before.match(/([A-Za-z_][\w]*)\.([\w]*)$/);
-  if (!m || m.index === undefined) return null;
-  const receiver = m[1]!;
-  const prefix = m[2]!;
-  return {
-    receiver,
-    prefix,
-    recvStart: m.index,
-    dotStart: m.index + receiver.length,
-  };
-};
-
-/**
- * Cursor inside an unclosed JSX open tag: attr name (`<Tag $to` / `<button dis`) or string
- * value (`<Tag $tone="ro` / `<button type="sub`).
- */
-const jsxAttrTriggerAt = (src: string, offset: number): JsxAttrTrigger | null => {
-  const before = src.slice(0, offset);
-  const tagM = before.match(/<([A-Za-z_][\w]*)\b([^<]*)$/);
-  if (!tagM || tagM.index === undefined) return null;
-  const tag = tagM[1]!;
-  // Trailing newline after `$tone="` is still value position (cursor at EOL).
-  const afterTag = tagM[2]!.replace(/[\t ]+$/, "");
-  const afterTrim = afterTag.replace(/\n$/, "");
-  if (afterTrim.includes(">")) return null;
-
-  const valDq = afterTrim.match(/(\$?[A-Za-z_][\w]*)\s*=\s*"([^"]*)$/);
-  const valSq = afterTrim.match(/(\$?[A-Za-z_][\w]*)\s*=\s*'([^']*)$/);
-  const val = valDq ?? valSq;
-  if (val) {
-    return {
-      kind: "value",
-      tag,
-      attr: val[1]!,
-      prefix: val[2]!,
-      tagStart: tagM.index,
-    };
-  }
-
-  // After `=` without a quote yet — not a name or string value.
-  if (/=\s*$/.test(afterTrim)) return null;
-
-  const nameM = afterTrim.match(/(?:^|[\s/])(\$?[A-Za-z_][\w]*)$/);
-  if (nameM) {
-    return { kind: "name", tag, prefix: nameM[1]!, tagStart: tagM.index };
-  }
-  if (afterTrim === "" || /[\s/]$/.test(afterTrim)) {
-    return { kind: "name", tag, prefix: "", tagStart: tagM.index };
-  }
-  return null;
-};
-
-/** Identifier (or empty) being typed at `offset` when not in a member trigger. */
-const identPrefixAt = (src: string, offset: number): string => {
-  const before = src.slice(0, offset);
-  const m = before.match(/([A-Za-z_][\w]*)$/);
-  return m?.[1] ?? "";
 };
 
 /** Prefer structural record under an alias fold for field listing. */
@@ -180,58 +117,6 @@ const componentPropsRow = (t: Type, aliases: InferResult["aliases"]): Row | null
 const tightestType = (types: TypeAt[], offset: number) =>
   tightestHit(types, offset, spanContainsClosed);
 
-const filterPrefix = (items: CompletionItem[], prefix: string): CompletionItem[] =>
-  !prefix ? items : items.filter((i) => i.label.startsWith(prefix));
-
-/** Frozen bootstrap type shapes needed for record-member completion. */
-type BootstrapTy = { _tag: string; row?: BootstrapRow };
-type BootstrapRow = { _tag: string; label?: string; fieldType?: BootstrapTy; rest?: BootstrapRow };
-
-const bootstrapRecordFieldItems = (ty: unknown): CompletionItem[] | null => {
-  if (typeof ty !== "object" || ty === null) return null;
-  const record = ty as BootstrapTy;
-  if (record._tag !== "TyRecord" || !record.row) return null;
-  const items: CompletionItem[] = [];
-  let row: BootstrapRow | undefined = record.row;
-  while (row?._tag === "RowExtend" && row.label && row.fieldType) {
-    items.push({
-      label: row.label,
-      kind: row.fieldType._tag === "TyFn" ? "method" : "field",
-      detail: row.fieldType._tag === "TyFn" ? "method" : undefined,
-    });
-    row = row.rest;
-  }
-  return items;
-};
-
-const bootstrapRecordFieldsAt = async (
-  path: string,
-  src: string,
-  trigger: MemberTrigger,
-  readFile: (path: string) => Promise<string>,
-  cache?: BootstrapGraphCache,
-): Promise<CompletionItem[] | null> => {
-  const rewritten =
-    src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
-  const inferred = await inferEntryGraphTypesBootstrap(path, rewritten, readFile, cache);
-  if (inferred._tag === "Err") return null;
-  const entry = inferred.value.find((module) => module.path === resolve(path));
-  const hit =
-    entry && tightestHit<BootstrapTypeAt>(entry.types, trigger.recvStart, spanContainsClosed);
-  return hit && hit._tag === "Some" ? bootstrapRecordFieldItems(hit.value.ty) : null;
-};
-
-const dedupeSort = (items: CompletionItem[]): CompletionItem[] => {
-  const seen = new Set<string>();
-  const out: CompletionItem[] = [];
-  for (const i of items) {
-    if (seen.has(i.label)) continue;
-    seen.add(i.label);
-    out.push(i);
-  }
-  return out.toSorted((a, b) => a.label.localeCompare(b.label));
-};
-
 // Recovering: completion is *most* wanted mid-edit, when the file does not yet
 // parse — the intact prefix still yields members and locals (C9 slice e).
 const parseProgram = (src: string, plugins?: LanguagePlugin[]): Program | null => {
@@ -266,14 +151,6 @@ const typedOf = (src: string, opts: CompleteOptions) => {
   return isOk(r) ? r.value : null;
 };
 
-/**
- * Incomplete JSX open tag → replace from `<Tag` through EOF with the bare tag
- * name so typecheck can resolve the component scheme (drops the broken tail;
- * imports / prior lets remain).
- */
-const rewriteJsxTagToRef = (src: string, tagStart: number, tag: string): string =>
-  `${src.slice(0, tagStart)}${tag}`;
-
 /** Namespace member labels — prelude table or `import * as` env. */
 const namespaceMembers = (
   receiver: string,
@@ -306,9 +183,7 @@ const recordFieldsAt = (
   trigger: MemberTrigger,
   opts: CompleteOptions,
 ): CompletionItem[] => {
-  const rewritten =
-    src.slice(0, trigger.dotStart) + src.slice(trigger.dotStart + 1 + trigger.prefix.length);
-  const typed = typedOf(rewritten, opts);
+  const typed = typedOf(withoutMemberSuffix(src, trigger), opts);
   return !typed
     ? []
     : matchMaybe(
@@ -463,28 +338,14 @@ const membersAt = (
       );
 };
 
-/** Namespace members from the frozen graph's exported-name index. */
-const bootstrapNamespaceMembers = async (
-  path: string,
-  src: string,
-  trigger: MemberTrigger,
-  readFile: (path: string) => Promise<string>,
-): Promise<CompletionItem[] | null> => {
-  const program = parseProgram(src);
-  const imported = program?.stmts.find(
-    (stmt) => stmt.kind === "import" && stmt.alias?.name === trigger.receiver,
-  );
-  if (imported?.kind !== "import") return null;
-  const graph = await loadBootstrapGraph(path, src, readFile);
-  if (graph._tag === "Err") return null;
-  const target = graph.value.find((module) => module.path === resolveImport(path, imported.from));
-  return !target
-    ? null
-    : [...target.origins.values.keys(), ...target.origins.ctors.keys()].map((label) => ({
-        label,
-        kind: "member" as const,
-        detail: `${trigger.receiver}.${label}`,
-      }));
+/** The TypeScript-core answer: `CompleteOptions` carries TS plugins or import schemes. */
+const completeAtTs = (src: string, offset: number, opts: CompleteOptions): CompletionItem[] => {
+  const trigger = memberTriggerAt(src, offset);
+  if (trigger) return dedupeSort(membersAt(src, trigger, opts));
+  const jsx = jsxAttrTriggerAt(src, offset);
+  return jsx
+    ? dedupeSort(jsxAttrItems(src, jsx, opts))
+    : dedupeSort(filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)));
 };
 
 /**
@@ -496,26 +357,25 @@ export const completeAt = (
   src: string,
   offset: number,
   opts: CompleteOptions = {},
-): CompletionItem[] => {
-  const trigger = memberTriggerAt(src, offset);
-  if (trigger) return dedupeSort(membersAt(src, trigger, opts));
-  const jsx = jsxAttrTriggerAt(src, offset);
-  return jsx
-    ? dedupeSort(jsxAttrItems(src, jsx, opts))
-    : dedupeSort(filterPrefix(valueItems(src, offset, opts.plugins), identPrefixAt(src, offset)));
-};
+): CompletionItem[] =>
+  opts.plugins === undefined && opts.imports === undefined && opts.nsImports === undefined
+    ? bootstrapCompleteAt(src, offset)
+    : completeAtTs(src, offset, opts);
 
 export type ModuleCompleteOptions = {
+  /** TypeScript-core plugins (`dxPlugins`); set, they route to the TS path. */
   plugins?: LanguagePlugin[];
   cache?: ModuleCache;
-  /** Caller-owned bootstrap graph memo for builtin-only member queries. */
+  /** Caller-owned bootstrap graph memo, valid for one `bootstrapPlugins` list. */
   bootstrapCache?: BootstrapGraphCache;
+  /** Project plugins for the bootstrap graph (ADR 0109); omitted means the builtins. */
+  bootstrapPlugins?: readonly BootstrapPlugin[];
 };
 
 /**
  * Module-aware completion: resolve imports so `import * as R` members,
  * imported components' JSX props, and plugin-backed `tw.*` work. Degrades to
- * single-file `completeAt` if the dep graph can't be resolved. Incomplete JSX
+ * single-file completion if the dep graph can't be resolved. Incomplete JSX
  * (`$tone="`) is rewritten before loading the entry so named imports still
  * resolve.
  */
@@ -526,22 +386,11 @@ export const moduleCompleteAt = async (
   readFile: (p: string) => Promise<string>,
   opts: ModuleCompleteOptions = {},
 ): Promise<CompletionItem[]> => {
-  if (opts.plugins === undefined) {
-    const trigger = memberTriggerAt(src, offset);
-    if (trigger) {
-      const items = await bootstrapNamespaceMembers(path, src, trigger, readFile);
-      if (items) return dedupeSort(filterPrefix(items, trigger.prefix));
-      const fields = await bootstrapRecordFieldsAt(
-        path,
-        src,
-        trigger,
-        readFile,
-        opts.bootstrapCache,
-      );
-      if (fields) return dedupeSort(filterPrefix(fields, trigger.prefix));
-    }
-    if (!trigger && !jsxAttrTriggerAt(src, offset)) return completeAt(src, offset);
-  }
+  if (opts.plugins === undefined)
+    return moduleBootstrapCompleteAt(path, src, offset, readFile, {
+      cache: opts.bootstrapCache,
+      plugins: opts.bootstrapPlugins,
+    });
   const entry = resolve(path);
   const load = async (buffer: string) => {
     const read = (p: string): Promise<string> =>
@@ -554,8 +403,8 @@ export const moduleCompleteAt = async (
     const jsx = jsxAttrTriggerAt(src, offset);
     if (jsx) ctx = await load(rewriteJsxTagToRef(src, jsx.tagStart, jsx.tag));
   }
-  if (isErr(ctx)) return completeAt(src, offset, { plugins: opts.plugins });
-  return completeAt(src, offset, {
+  if (isErr(ctx)) return completeAtTs(src, offset, { plugins: opts.plugins });
+  return completeAtTs(src, offset, {
     plugins: opts.plugins,
     nsImports: ctx.value.nsImports,
     imports: ctx.value.imports,
