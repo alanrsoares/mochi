@@ -16,13 +16,19 @@ import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 import {
   None,
   Some,
+  _Array_append,
   _Array_contains,
+  _Array_find,
   _Array_get,
   _Array_prepend,
   _Map_get,
   _Map_getOr,
+  _Map_has,
+  _Map_keys,
   _Map_set,
   _Map_values,
+  _Option_flatMap,
+  _Option_unwrapOr,
   _Set_add,
   _Set_diff,
   _Set_fromArray,
@@ -30,11 +36,19 @@ import {
   _Set_size,
   _Set_toArray,
   _Str_codeAt,
+  _Str_split,
   _curry,
   _tuple,
   add,
   and,
+  eq,
+  filter,
+  length,
+  lte,
   map,
+  not,
+  reduce,
+  sub,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -870,4 +884,323 @@ export const ctorScheme: <A>(
         return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty: ty }, st2);
       })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
     })(pvarsFrom(params, st)),
+);
+const matchTysFrom: _Curry<
+  [tpls: Ty[], actuals: Ty[], params: Set<number>, binds: Map<number, Ty>, i: number],
+  Option<Map<number, Ty>>
+> = _curry(5, (tpls: Ty[], actuals: Ty[], params: Set<number>, binds: Map<number, Ty>, i: number) =>
+  ((_v) =>
+    _v[0]._tag === "Some" && _v[1]._tag === "Some"
+      ? (([{ value: tpl }, { value: actual }]) =>
+          _Option_flatMap(
+            (b: Map<number, Ty>) => matchTysFrom(tpls, actuals, params, b, i + 1),
+            matchTy(tpl, actual, params, binds),
+          ))(
+          _v as [
+            Extract<[Option<Ty>, Option<Ty>][0], { _tag: "Some" }>,
+            Extract<[Option<Ty>, Option<Ty>][1], { _tag: "Some" }>,
+          ],
+        )
+      : (Some(binds) as Option<Map<number, Ty>>))(
+    _tuple(_Array_get(i, tpls), _Array_get(i, actuals)),
+  ),
+);
+/**
+ * A closed row's fields; `None` for an open one, which never folds.
+ */
+const closedFieldsOf: _Curry<
+  [row: Row, acc: { label: string; fieldType: Ty; optional: boolean }[]],
+  Option<{ label: string; fieldType: Ty; optional: boolean }[]>
+> = _curry(2, (row: Row, acc: { label: string; fieldType: Ty; optional: boolean }[]) =>
+  ((_v) =>
+    _v._tag === "RowEmpty"
+      ? (Some(acc) as Option<{ label: string; fieldType: Ty; optional: boolean }[]>)
+      : _v._tag === "RowVar"
+        ? (None as Option<{ label: string; fieldType: Ty; optional: boolean }[]>)
+        : _v._tag === "RowExtend"
+          ? (({ label, fieldType, optional, rest }) =>
+              closedFieldsOf(
+                rest,
+                _Array_append({ label: label, fieldType: fieldType, optional: optional }, acc),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(row),
+);
+const matchFieldsFrom: _Curry<
+  [
+    tpls: { label: string; optional: boolean; fieldType: Ty }[],
+    actuals: { label: string; optional: boolean; fieldType: Ty }[],
+    params: Set<number>,
+    binds: Map<number, Ty>,
+    i: number,
+  ],
+  Option<Map<number, Ty>>
+> = _curry(
+  5,
+  (
+    tpls: { label: string; optional: boolean; fieldType: Ty }[],
+    actuals: { label: string; optional: boolean; fieldType: Ty }[],
+    params: Set<number>,
+    binds: Map<number, Ty>,
+    i: number,
+  ) =>
+    ((_v) =>
+      _v._tag === "None"
+        ? (Some(binds) as Option<Map<number, Ty>>)
+        : _v._tag === "Some"
+          ? (({ value: t }) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: a }) =>
+                      eq(a.optional, t.optional)
+                        ? _Option_flatMap(
+                            (b: Map<number, Ty>) =>
+                              matchFieldsFrom(tpls, actuals, params, b, i + 1),
+                            matchTy(t.fieldType, a.fieldType, params, binds),
+                          )
+                        : (None as Option<Map<number, Ty>>))(_v)
+                  : _v._tag === "None"
+                    ? (None as Option<Map<number, Ty>>)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(
+                _Array_find(
+                  (a: { label: string; optional: boolean; fieldType: Ty }) => eq(a.label, t.label),
+                  actuals,
+                ),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, tpls)),
+);
+/**
+ * Does `actual` fit the template `tpl`? A var in `params` binds, and a repeat
+ * must agree; a record matches only closed, with the same labels.
+ */
+const matchTy: _Curry<
+  [tpl: Ty, actual: Ty, params: Set<number>, binds: Map<number, Ty>],
+  Option<Map<number, Ty>>
+> = _curry(4, (tpl: Ty, actual: Ty, params: Set<number>, binds: Map<number, Ty>) =>
+  ((_v) =>
+    _v[0]._tag === "TyVar" &&
+    (([{ id }]) => _Set_has(id, params))(
+      _v as [Extract<[Ty, Ty][0], { _tag: "TyVar" }>, [Ty, Ty][1]],
+    )
+      ? (([{ id }]) =>
+          ((_v) =>
+            _v._tag === "Some"
+              ? (({ value: prev }) =>
+                  eq(Types.showType(prev), Types.showType(actual))
+                    ? (Some(binds) as Option<Map<number, Ty>>)
+                    : (None as Option<Map<number, Ty>>))(_v)
+              : _v._tag === "None"
+                ? (Some(_Map_set(id, actual, binds)) as Option<Map<number, Ty>>)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Map_get(id, binds)))(
+          _v as [Extract<[Ty, Ty][0], { _tag: "TyVar" }>, [Ty, Ty][1]],
+        )
+      : _v[0]._tag === "TyVar" && _v[1]._tag === "TyVar"
+        ? (([{ id: a }, { id: b }]) =>
+            eq(a, b)
+              ? (Some(binds) as Option<Map<number, Ty>>)
+              : (None as Option<Map<number, Ty>>))(
+            _v as [
+              Extract<[Ty, Ty][0], { _tag: "TyVar" }>,
+              Extract<[Ty, Ty][1], { _tag: "TyVar" }>,
+            ],
+          )
+        : _v[0]._tag === "TyCon" && _v[1]._tag === "TyCon"
+          ? (([{ name: n, args: targs }, { name: m, args: aargs }]) =>
+              and(eq(n, m), eq(length(targs), length(aargs)))
+                ? matchTysFrom(targs, aargs, params, binds, 0)
+                : (None as Option<Map<number, Ty>>))(
+              _v as [
+                Extract<[Ty, Ty][0], { _tag: "TyCon" }>,
+                Extract<[Ty, Ty][1], { _tag: "TyCon" }>,
+              ],
+            )
+          : _v[0]._tag === "TyFn" && _v[1]._tag === "TyFn"
+            ? (([{ from: tf, to: tt }, { from: af, to: at }]) =>
+                _Option_flatMap(
+                  (b: Map<number, Ty>) => matchTy(tt, at, params, b),
+                  matchTy(tf, af, params, binds),
+                ))(
+                _v as [
+                  Extract<[Ty, Ty][0], { _tag: "TyFn" }>,
+                  Extract<[Ty, Ty][1], { _tag: "TyFn" }>,
+                ],
+              )
+            : _v[0]._tag === "TyRecord" && _v[1]._tag === "TyRecord"
+              ? (([{ row: trow }, { row: arow }]) =>
+                  ((_v) =>
+                    _v[0]._tag === "Some" && _v[1]._tag === "Some"
+                      ? (([{ value: tfs }, { value: afs }]) =>
+                          eq(length(tfs), length(afs))
+                            ? matchFieldsFrom(tfs, afs, params, binds, 0)
+                            : (None as Option<Map<number, Ty>>))(
+                          _v as [
+                            Extract<
+                              [
+                                Option<{ label: string; fieldType: Ty; optional: boolean }[]>,
+                                Option<{ label: string; fieldType: Ty; optional: boolean }[]>,
+                              ][0],
+                              { _tag: "Some" }
+                            >,
+                            Extract<
+                              [
+                                Option<{ label: string; fieldType: Ty; optional: boolean }[]>,
+                                Option<{ label: string; fieldType: Ty; optional: boolean }[]>,
+                              ][1],
+                              { _tag: "Some" }
+                            >,
+                          ],
+                        )
+                      : (None as Option<Map<number, Ty>>))(
+                    _tuple(
+                      closedFieldsOf(
+                        trow,
+                        [] as { label: string; fieldType: Ty; optional: boolean }[],
+                      ),
+                      closedFieldsOf(
+                        arow,
+                        [] as { label: string; fieldType: Ty; optional: boolean }[],
+                      ),
+                    ),
+                  ))(
+                  _v as [
+                    Extract<[Ty, Ty][0], { _tag: "TyRecord" }>,
+                    Extract<[Ty, Ty][1], { _tag: "TyRecord" }>,
+                  ],
+                )
+              : _v[0]._tag === "TySingleton" && _v[1]._tag === "TySingleton"
+                ? (([{ base: tb, value: tv }, { base: ab, value: av }]) =>
+                    and(eq(tb, ab), eq(tv, av))
+                      ? (Some(binds) as Option<Map<number, Ty>>)
+                      : (None as Option<Map<number, Ty>>))(
+                    _v as [
+                      Extract<[Ty, Ty][0], { _tag: "TySingleton" }>,
+                      Extract<[Ty, Ty][1], { _tag: "TySingleton" }>,
+                    ],
+                  )
+                : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf"
+                  ? eq(Types.showType(tpl), Types.showType(actual))
+                    ? (Some(binds) as Option<Map<number, Ty>>)
+                    : (None as Option<Map<number, Ty>>)
+                  : (None as Option<Map<number, Ty>>))(_tuple(tpl, actual)),
+);
+const templateRowFrom: _Curry<
+  [fields: AliasField[], vars: Map<string, Ty>, aliases: Map<string, AliasInfo>, i: number],
+  Row
+> = _curry(
+  4,
+  (fields: AliasField[], vars: Map<string, Ty>, aliases: Map<string, AliasInfo>, i: number) =>
+    ((_v) =>
+      _v._tag === "None"
+        ? (RowEmpty as Row)
+        : _v._tag === "Some"
+          ? (({ value: f }) =>
+              (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+                RowExtend(f.name, t, f.optional, templateRowFrom(fields, vars, aliases, i + 1)))(
+                typeExprToType(
+                  f.fieldType,
+                  vars,
+                  Types.mkSt(0),
+                  aliases,
+                  _Set_fromArray([] as string[]),
+                ),
+              ))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, fields)),
+);
+/**
+ * Template ids sit far below the inferrer's (which start at 1000), so a
+ * template var never collides with a var of the type it is matched against.
+ */
+const templateVars: <A>(params: A[]) => [Map<A, Ty>, number[]] = <A>(params: A[]) =>
+  reduce(
+    _curry(2, ([vs, ids]: [Map<A, Ty>, number[]], p: A) => {
+      const id: number = -1000000 - length(ids);
+      return _tuple(_Map_set(p, TyVar(id), vs), _Array_append(id, ids));
+    }),
+    _tuple(new Map<A, Ty>(), [] as number[]),
+    params,
+  );
+const allBound: _Curry<[ids: number[], binds: Map<number, Ty>], boolean> = _curry(
+  2,
+  (ids: number[], binds: Map<number, Ty>) =>
+    length(filter((id: number) => !_Map_has(id, binds), ids)) === 0,
+);
+const bareAliasName: (key: string) => string = (key: string) => {
+  const parts: string[] = _Str_split(".", key);
+  return _Option_unwrapOr(key, _Array_get(length(parts) - 1, parts));
+};
+const foldingAliasFrom: _Curry<
+  [t: Ty, keys: string[], aliases: Map<string, AliasInfo>, i: number],
+  Option<string>
+> = _curry(4, (t: Ty, keys: string[], aliases: Map<string, AliasInfo>, i: number) =>
+  ((_v) =>
+    _v._tag === "None"
+      ? (None as Option<string>)
+      : _v._tag === "Some"
+        ? (({ value: key }) =>
+            ((next: () => Option<string>) =>
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: info }) =>
+                      ((_v) =>
+                        _v._tag === "Some"
+                          ? next()
+                          : _v._tag === "None"
+                            ? (([vars, ids]: [Map<string, Ty>, number[]]) => {
+                                const tpl: Ty = TyRecord(
+                                  templateRowFrom(info.fields, vars, aliases, 0),
+                                );
+                                return ((_v) =>
+                                  _v._tag === "Some"
+                                    ? (({ value: binds }) =>
+                                        allBound(ids, binds)
+                                          ? (Some(bareAliasName(key)) as Option<string>)
+                                          : next())(_v)
+                                    : _v._tag === "None"
+                                      ? next()
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(
+                                  matchTy(tpl, t, _Set_fromArray(ids), new Map<number, Ty>()),
+                                );
+                              })(templateVars(info.params))
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(info.expr))(_v)
+                  : _v._tag === "None"
+                    ? next()
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(key, aliases)))(() =>
+              foldingAliasFrom(t, keys, aliases, i + 1),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, keys)),
+);
+/**
+ * The declared type a recorded type names, for go-to-type: a capitalised
+ * constructor head, or the first record alias (in declaration order) whose
+ * closed row it fits once literals widen. A phantom alias param cannot be
+ * named from the row, so that alias is skipped, as in src/ast/types.ts.
+ */
+export const nominalTypeName: _Curry<
+  [t: Ty, aliases: Map<string, AliasInfo>],
+  Option<string>
+> = _curry(2, (t: Ty, aliases: Map<string, AliasInfo>) =>
+  ((_v) =>
+    _v._tag === "TyCon"
+      ? (({ name }) =>
+          isUpperStart(name) ? (Some(name) as Option<string>) : (None as Option<string>))(_v)
+      : _v._tag === "TyRecord"
+        ? (({ row }) => foldingAliasFrom(TyRecord(row), _Map_keys(aliases), aliases, 0))(_v)
+        : (None as Option<string>))(widenLits(t)),
 );

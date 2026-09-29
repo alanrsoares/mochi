@@ -9,8 +9,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Program } from "@mochi/compiler/ast";
-import { inferProgram } from "@mochi/compiler/infer";
+import type { Expr, Program } from "@mochi/compiler/ast";
+import { inferProgram, inferProgramTypes } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
@@ -48,6 +48,12 @@ type AlInfer = {
     namespaces: Map<string, Map<string, unknown>>,
     openMode: boolean,
   ) => AlResult;
+  inferProgramTypes: (
+    stmts: unknown,
+    builtins: Map<string, unknown>,
+    namespaces: Map<string, Map<string, unknown>>,
+    openMode: boolean,
+  ) => AlResult;
   tVar: (id: number) => unknown;
   tCon: (name: string, args: unknown[]) => unknown;
   tArrow: (from: unknown, to: unknown) => unknown;
@@ -62,6 +68,7 @@ type AlInfer = {
 
 const alInfer = evalAlNames<AlInfer>(compileAl("bootstrap/infer.mochi"), [
   "inferProgram",
+  "inferProgramTypes",
   "tVar",
   "tCon",
   "tArrow",
@@ -208,6 +215,105 @@ for (const file of corpus) {
     const src = readFileSync(join(root, file), "utf8");
     const prog = unwrapOk(parse(unwrapOk(lex(src))));
     expect(alInferVerdict(src, prog)).toEqual(tsInferVerdict(src));
+  });
+}
+
+// ---- binder records (ADR 0119): every span the TS inferrer records with a
+// `symbol` (a `let` / parameter / property / extern name), with its kind, name,
+// doc and type, must be recorded by bootstrap infer too. Compared as sorted
+// lines, each type alpha-normalized on its own; synthetic `$` names are the
+// desugarer's, so they are left out. A file both sides reject has no table. JSX attribute names are left out too: the
+// TS plugin notes them through `api.noteType`, which the bootstrap plugin API
+// does not have yet. ----
+
+type AlBinder = {
+  kind: string;
+  name: string;
+  doc: { _tag: "Some"; value: string } | { _tag: "None" };
+};
+type AlTypeAt = {
+  span: { start: number; end: number };
+  ty: unknown;
+  sym: { _tag: "Some"; value: AlBinder } | { _tag: "None" };
+};
+
+const binderLine = (
+  start: number,
+  end: number,
+  kind: string,
+  name: string,
+  doc: string,
+  ty: string,
+) => `${start}:${end} ${kind} ${name} ${normalize(ty)}${doc === "" ? "" : ` /// ${doc}`}`;
+
+/** `start:end` of every JSX attribute name in `node`. */
+const jsxAttrSpans = (node: unknown, out = new Set<string>()): Set<string> => {
+  if (Array.isArray(node)) for (const child of node) jsxAttrSpans(child, out);
+  else if (node && typeof node === "object") {
+    const n = node as { kind?: string; origin?: string; args?: Expr[] };
+    const props = n.kind === "call" && n.origin === "jsx" ? n.args?.[1] : undefined;
+    if (props?.kind === "record")
+      for (const f of props.fields) out.add(`${f.nameSpan.start}:${f.nameSpan.end}`);
+    for (const child of Object.values(node)) jsxAttrSpans(child, out);
+  }
+  return out;
+};
+
+const tsBinders = (src: string): string[] | null => {
+  const prog = unwrapOk(parse(unwrapOk(lex(src))));
+  const r = inferProgramTypes(prog, preludeEnv, { open: true, namespaces: preludeNamespaces });
+  if (isErr(r)) return null;
+  const jsxAttrs = jsxAttrSpans(prog.stmts);
+  return r.value.types
+    .flatMap(({ span, type, symbol }) =>
+      symbol && !symbol.name.startsWith("$") && !jsxAttrs.has(`${span.start}:${span.end}`)
+        ? [
+            binderLine(
+              span.start,
+              span.end,
+              symbol.kind,
+              symbol.name,
+              symbol.doc ?? "",
+              showType(type),
+            ),
+          ]
+        : [],
+    )
+    .sort();
+};
+
+const alBinders = (src: string): string[] | null => {
+  const lr = alLex(src);
+  if (lr._tag !== "Ok") return null;
+  const pr = alParse(lr.value);
+  if (pr._tag !== "Ok") return null;
+  const ir = alInfer.inferProgramTypes(pr.value, alBuiltins, alNamespaces, true);
+  if (ir._tag !== "Ok") return null;
+  return (ir.value as { types: AlTypeAt[] }).types
+    .flatMap(({ span, ty, sym }) =>
+      sym._tag === "Some" && !sym.value.name.startsWith("$")
+        ? [
+            binderLine(
+              span.start,
+              span.end,
+              sym.value.kind,
+              sym.value.name,
+              sym.value.doc._tag === "Some" ? sym.value.doc.value : "",
+              alInfer.showType(ty),
+            ),
+          ]
+        : [],
+    )
+    .sort();
+};
+
+for (const file of corpus) {
+  test(`binder records agree on ${file}`, () => {
+    const src = readFileSync(join(root, file), "utf8");
+    const ts = tsBinders(src);
+    const al = alBinders(src);
+    expect(al === null).toBe(ts === null);
+    if (ts && al) expect(al).toEqual(ts);
   });
 }
 

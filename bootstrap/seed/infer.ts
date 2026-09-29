@@ -162,6 +162,7 @@ import {
   Some,
   _Array_append,
   _Array_concat,
+  _Array_find,
   _Array_flatMap,
   _Array_get,
   _Array_head,
@@ -222,6 +223,7 @@ import {
   showType,
   mkSt,
   recordAt,
+  recordBinder,
   noteLet,
   noteUse,
   freshVar,
@@ -700,13 +702,69 @@ const bindParamFieldsFrom: _Curry<
             throw new Error("non-exhaustive match");
           })())(fields),
 );
+const recordParamNamesFrom: _Curry<
+  [names: string[], spans: SpanAt[], types: Ty[], i: number, st: St],
+  St
+> = _curry(5, (names: string[], spans: SpanAt[], types: Ty[], i: number, st: St) =>
+  ((_v) =>
+    _v[0]._tag === "Some" && _v[1]._tag === "Some" && _v[2]._tag === "Some"
+      ? (([{ value: n }, { value: sp }, { value: t }]) =>
+          recordParamNamesFrom(
+            names,
+            spans,
+            types,
+            i + 1,
+            recordBinder(sp, t, "parameter", n, None as Option<string>, st),
+          ))(
+          _v as [
+            Extract<[Option<string>, Option<SpanAt>, Option<Ty>][0], { _tag: "Some" }>,
+            Extract<[Option<string>, Option<SpanAt>, Option<Ty>][1], { _tag: "Some" }>,
+            Extract<[Option<string>, Option<SpanAt>, Option<Ty>][2], { _tag: "Some" }>,
+          ],
+        )
+      : st)(_tuple(_Array_get(i, names), _Array_get(i, spans), _Array_get(i, types))),
+);
+const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _curry(
+  2,
+  <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) =>
+    _Array_flatMap(
+      (n: A) =>
+        ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: sc }) => [sc.ty])(_v)
+            : _v._tag === "None"
+              ? ([] as B[])
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(_Map_get(n, env)),
+      names,
+    ),
+);
 const bindParam: _Curry<
   [p: LamParam, env: Map<string, Scheme>, st: St],
   [Ty, Map<string, Scheme>, St]
 > = _curry(3, (p: LamParam, env: Map<string, Scheme>, st: St) =>
   ((_v) =>
     _v._tag === "LPSpanned"
-      ? (({ param: inner }) => bindParam(inner, env, st))(_v)
+      ? (({ param: inner, nameSpans: spans }) =>
+          (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
+            ((_v) =>
+              _v._tag === "LPTuple"
+                ? (({ names }) =>
+                    ((elems: Ty[]) =>
+                      _tuple(t, env1, recordParamNamesFrom(names, spans, elems, 0, st1)))(
+                      ((_v) => (_v._tag === "TyCon" ? (({ args: ts }) => ts)(_v) : ([] as Ty[])))(
+                        t,
+                      ),
+                    ))(_v)
+                : _v._tag === "LPRecord"
+                  ? (({ fields }) =>
+                      _tuple(
+                        t,
+                        env1,
+                        recordParamNamesFrom(fields, spans, envTypesOf(fields, env1), 0, st1),
+                      ))(_v)
+                  : _tuple(t, env1, st1))(inner))(bindParam(inner, env, st)))(_v)
       : _v._tag === "LPName"
         ? (({ name }) =>
             (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)))(
@@ -1126,7 +1184,10 @@ const inferLoopParamsFrom: _Curry<
                       _Map_set(p.name, mono(t), envAcc),
                       _Array_append(t, frameAcc),
                       _Map_set(p.name, sp, ownerAcc),
-                      noteLet(sp, st1),
+                      noteLet(
+                        sp,
+                        recordBinder(p.nameSpan, t, "let", p.name, None as Option<string>, st1),
+                      ),
                     ))(exprSpan(p.init)),
                 inferExpr(ctx, p.init, st),
               ))(_v)
@@ -1497,6 +1558,105 @@ const envWithLabFields: <A, E>(
         throw new Error("non-exhaustive match");
       }),
 );
+/**
+ * Each labeled param at its name span, typed as the body sees it.
+ */
+const recordLabParamsFrom: <A>(
+  labs: LamParam[],
+  fields: ({ name: string; bodyType: Ty } & A)[],
+  st: St,
+) => St = _curry(3, <A>(labs: LamParam[], fields: ({ name: string; bodyType: Ty } & A)[], st: St) =>
+  ((_v) =>
+    _v.length === 0
+      ? st
+      : _v.length >= 1 &&
+          _v[0]._tag === "LPSpanned" &&
+          _v[0].param._tag === "LPLabeled" &&
+          _v[0].nameSpans.length >= 1
+        ? (([
+            {
+              param: { name },
+              nameSpans: [sp],
+            },
+            ...rest
+          ]) =>
+            recordLabParamsFrom(
+              rest,
+              fields,
+              ((_v) =>
+                _v._tag === "Some"
+                  ? (({ value: f }) =>
+                      recordBinder(sp, f.bodyType, "parameter", name, None as Option<string>, st))(
+                      _v,
+                    )
+                  : _v._tag === "None"
+                    ? st
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(
+                _Array_find((f: { name: string; bodyType: Ty } & A) => eq(f.name, name), fields),
+              ),
+            ))(
+            _v as [
+              Extract<LamParam[][number], { _tag: "LPSpanned" }> & {
+                param: Extract<
+                  Extract<LamParam[][number], { _tag: "LPSpanned" }>["param"],
+                  { _tag: "LPLabeled" }
+                >;
+              },
+              ...LamParam[],
+            ],
+          )
+        : _v.length >= 1
+          ? (([, ...rest]) => recordLabParamsFrom(rest, fields, st))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(labs),
+);
+/**
+ * Each plain positional name at its span, after the body has constrained it.
+ */
+const recordNameParamsFrom: _Curry<[params: LamParam[], types: Ty[], st: St], St> = _curry(
+  3,
+  (params: LamParam[], types: Ty[], st: St) =>
+    ((_v) =>
+      _v[0].length >= 1 &&
+      _v[0][0]._tag === "LPSpanned" &&
+      _v[0][0].param._tag === "LPName" &&
+      _v[0][0].nameSpans.length >= 1 &&
+      _v[1].length >= 1
+        ? (([
+            [
+              {
+                param: { name },
+                nameSpans: [sp],
+              },
+              ...rest
+            ],
+            [t, ...ts],
+          ]) =>
+            recordNameParamsFrom(
+              rest,
+              ts,
+              recordBinder(sp, t, "parameter", name, None as Option<string>, st),
+            ))(
+            _v as [
+              [
+                Extract<[LamParam[], Ty[]][0][number], { _tag: "LPSpanned" }> & {
+                  param: Extract<
+                    Extract<[LamParam[], Ty[]][0][number], { _tag: "LPSpanned" }>["param"],
+                    { _tag: "LPName" }
+                  >;
+                },
+                ...[LamParam[], Ty[]][0],
+              ],
+              [LamParam[], Ty[]][1],
+            ],
+          )
+        : _v[0].length >= 1 && _v[1].length >= 1
+          ? (([[, ...rest], [, ...ts]]) => recordNameParamsFrom(rest, ts, st))(_v)
+          : st)(_tuple(params, types)),
+);
 const inferCallArgs: _Curry<
   [
     ctx: {
@@ -1805,6 +1965,13 @@ const inferTernary: _Curry<
       inferExpr(ctx, cond, st),
     ),
 );
+const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) =>
+  ((_v) =>
+    _v._tag === "LPSpanned"
+      ? (({ param: inner }) => bindNameOf(inner))(_v)
+      : _v._tag === "LPName"
+        ? (({ name }) => Some(name) as Option<string>)(_v)
+        : (None as Option<string>))(p);
 const inferBindBody: _Curry<
   [
     ctx: {
@@ -1850,16 +2017,27 @@ const inferBindBody: _Curry<
     (([paramT, bodyEnv, st1]: [Ty, Map<string, Scheme>, St]) =>
       _Result_flatMap(
         (st2) =>
-          _Result_flatMap(
-            ([bodyT, st3]) =>
-              (([resT, st4]: [Ty, St]) => {
-                const wantBody: Ty = mkBody(resT);
-                return _Result_flatMap(
-                  (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
-                  u(ctx, bodyT, wantBody, st4, exprSpan(body)),
-                );
-              })(freshVar(st3)),
-            inferExpr(ctxWithEnv(ctx, bodyEnv), body, st2),
+          ((stNamed: St) =>
+            _Result_flatMap(
+              ([bodyT, st3]) =>
+                (([resT, st4]: [Ty, St]) => {
+                  const wantBody: Ty = mkBody(resT);
+                  return _Result_flatMap(
+                    (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
+                    u(ctx, bodyT, wantBody, st4, exprSpan(body)),
+                  );
+                })(freshVar(st3)),
+              inferExpr(ctxWithEnv(ctx, bodyEnv), body, stNamed),
+            ))(
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: name }) =>
+                    recordBinder(paramSpan, payloadT, "let", name, None as Option<string>, st2))(_v)
+                : _v._tag === "None"
+                  ? st2
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(bindNameOf(param)),
           ),
         u(ctx, paramT, payloadT, st1, paramSpan),
       ))(bindParam(param, ctx.env, st)),
@@ -2867,7 +3045,17 @@ const inferExpr: _Curry<
     st: St,
   ) =>
     _Result_flatMap(
-      ([t, st1]) => Ok(_tuple(t, recordAt(exprSpan(e), t, st1))) as Result<[Ty, St], IErr>,
+      ([t, st1]) =>
+        Ok(
+          _tuple(
+            t,
+            ((_v) =>
+              _v._tag === "EField"
+                ? (({ name, span: sp }) =>
+                    recordBinder(sp, t, "property", name, None as Option<string>, st1))(_v)
+                : recordAt(exprSpan(e), t, st1))(e),
+          ),
+        ) as Result<[Ty, St], IErr>,
       inferExprRaw(ctx, e, st),
     ),
 );
@@ -2979,18 +3167,21 @@ const inferExprRaw: _Curry<
                               _Result_flatMap(
                                 ([labFields, st3]) =>
                                   ((allTypes: Ty[]) =>
-                                    _Result_flatMap(
-                                      ([bodyT, st4]) =>
-                                        Ok(_tuple(arrowChain(allTypes, bodyT), st4)) as Result<
-                                          [Ty, St],
-                                          IErr
-                                        >,
-                                      inferExpr(
-                                        ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
-                                        body,
-                                        st3,
-                                      ),
-                                    ))(
+                                    ((st3Labs: St) =>
+                                      _Result_flatMap(
+                                        ([bodyT, st4]) =>
+                                          Ok(
+                                            _tuple(
+                                              arrowChain(allTypes, bodyT),
+                                              recordNameParamsFrom(posParams, paramTypes, st4),
+                                            ),
+                                          ) as Result<[Ty, St], IErr>,
+                                        inferExpr(
+                                          ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
+                                          body,
+                                          st3Labs,
+                                        ),
+                                      ))(recordLabParamsFrom(labParams, labFields, st3)))(
                                     ((_v) =>
                                       _v.length === 0
                                         ? paramTypes
@@ -3012,7 +3203,7 @@ const inferExprRaw: _Curry<
                         splitLamParams(params, [] as LamParam[], [] as LamParam[]),
                       ))(_v)
                   : _v._tag === "ELetIn"
-                    ? (({ name, nameSpan: _nameSpan, annot, value, body, span: _span }) =>
+                    ? (({ name, nameSpan, annot, value, body, span: _span }) =>
                         ((_v) =>
                           _v._tag === "ELambda"
                             ? ((lets: Stmt[]) =>
@@ -3034,7 +3225,22 @@ const inferExprRaw: _Curry<
                                       ((widen: boolean) =>
                                         ((sc: Scheme) =>
                                           ((vsp: SpanAt) =>
-                                            (($ctx) => inferExpr($ctx, body, noteLet(vsp, st2)))(
+                                            (($ctx) =>
+                                              inferExpr(
+                                                $ctx,
+                                                body,
+                                                noteLet(
+                                                  vsp,
+                                                  recordBinder(
+                                                    nameSpan,
+                                                    pinned,
+                                                    "let",
+                                                    name,
+                                                    None as Option<string>,
+                                                    st2,
+                                                  ),
+                                                ),
+                                              ))(
                                               ctxWithLets(
                                                 ctx,
                                                 _Map_set(name, sc, ctx.env),
@@ -3360,7 +3566,14 @@ const inferPatRecordFrom: _Curry<
                     rest,
                     rExtend(f.label, subT, row),
                     mergeBindingMaps(bindings, subBindings),
-                    st1,
+                    recordBinder(
+                      f.labelSpan,
+                      subT,
+                      "property",
+                      f.label,
+                      None as Option<string>,
+                      st1,
+                    ),
                   ),
                 inferPat(ctx, f.pat, st),
               ))(_v)
@@ -3750,10 +3963,17 @@ const inferPat: _Curry<
   ) =>
     _Result_flatMap(
       ([t, bindings, st1]) =>
-        Ok(_tuple(t, bindings, recordAt(patSpan(p), t, st1))) as Result<
-          [Ty, Map<string, Ty>, St],
-          IErr
-        >,
+        Ok(
+          _tuple(
+            t,
+            bindings,
+            ((_v) =>
+              _v._tag === "PBind"
+                ? (({ name, span: sp }) =>
+                    recordBinder(sp, t, "parameter", name, None as Option<string>, st1))(_v)
+                : recordAt(patSpan(p), t, st1))(p),
+          ),
+        ) as Result<[Ty, Map<string, Ty>, St], IErr>,
       inferPatRaw(ctx, p, st),
     ),
 );
@@ -3793,13 +4013,16 @@ const inferPatRaw: _Curry<
   ) =>
     ((_v) =>
       _v._tag === "PAs"
-        ? (({ pat, name }) =>
+        ? (({ pat, name, nameSpan }) =>
             _Result_flatMap(
               ([t, bindings, st1]) =>
-                Ok(_tuple(t, _Map_set(name, t, bindings), st1)) as Result<
-                  [Ty, Map<string, Ty>, St],
-                  IErr
-                >,
+                Ok(
+                  _tuple(
+                    t,
+                    _Map_set(name, t, bindings),
+                    recordBinder(nameSpan, t, "parameter", name, None as Option<string>, st1),
+                  ),
+                ) as Result<[Ty, Map<string, Ty>, St], IErr>,
               inferPat(ctx, pat, st),
             ))(_v)
         : _v._tag === "PWild"
@@ -4842,15 +5065,17 @@ const registerExternsFrom: _Curry<
           ? (([s, ...rest]) =>
               ((_v) =>
                 _v._tag === "SExtern"
-                  ? (({ name, params, typeExpr }) =>
+                  ? (({ name, nameSpan, params, typeExpr, doc }) =>
                       (([vars, st0]: [Map<string, Ty>, St]) =>
-                        (([t, _, st1]: [Ty, Map<string, Ty>, St]) =>
-                          registerExternsFrom(
+                        (([t, _, st1]: [Ty, Map<string, Ty>, St]) => {
+                          const sc: Scheme = generalize(env, t, st1, false);
+                          return registerExternsFrom(
                             rest,
                             aliasMap,
-                            _Map_set(name, generalize(env, t, st1, false), env),
-                            st1,
-                          ))(
+                            _Map_set(name, sc, env),
+                            recordBinder(nameSpan, sc.ty, "extern", name, doc, st1),
+                          );
+                        })(
                           typeExprToType(
                             typeExpr,
                             vars,
@@ -5050,7 +5275,7 @@ const inferGroupFrom: _Curry<
           ? (([s, ...rest]) =>
               ((_v) =>
                 _v._tag === "SLet"
-                  ? (({ name, annot, value, span }) =>
+                  ? (({ name, nameSpan, annot, value, doc, span }) =>
                       _Result_flatMap(
                         ([t, st1]) =>
                           ((_v) =>
@@ -5060,12 +5285,24 @@ const inferGroupFrom: _Curry<
                                     (st2) =>
                                       _Result_flatMap(
                                         ([pinned, st3]) =>
-                                          _Result_flatMap(
-                                            ([restTypes, st4]) =>
-                                              Ok(
-                                                _tuple(_Map_set(name, pinned, restTypes), st4),
-                                              ) as Result<[Map<string, Ty>, St], IErr>,
-                                            inferGroupFrom(ctx, rest, st3),
+                                          ((stNamed: St) =>
+                                            _Result_flatMap(
+                                              ([restTypes, st4]) =>
+                                                Ok(
+                                                  _tuple(_Map_set(name, pinned, restTypes), st4),
+                                                ) as Result<[Map<string, Ty>, St], IErr>,
+                                              inferGroupFrom(ctx, rest, stNamed),
+                                            ))(
+                                            _Str_startsWith("$", name)
+                                              ? st3
+                                              : recordBinder(
+                                                  nameSpan,
+                                                  pinned,
+                                                  "let",
+                                                  name,
+                                                  doc,
+                                                  st3,
+                                                ),
                                           ),
                                         ((_v) =>
                                           _v._tag === "Some"
@@ -5636,7 +5873,7 @@ const qualAliasSeed: <E, F, G>(
  * two nodes share a span.
  */
 const zonkRecorded: (st: St) => TypeAt[] = (st: St) =>
-  map((r: TypeAt) => ({ span: r.span, ty: zonk(r.ty, st) }), recordedTypes(st));
+  map((r: TypeAt) => ({ span: r.span, ty: zonk(r.ty, st), sym: r.sym }), recordedTypes(st));
 /**
  * A type with no free type OR row vars — the only kind worth annotating from:
  * a generic position has nowhere to bind letters at a `const` / IIFE param.
@@ -5678,7 +5915,7 @@ const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
         ? ([] as TypeAt[])
         : _v.length >= 1
           ? (([k, ...rest]) =>
-              ((tail: TypeAt[]) =>
+              ((tail) =>
                 ((uses: Ty[]) =>
                   ((_v) =>
                     _v._tag === "None"
@@ -5689,7 +5926,9 @@ const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
                               ? ((_v) =>
                                   _v._tag === "Some"
                                     ? (({ value: span }) =>
-                                        _Array_prepend({ span: span, ty: first }, tail))(_v)
+                                        _Array_prepend({ span: span, ty: first, sym: None }, tail))(
+                                        _v,
+                                      )
                                     : _v._tag === "None"
                                       ? tail
                                       : (() => {

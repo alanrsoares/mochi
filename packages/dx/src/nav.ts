@@ -1,31 +1,27 @@
 /**
  * Navigation queries over the bootstrap symbol index (ADR 0118) — free of
  * LSP/protocol types so Bun unit tests can assert on Locations/spans. The
- * language server is a thin adapter (ADR 0003). Go-to-type also consults the
- * infer table when typecheck succeeds.
+ * language server is a thin adapter (ADR 0003). Go-to-type reads the bootstrap
+ * infer table when typecheck succeeds (ADR 0119).
  */
 import { dirname, resolve } from "node:path";
 import {
   type BootstrapGraphCache,
+  type BootstrapTypeAt,
   inferEntryGraphTypesBootstrap,
+  inferTypesBootstrapSync,
   loadBootstrapGraph,
+  nominalTypeNameBootstrap,
   resolveImportBootstrap,
 } from "@mochi/compiler/bootstrap";
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { lex as bootstrapLex } from "@mochi/compiler/bootstrap/syntax";
 import type { Stmt } from "@mochi/compiler/bootstrap/types";
-import { openMode, toTypedProgramRecovering, toTypedProgramWith } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
-import type { InferResult, TypeAt } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { type ModuleCache, moduleContext } from "@mochi/compiler/module";
-import { parseRecovering } from "@mochi/compiler/parser";
-import { preludeNamespaces } from "@mochi/compiler/prelude";
+import type { ModuleCache } from "@mochi/compiler/module";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import type { Location, Span } from "@mochi/compiler/span";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
-import { foldAliases, type Type } from "@mochi/compiler/types";
-import { isErr, isOk } from "@onrails/result";
 import {
   type Binding,
   emptyOrigins,
@@ -176,31 +172,23 @@ const externMemberDefinitionAt = async (
 export const definitionAt = (src: string, offset: number, path = "<buffer>"): Location | null =>
   indexSource(path, src)?.at(offset)?.binding.def ?? null;
 
-/** Tightest inferred type span containing `offset` (closed ends; ties → first). */
-const tightestType = (types: TypeAt[], offset: number) =>
-  tightestHit(types, offset, spanContainsClosed);
-
-/** Nominal type head (`Shape`, `Option`, …). Structural / primitives → null. */
-const nominalName = (t: Type): string | null =>
-  t.kind === "con" && /^[A-Z]/.test(t.name) ? t.name : null;
-
 /** A type name's declaration: one in scope (local, imported, prelude), else any export origin. */
 const typeDeclOf = (name: string, idx: FileIndex, origins?: Map<string, Location>) =>
   idx.binding("type", name)?.def ?? origins?.get(name) ?? null;
 
-const typeDefFrom = (
-  res: InferResult,
+/**
+ * The declared type named by the tightest bootstrap record at `offset`: a
+ * binder (`let c`) as much as an expression, since bootstrap infer records
+ * both (ADR 0119). Record aliases fold back through the result's own map.
+ */
+const nominalTypeAt = (
+  types: readonly BootstrapTypeAt[],
+  aliases: Map<string, unknown>,
   offset: number,
-  idx: FileIndex,
-  origins?: Map<string, Location>,
-): Location | null => {
-  const hit = tightestType(res.types, offset);
-  const name = hit._tag === "Some" ? nominalName(foldAliases(hit.value.type, res.aliases)) : null;
-  return name ? typeDeclOf(name, idx, origins) : null;
+): string | null => {
+  const hit = tightestHit(types, offset, spanContainsClosed);
+  return hit._tag === "Some" ? nominalTypeNameBootstrap(hit.value.ty, aliases) : null;
 };
-
-const bootstrapNominalName = (display: string): string | null =>
-  display.match(/[A-Z][A-Za-z0-9_]*/g)?.at(-1) ?? null;
 
 /** Export origins of `path`'s dependency graph, keyed as Locations. */
 const typeOrigins = async (path: string, src: string, readFile: ReadFile) => {
@@ -213,31 +201,10 @@ const typeOrigins = async (path: string, src: string, readFile: ReadFile) => {
   );
 };
 
-/** Bootstrap-native module go-to-type. */
-const bootstrapTypeDefinitionAt = async (
-  path: string,
-  src: string,
-  offset: number,
-  readFile: ReadFile,
-  cache?: BootstrapGraphCache,
-  plugins?: readonly BootstrapPlugin[],
-): Promise<Location | null> => {
-  const inferred = await inferEntryGraphTypesBootstrap(path, src, readFile, cache, plugins);
-  if (inferred._tag === "Err") return null;
-  const entryPath = resolve(path);
-  const entry = inferred.value.find((module) => module.path === entryPath);
-  const hit = entry && tightestHit(entry.types, offset, spanContainsClosed);
-  const name = hit && hit._tag === "Some" ? bootstrapNominalName(hit.value.display) : null;
-  return !name ? null : ((await typeOrigins(path, src, readFile)).get(name) ?? null);
-};
-
 /**
- * Go-to-type at `offset`: jump to the nominal type decl of the expression under
- * the cursor (variant / record alias / prelude). Needs a successful typecheck;
- * structural types and failed inference → null.
- *
- * The TS infer table still answers here: it records binder spans (`let c`),
- * which the bootstrap one does not yet.
+ * Go-to-type at `offset`: jump to the nominal type decl of the expression or
+ * binder under the cursor (variant / record alias / prelude). Needs a
+ * successful typecheck; structural types and failed inference → null.
  */
 export const typeDefinitionAt = (
   src: string,
@@ -246,13 +213,18 @@ export const typeDefinitionAt = (
 ): Location | null => {
   const idx = indexSource(path, src);
   if (!idx) return null;
-  const typed = toTypedProgramRecovering(src, { namespaces: preludeNamespaces });
-  return isOk(typed) ? typeDefFrom(typed.value.res, offset, idx) : null;
+  const inferred = inferTypesBootstrapSync(src);
+  if (inferred._tag === "Err") return null;
+  const name = nominalTypeAt(inferred.value.types, inferred.value.aliases, offset);
+  return name ? typeDeclOf(name, idx) : null;
 };
 
 /** Options threaded into module-* nav helpers that typecheck. */
 export type ModuleNavOptions = {
-  /** TS-host plugins for the go-to-type fallback (styled-cva, …). */
+  /**
+   * TS-host plugins and module cache. Go-to-type no longer reads them (it is
+   * bootstrap-only, ADR 0119); they stay so one DX options bag serves hover too.
+   */
   plugins?: LanguagePlugin[];
   cache?: ModuleCache;
   /** Caller-owned bootstrap graph memo, valid for one `bootstrapPlugins` list. */
@@ -269,35 +241,20 @@ export const moduleTypeDefinitionAt = async (
   readFile: ReadFile,
   opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
-  const bootstrap = await bootstrapTypeDefinitionAt(
+  const inferred = await inferEntryGraphTypesBootstrap(
     path,
     src,
-    offset,
     readFile,
     opts.bootstrapCache,
     opts.bootstrapPlugins,
   );
-  if (bootstrap) return bootstrap;
+  if (inferred._tag === "Err") return null;
+  const entryPath = resolve(path);
+  const entry = inferred.value.find((module) => module.path === entryPath);
+  const name = entry ? nominalTypeAt(entry.types, entry.aliases, offset) : null;
+  if (!name) return null;
   const idx = await indexModule(path, src, readFile);
-  if (!idx) return null;
-
-  const lexed = lex(src);
-  if (isErr(lexed)) return null;
-  const { program } = parseRecovering(lexed.value, { plugins: opts.plugins });
-
-  const entry = resolve(path);
-  const read = (p: string): Promise<string> =>
-    resolve(p) === entry ? Promise.resolve(src) : readFile(p);
-  const ctx = await moduleContext(entry, read, { plugins: opts.plugins, cache: opts.cache });
-  if (isErr(ctx)) return typeDefinitionAt(src, offset, entry);
-
-  const typed = toTypedProgramWith(program, ctx.value, {
-    plugins: opts.plugins,
-    open: openMode(src),
-  });
-  return isOk(typed)
-    ? typeDefFrom(typed.value.res, offset, idx, await typeOrigins(path, src, readFile))
-    : null;
+  return idx ? typeDeclOf(name, idx, await typeOrigins(path, src, readFile)) : null;
 };
 
 export const moduleDefinitionAt = async (

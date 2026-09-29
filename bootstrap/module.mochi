@@ -713,7 +713,8 @@ let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loade
                         {
                           span: hit.span,
                           ty: hit.ty,
-                          display: hit.ty->widenLits()->showType()
+                          display: hit.ty->widenLits()->showType(),
+                          sym: hit.sym
                         }),
                     aliases: mergeMap(r.aliases, ctx.aliases)
                   }

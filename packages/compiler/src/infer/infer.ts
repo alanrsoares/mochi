@@ -439,7 +439,7 @@ function inferLambda(e: LambdaExpr, ctx: Ctx): Result<Type, Diagnostic> {
       const f = fields.find((x) => x.name === lab.name)!;
       const bodyT = lab.default ? f.type : lab.optional ? tCon("Option", [f.type]) : f.type;
       bodyEnv.set(lab.name, mono(bodyT));
-      ctx.record?.(lab.span, bodyT, { kind: "parameter", name: lab.name });
+      ctx.record?.(lab.nameSpan, bodyT, { kind: "parameter", name: lab.name });
     }
     paramTypes.push(tRecord(row));
   }

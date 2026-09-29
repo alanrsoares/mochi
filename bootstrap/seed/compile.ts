@@ -1,5 +1,5 @@
 import type { Stmt } from "./ast";
-import type { SpanAt, Ty, TypeAt } from "./types";
+import type { BinderSym, SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
 import type { HostPlugin, IErr, QualAliasInfo } from "./infer";
 
@@ -65,6 +65,7 @@ import { emitTsModuleWith } from "./codegen-ts";
 import { bindingHooksFor } from "./extensions";
 import { showType } from "./types";
 import { widenLits } from "./schemes";
+import * as Schemes from "./schemes";
 import { builtins } from "./prelude.gen.mjs";
 import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
@@ -264,7 +265,7 @@ export const inferTypesWith: _Curry<
   Result<
     {
       env: Map<string, Scheme>;
-      types: { span: SpanAt; ty: Ty; display: string }[];
+      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
     },
@@ -288,6 +289,7 @@ export const inferTypesWith: _Curry<
                 span: hit.span,
                 ty: hit.ty,
                 display: showType(widenLits(hit.ty)),
+                sym: hit.sym,
               }),
               r.types,
             ),
@@ -309,12 +311,21 @@ export const inferTypesWith: _Curry<
 export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;
-    types: { span: SpanAt; ty: Ty; display: string }[];
+    types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
     aliases: Map<string, QualAliasInfo>;
     letParams: TypeAt[];
   },
   Stamped[]
 > = (src: string) => inferTypesWith(src, defaultOpts);
+/**
+ * The declared type a recorded type names, for go-to-type (ADR 0119).
+ */
+export const nominalTypeName: _Curry<
+  [ty: Ty, aliases: Map<string, QualAliasInfo>],
+  Option<string>
+> = _curry(2, (ty: Ty, aliases: Map<string, QualAliasInfo>) =>
+  Schemes.nominalTypeName(ty, aliases),
+);
 /**
  * compileWith : string -> Opts -> Result string Err
  */

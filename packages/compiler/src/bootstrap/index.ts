@@ -29,10 +29,18 @@ export type BootstrapDiagnostic = {
 };
 
 export type BootstrapModuleOutput = { path: string; js: string };
+/** Who a recorded binder span names (ADR 0119), as `SymbolInfo` does for the TS table. */
+export type BootstrapBinderSym = {
+  kind: "let" | "parameter" | "property" | "extern";
+  name: string;
+  doc: BootstrapHelp;
+};
 export type BootstrapTypeAt = {
   span: { start: number; end: number };
   ty: unknown;
   display: string;
+  /** Set where a name is bound (or a field read); `None` on other nodes. */
+  sym: { _tag: "Some"; value: BootstrapBinderSym } | { _tag: "None" };
 };
 export type BootstrapInferResult = {
   env: Map<string, unknown>;
@@ -231,7 +239,7 @@ export {
   symbolIndexBootstrap,
   symbolOccurrencesBootstrap,
 } from "./module.ts";
-export { checkBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
+export { checkBootstrapSync, inferTypesBootstrapSync, nominalTypeNameBootstrap } from "./sync.ts";
 
 import { type BootstrapPlugin, toSeedPlugins } from "./options.ts";
 import {
