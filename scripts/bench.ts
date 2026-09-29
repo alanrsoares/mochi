@@ -40,18 +40,28 @@ type Args = {
 
 const VALUE_FLAGS = ["--runs", "--save", "--compare", "--json"] as const;
 
+const usage = (message: string): never => {
+  console.error(`bench: ${message}`);
+  process.exit(2);
+};
+
 const parseArgs = (argv: readonly string[]): Args => {
   const value = (name: string): string | undefined => {
     const i = argv.indexOf(name);
-    return i === -1 ? undefined : argv[i + 1];
+    if (i === -1) return undefined;
+    const v = argv[i + 1];
+    if (v === undefined || v.startsWith("--")) usage(`${name} needs a value`);
+    return v;
   };
+  const runs = Number(value("--runs") ?? 8);
+  if (!Number.isInteger(runs) || runs < 1) usage("--runs must be a positive integer");
   const suites = argv.filter(
     (a, i) =>
       !a.startsWith("--") && !(VALUE_FLAGS as readonly string[]).includes(argv[i - 1] ?? ""),
   );
   return {
     suites,
-    runs: Number(value("--runs") ?? 8),
+    runs,
     save: value("--save"),
     compare: value("--compare"),
     json: value("--json"),
