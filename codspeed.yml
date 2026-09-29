@@ -1,0 +1,31 @@
+$schema: https://raw.githubusercontent.com/CodSpeedHQ/codspeed/refs/heads/main/schemas/codspeed.schema.json
+
+# CodSpeed benchmarks: one `scripts/bench-case.ts` case per process, measured by
+# the exec harness (.github/workflows/codspeed.yml runs it in CPU simulation).
+# The JSC flags turn off background JIT and GC threads so the instruction count
+# is reproducible from run to run. Run locally with `codspeed run -m simulation`.
+benchmarks:
+  - name: "startup"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts startup
+  - name: "compile-js:pipelines"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts compile-js:pipelines
+  - name: "compile-js:example"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts compile-js:example
+  - name: "compile-ts:example"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts compile-ts:example
+  - name: "infer:example"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts infer:example
+  - name: "graph-compile:modules"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts graph-compile:modules
+  - name: "graph-load:bootstrap-lexer"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts graph-load:bootstrap-lexer
+  - name: "graph-compile:bootstrap-lexer"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts graph-compile:bootstrap-lexer
+  - name: "fmt:example"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts fmt:example
+  - name: "fmt:snake-app"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts fmt:snake-app
+  - name: "fmt:bootstrap-lexer"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts fmt:bootstrap-lexer
+  - name: "fmt:bootstrap-parser"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts fmt:bootstrap-parser

@@ -1,0 +1,37 @@
+name: CodSpeed
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # `workflow_dispatch` lets CodSpeed trigger backtest runs on older commits.
+  workflow_dispatch:
+
+concurrency:
+  group: codspeed-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # OIDC authentication with CodSpeed
+
+jobs:
+  # The cases in codspeed.yml (scripts/bench-case.ts), one Bun process each,
+  # measured under CodSpeed's CPU simulation: instruction counts rather than
+  # wall time, so results stay comparable on shared runners.
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
