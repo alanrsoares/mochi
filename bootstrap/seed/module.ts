@@ -3,7 +3,7 @@ import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
 import type { StageErr, Stamped } from "./compile";
-import type { Occurrence } from "./symbols";
+import type { Occurrence, Origins, SymIndex, SymPrelude } from "./symbols";
 
 export type Opts = {
   open: boolean;
@@ -101,7 +101,7 @@ import * as Infer from "./infer";
 import { emitTsModuleWith, externModuleDts } from "./codegen-ts";
 import { showType, tVar } from "./types";
 import { widenLits } from "./schemes";
-import { index } from "./symbols";
+import { index, indexWith, originsOf } from "./symbols";
 import { emitDtsFromTypedWith, emitDtsText, qualifierMapOf } from "./dts";
 import { bindingHooksFor, dtsHooksFor } from "./extensions";
 import { openMode } from "./compile";
@@ -126,6 +126,23 @@ export const emitDts: _Curry<
  * host DX code about bootstrap's internal module layout.
  */
 export const symbolOccurrences: (stmts: Stmt[]) => Occurrence[] = (stmts: Stmt[]) => index(stmts);
+/**
+ * Host-facing symbol index over all four spaces, imports resolved through
+ * `origins` and builtins through the host's virtual `prelude`.
+ */
+export const symbolIndex: _Curry<
+  [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
+  SymIndex
+> = _curry(4, (path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]) =>
+  indexWith(path, origins, prelude, stmts),
+);
+/**
+ * A module's export sites, the `origins` an importer's `symbolIndex` takes.
+ */
+export const exportedOrigins: _Curry<[path: string, stmts: Stmt[]], Origins> = _curry(
+  2,
+  (path: string, stmts: Stmt[]) => originsOf(path, stmts),
+);
 
 const defaultOpts: Opts = {
   open: false,
@@ -135,76 +152,6 @@ const defaultOpts: Opts = {
   strictEntry: false,
   plugins: None as Option<HostPlugin[]>,
 };
-
-const addCtorOrigins: <A, B, C>(
-  ctors: ({ name: A } & C)[],
-  typeSpan: B,
-  origins: Map<A, B>,
-) => Map<A, B> = _curry(3, <A, B, C>(ctors: ({ name: A } & C)[], typeSpan: B, origins: Map<A, B>) =>
-  reduce(
-    _curry(2, (acc: Map<A, B>, ctor: { name: A } & C) => _Map_set(ctor.name, typeSpan, acc)),
-    origins,
-    ctors,
-  ),
-);
-const exportedOriginsFrom: _Curry<
-  [stmts: Stmt[], i: number, origins: ExportOrigins],
-  ExportOrigins
-> = _curry(3, (stmts: Stmt[], i: number, origins: ExportOrigins) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? origins
-      : _v._tag === "Some" && _v.value._tag === "SLet" && _v.value.exported === true
-        ? (({ value: { name, nameSpan } }) =>
-            exportedOriginsFrom(stmts, i + 1, {
-              values: _Map_set(name, nameSpan, origins.values),
-              types: origins.types,
-              ctors: origins.ctors,
-            }))(
-            _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
-              value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
-            },
-          )
-        : _v._tag === "Some" && _v.value._tag === "SExtern" && _v.value.exported === true
-          ? (({ value: { name, nameSpan } }) =>
-              exportedOriginsFrom(stmts, i + 1, {
-                values: _Map_set(name, nameSpan, origins.values),
-                types: origins.types,
-                ctors: origins.ctors,
-              }))(
-              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
-                value: Extract<
-                  Extract<Option<Stmt>, { _tag: "Some" }>["value"],
-                  { _tag: "SExtern" }
-                >;
-              },
-            )
-          : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true
-            ? (({ value: { name, ctors, span } }) =>
-                exportedOriginsFrom(stmts, i + 1, {
-                  values: origins.values,
-                  types: _Map_set(name, span, origins.types),
-                  ctors: addCtorOrigins(ctors, span, origins.ctors),
-                }))(
-                _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
-                  value: Extract<
-                    Extract<Option<Stmt>, { _tag: "Some" }>["value"],
-                    { _tag: "SType" }
-                  >;
-                },
-              )
-            : _v._tag === "Some"
-              ? exportedOriginsFrom(stmts, i + 1, origins)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(i, stmts)),
-);
-export const exportedOrigins: (stmts: Stmt[]) => ExportOrigins = (stmts: Stmt[]) =>
-  exportedOriginsFrom(stmts, 0, {
-    values: new Map<string, SpanAt>(),
-    types: new Map<string, SpanAt>(),
-    ctors: new Map<string, SpanAt>(),
-  });
 
 import { readFile } from "./host.mjs";
 import { resolveImport as $resolveImport } from "./host.mjs";

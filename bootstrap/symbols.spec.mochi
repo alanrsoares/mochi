@@ -1,7 +1,7 @@
 import { assertEq, ok, test } from "@mochi/test"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
-import { index } from "./symbols.mochi"
+import { index, indexWith } from "./symbols.mochi"
 
 let indexed = src => lex(src) |> Result.flatMap(parse) |> Result.map(index)
 
@@ -47,3 +47,77 @@ test("a let? binder resolves its body uses to itself", () => switch indexed("let
       |> assertEq([("def", 18, 18), ("use", 18, 32)])
   | Err(_) => false |> ok
 })
+
+let noOrigins = { values: #{}, types: #{}, ctors: #{} }
+let noPrelude = { origins: noOrigins, members: #{} }
+
+let spacedWhere = (origins, prelude, keep, src) =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.map(stmts =>
+      indexWith("/m.mochi", origins, prelude, stmts).occurrences)
+    |> Result.map(occs =>
+      occs
+        |> Array.filter(keep)
+        |> Array.map(o => (o.space, o.role, o.defPath, o.defStart, o.start)))
+
+let spaced = (origins, prelude, src) =>
+  spacedWhere(origins, prelude, _ => true, src)
+
+test("types and ctors index in their own spaces", () =>
+  assertEq(
+    Ok(
+      [
+        ("type", "def", "/m.mochi", 5, 5),
+        ("ctor", "def", "/m.mochi", 9, 9),
+        ("value", "def", "/m.mochi", 15, 15),
+        ("type", "use", "/m.mochi", 5, 18),
+        ("ctor", "use", "/m.mochi", 9, 22)
+      ]
+    ),
+    spaced(noOrigins, noPrelude, "type T = A\nlet x: T = A")
+  ))
+
+test("an imported name resolves to its export site", () =>
+  let origins = {
+    values: #{ "f": { path: "/dep.mochi", start: 4, end: 5 } },
+    types: #{},
+    ctors: #{}
+  } in
+    assertEq(
+      Ok(
+        [
+          ("value", "use", "/dep.mochi", 4, 9),
+          ("value", "use", "/dep.mochi", 4, 32)
+        ]
+      ),
+      spaced(origins, noPrelude, "import { f } from \"./dep.mochi\"\nf(1)")
+    ))
+
+test("the first site of a field name is its def, later sites use it", () =>
+  assertEq(
+    Ok(
+      [
+        ("field", "def", "/m.mochi", 10, 10),
+        ("field", "use", "/m.mochi", 10, 27)
+      ]
+    ),
+    spacedWhere(
+      noOrigins,
+      noPrelude,
+      o => o.space == "field",
+      "let r = { x: 1 }\nlet y = r.x"
+    )
+  ))
+
+test("a prelude namespace member resolves to the prelude, not a field", () =>
+  let prelude = {
+    origins: { values: #{}, types: #{}, ctors: #{} },
+    members: #{
+      "Array.map": { path: "mochi:/prelude.mochi", start: 7, end: 10 }
+    }
+  } in
+    assertEq(
+      Ok([("value", "use", "mochi:/prelude.mochi", 7, 14)]),
+      spacedWhere(noOrigins, prelude, o => o.role == "use", "let m = Array.map")
+    ))

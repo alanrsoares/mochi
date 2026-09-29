@@ -264,3 +264,38 @@ export const preludeDocForBinding = (b: PreludeDocBinding): string | undefined =
   if (b.space === "ctor") return CTOR_DOCS[b.name];
   return VALUE_DOCS[b.name] ?? CTOR_DOCS[b.name] ?? NS_DOCS[b.name];
 };
+
+/** A Location flattened to the `{ path, start, end }` shape bootstrap symbol queries take. */
+export type FlatLocation = { path: string; start: number; end: number };
+
+/** Virtual prelude defs as `bootstrap/symbols.mochi` takes them (`Prelude`). */
+export type PreludeBootstrap = {
+  origins: {
+    values: Map<string, FlatLocation>;
+    types: Map<string, FlatLocation>;
+    ctors: Map<string, FlatLocation>;
+  };
+  members: Map<string, FlatLocation>;
+};
+
+const flatLocations = (m: Map<string, Location>): Map<string, FlatLocation> =>
+  new Map(
+    [...m].map(([name, at]) => [name, { path: at.path, start: at.span.start, end: at.span.end }]),
+  );
+
+let cachedBootstrap: PreludeBootstrap | undefined;
+
+/** Memoized virtual prelude for the bootstrap symbol index. */
+export const preludeBootstrap = (): PreludeBootstrap => {
+  if (cachedBootstrap) return cachedBootstrap;
+  const { origins, nsMembers } = preludeVirtual();
+  cachedBootstrap = {
+    origins: {
+      values: flatLocations(origins.value),
+      types: flatLocations(origins.type),
+      ctors: flatLocations(origins.ctor),
+    },
+    members: flatLocations(nsMembers),
+  };
+  return cachedBootstrap;
+};

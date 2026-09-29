@@ -121,7 +121,10 @@ export type LamParam =
   | {
       kind: "labeled";
       name: string;
+      /** The whole `~name?: T = d` parameter. */
       span: Span;
+      /** Just `name`, after the `~`: what nav and rename anchor on. */
+      nameSpan: Span;
       annot?: TypeExpr;
       /** Written `~name?` — body sees `Option<T>` unless a default fills it. */
       optional: boolean;

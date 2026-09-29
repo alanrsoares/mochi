@@ -41,6 +41,8 @@ export type SymbolIndex = {
   bindingsAt: (offset: number, space?: SymbolSpace) => Binding[];
   /** Named, navigable value bindings introduced below module scope. */
   localBindings: () => Binding[];
+  /** Every occurrence, in walk order (the bootstrap index's parity target). */
+  all: () => Occurrence[];
 };
 
 type Scope = Map<string, Binding>;
@@ -135,7 +137,7 @@ const bindParam = (b: Builder, p: LamParam): void => {
     case "labeled":
       if (p.annot) walkTypeExpr(b, p.annot);
       if (p.default) walkExpr(b, p.default);
-      if (!p.name.startsWith("$")) bindLocal(b, p.name, p.span);
+      if (!p.name.startsWith("$")) bindLocal(b, p.name, p.nameSpan);
       return;
     case "ptuple":
       for (let i = 0; i < p.names.length; i++) bindLocal(b, p.names[i]!, p.nameSpans[i]!);
@@ -586,5 +588,7 @@ export const indexProgram = (path: string, prog: Program, origins?: Origins): Sy
 
   const localBindings = (): Binding[] => [...b.localBindings];
 
-  return { at, occurrences, binding, bindingsAt, localBindings };
+  const all = (): Occurrence[] => [...b.occurrences];
+
+  return { at, occurrences, binding, bindingsAt, localBindings, all };
 };

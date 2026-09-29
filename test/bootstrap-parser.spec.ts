@@ -755,7 +755,7 @@ const CANON_EXEMPT: Record<string, readonly string[]> = {
   // Secondary spans the bootstrap AST does not carry at all: the TS parser
   // anchors each of these for hover/rename, bootstrap keeps only the node span.
   // Comparing them would diff TS against a hole rather than against Mochi.
-  labeled: ["span"],
+  labeled: ["span", "nameSpan"],
   name: ["span"],
   precord: ["fieldSpans"],
   ptuple: ["nameSpans"],

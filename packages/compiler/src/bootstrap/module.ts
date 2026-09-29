@@ -5,8 +5,10 @@ import type {
   BootstrapGraphInferState,
   BootstrapModuleOutput,
   BootstrapOccurrence,
+  BootstrapPrelude,
   BootstrapRecoveryGraphState,
   BootstrapResult,
+  BootstrapSymbolIndex,
 } from "./index.ts";
 
 type SeedModule = {
@@ -57,8 +59,14 @@ type SeedModule = {
     modules: BootstrapGraphModule[],
     opts: SeedOptions,
   ) => BootstrapGraphRecovery;
-  exportedOrigins: (stmts: unknown) => BootstrapExportOrigins;
+  exportedOrigins: (path: string, stmts: unknown) => BootstrapExportOrigins;
   symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
+  symbolIndex: (
+    path: string,
+    origins: BootstrapExportOrigins,
+    prelude: BootstrapPrelude,
+    stmts: unknown,
+  ) => BootstrapSymbolIndex;
   emitDts: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
   emitDtsForFileWith: (
     entry: string,
@@ -200,11 +208,19 @@ export const compileGraphBootstrapRecovering = (
 ): BootstrapGraphRecovery =>
   seed.compileGraphRecoveringWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
-export const exportedOriginsBootstrap = (stmts: unknown): BootstrapExportOrigins =>
-  seed.exportedOrigins(stmts);
+export const exportedOriginsBootstrap = (path: string, stmts: unknown): BootstrapExportOrigins =>
+  seed.exportedOrigins(path, stmts);
 
 export const symbolOccurrencesBootstrap = (stmts: unknown): BootstrapOccurrence[] =>
   seed.symbolOccurrences(stmts);
+
+/** The full symbol index of `stmts` at `path` (`bootstrap/symbols.mochi`). */
+export const symbolIndexBootstrap = (
+  path: string,
+  origins: BootstrapExportOrigins,
+  prelude: BootstrapPrelude,
+  stmts: unknown,
+): BootstrapSymbolIndex => seed.symbolIndex(path, origins, prelude, stmts);
 
 /** `.d.ts` text for one source file, emitted by the frozen bootstrap graph. */
 export const emitDtsBootstrap = (
