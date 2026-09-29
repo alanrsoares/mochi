@@ -13,11 +13,10 @@ import {
 import { createModuleCache } from "@mochi/compiler/module";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
-import { moduleBootstrapHoverAt } from "@mochi/dx/bootstrap-hover";
+import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import { documentDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
-import { moduleHoverAt } from "@mochi/dx/hover";
 import {
   documentSymbolsAt,
   moduleDefinitionAt,
@@ -280,19 +279,11 @@ export function startServer(opts: ServerOptions = {}): void {
     const doc = documents.get(textDocument.uri);
     if (!doc) return null;
     const path = docPath(textDocument.uri);
-    const dx = await dxOpts(path);
-    const bootstrap =
-      dx.plugins === undefined
-        ? await moduleBootstrapHoverAt(
-            path,
-            doc.getText(),
-            doc.offsetAt(position),
-            read,
-            dx.bootstrapCache,
-          )
-        : null;
-    const result =
-      bootstrap ?? (await moduleHoverAt(path, doc.getText(), doc.offsetAt(position), read, dx));
+    const project = await projectPlugins(path);
+    const result = await moduleHoverAt(path, doc.getText(), doc.offsetAt(position), read, {
+      cache: bootstrapCacheFor(project).types,
+      plugins: project?.plugins,
+    });
     if (!result) return null;
     const fence = `\`\`\`mochi\n${result.code}\n\`\`\``;
     const value = result.doc ? `${fence}\n\n${result.doc}` : fence;

@@ -1,17 +1,15 @@
 // The typechecking DX query surfaces (hover, completion, go-to-type) each
-// resolve the edited file's whole import graph. Sharing one `ModuleCache`
-// across them is what keeps an editor session interactive — a hover in
-// `bootstrap/cli.mochi` costs ~1.8s cold and ~14ms warm (ADR 0095). These
+// resolve the edited file's whole import graph. Sharing one graph cache
+// across them is what keeps an editor session interactive (ADR 0095). These
 // guard that sharing it never changes an ANSWER.
 //
 // Every assertion also pins a non-empty result: comparing two `null`s would
 // pass while measuring nothing.
 import { expect, test } from "bun:test";
 import { createBootstrapGraphCache } from "@mochi/compiler/bootstrap";
-import { createModuleCache } from "@mochi/compiler/module";
+import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
 import { moduleCompleteAt } from "@mochi/dx/complete";
 import { documentDiagnostics } from "@mochi/dx/diagnostics";
-import { moduleHoverAt } from "@mochi/dx/hover";
 import { moduleTypeDefinitionAt } from "@mochi/dx/nav";
 import { memRead } from "@mochi/test-support";
 
@@ -33,9 +31,7 @@ const atCtor = src.lastIndexOf("Circle") + 2;
 const atBinding = src.indexOf("let shape") + 5;
 
 test("a shared cache does not change hover or go-to-type", async () => {
-  // Diagnostics run on the bootstrap compiler with their own cache; hover and
-  // go-to-type still share this TypeScript one (#103).
-  const cache = createModuleCache();
+  const cache = createBootstrapGraphCache();
   const read = memRead(files);
   expect(await documentDiagnostics("/app.mochi", src, read)).toEqual([]);
 
@@ -43,7 +39,9 @@ test("a shared cache does not change hover or go-to-type", async () => {
   expect(hover?.code).toBe("number -> Shape");
   expect(hover).toEqual(await moduleHoverAt("/app.mochi", src, atCtor, read));
 
-  const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, { cache });
+  const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, {
+    bootstrapCache: cache,
+  });
   expect(target?.path).toBe("/shapes.mochi");
   expect(target).toEqual(await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read));
 });
@@ -70,7 +68,7 @@ test("a shared bootstrap graph cache does not change completion or go-to-type", 
 });
 
 test("a warm query sees a dependency edit", async () => {
-  const cache = createModuleCache();
+  const cache = createBootstrapGraphCache();
   const before = await moduleHoverAt("/app.mochi", src, atCtor, memRead(files), { cache });
   expect(before?.code).toBe("number -> Shape");
 

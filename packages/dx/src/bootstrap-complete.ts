@@ -20,7 +20,8 @@ import { INTRINSIC_ELEMENTS } from "@mochi/compiler/plugins/jsx-schema";
 import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
-import { type FileIndex, indexModule, indexStmts, parseStmts } from "./bootstrap-index";
+import { type FileIndex, indexStmts, parseStmts } from "./bootstrap-index";
+import { indexModule } from "./bootstrap-module-index";
 import {
   dedupeSort,
   filterPrefix,

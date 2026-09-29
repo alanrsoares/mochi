@@ -1,5 +1,12 @@
 import * as seed from "../../../../bootstrap/seed/compile.bundle.mjs";
-import type { BootstrapDiagnostic, BootstrapInferResult, BootstrapResult } from "./index.ts";
+import type {
+  BootstrapDiagnostic,
+  BootstrapExportOrigins,
+  BootstrapInferResult,
+  BootstrapPrelude,
+  BootstrapResult,
+  BootstrapSymbolIndex,
+} from "./index.ts";
 import {
   type BootstrapOptions,
   type BootstrapPlugin,
@@ -27,6 +34,12 @@ type SeedCompile = {
     ty: unknown,
     aliases: Map<string, unknown>,
   ) => { _tag: "Some"; value: string } | { _tag: "None" };
+  symbolIndexSync: (
+    path: string,
+    origins: BootstrapExportOrigins,
+    prelude: BootstrapPrelude,
+    stmts: unknown,
+  ) => BootstrapSymbolIndex;
 };
 
 const seedCompile = seed as unknown as SeedCompile;
@@ -98,3 +111,14 @@ export const nominalTypeNameBootstrap = (
   const name = seedCompile.nominalTypeName(ty, aliases);
   return name._tag === "Some" ? name.value : null;
 };
+
+/**
+ * The full symbol index (ADR 0118) from the synchronous bundle, so browser
+ * callers (docs-site hover) can index without the Node-only module seed.
+ */
+export const symbolIndexBootstrapSync = (
+  path: string,
+  origins: BootstrapExportOrigins,
+  prelude: BootstrapPrelude,
+  stmts: unknown,
+): BootstrapSymbolIndex => seedCompile.symbolIndexSync(path, origins, prelude, stmts);

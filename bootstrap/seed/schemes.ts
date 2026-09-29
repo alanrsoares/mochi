@@ -1,4 +1,4 @@
-import type { AliasField, CtorField, TypeExpr } from "./ast";
+import type { AliasField, CtorField, Name, TypeExpr } from "./ast";
 import type { Row, St, Ty } from "./types";
 
 /**
@@ -10,6 +10,11 @@ import type { Row, St, Ty } from "./types";
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+/**
+ * One alias's display template: its expansion with each type param held by
+ * a template var, as src/infer/infer.ts builds `AliasDef.template`.
+ */
+export type FoldTemplate = { name: string; ids: number[]; tpl: Ty };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -1203,4 +1208,129 @@ export const nominalTypeName: _Curry<
       : _v._tag === "TyRecord"
         ? (({ row }) => foldingAliasFrom(TyRecord(row), _Map_keys(aliases), aliases, 0))(_v)
         : (None as Option<string>))(widenLits(t)),
+);
+
+const foldTemplatesFrom: _Curry<
+  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: FoldTemplate[]],
+  FoldTemplate[]
+> = _curry(4, (keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: FoldTemplate[]) =>
+  ((_v) =>
+    _v._tag === "None"
+      ? acc
+      : _v._tag === "Some"
+        ? (({ value: key }) =>
+            ((_v) =>
+              _v._tag === "None"
+                ? foldTemplatesFrom(keys, aliases, i + 1, acc)
+                : _v._tag === "Some"
+                  ? (({ value: info }) =>
+                      (([_vars, ids]: [Map<string, Ty>, number[]]) => {
+                        const name: string = bareAliasName(key);
+                        return (([tpl, _st]: [Ty, St]) =>
+                          foldTemplatesFrom(
+                            keys,
+                            aliases,
+                            i + 1,
+                            _Array_append({ name: name, ids: ids, tpl: tpl }, acc),
+                          ))(
+                          aliasRow(
+                            name,
+                            info,
+                            map((id: number) => TyVar(id), ids),
+                            Types.mkSt(0),
+                            aliases,
+                            _Set_fromArray([] as string[]),
+                          ),
+                        );
+                      })(templateVars(info.params)))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(_Map_get(key, aliases)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, keys)),
+);
+/**
+ * The first template (declaration order) `t` fits, as the alias name and its
+ * arguments. A phantom param cannot be read off `t`, so that alias is skipped.
+ */
+const foldHeadFrom: _Curry<
+  [t: Ty, tpls: FoldTemplate[], i: number],
+  Option<[string, Ty[]]>
+> = _curry(3, (t: Ty, tpls: FoldTemplate[], i: number) =>
+  ((_v) =>
+    _v._tag === "None"
+      ? (None as Option<[string, Ty[]]>)
+      : _v._tag === "Some"
+        ? (({ value: a }) =>
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: binds }) =>
+                    allBound(a.ids, binds)
+                      ? (Some(
+                          _tuple(
+                            a.name,
+                            map((id: number) => _Map_getOr(t, id, binds), a.ids),
+                          ),
+                        ) as Option<[string, Ty[]]>)
+                      : foldHeadFrom(t, tpls, i + 1))(_v)
+                : _v._tag === "None"
+                  ? foldHeadFrom(t, tpls, i + 1)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(matchTy(a.tpl, t, _Set_fromArray(a.ids), new Map<number, Ty>())))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, tpls)),
+);
+/**
+ * Top-down: a node is tried whole first, then its children fold too.
+ */
+const foldWith: _Curry<[t: Ty, tpls: FoldTemplate[]], Ty> = _curry(
+  2,
+  (t: Ty, tpls: FoldTemplate[]) =>
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: [name, args] }) =>
+            tCon(
+              name,
+              map((a: Ty) => foldWith(a, tpls), args),
+            ))(_v as Extract<Option<[string, Ty[]]>, { _tag: "Some" }>)
+        : _v._tag === "None"
+          ? ((_v) =>
+              _v._tag === "TyCon"
+                ? (({ name, args }) =>
+                    tCon(
+                      name,
+                      map((a: Ty) => foldWith(a, tpls), args),
+                    ))(_v)
+                : _v._tag === "TyFn"
+                  ? (({ from: fromT, to: toT }) =>
+                      tArrow(foldWith(fromT, tpls), foldWith(toT, tpls)))(_v)
+                  : _v._tag === "TyRecord"
+                    ? (({ row }) => tRecord(foldRowWith(row, tpls)))(_v)
+                    : _v._tag === "TyOneOf"
+                      ? (({ members }) => tUnion(map((m: Ty) => foldWith(m, tpls), members)))(_v)
+                      : t)(t)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(foldHeadFrom(t, tpls, 0)),
+);
+const foldRowWith: _Curry<[row: Row, tpls: FoldTemplate[]], Row> = _curry(
+  2,
+  (row: Row, tpls: FoldTemplate[]) =>
+    ((_v) =>
+      _v._tag === "RowExtend"
+        ? (({ label, fieldType, optional, rest }) =>
+            RowExtend(label, foldWith(fieldType, tpls), optional, foldRowWith(rest, tpls)))(_v)
+        : row)(row),
+);
+/**
+ * `t` with every node that fits an alias rewritten to `Name<args>`. Fold
+ * before widening literals, as hover does: a literal fits no primitive.
+ */
+export const foldAliases: _Curry<[t: Ty, aliases: Map<string, AliasInfo>], Ty> = _curry(
+  2,
+  (t: Ty, aliases: Map<string, AliasInfo>) =>
+    foldWith(t, foldTemplatesFrom(_Map_keys(aliases), aliases, 0, [] as FoldTemplate[])),
 );

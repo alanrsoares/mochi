@@ -16,6 +16,7 @@ import { bindingHooksFor } from "./extensions.mochi"
 import { showType } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
 import * as Schemes from "./schemes.mochi"
+import { indexWith } from "./symbols.mochi"
 
 // Prelude tables from the standalone shim. builtins/namespaces carry the
 // inferrer's Ty; compile never inspects them, so a polymorphic `a` lets them
@@ -205,6 +206,12 @@ export let inferTypes = src => src->inferTypesWith(defaultOpts)
 /// The declared type a recorded type names, for go-to-type (ADR 0119).
 export let nominalTypeName = (ty, aliases) =>
   Schemes.nominalTypeName(ty, aliases)
+
+/// The symbol index (ADR 0118) in the synchronous bundle, which the browser
+/// loads too: hover resolves a builtin reference to its prelude docstring
+/// through it (#103). module.mochi's `symbolIndex` is the same query.
+export let symbolIndexSync = (path, origins, prelude, stmts) =>
+  indexWith(path, origins, prelude, stmts)
 
 /// compileWith : string -> Opts -> Result string Err
 export let compileWith = (src, opts: Opts) =>

@@ -2,13 +2,25 @@ import { assertEq, ok, test } from "@mochi/test"
 import * as Ast from "./ast.mochi"
 import {
   ctorScheme,
+  foldAliases,
   generalize,
   generalizeOver,
   instantiate,
   mono,
   widenLits
 } from "./schemes.mochi"
-import { mkSt, showType, tArrow, tLit, tPrim, tVar } from "./types.mochi"
+import {
+  mkSt,
+  RowEmpty,
+  RowVar,
+  rField,
+  showType,
+  tArrow,
+  tLit,
+  tPrim,
+  tRecord,
+  tVar
+} from "./types.mochi"
 
 let identityType = tArrow(tVar(0), tVar(0))
 let sp = { start: 0, end: 0 }
@@ -51,3 +63,31 @@ test("ctorScheme makes a polymorphic curried constructor", () =>
   } in
   let (sc, _) = ctorScheme("Option", ["a"], ctor, mkSt(0), #{}) in
     sc.vars == [0] && showType(sc.ty) == "'t0 -> Option<'t0>" |> ok)
+
+let boxAlias = {
+  params: ["a"],
+  fields: [
+    {
+      name: "value",
+      nameSpan: sp,
+      fieldType: Ast.TyName("a", sp),
+      optional: false
+    }
+  ],
+  expr: None
+}
+
+let boxOf = t => tRecord(rField("value", t, RowEmpty, false))
+
+test("foldAliases names a closed record, its argument folded too", () =>
+  foldAliases(boxOf(boxOf(tPrim("number"))), Map.set("Box", boxAlias, #{}))
+    |> showType
+    |> assertEq("Box<Box<number>>"))
+
+test("foldAliases leaves an open row structural", () =>
+  foldAliases(
+    tRecord(rField("value", tPrim("number"), RowVar(1), false)),
+    Map.set("Box", boxAlias, #{})
+  )
+    |> showType
+    |> assertEq("{ value: number | 'r1 }"))

@@ -255,6 +255,7 @@ export type Doc =
   | { _tag: "DBreakParent" };
 export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };
 export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type SeedTypeCtors = {
   tCon: _Curry<[name: string, args: Ty[]], Ty>;
   tArrow: _Curry<[fromT: Ty, toT: Ty], Ty>;
@@ -272,4 +273,5 @@ export type SeedTypeCtors = {
   tString: Ty;
   tBool: Ty;
   widenLits: (t: Ty) => Ty;
+  foldAliases: _Curry<[t: Ty, aliases: Map<string, AliasInfo>], Ty>;
 };

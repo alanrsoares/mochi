@@ -2,8 +2,8 @@ import type { HostPlugin, LocTok, Plugin } from "./infer";
 import type { AliasField, Stmt, TypeExpr } from "./ast";
 import type { BinderSym, SpanAt, Ty, TypeAt } from "./types";
 import type { Scheme } from "./schemes";
-import type { StageErr, Stamped } from "./compile";
 import type { Occurrence, Origins, SymIndex, SymPrelude } from "./symbols";
+import type { StageErr, Stamped } from "./compile";
 
 export type Opts = {
   open: boolean;
@@ -1239,6 +1239,8 @@ const inferOne: <A, B>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   } & A,
@@ -1255,6 +1257,8 @@ const inferOne: <A, B>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
   },
   StageErr
@@ -1270,6 +1274,8 @@ const inferOne: <A, B>(
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
         aliases: Map<string, RecoveryAliasInfo>;
+        imports: Map<string, Scheme>;
+        quals: Map<string, RecoveryQualScope>;
       }[];
       aliases: Map<string, RecoveryAliasInfo>;
     } & A,
@@ -1290,6 +1296,8 @@ const inferOne: <A, B>(
                   path: string;
                   types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
                   aliases: Map<string, RecoveryAliasInfo>;
+                  imports: Map<string, Scheme>;
+                  quals: Map<string, RecoveryQualScope>;
                 }[];
               },
               StageErr
@@ -1315,6 +1323,8 @@ const inferOne: <A, B>(
                               sym: Option<BinderSym>;
                             }[];
                             aliases: Map<string, RecoveryAliasInfo>;
+                            imports: Map<string, Scheme>;
+                            quals: Map<string, RecoveryQualScope>;
                           }[];
                         },
                         StageErr
@@ -1339,6 +1349,8 @@ const inferOne: <A, B>(
                                       sym: Option<BinderSym>;
                                     }[];
                                     aliases: Map<string, RecoveryAliasInfo>;
+                                    imports: Map<string, Scheme>;
+                                    quals: Map<string, RecoveryQualScope>;
                                   }[];
                                 },
                                 StageErr
@@ -1381,6 +1393,8 @@ const inferOne: <A, B>(
                                         r.types,
                                       ),
                                       aliases: mergeMap(r.aliases, ctx.aliases),
+                                      imports: res.imports,
+                                      quals: res.quals,
                                     },
                                   ],
                                 }) as Result<
@@ -1399,6 +1413,8 @@ const inferOne: <A, B>(
                                         sym: Option<BinderSym>;
                                       }[];
                                       aliases: Map<string, RecoveryAliasInfo>;
+                                      imports: Map<string, Scheme>;
+                                      quals: Map<string, RecoveryQualScope>;
                                     }[];
                                   },
                                   StageErr
@@ -1449,6 +1465,8 @@ const inferAll: <A>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   },
@@ -1464,6 +1482,8 @@ const inferAll: <A>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   },
@@ -1480,6 +1500,8 @@ const inferAll: <A>(
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
         aliases: Map<string, RecoveryAliasInfo>;
+        imports: Map<string, Scheme>;
+        quals: Map<string, RecoveryQualScope>;
       }[];
       aliases: Map<string, RecoveryAliasInfo>;
     },
@@ -1500,6 +1522,8 @@ const inferAll: <A>(
                 path: string;
                 types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
                 aliases: Map<string, RecoveryAliasInfo>;
+                imports: Map<string, Scheme>;
+                quals: Map<string, RecoveryQualScope>;
               }[];
               aliases: Map<string, RecoveryAliasInfo>;
             },
@@ -1522,6 +1546,8 @@ const inferAll: <A>(
                         path: string;
                         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
                         aliases: Map<string, RecoveryAliasInfo>;
+                        imports: Map<string, Scheme>;
+                        quals: Map<string, RecoveryQualScope>;
                       }[];
                       aliases: Map<string, RecoveryAliasInfo>;
                     },
@@ -1572,6 +1598,8 @@ export const inferGraphTypesFromWith: <A>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   },
@@ -1587,6 +1615,8 @@ export const inferGraphTypesFromWith: <A>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   },
@@ -1603,6 +1633,8 @@ export const inferGraphTypesFromWith: <A>(
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
         aliases: Map<string, RecoveryAliasInfo>;
+        imports: Map<string, Scheme>;
+        quals: Map<string, RecoveryQualScope>;
       }[];
       aliases: Map<string, RecoveryAliasInfo>;
     },
@@ -1620,6 +1652,8 @@ export const inferGraphTypesFrom: <A>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   },
@@ -1634,6 +1668,8 @@ export const inferGraphTypesFrom: <A>(
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
       aliases: Map<string, RecoveryAliasInfo>;
+      imports: Map<string, Scheme>;
+      quals: Map<string, RecoveryQualScope>;
     }[];
     aliases: Map<string, RecoveryAliasInfo>;
   },
@@ -1650,6 +1686,8 @@ export const inferGraphTypesFrom: <A>(
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
         aliases: Map<string, RecoveryAliasInfo>;
+        imports: Map<string, Scheme>;
+        quals: Map<string, RecoveryQualScope>;
       }[];
       aliases: Map<string, RecoveryAliasInfo>;
     },
@@ -1768,6 +1806,8 @@ export const inferGraphTypesWith: <A>(
     path: string;
     types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
     aliases: Map<string, RecoveryAliasInfo>;
+    imports: Map<string, Scheme>;
+    quals: Map<string, RecoveryQualScope>;
   }[],
   StageErr
 > = _curry(2, <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[], opts: Opts) =>
@@ -1778,6 +1818,8 @@ export const inferGraphTypesWith: <A>(
           path: string;
           types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
           aliases: Map<string, RecoveryAliasInfo>;
+          imports: Map<string, Scheme>;
+          quals: Map<string, RecoveryQualScope>;
         }[],
         StageErr
       >,
@@ -1791,6 +1833,8 @@ export const inferGraphTypes: <A>(
     path: string;
     types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
     aliases: Map<string, RecoveryAliasInfo>;
+    imports: Map<string, Scheme>;
+    quals: Map<string, RecoveryQualScope>;
   }[],
   StageErr
 > = <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[]) =>

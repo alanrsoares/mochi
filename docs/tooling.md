@@ -178,6 +178,9 @@ extension).
   type syntax also have parse-level hovers, so they remain readable when value inference fails.
   Otherwise-unhoverable syntax such as `let`, `extern`, `loop`, and collection sigils has a
   concise fallback hint rather than competing with a more-specific semantic hover.
+  Hover runs on the self-hosted core: `hoverAt` (browser-safe, the docs site uses it) and the
+  graph-aware `moduleHoverAt` in `@mochi/dx/bootstrap-hover`
+  ([ADR 0122](adr/0122-bootstrap-hover.md)).
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors,
   same-file record fields); works when typecheck fails. Prelude / builtins (including
   `Result.map`-style namespaces) resolve to a virtual `mochi:/prelude.mochi` buffer

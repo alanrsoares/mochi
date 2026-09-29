@@ -48,10 +48,20 @@ export type BootstrapInferResult = {
   aliases: Map<string, unknown>;
   letParams: unknown[];
 };
+/** A generalized type as the seed builds it: quantified var ids and the type. */
+export type BootstrapScheme = { vars: number[]; rvars: number[]; ty: unknown };
+
+/** An `import * as` scope: the type names it puts in type position. */
+export type BootstrapQualScope = { types: ReadonlySet<string> };
+
 export type BootstrapGraphInferOutput = {
   path: string;
   types: BootstrapTypeAt[];
   aliases: Map<string, unknown>;
+  /** The scheme each named import binds, constructors included. */
+  imports: Map<string, BootstrapScheme>;
+  /** Each `import * as` alias's scope. */
+  quals: Map<string, BootstrapQualScope>;
 };
 export type BootstrapGraphInferState = { outputs: BootstrapGraphInferOutput[] };
 export type BootstrapRecoveryGraphState = { ctx: unknown; errors: BootstrapDiagnostic[] };
@@ -445,7 +455,13 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
           : {
               _tag: "Ok",
               value: [
-                { path: entryPath, types: inferred.value.types, aliases: inferred.value.aliases },
+                {
+                  path: entryPath,
+                  types: inferred.value.types,
+                  aliases: inferred.value.aliases,
+                  imports: new Map(),
+                  quals: new Map(),
+                },
               ],
             };
     } else {

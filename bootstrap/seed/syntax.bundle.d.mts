@@ -21,3 +21,4 @@ export declare const tBool: unknown;
 export declare const tNumber: unknown;
 export declare const tString: unknown;
 export declare const widenLits: unknown;
+export declare const foldAliases: unknown;

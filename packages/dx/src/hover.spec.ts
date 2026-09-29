@@ -247,6 +247,11 @@ test("type declarations and constructors have parse-level hovers", () => {
   expect(hoverAt(src, src.indexOf("value") + "value: ".length)?.code).toBe("type A");
 });
 
+test("a constructor of a parameterless type names it bare, with no `<>`", () => {
+  const src = "type Shape = | Circle(number)";
+  expect(hoverAt(src, src.indexOf("Circle") + 1)?.code).toBe("constructor Circle: number -> Shape");
+});
+
 test("record-alias fields and type syntax hover without successful inference", () => {
   const src = `type Point<A> = { x: A, y: number }
 let broken = add(1, "nope")`;

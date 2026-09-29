@@ -8,6 +8,7 @@
 import * as seedModule from "../../../../bootstrap/seed/syntax.bundle.mjs";
 
 export type {
+  AliasInfo,
   Expr,
   Field,
   HostPlugin,
@@ -48,3 +49,5 @@ export const freshRowVar = seed.freshRowVar;
 export const zonk = seed.zonk;
 /** Literal types widened to their base (`"js"` → `string`); literal unions stay. */
 export const widenLits = seed.widenLits;
+/** Every node that fits a type alias's expansion rewritten to the alias name (hover). */
+export const foldAliases = seed.foldAliases;
