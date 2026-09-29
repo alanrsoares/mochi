@@ -1,8 +1,8 @@
 /**
- * Single-pass multi-target compile: one typed program → JS + typed TS + `.d.ts`.
- * Playground previously ran `compile` + `codegenTs` + `emitDts` (three full
- * lex/parse/check/infer pipelines). This keeps the displayed surfaces in lockstep
- * at ~⅓ the cost.
+ * Single-pass multi-target compile on the TypeScript core: one typed program →
+ * JS + typed TS + `.d.ts`. The barrel's `compileTargets` runs the bootstrap twin
+ * (`bootstrap/dts.mochi` `compileTargetsWith`, ADR 0125) and falls back here only
+ * for a TypeScript-core plugin list.
  */
 import { isErr, ok, type Result } from "@onrails/result";
 import { codegen } from "../codegen/codegen";
@@ -19,7 +19,7 @@ export type CompileTargets = {
   dts: string;
 };
 
-export function compileTargets(
+export function compileTargetsWithTsCore(
   src: string,
   opts: CompileOptions = {},
 ): Result<CompileTargets, Diagnostic[]> {

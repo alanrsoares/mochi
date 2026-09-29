@@ -1,10 +1,22 @@
 /** The pipeline as a two-track railway: lex → parse → check → typecheck → codegen. Lex/parse fail with one Diagnostic; check/infer with Diagnostic[] (ADR 0004). Ok carries the emitted JS / typed program. */
 import { err, isErr, map, ok, type Result } from "@onrails/result";
 import type { Program } from "../ast/ast";
-import type { BootstrapDiagnostic } from "../bootstrap/index.ts";
-import { compileBootstrapSyncWith } from "../bootstrap/sync";
+import type { BootstrapDiagnostic, BootstrapResult } from "../bootstrap/index.ts";
+import type { BootstrapOptions } from "../bootstrap/options";
+import {
+  compileBootstrapSyncWith,
+  compileTargetsBootstrapSyncWith,
+  compileTsBootstrapSyncWith,
+  emitDtsBootstrapSyncWith,
+} from "../bootstrap/sync";
 import { check, type Registry } from "../check/check";
 import { codegen } from "../codegen/codegen";
+import {
+  type CodegenTsOptions,
+  codegenTs as codegenTsWithTsCore,
+  DEFAULT_RUNTIME_IMPORT,
+} from "../codegen/codegen-ts";
+import { type EmitDtsOptions, emitDts as emitDtsWithTsCore } from "../dts/dts";
 import { type Diagnostic, oneDiag } from "../errors/errors";
 import type { LanguagePlugin } from "../extensions/extensions";
 import {
@@ -18,6 +30,7 @@ import {
 import { lex } from "../lexer/lexer";
 import { parse, parseRecovering } from "../parser/parser";
 import { preludeEnv, preludeNamespaces } from "../prelude/prelude";
+import { type CompileTargets, compileTargetsWithTsCore } from "./compile-targets";
 import { openMode } from "./open-mode";
 
 /** The typed program: the parsed `Program` plus the inference result (env, span→type table, aliases) that tooling reads back. */
@@ -169,27 +182,70 @@ const toDiagnostic = (d: BootstrapDiagnostic): Diagnostic => {
   };
 };
 
+/** The barrel's options as the self-hosted core takes them, with the barrel's defaults. */
+const toBootstrapOptions = (opts: CompileOptions): BootstrapOptions => ({
+  open: opts.open ?? false,
+  runtime: opts.runtime ?? true,
+  docs: opts.docs ?? true,
+  moduleExt: opts.moduleExt ?? ".js",
+  strictEntry: false,
+});
+
+const fromBootstrap = <T>(r: BootstrapResult<T, BootstrapDiagnostic[]>): Result<T, Diagnostic[]> =>
+  r._tag === "Ok" ? ok(r.value) : err(r.error.map(toDiagnostic));
+
 /**
  * Source → JS through the self-hosted compiler. A caller-supplied `plugins`
- * list still runs the TypeScript railway: bootstrap compile takes no plugin
- * argument yet.
+ * list still runs the TypeScript railway: the barrel's `LanguagePlugin` is a
+ * TypeScript-core plugin, which the seed cannot run (#104).
  */
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {
   if (opts.plugins !== undefined) return compileWithTsCore(src, opts);
-  const compiled = compileBootstrapSyncWith(src, {
-    open: opts.open ?? false,
-    runtime: opts.runtime ?? true,
-    docs: opts.docs ?? true,
-    moduleExt: opts.moduleExt ?? ".js",
-    strictEntry: false,
-  });
-  return compiled._tag === "Ok" ? ok(compiled.value) : err(compiled.error.map(toDiagnostic));
+  return fromBootstrap(compileBootstrapSyncWith(src, toBootstrapOptions(opts)));
 }
 
-export { codegenTs } from "../codegen/codegen-ts";
-export { emitDts } from "../dts/dts";
+/** Source → typed TypeScript through the self-hosted compiler (ADR 0026). */
+export function codegenTs(src: string, opts: CodegenTsOptions = {}): Result<string, Diagnostic[]> {
+  return fromBootstrap(
+    compileTsBootstrapSyncWith(
+      src,
+      opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,
+      toBootstrapOptions(opts),
+    ),
+  );
+}
+
+/**
+ * Source → `.d.ts` through the self-hosted compiler. `plugins` or a graph
+ * `qualify` map still run the TypeScript core, as in `compile`.
+ */
+export function emitDts(src: string, opts: EmitDtsOptions = {}): Result<string, Diagnostic[]> {
+  if (opts.plugins !== undefined || opts.qualify !== undefined) return emitDtsWithTsCore(src, opts);
+  return fromBootstrap(
+    emitDtsBootstrapSyncWith(
+      src,
+      opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,
+      toBootstrapOptions(opts),
+    ),
+  );
+}
+
+/**
+ * Single-pass multi-target compile (ADR 0125): one inference → JS + typed TS +
+ * `.d.ts`, for the docs playground. `plugins` still run the TypeScript core.
+ */
+export function compileTargets(
+  src: string,
+  opts: CompileOptions = {},
+): Result<CompileTargets, Diagnostic[]> {
+  if (opts.plugins !== undefined) return compileTargetsWithTsCore(src, opts);
+  return fromBootstrap(
+    compileTargetsBootstrapSyncWith(src, DEFAULT_RUNTIME_IMPORT, toBootstrapOptions(opts)),
+  );
+}
+
 export type { Diagnostic } from "../errors/errors";
 export { formatError } from "../errors/errors";
 export type { HostExtension, LanguagePlugin } from "../extensions/extensions";
 export { lex } from "../lexer/lexer";
-export { type CompileTargets, compileTargets } from "./compile-targets";
+export type { CompileTargets };

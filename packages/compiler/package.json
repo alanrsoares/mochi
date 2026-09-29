@@ -17,7 +17,6 @@
     "./codegen": "./src/codegen/index.ts",
     "./codegen-ts": "./src/codegen/codegen-ts.ts",
     "./compile": "./src/compile/index.ts",
-    "./compile-targets": "./src/compile/compile-targets.ts",
     "./ctors": "./src/ast/ctors.ts",
     "./doc": "./src/doc/index.ts",
     "./dts": "./src/dts/index.ts",
