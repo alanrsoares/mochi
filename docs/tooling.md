@@ -101,6 +101,15 @@ CI (`.github/workflows/bench.yml`) feeds `--json` to
 compared against it in the job summary. An alert (150% of the last `main` run) is
 advisory and never fails the job — shared runners are too noisy for a hard gate.
 
+**CodSpeed** (`.github/workflows/codspeed.yml`) runs the same cases under Node in
+simulation mode: CodSpeed counts instructions under Valgrind, so a result does not
+move with the runner's load, and it comments on pull requests. The cases live in
+`scripts/lib/bench-suites.ts`, shared by both harnesses. `scripts/build-codspeed.ts`
+bundles `bench/codspeed.ts` for Node, and `bun run bench:codspeed` runs it
+locally without instrumentation. The benchmarks run in a worker with a 512 MB
+stack: the self-hosted compiler relies on the proper tail calls JavaScriptCore
+implements and V8 does not.
+
 ## Mochi specs (`*.spec.mochi`)
 
 `@mochi/test` binds `bun:test` as typed `extern`s (`test`, `describe`,

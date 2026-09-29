@@ -13,20 +13,15 @@
 // Not in any gate — timings are machine-dependent.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
-import { compileGraphBootstrap } from "@mochi/compiler/bootstrap/module";
-import { format } from "@mochi/dx/format";
+import { type BenchSuite, SUITES } from "./lib/bench-suites";
 import { inclusiveTop } from "./lib/cpu-profile";
-import { vendorPluginsFor } from "./lib/plugins";
-import { BOOTSTRAP_CLI, REPO_ROOT, repoPath } from "./lib/repo";
+import { REPO_ROOT, repoPath } from "./lib/repo";
 
 type Timings = Record<string, number[]>;
 /** Per-case context (sizes) kept out of the case name, which must stay stable across commits. */
 const notes: Record<string, string> = {};
-type Suite = { readonly describe: string; readonly run: (timings: Timings) => Promise<void> };
 type Saved = { readonly rev: string; readonly date: string; readonly best: Record<string, number> };
 
 type Args = {
@@ -78,77 +73,11 @@ const record = (timings: Timings, key: string, ms: number): void => {
   timings[key] = xs;
 };
 
-const time = <A>(timings: Timings, key: string, f: () => A): A => {
-  const start = performance.now();
-  const out = f();
-  record(timings, key, performance.now() - start);
-  return out;
-};
-
 const timeAsync = async <A>(timings: Timings, key: string, f: () => Promise<A>): Promise<A> => {
   const start = performance.now();
   const out = await f();
   record(timings, key, performance.now() - start);
   return out;
-};
-
-const FORMAT_FILES = [
-  "bootstrap/parser.mochi",
-  "bootstrap/infer.mochi",
-  "examples/snake/src/App.mochi",
-];
-
-const repoMochiFiles = (): string[] =>
-  [...new Bun.Glob("**/*.mochi").scanSync({ cwd: REPO_ROOT })]
-    .filter((f) => !f.split("/").some((p) => p === "node_modules" || p === "dist"))
-    .toSorted();
-
-const SUITES: Record<string, Suite> = {
-  fmt: {
-    describe: "format three files of different sizes through @mochi/dx/format",
-    run: async (timings) => {
-      for (const rel of FORMAT_FILES) {
-        const src = readFileSync(repoPath(rel), "utf8");
-        const plugins = vendorPluginsFor(rel);
-        notes[`fmt ${rel}`] = `${src.split("\n").length} lines`;
-        for (let i = 0; i < runs; i++) {
-          time(timings, `fmt ${rel}`, () => format(src, { plugins }));
-        }
-      }
-    },
-  },
-  "fmt:repo": {
-    describe: "format every .mochi file in the repo, as fmt:check does",
-    run: async (timings) => {
-      const files = repoMochiFiles().map((rel) => ({
-        src: readFileSync(repoPath(rel), "utf8"),
-        plugins: vendorPluginsFor(rel),
-      }));
-      notes["fmt:repo"] = `${files.length} files`;
-      for (let i = 0; i < runs; i++) {
-        time(timings, "fmt:repo", () => {
-          for (const f of files) format(f.src, { plugins: f.plugins });
-        });
-      }
-    },
-  },
-  compile: {
-    describe: "load and compile the bootstrap/cli.mochi module graph",
-    run: async (timings) => {
-      const src = readFileSync(BOOTSTRAP_CLI, "utf8");
-      for (let i = 0; i < runs; i++) {
-        const graph = await timeAsync(timings, "compile: load (lex+parse)", () =>
-          loadBootstrapGraph(BOOTSTRAP_CLI, src, (p) => readFile(p, "utf8")),
-        );
-        if (graph._tag !== "Ok") throw new Error(`load failed: ${JSON.stringify(graph.error)}`);
-        notes["compile: check+infer+codegen"] = `${graph.value.length} modules`;
-        const out = time(timings, "compile: check+infer+codegen", () =>
-          compileGraphBootstrap(graph.value),
-        );
-        if (out._tag !== "Ok") throw new Error(`compile failed: ${JSON.stringify(out.error)}`);
-      }
-    },
-  },
 };
 
 const selected = opts.suites.length > 0 ? opts.suites : Object.keys(SUITES);
@@ -180,7 +109,12 @@ if (opts.profile) {
 }
 
 const timings: Timings = {};
-for (const name of selected) await (SUITES[name] as Suite).run(timings);
+for (const name of selected) {
+  for (const c of await (SUITES[name] as BenchSuite).cases(REPO_ROOT)) {
+    if (c.note !== undefined) notes[c.name] = c.note;
+    for (let i = 0; i < runs; i++) await timeAsync(timings, c.name, async () => c.run());
+  }
+}
 
 const best = (xs: number[]): number => Math.min(...xs);
 const median = (xs: number[]): number => {
