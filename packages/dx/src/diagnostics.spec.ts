@@ -1,24 +1,20 @@
 import { expect, test } from "bun:test";
-import { toTypedProgram } from "@mochi/compiler/compile";
 import {
-  bootstrapModuleDiagnostics,
   diagnostics,
   documentDiagnostics,
   moduleDiagnostics,
-  toPublish,
   unusedBindingDiagnostics,
 } from "@mochi/dx/diagnostics";
 import { memRead } from "@mochi/test-support";
-import { isErr } from "@onrails/result";
 
 test("clean source produces no diagnostics", () => {
   expect(diagnostics("let n = add(mul(2, 3), 4)")).toEqual([]);
 });
 
-test("bootstrap dependency diagnostics anchor at the importing statement", async () => {
+test("dependency diagnostics anchor at the importing statement", async () => {
   const path = "/virtual/main.mochi";
   const src = 'import { value } from "./dep"\n';
-  const result = await bootstrapModuleDiagnostics(path, src, async (file) => {
+  const result = await moduleDiagnostics(path, src, async (file) => {
     if (file === "/virtual/dep.mochi") return 'let value = add(1, "bad")\n';
     throw new Error(`unexpected read: ${file}`);
   });
@@ -26,10 +22,10 @@ test("bootstrap dependency diagnostics anchor at the importing statement", async
   expect(result[0]?.message).toContain("module './dep' failed to compile");
 });
 
-test("bootstrap imported-module semantic diagnostics anchor at the entry import", async () => {
+test("imported-module semantic diagnostics anchor at the entry import", async () => {
   const path = "/virtual/main.mochi";
   const src = 'import { value } from "./dep"\n';
-  const result = await bootstrapModuleDiagnostics(path, src, async (file) => {
+  const result = await moduleDiagnostics(path, src, async (file) => {
     if (file === "/virtual/dep.mochi")
       return 'import { helper } from "./leaf"\nlet value = add(helper, "bad")\n';
     if (file === "/virtual/leaf.mochi") return "let helper = 1\n";
@@ -165,15 +161,9 @@ let s = "hi" ++ ctx->gen(1)`;
 });
 
 test("diagnostics surface did-you-mean suggestions", () => {
-  // compile()/LSP diagnostics are open-world (host globals); did-you-mean runs
-  // in strict mode so intentional open names aren't false-positived.
-  const src = "let count = 1\nlet n = coun";
-  const r = toTypedProgram(src, { open: false });
-  expect(isErr(r)).toBe(true);
-  if (!isErr(r)) return;
-  const d = toPublish(src, r.error[0]!, "/t.mochi");
-  expect(d.message).toContain("help: did you mean 'count'?");
-  expect(d.suggestions?.[0]?.replaceWith).toBe("count");
+  const [d] = diagnostics("let count = 1\nlet n = coun");
+  expect(d?.message).toContain("help: did you mean 'count'?");
+  expect(d?.suggestions?.[0]?.replaceWith).toBe("count");
 });
 
 test("documentDiagnostics unions the graph errors and the liveness warnings", async () => {

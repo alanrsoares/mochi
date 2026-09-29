@@ -51,3 +51,19 @@ export const inferTypesBootstrapSync = (
   plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
   seedCompile.inferTypesWith(src, toSeedOptions({ ...defaultBootstrapOptions, plugins }));
+
+/**
+ * Strict single-file check for editor diagnostics: every lex, parse (with
+ * recovery, ADR 0045) and check finding, else the first type error. Imports
+ * bind nothing here; graph-aware checking is `checkGraphBootstrapRecovering`.
+ */
+export const checkBootstrapSync = (
+  src: string,
+  plugins?: readonly BootstrapPlugin[],
+): BootstrapDiagnostic[] => {
+  const r = seedCompile.inferTypesWith(
+    src,
+    toSeedOptions({ ...defaultBootstrapOptions, open: false, plugins }),
+  );
+  return r._tag === "Err" ? r.error : [];
+};

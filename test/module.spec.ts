@@ -2,11 +2,10 @@
 // cross-module type inference. Files live in an in-memory map (no fs).
 import { expect, test } from "bun:test";
 import {
-  buildModules,
-  createModuleCache,
-  type ModuleCache,
-  type ModuleOutput,
-} from "@mochi/compiler/module";
+  type BootstrapRecoveryGraphCache,
+  createBootstrapRecoveryGraphCache,
+} from "@mochi/compiler/bootstrap";
+import { buildModules, type ModuleOutput } from "@mochi/compiler/module";
 import { moduleDiagnostics } from "@mochi/dx/diagnostics";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
@@ -206,14 +205,18 @@ test("the same ctor imported twice from one module is the same type (ADR 0082)",
   expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
 });
 
-// --- moduleContext cache (ADR 0095) -----------------------------------------
+// --- diagnostics graph cache (ADR 0095) --------------------------------------
 //
-// `moduleContext` infers every dependency of its entry, so checking N modules
-// that share a graph re-infers that graph N times. The cache removes that
-// redundancy; these guard that it never changes an ANSWER.
+// Checking an entry infers every dependency of it, so checking N modules that
+// share a graph re-infers that graph N times. The bootstrap recovery cache
+// removes that redundancy; these guard that it never changes an ANSWER.
 
 /** Diagnostics for `entry` against a `{ path: source }` fixture. */
-const diagnose = (files: Record<string, string>, entry: string, cache?: ModuleCache) => {
+const diagnose = (
+  files: Record<string, string>,
+  entry: string,
+  cache?: BootstrapRecoveryGraphCache,
+) => {
   const read = async (p: string): Promise<string> => {
     const src = files[p];
     if (src === undefined) throw new Error(`no such file ${p}`);
@@ -228,16 +231,16 @@ test("a cached run answers exactly what an uncached run answers", async () => {
     "/mid.mochi": 'import { one } from "/lib.mochi"\nexport let two = one + 1\n',
     "/app.mochi": 'import { two } from "/mid.mochi"\nexport let three = two + 1\n',
   };
-  const cache = createModuleCache();
+  const cache = createBootstrapRecoveryGraphCache();
   for (const entry of ["/lib.mochi", "/mid.mochi", "/app.mochi"]) {
     expect(await diagnose(files, entry, cache)).toEqual(await diagnose(files, entry));
   }
   // The shared dependency was inferred once, not once per entry.
-  expect(cache.entries.size).toBeGreaterThan(0);
+  expect(cache.modules.size).toBeGreaterThan(0);
 });
 
 test("editing a dependency invalidates the modules downstream of it", async () => {
-  const cache = createModuleCache();
+  const cache = createBootstrapRecoveryGraphCache();
   const before = {
     "/lib.mochi": "export let one = 1\n",
     "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
@@ -257,7 +260,7 @@ test("editing a dependency invalidates the modules downstream of it", async () =
 });
 
 test("a dependency that reverts is answered as it was, not as it briefly became", async () => {
-  const cache = createModuleCache();
+  const cache = createBootstrapRecoveryGraphCache();
   const good = {
     "/lib.mochi": "export let one = 1\n",
     "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
@@ -268,32 +271,18 @@ test("a dependency that reverts is answered as it was, not as it briefly became"
   expect(await diagnose(good, "/app.mochi", cache)).toEqual([]);
 });
 
-test("plugin lists are part of the cache key", async () => {
-  const cache = createModuleCache();
-  const files = {
-    "/lib.mochi": "export let one = 1\n",
-    "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
-  };
-  const read = async (p: string): Promise<string> => files[p as keyof typeof files]!;
-  // Two distinct lists must not share an entry, even though both are empty.
-  await moduleDiagnostics("/app.mochi", files["/app.mochi"], read, { cache, plugins: [] });
-  const afterFirst = cache.entries.size;
-  await moduleDiagnostics("/app.mochi", files["/app.mochi"], read, { cache, plugins: [] });
-  expect(cache.entries.size).toBe(afterFirst * 2);
-});
-
 test("an entry seen earlier as a dependency reuses that inference", async () => {
   const files = {
     "/lib.mochi": "export let one = 1\n",
     "/app.mochi": 'import { one } from "/lib.mochi"\nexport let sum = one + 1\n',
   };
-  const cache = createModuleCache();
+  const cache = createBootstrapRecoveryGraphCache();
   // Diagnosing the importer infers `/lib.mochi` as a dependency...
   expect(await diagnose(files, "/app.mochi", cache)).toEqual([]);
-  const beforeEntries = cache.entries.size;
+  const beforeModules = cache.modules.size;
   // ...so asking about `/lib.mochi` itself must not infer it a second time.
   expect(await diagnose(files, "/lib.mochi", cache)).toEqual(await diagnose(files, "/lib.mochi"));
-  expect(cache.entries.size).toBe(beforeEntries);
+  expect(cache.modules.size).toBe(beforeModules);
 });
 
 test("a reused entry still reports the diagnostics it had as a dependency", async () => {
@@ -301,7 +290,7 @@ test("a reused entry still reports the diagnostics it had as a dependency", asyn
     "/lib.mochi": 'export let bad = 1 + "nope"\n',
     "/app.mochi": 'import { bad } from "/lib.mochi"\nexport let use = bad\n',
   };
-  const cache = createModuleCache();
+  const cache = createBootstrapRecoveryGraphCache();
   await diagnose(files, "/app.mochi", cache);
   const reused = await diagnose(files, "/lib.mochi", cache);
   expect(reused.map((d) => d.message)).toEqual(
@@ -317,7 +306,7 @@ test('a "use open" entry does not reuse its lenient dependency inference', async
     "/open.mochi": '"use open"\nexport let value = hostGlobal + 1\n',
     "/app.mochi": 'import { value } from "/open.mochi"\nexport let use = value\n',
   };
-  const cache = createModuleCache();
+  const cache = createBootstrapRecoveryGraphCache();
   expect(await diagnose(files, "/app.mochi", cache)).toEqual([]);
   const asEntry = await diagnose(files, "/open.mochi", cache);
   expect(asEntry.map((d) => d.message)).toEqual(

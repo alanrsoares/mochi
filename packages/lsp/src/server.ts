@@ -26,11 +26,7 @@ import {
   bootstrapWorkspaceSymbolsAt,
 } from "@mochi/dx/bootstrap-symbols";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
-import {
-  bootstrapModuleDiagnostics,
-  type PublishDiagnostic,
-  unusedBindingDiagnostics,
-} from "@mochi/dx/diagnostics";
+import { documentDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { moduleHoverAt } from "@mochi/dx/hover";
 import {
@@ -234,14 +230,10 @@ export function startServer(opts: ServerOptions = {}): void {
   // project's self-hosted-core plugins (ADR 0109).
   const diagnosticsFor = async (path: string, src: string) => {
     const project = await projectPlugins(path);
-    const bootstrap = await bootstrapModuleDiagnostics(
-      path,
-      src,
-      read,
-      bootstrapCacheFor(project),
-      project?.plugins,
-    );
-    return [...bootstrap, ...unusedBindingDiagnostics(src, path)];
+    return documentDiagnostics(path, src, read, {
+      cache: bootstrapCacheFor(project),
+      plugins: project?.plugins,
+    });
   };
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
