@@ -22,7 +22,11 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     steps:
+      # The job runs pull-request code and never pushes, so the token stays out
+      # of .git/config.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
