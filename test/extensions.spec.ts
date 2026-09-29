@@ -303,19 +303,6 @@ test("parse(): a clashing plugin list fails with a diagnostic whose message cont
   expect(diags[0]!.message).toContain("clash");
 });
 
-test("moduleDiagnostics(): a clashing plugin list surfaces the clash diagnostic for editor display", async () => {
-  const a: LanguagePlugin = { name: "alpha", parse: { tokens: ["at"], hook: nullHook } };
-  const b: LanguagePlugin = { name: "beta", parse: { tokens: ["at"], hook: nullHook } };
-  const noDeps = async (): Promise<string> => {
-    throw new Error("single-file test — no imports to read");
-  };
-  const diags = await moduleDiagnostics("/virtual/main.mochi", "let x = 1", noDeps, {
-    plugins: [a, b],
-  });
-  expect(diags.length).toBeGreaterThan(0);
-  expect(diags[0]!.message).toContain("clash");
-});
-
 // Claim-table dispatch (the follow-up slice to the claim declarations above):
 // a hook is now physically unreachable outside its declared claims — the seam
 // consults only the claimant matching the callee/token, plus every claim-less

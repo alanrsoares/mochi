@@ -3,7 +3,7 @@
 // must be real. The dep is served from an in-memory map, so no disk is touched.
 import { expect, test } from "bun:test";
 import { diagnostics, moduleDiagnostics } from "@mochi/dx/diagnostics";
-import { styledCvaExtension } from "@mochi/plugin-styled-cva";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 import { memRead } from "@mochi/test-support";
 
 const DEP = "/proj/ast.mochi";
@@ -69,7 +69,7 @@ export let bad = <Btn $tone={1} />
 
 test("with plugins, an invalid prop on a tw.* component is a real diagnostic", async () => {
   const diags = await moduleDiagnostics(ENTRY, TW_JSX_SRC, memRead({}), {
-    plugins: [styledCvaExtension],
+    plugins: [styledCvaBootstrap],
   });
   expect(diags.length).toBeGreaterThan(0);
 });
@@ -84,7 +84,7 @@ test("without plugins, the same tw.* JSX usage is today's blind spot (no diagnos
 test("package import of plugin-preact hooks + plugin surfaces useState misuse", async () => {
   const { readFile } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const { preactExtension } = await import("@mochi/plugin-preact");
+  const { preactBootstrap } = await import("@mochi/plugin-preact/bootstrap");
   // Real monorepo path so createRequire walks to workspace node_modules.
   const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
   const src = `
@@ -94,7 +94,7 @@ let bad = _ =>
   let _ = setN("oops") in n
 `;
   const diags = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    plugins: [preactExtension],
+    plugins: [preactBootstrap],
   });
   expect(diags.some((d) => d.message.startsWith("type:"))).toBe(true);
 });
@@ -102,7 +102,7 @@ let bad = _ =>
 test("same package import without preactExtension leaves useRef unpinned", async () => {
   const { readFile } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const { preactExtension } = await import("@mochi/plugin-preact");
+  const { preactBootstrap } = await import("@mochi/plugin-preact/bootstrap");
   const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
   const src = `
 import { useRef } from "@mochi/plugin-preact/hooks"
@@ -111,7 +111,7 @@ let bad = _ =>
   eq(r.current, "x")
 `;
   const withPlugin = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    plugins: [preactExtension],
+    plugins: [preactBootstrap],
   });
   const without = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
     plugins: [],
@@ -137,7 +137,7 @@ test("strict diagnostics flag unbound typos (open-world emit would swallow them)
     .replace("let canvasRef = useRef", "let canvasRefasdasd = useRef")
     .replace("let particles = useRef", "let particles = useRefssss");
   const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
-    bootstrapPlugins: snakeVendorPlugins,
+    plugins: snakeVendorPlugins,
   });
   expect(diags.some((d) => d.message.includes("unbound variable"))).toBe(true);
   expect(
@@ -158,12 +158,12 @@ test("the snake container compiles clean across the whole re-reduced surface", a
   const entry = resolve(import.meta.dir, "../examples/snake/src/App.mochi");
   const src = await readFile(entry, "utf8");
   const diags = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    bootstrapPlugins: snakeVendorPlugins,
+    plugins: snakeVendorPlugins,
   });
   expect(diags.map((d) => d.message)).toEqual([]);
   // The plugins are what make it clean: the bare core cannot type the host kits.
   const bare = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    bootstrapPlugins: [],
+    plugins: [],
   });
   expect(bare).not.toEqual([]);
 });
@@ -183,7 +183,7 @@ test("dropping a Key arm in the snake dispatch is a non-exhaustive error", async
   const broken = good.replace(/\n\s*\| MoveLeft => store\.actions\.left\(\)/, "");
   expect(broken).not.toBe(good); // the arm we key on still exists
   const diags = await moduleDiagnostics(entry, broken, (p) => readFile(p, "utf8"), {
-    bootstrapPlugins: snakeVendorPlugins,
+    plugins: snakeVendorPlugins,
   });
   const msgs = diags.map((d) => d.message).join("\n");
   expect(msgs).toContain("non-exhaustive");

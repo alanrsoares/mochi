@@ -98,7 +98,7 @@ for (const file of files) {
       console.error(`${relative(root, manifest)}: failed to load — ${String(error)}`);
     },
   });
-  const opts = { bootstrapCache: cacheFor(project), bootstrapPlugins: project?.plugins };
+  const opts = { cache: cacheFor(project), plugins: project?.plugins };
   for (const d of await moduleDiagnostics(path, await read(path), read, opts)) {
     failures += 1;
     clearProgress();

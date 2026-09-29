@@ -33,10 +33,11 @@ const atCtor = src.lastIndexOf("Circle") + 2;
 const atBinding = src.indexOf("let shape") + 5;
 
 test("a shared cache does not change hover, completion, or go-to-type", async () => {
-  // Warm the way a session does: diagnostics on open, then the user interacts.
+  // Diagnostics run on the bootstrap compiler with their own cache; hover,
+  // completion and go-to-type still share this TypeScript one (#103).
   const cache = createModuleCache();
   const read = memRead(files);
-  expect(await documentDiagnostics("/app.mochi", src, read, { cache })).toEqual([]);
+  expect(await documentDiagnostics("/app.mochi", src, read)).toEqual([]);
 
   const hover = await moduleHoverAt("/app.mochi", src, atCtor, read, { cache });
   expect(hover?.code).toBe("number -> Shape");
