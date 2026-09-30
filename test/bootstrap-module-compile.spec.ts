@@ -1,16 +1,14 @@
 // Ticket 0013 (part b) — bootstrap/module.mochi's compileGraph / buildModules.
 // Having loaded the graph (part a) and added the four cross-module seams, we
-// now compile a real multi-module program end to end and DIFFERENTIAL-check it
-// against the TS driver (src/module.ts): same module order, byte-identical JS
-// per module. Then we assert the cross-module gates actually fire — a
+// now compile a real multi-module program end to end. Then we assert the
+// cross-module gates actually fire — a
 // non-exhaustive switch over an IMPORTED variant, and a missing export.
 
 import { beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
-import { readFile as fsRead } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildModulesTs, buildModules as tsBuild } from "@mochi/compiler/module";
+import { buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
 import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
@@ -37,19 +35,6 @@ test("compiles examples/modules end to end", () => {
   // geometry before main — dependency order.
   expect(bases(r.value)).toEqual(["geometry.mochi", "main.mochi"]);
   for (const o of r.value) expect(o.js.length).toBeGreaterThan(0);
-});
-
-test("matches the TS buildModules driver byte for byte", async () => {
-  const ts = await tsBuild(join(root, "examples/modules/main.mochi"), (p) => fsRead(p, "utf8"));
-  expect(ts._tag).toBe("Ok");
-  const boot = buildModules(join(root, "examples/modules/main.mochi"));
-  expect(boot._tag).toBe("Ok");
-  if (ts._tag !== "Ok" || boot._tag !== "Ok") return;
-
-  const tsBy = new Map(ts.value.map((o) => [basename(o.path), o.js]));
-  const bootBy = new Map(boot.value.map((o) => [basename(o.path), o.js]));
-  expect([...bootBy.keys()].sort()).toEqual([...tsBy.keys()].sort());
-  for (const [name, tsJs] of tsBy) expect(bootBy.get(name)).toBe(tsJs);
 });
 
 test("cross-module exhaustiveness fires: dropping an imported ctor arm fails", () => {
@@ -163,27 +148,12 @@ test("a nested alias resolves in the DECLARING module, not the importer", () => 
   if (r._tag === "Err") throw new Error(r.error.map((error) => error.message).join("\n"));
 });
 
-test("the TS driver agrees on the nested alias", async () => {
-  const dir = writeFixture(NESTED_ALIAS);
-  const ts = await tsBuild(join(dir, "app.mochi"), (p) => fsRead(p, "utf8"));
-  expect(ts._tag).toBe("Ok");
-  const boot = buildModules(join(dir, "app.mochi"));
-  expect(boot._tag).toBe("Ok");
-  if (ts._tag !== "Ok" || boot._tag !== "Ok") return;
-  const tsBy = new Map(ts.value.map((o) => [basename(o.path), o.js]));
-  for (const o of boot.value) {
-    const want = tsBy.get(basename(o.path));
-    expect(want).toBeDefined();
-    expect(o.js).toBe(want as string);
-  }
-});
-
-test("same-shaped aliases in different modules do not fold into a cycle", async () => {
+test("same-shaped aliases in different modules do not fold into a cycle", () => {
   const dir = writeFixture(TWIN_ALIAS);
-  const ts = await buildModulesTs(join(dir, "b.mochi"), (p) => fsRead(p, "utf8"));
-  expect(ts._tag).toBe("Ok");
-  if (ts._tag !== "Ok") return;
-  const byName = new Map(ts.value.map((o) => [basename(o.path), o.js]));
+  const built = buildModulesTsBootstrap(join(dir, "b.mochi"), "@mochi/runtime");
+  expect(built._tag).toBe("Ok");
+  if (built._tag !== "Ok") return;
+  const byName = new Map(built.value.map((o) => [basename(o.path), o.js]));
   expect(byName.get("a.mochi") ?? byName.get("a.ts") ?? "").toContain(
     "export type Pair = { lo: number; hi: number };",
   );

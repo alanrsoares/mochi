@@ -70,8 +70,9 @@ commands, `gen-mochi-dts`, and the `@mochi/compiler` barrel's `compile`,
 `BootstrapPlugin`s ([ADR 0125](adr/0125-bootstrap-compile-targets.md),
 [ADR 0126](adr/0126-barrel-typed-emit-on-bootstrap.md),
 [ADR 0127](adr/0127-barrel-takes-bootstrap-plugins.md)). The TypeScript
-`codegen-ts.ts`/`dts.ts` remain as the parity oracle and as the TypeScript
-module graph's emitters, until #105 deletes the core.
+`codegen-ts.ts`/`dts.ts` remain as the temporary seed module graph's emitters
+until #105 deletes the core; they no longer define bootstrap behavior through
+differential tests.
 
 `@onrails/pattern`'s `.exhaustive()` runs *inside* the TypeScript compiler (a missing
 `Expr` case is a TS error at build time). Emitted code does not use it: a `switch`
@@ -84,7 +85,7 @@ lowers to a ternary chain over its scrutinee, and only the TS backend falls back
 The compiler is re-implemented in mochi under `bootstrap/` (`lexer.mochi`,
 `parser.mochi`, `check.mochi`, `infer.mochi`, `codegen.mochi`, `module.mochi`, …). Two
 host files stay hand-written as `.mjs`: `host.mjs` (IO/resolver shims) and
-`prelude.gen.mjs` (the generated, parity-guarded prelude-table shim). Everything else is
+`prelude.gen.mjs` (the generated, checked prelude-table shim). Everything else is
 compiled from the `.mochi` sources.
 
 `bootstrap/` mirrors the JSX-as-plugin seam (Wave 8 / ADR 0011 §6): parse +

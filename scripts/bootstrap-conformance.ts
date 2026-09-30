@@ -341,7 +341,7 @@ const candidateFor = (test: ManifestCase): { path: string; contents: string } =>
   return { path: test.expect, contents: result.value };
 };
 
-/** The reviewed minimum contract required before this corpus can replace TS parity. */
+/** The reviewed minimum contract retained after retiring TS parity. */
 const coverageErrorsFor = (manifest: Manifest): string[] => {
   const ids = manifest.cases.map((test) => test.id);
   const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);

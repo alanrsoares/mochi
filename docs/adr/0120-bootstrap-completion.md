@@ -5,7 +5,7 @@
 - **Source:** [ADR 0013](0013-lsp-completion.md), [ADR 0109](0109-bootstrap-ast-is-the-public-ast.md),
   [ADR 0118](0118-bootstrap-symbol-index.md), [ADR 0119](0119-bootstrap-binder-records.md),
   `bootstrap/symbols.mochi`, `bootstrap/compile.mochi`, `packages/dx/src/bootstrap-complete.ts`,
-  `packages/dx/src/complete.ts`, `test/bootstrap-symbols.spec.ts`, `test/bootstrap-complete.spec.ts`, #103
+  `packages/dx/src/complete.ts`, `packages/dx/src/bootstrap-complete.spec.ts`, #103
 
 ## Context
 
@@ -52,12 +52,11 @@ three things bootstrap did not have:
 
 ## Consequences
 
-- Parity is checked twice. `test/bootstrap-symbols.spec.ts` compares the
-  bootstrap `bindingsAt` with the TS one on every corpus file, at every frame
-  edge and occurrence start. `test/bootstrap-complete.spec.ts` compares
-  completion output with the TS core at sampled value, member and JSX
-  positions on every import-free file. A full sweep, 1,905 single-file and
-  1,609 module positions, agreed when this landed.
+- Parity was checked twice at landing: scope visibility across every corpus
+  file, then completion output at sampled value, member, and JSX positions. A
+  full sweep—1,905 single-file and 1,609 module positions—agreed. #104 slice c
+  retired those temporary comparisons; direct bootstrap completion and binder
+  specs now guard the shipped path.
 - With no `dxPlugins`, completion no longer touches the TS lexer, parser,
   checker, inferrer, symbol index or module cache. The prelude name tables and
   the generated HTML schema are still read as data.

@@ -1,6 +1,6 @@
-// bootstrap/parser.mochi — the mochi parser, in mochi. Ported from src/parser.ts
-// (the spec); test/bootstrap-parser.spec.ts diffs canonical AST JSON against
-// the TS parser on every .mochi file in the repo — including this one.
+// bootstrap/parser.mochi — the mochi parser, in mochi. Ported from src/parser.ts;
+// its contract is pinned by parser.spec.mochi, formatter round-trips, and the
+// compiler conformance corpus.
 //
 // Shape notes vs the TS original:
 // - The mutable cursor (`pos`/`last`) becomes threading: every production takes
@@ -10,12 +10,11 @@
 //   sequenced step (ADR 0017 — this file's original `Result.flatMap` chains
 //   were the pain measurement that motivated it, docs/PATH_TO_BOOTSTRAP.md §2.4).
 // - `Tok` and its constructors come from bootstrap/lexer.mochi. They were once
-//   redeclared here (structurally equal, kept honest by the differential suite)
-//   because the module graph did not exist yet; it does, and lexer.mochi imports
-//   nothing, so the edge adds no cycle.
+//   redeclared here before the module graph existed; lexer.mochi now owns them
+//   and imports nothing, so the edge adds no cycle.
 // - TS optional fields become Options (`doc`, `guard`, `rest`, `alias`), the
 //   `exported?` flag a plain bool, and `CtorField.type` is `fieldType` (`type`
-//   is a keyword here). The test harness canonicalizes both shapes.
+//   is a keyword here). Host adapters translate these shapes at the façade.
 
 import * as Ast from "./ast.mochi"
 import {

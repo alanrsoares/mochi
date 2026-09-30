@@ -6314,7 +6314,7 @@ export const scopeAliases: <A, B, C>(
 );
 /**
  * Env-only view — the shape every existing caller (compile.mochi,
- * module.mochi) and the TS parity oracle expect.
+ * module.mochi) and the host façades expect.
  */
 export const inferProgramImports: <A, B, C>(
   stmts: Stmt[],

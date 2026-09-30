@@ -3,9 +3,8 @@ import {
   skipLineCommentTo,
   skipStringLiteral
 } from "./str-scan.mochi"
-// bootstrap/lexer.mochi — the mochi lexer, in mochi. Ported from src/lexer.ts
-// (the spec); test/bootstrap-lexer.spec.ts diffs the two token streams over
-// every .mochi file in the repo — including this one.
+// bootstrap/lexer.mochi — the mochi lexer, in mochi. Ported from src/lexer.ts;
+// its contract is pinned by lexer.spec.mochi and the compiler conformance corpus.
 //
 // Shape notes vs the TS original:
 // - `Tok` is a variant (TS: tagged record union); payloads keep field names.

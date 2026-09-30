@@ -23,6 +23,26 @@ testEach("lex errors", [
   | Ok(_) => false |> ok
 })
 
+testEach("interpolation lex errors keep their span", [
+  {
+    label: "unterminated hole",
+    src: "let s = \"a \${ 1 + 2 x\"",
+    start: 8,
+    end: 22
+  },
+  {
+    label: "unterminated string after a closed hole",
+    src: "let s = \"a \${x} b",
+    start: 8,
+    end: 17
+  }
+], row => switch lex(row.src) {
+  | Err(e) => ok(
+      e.message == "unterminated string literal" && e.start == row.start && e.end == row.end
+    )
+  | Ok(_) => false |> ok
+})
+
 test("doc attaches to the next token", () => switch lex("/// hi\nlet x = 1") {
   | Ok(toks) => switch Array.get(0, toks) {
       | Some(loc) => switch loc.doc {
@@ -33,3 +53,47 @@ test("doc attaches to the next token", () => switch lex("/// hi\nlet x = 1") {
     }
   | Err(_) => false |> ok
 })
+
+let docAt = (src, i) => switch lex(src) {
+  | Ok(toks) => Array.get(i, toks) |> Option.flatMap(loc => loc.doc)
+  | Err(_) => None
+}
+
+testEach("doc attachment boundaries", [
+  {
+    label: "consecutive docs join",
+    src: "/// one\n/// two\nlet f = 1",
+    index: 0,
+    want: Some("one\ntwo")
+  },
+  {
+    label: "blank line breaks attachment",
+    src: "/// lost\n\nlet f = 1",
+    index: 0,
+    want: None
+  },
+  {
+    label: "plain comment breaks attachment",
+    src: "/// lost\n// plain\nlet f = 1",
+    index: 0,
+    want: None
+  },
+  {
+    label: "trailing doc does not attach to the next declaration",
+    src: "let f = 1 /// trailing\nlet g = 2",
+    index: 4,
+    want: None
+  },
+  {
+    label: "dangling doc attaches to eof",
+    src: "let f = 1\n/// dangling",
+    index: 4,
+    want: Some("dangling")
+  },
+  {
+    label: "doc text drops at most one leading space",
+    src: "///no space\n/// one space\n///  two spaces\nlet f = 1",
+    index: 0,
+    want: Some("no space\none space\n two spaces")
+  }
+], row => assertEq(row.want, docAt(row.src, row.index)))
