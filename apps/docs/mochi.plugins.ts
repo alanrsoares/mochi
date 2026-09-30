@@ -7,9 +7,9 @@
  */
 
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { preactBootstrap } from "@mochi/plugin-preact/bootstrap";
-import { reReducedBootstrap } from "@mochi/plugin-re-reduced/bootstrap";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { preactBootstrap } from "@mochi/plugin-preact";
+import { reReducedBootstrap } from "@mochi/plugin-re-reduced";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
 
 export const docsVendorPlugins: BootstrapPlugin[] = [
   styledCvaBootstrap,

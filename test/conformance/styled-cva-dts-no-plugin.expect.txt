@@ -1,0 +1,2 @@
+export declare const Badge: unknown;
+export declare const hot: any;

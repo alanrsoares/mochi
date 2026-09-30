@@ -2,8 +2,8 @@
 
 Vendor plugin (not language core) that teaches the Mochi compiler about
 [`@styled-cva/react`](https://www.npmjs.com/package/@styled-cva/react) `tw.*`
-factories. It is a `HostExtension` — it only touches the compiler's plugin
-interface (`inferCall` + `dtsBinding`), never the pipeline.
+factories. It is a self-hosted `BootstrapPlugin` that supplies inference,
+declaration, formatting, and completion hooks without changing the pipeline.
 
 What it teaches:
 
@@ -21,7 +21,7 @@ all read. For the docs app that is `apps/docs/mochi.plugins.ts`:
 
 ```ts
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
 
 export const docsVendorPlugins: BootstrapPlugin[] = [styledCvaBootstrap];
 export const plugins = docsVendorPlugins;

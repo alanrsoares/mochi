@@ -1,8 +1,9 @@
 // bootstrap/plugins/preact.mochi — self-hosted Preact LanguagePlugin.
 //
-// Mirrors @mochi/plugin-preact's inferCall adapter. The hook API threads
-// inference state explicitly, so this is a vendor plugin rather than compiler
-// knowledge: applications opt in by passing `preactPlugin` to inferProgramWith.
+// The hook API threads inference state explicitly and pins relationships the
+// loose extern schemes cannot express: setter inputs, ref fields, effect
+// thunks, memo results, and heterogeneous dep packs. This stays vendor-plugin
+// knowledge; applications opt in by passing `preactPlugin` to inferProgramWith.
 
 import * as Ast from "../ast.mochi"
 import {

@@ -1,12 +1,9 @@
 /**
- * styled-cva over the self-hosted core (ADR 0109). The same three behaviours as
- * `styledCvaExtension` in `./index.ts`, written against bootstrap AST and type
- * values: `tw.tag(base, { variants })` types as props → VNode, the dts hook
- * prints `$tone?: "rose" | …` unions, and the format hook reflows class strings
- * (ADR 0057). `completeMembers` lists the `tw.<tag>` factories for the editor.
- *
- * Depends only on bootstrap façades, so the conformance runner can load it
- * without reaching the hand-authored TypeScript core.
+ * styled-cva typing over the self-hosted core (ADR 0009, 0057, 0109).
+ * The `tw` extern stays opaque because its factories are overloaded; this
+ * plugin derives a props → VNode type from each `tw.tag` call, preserves
+ * variant keys as literal unions in declarations, reflows class strings, and
+ * lists intrinsic factories for member completion.
  */
 import type {
   BootstrapDtsBindingHook,
@@ -33,7 +30,7 @@ type RecordExpr = Extract<Expr, { _tag: "ERecord" }>;
 
 const none = { _tag: "None" } as const;
 
-// Shared with the JSX schema (ADR 0097), like the TypeScript adapter.
+// Shared with the JSX schema so intrinsic validation and `tw.<tag>` cannot drift (ADR 0097).
 const HTML_ELEMENTS = new Set(Object.keys(INTRINSIC_ELEMENTS));
 
 /** The element name of a `tw.<tag>` callee, or `null` for any other callee. */
@@ -103,8 +100,8 @@ const styledCvaDts: BootstrapDtsBindingHook = (_name, value) => {
 };
 
 // --- Class-string reflow (ADR 0057) ------------------------------------------
-// Same budgets and segmentation as `./index.ts`; see its comment for why every
-// break lands on a space that stays at the head of the continuation.
+// Every break lands on a space kept at the head of the continuation, preserving
+// the runtime class string while letting the formatter wrap at the shared width.
 
 const WIDTH = 80;
 const ARG_COL = 2;

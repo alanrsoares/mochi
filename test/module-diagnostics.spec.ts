@@ -3,7 +3,7 @@
 // must be real. The dep is served from an in-memory map, so no disk is touched.
 import { expect, test } from "bun:test";
 import { diagnostics, moduleDiagnostics } from "@mochi/dx/diagnostics";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
 import { memRead } from "@mochi/test-support";
 
 const DEP = "/proj/ast.mochi";
@@ -58,6 +58,21 @@ test("a file with no imports behaves like single-file diagnostics", async () => 
   expect(diags[0]!.message).toStartWith("type:");
 });
 
+test("plugins: [] reports JSX as an unexpected core token", async () => {
+  const diags = await moduleDiagnostics(ENTRY, "let el = <div />", memRead({}), {
+    plugins: [],
+  });
+  expect(diags).toEqual([
+    {
+      message: "parse: unexpected token lt",
+      range: {
+        start: { line: 0, character: 9 },
+        end: { line: 0, character: 10 },
+      },
+    },
+  ]);
+});
+
 // Slice 19: diagnostics run with the project's `plugins` (styled-cva, …), so
 // JSX-attr checking against a `tw.*` component's real prop type applies in
 // the editor the same way it does for Vite/`gen-mochi-dts` (#14/#15/#17).
@@ -80,11 +95,11 @@ test("without plugins, the same tw.* JSX usage is today's blind spot (no diagnos
 });
 
 // Tracer #51: bare package import must resolve via Node exports so LSP can
-// load `@mochi/plugin-preact/hooks` and run `preactExtension.inferCall`.
+// load `@mochi/plugin-preact/hooks` and run `preactBootstrap.inferCall`.
 test("package import of plugin-preact hooks + plugin surfaces useState misuse", async () => {
   const { readFile } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const { preactBootstrap } = await import("@mochi/plugin-preact/bootstrap");
+  const { preactBootstrap } = await import("@mochi/plugin-preact");
   // Real monorepo path so createRequire walks to workspace node_modules.
   const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
   const src = `
@@ -99,10 +114,10 @@ let bad = _ =>
   expect(diags.some((d) => d.message.startsWith("type:"))).toBe(true);
 });
 
-test("same package import without preactExtension leaves useRef unpinned", async () => {
+test("same package import without preactBootstrap leaves useRef unpinned", async () => {
   const { readFile } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const { preactBootstrap } = await import("@mochi/plugin-preact/bootstrap");
+  const { preactBootstrap } = await import("@mochi/plugin-preact");
   const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
   const src = `
 import { useRef } from "@mochi/plugin-preact/hooks"

@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
 import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
 import { formatSrc as fmt } from "@mochi/test-support/format";
+import { unwrapOk } from "@onrails/result";
+import { format } from "./format";
 
 type Parsed = BootstrapResult<unknown, BootstrapDiagnostic>;
 
@@ -549,4 +551,14 @@ test("a wide record type alias breaks one field per line", () => {
 
 test("an empty record type alias keeps the flat form", () => {
   expect(fmt("type Empty={}")).toBe("type Empty = {}\n");
+});
+
+test("plugins: [] formats core syntax exactly like the builtin default", () => {
+  const core = "let x = 1 + 2 * 3\nlet y = switch x { | 0 => 1 | _ => 2 }\n";
+  expect(unwrapOk(format(core, { plugins: [] }))).toBe(unwrapOk(format(core)));
+});
+
+test("plugins: [] passes JSX through verbatim (no JSX parser to reflow it)", () => {
+  const src = 'let el = <div className="card">{"hi"}</div>\n';
+  expect(unwrapOk(format(src, { plugins: [] }))).toBe(src);
 });
