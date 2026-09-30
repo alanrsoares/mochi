@@ -1,13 +1,11 @@
 /**
- * Preact over the self-hosted core (ADR 0109). The same call-site pins as
- * `inferPreactCall` in `./infer.ts`, written against bootstrap AST and type
- * values; see there for why each hook's shape is what it is.
+ * Preact call-site typing over the self-hosted core (ADR 0015, 0109).
+ * `hooks.mochi` keeps honest but deliberately loose extern schemes; this plugin
+ * pins the relationships HM cannot state there: updater-or-value setters,
+ * `{ current }` refs, effect thunks, memo results, and heterogeneous dep packs.
  *
- * Bootstrap inference threads its state (`St`) instead of mutating it, so each
- * hook call carries one `Solver` that holds the current state.
- *
- * Depends only on bootstrap façades, so the conformance runner can load it
- * without reaching the hand-authored TypeScript core.
+ * Bootstrap inference threads `St` instead of mutating it, so a `Solver`
+ * carries the latest state through every inference and unification step.
  */
 import type { BootstrapInferCallHook, BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import type { Expr, IErr, InferApi, Span, St, Ty } from "@mochi/compiler/bootstrap/types";

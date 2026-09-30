@@ -31,9 +31,11 @@
       "styled-cva-format-paths",
       "styled-cva-format-comments",
       "styled-cva-dts",
+      "styled-cva-dts-no-plugin",
       "re-reduced-compile",
       "re-reduced-dts",
       "re-reduced-config-dts",
+      "re-reduced-dts-no-plugin",
       "re-reduced-bad-payload",
       "re-reduced-bad-on-action",
       "re-reduced-bad-query",
@@ -217,6 +219,12 @@
       ]
     },
     {
+      "id": "styled-cva-dts-no-plugin",
+      "kind": "dts",
+      "entry": "styled-cva/badge.mochi",
+      "expect": "styled-cva-dts-no-plugin.expect.txt"
+    },
+    {
       "id": "styled-cva-format",
       "kind": "format",
       "source": "styled-cva/reflow.src.txt",
@@ -269,6 +277,12 @@
         "re-reduced"
       ],
       "entry": "re-reduced/config-binding.mochi"
+    },
+    {
+      "id": "re-reduced-dts-no-plugin",
+      "kind": "dts",
+      "entry": "re-reduced/config-binding.mochi",
+      "expect": "re-reduced-dts-no-plugin.expect.txt"
     },
     {
       "id": "re-reduced-bad-payload",

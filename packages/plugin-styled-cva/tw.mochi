@@ -1,5 +1,5 @@
 /// Typed styled-cva seam (ADR 0015) — @styled-cva/react (Preact compat).
-/// Import from apps; register `styledCvaExtension` on the project plugin list.
+/// Import from apps; register `styledCvaBootstrap` on the project plugin list.
 ///
 /// `tw` stays opaque (`: a`) on purpose: the `tw.tag` factories are overloaded
 /// (`tw.div("x")` and `tw.div("x", { variants })`). Fixed-arity HM arrows would

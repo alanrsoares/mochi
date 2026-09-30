@@ -96,7 +96,7 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   Bootstrap unit specs colocate as `bootstrap/*.spec.mochi`; corpus parity vs the
   TypeScript oracle stays in `test/bootstrap-*.spec.ts`.
 - **Smoke / integration** — `test/` only: bootstrap parity, module graphs, examples,
-  playground, cross-package seams (`extensions.spec.ts`), and language guards that
+  playground, cross-package seams, and language guards that
   exercise the full pipeline.
 - **Shared harness** — `@mochi/test-support` (`compileJs`, `compileAndEval`, `pos`,
   `memRead`, `repoRoot`/`readRepo`, `formatSrc`; `./bootstrap` for self-host diffs).

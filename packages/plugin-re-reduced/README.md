@@ -2,8 +2,8 @@
 
 Vendor plugin (not language core) that teaches the Mochi compiler about
 [`@re-reduced/preact`](https://www.npmjs.com/package/@re-reduced/preact)
-`defineContainer` factories (ADR 0010 Gap A / Wave 6). A `HostExtension` —
-`inferCall` + `dtsBinding` only.
+`defineContainer` factories (ADR 0010 Gap A / Wave 6). It is a self-hosted
+`BootstrapPlugin` with inference and declaration hooks.
 
 **Status:** Wave 10–11 **thin adapter** following
 [ADR 0012](../../docs/adr/0012-host-interop-end-state.md). Preference order:
@@ -29,8 +29,8 @@ What it teaches today:
 
 ```ts
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { reReducedBootstrap } from "@mochi/plugin-re-reduced/bootstrap";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { reReducedBootstrap } from "@mochi/plugin-re-reduced";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
 
 export const docsVendorPlugins: BootstrapPlugin[] = [styledCvaBootstrap, reReducedBootstrap];
 export const plugins = docsVendorPlugins;

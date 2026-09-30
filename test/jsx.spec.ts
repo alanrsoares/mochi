@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { compile } from "@mochi/compiler";
+import { codegenTs, compile, emitDts } from "@mochi/compiler";
 import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
-import { isErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 type ParsedLet = { _tag: string; name?: string; value?: unknown };
 
@@ -145,6 +145,33 @@ describe("JSX syntax desugaring (ADR 0007)", () => {
     if (isErr(r)) {
       expect(r.error.some((d) => d.message.includes("missing field 'children'"))).toBe(true);
     }
+  });
+
+  it("checks an inferred component prop row", () => {
+    const component = 'let Card = props => <div>{concat(props.title, "!")}</div>';
+    const bad = compile(`${component}\nlet el = <Card title={1} />`);
+    expect(unwrapErr(bad)).toEqual([
+      {
+        kind: "type",
+        message: "cannot unify number with string",
+        span: { start: 67, end: 85 },
+      },
+    ]);
+    expect(isErr(compile(`${component}\nlet el = <Card title="ok" />`))).toBe(false);
+  });
+
+  it("types component bindings consistently in TypeScript and declarations", () => {
+    const inferred = 'let Card = props => <div className="card">{props.title}</div>';
+    const inferredType = "(props: { title: unknown; children?: any; className?: string }) => any";
+    expect(unwrapOk(emitDts(inferred))).toContain(`export declare const Card: ${inferredType};`);
+    expect(unwrapOk(codegenTs(inferred))).toContain(`const Card: ${inferredType}`);
+
+    const annotated =
+      "type Props = { title: string }\nlet Card : Props -> VNode = props => <div>{props.title}</div>";
+    expect(unwrapOk(emitDts(annotated))).toContain(
+      "export declare const Card: (props: Props) => any;",
+    );
+    expect(unwrapOk(codegenTs(annotated))).toContain("const Card: (props: Props) => any");
   });
 });
 

@@ -1,17 +1,14 @@
 /**
- * re-reduced over the self-hosted core (ADR 0109). The same DSL typing as
- * `reReducedExtension` in `./index.ts`, written against bootstrap AST and type
- * values: `defineContainer` walks its rank-2 `actions` / `effects` builders site
- * by site, the hooks type against a structural store sketch, `Intent.*` builds
- * intents, and the dts hook wraps the config in the host's `ContainerDef`. See
- * `./index.ts` for why each shape is what it is. Completion stays on the
- * TypeScript host until DX moves (#103).
+ * re-reduced DSL typing over the self-hosted core (ADR 0051, 0109).
+ * `defineContainer` decomposes the `actions` and `effects` builder lambdas into
+ * call sites so each site gets a fresh instantiation; treating the builder as a
+ * normal HM lambda parameter would incorrectly force every action to share one
+ * reducer type. The remaining hooks derive a structural Store sketch, type the
+ * `Intent.*` vocabulary, and wrap the inferred config in `ContainerDef` at the
+ * outbound declaration seam.
  *
- * Bootstrap inference threads its state (`St`) instead of mutating it, so each
- * hook call carries one `Solver` that holds the current state.
- *
- * Depends only on bootstrap façades, so the conformance runner can load it
- * without reaching the hand-authored TypeScript core.
+ * Bootstrap inference threads `St` instead of mutating it, so a `Solver`
+ * carries the latest state through every inference and unification step.
  */
 import type {
   BootstrapDtsBindingHook,
