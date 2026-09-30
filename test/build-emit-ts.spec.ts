@@ -8,8 +8,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { buildModulesTs, type ModuleOutput } from "@mochi/compiler/module";
-import { isErr } from "@onrails/result";
+import type { BootstrapModuleOutput } from "@mochi/compiler/bootstrap";
+import {
+  buildModulesTsBootstrapWith,
+  defaultBootstrapOptions,
+} from "@mochi/compiler/bootstrap/module";
 
 const DIR = new URL("./.tsgen-graph/", import.meta.url).pathname;
 // From test/.tsgen-graph/<file>.ts back to src/runtime.
@@ -46,15 +49,17 @@ let flat = tag("a", "b")
 let curried = prefix("a")("b")`,
 };
 
-let outputs: ModuleOutput[] = [];
+let outputs: BootstrapModuleOutput[] = [];
 
-beforeAll(async () => {
+beforeAll(() => {
   mkdirSync(DIR, { recursive: true });
   for (const [name, src] of Object.entries(MODULES)) writeFileSync(join(DIR, name), src);
-  const built = await buildModulesTs(join(DIR, "main.mochi"), (p) => Bun.file(p).text(), {
-    runtimeImport: RUNTIME,
-  });
-  if (isErr(built)) throw new Error(`build --emit=ts failed: ${built.error[0]!.message}`);
+  const built = buildModulesTsBootstrapWith(
+    join(DIR, "main.mochi"),
+    RUNTIME,
+    defaultBootstrapOptions,
+  );
+  if (built._tag === "Err") throw new Error(`build --emit=ts failed: ${built.error[0]!.message}`);
   outputs = built.value;
   for (const { path, js } of outputs)
     writeFileSync(path.endsWith(".ts") ? path : path.replace(/\.mochi$/, ".ts"), js);

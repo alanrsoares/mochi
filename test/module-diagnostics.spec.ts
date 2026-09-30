@@ -121,9 +121,9 @@ let bad = _ =>
 });
 test("resolveImport maps @mochi/plugin-preact/hooks via package exports", async () => {
   const { resolve } = await import("node:path");
-  const { resolveImport } = await import("@mochi/compiler/module");
+  const { resolveImportBootstrap } = await import("@mochi/compiler/bootstrap");
   const importer = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
-  const hit = resolveImport(importer, "@mochi/plugin-preact/hooks");
+  const hit = await resolveImportBootstrap(importer, "@mochi/plugin-preact/hooks");
   expect(hit.endsWith("packages/plugin-preact/hooks.mochi")).toBe(true);
 });
 

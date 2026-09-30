@@ -1,29 +1,31 @@
 import { describe, expect, it } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import { format } from "@mochi/dx/format";
 import { unwrapOk } from "@onrails/result";
 
+/** The first statement of a clean self-hosted parse. */
+const firstStmt = (src: string) => {
+  const r = parseProgram(src);
+  if (r._tag === "Err" || r.value.diagnostics.length > 0) throw new Error(`parse failed: ${src}`);
+  return r.value.stmts[0]!;
+};
+
 describe("$ labels for styled-cva interop", () => {
   it("parses $tone record fields", () => {
-    const prog = unwrapOk(parse(unwrapOk(lex(`let cfg = { $tone: { rose: "bg-rose" } }`))));
-    const stmt = prog.stmts[0]!;
-    expect(stmt.kind).toBe("let");
-    if (stmt.kind === "let" && stmt.value.kind === "record") {
+    const stmt = firstStmt(`let cfg = { $tone: { rose: "bg-rose" } }`);
+    expect(stmt._tag).toBe("SLet");
+    if (stmt._tag === "SLet" && stmt.value._tag === "ERecord") {
       expect(stmt.value.fields[0]?.name).toBe("$tone");
     }
   });
 
   it("parses $tone JSX attributes", () => {
-    const prog = unwrapOk(
-      parse(unwrapOk(lex(`let el = <Button $tone="rose" $size="sm">{"x"}</Button>`))),
-    );
-    const stmt = prog.stmts[0]!;
+    const stmt = firstStmt(`let el = <Button $tone="rose" $size="sm">{"x"}</Button>`);
     if (
-      stmt.kind === "let" &&
-      stmt.value.kind === "call" &&
-      stmt.value.args[1]?.kind === "record"
+      stmt._tag === "SLet" &&
+      stmt.value._tag === "ECall" &&
+      stmt.value.args[1]?._tag === "ERecord"
     ) {
       expect(stmt.value.args[1].fields.map((f) => f.name)).toEqual(["$tone", "$size"]);
     }

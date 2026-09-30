@@ -3,28 +3,14 @@
 // destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
 // Empty Set is `Set.empty` (ADR 0080); `#{}` stays Map.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { emitDts } from "@mochi/compiler/dts";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
+import { compile, emitDts } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
-import { compileJs } from "@mochi/test-support";
+import { compileJs, typeOf } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const run = (src: string, ret: string): unknown => {
   const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function(`${js}\nreturn ${ret};`)();
-};
-
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  const env = unwrapOk(
-    inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }),
-  );
-  return showScheme(env.get(name)!);
 };
 
 // ---- Set -------------------------------------------------------------------
@@ -40,7 +26,7 @@ test("an empty Set has size 0", () => {
 test("Set.empty is a polymorphic empty Set (ADR 0080)", () => {
   expect(run("let a = Set.size(Set.empty)", "a")).toBe(0);
   expect(run("let a = Set.toArray(Set.add(1, Set.empty))", "a")).toEqual([1]);
-  expect(schemeOf("let s = Set.add(1, Set.empty)", "s")).toBe("Set<number>");
+  expect(typeOf("let s = Set.add(1, Set.empty)", "s")).toBe("Set<number>");
 });
 
 test("List.empty and Map.empty match the empty literals (ADR 0080)", () => {
@@ -80,7 +66,7 @@ test("Set ops are immutable — the source Set is untouched", () => {
 });
 
 test("Set.fromArray infers as Set", () => {
-  expect(schemeOf("let s = Set.fromArray([1, 2, 3])", "s")).toBe("Set<number>");
+  expect(typeOf("let s = Set.fromArray([1, 2, 3])", "s")).toBe("Set<number>");
 });
 
 test("Set erases to a native Set in .d.ts", () => {
@@ -121,7 +107,7 @@ test("Map ops are immutable — the source Map is untouched", () => {
 });
 
 test("a `#{…}` literal infers as Map k v", () => {
-  expect(schemeOf('let m = #{ "a": 1 }', "m")).toBe("Map<string, number>");
+  expect(typeOf('let m = #{ "a": 1 }', "m")).toBe("Map<string, number>");
 });
 
 test("Map erases to a native Map in .d.ts", () => {

@@ -96,11 +96,17 @@ export const compileTargetsBootstrapSyncWith = (
 ): BootstrapResult<BootstrapTargets, BootstrapDiagnostic[]> =>
   seedCompile.compileTargetsWith(src, runtimeImport, toSeedOptions(opts));
 
+export const inferTypesBootstrapSyncWith = (
+  src: string,
+  opts: BootstrapOptions,
+): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
+  seedCompile.inferTypesWith(src, toSeedOptions(opts));
+
 export const inferTypesBootstrapSync = (
   src: string,
   plugins?: readonly BootstrapPlugin[],
 ): BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]> =>
-  seedCompile.inferTypesWith(src, toSeedOptions({ ...defaultBootstrapOptions, plugins }));
+  inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, plugins });
 
 /**
  * `inferTypesBootstrapSync` over the statements a recovering parse keeps, so a

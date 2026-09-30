@@ -3,14 +3,8 @@
 // are lazy (fuse over infinite sequences); `Array.*` mirror the eager unqualified
 // ops. Access parses as plain field-access — no new syntax.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { emitDts } from "@mochi/compiler/dts";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
-import { compileJs } from "@mochi/test-support";
+import { compile, emitDts } from "@mochi/compiler";
+import { compileJs, typeOf } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 const run = (src: string, ret: string): unknown => {
@@ -18,13 +12,7 @@ const run = (src: string, ret: string): unknown => {
   return new Function(`${js}\nreturn ${ret};`)();
 };
 
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  const env = unwrapOk(
-    inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }),
-  );
-  return showScheme(env.get(name)!);
-};
+const schemeOf = (src: string, name: string): string => typeOf(src, name);
 
 const DBL = "let dbl = x => mul(x, 2)\n";
 const BIG = "let big = x => gt(x, 4)\n";

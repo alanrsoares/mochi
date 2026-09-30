@@ -1,7 +1,7 @@
 // Named constructor fields — `Ok(value: a)` lowers to `{ _tag, value }`,
 // matching the @onrails/result + @onrails/maybe runtime shape for interop.
 import { expect, test } from "bun:test";
-import { emitDts } from "@mochi/compiler/dts";
+import { emitDts } from "@mochi/compiler";
 import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isOk, map, unwrapOk, unwrapOr } from "@onrails/result";

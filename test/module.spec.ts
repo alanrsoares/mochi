@@ -1,26 +1,41 @@
 // Multi-file module driver: graph resolution, dependency order, and
-// cross-module type inference. Files live in an in-memory map (no fs).
-import { expect, test } from "bun:test";
+// cross-module type inference. Build fixtures are written to a temp dir (the
+// self-hosted driver reads real files); diagnostics fixtures stay in memory.
+import { afterAll, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
+  type BootstrapModuleOutput,
   type BootstrapRecoveryGraphCache,
   createBootstrapRecoveryGraphCache,
 } from "@mochi/compiler/bootstrap";
-import { buildModules, type ModuleOutput } from "@mochi/compiler/module";
+import {
+  buildModulesBootstrapWith,
+  defaultBootstrapOptions,
+} from "@mochi/compiler/bootstrap/module";
 import { moduleDiagnostics } from "@mochi/dx/diagnostics";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
-// Build from a `{ path: source }` fixture; paths are absolute so node:path
-// resolution is deterministic across machines.
+const root = mkdtempSync(join(tmpdir(), "mochi-module-spec-"));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
+let fixtures = 0;
+
+// Build from a `{ path: source }` fixture of absolute paths, written under a
+// fresh temp dir; output paths are mapped back to the fixture's own.
 const build = (files: Record<string, string>, entry: string) => {
-  const read = async (p: string): Promise<string> => {
-    const src = files[p];
-    if (src === undefined) throw new Error(`no such file ${p}`);
-    return src;
-  };
-  return buildModules(entry, read);
+  const dir = join(root, String(fixtures++));
+  for (const [p, src] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, p)), { recursive: true });
+    writeFileSync(join(dir, p), src);
+  }
+  const r = buildModulesBootstrapWith(join(dir, entry), defaultBootstrapOptions);
+  return r._tag === "Ok"
+    ? { ...r, value: r.value.map((o) => ({ ...o, path: o.path.slice(dir.length) })) }
+    : r;
 };
 
-const jsFor = (outs: ModuleOutput[], suffix: string): string =>
+const jsFor = (outs: BootstrapModuleOutput[], suffix: string): string =>
   outs.find((o) => o.path.endsWith(suffix))!.js;
 
 const MATH = "export let double = x => mul(x, 2)\nexport let inc = x => add(x, 1)\n";
@@ -30,7 +45,7 @@ test("a module graph compiles both files, dependency-first", async () => {
     "/p/math.mochi": MATH,
     "/p/main.mochi": 'import { double, inc } from "./math"\nlet r = 5 |> double |> inc\n',
   };
-  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  const outs = unwrapOk(build(files, "/p/main.mochi"));
   expect(outs.map((o) => o.path)).toEqual(["/p/math.mochi", "/p/main.mochi"]); // dep before dependent
   expect(jsFor(outs, "main.mochi")).toContain('import { double, inc } from "./math.js";');
   expect(jsFor(outs, "math.mochi")).toContain("export const double");
@@ -41,8 +56,9 @@ test("an exported binding's type crosses the boundary", async () => {
     "/p/math.mochi": MATH,
     "/p/main.mochi": 'import { double } from "./math"\nlet bad = double("hi")\n',
   };
-  const r = await build(files, "/p/main.mochi");
+  const r = build(files, "/p/main.mochi");
   expect(isErr(r)).toBe(true); // double : number -> number, applied to a string
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });
 
 test("a polymorphic export instantiates fresh at each use site", async () => {
@@ -50,7 +66,7 @@ test("a polymorphic export instantiates fresh at each use site", async () => {
     "/p/id.mochi": "export let id = x => x\n",
     "/p/main.mochi": 'import { id } from "./id"\nlet n = id(42)\nlet s = id("hi")\n',
   };
-  expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
+  expect(isErr(build(files, "/p/main.mochi"))).toBe(false);
 });
 
 test("importing a name the module does not export is an error", async () => {
@@ -58,7 +74,9 @@ test("importing a name the module does not export is an error", async () => {
     "/p/math.mochi": MATH,
     "/p/main.mochi": 'import { nope } from "./math"\nlet x = nope\n',
   };
-  expect(isErr(await build(files, "/p/main.mochi"))).toBe(true);
+  const r = build(files, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("has no export 'nope'");
 });
 
 test("an import cycle is reported, not looped on", async () => {
@@ -66,7 +84,9 @@ test("an import cycle is reported, not looped on", async () => {
     "/p/a.mochi": 'import { b } from "./b"\nexport let a = b\n',
     "/p/b.mochi": 'import { a } from "./a"\nexport let b = a\n',
   };
-  expect(isErr(await build(files, "/p/a.mochi"))).toBe(true);
+  const r = build(files, "/p/a.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("import cycle");
 });
 
 test("an exported variant's constructors are importable", async () => {
@@ -74,7 +94,7 @@ test("an exported variant's constructors are importable", async () => {
     "/p/opt.mochi": "export type Option a =\n  | Some(value: a)\n  | None\n",
     "/p/main.mochi": 'import { Some, None } from "./opt"\nlet x = Some(1)\nlet y = None\n',
   };
-  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  const outs = unwrapOk(build(files, "/p/main.mochi"));
   expect(jsFor(outs, "opt.mochi")).toContain(
     'export const Some = (value) => ({ _tag: "Some", value });',
   );
@@ -90,7 +110,7 @@ test("a switch on an imported variant is exhaustiveness-checked and destructures
       'import { Some, None } from "./opt"\n' +
       "let get = o => switch o { | Some(v) => v | None => 0 }\n",
   };
-  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  const outs = unwrapOk(build(files, "/p/main.mochi"));
   // Pattern must destructure the imported ctor's KEY (`value`), not positional `_0`.
   expect(jsFor(outs, "main.mochi")).toContain("? (({ value: v }) => (v))(_v)");
 });
@@ -101,7 +121,9 @@ test("a non-exhaustive switch on an imported variant is rejected", async () => {
     "/p/main.mochi":
       'import { Some, None } from "./opt"\n' + "let get = o => switch o { | Some(v) => v }\n", // missing None, no catch-all
   };
-  expect(isErr(await build(files, "/p/main.mochi"))).toBe(true);
+  const r = build(files, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("missing None");
 });
 
 test("an exported binding is reachable via import * as", async () => {
@@ -109,7 +131,7 @@ test("an exported binding is reachable via import * as", async () => {
     "/p/math.mochi": MATH,
     "/p/main.mochi": 'import * as M from "./math"\nlet r = 5 |> M.double |> M.inc\n',
   };
-  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  const outs = unwrapOk(build(files, "/p/main.mochi"));
   expect(jsFor(outs, "main.mochi")).toContain('import * as M from "./math.js";');
   expect(jsFor(outs, "main.mochi")).toContain("M.double");
 });
@@ -122,7 +144,7 @@ test("a switch on a namespace-imported variant uses qualified patterns", async (
       "let get = o => switch o { | Opt.Some(v) => v | Opt.None => 0 }\n" +
       "let x = Opt.Some(1)\n",
   };
-  const outs = unwrapOk(await build(files, "/p/main.mochi"));
+  const outs = unwrapOk(build(files, "/p/main.mochi"));
   expect(jsFor(outs, "main.mochi")).toContain('import * as Opt from "./opt.js";');
   expect(jsFor(outs, "main.mochi")).toContain("? (({ value: v }) => (v))(_v)");
   expect(jsFor(outs, "main.mochi")).toContain("Opt.Some(1)");
@@ -133,7 +155,9 @@ test("import * as a reserved prelude namespace is rejected", async () => {
     "/p/math.mochi": MATH,
     "/p/main.mochi": 'import * as List from "./math"\nlet x = List.double\n',
   };
-  expect(isErr(await build(files, "/p/main.mochi"))).toBe(true);
+  const r = build(files, "/p/main.mochi");
+  expect(isErr(r)).toBe(true);
+  if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("reserved");
 });
 
 const SHAPE =
@@ -145,7 +169,7 @@ test("a named import does not leak sibling constructors (ADR 0082)", async () =>
     "/p/main.mochi":
       'import { origin } from "./shapes"\n' + "let f = s => switch s { | Circle(r) => r }\n",
   };
-  const r = await build(files, "/p/main.mochi");
+  const r = build(files, "/p/main.mochi");
   expect(isErr(r)).toBe(true);
   if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("unknown constructor 'Circle'");
 });
@@ -156,7 +180,7 @@ test("importing one ctor still exhausts the whole owning type (ADR 0082)", async
     "/p/main.mochi":
       'import { Circle } from "./shapes"\n' + "let f = s => switch s { | Circle(r) => r }\n",
   };
-  const r = await build(files, "/p/main.mochi");
+  const r = build(files, "/p/main.mochi");
   expect(isErr(r)).toBe(true);
   if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("non-exhaustive");
 });
@@ -168,7 +192,7 @@ test("a namespace import requires qualified ctor patterns (ADR 0082)", async () 
       'import * as S from "./shapes"\n' +
       "let f = s => switch s { | S.Circle(r) => r | S.Square(w) => w }\n",
   };
-  expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
+  expect(isErr(build(files, "/p/main.mochi"))).toBe(false);
 
   const bare = {
     "/p/shapes.mochi": SHAPE,
@@ -176,7 +200,7 @@ test("a namespace import requires qualified ctor patterns (ADR 0082)", async () 
       'import * as S from "./shapes"\n' +
       "let f = s => switch s { | Circle(r) => r | Square(w) => w }\n",
   };
-  const r = await build(bare, "/p/main.mochi");
+  const r = build(bare, "/p/main.mochi");
   expect(isErr(r)).toBe(true);
   if (isErr(r)) expect(unwrapErr(r)[0]!.message).toMatch(/unknown constructor/);
 });
@@ -187,7 +211,7 @@ test("same-name ctors from two deps collide at the second import (ADR 0082)", as
     "/p/b.mochi": "export type B = | Empty\n",
     "/p/main.mochi": 'import { Empty } from "./a"\nimport { Empty } from "./b"\nlet x = Empty\n',
   };
-  const r = await build(files, "/p/main.mochi");
+  const r = build(files, "/p/main.mochi");
   expect(isErr(r)).toBe(true);
   if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("duplicate constructor 'Empty'");
 });
@@ -202,7 +226,7 @@ test("the same ctor imported twice from one module is the same type (ADR 0082)",
       "let x = wrap(1)\n" +
       "let n = switch x { | Hold(v) => v }\n",
   };
-  expect(isErr(await build(files, "/p/main.mochi"))).toBe(false);
+  expect(isErr(build(files, "/p/main.mochi"))).toBe(false);
 });
 
 // --- diagnostics graph cache (ADR 0095) --------------------------------------

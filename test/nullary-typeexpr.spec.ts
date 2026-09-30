@@ -1,20 +1,28 @@
 // `() -> T` in TypeExpr / extern signatures (ADR 0014 surface + ADR 0015).
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
+import type { Stmt } from "@mochi/compiler/bootstrap/types";
 import { hoverAt } from "@mochi/dx/hover";
 import { isOk, unwrapOk } from "@onrails/result";
 
+type Lexed = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: unknown };
+type Parsed = { _tag: "Ok"; value: Stmt[] } | { _tag: "Err"; error: unknown };
+
+const parseSrc = (src: string): Stmt[] => {
+  const lexed = lex(src) as Lexed;
+  if (lexed._tag === "Err") throw new Error("lex failed");
+  return unwrapOk(parse(lexed.value) as Parsed);
+};
+
 test("() parses as a type atom (nullary domain)", () => {
-  const prog = unwrapOk(parse(unwrapOk(lex('extern f : () -> number = "./m" "f"'))));
-  const s = prog.stmts[0];
-  expect(s?.kind).toBe("extern");
-  if (s?.kind !== "extern") throw new Error("unreachable");
-  expect(s.typeExpr.kind).toBe("tarrow");
-  if (s.typeExpr.kind !== "tarrow") throw new Error("unreachable");
-  expect(s.typeExpr.from.kind).toBe("tname");
-  if (s.typeExpr.from.kind !== "tname") throw new Error("unreachable");
+  const s = parseSrc('extern f : () -> number = "./m" "f"')[0];
+  expect(s?._tag).toBe("SExtern");
+  if (s?._tag !== "SExtern") throw new Error("unreachable");
+  expect(s.typeExpr._tag).toBe("TyArrow");
+  if (s.typeExpr._tag !== "TyArrow") throw new Error("unreachable");
+  expect(s.typeExpr.from._tag).toBe("TyName");
+  if (s.typeExpr.from._tag !== "TyName") throw new Error("unreachable");
   expect(s.typeExpr.from.name).toBe("unit");
 });
 

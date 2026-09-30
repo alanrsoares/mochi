@@ -3,41 +3,44 @@
 // extern signatures); hover / inlay / .d.ts FOLD a matching closed row back to
 // the alias name. No nominal identity, no runtime — pure naming for readability.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { emitDts } from "@mochi/compiler/dts";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { compile, emitDts } from "@mochi/compiler";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import { emitDts as emitDtsCore } from "@mochi/compiler/dts";
 import { format } from "@mochi/dx/format";
 import { hoverAt } from "@mochi/dx/hover";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 const POINT = "type Point = { x: number, y: number }\n";
 
+/** The first statement of a clean self-hosted parse, narrowed to a `type` decl. */
+const typeDecl = (src: string) => {
+  const r = parseProgram(src);
+  if (r._tag === "Err" || r.value.diagnostics.length > 0) throw new Error(`parse failed: ${src}`);
+  const s = r.value.stmts[0];
+  if (s?._tag !== "SType") throw new Error("expected a type declaration");
+  return s;
+};
+
+const aliasFields = (src: string) => {
+  const alias = typeDecl(src).alias;
+  return alias._tag === "Some" ? alias.value : null;
+};
+
 // ---- parsing ---------------------------------------------------------------
 
 test("a `{ ... }` body parses as a record alias, not a variant", () => {
-  const prog = unwrapOk(parse(unwrapOk(lex(POINT))));
-  const s = prog.stmts[0];
-  expect(s?.kind).toBe("type");
-  if (s?.kind !== "type") throw new Error("unreachable");
-  expect(s.ctors).toEqual([]);
-  expect(s.alias?.map((f) => f.name)).toEqual(["x", "y"]);
+  expect(typeDecl(POINT).ctors).toEqual([]);
+  expect(aliasFields(POINT)?.map((f) => f.name)).toEqual(["x", "y"]);
 });
 
 test("parametric alias captures its type parameters", () => {
-  const prog = unwrapOk(parse(unwrapOk(lex("type Box a = { value: a }"))));
-  const s = prog.stmts[0];
-  if (s?.kind !== "type") throw new Error("unreachable");
-  expect(s.params).toEqual(["a"]);
-  expect(s.alias?.[0]?.name).toBe("value");
+  const src = "type Box a = { value: a }";
+  expect(typeDecl(src).params).toEqual(["a"]);
+  expect(aliasFields(src)?.[0]?.name).toBe("value");
 });
 
 test("empty record alias `type Unit = {}` parses", () => {
-  const prog = unwrapOk(parse(unwrapOk(lex("type Unit = {}"))));
-  const s = prog.stmts[0];
-  if (s?.kind !== "type") throw new Error("unreachable");
-  expect(s.alias).toEqual([]);
+  expect(aliasFields("type Unit = {}")).toEqual([]);
 });
 
 // ---- hover folds a matching row to the alias name --------------------------
@@ -90,9 +93,13 @@ test("emits an exported TS object type + folds binding types", () => {
 
 test("parametric alias emits a generic TS type", () => {
   const src = "type Box a = { value: a }\nlet b = { value: 42 }";
-  const dts = unwrapOk(emitDts(src));
-  expect(dts).toContain("export type Box<A> = { value: A };");
-  expect(dts).toContain("export declare const b: Box<number>;");
+  expect(unwrapOk(emitDts(src))).toContain("export type Box<A> = { value: A };");
+});
+
+test("a binding matching a parametric alias folds to it in .d.ts", () => {
+  // #104: seed diverges — self-hosted .d.ts prints `b: { value: number }`, not `Box<number>`.
+  const src = "type Box a = { value: a }\nlet b = { value: 42 }";
+  expect(unwrapOk(emitDtsCore(src))).toContain("export declare const b: Box<number>;");
 });
 
 // ---- codegen: pure type, no runtime ----------------------------------------
@@ -112,7 +119,7 @@ test("an exported alias emits no stray `export`", () => {
 
 test("a name declared twice (alias + variant) is a duplicate-type error", () => {
   const src = `${POINT}type Point = | P(number)`;
-  const r = check(unwrapOk(parse(unwrapOk(lex(src)))));
+  const r = compile(src);
   expect(isErr(r)).toBe(true);
   if (isErr(r)) expect(unwrapErr(r)[0]!.message).toContain("duplicate type 'Point'");
 });

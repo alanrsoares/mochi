@@ -1,8 +1,15 @@
 import { expect, test } from "bun:test";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
+import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
 import { formatSrc as fmt } from "@mochi/test-support/format";
-import { isErr, unwrapOk } from "@onrails/result";
+
+type Parsed = BootstrapResult<unknown, BootstrapDiagnostic>;
+
+/** Whether `src` lexes and parses cleanly through the self-hosted front end. */
+const reparses = (src: string): boolean => {
+  const tokens = lex(src) as Parsed;
+  return tokens._tag === "Ok" && (parse(tokens.value) as Parsed)._tag === "Ok";
+};
 
 test("normalizes whitespace in a let binding", () => {
   expect(fmt("let   n=add(1,2)")).toBe("let n = 1 + 2\n");
@@ -480,7 +487,7 @@ test("composition operator >> refolds correctly when formatted", () => {
 test("a trailing comment prints after the separator, and the output reparses", () => {
   const out = fmt("let value = f(\n  x, // why\n  y\n)");
   expect(out).toBe("let value = f(\n  x, // why\n  y\n)\n");
-  expect(isErr(parse(unwrapOk(lex(out))))).toBe(false);
+  expect(reparses(out)).toBe(true);
 });
 
 test("an applied composition keeps its arguments", () => {

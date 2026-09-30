@@ -3,25 +3,15 @@
 // compose with `|>`. Checks both the inferred types and the standalone runtime.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
+import { typeOf } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
-
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  const env = unwrapOk(inferProgram(prog, preludeEnv, { open: true }));
-  return showScheme(env.get(name)!);
-};
 
 // Compile standalone (prelude inlined) and return the named binding's value.
 const val = (src: string, name: string): unknown =>
   new Function(`${unwrapOk(compile(src))}\nreturn ${name};`)();
 
 test("map has the expected polymorphic type", () => {
-  expect(schemeOf("let f = map", "f")).toMatch(/^\('t\d+ -> 't\d+\) -> \['t\d+\] -> \['t\d+\]$/);
+  expect(typeOf("let f = map", "f")).toMatch(/^\('t\d+ -> 't\d+\) -> \['t\d+\] -> \['t\d+\]$/);
 });
 
 test("map applies a function over a list", () => {

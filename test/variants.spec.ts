@@ -1,21 +1,14 @@
 // Parametric (generic) variant types + railway-oriented combinators over them.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
-import { compileAndEval } from "@mochi/test-support";
-import { isErr, unwrapOk } from "@onrails/result";
+import { compileAndEval, typeOf } from "@mochi/test-support";
+import { isErr } from "@onrails/result";
 
 const RESULT = "type Result a e = | Ok(a) | Err(e)\n";
 
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  const env = unwrapOk(inferProgram(prog, preludeEnv, { open: true }));
-  return showScheme(env.get(name)!);
-};
+// A constructor's type is read through a probe binding (`let probe = Ok`).
+const schemeOf = (src: string, name: string): string =>
+  /^[A-Z]/.test(name) ? typeOf(`${src}\nlet probe = ${name}`, "probe") : typeOf(src, name);
 
 // Compile and run, injecting @onrails/pattern `match` (the codegen import is
 // stripped). Output is standalone — compile inlines the prelude it uses.

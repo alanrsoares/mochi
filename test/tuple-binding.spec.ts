@@ -3,17 +3,10 @@
 // one codegen path (JS array destructuring). Guards parse+infer+runtime+format.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { type Type, tArrow, tNumber } from "@mochi/compiler/types";
 import { format } from "@mochi/dx/format";
+import { typeOf } from "@mochi/test-support";
 import { unwrapErr, unwrapOk } from "@onrails/result";
 
-const numOps: Record<string, Type> = { add: tArrow(tNumber, tArrow(tNumber, tNumber)) };
-const infer = (src: string, builtins: Record<string, Type> = numOps) =>
-  inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), builtins);
-const typeOf = (env: Env, name: string): string => showScheme(env.get(name)!);
 const run = (src: string): unknown => new Function(`${unwrapOk(compile(src))}\nreturn r;`)();
 
 test("a tuple lambda param destructures its argument", () => {
@@ -31,8 +24,7 @@ test("let-tuple desugars to a JS array-destructuring IIFE", () => {
 });
 
 test("a tuple param lambda is inferred with a tuple domain", () => {
-  const env = unwrapOk(infer("let fst = ((a, b)) => a", {}));
-  expect(typeOf(env, "fst")).toMatch(/^\('t\d+, 't\d+\) -> 't\d+$/);
+  expect(typeOf("let fst = ((a, b)) => a", "fst")).toMatch(/^\('t\d+, 't\d+\) -> 't\d+$/);
 });
 
 test("nested let-tuple threads scanner-style state", () => {

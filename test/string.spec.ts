@@ -1,27 +1,17 @@
 // String literals.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
-import { compileJs } from "@mochi/test-support";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+import { compileJs, typeOf } from "@mochi/test-support";
+import { isErr, unwrapErr } from "@onrails/result";
 
 const js = (src: string) => compileJs(src, { runtime: true });
-
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  return showScheme(unwrapOk(inferProgram(prog, preludeEnv, { open: true })).get(name)!);
-};
 
 test("a string literal compiles to a JS string", () => {
   expect(js(`let m = "hello"`)).toBe(`const m = "hello";\n`);
 });
 
 test("a string literal has type string", () => {
-  expect(schemeOf(`let m = "hi"`, "m")).toBe("string");
+  expect(typeOf(`let m = "hi"`, "m")).toBe("string");
 });
 
 test("escapes are decoded then safely re-encoded", () => {

@@ -2,18 +2,28 @@
 // must produce its documented results — a guard against language regressions.
 
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { compile, compileTargets } from "@mochi/compiler";
-import { toTypedProgram } from "@mochi/compiler/compile";
-import { emitDts } from "@mochi/compiler/dts";
-import { buildModules } from "@mochi/compiler/module";
-import { preludeNamespaces } from "@mochi/compiler/prelude";
-import { compileAndEval, readRepo, repoPath } from "@mochi/test-support";
+import { compile, compileTargets, emitDts } from "@mochi/compiler";
+import type { BootstrapModuleOutput } from "@mochi/compiler/bootstrap";
+import {
+  buildModulesBootstrapWith,
+  defaultBootstrapOptions,
+} from "@mochi/compiler/bootstrap/module";
+import { compileAndEval, readRepo, repoPath, typesOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
+
+/** A recorded type's tag in the self-hosted `Type` union (`TyFn`, `TyCon`, …). */
+type Tagged = { _tag?: string };
+
+/** Build the graph at repo path `entry` through the self-hosted core; throws on a diagnostic. */
+const build = (entry: string): BootstrapModuleOutput[] => {
+  const r = buildModulesBootstrapWith(path(entry), defaultBootstrapOptions);
+  if (r._tag === "Err") throw new Error(`${entry}: ${r.error.map((d) => d.message).join("; ")}`);
+  return r.value;
+};
 
 test("example.mochi compiles", () => {
   expect(isErr(compile(read("examples/example.mochi")))).toBe(false);
@@ -38,9 +48,8 @@ let miss = Map.get("b", #{"a": 1})`;
   ]);
 });
 
-test("examples/life/main.mochi builds with the Bun terminal bindings", async () => {
-  const result = await buildModules(path("examples/life/main.mochi"), (p) => Bun.file(p).text());
-  expect(isErr(result)).toBe(false);
+test("examples/life/main.mochi builds with the Bun terminal bindings", () => {
+  expect(build("examples/life/main.mochi").length).toBeGreaterThan(0);
 });
 
 test("Bun terminal binding settles Err on a forced write failure", async () => {
@@ -143,12 +152,8 @@ test("examples/async fans out with Task.all/traverse/race (ADR 0074)", async () 
   expect(await out.fastest).toEqual({ _tag: "Ok", value: "quick" });
 });
 
-test("examples/modules builds the whole graph and wires imports", async () => {
-  const outs = unwrapOk(
-    await buildModules(path("examples/modules/main.mochi"), (p) =>
-      Promise.resolve(readFileSync(p, "utf8")),
-    ),
-  );
+test("examples/modules builds the whole graph and wires imports", () => {
+  const outs = build("examples/modules/main.mochi");
   const main = outs.find((o) => o.path.endsWith("main.mochi"))!.js;
   const geometry = outs.find((o) => o.path.endsWith("geometry.mochi"))!.js;
   expect(main).toContain('import { area, hypot, Circle, Rect } from "./geometry.js";');
@@ -161,14 +166,10 @@ test("examples/modules builds the whole graph and wires imports", async () => {
 // are structural, ADR 0005). Checked in as `examples/qualified-types/`, so the
 // bootstrap differential corpus (which globs every `.mochi` in the repo) also
 // exercises the self-hosted graph's qualified-type path (C5 slice d).
-test("a graph naming imported TYPES through a namespace alias builds (C5 slice b)", async () => {
-  const outs = unwrapOk(
-    await buildModules(path("examples/qualified-types/main.mochi"), (p) =>
-      Promise.resolve(readFileSync(p, "utf8")),
-    ),
-  );
+test("a graph naming imported TYPES through a namespace alias builds (C5 slice b)", () => {
+  const outs = build("examples/qualified-types/main.mochi");
   const main = outs.find((o) => o.path.endsWith("main.mochi"))!.js;
-  // `import * as D` is type-only, so it contributes no value import of its own;
+  // `D` is only ever used in type positions, so no value is read through it;
   // the ctors and `area` arrive through the ordinary named import.
   expect(main).toContain('import { area, Circle, Rect, Box } from "./shapes.js";');
   expect(main).not.toContain("D.");
@@ -245,11 +246,9 @@ let pair = (n: number) =>
 test("a tuple let still records its lambda's type at the lambda span", () => {
   // Hover and the TS backend's parameter annotations read the arrow from there.
   const src = "let pair = (n: number) =>\n  let (m, k) = (n, 1) in m + k";
-  const r = toTypedProgram(src, { namespaces: preludeNamespaces });
-  expect(isErr(r)).toBe(false);
   const lamStart = src.indexOf("(m, k)");
-  const hit = unwrapOk(r).res.types.find((t) => t.span.start === lamStart);
-  expect(hit?.type.kind).toBe("arrow");
+  const hit = typesOf(src, { open: false }).find((t) => t.span.start === lamStart);
+  expect((hit?.ty as Tagged | undefined)?._tag).toBe("TyFn");
 });
 
 test("an optional record field may be omitted and reads as Option (ADR 0098)", () => {

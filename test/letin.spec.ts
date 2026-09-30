@@ -3,31 +3,23 @@
 // formatter round-trip.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { type Type, tArrow, tBool, tNumber } from "@mochi/compiler/types";
+import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
+import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
 import { format } from "@mochi/dx/format";
-import { compileJs } from "@mochi/test-support";
+import { compileJs, typeOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
-const numOps: Record<string, Type> = {
-  add: tArrow(tNumber, tArrow(tNumber, tNumber)),
-  sub: tArrow(tNumber, tArrow(tNumber, tNumber)),
-  eq: tArrow(tNumber, tArrow(tNumber, tBool)),
-};
-const infer = (src: string, builtins: Record<string, Type> = numOps) =>
-  inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), builtins);
-const typeOf = (env: Env, name: string): string => showScheme(env.get(name)!);
+// Closed-world: every name must resolve (the prelude supplies add/sub/eq).
+const typechecks = (src: string): boolean =>
+  !isErr(inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: false }));
 const run = (src: string): unknown => {
   const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `${js}\nreturn r;`)(match);
 };
 
 test("binds a local and uses it in the body", () => {
-  const env = unwrapOk(infer("let r = let x = add(1, 2) in add(x, x)"));
-  expect(typeOf(env, "r")).toBe("number");
+  expect(typeOf("let r = let x = add(1, 2) in add(x, x)", "r", { open: false })).toBe("number");
 });
 
 test("evaluates to the body with the binding in scope", () => {
@@ -42,7 +34,7 @@ test("the bound value is generalized (let-polymorphism)", () => {
   // `id` is used at two different types inside the body — only sound if the
   // local binding generalizes, exactly like a top-level `let`.
   const src = "let r = let id = x => x in { a: id(1), b: id(id) }";
-  expect(isErr(infer(src, {}))).toBe(false);
+  expect(typechecks(src)).toBe(true);
 });
 
 test("the value sees the OUTER scope, not the binding itself (non-recursive)", () => {
@@ -78,14 +70,14 @@ test("a lambda-valued local let can recurse without leaving its enclosing functi
   const src =
     "let count = n => let go = k => eq(k, 0) ? 0 : add(1, go(sub(k, 1))) in go(n)\nlet r = count(4)";
   expect(run(src)).toBe(4);
-  expect(isErr(infer(src))).toBe(false);
+  expect(typechecks(src)).toBe(true);
 });
 
 test("adjacent lambda-valued local lets are mutually recursive", () => {
   const src =
     "let parity = n => let even = k => eq(k, 0) ? true : odd(sub(k, 1)) in let odd = k => eq(k, 0) ? false : even(sub(k, 1)) in even(n)\nlet r = parity(7)";
   expect(run(src)).toBe(false);
-  expect(isErr(infer(src))).toBe(false);
+  expect(typechecks(src)).toBe(true);
 });
 
 test("a non-lambda shadow-rebind still reads the outer local binding", () => {

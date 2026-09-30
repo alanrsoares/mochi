@@ -1,21 +1,16 @@
 // Gleam-style external bindings: `extern name : type = "module" "export"`.
 import { expect, test } from "bun:test";
 import { compile, compileTargets } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
 import { format } from "@mochi/dx/format";
-import { compileJs } from "@mochi/test-support";
+import { compileJs, typeOf } from "@mochi/test-support";
 import { isErr, isOk, unwrapOk } from "@onrails/result";
 
 const js = (src: string) => compileJs(src, { runtime: true });
 
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  return showScheme(unwrapOk(inferProgram(prog, preludeEnv, {})).get(name)!);
-};
+// Closed-world, like the TS-core `inferProgram(…, {})` it replaces. An extern is
+// not a `let`, so read its generalized type back through a probe binding.
+const schemeOf = (src: string, name: string): string =>
+  typeOf(`${src}\nlet probe = ${name}`, "probe", { open: false });
 
 test("an extern's declared type becomes its scheme", () => {
   expect(schemeOf(`extern sqrt : number -> number = "node:module" "sqrt"`, "sqrt")).toBe(
