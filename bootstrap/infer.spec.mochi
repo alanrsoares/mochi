@@ -235,8 +235,7 @@ let schemeOf = (src, name) =>
     |> Result.flatMap(check)
     |> Result.flatMap(stmts =>
       inferProgramTypes(stmts, builtins, namespaces, false)
-        |> Result.mapErr(e =>
-          { message: e.message, start: e.start, end: e.end }))
+        |> Result.mapErr(es => firstOf(es |> map(slim))))
     |> Result.map(r =>
       r.env
         |> Map.get(name)

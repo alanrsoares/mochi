@@ -1,6 +1,7 @@
 # 0105 — Bootstrap conformance corpus replaces the TS core oracle
 
-- **Status:** Accepted
+- **Status:** Accepted — amended by [ADR 0129](0129-seed-parity-diagnostics-and-dts-aliases.md)
+  (every diagnostic expectation compares `kind`)
 - **Date:** 2026-09-04
 - **Source:** [ADR 0090](0090-bootstrap-chain.md), [issue #66](https://github.com/alanrsoares/mochi/issues/66), [issue #70](https://github.com/alanrsoares/mochi/issues/70)
 

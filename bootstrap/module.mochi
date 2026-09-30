@@ -123,7 +123,12 @@ let atPath = (kind: string, path: string, e) =>
 // ADR 0004 §3). Never empty in practice — inference fails with at least one.
 let firstAtPath = (path, es) => switch Array.get(0, es) {
   | Some(e) => atPath("type", path, e)
-  | None => { kind: "type", message: "module '${path}': type error", start: 0, end: 0 }
+  | None => {
+      kind: "type",
+      message: "module '${path}': type error",
+      start: 0,
+      end: 0
+    }
 }
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
