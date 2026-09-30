@@ -17,6 +17,7 @@ import {
   type Row,
   rEmpty,
   rExtend,
+  type Scheme,
   type Type,
   tArrow,
   tBool,
@@ -31,7 +32,7 @@ import {
 import { type Subst, zonk } from "./unify";
 
 /** A polymorphic type scheme: `∀ vars rvars. type`. */
-export type Scheme = { vars: number[]; rvars: number[]; type: Type };
+export type { Scheme } from "../ast/types";
 export type Env = Map<string, Scheme>;
 export const mono = (t: Type): Scheme => ({ vars: [], rvars: [], type: t });
 

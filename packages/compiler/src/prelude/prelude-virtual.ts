@@ -6,8 +6,20 @@
 import { match } from "@onrails/pattern";
 import type { Location, Span } from "../ast/span";
 import { type ConType, showType, type Type } from "../ast/types";
-import { emptyOrigins, type Origins } from "../check/symbols";
 import { builtinTypeDecls, preludeEnv, preludeNamespaces } from "./prelude";
+
+/** Export sites of a module, keyed by symbol space. */
+export type Origins = {
+  value: Map<string, Location>;
+  type: Map<string, Location>;
+  ctor: Map<string, Location>;
+};
+
+export const emptyOrigins = (): Origins => ({
+  value: new Map(),
+  type: new Map(),
+  ctor: new Map(),
+});
 
 /** Virtual document URI / Location.path for every builtin def. */
 export const PRELUDE_PATH = "mochi:/prelude.mochi";

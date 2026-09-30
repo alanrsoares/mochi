@@ -38,7 +38,7 @@ import {
   tUnion,
 } from "../../ast/types";
 import type { Diagnostic } from "../../errors/errors";
-import { closestName } from "../../infer/suggest";
+import { closestName } from "../../errors/suggest";
 import type {
   BindingTypeApi,
   BindingTypeHook,

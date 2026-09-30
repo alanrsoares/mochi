@@ -79,12 +79,12 @@ import {
   tVar,
 } from "../ast/types";
 import { type Diagnostic, typeErr } from "../errors/errors";
+import { closestName } from "../errors/suggest";
 import type { InferCallApi, InferCallDispatch, LanguagePlugin } from "../extensions/extensions";
 import { inferCallDispatch, resolvePlugins, runInferCallHooks } from "../extensions/extensions";
 import { localBinderNames } from "./local-names";
 import { stronglyConnected } from "./scc";
 import { showTypeExpr } from "./show-type-expr";
-import { closestName } from "./suggest";
 import { emptySubst, fits, resolve, resolveRow, type Subst, unify, zonk } from "./unify";
 
 /**
