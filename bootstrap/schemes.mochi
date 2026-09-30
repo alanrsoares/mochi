@@ -729,4 +729,10 @@ let foldRowWith = (row, tpls: [FoldTemplate]) => switch row {
 /// `t` with every node that fits an alias rewritten to `Name<args>`. Fold
 /// before widening literals, as hover does: a literal fits no primitive.
 export let foldAliases = (t, aliases: Map<string, AliasInfo>) =>
-  foldWith(t, foldTemplatesFrom(Map.keys(aliases), aliases, 0, []))
+  foldAliasesAt(t, Map.keys(aliases), aliases)
+
+/// `foldAliases` over only the aliases `keys` names, tried in that order. The
+/// `.d.ts` writer passes the file's own aliases in declaration order, so a
+/// dependency's alias stays structural (ADR 0092).
+export let foldAliasesAt = (t, keys, aliases: Map<string, AliasInfo>) =>
+  foldWith(t, foldTemplatesFrom(keys, aliases, 0, []))

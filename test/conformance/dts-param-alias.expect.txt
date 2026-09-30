@@ -1,0 +1,5 @@
+export type Box<A> = { value: A };
+export type Pair<A, B> = { fst: A; snd: B };
+export declare const b: Box<number>;
+export declare const mk: <A>(x: A) => Box<A>;
+export declare const p: Pair<number, string>;

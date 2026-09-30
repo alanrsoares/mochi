@@ -3,6 +3,7 @@ import * as Ast from "./ast.mochi"
 import {
   ctorScheme,
   foldAliases,
+  foldAliasesAt,
   generalize,
   generalizeOver,
   instantiate,
@@ -91,3 +92,12 @@ test("foldAliases leaves an open row structural", () =>
   )
     |> showType
     |> assertEq("{ value: number | 'r1 }"))
+
+test("foldAliasesAt folds only the named aliases", () =>
+  let aliases = Map.set("Box", boxAlias, #{}) in
+  let t = boxOf(tPrim("number")) in
+    (
+      showType(foldAliasesAt(t, ["Box"], aliases)),
+      showType(foldAliasesAt(t, [], aliases))
+    )
+      |> assertEq(("Box<number>", "{ value: number }")))

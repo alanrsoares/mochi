@@ -6894,7 +6894,8 @@ var foldWith = _curry9(2, (t, tpls) => ((_v) => _v._tag === "Some" ? (({ value: 
   throw new Error("non-exhaustive match");
 })())(foldHeadFrom(t, tpls, 0)));
 var foldRowWith = _curry9(2, (row, tpls) => ((_v) => _v._tag === "RowExtend" ? (({ label, fieldType, optional, rest }) => RowExtend(label, foldWith(fieldType, tpls), optional, foldRowWith(rest, tpls)))(_v) : row)(row));
-var foldAliases = _curry9(2, (t, aliases) => foldWith(t, foldTemplatesFrom(_Map_keys3(aliases), aliases, 0, [])));
+var foldAliases = _curry9(2, (t, aliases) => foldAliasesAt(t, _Map_keys3(aliases), aliases));
+var foldAliasesAt = _curry9(3, (t, keys, aliases) => foldWith(t, foldTemplatesFrom(keys, aliases, 0, [])));
 
 var arrOf = (elem) => tCon("Array", [elem]);
 var setStateDomain = (state) => tUnion([state, tArrow(state, state)]);

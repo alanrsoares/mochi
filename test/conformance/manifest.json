@@ -16,6 +16,7 @@
       "module-cycle",
       "multiple-graph-check-errors",
       "dts",
+      "dts-param-alias",
       "jsx-dts",
       "format",
       "typed-ts",
@@ -127,6 +128,12 @@
       "kind": "dts",
       "entry": "dts.mochi",
       "expect": "dts.expect.txt"
+    },
+    {
+      "id": "dts-param-alias",
+      "kind": "dts",
+      "entry": "dts-param-alias.mochi",
+      "expect": "dts-param-alias.expect.txt"
     },
     {
       "id": "jsx-dts",

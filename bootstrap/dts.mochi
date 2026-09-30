@@ -35,6 +35,7 @@ import {
   TyVar
 } from "./types.mochi"
 import { jsDoc } from "./codegen.mochi"
+import { foldAliasesAt } from "./schemes.mochi"
 import {
   defaultOpts,
   emitJsWith,
@@ -242,14 +243,41 @@ let typeDeclsFrom = (stmts, aliases, recs, qualify, docs, i) => switch Array.get
   | Some(_) => typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1)
 }
 
+/// A declared alias as inference records it; a local copy of schemes.mochi's,
+/// so the two unify structurally (ADR 0044).
+type AliasInfo = {
+  params: [string],
+  fields: [Ast.AliasField],
+  expr: Option<Ast.TypeExpr>
+}
+
+/// The file's own aliases (record and expression forms), in declaration order
+/// — the order `foldAliasesAt` tries them, as src/dts/dts.ts folds with the
+/// inference result's local alias list.
+let localAliasKeys = (stmts, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(Ast.SType(name, _, _, _, alias, aliasType, _, _, _)) => localAliasKeys(
+      stmts,
+      i + 1,
+      Option.isSome(alias) || Option.isSome(aliasType)
+        ? Array.append(name, acc)
+        : acc
+    )
+  | Some(_) => localAliasKeys(stmts, i + 1, acc)
+}
+
 /// `export declare const` per top-level binding that has an inferred scheme.
 /// `$`-prefixed synthetic binders declare nothing.
-/// A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead.
-let bindingDeclsFrom = (stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i) => switch Array.get(i, stmts) {
+/// A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead; it
+/// sees the unfolded type. The fallback folds every local alias the type fits
+/// (`{ value: number }` -> `Box<number>`), parametric ones included.
+let bindingDeclsFrom = (stmts, env, aliases: Map<string, AliasInfo>, keys, recs, qualify, docs, dtsHooks, bindingHooks, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SLet(name, _, _, value, _, doc, _)) => let rest = bindingDeclsFrom(
       stmts,
       env,
+      aliases,
+      keys,
       recs,
       qualify,
       docs,
@@ -269,7 +297,11 @@ let bindingDeclsFrom = (stmts, env, recs, qualify, docs, dtsHooks, bindingHooks,
                   runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs))
                     |> Option.unwrapOr(
                       bindingTsType(
-                        { vars: sc.vars, rvars: sc.rvars, ty },
+                        {
+                          vars: sc.vars,
+                          rvars: sc.rvars,
+                          ty: foldAliasesAt(ty, keys, aliases)
+                        },
                         value,
                         recs,
                         bindingHooks
@@ -282,6 +314,8 @@ let bindingDeclsFrom = (stmts, env, recs, qualify, docs, dtsHooks, bindingHooks,
   | Some(_) => bindingDeclsFrom(
       stmts,
       env,
+      aliases,
+      keys,
       recs,
       qualify,
       docs,
@@ -402,6 +436,8 @@ export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, 
   let bindings = bindingDeclsFrom(
     stmts,
     env,
+    aliases,
+    localAliasKeys(stmts, 0, []),
     recs,
     quals,
     docs,

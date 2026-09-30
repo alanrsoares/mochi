@@ -5,7 +5,6 @@
 import { expect, test } from "bun:test";
 import { compile, emitDts } from "@mochi/compiler";
 import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
-import { emitDts as emitDtsCore } from "@mochi/compiler/dts";
 import { format } from "@mochi/dx/format";
 import { hoverAt } from "@mochi/dx/hover";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
@@ -97,9 +96,8 @@ test("parametric alias emits a generic TS type", () => {
 });
 
 test("a binding matching a parametric alias folds to it in .d.ts", () => {
-  // #104: seed diverges — self-hosted .d.ts prints `b: { value: number }`, not `Box<number>`.
   const src = "type Box a = { value: a }\nlet b = { value: 42 }";
-  expect(unwrapOk(emitDtsCore(src))).toContain("export declare const b: Box<number>;");
+  expect(unwrapOk(emitDts(src))).toContain("export declare const b: Box<number>;");
 });
 
 // ---- codegen: pure type, no runtime ----------------------------------------
