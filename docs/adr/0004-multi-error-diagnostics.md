@@ -3,6 +3,8 @@
 - **Status:** Accepted — the *parse* half of decision 1 is amended by
   [ADR 0045](0045-parser-error-recovery.md) (parse now returns `Diagnostic[]` with
   panic-mode recovery; lex stays single-error, and the hard-fail invariant is unchanged)
+  and §3 is amended by [ADR 0129](0129-seed-parity-diagnostics-and-dts-aliases.md)
+  (the self-hosted inferrer: a failed member's var stays fresh)
 - **Source:** DX slice 12 grilling, ADR 0003 decision 7 (superseded here)
 
 ## Context

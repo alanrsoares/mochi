@@ -1,5 +1,6 @@
 [
   {
+    "kind": "type",
     "message": "cannot unify \"oops\" with number | number -> number",
     "start": 842,
     "end": 848

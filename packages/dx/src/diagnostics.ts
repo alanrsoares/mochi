@@ -142,7 +142,7 @@ const fromBootstrap = (
 
 /**
  * Single-file diagnostics: every lex, parse (ADR 0045) and check finding, else
- * the first type error. Imports resolve to nothing, so a `switch` on an
+ * every type error. Imports resolve to nothing, so a `switch` on an
  * imported variant reads as an unknown constructor; use `moduleDiagnostics`
  * when a path is available.
  *

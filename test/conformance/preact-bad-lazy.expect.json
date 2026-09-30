@@ -1,5 +1,6 @@
 [
   {
+    "kind": "type",
     "message": "cannot unify number with () -> 't1029 — a function (() -> 't1029) was used where a number was expected; a call may be missing an argument",
     "start": 819,
     "end": 820

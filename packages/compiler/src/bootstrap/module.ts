@@ -24,7 +24,7 @@ type SeedModule = {
   compileGraphWith: (
     modules: BootstrapGraphModule[],
     opts: SeedOptions,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic>;
+  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
   inferGraphTypesWith: (
     modules: BootstrapGraphModule[],
     opts: SeedOptions,
@@ -135,7 +135,7 @@ export const buildModulesTsBootstrap = (
 export const compileGraphBootstrap = (
   modules: BootstrapGraphModule[],
   plugins?: readonly BootstrapPlugin[],
-): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic> =>
+): BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]> =>
   seed.compileGraphWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
 export const inferGraphTypesBootstrap = (

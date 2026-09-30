@@ -1,0 +1,9 @@
+[
+  {
+    "kind": "check",
+    "message": "module '<fixtures>/graph-qualified-missing-type/main.mochi': module alias 'D' has no exported type 'Nope' — export it from the imported module ('export type Nope = …')",
+    "start": 46,
+    "end": 50,
+    "entry": "graph-qualified-missing-type/main.mochi"
+  }
+]

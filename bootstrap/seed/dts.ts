@@ -4,8 +4,14 @@ import type { Row, St, Ty, TypeAt } from "./types";
 import type { Doc } from "./doc";
 import type { FormatApi } from "./format-api";
 import type { Scheme } from "./schemes";
-import type { IErr, InferApi, QualAliasInfo, TsApi } from "./infer";
+import type { IErr, InferApi, TsApi } from "./infer";
 import type { StageErr, Stamped } from "./compile";
+
+/**
+ * A declared alias as inference records it; a local copy of schemes.mochi's,
+ * so the two unify structurally (ADR 0044).
+ */
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -13,6 +19,7 @@ import {
   None,
   Ok,
   Some,
+  _Array_append,
   _Array_concat,
   _Array_contains,
   _Array_get,
@@ -22,6 +29,7 @@ import {
   _Map_has,
   _Map_keys,
   _Map_set,
+  _Option_isSome,
   _Option_unwrapOr,
   _Result_map,
   _Set_add,
@@ -73,6 +81,7 @@ import {
   TyVar,
 } from "./types";
 import { jsDoc } from "./codegen";
+import { foldAliasesAt } from "./schemes";
 import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "./compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "./extensions";
 /**
@@ -354,7 +363,7 @@ const qualifyAliasField: _Curry<[f: AliasField, qualify: Map<string, string>], A
 const typeDeclsFrom: _Curry<
   [
     stmts: Stmt[],
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -365,7 +374,7 @@ const typeDeclsFrom: _Curry<
   6,
   (
     stmts: Stmt[],
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -430,14 +439,49 @@ const typeDeclsFrom: _Curry<
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts)),
 );
+
+/**
+ * The file's own aliases (record and expression forms), in declaration order
+ * — the order `foldAliasesAt` tries them, as src/dts/dts.ts folds with the
+ * inference result's local alias list.
+ */
+const localAliasKeys: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
+  3,
+  (stmts: Stmt[], i: number, acc: string[]) =>
+    ((_v) =>
+      _v._tag === "None"
+        ? acc
+        : _v._tag === "Some" && _v.value._tag === "SType"
+          ? (({ value: { name, alias, aliasType } }) =>
+              localAliasKeys(
+                stmts,
+                i + 1,
+                or(_Option_isSome(alias), _Option_isSome(aliasType))
+                  ? _Array_append(name, acc)
+                  : acc,
+              ))(
+              _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
+                value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
+              },
+            )
+          : _v._tag === "Some"
+            ? localAliasKeys(stmts, i + 1, acc)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(_Array_get(i, stmts)),
+);
 /**
  * `export declare const` per top-level binding that has an inferred scheme.
  * `$`-prefixed synthetic binders declare nothing.
- * A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead.
+ * A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead; it
+ * sees the unfolded type. The fallback folds every local alias the type fits
+ * (`{ value: number }` -> `Box<number>`), parametric ones included.
  */
 const bindingDeclsFrom: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+  aliases: Map<string, AliasInfo>,
+  keys: string[],
   recs: Map<string, string>,
   qualify: Map<string, string>,
   docs: boolean,
@@ -445,10 +489,12 @@ const bindingDeclsFrom: <A>(
   bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   i: number,
 ) => string[] = _curry(
-  8,
+  10,
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+    aliases: Map<string, AliasInfo>,
+    keys: string[],
     recs: Map<string, string>,
     qualify: Map<string, string>,
     docs: boolean,
@@ -475,7 +521,11 @@ const bindingDeclsFrom: <A>(
                                     decl(
                                       _Option_unwrapOr(
                                         bindingTsType(
-                                          { vars: sc.vars, rvars: sc.rvars, ty: ty },
+                                          {
+                                            vars: sc.vars,
+                                            rvars: sc.rvars,
+                                            ty: foldAliasesAt(ty, keys, aliases),
+                                          },
                                           value,
                                           recs,
                                           bindingHooks,
@@ -490,14 +540,36 @@ const bindingDeclsFrom: <A>(
                               })())(_Map_get(name, env)))(
                   (ts: string) => `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`,
                 ))(
-                bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i + 1),
+                bindingDeclsFrom(
+                  stmts,
+                  env,
+                  aliases,
+                  keys,
+                  recs,
+                  qualify,
+                  docs,
+                  dtsHooks,
+                  bindingHooks,
+                  i + 1,
+                ),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                 value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
               },
             )
           : _v._tag === "Some"
-            ? bindingDeclsFrom(stmts, env, recs, qualify, docs, dtsHooks, bindingHooks, i + 1)
+            ? bindingDeclsFrom(
+                stmts,
+                env,
+                aliases,
+                keys,
+                recs,
+                qualify,
+                docs,
+                dtsHooks,
+                bindingHooks,
+                i + 1,
+              )
             : (() => {
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts)),
@@ -508,11 +580,11 @@ const bindingDeclsFrom: <A>(
  * runtime instead (ADR 0093).
  */
 const builtinDeclsFor: _Curry<
-  [names: string[], aliases: Map<string, QualAliasInfo>, recs: Map<string, string>, i: number],
+  [names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number],
   string[]
 > = _curry(
   4,
-  (names: string[], aliases: Map<string, QualAliasInfo>, recs: Map<string, string>, i: number) =>
+  (names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
     ((_v) =>
       _v._tag === "None"
         ? ([] as string[])
@@ -606,9 +678,9 @@ const blankNonLocal: <A>(
             })())(_Array_get(i, keys)),
 );
 export const declarationRecs: _Curry<
-  [stmts: Stmt[], aliases: Map<string, QualAliasInfo>],
+  [stmts: Stmt[], aliases: Map<string, AliasInfo>],
   Map<string, string>
-> = _curry(2, (stmts: Stmt[], aliases: Map<string, QualAliasInfo>) => {
+> = _curry(2, (stmts: Stmt[], aliases: Map<string, AliasInfo>) => {
   const locals: Set<string> = nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[]));
   const indexed: Map<string, string> = recordAliasIndex(aliases);
   return blankNonLocal(
@@ -687,7 +759,7 @@ const qualConRecs: <A, B, C, D, E>(
 export const emitDtsFromTypedWith: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-  aliases: Map<string, QualAliasInfo>,
+  aliases: Map<string, AliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
   docs: boolean,
@@ -698,7 +770,7 @@ export const emitDtsFromTypedWith: <A>(
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
     docs: boolean,
@@ -718,6 +790,8 @@ export const emitDtsFromTypedWith: <A>(
     const bindings: string[] = bindingDeclsFrom(
       stmts,
       env,
+      aliases,
+      localAliasKeys(stmts, 0, [] as string[]),
       recs,
       quals,
       docs,
@@ -830,7 +904,7 @@ export const qualifierMapOf: <A>(
 export const emitDtsFromTyped: <A>(
   stmts: Stmt[],
   env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-  aliases: Map<string, QualAliasInfo>,
+  aliases: Map<string, AliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
 ) => string = _curry(
@@ -838,7 +912,7 @@ export const emitDtsFromTyped: <A>(
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
   ) =>
@@ -944,7 +1018,7 @@ export const emitDtsTextWith: _Curry<
         Stmt[],
         {
           env: Map<string, Scheme>;
-          aliases: Map<string, QualAliasInfo>;
+          aliases: Map<string, AliasInfo>;
           types: TypeAt[];
           letParams: TypeAt[];
         },
@@ -1060,7 +1134,7 @@ export const compileTargetsWith: _Curry<
         Stmt[],
         {
           env: Map<string, Scheme>;
-          aliases: Map<string, QualAliasInfo>;
+          aliases: Map<string, AliasInfo>;
           types: TypeAt[];
           letParams: TypeAt[];
         },

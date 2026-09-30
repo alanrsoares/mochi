@@ -1,10 +1,12 @@
 [
   {
+    "kind": "check",
     "message": "non-exhaustive switch on 'Choice': missing Two",
     "start": 47,
     "end": 70
   },
   {
+    "kind": "check",
     "message": "non-exhaustive switch on 'Choice': missing One",
     "start": 89,
     "end": 112

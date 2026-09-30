@@ -41,3 +41,8 @@ test("loadGraph reports an unreadable entry as an Err verdict", () => switch loa
   | Err(e) => e.message |> Str.contains("cannot read module") |> ok
   | Ok(_) => false |> ok
 })
+
+test("a graph load failure is a check diagnostic", () => switch loadGraph("bootstrap/not-a-module.mochi") {
+  | Err(e) => e.kind == "check" |> ok
+  | Ok(_) => false |> ok
+})

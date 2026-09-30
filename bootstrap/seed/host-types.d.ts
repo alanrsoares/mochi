@@ -269,6 +269,7 @@ export type SeedTypeCtors = {
   freshVar: <A>(st: { next: number } & A) => [Ty, { next: number } & A];
   freshRowVar: <A>(st: { next: number } & A) => [Row, { next: number } & A];
   zonk: _Curry<[t: Ty, st: St], Ty>;
+  showType: (t: Ty) => string;
   tNumber: Ty;
   tString: Ty;
   tBool: Ty;

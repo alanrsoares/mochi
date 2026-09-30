@@ -18,7 +18,7 @@ test(
     // compile's error is the named `Stamped` diagnostic (kind, help, suggestions).
     // `IErr` is infer's alias and must stay named, not expand to a structural record.
     expect(compile?.js).toContain("Result<string, Stamped[]>");
-    expect(compile?.js).toContain("(e: IErr)");
+    expect(compile?.js).toContain("(es: IErr[])");
     expect(compile?.js).not.toContain(
       "Result<string, { message: string; start: number; end: number }>",
     );

@@ -47,6 +47,8 @@ const cases: Record<string, string> = {
   "a record-destructuring param": "let dx = ({ x, y }) => x + y",
   "a unit-returning callback field renders void":
     "type Props = { onClick: () -> (), onKey: string -> () }",
+  "a parametric record alias folds":
+    'type Box a = { value: a }\ntype Pair a b = { fst: a, snd: b }\nexport let b = { value: 42 }\nexport let mk = x => { value: x }\nexport let p = { fst: 1, snd: "s" }',
 };
 
 for (const [name, src] of Object.entries(cases)) {

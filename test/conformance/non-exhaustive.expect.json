@@ -1,7 +1,8 @@
 [
   {
-  "message": "non-exhaustive switch on 'Choice': missing Two",
-  "start": 48,
-  "end": 71
+    "kind": "check",
+    "message": "non-exhaustive switch on 'Choice': missing Two",
+    "start": 48,
+    "end": 71
   }
 ]

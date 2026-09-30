@@ -1,5 +1,6 @@
 [
   {
+    "kind": "type",
     "message": "cannot unify \"blue\" with \"rose\" | \"amber\"",
     "start": 183,
     "end": 219

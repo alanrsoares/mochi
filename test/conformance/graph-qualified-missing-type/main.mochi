@@ -1,0 +1,2 @@
+import * as D from "./shapes.mochi"
+let n : D.Nope = 1

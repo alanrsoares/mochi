@@ -1,5 +1,6 @@
 [
   {
+    "kind": "type",
     "message": "cannot unify number with \"\"",
     "start": 752,
     "end": 798

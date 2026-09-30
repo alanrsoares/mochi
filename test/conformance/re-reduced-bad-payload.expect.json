@@ -1,5 +1,6 @@
 [
   {
+    "kind": "type",
     "message": "cannot unify string with number",
     "start": 1044,
     "end": 1045

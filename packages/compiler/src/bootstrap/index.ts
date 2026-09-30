@@ -223,7 +223,7 @@ export type BootstrapCore = {
     src: string,
     readFile: (path: string) => Promise<string>,
     plugins?: readonly BootstrapPlugin[],
-  ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
+  ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>>;
 };
 
 import {
@@ -269,6 +269,9 @@ import {
 /** A parsed graph module and the paths its imports resolve to. */
 type LoadedModule = BootstrapParsedModule & { deps: string[] };
 
+const stampStrictParse = (parsed: ParsedSource): ParsedSource =>
+  parsed._tag === "Err" ? { _tag: "Err", error: { ...parsed.error, kind: "parse" } } : parsed;
+
 /** Strict lex + parse of one module, through `parses` when given. */
 const parseSource = (
   path: string,
@@ -282,10 +285,11 @@ const parseSource = (
   const lexed = bootstrapLex(text) as
     | { _tag: "Ok"; value: unknown }
     | { _tag: "Err"; error: BootstrapDiagnostic };
+  // Stamp the seed's lex/parse errors with their stage, as `recoverSource` does.
   const parsed: ParsedSource =
     lexed._tag === "Err"
-      ? lexed
-      : (bootstrapParseWith(lexed.value, toSeedPlugins(plugins)) as ParsedSource);
+      ? { _tag: "Err", error: { ...lexed.error, kind: "lex" } }
+      : stampStrictParse(bootstrapParseWith(lexed.value, toSeedPlugins(plugins)) as ParsedSource);
   parses?.set(key, parsed);
   return parsed;
 };
@@ -308,13 +312,14 @@ const loadGraphWith = async (
   const visit = async (path: string): Promise<BootstrapDiagnostic | null> => {
     const abs = resolve(path);
     if (loaded.has(abs)) return null;
-    if (visiting.has(abs)) return { message: `import cycle through '${abs}'`, start: 0, end: 0 };
+    if (visiting.has(abs))
+      return { kind: "check", message: `import cycle through '${abs}'`, start: 0, end: 0 };
     visiting.add(abs);
     let text: string;
     try {
       text = await read(abs);
     } catch {
-      return { message: `cannot read module '${abs}'`, start: 0, end: 0 };
+      return { kind: "check", message: `cannot read module '${abs}'`, start: 0, end: 0 };
     }
     const parsed = parseSource(abs, text, plugins, parses);
     if (parsed._tag === "Err") return parsed.error;
@@ -473,11 +478,14 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
 
   const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile, plugins) => {
     const loaded = await loadGraph(entry, src, readFile, plugins);
-    if (loaded._tag === "Err") return loaded;
+    if (loaded._tag === "Err") return { _tag: "Err", error: [loaded.error] };
     const result = compileGraphBootstrap(loaded.value, plugins);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
-      : { _tag: "Err", error: enrich(decodeModulePath(result.error), src) };
+      : {
+          _tag: "Err",
+          error: result.error.map((error) => enrich(decodeModulePath(error), src)),
+        };
   };
 
   return {
@@ -514,13 +522,14 @@ export const loadBootstrapGraph = async (
 ): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
   (await loadBootstrapCore()).loadGraph(entry, src, readFile, plugins);
 
-/** Narrow graph-checking seam for editor integrations. */
+/** Narrow graph-checking seam for editor integrations: every type error of
+ * the first failing module (ADR 0004). */
 export const checkGraphBootstrap = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
   plugins?: readonly BootstrapPlugin[],
-): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
+): Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>> =>
   (await loadBootstrapCore()).checkGraph(entry, src, readFile, plugins);
 
 /** Graph typed-query seam for editor integrations. */
@@ -630,6 +639,7 @@ export const checkGraphBootstrapRecovering = async (
     if (loaded.has(absolute)) return;
     if (visiting.has(absolute)) {
       dependencyErrors.push({
+        kind: "check",
         message: `import cycle through '${absolute}'`,
         start: 0,
         end: 0,
@@ -643,6 +653,7 @@ export const checkGraphBootstrapRecovering = async (
       source = absolute === entryPath ? src : await readFile(absolute);
     } catch {
       dependencyErrors.push({
+        kind: "check",
         message: `cannot read module '${absolute}'`,
         start: 0,
         end: 0,
@@ -667,10 +678,11 @@ export const checkGraphBootstrapRecovering = async (
   await visit(entry);
   if (dependencyErrors.length > 0) return dependencyErrors;
   const entryModule = loaded.get(entryPath);
-  if (!entryModule) return [{ message: `cannot read module '${entry}'`, start: 0, end: 0 }];
+  if (!entryModule)
+    return [{ kind: "check", message: `cannot read module '${entry}'`, start: 0, end: 0 }];
   if (entryModule.deps.length === 0) {
     const strict = await checkGraphBootstrap(entry, src, readFile, plugins);
-    return strict._tag === "Ok" ? [] : [strict.error];
+    return strict._tag === "Ok" ? [] : strict.error;
   }
   const graph = [...loaded.values()];
   const graphKey = JSON.stringify(graph.map(({ path, src: source }) => [path, source]));

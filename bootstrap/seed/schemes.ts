@@ -1331,6 +1331,14 @@ const foldRowWith: _Curry<[row: Row, tpls: FoldTemplate[]], Row> = _curry(
  */
 export const foldAliases: _Curry<[t: Ty, aliases: Map<string, AliasInfo>], Ty> = _curry(
   2,
-  (t: Ty, aliases: Map<string, AliasInfo>) =>
-    foldWith(t, foldTemplatesFrom(_Map_keys(aliases), aliases, 0, [] as FoldTemplate[])),
+  (t: Ty, aliases: Map<string, AliasInfo>) => foldAliasesAt(t, _Map_keys(aliases), aliases),
 );
+/**
+ * `foldAliases` over only the aliases `keys` names, tried in that order. The
+ * `.d.ts` writer passes the file's own aliases in declaration order, so a
+ * dependency's alias stays structural (ADR 0092).
+ */
+export const foldAliasesAt: _Curry<[t: Ty, keys: string[], aliases: Map<string, AliasInfo>], Ty> =
+  _curry(3, (t: Ty, keys: string[], aliases: Map<string, AliasInfo>) =>
+    foldWith(t, foldTemplatesFrom(keys, aliases, 0, [] as FoldTemplate[])),
+  );

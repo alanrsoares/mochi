@@ -8,6 +8,7 @@
       "type-error",
       "non-exhaustive",
       "multiple-check-errors",
+      "multiple-type-errors",
       "runtime",
       "runtime-variant",
       "runtime-tuple-let-union",
@@ -15,7 +16,10 @@
       "transitive-alias",
       "module-cycle",
       "multiple-graph-check-errors",
+      "graph-qualified-missing-type",
+      "graph-type-error",
       "dts",
+      "dts-param-alias",
       "jsx-dts",
       "format",
       "typed-ts",
@@ -81,6 +85,12 @@
       "expect": "multiple-check-errors.expect.json"
     },
     {
+      "id": "multiple-type-errors",
+      "kind": "diagnostic",
+      "source": "multiple-type-errors.mochi",
+      "expect": "multiple-type-errors.expect.json"
+    },
+    {
       "id": "runtime",
       "kind": "runtime",
       "source": "runtime.mochi",
@@ -123,10 +133,28 @@
       "expect": "multiple-graph-check-errors.expect.json"
     },
     {
+      "id": "graph-qualified-missing-type",
+      "kind": "graph-diagnostic",
+      "entry": "graph-qualified-missing-type/main.mochi",
+      "expect": "graph-qualified-missing-type.expect.json"
+    },
+    {
+      "id": "graph-type-error",
+      "kind": "graph-diagnostic",
+      "entry": "graph-type-error/main.mochi",
+      "expect": "graph-type-error.expect.json"
+    },
+    {
       "id": "dts",
       "kind": "dts",
       "entry": "dts.mochi",
       "expect": "dts.expect.txt"
+    },
+    {
+      "id": "dts-param-alias",
+      "kind": "dts",
+      "entry": "dts-param-alias.mochi",
+      "expect": "dts-param-alias.expect.txt"
     },
     {
       "id": "jsx-dts",

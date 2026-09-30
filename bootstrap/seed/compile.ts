@@ -165,7 +165,7 @@ const typecheckWith: _Curry<
   Result<Stmt[], Stamped[]>
 > = _curry(3, (prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>) =>
   _Result_mapErr(
-    (e: IErr) => [stampType(e)],
+    (es: IErr[]) => map(stampType, es),
     _Result_map(
       (_: Map<string, Scheme>) => prog,
       inferProgramWith(prog, builtins, namespaces, open, plugins),
@@ -226,7 +226,7 @@ export const typedProgramWith: _Curry<
   _Result_flatMap(
     (stmts) =>
       _Result_mapErr(
-        (e: IErr) => [stampType(e)],
+        (es: IErr[]) => map(stampType, es),
         _Result_map(
           (r: {
             env: Map<string, Scheme>;
@@ -271,7 +271,7 @@ const typedQuery: _Curry<
   >
 > = _curry(3, (src: string, stmts: Stmt[], opts: Opts) =>
   _Result_mapErr(
-    (e: IErr) => [stampType(e)],
+    (es: IErr[]) => map(stampType, es),
     _Result_map(
       (r: {
         letParams: TypeAt[];
@@ -477,7 +477,7 @@ export const compileTsWith: _Curry<
   _Result_flatMap(
     (stmts) =>
       _Result_mapErr(
-        (e: IErr) => [stampType(e)],
+        (es: IErr[]) => map(stampType, es),
         _Result_map(
           (r: {
             env: Map<string, Scheme>;

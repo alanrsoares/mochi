@@ -51,3 +51,5 @@ export const zonk = seed.zonk;
 export const widenLits = seed.widenLits;
 /** Every node that fits a type alias's expansion rewritten to the alias name (hover). */
 export const foldAliases = seed.foldAliases;
+/** A type printed as the core prints it (`'a -> [string]`), with no alias folding or widening. */
+export const showType = seed.showType;

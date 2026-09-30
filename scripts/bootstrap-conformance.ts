@@ -38,7 +38,8 @@ type TypedTsCase = { id: string; kind: "typed-ts"; source: string; expect: strin
 type TypedTsGraphCase = { id: string; kind: "typed-ts-graph"; entry: string; expect: string };
 type DtsCase = { id: string; kind: "dts"; entry: string; expect: string };
 type FormatCase = { id: string; kind: "format"; source: string; expect: string };
-type CompactDiagnostic = { message: string; start: number; end: number };
+/** `kind` (lex|parse|check|type) is part of the diagnostic contract (ADR 0105). */
+type CompactDiagnostic = { kind?: string; message: string; start: number; end: number };
 type EmittedModule = { path: string; js: string };
 type Case =
   | CompileCase
@@ -95,13 +96,14 @@ const expectedJson = (path: string): unknown => JSON.parse(text(path)) as unknow
 const resultError = (id: string, message: string): string => `${id}: ${message}`;
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 const compactDiagnostics = (errors: readonly CompactDiagnostic[]): CompactDiagnostic[] =>
-  errors.map(({ message, start, end }) => ({ message, start, end }));
+  errors.map(({ kind, message, start, end }) => ({ kind, message, start, end }));
 const evaluateRuntime = (js: string, names: string[]): unknown =>
   new Function(
     "match",
     `"use strict";\n${js.replace('import { match } from "@onrails/pattern";\n', "")}\nreturn { ${names.join(", ")} };`,
   )(match) as unknown;
 const graphDiagnostic = (entry: string, error: CompactDiagnostic) => ({
+  kind: error.kind,
   message: error.message.replace(fixtureRoot, "<fixtures>"),
   start: error.start,
   end: error.end,

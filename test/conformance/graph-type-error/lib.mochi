@@ -1,0 +1,1 @@
+export let inc = (n: number) => n + 1

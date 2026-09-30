@@ -10,6 +10,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Expr, Program } from "@mochi/compiler/ast";
+import type { Diagnostic } from "@mochi/compiler/errors";
 import { inferProgram, inferProgramTypes } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
@@ -32,6 +33,8 @@ const evalAlNames = <T extends Record<string, unknown>>(js: string, names: strin
 
 type AlErr = { message: string; start: number; end: number };
 type AlResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr };
+// Inference collects every type error (ADR 0004 §3).
+type AlInferResult = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: AlErr[] };
 
 const alLex = evalAlNames<{ lex: (src: string) => AlResult }>(compileAl("bootstrap/lexer.mochi"), [
   "lex",
@@ -47,13 +50,13 @@ type AlInfer = {
     builtins: Map<string, unknown>,
     namespaces: Map<string, Map<string, unknown>>,
     openMode: boolean,
-  ) => AlResult;
+  ) => AlInferResult;
   inferProgramTypes: (
     stmts: unknown,
     builtins: Map<string, unknown>,
     namespaces: Map<string, Map<string, unknown>>,
     openMode: boolean,
-  ) => AlResult;
+  ) => AlInferResult;
   tVar: (id: number) => unknown;
   tCon: (name: string, args: unknown[]) => unknown;
   tArrow: (from: unknown, to: unknown) => unknown;
@@ -140,9 +143,20 @@ const normalize = (s: string): string => {
 
 // ---- one canonical verdict shape for both inferrers -----------------------
 
-type Verdict =
-  | { ok: true; schemes: Record<string, string> }
-  | { ok: false; message: string; start: number; end: number };
+type Verdict = { ok: true; schemes: Record<string, string> } | { ok: false; errors: AlErr[] };
+
+// Every diagnostic inference collected (ADR 0004 §3), span-stamped alike.
+// Messages are alpha-normalized: a failed member rewinds the seed's fresh-var
+// counter (its state is a value), where the TS core's keeps counting, so the
+// ids printed in LATER messages drift apart.
+const tsErrors = (diags: readonly Diagnostic[]): AlErr[] =>
+  diags.map((d) => {
+    if (d.span === undefined) throw new Error(`TS infer error without a span: ${d.message}`);
+    return { message: normalize(d.message), start: d.span.start, end: d.span.end };
+  });
+
+const alErrors = (errs: readonly AlErr[]): AlErr[] =>
+  errs.map(({ message, start, end }) => ({ message: normalize(message), start, end }));
 
 // Names a file itself declares (ctors/lets/externs) — the subset of the
 // (much larger, prelude-seeded) env worth comparing per file. Both sides
@@ -162,16 +176,7 @@ const declaredNames = (prog: Program): string[] => {
 const tsInferVerdict = (src: string): Verdict => {
   const prog = unwrapOk(parse(unwrapOk(lex(src))));
   const r = inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces });
-  if (isErr(r)) {
-    if (r.error[0]!.span === undefined)
-      throw new Error(`TS infer error without a span: ${r.error[0]!.message}`);
-    return {
-      ok: false,
-      message: r.error[0]!.message,
-      start: r.error[0]!.span.start,
-      end: r.error[0]!.span.end,
-    };
-  }
+  if (isErr(r)) return { ok: false, errors: tsErrors(r.error) };
   const env = r.value;
   const schemes: Record<string, string> = {};
   for (const name of declaredNames(prog)) {
@@ -188,8 +193,7 @@ const alInferVerdict = (src: string, prog: Program): Verdict => {
   const pr = alParse(lr.value);
   if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, alNamespaces, true);
-  if (ir._tag !== "Ok")
-    return { ok: false, message: ir.error.message, start: ir.error.start, end: ir.error.end };
+  if (ir._tag !== "Ok") return { ok: false, errors: alErrors(ir.error) };
   const env = ir.value as Map<string, { vars: number[]; rvars: number[]; ty: unknown }>;
   const schemes: Record<string, string> = {};
   for (const name of declaredNames(prog)) {
@@ -210,11 +214,28 @@ test("corpus includes the bootstrap inferrer itself", () => {
   expect(corpus).toContain("bootstrap/infer.mochi");
 });
 
+// Files whose collected diagnostics part ways AFTER the first one (ADR 0004
+// §3). A top-level `let` whose body fails keeps its pre-bound self var; the TS
+// core mutates its substitution in place, so that var keeps whatever the failed
+// body solved (a recursive call pins it to a function), while the seed's state
+// is a value and the failed body's progress is dropped — the var stays fresh.
+// Later uses of the failed binding then cascade differently. Here:
+// `resolveLetParamsFrom` fails single-file (its `Types.St` import is unbound),
+// and `resolveLetParams` calls it.
+const cascadeDivergent = new Set(["bootstrap/infer.mochi"]);
+
 for (const file of corpus) {
   test(`infer verdicts agree on ${file}`, () => {
     const src = readFileSync(join(root, file), "utf8");
     const prog = unwrapOk(parse(unwrapOk(lex(src))));
-    expect(alInferVerdict(src, prog)).toEqual(tsInferVerdict(src));
+    const al = alInferVerdict(src, prog);
+    const ts = tsInferVerdict(src);
+    if (!cascadeDivergent.has(file)) {
+      expect(al).toEqual(ts);
+      return;
+    }
+    if (al.ok || ts.ok) throw new Error(`${file} no longer fails; drop it from cascadeDivergent`);
+    expect(al.errors[0]).toEqual(ts.errors[0]);
   });
 }
 
@@ -343,16 +364,7 @@ for (const [name, src] of Object.entries(schemeCases)) {
 const strictTsVerdict = (src: string): Verdict => {
   const prog = unwrapOk(parse(unwrapOk(lex(src))));
   const r = inferProgram(prog, preludeEnv, { open: false });
-  if (isErr(r)) {
-    if (r.error[0]!.span === undefined)
-      throw new Error(`TS infer error without a span: ${r.error[0]!.message}`);
-    return {
-      ok: false,
-      message: r.error[0]!.message,
-      start: r.error[0]!.span.start,
-      end: r.error[0]!.span.end,
-    };
-  }
+  if (isErr(r)) return { ok: false, errors: tsErrors(r.error) };
   return { ok: true, schemes: {} };
 };
 
@@ -362,9 +374,7 @@ const strictAlVerdict = (src: string): Verdict => {
   const pr = alParse(lr.value);
   if (pr._tag !== "Ok") throw new Error(`mochi parser errored: ${pr.error.message}`);
   const ir = alInfer.inferProgram(pr.value, alBuiltins, new Map(), false);
-  return ir._tag !== "Ok"
-    ? { ok: false, message: ir.error.message, start: ir.error.start, end: ir.error.end }
-    : { ok: true, schemes: {} };
+  return ir._tag !== "Ok" ? { ok: false, errors: alErrors(ir.error) } : { ok: true, schemes: {} };
 };
 
 const cases: Record<string, { src: string; ok: boolean }> = {

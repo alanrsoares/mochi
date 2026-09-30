@@ -1,0 +1,5 @@
+type Box<a> = { value: a }
+type Pair<a, b> = { fst: a, snd: b }
+export let b = { value: 42 }
+export let mk = x => { value: x }
+export let p = { fst: 1, snd: "s" }

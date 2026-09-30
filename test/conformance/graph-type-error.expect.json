@@ -1,0 +1,9 @@
+[
+  {
+    "kind": "type",
+    "message": "module '<fixtures>/graph-type-error/main.mochi': cannot unify number with \"x\"",
+    "start": 48,
+    "end": 51,
+    "entry": "graph-type-error/main.mochi"
+  }
+]
