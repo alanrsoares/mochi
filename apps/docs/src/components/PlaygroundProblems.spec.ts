@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";

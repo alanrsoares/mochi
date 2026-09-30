@@ -171,6 +171,7 @@ What else was on the table and why not.
 | [0124](0124-plugin-seam-types-off-core.md) | Plugin-seam types live outside the TypeScript core | Accepted |
 | [0125](0125-bootstrap-compile-targets.md) | Every emit target from one bootstrap inference | Accepted |
 | [0126](0126-barrel-typed-emit-on-bootstrap.md) | The barrel's typed emit runs on bootstrap | Accepted |
+| [0127](0127-barrel-takes-bootstrap-plugins.md) | The barrel takes bootstrap plugins, and exports only compile and emit | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

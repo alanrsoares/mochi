@@ -3,7 +3,8 @@
 
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { compile, compileTargets, toTypedProgram } from "@mochi/compiler/compile";
+import { compile, compileTargets } from "@mochi/compiler";
+import { toTypedProgram } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
 import { buildModules } from "@mochi/compiler/module";
 import { preludeNamespaces } from "@mochi/compiler/prelude";

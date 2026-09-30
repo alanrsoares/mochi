@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { formatError } from "@mochi/compiler/errors";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";

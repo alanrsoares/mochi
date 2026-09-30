@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";

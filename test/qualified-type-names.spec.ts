@@ -2,7 +2,7 @@
 // (slice b), and folds back in hover/dts (slice c) — dts emits
 // `import type * as D from "./shapes.mochi"` so the sidecar resolves.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { lex } from "@mochi/compiler/lexer";
 import { buildModules, emitDtsForFile } from "@mochi/compiler/module";
 import { parse } from "@mochi/compiler/parser";

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { codegenTs, compile, compileTargets, emitDts } from "@mochi/compiler";
 import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
 import { compileTsBootstrapSync, emitDtsBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
-import { codegenTs, compile, compileTargets, emitDts } from "@mochi/compiler/compile";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const src = `

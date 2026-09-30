@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { format } from "@mochi/dx/format";

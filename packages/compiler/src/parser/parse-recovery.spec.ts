@@ -4,9 +4,9 @@
  * whose span covers exactly the bytes it skipped.
  */
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import type { ErrorStmt } from "@mochi/compiler/ast";
 import { codegen } from "@mochi/compiler/codegen";
-import { compile } from "@mochi/compiler/compile";
 import type { LanguagePlugin } from "@mochi/compiler/extensions";
 import { lex } from "@mochi/compiler/lexer";
 import { parse, parseRecovering } from "@mochi/compiler/parser";

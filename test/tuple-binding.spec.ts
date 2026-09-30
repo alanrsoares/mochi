@@ -2,7 +2,7 @@
 // body`. The let form desugars to an applied tuple-param lambda, so both share
 // one codegen path (JS array destructuring). Guards parse+infer+runtime+format.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";

@@ -3,8 +3,8 @@
 // are lazy (fuse over infinite sequences); `Array.*` mirror the eager unqualified
 // ops. Access parses as plain field-access — no new syntax.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import { check } from "@mochi/compiler/check";
-import { compile } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
 import { inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";

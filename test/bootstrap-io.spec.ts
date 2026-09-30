@@ -7,7 +7,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { repoRoot } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";

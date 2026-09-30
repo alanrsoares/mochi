@@ -6,7 +6,7 @@
 // are NOT binding positions — they stay allowed. See ADR 0020.
 
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { isErr, isOk, unwrapErr, unwrapOk } from "@onrails/result";
 
 const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;

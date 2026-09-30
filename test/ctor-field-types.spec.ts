@@ -2,7 +2,7 @@
 // port (Slice D) needs `[Expr]`, `Option Expr`, and tuple payloads; before this
 // a ctor field type was a bare name.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { emitDts } from "@mochi/compiler/dts";
 import { format } from "@mochi/dx/format";
 import { compileJs } from "@mochi/test-support";

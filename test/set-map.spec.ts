@@ -3,8 +3,8 @@
 // destructuring; ops are qualified (`Set.union`, `Map.getOr`) and immutable.
 // Empty Set is `Set.empty` (ADR 0080); `#{}` stays Map.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import { check } from "@mochi/compiler/check";
-import { compile } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
 import { inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";

@@ -2,7 +2,7 @@
 // legal projection too: `props.$tone` reads what `{ $tone: … }` writes. Since
 // ADR 0047 `$` is an ordinary identifier char, so it also binds and destructures.
 import { expect, test } from "bun:test";
-import { compile, compileTargets } from "@mochi/compiler/compile";
+import { compile, compileTargets } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";

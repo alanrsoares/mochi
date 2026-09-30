@@ -2,7 +2,7 @@
 // Set literals `#{a, b}` (no colons) dedupe like native JS Set; `#{}` stays Map.
 
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";

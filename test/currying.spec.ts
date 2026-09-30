@@ -6,7 +6,7 @@
 // over-application. Before this, type-valid programs like `map(add(10))(xs)`
 // compiled but crashed at runtime.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { compileAndEval } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 

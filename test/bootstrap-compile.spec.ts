@@ -9,7 +9,7 @@
 
 import { beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
-import { compile as tsCompile } from "@mochi/compiler/compile";
+import { compile as tsCompile } from "@mochi/compiler";
 import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, bootstrapModuleJs } from "@mochi/test-support/bootstrap";
 import { match } from "@onrails/pattern";

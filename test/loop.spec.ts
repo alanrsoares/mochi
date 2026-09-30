@@ -4,7 +4,7 @@
 // only when a switch sits in the tail).
 
 import { describe, expect, it } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { match } from "@onrails/pattern";

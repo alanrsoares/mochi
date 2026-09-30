@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
-import { lex } from "@mochi/compiler/lexer";
+import { compile } from "@mochi/compiler";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
+import { lexTokens } from "./lex-tokens";
 
 test("generic angle brackets highlight as punctuation, not JSX", () => {
   const source = readRepo(import.meta.url, "apps/docs/src/lib/highlight.mochi");
@@ -12,7 +12,7 @@ test("generic angle brackets highlight as punctuation, not JSX", () => {
     .replace(/^export /gm, "");
   const api = new Function("match", "lex", "$hoverAt", `${js}\nreturn { highlightMochiCode };`)(
     match,
-    lex,
+    lexTokens,
     () => null,
   ) as {
     highlightMochiCode: (code: string) => { text: string; kind: string }[];
@@ -31,7 +31,7 @@ test("do, loop, and recur highlight as keywords", () => {
     .replace(/^export /gm, "");
   const api = new Function("match", "lex", "$hoverAt", `${js}\nreturn { highlightMochiCode };`)(
     match,
-    lex,
+    lexTokens,
     () => null,
   ) as {
     highlightMochiCode: (code: string) => { text: string; kind: string }[];
@@ -55,7 +55,7 @@ test("when highlights as keyword in switch guards and plain/function in calls", 
     .replace(/^export /gm, "");
   const api = new Function("match", "lex", "$hoverAt", `${js}\nreturn { highlightMochiCode };`)(
     match,
-    lex,
+    lexTokens,
     () => null,
   ) as {
     highlightMochiCode: (code: string) => { text: string; kind: string }[];
@@ -91,7 +91,7 @@ test("highlights a stack-sized token stream iteratively", () => {
     .replace(/^export /gm, "");
   const api = new Function("match", "lex", "$hoverAt", `${js}\nreturn { highlightMochiCode };`)(
     match,
-    lex,
+    lexTokens,
     () => null,
   ) as {
     highlightMochiCode: (code: string) => { text: string; kind: string }[];

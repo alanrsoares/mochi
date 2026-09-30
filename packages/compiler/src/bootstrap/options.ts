@@ -5,7 +5,7 @@ import type { HostPlugin } from "./types.ts";
  * file's own `"use open"` directive still wins), `runtime` inlines prelude
  * helpers, `docs` keeps `///` comments in the emitted text, and `moduleExt` is
  * the suffix rewritten onto relative import paths. Mirrors the non-plugin
- * `CompileOptions` in `../compile/compile.ts`.
+ * `CompileOptions` in `./compile.ts`.
  *
  * `strictEntry` is an editor policy rather than a compiler one: dependencies
  * always honour their own `"use open"`, but under it the graph entry takes

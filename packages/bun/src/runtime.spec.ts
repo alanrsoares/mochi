@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { unwrapOk } from "@onrails/result";
 
 test("CLI bindings compile as direct Bun runtime imports", async () => {
