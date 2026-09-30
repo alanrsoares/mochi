@@ -1,11 +1,13 @@
 [
   {
+    "kind": "check",
     "message": "module '<fixtures>/multiple-graph-check-errors/main.mochi': non-exhaustive switch on 'Choice': missing Two",
     "start": 63,
     "end": 90,
     "entry": "multiple-graph-check-errors/main.mochi"
   },
   {
+    "kind": "check",
     "message": "module '<fixtures>/multiple-graph-check-errors/main.mochi': non-exhaustive switch on 'Choice': missing One",
     "start": 113,
     "end": 140,

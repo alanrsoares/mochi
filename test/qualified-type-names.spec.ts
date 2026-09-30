@@ -163,6 +163,7 @@ test("an alias member the dep does not export is a check diagnostic on the membe
   const files = withShapes("let n : D.Nope = 1");
   const [d, ...rest] = errorsOf(files, "main.mochi");
   expect(rest).toEqual([]);
+  expect(d?.kind).toBe("check");
   expect(d?.message).toContain("module alias 'D' has no exported type 'Nope'");
   // Reported on `nameSpan` — the member, not the whole qualified type.
   const main = files["main.mochi"]!;

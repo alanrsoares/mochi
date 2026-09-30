@@ -1,0 +1,2 @@
+import { inc } from "./lib.mochi"
+let bad = inc("x")

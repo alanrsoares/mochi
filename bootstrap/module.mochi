@@ -93,25 +93,41 @@ type ExportOrigins = {
 }
 
 // A driver error, shaped like the compiler's `CErr`; the graph phase has no
-// meaningful span, so both offsets are 0 (matching src/module.ts).
-type MErr = { message: string, start: number, end: number }
+// meaningful span, so both offsets are 0 (matching src/module.ts). `kind` is the
+// stage that raised it (lex|parse|check|type), as src/module.ts's Diagnostic.
+type MErr = { kind: string, message: string, start: number, end: number }
 
 extern readFile : string -> Result<string, string> = "./host.mjs" "readFile"
 extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
 extern absPath : string -> string = "./host.mjs" "absPath"
 
-let mErr = message => { message, start: 0, end: 0 }
+let mErr : string -> MErr = message =>
+  { kind: "check", message, start: 0, end: 0 }
+// Tag a stage error with its kind. `kind: string` so the TS emit widens it
+// rather than narrowing to the literal at each call site.
+let stamp = (kind: string, e) =>
+  { kind, message: e.message, start: e.start, end: e.end }
 // An unresolved import stands for an independently-instantiable host value,
 // not one shared type variable: `forall a. a` keeps later checks moving
 // without inventing an infinite-type cascade at each use site.
 let recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) }
-let atPath = (path, e) =>
-  { message: "module '${path}': ${e.message}", start: e.start, end: e.end }
+let atPath = (kind: string, path: string, e) =>
+  {
+    kind,
+    message: "module '${path}': ${e.message}",
+    start: e.start,
+    end: e.end
+  }
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
 // graph's exports resolved first, which only happens in a later part.
-let parseModule = (src, plugins: Option<[Infer.HostPlugin]>) =>
-  let? toks = lex(src) in toks->parseWith(plugins)
+let parseModule = (src, plugins: Option<[Infer.HostPlugin]>) => switch lex(src) {
+  | Err(e) => Err(stamp("lex", e))
+  | Ok(toks) => switch toks->parseWith(plugins) {
+      | Err(e) => Err(stamp("parse", e))
+      | Ok(stmts) => Ok(stmts)
+    }
+}
 
 // The `from` specs of a module's import statements, in source order.
 let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
@@ -278,6 +294,7 @@ let takeNamedCtor = (name, span, depReg, depKeys, res) => switch Map.get(name, d
       | Some(prior) => prior.owner != info.owner
           ? Err(
             {
+              kind: "check",
               message: "duplicate constructor '${name}'",
               start: span.start,
               end: span.end
@@ -325,6 +342,7 @@ let resolveNames = (names, from, depExports, depReg, depKeys, res, recovering) =
           )
           : Err(
             {
+              kind: "check",
               message: "'${from}' has no export '${n.name}'",
               start: n.span.start,
               end: n.span.end
@@ -412,11 +430,11 @@ let openFor = (loaded: Loaded, isEntry, opts: Opts) =>
   isEntry && opts.strictEntry ? opts.open : openMode(loaded.src, opts.open)
 
 let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
-  | Err(e) => Err(atPath(loaded.path, e))
+  | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(atPath(loaded.path, e))
+      | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath(loaded.path, e))
+          | Err(e) => Err(atPath("type", loaded.path, e))
           | Ok(env) => let js = codegenWith(
               loaded.stmts,
               res.keys,
@@ -539,7 +557,7 @@ let depsPublished = (ctx, stmts, i, path) => switch Array.get(i, stmts) {
 let checkErrorsRecovering = (ctx, loaded: Loaded) =>
   let importErrors = ctx->depsPublished(loaded.stmts, 0, loaded.path)
     ? switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
-      | Err(e) => [atPath(loaded.path, e)]
+      | Err(e) => [atPath("check", loaded.path, e)]
       | Ok(_) => []
     }
     : [] in
@@ -548,18 +566,18 @@ let checkErrorsRecovering = (ctx, loaded: Loaded) =>
         // An error the recovering pass still raises is not import-shaped (a ctor
         // clash, say) and stands alone — reporting `importErrors` beside it would
         // double up on the same statement.
-        [atPath(loaded.path, e)]
+        [atPath("check", loaded.path, e)]
       | Ok(res) => switch checkAllWith(loaded.stmts, res.reg, res.quals) {
           | Err(es) => Array.concat(
               importErrors,
-              es |> map(e => atPath(loaded.path, e))
+              es |> map(e => atPath("check", loaded.path, e))
             )
           | Ok(_) => importErrors
         }
     }
 
 let sameErr = (a: MErr, b: MErr) =>
-  a.message == b.message && a.start == b.start && a.end == b.end
+  a.kind == b.kind && a.message == b.message && a.start == b.start && a.end == b.end
 
 // `e` is the strict rail's FIRST failure, `checks` the recovering rail's
 // independent ones — usually overlapping, since `e` is normally the first of
@@ -676,11 +694,11 @@ export let compileGraphRecovering = graph =>
 // in the TypeScript host. Keep every module's recorded spans together with the
 // alias scope accumulated through its dependencies.
 let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
-  | Err(e) => Err(atPath(loaded.path, e))
+  | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(atPath(loaded.path, e))
+      | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath(loaded.path, e))
+          | Err(e) => Err(atPath("type", loaded.path, e))
           | Ok(r) => Ok(
               {
                 exportsByPath: Map.set(
@@ -1016,11 +1034,11 @@ let externBindingsInto = (stmts, path, env, acc) =>
 // `compileOne`, then emit, then prepend the `import type` lines the emitted text
 // turned out to need.
 let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
-  | Err(e) => Err(atPath(loaded.path, e))
+  | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(atPath(loaded.path, e))
+      | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath(loaded.path, e))
+          | Err(e) => Err(atPath("type", loaded.path, e))
           | Ok(r) => let body = emitTsModuleWith(
               loaded.stmts,
               r.env,
@@ -1146,11 +1164,11 @@ export let compileGraphTs = (graph, runtimeImport) =>
 // qualified type scopes are in place, and emit `.d.ts` for ONE target path. The
 // dependencies are inferred, not emitted — `.d.ts` is a per-file question.
 let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
-  | Err(e) => Err(atPath(loaded.path, e))
+  | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(atPath(loaded.path, e))
+      | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath(loaded.path, e))
+          | Err(e) => Err(atPath("type", loaded.path, e))
           | Ok(r) => Ok(
               {
                 exportsByPath: Map.set(

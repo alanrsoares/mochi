@@ -172,6 +172,7 @@ test("bootstrap runtime checks an editor buffer through its graph", async () => 
     {
       _tag: "Err",
       error: {
+        kind: "type",
         message: "unbound variable 'nope'",
         path: "/virtual/main.mochi",
         start: 8,
@@ -216,6 +217,7 @@ test("bootstrap graph recovery reports an import cycle", async () => {
   );
   expect(errors).toEqual([
     {
+      kind: "check",
       message: "import cycle through '/virtual/main.mochi'",
       start: 0,
       end: 0,
