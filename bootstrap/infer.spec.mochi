@@ -189,3 +189,26 @@ test("open mode still accepts a host global", () => switch inferOpen("let read =
   | Ok(_) => true |> ok
   | Err(_) => false |> ok
 })
+
+// ---- generalized env schemes ----
+
+/// The final env's scheme for `name`, printed without hover's literal widening.
+let schemeOf = (src, name) =>
+  lex(src)
+    |> Result.flatMap(parse)
+    |> Result.flatMap(check)
+    |> Result.flatMap(stmts =>
+      inferProgramTypes(stmts, builtins, namespaces, false)
+        |> Result.mapErr(e =>
+          { message: e.message, start: e.start, end: e.end }))
+    |> Result.map(r =>
+      r.env
+        |> Map.get(name)
+        |> Option.map(s => showType(s.ty))
+        |> Option.unwrapOr("<none>"))
+    |> Result.unwrapOr("<err>")
+
+testEach("a string literal's scheme widens only when unannotated", [
+  ("let m : \"hi\" = \"hi\"", "m", "\"hi\""),
+  ("let w = \"hi\"", "w", "string")
+], ((src, name, want)) => assertEq(want, schemeOf(src, name)))

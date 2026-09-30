@@ -17,6 +17,7 @@ export declare const tTuple: unknown;
 export declare const tUnion: unknown;
 export declare const UNIT: unknown;
 export declare const zonk: unknown;
+export declare const showType: unknown;
 export declare const tBool: unknown;
 export declare const tNumber: unknown;
 export declare const tString: unknown;

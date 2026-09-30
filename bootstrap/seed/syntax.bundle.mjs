@@ -12520,6 +12520,7 @@ export {
   parseRecovering,
   parseWith,
   rExtend,
+  showType,
   tArrow,
   tBool,
   tCon,

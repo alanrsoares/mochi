@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "45d0a44b2c3db3f1ccf343bc7707228fdbcb8a55",
+  "sourceRevision": "c8eced05dde356883434f5aa089e4f5d312fde5b",
   "emitted": {
     "ast.ts": "106907737bf4a86a563feacd4b052f745b4299a4a0339d0f97096f2d0bcc7551",
     "check.ts": "a2c6892fccf7b321ce6deb427a9e437e492f12fde5c993bc2ed9dbebae1f58a3",
@@ -16,7 +16,7 @@
     "extensions.ts": "68093579b45772e821b42f499b4c5f18bcb207a0d740a4ad4c8394464284f6f8",
     "format-api.ts": "25b5b49b91f64c1e2f78c12c47dd79311f27648b23bb25e5481167867f4730e8",
     "format.ts": "21e8a915dcab4dde3b2dbb870f1ddf8efb4df4e89418f114fbb9dc467686a3e7",
-    "host-types.d.ts": "251f9c3aa9197a1694486632da2961bac0470005032bb22ffab60496560bcf69",
+    "host-types.d.ts": "089cd25aa34c542e77e43061eaee3290dc8f462dd5b2e5bc27c7133c2061e3d4",
     "host.d.mts": "6f27fc7b7e685aee0f421e35324b376e74c73b85a64b966a1674abbdd090067d",
     "host.mjs": "0a15008935778f509f16a64086d5d40698a946a68a91da1827ea3836814623cd",
     "infer.ts": "6556816274d54f6ed8c83df624e76fb81e82524130654c349fb95614ff9c2b65",
@@ -37,8 +37,8 @@
     "str-scan.ts": "8e8b056a00bb635650fdf5607a8d1ccef3cb73499dd704a510f2fbbcdd2af45d",
     "suggest.ts": "d3f25e177f2db020eaf3f06b267c7d2347115556671e4f8304bf2d1bd54db238",
     "symbols.ts": "d5d8624ae9a73fffcd5e5de941c6eeca28217568e87fcb5c9d60d9ba3b3a3b07",
-    "syntax.bundle.d.mts": "19dbb10a347b9367ecae5af389731a99601f295c05d2554d7a421bc14cb20e6d",
-    "syntax.bundle.mjs": "ee23a329a237559ef38481023e4a7b8dee69c2e96acad0c24422532b614c62bb",
+    "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
+    "syntax.bundle.mjs": "9c538ca87e0e0b6281a5aaeb23f12f4e83ce95d6f39324b812eac50cd6a48399",
     "ts-types.ts": "4e2ad20556e7b7ec6479ba799ea239d1e7ce18bcb67ef588edd98b97e3f08fdc",
     "types.ts": "cc97f6e262d04058694ddd28bda9a4e03cb70fd18dc185d8d4f608c8e0fcef6d",
     "usefulness.ts": "ac5162852991462febcf0d11ca75c99b665f67efedc5a40e03b68578511f1d4b"
@@ -59,7 +59,7 @@
     "extensions.ts": "680685e82bd45c469d5fa673896b2fe858e7ac6f604d1cf4572a9ba825a7dc4d",
     "format-api.ts": "e9e6ce252e55c1db104e03b5917622e7567ab5f336752b1e945d8ca244b0f92a",
     "format.ts": "cb34ceb733bb60eb218ec12643e7675befcd7a489ef6b8ca970a3386835b873e",
-    "host-types.d.ts": "13a726e699d848a625008bfb9bc5b126596f500e3fc5326026873e52cafa61bf",
+    "host-types.d.ts": "128a718cbfe8086231fd3c8492a6cbcc1459165b7e23a9e8d8c6898e28b5a18c",
     "host.d.mts": "6f27fc7b7e685aee0f421e35324b376e74c73b85a64b966a1674abbdd090067d",
     "host.mjs": "0a15008935778f509f16a64086d5d40698a946a68a91da1827ea3836814623cd",
     "infer.ts": "c7b2d55d437d6cd23d4bb220fbfec309d77104c1c2d08d0cdacdcaacb98aaf78",
@@ -80,8 +80,8 @@
     "str-scan.ts": "3555ece072515ffab74f5731c35babd447bc23fc53169ac59e0a684923cf1148",
     "suggest.ts": "ba185500ed2770fee778ee14b6f3c2d9cc62e706a6063528f77218d0536d2d7a",
     "symbols.ts": "fb7a5df2c679e9665aa3045084bd298c7c15bda6911007a7fcc4f2b6eff2b7b1",
-    "syntax.bundle.d.mts": "19dbb10a347b9367ecae5af389731a99601f295c05d2554d7a421bc14cb20e6d",
-    "syntax.bundle.mjs": "ee23a329a237559ef38481023e4a7b8dee69c2e96acad0c24422532b614c62bb",
+    "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
+    "syntax.bundle.mjs": "9c538ca87e0e0b6281a5aaeb23f12f4e83ce95d6f39324b812eac50cd6a48399",
     "ts-types.ts": "dc9669f1caa6f24109f3f507be2c8129793f4650c5be1ffccfa35f55ec44dc89",
     "types.ts": "8ce0c220cad710ed69f0facc2d026afcfae8dfc83a54ad55c84fb50e54f5df7d",
     "usefulness.ts": "48b21a158986f53ab415b243fc083c0fc5b42d297f1a618c9775dbfaaf15606e"
