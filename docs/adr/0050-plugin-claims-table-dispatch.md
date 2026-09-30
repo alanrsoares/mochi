@@ -1,6 +1,6 @@
 # 0050 — Plugin claims as declarations, table dispatch, and clash rejection
 
-- **Status:** accepted
+- **Status:** superseded by [ADR 0128](0128-bootstrap-plugin-shadowing.md)
 - **Date:** 2026-07-28
 - **Source:** `packages/compiler/src/extensions/extensions.ts`, `packages/compiler/src/parser/parser.ts`, `packages/lsp/src/load-plugins.ts`
 - **Deepens:** ADR 0011 (language plugins), ADR 0049 (name shadowing)

@@ -1,0 +1,37 @@
+import { assertEq, test, testEach } from "@mochi/test"
+import { resolvePlugins } from "./extensions.mochi"
+
+let names = plugins => Array.map(p => p.name, plugins)
+
+// Plugins reduced to their identity: `resolvePlugins` only reads `name`.
+let plugin = (name, tag) => { name, tag }
+
+let builtin = plugin("builtin", "core")
+let other = plugin("other-builtin", "core")
+let vendorA = plugin("vendor-a", "vendor")
+let vendorB = plugin("vendor-b", "vendor")
+
+testEach("resolvePlugins (ADR 0011, ADR 0049)", [
+  {
+    label: "omitted → builtins",
+    opt: None,
+    want: ["builtin", "other-builtin"]
+  },
+  { label: "[] → hard opt-out", opt: Some([]), want: [] },
+  {
+    label: "vendors get builtins prepended",
+    opt: Some([vendorA, vendorB]),
+    want: ["builtin", "other-builtin", "vendor-a", "vendor-b"]
+  },
+  {
+    label: "a same-named caller plugin takes the builtin's slot",
+    opt: Some([vendorA, plugin("other-builtin", "caller")]),
+    want: ["builtin", "other-builtin", "vendor-a"]
+  }
+], row =>
+  row.opt->resolvePlugins([builtin, other]) |> names |> assertEq(row.want))
+
+test("the shadowing plugin replaces the builtin, and runs once", () =>
+  Some([plugin("builtin", "caller"), vendorA])->resolvePlugins([builtin, other])
+    |> Array.map(p => p.tag)
+    |> assertEq(["caller", "core", "vendor"]))
