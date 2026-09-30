@@ -33,9 +33,9 @@ after `tw.`, where `extern tw : a` gives the core no members to list.
   definition.
 - **The TypeScript completion path is removed from `@mochi/dx`.** `completeAt`
   and `moduleCompleteAt` take `{ cache, plugins }`, with bootstrap plugins
-  only. The TypeScript answer lives on only as a test oracle
-  (`test/oracles/complete-ts.ts`), which `test/bootstrap-complete.spec.ts`
-  compares against until #104 retires the oracles.
+  only. During migration the TypeScript answer remained as a temporary
+  differential oracle; #104 slice c retired it once direct bootstrap completion
+  specs covered the behavior.
 
 ## Consequences
 

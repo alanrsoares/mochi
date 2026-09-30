@@ -51,14 +51,14 @@ and `codegen-ts.mochi`. Consumers that do care — currently only
 `bootstrap/symbols.mochi` — match the wrapper and the inner shape together.
 
 **The TypeScript mirror keeps its inline spans.** The two representations stay
-different on purpose. The mirror is the seed and the parity oracle (ADR 0078),
-not a consumer with synthetic-parameter problems, and its `LamParam` values all
+different on purpose. The mirror is the temporary seed (ADR 0078), not a
+consumer with synthetic-parameter problems, and its `LamParam` values all
 originate in the TS parser. Forcing the wrapper on it would add an unwrapping
 step to every one of its `LamParam` matches to buy nothing.
 
-The parity harness (`test/bootstrap-parser.spec.ts`) already maps both ASTs into
-one canonical shape that drops spans, so the representations are compared where
-they agree — on structure — and the unwrap is one line in `aParam`.
+At landing, a differential harness mapped both ASTs into one canonical shape
+that dropped spans. #104 slice c retired that temporary harness; parser and
+symbol behavior now have direct seed-owned specs.
 
 ## Consequences
 

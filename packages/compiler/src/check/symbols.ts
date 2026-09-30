@@ -47,7 +47,7 @@ export type SymbolIndex = {
   bindingsAt: (offset: number, space?: SymbolSpace) => Binding[];
   /** Named, navigable value bindings introduced below module scope. */
   localBindings: () => Binding[];
-  /** Every occurrence, in walk order (the bootstrap index's parity target). */
+  /** Every occurrence, in walk order. */
   all: () => Occurrence[];
 };
 

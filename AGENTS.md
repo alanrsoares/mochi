@@ -62,8 +62,9 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   becomes `Diagnostic` only at `infer.ts`'s `u()` seam (which attaches the span) — keep it.
 - **No throws** except `parser.ts`'s `ParseAbort` marker and one codegen invariant.
 - **Bootstrap-covered core is Mochi-first.** Change the matching `bootstrap/*.mochi`
-  source first, then port it to `packages/compiler/src/`; TypeScript remains the seed
-  and parity oracle. See `bootstrap/README.md` and ADR 0078.
+  source first, then port it to `packages/compiler/src/`; TypeScript remains the
+  temporary seed until #105, while seed-owned specs and ADR 0105 conformance define
+  behavior. See `bootstrap/README.md` and ADR 0078.
 - **`ResultAsync<T,E>`, never `Promise<Result<…>>`** (`no-promise-result.grit`).
 - **One match lib:** `@onrails/pattern` `.exhaustive()` both *inside* the compiler
   (missing an `Expr` case = TS error) and *emitted* into user JS.
@@ -93,10 +94,10 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   passes, DX queries, plugins). Test one module or package surface in isolation.
   Mochi specs are `*.spec.mochi` (`import { test, testEach, testTask, check, checkTask, assertEq, ok } from "@mochi/test"`,
   ADR 0086 / 0088 / 0089) — `bun test` discovers them via bunfig `[loader] ".mochi" = "js"`.
-  Bootstrap unit specs colocate as `bootstrap/*.spec.mochi`; corpus parity vs the
-  TypeScript oracle stays in `test/bootstrap-*.spec.ts`.
-- **Smoke / integration** — `test/` only: bootstrap parity, module graphs, examples,
-  playground, cross-package seams, and language guards that
+  Bootstrap unit specs colocate as `bootstrap/*.spec.mochi`; black-box compiler
+  contracts live in the ADR 0105 conformance corpus.
+- **Smoke / integration** — `test/` only: bootstrap façades and north-stars,
+  module graphs, examples, playground, cross-package seams, and language guards that
   exercise the full pipeline.
 - **Shared harness** — `@mochi/test-support` (`compileJs`, `compileAndEval`, `pos`,
   `memRead`, `repoRoot`/`readRepo`, `formatSrc`; `./bootstrap` for self-host diffs).

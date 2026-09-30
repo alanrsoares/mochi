@@ -217,7 +217,7 @@ const emptyNsCtor: _Curry<[con: string, ann: Option<string>], string> = _curry(
  * Uppercase-initial name — a constructor, not an ordinary binding.
  * A record field name emits BARE only when it is a valid JS identifier;
  * anything else (`data-testid`, `aria-label`) must be quoted or the object
- * literal is a syntax error. Mirrors the oracle's `/^[$A-Za-z_][\w$]*$/`.
+ * literal is a syntax error. Mirrors JavaScript's identifier shape.
  */
 const isIdentStart: (c: number) => boolean = (c: number) =>
   or(or(or(and(c >= 65, c <= 90), and(c >= 97, c <= 122)), c === 95), c === 36);

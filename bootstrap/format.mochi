@@ -2151,4 +2151,4 @@ export let formatProgramWith = (stmts, src, hooks: FormatHooks) =>
 
 // The `lex` + `parseRecovering` + `formatProgram` composition lives in the
 // caller (the CLI), not here: this module prints an AST and stays independent
-// of the front end, so the differential specs can drive it directly.
+// of the front end, so its unit specs can drive it directly.

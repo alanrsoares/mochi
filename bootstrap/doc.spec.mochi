@@ -1,0 +1,110 @@
+import { assertEq, test, testEach } from "@mochi/test"
+import {
+  breakParent,
+  cat,
+  flat,
+  group,
+  hardline,
+  indent,
+  join,
+  line,
+  lineSuffix,
+  render,
+  softline,
+  txt,
+  verbatim
+} from "./doc.mochi"
+
+testEach("groups choose flat or broken layout", [
+  (80, "a b"),
+  (1, "a\nb")
+], ((width, want)) =>
+  assertEq(want, render(group(cat([txt("a"), line, txt("b")])), width)))
+
+test("soft lines disappear in flat groups", () =>
+  assertEq("ab", flat(group(cat([txt("a"), softline, txt("b")])))))
+
+test("hard lines force enclosing groups to break", () =>
+  assertEq("a\nb", render(group(cat([txt("a"), hardline, txt("b")])), 80)))
+
+test("breakParent forces a break without adding its own newline", () =>
+  assertEq(
+    "a\nb",
+    render(group(cat([txt("a"), breakParent, line, txt("b")])), 80)
+  ))
+
+test("nested indentation compounds", () =>
+  assertEq(
+    "{\n  x\n    y\n}",
+    render(
+      group(
+        cat(
+          [
+            txt("{"),
+            indent(
+              cat([hardline, txt("x"), indent(cat([hardline, txt("y")]))])
+            ),
+            hardline,
+            txt("}")
+          ]
+        )
+      ),
+      80
+    )
+  ))
+
+test("verbatim text passes through unchanged", () =>
+  assertEq(
+    "before raw\n  bytes\nafter",
+    render(
+      group(
+        cat([txt("before "), verbatim("raw\n  bytes"), line, txt("after")])
+      ),
+      80
+    )
+  ))
+
+test("verbatim updates the column after its final newline", () =>
+  assertEq(
+    "a\nbb\ntail",
+    render(group(cat([verbatim("a\nbb"), line, txt("tail")])), 8)
+  ))
+
+test("join handles empty and separated documents", () => {
+  assertEq("", flat(join(line, [])));
+  assertEq("a,\nb", flat(join(cat([txt(","), line]), [txt("a"), txt("b")])));
+  assertEq(
+    "a, b",
+    flat(group(join(cat([txt(","), line]), [txt("a"), txt("b")])))
+  )
+})
+
+test("lineSuffix flushes before the next newline", () =>
+  assertEq(
+    "f(\n  x, // why\n  y\n)",
+    render(
+      cat(
+        [
+          txt("f("),
+          indent(
+            cat(
+              [
+                hardline,
+                txt("x"),
+                lineSuffix(txt(" // why")),
+                txt(","),
+                hardline,
+                txt("y")
+              ]
+            )
+          ),
+          hardline,
+          txt(")")
+        ]
+      ),
+      80
+    )
+  ))
+
+test("lineSuffix flushes at end of input", () =>
+  assertEq("x // end", render(cat([txt("x"), lineSuffix(txt(" // end"))]), 80)))

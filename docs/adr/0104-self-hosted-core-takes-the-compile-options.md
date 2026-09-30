@@ -57,13 +57,14 @@ fall through to TypeScript is not a door worth keeping.
 
 ## Consequences
 
-- The hand-authored TypeScript compiler is no longer reachable from the CLI. It
-  remains the parity oracle and the host for `@mochi/compiler`'s public
-  surface; this ADR does not authorize deleting it (ADR 0090 still governs).
+- The hand-authored TypeScript compiler is no longer reachable from the CLI.
+  At acceptance it remained the differential oracle and public-surface host;
+  #104 later moved the barrel and retired that oracle, while #105 still governs
+  deleting the seed core.
 - The graph rejects unbound names. That is a behaviour change for
   `mochi build`, and it is the one the single-file railway always had.
-- Bootstrap graph output is now byte-identical to the oracle's without any
-  rewrite, so the parity specs compare emitted text directly.
+- Bootstrap graph output needs no host rewrite and is pinned directly by the
+  conformance corpus and graph façade tests.
 - `moduleExt` is a caller's choice again: the CLI takes `.js`, the Vite plugin
   and the Bun `.mochi` test loader ask for `.mochi`.
 - Anything constructing graph modules for the façade must supply `src`

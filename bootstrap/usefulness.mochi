@@ -1,7 +1,6 @@
 // bootstrap/usefulness.mochi — exhaustiveness by Maranget's usefulness
-// algorithm, in mochi. Ported from packages/compiler/src/check/usefulness.ts
-// (the spec); test/bootstrap-check.spec.ts diffs this verdict against the TS
-// checker's, message for message, per ADR 0066.
+// algorithm, in mochi. Ported from packages/compiler/src/check/usefulness.ts;
+// usefulness.spec.mochi and check.spec.mochi pin the verdict per ADR 0066.
 //
 // Shape notes vs the TS original:
 // - The TS `P` union becomes `MP`; its `ReadonlyMap<string, P>` record payload

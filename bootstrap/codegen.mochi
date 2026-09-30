@@ -1,6 +1,5 @@
 // bootstrap/codegen.mochi — the mochi codegen pass, in mochi. Ported from
-// src/codegen.ts (the spec); test/bootstrap-codegen.spec.ts diffs emitted JS
-// against the TS codegen on every .mochi file in the repo — including this one.
+// src/codegen.ts; codegen.spec.mochi, conformance, and fixpoint pin its output.
 //
 // Shape notes vs TS original:
 // - AST declared again here (bootstrap/parser.mochi's shape/tags — same
@@ -12,9 +11,9 @@
 // - `exprRefs`'s mutable `Set` accumulator becomes an explicit
 //   threaded/returned immutable Set.
 // - `namespaceRuntime` / `preludeJsDefs` / `runtimeDeps` are NOT
-//   reimplemented — the differential-test harness passes the real
-//   src/prelude.ts tables in as Map arguments (one prelude, not forked —
-//   docs/PATH_TO_BOOTSTRAP.md §6). Only `builtinTypeDecls`' ctor keys
+//   reimplemented — the generated prelude shim passes the shared tables in as
+//   Map arguments (one prelude, not forked — docs/PATH_TO_BOOTSTRAP.md §6).
+//   Only `builtinTypeDecls`' ctor keys
 //   (Some/None/Ok/Err — 4 entries) are small/stable enough to hardcode
 //   directly, matching infer.mochi's precedent for `builtinTypeDecls`.
 // - TS `for`/`forEach`/`flatMap` loops become tail-recursive `Array.get(i,
@@ -33,8 +32,7 @@ import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
 // TS's `GenCtx` carries these inline; here they are one record folded into the
 // threaded ctx, so every generator keeps its `ctx->` shape. All hooks are
 // `Option<fn>` (TS's `| null`): `jsGenOpts` leaves every one `None` and the JS
-// backend's output stays byte-for-byte identical — test/bootstrap-codegen.spec.ts
-// and the fixpoint guard that.
+// backend's output stays stable; codegen.spec.mochi and fixpoint guard that.
 
 /// What a typed ctor factory carries (TS's `CtorFactoryTs`).
 type CtorFactoryTs = {
@@ -148,7 +146,7 @@ let emptyNsCtor = (con, ann) => switch ann {
 /// Uppercase-initial name — a constructor, not an ordinary binding.
 /// A record field name emits BARE only when it is a valid JS identifier;
 /// anything else (`data-testid`, `aria-label`) must be quoted or the object
-/// literal is a syntax error. Mirrors the oracle's `/^[$A-Za-z_][\w$]*$/`.
+/// literal is a syntax error. Mirrors JavaScript's identifier shape.
 let isIdentStart = c =>
   c >= 65 && c <= 90 || (c >= 97 && c <= 122) || c == 95 || c == 36
 

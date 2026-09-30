@@ -1,7 +1,7 @@
 // bootstrap/infer.mochi — Hindley-Milner type inference, in mochi. Ports
 // src/types.ts + src/unify.ts + src/infer.ts into one file (Slice E, part 2).
-// test/bootstrap-infer.spec.ts (once written) diffs alpha-normalized schemes
-// against the TS inferrer on every .mochi file in the repo.
+// infer.spec.mochi, seed-facing DX specs, and the compiler conformance corpus
+// pin its behavior directly.
 //
 // PORTING ORDER (biggest unknown first): (a) types.ts warm-up — Ty/Row shape
 // + showType, DONE below. (b) unify.ts — St-threaded resolve/zonk/occurs/
@@ -15,14 +15,14 @@
 //    next: number }` — every fresh-var mint AND every unify call returns a
 //    new St. Fresh-var minting (types.ts's `Fresh`) is folded into St here,
 //    not ported as a separate type.
-// 3. Prelude type tables are NOT reimplemented — the differential harness
-//    feeds TS preludeEnv/preludeNamespaces in as runtime args.
+// 3. Prelude type tables are NOT reimplemented — the generated prelude shim
+//    supplies builtins and namespaces as runtime args.
 // 4. Semantic alias expansion stays in typeExprToType (it changes what a
 //    type unifies against). Unify errors still name a record alias when its
 //    expanded row is what `showType` printed — `nameAliases`, below.
-// 5. Harness compares per-name scheme STRINGS with alpha-normalized var ids.
-// 6. Corpus = TS-check-passing files, open:true + namespaces threaded;
-//    strict-mode error cases get their own targeted cases.
+// 5. Seed-facing specs compare displayed schemes with alpha-normalized var ids.
+// 6. Strict-mode errors and graph behavior have direct specs and conformance
+//    cases.
 
 import {
   TyVar,
@@ -182,8 +182,7 @@ type IErr = {
 let noErrs : [IErr] = []
 // src/ast.ts's TypeExpr nodes carry `span` as a plain field, so TS just writes
 // `s.annot.span`; a mochi variant needs the accessor. Kept local (parser.mochi has
-// its own copy) because the differential harness evaluates each bootstrap module
-// standalone — a cross-module VALUE reference would be undefined there.
+// its own copy) to keep this hot accessor local without another value import.
 let annotSpan = t => switch t {
   | Ast.TyName(_, sp) => sp
   | Ast.TyArrow(_, _, sp) => sp
@@ -1643,8 +1642,8 @@ let freeRefs = (e, bound, acc) => switch e {
 // ============================================================
 // inferProgram — the shared inference core (TS's `run`). Builtins/namespaces
 // arrive pre-built (`Map string Ty` / `Map string (Map string Ty)`) — the
-// differential harness converts TS's `preludeEnv`/`preludeNamespaces` into
-// these shapes rather than this file reimplementing the prelude tables
+// generated prelude shim supplies these shapes rather than this file
+// reimplementing the prelude tables
 // (locked decision 3). Dropped vs TS: `imports` (cross-module env seeding —
 // Slice F, since added via `inferProgramImports`), and `AliasDef` display
 // templates (decision 4) — this file only needs an alias's structural
@@ -2337,7 +2336,7 @@ export let scopeAliases = (stmts, quals) =>
   aliasMapFrom(stmts, qualAliasSeed(stmts, quals, #{}))
 
 /// Env-only view — the shape every existing caller (compile.mochi,
-/// module.mochi) and the TS parity oracle expect.
+/// module.mochi) and the host façades expect.
 export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
   runInferImports(
     stmts,

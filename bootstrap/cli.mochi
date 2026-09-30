@@ -137,7 +137,7 @@ export let buildMultiTs = (entry, runtimeImport) =>
 // Multi-file build: resolve + compile the graph, then write all outputs. The
 // driver's diagnostic (a graph/type/exhaustiveness error) has no single source
 // file to anchor a line:col against, so we surface its message (as src/cli.ts's
-// build does — span parity across modules is a later refinement).
+// build does — richer cross-module spans are a later refinement).
 export let buildMulti = entry =>
   buildModules(entry)
     |> Result.mapErr(formatModuleErrors)

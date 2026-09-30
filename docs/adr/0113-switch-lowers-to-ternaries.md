@@ -45,8 +45,8 @@ compiled Mochi program pays the same cost wherever it matches.
   bindings. JS output never uses the library.
 - Lazy-List switches keep their bounded-pull IIFE.
 - Both codegens change together (`bootstrap/codegen.mochi`, then
-  `packages/compiler/src/codegen/codegen-match.ts`). The parity specs pin
-  them to the same output.
+  `packages/compiler/src/codegen/codegen-match.ts`). Bootstrap output is pinned
+  directly by `bootstrap/codegen.spec.mochi`, conformance, and fixpoint.
 
 ## Consequences
 

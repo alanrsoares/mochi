@@ -4,7 +4,7 @@
 // ctor schemes), and codegen.mochi (runtime destructure keys). Before this
 // module the Some/None/Ok/Err facts were hardcoded three times — names+arity
 // in check, full decls in infer, field-key lists in codegen — and drift
-// between the copies was caught by nobody's differential case.
+// between the copies had no direct guard.
 //
 // No cross-module type-name imports (the ast.mochi rule): consumers hold the
 // registry as a structural value and re-declare its record shape locally

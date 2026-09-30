@@ -1,17 +1,15 @@
 // Ticket 0013 (part a) — bootstrap/module.mochi's graph loader. We compile the
 // loader (open-world, like every bootstrap module) plus its dep graph to JS,
 // then drive the emitted `loadGraph` in-process: it must order modules by
-// dependency, detect cycles, and report an unreadable file — matching the TS
-// `src/module.ts` driver's verdicts. Scheme/registry threading is parts (b)/(c).
+// dependency, detect cycles, and report an unreadable file. Scheme/registry
+// threading is parts (b)/(c).
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildModules } from "@mochi/compiler/module";
 import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
-import { unwrapOk } from "@onrails/result";
 
 const root = repoRoot(import.meta.url);
 
@@ -44,13 +42,6 @@ test("orders a real graph so every dependency precedes its dependent", () => {
   expect(before("compile.mochi", "cli.mochi")).toBe(true);
   expect(before("infer.mochi", "compile.mochi")).toBe(true);
 }, 30_000);
-
-test("dependency order matches the TS buildModules driver on examples/modules", async () => {
-  const entry = "examples/modules/main.mochi";
-  const ts = unwrapOk(await buildModules(entry, (p) => Bun.file(p).text()));
-  const tsOrder = ts.map((o) => basename(o.path));
-  expect(names(loadGraph(entry))).toEqual(tsOrder);
-});
 
 test("reports an unreadable module (no throw, Err verdict)", () => {
   const r = loadGraph("bootstrap/nope.mochi");

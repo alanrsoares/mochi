@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
-import { buildModules as tsBuildModules } from "../module/module.ts";
 import {
   buildModulesBootstrap,
   buildModulesBootstrapWith,
@@ -24,14 +23,17 @@ const parseBootstrap = (source: string): unknown => {
   return stmts.value;
 };
 
-test("bundled bootstrap module graph matches the TypeScript driver", async () => {
+test("bundled bootstrap module graph orders dependencies first", () => {
   const entry = join(repoRoot(import.meta.url), "examples/modules/main.mochi");
   const bootstrap = buildModulesBootstrap(entry);
-  const oracle = await tsBuildModules(entry, (path) => Bun.file(path).text());
-  expect(bootstrap).toEqual({
-    _tag: "Ok",
-    value: unwrapOk(oracle),
-  });
+  expect(bootstrap._tag).toBe("Ok");
+  if (bootstrap._tag === "Ok") {
+    expect(bootstrap.value.map((output) => basename(output.path))).toEqual([
+      "geometry.mochi",
+      "main.mochi",
+    ]);
+    expect(bootstrap.value.every((output) => output.js.length > 0)).toBe(true);
+  }
 });
 
 test("bundled graph facade emits .js sibling imports by default", () => {

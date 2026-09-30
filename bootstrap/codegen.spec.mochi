@@ -72,8 +72,8 @@ testEach("the JS backend lowers every match without @onrails/pattern", [
 
 // ---- GenOpts: the TS backend's knobs on the shared codegen (ADR 0026 / 0090) ----
 //
-// The all-`None` JS path is guarded byte-for-byte by test/bootstrap-codegen.spec.ts
-// and the fixpoint; these cases prove each hook actually fires and that its text
+// The all-`None` JS path is guarded by the runtime conformance cases and the
+// fixpoint; these cases prove each hook actually fires and that its text
 // lands in the right syntactic slot.
 
 /// Every hook answers unconditionally, so one source exercises all of them.

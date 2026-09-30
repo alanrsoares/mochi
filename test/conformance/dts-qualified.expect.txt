@@ -1,0 +1,5 @@
+import type * as Ast from "./ast.mochi";
+/**
+ * A recursive alias owned by another module must stay qualified.
+ */
+export type Box = { node: { child: Ast.Node; tag: string } };

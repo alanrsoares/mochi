@@ -20,6 +20,7 @@
       "graph-type-error",
       "dts",
       "dts-param-alias",
+      "dts-qualified",
       "jsx-dts",
       "format",
       "typed-ts",
@@ -157,6 +158,12 @@
       "kind": "dts",
       "entry": "dts-param-alias.mochi",
       "expect": "dts-param-alias.expect.txt"
+    },
+    {
+      "id": "dts-qualified",
+      "kind": "dts",
+      "entry": "dts-qualified/main.mochi",
+      "expect": "dts-qualified.expect.txt"
     },
     {
       "id": "jsx-dts",

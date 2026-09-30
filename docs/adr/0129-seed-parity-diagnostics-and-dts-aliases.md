@@ -57,10 +57,10 @@ it replaces:
 ## Consequences
 
 - Error order follows SCC order (dependencies first), as in the TypeScript core.
-- The parity suite `test/bootstrap-infer.spec.ts` compares full error lists with
-  type variables alpha-normalised. `bootstrap/infer.mochi` is listed as
-  cascade-divergent: only its first error is compared, because the fresh var
-  cascades differently from the core's partially solved one.
+- At landing, the temporary differential suite compared full error lists with
+  alpha-normalised type variables, except the documented `infer.mochi` cascade
+  divergence. #104 slice c retired that suite; direct inference specs and the
+  required conformance cases below now own the behavior.
 - New required conformance cases: `multiple-type-errors`,
   `graph-qualified-missing-type`, `graph-type-error` and `dts-param-alias`.
   Every diagnostic expectation now records its `kind`.

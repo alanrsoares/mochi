@@ -1,7 +1,7 @@
 import { assertEq, ok, test, testEach } from "@mochi/test"
 import * as Ast from "./ast.mochi"
 import { lex } from "./lexer.mochi"
-import { parse } from "./parser.mochi"
+import { parse, parseRecovering } from "./parser.mochi"
 
 let parseSrc = src => lex(src) |> Result.flatMap(parse)
 
@@ -85,4 +85,47 @@ test("`> >` with a space is not composition", () =>
 test("a single `>` is still a comparison", () => switch valueOf("let b = a > c") {
   | Some(Ast.ECall(Ast.ERef("gt", _), [_, _], _, _)) => true |> ok
   | _ => false |> ok
+})
+
+let recover = src => switch lex(src) {
+  | Ok(toks) => Some(parseRecovering(toks, None))
+  | Err(_) => None
+}
+
+testEach("recovery resumes at declaration boundaries", [
+  {
+    label: "offending token starts the next declaration",
+    src: "let x let y = 2",
+    message: "expected eq, got let",
+    start: 6,
+    end: 9,
+    next: "y"
+  },
+  {
+    label: "nested sync token is skipped",
+    src: "let a = f(1 * * , g(let y = 1 in y))\nlet b = 2",
+    message: "unexpected token star",
+    start: 14,
+    end: 15,
+    next: "b"
+  },
+  {
+    label: "trailing bad declaration reaches eof",
+    src: "let a = 1\nlet b = ",
+    message: "unexpected token eof",
+    start: 18,
+    end: 18,
+    next: "<error>"
+  }
+], row => switch recover(row.src) {
+  | Some(r) => switch (Array.get(0, r.diagnostics), Array.get(1, r.stmts)) {
+      | (Some(e), Some(Ast.SLet(name, _, _, _, _, _, _))) => ok(
+          e.message == row.message && e.start == row.start && e.end == row.end && name == row.next
+        )
+      | (Some(e), Some(Ast.SError(_))) => ok(
+          e.message == row.message && e.start == row.start && e.end == row.end && row.next == "<error>"
+        )
+      | _ => false |> ok
+    }
+  | None => false |> ok
 })

@@ -105,8 +105,8 @@ test("emitted TypeScript is strict-clean", () => {
 // three things stage 1 actually needs: imported ctor keys threaded into the
 // emitter, a cross-module `import type` for a type reachable with NO
 // value-import edge, and a sidecar declaration for an extern host module. Same
-// fixture as the TypeScript oracle's `test/build-emit-ts.spec.ts`, run through
-// the SELF-HOSTED `buildModulesTs`.
+// fixture as the older seed-driver regression, run through the self-hosted
+// `buildModulesTs`.
 
 type Output = { path: string; js: string };
 const { buildModulesTs } = (await import(join(REPO, "bootstrap/module.js"))) as {

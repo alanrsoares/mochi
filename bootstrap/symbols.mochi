@@ -6,10 +6,10 @@
 // lets, externs, types, ctors, `let … in`, parameters (through `LPSpanned`),
 // `let?`/`let!` binders, pattern binds, loop params and record field names.
 //
-// Mirrors `indexProgram` in packages/compiler/src/check/symbols.ts, the parity
-// oracle (test/bootstrap-symbols.spec.ts): four symbol spaces, imported names
+// Implements four symbol spaces, imported names
 // resolved to their export sites through `origins`, and builtins resolved to
-// the host's virtual prelude through `prelude`.
+// the host's virtual prelude through `prelude`. symbols.spec.mochi and the DX
+// façade specs pin the behavior directly.
 import * as Ast from "./ast.mochi"
 import { exprSpan, patSpan } from "./infer.mochi"
 
@@ -266,7 +266,7 @@ let walkType = (env: SymEnv, t: Ast.TypeExpr) => switch t {
   | Ast.TyList(elem, _) => walkType(env, elem)
   | Ast.TyQual(alias, name, nameSpan, args, _) =>
     // Indexed under the qualified name, which nothing binds: resolving it back
-    // to the aliased module's declaration is a later slice (as in the oracle).
+    // to the aliased module's declaration is a later slice.
     Array.concat(
       use(env, "type", "${alias}.${name}", nameSpan),
       walkTypes(env, args, 0)
@@ -601,7 +601,7 @@ let walkRunValues = (env: SymEnv, binders, i: number, fields: Map<string, Loc>) 
 
 let walkLetRun = (env: SymEnv, run: LetRun, fields: Map<string, Loc>) =>
   let scope = bindRun(env, run.binders, 0, fields) in
-    // The oracle's frame is the tail's span: the run's own values see the
+    // The frame is the tail's span: the run's own values see the
     // binders (they are recursive) but completion inside them does not.
     framed(
       env,

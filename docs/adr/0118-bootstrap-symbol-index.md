@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-29
-- **Source:** [ADR 0101](0101-bootstrap-query-boundary.md), [ADR 0103](0103-binding-identity-is-the-declaration-span.md), `bootstrap/symbols.mochi`, `packages/compiler/src/check/symbols.ts`, `test/bootstrap-symbols.spec.ts`, #103
+- **Source:** [ADR 0101](0101-bootstrap-query-boundary.md), [ADR 0103](0103-binding-identity-is-the-declaration-span.md), `bootstrap/symbols.mochi`, `bootstrap/symbols.spec.mochi`, `packages/compiler/src/check/symbols.ts`, #103
 
 ## Context
 
@@ -40,9 +40,10 @@ order:
 - **One walker.** The single-file `index` from ADR 0103 is now a projection of
   `indexWith`: this file's value bindings, excluding imports. `bootstrap-unused`
   and the single-file highlight path keep their inputs.
-- **Parity is exact.** `test/bootstrap-symbols.spec.ts` compares the frozen
-  seed's occurrences with `indexProgram(…).all()` on every `.mochi` file. It
-  also compares each dependency's export origins.
+- **Parity was exact at landing.** A temporary differential suite compared the
+  frozen seed's occurrences and dependency origins with the TypeScript index on
+  every `.mochi` file. #104 slice c retired it after direct symbol, façade, and
+  DX query specs covered the shipped path.
 
 Labeled parameters now anchor on their name. The TS parser's `span` for
 `~timing?: string` covers the whole parameter, so the TS index recorded that

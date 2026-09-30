@@ -4,7 +4,7 @@
 - **Date:** 2026-09-29
 - **Source:** [ADR 0090](0090-bootstrap-chain.md), [ADR 0118](0118-bootstrap-symbol-index.md),
   `bootstrap/types.mochi`, `bootstrap/infer.mochi`, `bootstrap/schemes.mochi`,
-  `packages/dx/src/hover.ts`, `packages/dx/src/nav.ts`, `test/bootstrap-infer.spec.ts`, #103
+  `packages/dx/src/hover.ts`, `packages/dx/src/nav.ts`, `bootstrap/infer.spec.mochi`, #103
 
 ## Context
 
@@ -34,11 +34,10 @@ the cursor, whatever kind it is.
   `let!` over a plain name, loop params, lambda params (plain, tuple, record
   and labeled), pattern binds, `pat as name`, record-pattern labels, and field
   reads (`property`, at the whole `r.q` span, as the TS `infer` wrapper does).
-- **Parity is checked.** `test/bootstrap-infer.spec.ts` compares every binder
-  record, meaning span, kind, name, doc and alpha-normalized type, with the TS
-  table's `symbol` entries on every `.mochi` file. JSX attribute names are
-  left out: the TS plugin notes them through `api.noteType`, and the bootstrap
-  plugin API has no equivalent yet.
+- **Parity was checked at landing.** A temporary differential suite compared
+  every binder record—span, kind, name, doc, and alpha-normalized type—with the
+  TypeScript table on every `.mochi` file. #104 slice c retired it after direct
+  infer, DX binder, and graph façade specs covered the shipped path.
 - **Labeled params anchor on their name.** The oracle recorded a labeled
   param's symbol at its whole-parameter span. It now uses `nameSpan`, as its
   symbol index already does (ADR 0118).
