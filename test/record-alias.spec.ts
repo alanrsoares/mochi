@@ -3,8 +3,8 @@
 // extern signatures); hover / inlay / .d.ts FOLD a matching closed row back to
 // the alias name. No nominal identity, no runtime — pure naming for readability.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import { check } from "@mochi/compiler/check";
-import { compile } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";

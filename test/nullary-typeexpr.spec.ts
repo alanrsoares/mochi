@@ -1,6 +1,6 @@
 // `() -> T` in TypeExpr / extern signatures (ADR 0014 surface + ADR 0015).
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
 import { hoverAt } from "@mochi/dx/hover";

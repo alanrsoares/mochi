@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import { codegenTs } from "@mochi/compiler/codegen-ts";
-import { compile, toTypedProgram } from "@mochi/compiler/compile";
+import { toTypedProgram } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
 import {
   DEFAULT_PLUGINS,
@@ -14,6 +15,7 @@ import { preludeNamespaces } from "@mochi/compiler/prelude";
 import { moduleDiagnostics } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
 import { styledCvaExtension } from "@mochi/plugin-styled-cva";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 const builtin: LanguagePlugin = { name: "builtin" };
@@ -203,9 +205,9 @@ export extern tw : a = "@styled-cva/react" "default"
 export let Btn = tw.button("x", { variants: { $tone: { a: "1", b: "2" } } })
 export let el = <Btn $tone="a" />
 `;
-  // `styledCvaExtension` alone doesn't know JSX syntax — if this compiles, the
+  // `styledCvaBootstrap` alone doesn't know JSX syntax — if this compiles, the
   // `<Btn …/>` came from `jsxPlugin`, prepended by `resolvePlugins` (ADR 0011).
-  const r = compile(src, { plugins: [styledCvaExtension] });
+  const r = compile(src, { plugins: [styledCvaBootstrap] });
   expect(isErr(r)).toBe(false);
   expect(unwrapOk(r)).toContain("h(");
 });

@@ -1,7 +1,7 @@
 // Prelude extension: Math (unqualified builtins), String ops (`Str.*`), and the
 // grown eager-Array namespace (`Array.reverse/concat/…`). All immutable.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { compileAndEval, compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr } from "@onrails/result";

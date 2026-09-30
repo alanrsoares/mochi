@@ -8,7 +8,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { compile as tsCompile } from "@mochi/compiler/compile";
+import { compile as tsCompile } from "@mochi/compiler";
 import { buildModules as tsBuild } from "@mochi/compiler/module";
 import { format as tsFormat } from "@mochi/dx/format";
 import { repoRoot } from "@mochi/test-support";

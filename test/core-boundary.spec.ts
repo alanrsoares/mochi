@@ -1,6 +1,6 @@
 // #70 deletes the hand-authored TypeScript core. Modules that outlive it — the
-// plugin seam (ADR 0011), the prelude tables, `ast/`, `errors/`, DX and LSP —
-// must not import it, or the deletion breaks them. Specs are exempt: #104
+// barrel and its bootstrap façades (ADR 0127), the plugin seam (ADR 0011), the
+// prelude tables, `ast/`, `errors/`, DX and LSP — must not import it, or the deletion breaks them. Specs are exempt: #104
 // retires the ones that exercise the core.
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -15,11 +15,13 @@ const exportsMap = JSON.parse(readFileSync(join(root, "packages/compiler/package
   .exports as Record<string, string>;
 
 const sources = (dir: string): string[] =>
-  readdirSync(dir).flatMap((name) => {
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) return sources(p);
-    return /\.tsx?$/.test(name) && !/\.spec\.tsx?$/.test(name) ? [p] : [];
-  });
+  statSync(dir).isFile()
+    ? [dir]
+    : readdirSync(dir).flatMap((name) => {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) return sources(p);
+        return /\.tsx?$/.test(name) && !/\.spec\.tsx?$/.test(name) ? [p] : [];
+      });
 
 const SPECIFIER = /(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g;
 
@@ -39,6 +41,8 @@ const isCore = (path: string): boolean => {
 };
 
 const SURVIVORS = [
+  "packages/compiler/src/index.ts",
+  "packages/compiler/src/bootstrap",
   "packages/compiler/src/ast",
   "packages/compiler/src/errors",
   "packages/compiler/src/extensions",

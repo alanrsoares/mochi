@@ -2,7 +2,7 @@
 // slice: parse+infer (with let-polymorphism), codegen runtime behavior, and
 // formatter round-trip.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";

@@ -4,7 +4,7 @@
 // the calling-convention slot alongside `send`/`new`/`global` (ADR 0059).
 import { expect, test } from "bun:test";
 import { basename } from "node:path";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { buildModulesTs } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { compileAndEval, compileJs } from "@mochi/test-support";

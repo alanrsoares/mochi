@@ -4,7 +4,7 @@
 // (`Sm(Sm(n))`, `Sm(0)`) as covering its whole constructor. See ADR 0012.
 
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { compileAndEval } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";

@@ -1,7 +1,7 @@
 // List destructuring in `switch`: [], [x], [head, ...tail]. Patterns lower to
 // length-guards over @onrails/pattern; a `[]` + `[x, ...xs]` pair is total.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { compileAndEval, compileJs } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";

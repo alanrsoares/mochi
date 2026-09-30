@@ -65,9 +65,11 @@ byte-identical apart from the annotations TS adds. The result typechecks under
 
 What ships runs the self-hosted twins, `bootstrap/codegen-ts.mochi` and
 `bootstrap/dts.mochi`. That covers the CLI `ts`/`dts`/`build --emit=ts`
-commands, `gen-mochi-dts`, and the `@mochi/compiler` barrel's `codegenTs`,
-`emitDts` and `compileTargets` ([ADR 0125](adr/0125-bootstrap-compile-targets.md),
-[ADR 0126](adr/0126-barrel-typed-emit-on-bootstrap.md)). The TypeScript
+commands, `gen-mochi-dts`, and the `@mochi/compiler` barrel's `compile`,
+`codegenTs`, `emitDts` and `compileTargets`, whose `plugins` are
+`BootstrapPlugin`s ([ADR 0125](adr/0125-bootstrap-compile-targets.md),
+[ADR 0126](adr/0126-barrel-typed-emit-on-bootstrap.md),
+[ADR 0127](adr/0127-barrel-takes-bootstrap-plugins.md)). The TypeScript
 `codegen-ts.ts`/`dts.ts` remain as the parity oracle and as the TypeScript
 module graph's emitters, until #105 deletes the core.
 

@@ -3,7 +3,7 @@
 // `_Task_andThen((param) => body)(value)`. Mirrors `let?` for Result; infix
 // bind for both is deferred.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { hoverAt } from "@mochi/dx/hover";
 import { compileJs } from "@mochi/test-support";

@@ -4,7 +4,7 @@
 // unify-mismatch path via the `u()` seam in infer.ts. See CRITIQUE §4.1.
 
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { unwrapErr } from "@onrails/result";
 
 const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;

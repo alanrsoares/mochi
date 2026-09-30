@@ -1,7 +1,7 @@
 // ADR 0081 — string literals and finite unions in type position.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import { check } from "@mochi/compiler/check";
-import { compile } from "@mochi/compiler/compile";
 import { emitDts } from "@mochi/compiler/dts";
 import { inferProgramTypes, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";

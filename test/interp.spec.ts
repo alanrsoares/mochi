@@ -1,7 +1,7 @@
 // String interpolation (ADR 0023): "...${expr}..." — holes unify with
 // `string`, codegen is a native JS template literal, safely re-escaped.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapErr } from "@onrails/result";
 

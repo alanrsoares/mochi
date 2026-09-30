@@ -4,7 +4,7 @@
 // declare its own type of that name, so hand-written decls still win. They back
 // the Option-returning safe accessors (Map.get, List.head, Array.head/find).
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { emitDts } from "@mochi/compiler/dts";
 import { compileAndEval } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";

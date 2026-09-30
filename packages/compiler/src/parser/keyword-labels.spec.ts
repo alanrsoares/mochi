@@ -6,7 +6,7 @@
 // ADR 0020 is the sibling rule for JavaScript reserved words.
 
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { isErr, isOk, unwrapErr, unwrapOk } from "@onrails/result";
 
 const errMsg = (src: string): string => unwrapErr(compile(src))[0]!.message;

@@ -1,7 +1,7 @@
 // String literals.
 import { expect, test } from "bun:test";
+import { compile } from "@mochi/compiler";
 import { check } from "@mochi/compiler/check";
-import { compile } from "@mochi/compiler/compile";
 import { inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";

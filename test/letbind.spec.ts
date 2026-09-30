@@ -3,7 +3,7 @@
 // Some payload and short-circuits None; Result binds Ok and short-circuits
 // Err. Lowers to `_Option_flatMap` / `_Result_flatMap`.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { hoverAt } from "@mochi/dx/hover";
 import { compileJs } from "@mochi/test-support";

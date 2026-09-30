@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 
 const PORT = Number(process.env.PORT || 3000);
 const DIR = import.meta.dir;

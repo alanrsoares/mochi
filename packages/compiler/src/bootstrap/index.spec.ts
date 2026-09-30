@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { repoRoot } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
-import { compile as tsCompile } from "../compile/compile.ts";
 import { buildModules as tsBuildModules } from "../module/module.ts";
+import { compile as tsCompile } from "./compile.ts";
 import {
   checkGraphBootstrapRecovering,
   createBootstrapGraphCache,

@@ -1,6 +1,6 @@
 /**
- * Public barrel for `@mochi/compiler` (ADR 0048).
- * Compile / typecheck / emit surfaces only — DX lives in `@mochi/dx`.
+ * Public barrel for `@mochi/compiler` (ADR 0048, 0127).
+ * Compile / emit surfaces over the self-hosted core — DX lives in `@mochi/dx`.
  */
 export {
   type CompileOptions,
@@ -8,16 +8,9 @@ export {
   codegenTs,
   compile,
   compileTargets,
-  type Diagnostic,
+  DEFAULT_RUNTIME_IMPORT,
+  type EmitOptions,
   emitDts,
-  formatError,
-  type HostExtension,
-  type ImportedContext,
-  type LanguagePlugin,
-  lex,
-  type TypedProgram,
-  type TypedProgramWithOptions,
-  toTypedProgram,
-  toTypedProgramRecovering,
-  toTypedProgramWith,
-} from "./compile/index.ts";
+} from "./bootstrap/compile.ts";
+export type { BootstrapPlugin } from "./bootstrap/options.ts";
+export { type Diagnostic, formatError } from "./errors/errors.ts";

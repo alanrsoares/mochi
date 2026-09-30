@@ -2,7 +2,7 @@
 // one-inhabitant type: `()` is writable as a value, as a type, and as a pattern.
 
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { hoverAt } from "@mochi/dx/hover";
 import { compileAndEval, compileJs } from "@mochi/test-support";
 import { isErr, isOk } from "@onrails/result";

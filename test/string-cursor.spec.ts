@@ -2,7 +2,7 @@
 // self-hosted lexer) needs: bounds-safe indexed access (Option), char↔code, and
 // numeric parsing. Guards types (they compile) + runtime behavior.
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler/compile";
+import { compile } from "@mochi/compiler";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 
