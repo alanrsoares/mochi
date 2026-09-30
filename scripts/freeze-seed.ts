@@ -97,11 +97,16 @@ for (const shim of HOST_SHIMS) cpSync(join(BOOTSTRAP_DIR, shim), join(tmp, shim)
 // Keep a synchronous entry for host integrations whose hooks cannot await
 // dynamic seed loading (notably Vite's transform). The bundle embeds the seed
 // graph, so consumers do not typecheck or import generated TS modules.
+// `dts.ts` imports `compile.ts`, so the entry adds its single-file drivers.
+writeFileSync(
+  join(tmp, "compile-entry.ts"),
+  'export * from "./compile.ts";\nexport { compileTargetsWith, emitDtsTextWith } from "./dts.ts";\n',
+);
 execFileSync(
   "bun",
   [
     "build",
-    join(tmp, "compile.ts"),
+    join(tmp, "compile-entry.ts"),
     "--outfile",
     join(tmp, "compile.bundle.cjs"),
     "--target",
@@ -120,7 +125,7 @@ execFileSync(
   "bun",
   [
     "build",
-    join(tmp, "compile.ts"),
+    join(tmp, "compile-entry.ts"),
     "--outfile",
     join(tmp, "compile.bundle.mjs"),
     "--target",
@@ -135,6 +140,7 @@ execFileSync(
   { cwd: REPO_ROOT, stdio: "inherit" },
 );
 stripBundleSourceLabels(join(tmp, "compile.bundle.mjs"));
+rmSync(join(tmp, "compile-entry.ts"), { force: true });
 writeFileSync(
   join(tmp, "compile.bundle.d.mts"),
   `export type BootstrapDiagnostic = { message: string; start: number; end: number };\nexport type BootstrapResult<A> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: BootstrapDiagnostic[] };\nexport type BootstrapInferResult = { env: Map<string, unknown>; types: Array<{ span: { start: number; end: number }; ty: unknown; display: string }>; aliases: Map<string, unknown>; letParams: unknown[] };\nexport const compile: (src: string) => BootstrapResult<string>;\nexport const compileTs: (src: string, runtimeImport: string) => BootstrapResult<string>;\nexport const inferTypes: (src: string) => BootstrapResult<BootstrapInferResult>;\n`,

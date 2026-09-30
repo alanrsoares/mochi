@@ -388,22 +388,30 @@ export const symbolIndexSync: _Curry<
   indexWith(path, origins, prelude, stmts),
 );
 /**
+ * The JS a checked program emits under `opts`. Shared with `dts.mochi`'s
+ * `compileTargetsWith`, which prints every target from one inference.
+ */
+export const emitJsWith: _Curry<[stmts: Stmt[], opts: Opts], string> = _curry(
+  2,
+  (stmts: Stmt[], opts: Opts) =>
+    codegenWith(
+      stmts,
+      new Map<string, string[]>(),
+      opts.runtime,
+      namespaceRuntime,
+      preludeJsDefs,
+      runtimeDeps,
+      { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
+    ),
+);
+/**
  * compileWith : string -> Opts -> Result string Err
  */
 export const compileWith: _Curry<[src: string, opts: Opts], Result<string, Stamped[]>> = _curry(
   2,
   (src: string, opts: Opts) =>
     _Result_map(
-      (prog: Stmt[]) =>
-        codegenWith(
-          prog,
-          new Map<string, string[]>(),
-          opts.runtime,
-          namespaceRuntime,
-          preludeJsDefs,
-          runtimeDeps,
-          { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
-        ),
+      (prog: Stmt[]) => emitJsWith(prog, opts),
       pipelineWith(src, openMode(src, opts.open), opts.plugins),
     ),
 );
@@ -413,6 +421,49 @@ export const compileWith: _Curry<[src: string, opts: Opts], Result<string, Stamp
 export const compile: (src: string) => Result<string, Stamped[]> = (src: string) =>
   compileWith(src, defaultOpts);
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
+/**
+ * The typed TypeScript a single file emits from its inference result `r`.
+ * Shared with `dts.mochi`'s `compileTargetsWith`.
+ */
+export const emitTsWith: <A, B, C, D, E, F, G, H, I, J>(
+  stmts: Stmt[],
+  r: {
+    env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>;
+    types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[];
+    letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[];
+    aliases: Map<string, QualAliasInfo>;
+  } & J,
+  runtimeImport: string,
+  opts: Opts,
+) => string = _curry(
+  4,
+  <A, B, C, D, E, F, G, H, I, J>(
+    stmts: Stmt[],
+    r: {
+      env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>;
+      types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[];
+      letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[];
+      aliases: Map<string, QualAliasInfo>;
+    } & J,
+    runtimeImport: string,
+    opts: Opts,
+  ) =>
+    emitTsModuleWith(
+      stmts,
+      r.env,
+      r.types,
+      r.letParams,
+      r.aliases,
+      noImportedKeys,
+      [] as string[],
+      namespaceRuntime,
+      preludeJsDefs,
+      runtimeDeps,
+      runtimeImport,
+      opts.docs,
+      bindingHooksFor(opts.plugins),
+    ),
+);
 /**
  * compileTs : string -> Result string Err — the SAME railway, but the typed
  * TypeScript backend (ADR 0026 / 0090). Inference runs through
@@ -433,22 +484,7 @@ export const compileTsWith: _Curry<
             types: TypeAt[];
             letParams: TypeAt[];
             aliases: Map<string, QualAliasInfo>;
-          }) =>
-            emitTsModuleWith(
-              stmts,
-              r.env,
-              r.types,
-              r.letParams,
-              r.aliases,
-              noImportedKeys,
-              [] as string[],
-              namespaceRuntime,
-              preludeJsDefs,
-              runtimeDeps,
-              runtimeImport,
-              opts.docs,
-              bindingHooksFor(opts.plugins),
-            ),
+          }) => emitTsWith(stmts, r, runtimeImport, opts),
           inferProgramTypesWith(
             stmts,
             builtins,

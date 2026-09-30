@@ -213,18 +213,22 @@ export let nominalTypeName = (ty, aliases) =>
 export let symbolIndexSync = (path, origins, prelude, stmts) =>
   indexWith(path, origins, prelude, stmts)
 
+/// The JS a checked program emits under `opts`. Shared with `dts.mochi`'s
+/// `compileTargetsWith`, which prints every target from one inference.
+export let emitJsWith = (stmts, opts: Opts) =>
+  stmts->codegenWith(
+    #{},
+    opts.runtime,
+    namespaceRuntime,
+    preludeJsDefs,
+    runtimeDeps,
+    { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }
+  )
+
 /// compileWith : string -> Opts -> Result string Err
 export let compileWith = (src, opts: Opts) =>
   src->pipelineWith(openMode(src, opts.open), opts.plugins)
-    |> Result.map(prog =>
-      prog->codegenWith(
-        #{},
-        opts.runtime,
-        namespaceRuntime,
-        preludeJsDefs,
-        runtimeDeps,
-        { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }
-      ))
+    |> Result.map(prog => prog->emitJsWith(opts))
 
 /// compile : string -> Result string Err
 export let compile = src => src->compileWith(defaultOpts)
@@ -234,6 +238,24 @@ export let compile = src => src->compileWith(defaultOpts)
 // generalize and leave the emitted TS a `Map<string, unknown>` against
 // `emitTsModule`'s pinned key type.
 let noImportedKeys : Map<string, [string]> = #{}
+
+/// The typed TypeScript a single file emits from its inference result `r`.
+/// Shared with `dts.mochi`'s `compileTargetsWith`.
+export let emitTsWith = (stmts, r, runtimeImport, opts: Opts) =>
+  stmts->emitTsModuleWith(
+    r.env,
+    r.types,
+    r.letParams,
+    r.aliases,
+    noImportedKeys,
+    [],
+    namespaceRuntime,
+    preludeJsDefs,
+    runtimeDeps,
+    runtimeImport,
+    opts.docs,
+    bindingHooksFor(opts.plugins)
+  )
 
 /// compileTs : string -> Result string Err — the SAME railway, but the typed
 /// TypeScript backend (ADR 0026 / 0090). Inference runs through
@@ -247,21 +269,7 @@ export let compileTsWith = (src, runtimeImport, opts: Opts) =>
       openMode(src, opts.open),
       opts.plugins
     )
-      |> Result.map(r =>
-        stmts->emitTsModuleWith(
-          r.env,
-          r.types,
-          r.letParams,
-          r.aliases,
-          noImportedKeys,
-          [],
-          namespaceRuntime,
-          preludeJsDefs,
-          runtimeDeps,
-          runtimeImport,
-          opts.docs,
-          bindingHooksFor(opts.plugins)
-        ))
+      |> Result.map(r => stmts->emitTsWith(r, runtimeImport, opts))
       |> Result.mapErr(e => [stampType(e)])
 
 export let compileTs = (src, runtimeImport) =>
