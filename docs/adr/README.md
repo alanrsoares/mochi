@@ -99,7 +99,7 @@ What else was on the table and why not.
 | [0047](0047-dollar-identifiers.md) | `$` is an identifier character | Accepted |
 | [0048](0048-core-dx-package-boundary.md) | Core vs DX package boundary (bootstrap = core) | Accepted |
 | [0049](0049-plugin-name-shadowing.md) | Builtin plugin replacement via name shadowing | Accepted |
-| [0050](0050-plugin-claims-table-dispatch.md) | Plugin claims as declarations, table dispatch, and clash rejection | Accepted |
+| [0050](0050-plugin-claims-table-dispatch.md) | Plugin claims as declarations, table dispatch, and clash rejection | Superseded by 0128 |
 | [0051](0051-rank2-builder-call-sites.md) | Rank-2 builder DSLs: type the call sites, never the builder | Accepted |
 | [0052](0052-js-bundles-via-host-not-compiler.md) | JS bundles via host bundler; compiler ships clean ESM | Accepted |
 | [0053](0053-path-to-wasm3.md) | Path to Wasm 3.0 (WasmGC third backend; no Rust rewrite) | Proposed |
@@ -172,6 +172,7 @@ What else was on the table and why not.
 | [0125](0125-bootstrap-compile-targets.md) | Every emit target from one bootstrap inference | Accepted |
 | [0126](0126-barrel-typed-emit-on-bootstrap.md) | The barrel's typed emit runs on bootstrap | Accepted |
 | [0127](0127-barrel-takes-bootstrap-plugins.md) | The barrel takes bootstrap plugins, and exports only compile and emit | Accepted |
+| [0128](0128-bootstrap-plugin-shadowing.md) | Bootstrap plugins shadow builtins by name; claims and clash checks retire | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

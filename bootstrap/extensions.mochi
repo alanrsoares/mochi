@@ -6,7 +6,8 @@
 // resolvePlugins mirrors src/extensions.ts:
 //   None            → builtins (default JSX on)
 //   Some([])        → hard opt-out
-//   Some([a, b, …]) → builtins prepended, then caller list
+//   Some([a, b, …]) → builtins prepended (a same-named caller plugin
+//                     replaces one in place, ADR 0049), then caller list
 
 import { jsxPlugin } from "./plugins/jsx.mochi"
 import { preactPlugin } from "./plugins/preact.mochi"
@@ -18,10 +19,26 @@ export let DEFAULT_PLUGINS = [jsxPlugin]
 /// part of the language's default surface.
 export let PREACT_PLUGIN = preactPlugin
 
+/// A caller plugin named like builtin `b` takes its slot (ADR 0049).
+let shadowing = (ps, b) => switch Array.find(p => p.name == b.name, ps) {
+  | Some(p) => p
+  | None => b
+}
+
 /// `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
+/// Otherwise builtins first, each replaced in place by a same-named caller
+/// plugin (a hook-less stub disables it), then the rest of the caller list.
 export let resolvePlugins = (pluginsOpt, builtins) => switch pluginsOpt {
   | None => builtins
-  | Some(ps) => Array.length(ps) == 0 ? [] : Array.concat(builtins, ps)
+  | Some(ps) => Array.length(ps) == 0
+      ? []
+      : Array.concat(
+        Array.map(b => shadowing(ps, b), builtins),
+        Array.filter(
+          p => Array.length(Array.filter(b => b.name == p.name, builtins)) == 0,
+          ps
+        )
+      )
 }
 
 export let resolvePluginsDefault = pluginsOpt =>

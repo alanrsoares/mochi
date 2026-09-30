@@ -43,6 +43,19 @@ test("an empty plugin list opts out of the builtin JSX plugin", () => {
   expect(res._tag === "Err" && res.error[0]?.kind).toBe("parse");
 });
 
+test("a hook-less plugin named like a builtin disables it, keeping the rest (ADR 0049)", () => {
+  const src = 'export let v = <div />\nexport let n : number = magic("x")\n';
+  const withJsx = compileBootstrapSyncWith(src, { ...withPlugins([magicPlugin]), open: true });
+  expect(withJsx._tag).toBe("Ok");
+  const res = compileBootstrapSyncWith(src, {
+    ...withPlugins([{ name: "jsx" }, magicPlugin]),
+    open: true,
+  });
+  expect(res._tag === "Err" && res.error[0]?.kind).toBe("parse");
+  const noJsx = compileBootstrapSyncWith(magicSrc, withPlugins([{ name: "jsx" }, magicPlugin]));
+  expect(noJsx._tag).toBe("Ok");
+});
+
 const dir = mkdtempSync(join(tmpdir(), "mochi-bootstrap-plugins-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 

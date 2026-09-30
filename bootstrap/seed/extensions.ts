@@ -14,9 +14,13 @@ import {
   Some,
   _Array_append,
   _Array_concat,
+  _Array_find,
   _Array_get,
   _curry,
+  eq,
+  filter,
   length,
+  map,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";
@@ -31,16 +35,46 @@ export const DEFAULT_PLUGINS = [jsxPlugin];
  */
 export const PREACT_PLUGIN = preactPlugin;
 /**
- * `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
+ * A caller plugin named like builtin `b` takes its slot (ADR 0049).
  */
-export const resolvePlugins: <A>(pluginsOpt: Option<A[]>, builtins: A[]) => A[] = _curry(
+const shadowing: <A, B>(ps: ({ name: A } & B)[], b: { name: A } & B) => { name: A } & B = _curry(
   2,
-  <A>(pluginsOpt: Option<A[]>, builtins: A[]) =>
+  <A, B>(ps: ({ name: A } & B)[], b: { name: A } & B) =>
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: p }) => p)(_v)
+        : _v._tag === "None"
+          ? b
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_find((p: { name: A } & B) => eq(p.name, b.name), ps)),
+);
+/**
+ * `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
+ * Otherwise builtins first, each replaced in place by a same-named caller
+ * plugin (a hook-less stub disables it), then the rest of the caller list.
+ */
+export const resolvePlugins: <A, B>(
+  pluginsOpt: Option<({ name: A } & B)[]>,
+  builtins: ({ name: A } & B)[],
+) => ({ name: A } & B)[] = _curry(
+  2,
+  <A, B>(pluginsOpt: Option<({ name: A } & B)[]>, builtins: ({ name: A } & B)[]) =>
     ((_v) =>
       _v._tag === "None"
         ? builtins
         : _v._tag === "Some"
-          ? (({ value: ps }) => (length(ps) === 0 ? ([] as A[]) : _Array_concat(builtins, ps)))(_v)
+          ? (({ value: ps }) =>
+              length(ps) === 0
+                ? ([] as ({ name: A } & B)[])
+                : _Array_concat(
+                    map((b: { name: A } & B) => shadowing(ps, b), builtins),
+                    filter(
+                      (p: { name: A } & B) =>
+                        length(filter((b: { name: A } & B) => eq(b.name, p.name), builtins)) === 0,
+                      ps,
+                    ),
+                  ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(pluginsOpt),
