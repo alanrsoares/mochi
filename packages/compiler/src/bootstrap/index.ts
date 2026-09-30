@@ -223,7 +223,7 @@ export type BootstrapCore = {
     src: string,
     readFile: (path: string) => Promise<string>,
     plugins?: readonly BootstrapPlugin[],
-  ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic>>;
+  ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>>;
 };
 
 import {
@@ -478,11 +478,14 @@ export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
 
   const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile, plugins) => {
     const loaded = await loadGraph(entry, src, readFile, plugins);
-    if (loaded._tag === "Err") return loaded;
+    if (loaded._tag === "Err") return { _tag: "Err", error: [loaded.error] };
     const result = compileGraphBootstrap(loaded.value, plugins);
     return result._tag === "Ok"
       ? { _tag: "Ok", value: undefined }
-      : { _tag: "Err", error: enrich(decodeModulePath(result.error), src) };
+      : {
+          _tag: "Err",
+          error: result.error.map((error) => enrich(decodeModulePath(error), src)),
+        };
   };
 
   return {
@@ -519,13 +522,14 @@ export const loadBootstrapGraph = async (
 ): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
   (await loadBootstrapCore()).loadGraph(entry, src, readFile, plugins);
 
-/** Narrow graph-checking seam for editor integrations. */
+/** Narrow graph-checking seam for editor integrations: every type error of
+ * the first failing module (ADR 0004). */
 export const checkGraphBootstrap = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
   plugins?: readonly BootstrapPlugin[],
-): Promise<BootstrapResult<undefined, BootstrapDiagnostic>> =>
+): Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>> =>
   (await loadBootstrapCore()).checkGraph(entry, src, readFile, plugins);
 
 /** Graph typed-query seam for editor integrations. */
@@ -678,7 +682,7 @@ export const checkGraphBootstrapRecovering = async (
     return [{ kind: "check", message: `cannot read module '${entry}'`, start: 0, end: 0 }];
   if (entryModule.deps.length === 0) {
     const strict = await checkGraphBootstrap(entry, src, readFile, plugins);
-    return strict._tag === "Ok" ? [] : [strict.error];
+    return strict._tag === "Ok" ? [] : strict.error;
   }
   const graph = [...loaded.values()];
   const graphKey = JSON.stringify(graph.map(({ path, src: source }) => [path, source]));

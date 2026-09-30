@@ -120,7 +120,7 @@ export const inferTypesRecoveringBootstrapSync = (
 
 /**
  * Strict single-file check for editor diagnostics: every lex, parse (with
- * recovery, ADR 0045) and check finding, else the first type error. Imports
+ * recovery, ADR 0045) and check finding, else every type error. Imports
  * bind nothing here; graph-aware checking is `checkGraphBootstrapRecovering`.
  */
 export const checkBootstrapSync = (

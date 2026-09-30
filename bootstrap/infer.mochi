@@ -177,6 +177,9 @@ type IErr = {
   help: Option<string>,
   suggestions: [Suggestion]
 }
+// Pinned so the collected-diagnostics accumulator types as `[IErr]` in the
+// emitted TS rather than an empty `never[]` (ADR 0044).
+let noErrs : [IErr] = []
 // src/ast.ts's TypeExpr nodes carry `span` as a plain field, so TS just writes
 // `s.annot.span`; a mochi variant needs the accessor. Kept local (parser.mochi has
 // its own copy) because the differential harness evaluates each bootstrap module
@@ -1110,12 +1113,19 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         let lets = localLetsFrom(e) in
         let idxOf = idxOfMap(lets) in
         let tail = localTail(e) in
-        let? (localCtx, localSt) = ctx->processGroupsFrom(
+        // Inside one expression the first error still wins (ADR 0004 §3):
+        // report the first local failure, as src/infer.ts's
+        // `inferLocalLambdaGroup` returns on it.
+        let (localCtx, localSt, localErrs) = ctx->processGroupsFrom(
           stronglyConnected(adjOf(lets, idxOf)),
           lets,
-          st
+          st,
+          noErrs
         ) in
-          localCtx->inferExpr(tail, localSt)
+          switch Array.get(0, localErrs) {
+            | Some(firstErr) => Err(firstErr)
+            | None => localCtx->inferExpr(tail, localSt)
+          }
       | _ => let? (valT, st1) = ctx->inferExpr(value, st) in
         // `let x : T = v in b` (ADR 0044): pin to the declared type before
         // generalize, so a literal against a union keeps the union instead of
@@ -1907,42 +1917,73 @@ let preBindGroupFrom = (group, env, st: Types.St) => switch group {
     }
 }
 
-let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St) => switch group {
-  | [] => Ok((#{}, st))
-  | [s, ...rest] => switch s {
-      | Ast.SLet(name, nameSpan, annot, value, _, doc, span) => let? (t, st1) = ctx->inferExpr(
-          value,
-          st
-        ) in
-          switch Map.get(name, ctx.env) {
-            | Some(selfSc) => let? st2 = ctx->u(selfSc.ty, t, st1, span) in
-              // Binding annotation (`let x : T = v`, ADR 0044 / 0081): pin to
-              // the declared type before generalize, so a lit against a union
-              // keeps the union instead of widening to `string`.
-              let? (pinned, st3) = switch annot {
-                | Some(te) => let (at, _, stA) = typeExprToType(
-                    te,
-                    #{},
-                    st2,
-                    ctx.aliasMap,
-                    Set.fromArray([])
-                  ) in
-                    ctx->checkFits(t, at, stA, annotSpan(te))
-                      |> Result.map(stB => (at, stB))
-                | None => Ok((t, st2))
-              } in
-              // The name itself, so hover leads with `let x: T` (+ its `///`).
-              // Synthetic destructure temps (`$d…`) are skipped.
-              let stNamed = Str.startsWith("$", name)
-                ? st3
-                : recordBinder(nameSpan, pinned, "let", name, doc, st3) in
-              let? (restTypes, st4) = ctx->inferGroupFrom(rest, stNamed) in
-                Ok((Map.set(name, pinned, restTypes), st4))
-            | None => Err(
-                typeErr("internal: missing self-binding for '${name}'", span)
-              )
+/// A group member that failed to type: its diagnostic, and the state the rest
+/// of the group resumes from. src/infer.ts mutates its substitution in place,
+/// so whatever a member solved before failing stays solved; carrying the
+/// state back is the same thing, done functionally.
+type MemberErr = { err: IErr, st: Types.St }
+
+// One member's body, unified with its pre-bound self var and pinned to its
+// annotation. Returns the type to generalize, or the member's failure.
+let inferMember : Ctx<a> -> string -> Option<Ast.TypeExpr> -> Ast.Expr -> Ast.Span -> Types.St -> Result<(Types.Ty, Types.St), MemberErr> = (ctx, name, annot, value, span, st) => switch ctx->inferExpr(value, st) {
+  | Err(e) => Err({ err: e, st })
+  | Ok((t, st1)) => switch Map.get(name, ctx.env) {
+      | None => Err(
+          {
+            err: typeErr("internal: missing self-binding for '${name}'", span),
+            st: st1
           }
-      | _ => ctx->inferGroupFrom(rest, st)
+        )
+      | Some(selfSc) => switch ctx->u(selfSc.ty, t, st1, span) {
+          | Err(e) => Err({ err: e, st: st1 })
+          | Ok(st2) => switch annot {
+              | Some(te) =>
+                // Binding annotation (`let x : T = v`, ADR 0044 / 0081): pin
+                // to the declared type before generalize, so a lit against a
+                // union keeps the union instead of widening to `string`.
+                let (at, _, stA) = typeExprToType(
+                  te,
+                  #{},
+                  st2,
+                  ctx.aliasMap,
+                  Set.fromArray([])
+                ) in
+                  switch ctx->checkFits(t, at, stA, annotSpan(te)) {
+                    | Ok(stB) => Ok((at, stB))
+                    | Err(e) => Err({ err: e, st: stA })
+                  }
+              | None => Ok((t, st2))
+            }
+        }
+    }
+}
+
+// Collect-and-continue per member (ADR 0004 §3): a failed member records its
+// diagnostic, gets no body type (so it keeps its pre-bound mono var), and its
+// siblings still infer. Diagnostics accumulate in source order.
+let inferGroupFrom = (ctx: Ctx<a>, group, st: Types.St, errs: [IErr]) => switch group {
+  | [] => (#{}, st, errs)
+  | [s, ...rest] => switch s {
+      | Ast.SLet(name, nameSpan, annot, value, _, doc, span) => switch ctx->inferMember(name, annot, value, span, st) {
+          | Err(me) => ctx->inferGroupFrom(
+              rest,
+              me.st,
+              Array.append(me.err, errs)
+            )
+          | Ok((pinned, st3)) =>
+            // The name itself, so hover leads with `let x: T` (+ its `///`).
+            // Synthetic destructure temps (`$d…`) are skipped.
+            let stNamed = Str.startsWith("$", name)
+              ? st3
+              : recordBinder(nameSpan, pinned, "let", name, doc, st3) in
+            let (restTypes, st4, errs1) = ctx->inferGroupFrom(
+              rest,
+              stNamed,
+              errs
+            ) in
+              (Map.set(name, pinned, restTypes), st4, errs1)
+        }
+      | _ => ctx->inferGroupFrom(rest, st, errs)
     }
 }
 
@@ -1969,8 +2010,11 @@ let groupNamesFrom = (group, acc) => switch group {
 
 // generalize against the OUTER env — drop the mono self-bindings first, else
 // the group's own type vars look env-bound and stay ungeneralized.
-// Monomorphic recursion within the group, polymorphic use afterwards.
-let generalizeGroupFrom = (group, bodyTypes, env, names, st: Types.St) => switch group {
+// Monomorphic recursion within the group, polymorphic use afterwards. A member
+// that failed to type (no body type) keeps its pre-bound mono var from
+// `preEnv`, ungeneralized, so a later group referencing it sees an
+// unconstrained var rather than an unbound name (ADR 0004 §5).
+let generalizeGroupFrom = (group, bodyTypes, preEnv, env, names, st: Types.St) => switch group {
   | [] => env
   | [s, ...rest] => switch s {
       | Ast.SLet(name, _, annot, _, _, _, _) => switch Map.get(name, bodyTypes) {
@@ -1981,13 +2025,24 @@ let generalizeGroupFrom = (group, bodyTypes, env, names, st: Types.St) => switch
               generalizeGroupFrom(
                 rest,
                 bodyTypes,
+                preEnv,
                 Map.set(name, generalizeOver(env, names, t, st, widen), env),
                 names,
                 st
               )
-          | None => generalizeGroupFrom(rest, bodyTypes, env, names, st)
+          | None => generalizeGroupFrom(
+              rest,
+              bodyTypes,
+              preEnv,
+              switch Map.get(name, preEnv) {
+                | Some(sc) => Map.set(name, sc, env)
+                | None => env
+              },
+              names,
+              st
+            )
         }
-      | _ => generalizeGroupFrom(rest, bodyTypes, env, names, st)
+      | _ => generalizeGroupFrom(rest, bodyTypes, preEnv, env, names, st)
     }
 }
 
@@ -2008,15 +2063,18 @@ let noteGroupLets = (group, letOwner, st: Types.St) => switch group {
 
 // `let`s, grouped into mutually-recursive components (SCCs of the reference
 // graph) and inferred group-by-group in dependency-first order.
-let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St) => switch sccs {
-  | [] => Ok((ctx, st))
+// A failing group does not stop the program: its diagnostics join `errs` and
+// the later groups still infer (ADR 0004 §3).
+let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St, errs: [IErr]) => switch sccs {
+  | [] => (ctx, st, errs)
   | [comp, ...restSccs] => let group = groupOfFrom(comp, lets) in
     let (preEnv, st1) = preBindGroupFrom(group, ctx.env, st) in
     let preCtx = ctx->ctxWithGroup(preEnv, groupNamesFrom(group, [])) in
-    let? (bodyTypes, st2) = preCtx->inferGroupFrom(group, st1) in
+    let (bodyTypes, st2, errs1) = preCtx->inferGroupFrom(group, st1, errs) in
     let finalEnv = generalizeGroupFrom(
       group,
       bodyTypes,
+      preEnv,
       dropGroupFrom(group, preEnv),
       ctx.scopeNames,
       st2
@@ -2025,18 +2083,26 @@ let processGroupsFrom = (ctx: Ctx<a>, sccs, lets, st: Types.St) => switch sccs {
       ctx->ctxWithLets(
         finalEnv,
         finalOwner
-      )->processGroupsFrom(restSccs, lets, st3)
+      )->processGroupsFrom(restSccs, lets, st3, errs1)
 }
 
 // Top-level expression statements after every let is generalized (ADR 0087).
-// Must unify with `()`.
-let inferExprStmtsFrom = (ctx: Ctx<a>, stmts, st: Types.St) => switch stmts {
-  | [] => Ok(st)
+// Must unify with `()`. One diagnostic per failing statement, like the lets.
+let inferExprStmtsFrom = (ctx: Ctx<a>, stmts, st: Types.St, errs: [IErr]) => switch stmts {
+  | [] => (st, errs)
   | [s, ...rest] => switch s {
-      | Ast.SExpr(value, span) => let? (t, st1) = ctx->inferExpr(value, st) in
-        let? st2 = ctx->u(t, tUnit, st1, span) in
-          ctx->inferExprStmtsFrom(rest, st2)
-      | _ => ctx->inferExprStmtsFrom(rest, st)
+      | Ast.SExpr(value, span) => switch ctx->inferExpr(value, st) {
+          | Err(e) => ctx->inferExprStmtsFrom(rest, st, Array.append(e, errs))
+          | Ok((t, st1)) => switch ctx->u(t, tUnit, st1, span) {
+              | Err(e) => ctx->inferExprStmtsFrom(
+                  rest,
+                  st1,
+                  Array.append(e, errs)
+                )
+              | Ok(st2) => ctx->inferExprStmtsFrom(rest, st2, errs)
+            }
+        }
+      | _ => ctx->inferExprStmtsFrom(rest, st, errs)
     }
 }
 
@@ -2232,19 +2298,35 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
   let localNames = localBinderNames(stmts) in
-    switch processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: #{}, localNames, scopeNames: Set.toArray(localNames) }, sccs, lets, st3) {
-      | Ok((finalCtx, st4)) => switch finalCtx->inferExprStmtsFrom(stmts, st4) {
-          | Ok(st5) => Ok(
-              {
-                env: finalCtx.env,
-                types: zonkRecorded(st5),
-                aliases: aliasMap,
-                letParams: resolveLetParams(st5)
-              }
-            )
-          | Err(e) => Err(e)
-        }
-      | Err(e) => Err(e)
+  let (finalCtx, st4, errs) = processGroupsFrom(
+    {
+      env: env4,
+      open: openMode,
+      ns: ns0,
+      aliasMap,
+      plugins,
+      loopStack: [],
+      letOwner: #{},
+      localNames,
+      scopeNames: Set.toArray(localNames)
+    },
+    sccs,
+    lets,
+    st3,
+    noErrs
+  ) in
+  let (st5, errs1) = finalCtx->inferExprStmtsFrom(stmts, st4, errs) in
+    // Every type error in the module, or none (ADR 0004 §3).
+    switch errs1 {
+      | [] => Ok(
+          {
+            env: finalCtx.env,
+            types: zonkRecorded(st5),
+            aliases: aliasMap,
+            letParams: resolveLetParams(st5)
+          }
+        )
+      | _ => Err(errs1)
     }
 
 /// Every record alias a module's own type expressions can name: its

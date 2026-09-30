@@ -30,6 +30,13 @@ export type IErr = {
   help: Option<string>;
   suggestions: Suggestion[];
 };
+/**
+ * A group member that failed to type: its diagnostic, and the state the rest
+ * of the group resumes from. src/infer.ts mutates its substitution in place,
+ * so whatever a member solved before failing stays solved; carrying the
+ * state back is the same thing, done functionally.
+ */
+export type MemberErr = { err: IErr; st: St };
 export type QualAliasField = {
   name: string;
   nameSpan: SpanAt;
@@ -352,6 +359,7 @@ export const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
 
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
+const noErrs: IErr[] = [] as IErr[];
 const annotSpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) =>
   ((_v) =>
     _v._tag === "TyName"
@@ -3209,13 +3217,36 @@ const inferExprRaw: _Curry<
                             ? ((lets: Stmt[]) =>
                                 ((idxOf: Map<string, number>) =>
                                   ((tail: Expr) =>
-                                    _Result_flatMap(
-                                      ([localCtx, localSt]) => inferExpr(localCtx, tail, localSt),
+                                    (([localCtx, localSt, localErrs]: [
+                                      {
+                                        env: Map<string, Scheme>;
+                                        open: boolean;
+                                        ns: Map<string, Map<string, Scheme>>;
+                                        aliasMap: Map<string, QualAliasInfo>;
+                                        plugins: HostPlugin[];
+                                        loopStack: Ty[][];
+                                        letOwner: Map<string, SpanAt>;
+                                        localNames: Set<string>;
+                                        scopeNames: string[];
+                                      },
+                                      St,
+                                      IErr[],
+                                    ]) =>
+                                      ((_v) =>
+                                        _v._tag === "Some"
+                                          ? (({ value: firstErr }) =>
+                                              Err(firstErr) as Result<[Ty, St], IErr>)(_v)
+                                          : _v._tag === "None"
+                                            ? inferExpr(localCtx, tail, localSt)
+                                            : (() => {
+                                                throw new Error("non-exhaustive match");
+                                              })())(_Array_get(0, localErrs)))(
                                       processGroupsFrom(
                                         ctx,
                                         stronglyConnected(adjOf(lets, idxOf)),
                                         lets,
                                         st,
+                                        noErrs,
                                       ),
                                     ))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e))
                             : _Result_flatMap(
@@ -5234,6 +5265,113 @@ const preBindGroupFrom: _Curry<
             throw new Error("non-exhaustive match");
           })())(group),
 );
+
+const inferMember: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    name: string,
+    annot: Option<TypeExpr>,
+    value: Expr,
+    span: SpanAt,
+    st: St,
+  ],
+  Result<[Ty, St], MemberErr>
+> = _curry(
+  6,
+  (
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    name: string,
+    annot: Option<TypeExpr>,
+    value: Expr,
+    span: SpanAt,
+    st: St,
+  ) =>
+    ((_v) =>
+      _v._tag === "Err"
+        ? (({ error: e }) => Err({ err: e, st: st }) as Result<[Ty, St], MemberErr>)(_v)
+        : _v._tag === "Ok"
+          ? (({ value: [t, st1] }) =>
+              ((_v) =>
+                _v._tag === "None"
+                  ? (Err({
+                      err: typeErr(`internal: missing self-binding for '${name}'`, span),
+                      st: st1,
+                    }) as Result<[Ty, St], MemberErr>)
+                  : _v._tag === "Some"
+                    ? (({ value: selfSc }) =>
+                        ((_v) =>
+                          _v._tag === "Err"
+                            ? (({ error: e }) =>
+                                Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>)(_v)
+                            : _v._tag === "Ok"
+                              ? (({ value: st2 }) =>
+                                  ((_v) =>
+                                    _v._tag === "Some"
+                                      ? (({ value: te }) =>
+                                          (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                                            ((_v) =>
+                                              _v._tag === "Ok"
+                                                ? (({ value: stB }) =>
+                                                    Ok(_tuple(at, stB)) as Result<
+                                                      [Ty, St],
+                                                      MemberErr
+                                                    >)(_v)
+                                                : _v._tag === "Err"
+                                                  ? (({ error: e }) =>
+                                                      Err({ err: e, st: stA }) as Result<
+                                                        [Ty, St],
+                                                        MemberErr
+                                                      >)(_v)
+                                                  : (() => {
+                                                      throw new Error("non-exhaustive match");
+                                                    })())(
+                                              checkFits(ctx, t, at, stA, annotSpan(te)),
+                                            ))(
+                                            typeExprToType(
+                                              te,
+                                              new Map<string, Ty>(),
+                                              st2,
+                                              ctx.aliasMap,
+                                              _Set_fromArray([] as string[]),
+                                            ),
+                                          ))(_v)
+                                      : _v._tag === "None"
+                                        ? (Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>)
+                                        : (() => {
+                                            throw new Error("non-exhaustive match");
+                                          })())(annot))(_v)
+                              : (() => {
+                                  throw new Error("non-exhaustive match");
+                                })())(u(ctx, selfSc.ty, t, st1, span)))(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(_Map_get(name, ctx.env)))(
+              _v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>,
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(inferExpr(ctx, value, st)),
+);
 const inferGroupFrom: _Curry<
   [
     ctx: {
@@ -5249,10 +5387,11 @@ const inferGroupFrom: _Curry<
     },
     group: Stmt[],
     st: St,
+    errs: IErr[],
   ],
-  Result<[Map<string, Ty>, St], IErr>
+  [Map<string, Ty>, St, IErr[]]
 > = _curry(
-  3,
+  4,
   (
     ctx: {
       env: Map<string, Scheme>;
@@ -5267,77 +5406,35 @@ const inferGroupFrom: _Curry<
     },
     group: Stmt[],
     st: St,
+    errs: IErr[],
   ) =>
     ((_v) =>
       _v.length === 0
-        ? (Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>)
+        ? _tuple(new Map<string, Ty>(), st, errs)
         : _v.length >= 1
           ? (([s, ...rest]) =>
               ((_v) =>
                 _v._tag === "SLet"
                   ? (({ name, nameSpan, annot, value, doc, span }) =>
-                      _Result_flatMap(
-                        ([t, st1]) =>
-                          ((_v) =>
-                            _v._tag === "Some"
-                              ? (({ value: selfSc }) =>
-                                  _Result_flatMap(
-                                    (st2) =>
-                                      _Result_flatMap(
-                                        ([pinned, st3]) =>
-                                          ((stNamed: St) =>
-                                            _Result_flatMap(
-                                              ([restTypes, st4]) =>
-                                                Ok(
-                                                  _tuple(_Map_set(name, pinned, restTypes), st4),
-                                                ) as Result<[Map<string, Ty>, St], IErr>,
-                                              inferGroupFrom(ctx, rest, stNamed),
-                                            ))(
-                                            _Str_startsWith("$", name)
-                                              ? st3
-                                              : recordBinder(
-                                                  nameSpan,
-                                                  pinned,
-                                                  "let",
-                                                  name,
-                                                  doc,
-                                                  st3,
-                                                ),
-                                          ),
-                                        ((_v) =>
-                                          _v._tag === "Some"
-                                            ? (({ value: te }) =>
-                                                (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
-                                                  _Result_map(
-                                                    (stB: St) => _tuple(at, stB),
-                                                    checkFits(ctx, t, at, stA, annotSpan(te)),
-                                                  ))(
-                                                  typeExprToType(
-                                                    te,
-                                                    new Map<string, Ty>(),
-                                                    st2,
-                                                    ctx.aliasMap,
-                                                    _Set_fromArray([] as string[]),
-                                                  ),
-                                                ))(_v)
-                                            : _v._tag === "None"
-                                              ? (Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(annot),
-                                      ),
-                                    u(ctx, selfSc.ty, t, st1, span),
-                                  ))(_v)
-                              : _v._tag === "None"
-                                ? (Err(
-                                    typeErr(`internal: missing self-binding for '${name}'`, span),
-                                  ) as Result<[Map<string, Ty>, St], IErr>)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(_Map_get(name, ctx.env)),
-                        inferExpr(ctx, value, st),
-                      ))(_v)
-                  : inferGroupFrom(ctx, rest, st))(s))(_v)
+                      ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: me }) =>
+                              inferGroupFrom(ctx, rest, me.st, _Array_append(me.err, errs)))(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: [pinned, st3] }) =>
+                                ((stNamed: St) =>
+                                  (([restTypes, st4, errs1]: [Map<string, Ty>, St, IErr[]]) =>
+                                    _tuple(_Map_set(name, pinned, restTypes), st4, errs1))(
+                                    inferGroupFrom(ctx, rest, stNamed, errs),
+                                  ))(
+                                  _Str_startsWith("$", name)
+                                    ? st3
+                                    : recordBinder(nameSpan, pinned, "let", name, doc, st3),
+                                ))(_v as Extract<Result<[Ty, St], MemberErr>, { _tag: "Ok" }>)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(inferMember(ctx, name, annot, value, span, st)))(_v)
+                  : inferGroupFrom(ctx, rest, st, errs))(s))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(group),
@@ -5375,11 +5472,25 @@ const groupNamesFrom: _Curry<[group: Stmt[], acc: string[]], string[]> = _curry(
             })())(group),
 );
 const generalizeGroupFrom: _Curry<
-  [group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, names: string[], st: St],
+  [
+    group: Stmt[],
+    bodyTypes: Map<string, Ty>,
+    preEnv: Map<string, Scheme>,
+    env: Map<string, Scheme>,
+    names: string[],
+    st: St,
+  ],
   Map<string, Scheme>
 > = _curry(
-  5,
-  (group: Stmt[], bodyTypes: Map<string, Ty>, env: Map<string, Scheme>, names: string[], st: St) =>
+  6,
+  (
+    group: Stmt[],
+    bodyTypes: Map<string, Ty>,
+    preEnv: Map<string, Scheme>,
+    env: Map<string, Scheme>,
+    names: string[],
+    st: St,
+  ) =>
     ((_v) =>
       _v.length === 0
         ? env
@@ -5395,6 +5506,7 @@ const generalizeGroupFrom: _Curry<
                                 generalizeGroupFrom(
                                   rest,
                                   bodyTypes,
+                                  preEnv,
                                   _Map_set(name, generalizeOver(env, names, t, st, widen), env),
                                   names,
                                   st,
@@ -5409,11 +5521,25 @@ const generalizeGroupFrom: _Curry<
                                         })())(annot),
                               ))(_v)
                           : _v._tag === "None"
-                            ? generalizeGroupFrom(rest, bodyTypes, env, names, st)
+                            ? generalizeGroupFrom(
+                                rest,
+                                bodyTypes,
+                                preEnv,
+                                ((_v) =>
+                                  _v._tag === "Some"
+                                    ? (({ value: sc }) => _Map_set(name, sc, env))(_v)
+                                    : _v._tag === "None"
+                                      ? env
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(_Map_get(name, preEnv)),
+                                names,
+                                st,
+                              )
                             : (() => {
                                 throw new Error("non-exhaustive match");
                               })())(_Map_get(name, bodyTypes)))(_v)
-                  : generalizeGroupFrom(rest, bodyTypes, env, names, st))(s))(_v)
+                  : generalizeGroupFrom(rest, bodyTypes, preEnv, env, names, st))(s))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(group),
@@ -5455,26 +5581,25 @@ const processGroupsFrom: _Curry<
     sccs: number[][],
     lets: Stmt[],
     st: St,
+    errs: IErr[],
   ],
-  Result<
-    [
-      {
-        env: Map<string, Scheme>;
-        open: boolean;
-        ns: Map<string, Map<string, Scheme>>;
-        aliasMap: Map<string, QualAliasInfo>;
-        plugins: HostPlugin[];
-        loopStack: Ty[][];
-        letOwner: Map<string, SpanAt>;
-        localNames: Set<string>;
-        scopeNames: string[];
-      },
-      St,
-    ],
-    IErr
-  >
+  [
+    {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, QualAliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    St,
+    IErr[],
+  ]
 > = _curry(
-  4,
+  5,
   (
     ctx: {
       env: Map<string, Scheme>;
@@ -5490,35 +5615,34 @@ const processGroupsFrom: _Curry<
     sccs: number[][],
     lets: Stmt[],
     st: St,
+    errs: IErr[],
   ) =>
     ((_v) =>
       _v.length === 0
-        ? Ok(_tuple(ctx, st))
+        ? _tuple(ctx, st, errs)
         : _v.length >= 1
           ? (([comp, ...restSccs]) =>
               ((group: Stmt[]) =>
                 (([preEnv, st1]: [Map<string, Scheme>, St]) => {
                   const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom(group, [] as string[]));
-                  return _Result_flatMap(
-                    ([bodyTypes, st2]) =>
-                      ((finalEnv: Map<string, Scheme>) =>
-                        (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
-                          processGroupsFrom(
-                            ctxWithLets(ctx, finalEnv, finalOwner),
-                            restSccs,
-                            lets,
-                            st3,
-                          ))(noteGroupLets(group, ctx.letOwner, st2)))(
-                        generalizeGroupFrom(
-                          group,
-                          bodyTypes,
-                          dropGroupFrom(group, preEnv),
-                          ctx.scopeNames,
-                          st2,
-                        ),
-                      ),
-                    inferGroupFrom(preCtx, group, st1),
-                  );
+                  return (([bodyTypes, st2, errs1]: [Map<string, Ty>, St, IErr[]]) => {
+                    const finalEnv: Map<string, Scheme> = generalizeGroupFrom(
+                      group,
+                      bodyTypes,
+                      preEnv,
+                      dropGroupFrom(group, preEnv),
+                      ctx.scopeNames,
+                      st2,
+                    );
+                    return (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
+                      processGroupsFrom(
+                        ctxWithLets(ctx, finalEnv, finalOwner),
+                        restSccs,
+                        lets,
+                        st3,
+                        errs1,
+                      ))(noteGroupLets(group, ctx.letOwner, st2));
+                  })(inferGroupFrom(preCtx, group, st1, errs));
                 })(preBindGroupFrom(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -5539,10 +5663,11 @@ const inferExprStmtsFrom: _Curry<
     },
     stmts: Stmt[],
     st: St,
+    errs: IErr[],
   ],
-  Result<St, IErr>
+  [St, IErr[]]
 > = _curry(
-  3,
+  4,
   (
     ctx: {
       env: Map<string, Scheme>;
@@ -5557,24 +5682,40 @@ const inferExprStmtsFrom: _Curry<
     },
     stmts: Stmt[],
     st: St,
+    errs: IErr[],
   ) =>
     ((_v) =>
       _v.length === 0
-        ? (Ok(st) as Result<St, IErr>)
+        ? _tuple(st, errs)
         : _v.length >= 1
           ? (([s, ...rest]) =>
               ((_v) =>
                 _v._tag === "SExpr"
                   ? (({ value, span }) =>
-                      _Result_flatMap(
-                        ([t, st1]) =>
-                          _Result_flatMap(
-                            (st2) => inferExprStmtsFrom(ctx, rest, st2),
-                            u(ctx, t, tUnit, st1, span),
-                          ),
-                        inferExpr(ctx, value, st),
-                      ))(_v)
-                  : inferExprStmtsFrom(ctx, rest, st))(s))(_v)
+                      ((_v) =>
+                        _v._tag === "Err"
+                          ? (({ error: e }) =>
+                              inferExprStmtsFrom(ctx, rest, st, _Array_append(e, errs)))(_v)
+                          : _v._tag === "Ok"
+                            ? (({ value: [t, st1] }) =>
+                                ((_v) =>
+                                  _v._tag === "Err"
+                                    ? (({ error: e }) =>
+                                        inferExprStmtsFrom(ctx, rest, st1, _Array_append(e, errs)))(
+                                        _v,
+                                      )
+                                    : _v._tag === "Ok"
+                                      ? (({ value: st2 }) =>
+                                          inferExprStmtsFrom(ctx, rest, st2, errs))(_v)
+                                      : (() => {
+                                          throw new Error("non-exhaustive match");
+                                        })())(u(ctx, t, tUnit, st1, span)))(
+                                _v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>,
+                              )
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(inferExpr(ctx, value, st)))(_v)
+                  : inferExprStmtsFrom(ctx, rest, st, errs))(s))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(stmts),
@@ -5983,7 +6124,7 @@ const runInferImports: <A, B, C>(
     aliases: Map<string, QualAliasInfo>;
     letParams: TypeAt[];
   },
-  IErr
+  IErr[]
 > = _curry(
   8,
   <A, B, C>(
@@ -6057,75 +6198,47 @@ const runInferImports: <A, B, C>(
           const idxOf: Map<string, number> = idxOfMap(lets);
           const sccs: number[][] = stronglyConnected(adjOf(lets, idxOf));
           const localNames: Set<string> = localBinderNames(stmts);
-          return ((_v) =>
-            _v._tag === "Ok"
-              ? (({ value: [finalCtx, st4] }) =>
-                  ((_v) =>
-                    _v._tag === "Ok"
-                      ? (({ value: st5 }) =>
-                          Ok({
-                            env: finalCtx.env,
-                            types: zonkRecorded(st5),
-                            aliases: aliasMap,
-                            letParams: resolveLetParams(st5),
-                          }) as Result<
-                            {
-                              env: Map<string, Scheme>;
-                              types: TypeAt[];
-                              aliases: Map<string, QualAliasInfo>;
-                              letParams: TypeAt[];
-                            },
-                            IErr
-                          >)(_v)
-                      : _v._tag === "Err"
-                        ? (({ error: e }) =>
-                            Err(e) as Result<
-                              {
-                                env: Map<string, Scheme>;
-                                types: TypeAt[];
-                                aliases: Map<string, QualAliasInfo>;
-                                letParams: TypeAt[];
-                              },
-                              IErr
-                            >)(_v)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(inferExprStmtsFrom(finalCtx, stmts, st4)))(
-                  _v as Extract<
-                    Result<
-                      [
-                        {
-                          env: Map<string, Scheme>;
-                          open: boolean;
-                          ns: Map<string, Map<string, Scheme>>;
-                          aliasMap: Map<string, QualAliasInfo>;
-                          plugins: HostPlugin[];
-                          loopStack: Ty[][];
-                          letOwner: Map<string, SpanAt>;
-                          localNames: Set<string>;
-                          scopeNames: string[];
-                        },
-                        St,
-                      ],
-                      IErr
-                    >,
-                    { _tag: "Ok" }
-                  >,
-                )
-              : _v._tag === "Err"
-                ? (({ error: e }) =>
-                    Err(e) as Result<
+          return (([finalCtx, st4, errs]: [
+            {
+              env: Map<string, Scheme>;
+              open: boolean;
+              ns: Map<string, Map<string, Scheme>>;
+              aliasMap: Map<string, QualAliasInfo>;
+              plugins: HostPlugin[];
+              loopStack: Ty[][];
+              letOwner: Map<string, SpanAt>;
+              localNames: Set<string>;
+              scopeNames: string[];
+            },
+            St,
+            IErr[],
+          ]) =>
+            (([st5, errs1]: [St, IErr[]]) =>
+              ((_v) =>
+                _v.length === 0
+                  ? (Ok({
+                      env: finalCtx.env,
+                      types: zonkRecorded(st5),
+                      aliases: aliasMap,
+                      letParams: resolveLetParams(st5),
+                    }) as Result<
                       {
                         env: Map<string, Scheme>;
                         types: TypeAt[];
                         aliases: Map<string, QualAliasInfo>;
                         letParams: TypeAt[];
                       },
-                      IErr
-                    >)(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(
+                      IErr[]
+                    >)
+                  : (Err(errs1) as Result<
+                      {
+                        env: Map<string, Scheme>;
+                        types: TypeAt[];
+                        aliases: Map<string, QualAliasInfo>;
+                        letParams: TypeAt[];
+                      },
+                      IErr[]
+                    >))(errs1))(inferExprStmtsFrom(finalCtx, stmts, st4, errs)))(
             processGroupsFrom(
               {
                 env: env4,
@@ -6141,6 +6254,7 @@ const runInferImports: <A, B, C>(
               sccs,
               lets,
               st3,
+              noErrs,
             ),
           );
         })(registerExternsFrom(stmts, aliasMap, env2, st2)))(
@@ -6228,7 +6342,7 @@ export const inferProgramImports: <A, B, C>(
     } & C
   >,
   pluginsOpt: Option<HostPlugin[]>,
-) => Result<Map<string, Scheme>, IErr> = _curry(
+) => Result<Map<string, Scheme>, IErr[]> = _curry(
   8,
   <A, B, C>(
     stmts: Stmt[],
@@ -6276,7 +6390,7 @@ export const inferProgram: _Curry<
     namespaces: Map<string, Map<string, Ty>>,
     openMode: boolean,
   ],
-  Result<Map<string, Scheme>, IErr>
+  Result<Map<string, Scheme>, IErr[]>
 > = _curry(
   4,
   (
@@ -6335,7 +6449,7 @@ export const inferProgramImportsTypes: <A, B, C>(
     aliases: Map<string, QualAliasInfo>;
     letParams: TypeAt[];
   },
-  IErr
+  IErr[]
 > = _curry(
   8,
   <A, B, C>(
@@ -6385,7 +6499,7 @@ export const inferProgramTypes: _Curry<
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
     },
-    IErr
+    IErr[]
   >
 > = _curry(
   4,
@@ -6424,7 +6538,7 @@ export const inferProgramTypesWith: _Curry<
       aliases: Map<string, QualAliasInfo>;
       letParams: TypeAt[];
     },
-    IErr
+    IErr[]
   >
 > = _curry(
   5,
@@ -6454,7 +6568,7 @@ export const inferProgramWith: _Curry<
     openMode: boolean,
     pluginsOpt: Option<HostPlugin[]>,
   ],
-  Result<Map<string, Scheme>, IErr>
+  Result<Map<string, Scheme>, IErr[]>
 > = _curry(
   5,
   (

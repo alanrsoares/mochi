@@ -1,0 +1,12 @@
+[
+  {
+    "message": "cannot unify number with bool",
+    "start": 12,
+    "end": 16
+  },
+  {
+    "message": "cannot unify number with \"x\"",
+    "start": 25,
+    "end": 28
+  }
+]

@@ -8,6 +8,7 @@
       "type-error",
       "non-exhaustive",
       "multiple-check-errors",
+      "multiple-type-errors",
       "runtime",
       "runtime-variant",
       "runtime-tuple-let-union",
@@ -82,6 +83,12 @@
       "kind": "diagnostic",
       "source": "multiple-check-errors.mochi",
       "expect": "multiple-check-errors.expect.json"
+    },
+    {
+      "id": "multiple-type-errors",
+      "kind": "diagnostic",
+      "source": "multiple-type-errors.mochi",
+      "expect": "multiple-type-errors.expect.json"
     },
     {
       "id": "runtime",

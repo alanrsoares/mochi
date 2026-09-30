@@ -124,7 +124,7 @@ let stampType = e =>
 let typecheckWith = (prog, open, plugins: Option<[Infer.HostPlugin]>) =>
   prog->inferProgramWith(builtins, namespaces, open, plugins)
     |> Result.map(_ => prog)
-    |> Result.mapErr(e => [stampType(e)])
+    |> Result.mapErr(es => es |> map(stampType))
 
 // lex -> parse -> check. Parse keeps every recovering diagnostic (source
 // order); `checkAll` collects every independent checker finding. Shared by
@@ -155,7 +155,7 @@ export let typedProgramWith = (src, opts: Opts) =>
       opts.plugins
     )
       |> Result.map(r => (stmts, r))
-      |> Result.mapErr(e => [stampType(e)])
+      |> Result.mapErr(es => es |> map(stampType))
 
 export let typedProgram = src => src->typedProgramWith(defaultOpts)
 
@@ -182,7 +182,7 @@ let typedQuery = (src, stmts, opts: Opts) =>
         aliases: r.aliases,
         letParams: r.letParams
       })
-    |> Result.mapErr(e => [stampType(e)])
+    |> Result.mapErr(es => es |> map(stampType))
 
 /// inferTypes : string -> Result InferResult Err — strict typed-query seam
 /// for host DX. Keeps the recorded span -> type table instead of discarding it.
@@ -270,7 +270,7 @@ export let compileTsWith = (src, runtimeImport, opts: Opts) =>
       opts.plugins
     )
       |> Result.map(r => stmts->emitTsWith(r, runtimeImport, opts))
-      |> Result.mapErr(e => [stampType(e)])
+      |> Result.mapErr(es => es |> map(stampType))
 
 export let compileTs = (src, runtimeImport) =>
   src->compileTsWith(runtimeImport, defaultOpts)

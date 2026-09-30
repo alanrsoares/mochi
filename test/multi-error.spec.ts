@@ -1,12 +1,7 @@
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { inferProgram } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
 import { diagnostics } from "@mochi/dx/diagnostics";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
-
-const prog = (src: string) => unwrapOk(parse(unwrapOk(lex(src))));
+import { isErr, unwrapErr } from "@onrails/result";
 
 test("check collects two independent non-exhaustive switches", () => {
   const src =
@@ -22,13 +17,16 @@ test("check collects two independent non-exhaustive switches", () => {
   expect(diags[1]!.message).toContain("missing A");
 });
 
-// #104: seed diverges — self-hosted infer stops at the first type error, so only one of the two lets is reported
 test("infer collects type errors across two top-level lets", () => {
-  const src = 'let a = add(1, true)\nlet b = mul("x", 2)\n';
-  const r = inferProgram(prog(src));
+  const r = compile('let a = add(1, true)\nlet b = mul("x", 2)\n');
   expect(isErr(r)).toBe(true);
-  expect(unwrapErr(r).length).toBe(2);
-  expect(unwrapErr(r).every((d) => d.kind === "type")).toBe(true);
+  const diags = unwrapErr(r);
+  expect(diags).toHaveLength(2);
+  expect(diags.every((d) => d.kind === "type")).toBe(true);
+  expect(diags.map((d) => d.message)).toEqual([
+    "cannot unify number with bool",
+    'cannot unify number with "x"',
+  ]);
 });
 
 test("infer stays first-error-wins inside one expression", () => {

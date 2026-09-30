@@ -171,13 +171,15 @@ test("bootstrap runtime checks an editor buffer through its graph", async () => 
   expect(await bootstrap.checkGraph("/virtual/main.mochi", "let n = nope", async () => "")).toEqual(
     {
       _tag: "Err",
-      error: {
-        kind: "type",
-        message: "unbound variable 'nope'",
-        path: "/virtual/main.mochi",
-        start: 8,
-        end: 12,
-      },
+      error: [
+        {
+          kind: "type",
+          message: "unbound variable 'nope'",
+          path: "/virtual/main.mochi",
+          start: 8,
+          end: 12,
+        },
+      ],
     },
   );
 });

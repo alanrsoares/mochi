@@ -118,6 +118,13 @@ let atPath = (kind: string, path: string, e) =>
     start: e.start,
     end: e.end
   }
+// The typed-query and TS-emit rails stay single-error at the host API: they
+// report the first of a module's type errors (inference collects them all,
+// ADR 0004 §3). Never empty in practice — inference fails with at least one.
+let firstAtPath = (path, es) => switch Array.get(0, es) {
+  | Some(e) => atPath("type", path, e)
+  | None => { kind: "type", message: "module '${path}': type error", start: 0, end: 0 }
+}
 
 // Lex + parse a source file to statements. No check/infer — both need the whole
 // graph's exports resolved first, which only happens in a later part.
@@ -430,11 +437,11 @@ let openFor = (loaded: Loaded, isEntry, opts: Opts) =>
   isEntry && opts.strictEntry ? opts.open : openMode(loaded.src, opts.open)
 
 let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
-  | Err(e) => Err(atPath("check", loaded.path, e))
+  | Err(e) => Err([atPath("check", loaded.path, e)])
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
-      | Err(e) => Err(atPath("check", loaded.path, e))
+      | Err(e) => Err([atPath("check", loaded.path, e)])
       | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath("type", loaded.path, e))
+          | Err(es) => Err(es |> map(e => atPath("type", loaded.path, e)))
           | Ok(env) => let js = codegenWith(
               loaded.stmts,
               res.keys,
@@ -473,7 +480,8 @@ let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switc
     }
 }
 
-// Compile the whole ordered graph, threading the ctx; first Err short-circuits.
+// Compile the whole ordered graph, threading the ctx; the first failing module
+// short-circuits, with every type error it has.
 let compileAll = (ctx, graph, opts) => switch graph {
   | [] => Ok(ctx.outputs)
   | [m, ...rest] => switch ctx->compileOne(m, false, Array.length(rest) == 0, opts) {
@@ -482,7 +490,7 @@ let compileAll = (ctx, graph, opts) => switch graph {
     }
 }
 
-/// compileGraph : [Loaded] -> Result [ModuleOutput] MErr
+/// compileGraph : [Loaded] -> Result [ModuleOutput] [MErr]
 /// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
 /// multi-param function uncurried, so a partial application is a tsc error.
 export let compileGraphWith = (graph, opts: Opts) =>
@@ -579,19 +587,24 @@ let checkErrorsRecovering = (ctx, loaded: Loaded) =>
 let sameErr = (a: MErr, b: MErr) =>
   a.kind == b.kind && a.message == b.message && a.start == b.start && a.end == b.end
 
-// `e` is the strict rail's FIRST failure, `checks` the recovering rail's
-// independent ones — usually overlapping, since `e` is normally the first of
-// them. Union with a dedupe, so neither side can hide the other: `checks` alone
-// dropped an inference error like an unbound name (no checker error to report
-// it), while `[e]` alone dropped every check error after the first.
-let mergeRecovered = (e: MErr, checks) =>
-  Array.length(Array.filter(c => sameErr(c, e), checks)) > 0
-    ? checks
-    : Array.concat(checks, [e])
+// `es` is the strict rail's failure — its one resolve/check error, or every
+// type error inference collected — and `checks` the recovering rail's
+// independent ones, usually overlapping. Union with a dedupe, so neither side
+// can hide the other: `checks` alone dropped an inference error like an unbound
+// name (no checker error to report it), while `es` alone dropped every check
+// error after the first.
+let mergeRecovered = (es: [MErr], checks) =>
+  Array.concat(
+    checks,
+    Array.filter(
+      e => Array.length(Array.filter(c => sameErr(c, e), checks)) == 0,
+      es
+    )
+  )
 
 let recoverOne = (ctx, m, isEntry, errors, opts) => switch ctx->compileOne(m, true, isEntry, opts) {
-  | Err(e) => let checks = ctx->checkErrorsRecovering(m) in
-      { ctx, errors: Array.concat(errors, mergeRecovered(e, checks)) }
+  | Err(es) => let checks = ctx->checkErrorsRecovering(m) in
+      { ctx, errors: Array.concat(errors, mergeRecovered(es, checks)) }
   | Ok(ctx1) => { ctx: ctx1, errors }
 }
 
@@ -698,7 +711,7 @@ let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loade
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath("type", loaded.path, e))
+          | Err(es) => Err(firstAtPath(loaded.path, es))
           | Ok(r) => Ok(
               {
                 exportsByPath: Map.set(
@@ -820,7 +833,7 @@ export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraphWith
   | Err(e) => Err([e])
   | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
       Array.length(recovered.errors) == 0
-        ? graph->compileGraphWith(opts) |> Result.mapErr(e => [e])
+        ? graph->compileGraphWith(opts)
         : Err(recovered.errors)
 }
 
@@ -1038,7 +1051,7 @@ let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(l
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath("type", loaded.path, e))
+          | Err(es) => Err(firstAtPath(loaded.path, es))
           | Ok(r) => let body = emitTsModuleWith(
               loaded.stmts,
               r.env,
@@ -1168,7 +1181,7 @@ let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
       | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
-          | Err(e) => Err(atPath("type", loaded.path, e))
+          | Err(es) => Err(firstAtPath(loaded.path, es))
           | Ok(r) => Ok(
               {
                 exportsByPath: Map.set(

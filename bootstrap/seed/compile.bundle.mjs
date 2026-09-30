@@ -8017,6 +8017,7 @@ var patSpan3 = (p) => ((_v) => _v._tag === "PWild" ? (({ span: sp }) => sp)(_v) 
   throw new Error("non-exhaustive match");
 })())(p);
 var noSuggestions = [];
+var noErrs = [];
 var annotSpan = (t) => ((_v) => _v._tag === "TyName" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyArrow" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyApp" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyTuple" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyList" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyQual" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyLit" ? (({ span: sp }) => sp)(_v) : _v._tag === "TyUnion" ? (({ span: sp }) => sp)(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(t);
@@ -8205,7 +8206,9 @@ var inferExprRaw = _curry17(3, (ctx, e, st) => ((_v) => _v._tag === "ENum" ? Ok9
   throw new Error("non-exhaustive match");
 })())(closestName(name, _Map_keys6(ctx.env))) : (() => {
   throw new Error("non-exhaustive match");
-})())(_Map_get6(name, ctx.env)))(_v) : _v._tag === "ELambda" ? (({ params, body }) => (([posParams, labParams]) => (([paramTypes, bodyEnv, st1]) => _Result_flatMap7(([annotVars, st2]) => _Result_flatMap7(([labFields, st3]) => ((allTypes) => ((st3Labs) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(arrowChain(allTypes, bodyT), recordNameParamsFrom(posParams, paramTypes, st4))), inferExpr(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3Labs)))(recordLabParamsFrom(labParams, labFields, st3)))(((_v) => _v.length === 0 ? paramTypes : _Array_append12(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams)), labFieldsFrom(ctx, labParams, bodyEnv, annotVars, st2)), constrainParamAnnotsFrom(ctx, posParams, paramTypes, new Map, st1)))(bindParamsFrom(posParams, ctx.env, st)))(splitLamParams(params, [], [])))(_v) : _v._tag === "ELetIn" ? (({ name, nameSpan, annot, value, body, span: _span }) => ((_v) => _v._tag === "ELambda" ? ((lets) => ((idxOf) => ((tail) => _Result_flatMap7(([localCtx, localSt]) => inferExpr(localCtx, tail, localSt), processGroupsFrom(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st)))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e)) : _Result_flatMap7(([valT, st1]) => _Result_flatMap7(([pinned, st2]) => ((widen) => ((sc) => ((vsp) => (($ctx) => inferExpr($ctx, body, noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None16, st2))))(ctxWithLets(ctx, _Map_set6(name, sc, ctx.env), _Map_set6(name, vsp, ctx.letOwner))))(exprSpan3(value)))(generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen)))(((_v) => _v._tag === "Some" ? false : _v._tag === "None" ? true : (() => {
+})())(_Map_get6(name, ctx.env)))(_v) : _v._tag === "ELambda" ? (({ params, body }) => (([posParams, labParams]) => (([paramTypes, bodyEnv, st1]) => _Result_flatMap7(([annotVars, st2]) => _Result_flatMap7(([labFields, st3]) => ((allTypes) => ((st3Labs) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(arrowChain(allTypes, bodyT), recordNameParamsFrom(posParams, paramTypes, st4))), inferExpr(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3Labs)))(recordLabParamsFrom(labParams, labFields, st3)))(((_v) => _v.length === 0 ? paramTypes : _Array_append12(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams)), labFieldsFrom(ctx, labParams, bodyEnv, annotVars, st2)), constrainParamAnnotsFrom(ctx, posParams, paramTypes, new Map, st1)))(bindParamsFrom(posParams, ctx.env, st)))(splitLamParams(params, [], [])))(_v) : _v._tag === "ELetIn" ? (({ name, nameSpan, annot, value, body, span: _span }) => ((_v) => _v._tag === "ELambda" ? ((lets) => ((idxOf) => ((tail) => (([localCtx, localSt, localErrs]) => ((_v) => _v._tag === "Some" ? (({ value: firstErr }) => Err9(firstErr))(_v) : _v._tag === "None" ? inferExpr(localCtx, tail, localSt) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get15(0, localErrs)))(processGroupsFrom(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs)))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e)) : _Result_flatMap7(([valT, st1]) => _Result_flatMap7(([pinned, st2]) => ((widen) => ((sc) => ((vsp) => (($ctx) => inferExpr($ctx, body, noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None16, st2))))(ctxWithLets(ctx, _Map_set6(name, sc, ctx.env), _Map_set6(name, vsp, ctx.letOwner))))(exprSpan3(value)))(generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen)))(((_v) => _v._tag === "Some" ? false : _v._tag === "None" ? true : (() => {
   throw new Error("non-exhaustive match");
 })())(annot)), ((_v) => _v._tag === "Some" ? (({ value: te }) => (([at, _, stA]) => _Result_map6((stB) => _tuple8(at, stB), checkFits(ctx, valT, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st1, ctx.aliasMap, _Set_fromArray5([]))))(_v) : _v._tag === "None" ? Ok9(_tuple8(valT, st1)) : (() => {
   throw new Error("non-exhaustive match");
@@ -8386,11 +8389,20 @@ var groupOfFrom = _curry17(2, (idxs, lets) => ((_v) => _v.length === 0 ? [] : _v
 var preBindGroupFrom = _curry17(3, (group, env, st) => ((_v) => _v.length === 0 ? _tuple8(env, st) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name }) => (([v, st1]) => preBindGroupFrom(rest, _Map_set6(name, mono(v), env), st1))(freshVar(st)))(_v) : preBindGroupFrom(rest, env, st))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(group));
-var inferGroupFrom = _curry17(3, (ctx, group, st) => ((_v) => _v.length === 0 ? Ok9(_tuple8(new Map, st)) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name, nameSpan, annot, value, doc, span }) => _Result_flatMap7(([t, st1]) => ((_v) => _v._tag === "Some" ? (({ value: selfSc }) => _Result_flatMap7((st2) => _Result_flatMap7(([pinned, st3]) => ((stNamed) => _Result_flatMap7(([restTypes, st4]) => Ok9(_tuple8(_Map_set6(name, pinned, restTypes), st4)), inferGroupFrom(ctx, rest, stNamed)))(_Str_startsWith3("$", name) ? st3 : recordBinder(nameSpan, pinned, "let", name, doc, st3)), ((_v) => _v._tag === "Some" ? (({ value: te }) => (([at, _, stA]) => _Result_map6((stB) => _tuple8(at, stB), checkFits(ctx, t, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st2, ctx.aliasMap, _Set_fromArray5([]))))(_v) : _v._tag === "None" ? Ok9(_tuple8(t, st2)) : (() => {
+var inferMember = _curry17(6, (ctx, name, annot, value, span, st) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err9({ err: e, st }))(_v) : _v._tag === "Ok" ? (({ value: [t, st1] }) => ((_v) => _v._tag === "None" ? Err9({ err: typeErr(`internal: missing self-binding for '${name}'`, span), st: st1 }) : _v._tag === "Some" ? (({ value: selfSc }) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err9({ err: e, st: st1 }))(_v) : _v._tag === "Ok" ? (({ value: st2 }) => ((_v) => _v._tag === "Some" ? (({ value: te }) => (([at, _, stA]) => ((_v) => _v._tag === "Ok" ? (({ value: stB }) => Ok9(_tuple8(at, stB)))(_v) : _v._tag === "Err" ? (({ error: e }) => Err9({ err: e, st: stA }))(_v) : (() => {
   throw new Error("non-exhaustive match");
-})())(annot)), u(ctx, selfSc.ty, t, st1, span)))(_v) : _v._tag === "None" ? Err9(typeErr(`internal: missing self-binding for '${name}'`, span)) : (() => {
+})())(checkFits(ctx, t, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st2, ctx.aliasMap, _Set_fromArray5([]))))(_v) : _v._tag === "None" ? Ok9(_tuple8(t, st2)) : (() => {
   throw new Error("non-exhaustive match");
-})())(_Map_get6(name, ctx.env)), inferExpr(ctx, value, st)))(_v) : inferGroupFrom(ctx, rest, st))(s))(_v) : (() => {
+})())(annot))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(u(ctx, selfSc.ty, t, st1, span)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get6(name, ctx.env)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(inferExpr(ctx, value, st)));
+var inferGroupFrom = _curry17(4, (ctx, group, st, errs) => ((_v) => _v.length === 0 ? _tuple8(new Map, st, errs) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name, nameSpan, annot, value, doc, span }) => ((_v) => _v._tag === "Err" ? (({ error: me }) => inferGroupFrom(ctx, rest, me.st, _Array_append12(me.err, errs)))(_v) : _v._tag === "Ok" ? (({ value: [pinned, st3] }) => ((stNamed) => (([restTypes, st4, errs1]) => _tuple8(_Map_set6(name, pinned, restTypes), st4, errs1))(inferGroupFrom(ctx, rest, stNamed, errs)))(_Str_startsWith3("$", name) ? st3 : recordBinder(nameSpan, pinned, "let", name, doc, st3)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(inferMember(ctx, name, annot, value, span, st)))(_v) : inferGroupFrom(ctx, rest, st, errs))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(group));
 var dropGroupFrom = _curry17(2, (group, env) => ((_v) => _v.length === 0 ? env : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name }) => dropGroupFrom(rest, _Map_delete(name, env)))(_v) : dropGroupFrom(rest, env))(s))(_v) : (() => {
@@ -8399,23 +8411,32 @@ var dropGroupFrom = _curry17(2, (group, env) => ((_v) => _v.length === 0 ? env :
 var groupNamesFrom = _curry17(2, (group, acc) => ((_v) => _v.length === 0 ? acc : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name }) => groupNamesFrom(rest, _Array_append12(name, acc)))(_v) : groupNamesFrom(rest, acc))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(group));
-var generalizeGroupFrom = _curry17(5, (group, bodyTypes, env, names, st) => ((_v) => _v.length === 0 ? env : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name, annot }) => ((_v) => _v._tag === "Some" ? (({ value: t }) => ((widen) => generalizeGroupFrom(rest, bodyTypes, _Map_set6(name, generalizeOver(env, names, t, st, widen), env), names, st))(((_v) => _v._tag === "None" ? true : _v._tag === "Some" ? false : (() => {
+var generalizeGroupFrom = _curry17(6, (group, bodyTypes, preEnv, env, names, st) => ((_v) => _v.length === 0 ? env : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" ? (({ name, annot }) => ((_v) => _v._tag === "Some" ? (({ value: t }) => ((widen) => generalizeGroupFrom(rest, bodyTypes, preEnv, _Map_set6(name, generalizeOver(env, names, t, st, widen), env), names, st))(((_v) => _v._tag === "None" ? true : _v._tag === "Some" ? false : (() => {
   throw new Error("non-exhaustive match");
-})())(annot)))(_v) : _v._tag === "None" ? generalizeGroupFrom(rest, bodyTypes, env, names, st) : (() => {
+})())(annot)))(_v) : _v._tag === "None" ? generalizeGroupFrom(rest, bodyTypes, preEnv, ((_v) => _v._tag === "Some" ? (({ value: sc }) => _Map_set6(name, sc, env))(_v) : _v._tag === "None" ? env : (() => {
   throw new Error("non-exhaustive match");
-})())(_Map_get6(name, bodyTypes)))(_v) : generalizeGroupFrom(rest, bodyTypes, env, names, st))(s))(_v) : (() => {
+})())(_Map_get6(name, preEnv)), names, st) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Map_get6(name, bodyTypes)))(_v) : generalizeGroupFrom(rest, bodyTypes, preEnv, env, names, st))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(group));
 var noteGroupLets = _curry17(3, (group, letOwner, st) => ((_v) => _v.length === 0 ? _tuple8(letOwner, st) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SLet" && (({ name, value }) => !_Str_startsWith3("$", name))(_v) ? (({ name, value }) => ((sp) => noteGroupLets(rest, _Map_set6(name, sp, letOwner), noteLet(sp, st)))(exprSpan3(value)))(_v) : noteGroupLets(rest, letOwner, st))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(group));
-var processGroupsFrom = _curry17(4, (ctx, sccs, lets, st) => ((_v) => _v.length === 0 ? Ok9(_tuple8(ctx, st)) : _v.length >= 1 ? (([comp, ...restSccs]) => ((group) => (([preEnv, st1]) => {
+var processGroupsFrom = _curry17(5, (ctx, sccs, lets, st, errs) => ((_v) => _v.length === 0 ? _tuple8(ctx, st, errs) : _v.length >= 1 ? (([comp, ...restSccs]) => ((group) => (([preEnv, st1]) => {
   const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom(group, []));
-  return _Result_flatMap7(([bodyTypes, st2]) => ((finalEnv) => (([finalOwner, st3]) => processGroupsFrom(ctxWithLets(ctx, finalEnv, finalOwner), restSccs, lets, st3))(noteGroupLets(group, ctx.letOwner, st2)))(generalizeGroupFrom(group, bodyTypes, dropGroupFrom(group, preEnv), ctx.scopeNames, st2)), inferGroupFrom(preCtx, group, st1));
+  return (([bodyTypes, st2, errs1]) => {
+    const finalEnv = generalizeGroupFrom(group, bodyTypes, preEnv, dropGroupFrom(group, preEnv), ctx.scopeNames, st2);
+    return (([finalOwner, st3]) => processGroupsFrom(ctxWithLets(ctx, finalEnv, finalOwner), restSccs, lets, st3, errs1))(noteGroupLets(group, ctx.letOwner, st2));
+  })(inferGroupFrom(preCtx, group, st1, errs));
 })(preBindGroupFrom(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(sccs));
-var inferExprStmtsFrom = _curry17(3, (ctx, stmts, st) => ((_v) => _v.length === 0 ? Ok9(st) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SExpr" ? (({ value, span }) => _Result_flatMap7(([t, st1]) => _Result_flatMap7((st2) => inferExprStmtsFrom(ctx, rest, st2), u(ctx, t, tUnit, st1, span)), inferExpr(ctx, value, st)))(_v) : inferExprStmtsFrom(ctx, rest, st))(s))(_v) : (() => {
+var inferExprStmtsFrom = _curry17(4, (ctx, stmts, st, errs) => ((_v) => _v.length === 0 ? _tuple8(st, errs) : _v.length >= 1 ? (([s, ...rest]) => ((_v) => _v._tag === "SExpr" ? (({ value, span }) => ((_v) => _v._tag === "Err" ? (({ error: e }) => inferExprStmtsFrom(ctx, rest, st, _Array_append12(e, errs)))(_v) : _v._tag === "Ok" ? (({ value: [t, st1] }) => ((_v) => _v._tag === "Err" ? (({ error: e }) => inferExprStmtsFrom(ctx, rest, st1, _Array_append12(e, errs)))(_v) : _v._tag === "Ok" ? (({ value: st2 }) => inferExprStmtsFrom(ctx, rest, st2, errs))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(u(ctx, t, tUnit, st1, span)))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(inferExpr(ctx, value, st)))(_v) : inferExprStmtsFrom(ctx, rest, st, errs))(s))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(stmts));
 var seedImportsFrom = _curry17(3, (keys, imports, env) => match8(keys).with((_v) => _v.length === 0, () => env).with((_v) => _v.length >= 1, ([k, ...rest]) => ((_v) => _v._tag === "Some" ? (({ value: sc }) => seedImportsFrom(rest, imports, _Map_set6(k, sc, env)))(_v) : _v._tag === "None" ? seedImportsFrom(rest, imports, env) : (() => {
@@ -8465,11 +8486,7 @@ var runInferImports = _curry17(8, (stmts, builtins, namespaces, openMode, import
     const idxOf = idxOfMap(lets);
     const sccs = stronglyConnected(adjOf(lets, idxOf));
     const localNames = localBinderNames(stmts);
-    return ((_v) => _v._tag === "Ok" ? (({ value: [finalCtx, st4] }) => ((_v) => _v._tag === "Ok" ? (({ value: st5 }) => Ok9({ env: finalCtx.env, types: zonkRecorded(st5), aliases: aliasMap, letParams: resolveLetParams(st5) }))(_v) : _v._tag === "Err" ? (({ error: e }) => Err9(e))(_v) : (() => {
-      throw new Error("non-exhaustive match");
-    })())(inferExprStmtsFrom(finalCtx, stmts, st4)))(_v) : _v._tag === "Err" ? (({ error: e }) => Err9(e))(_v) : (() => {
-      throw new Error("non-exhaustive match");
-    })())(processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: new Map, localNames, scopeNames: _Set_toArray2(localNames) }, sccs, lets, st3));
+    return (([finalCtx, st4, errs]) => (([st5, errs1]) => ((_v) => _v.length === 0 ? Ok9({ env: finalCtx.env, types: zonkRecorded(st5), aliases: aliasMap, letParams: resolveLetParams(st5) }) : Err9(errs1))(errs1))(inferExprStmtsFrom(finalCtx, stmts, st4, errs)))(processGroupsFrom({ env: env4, open: openMode, ns: ns0, aliasMap, plugins, loopStack: [], letOwner: new Map, localNames, scopeNames: _Set_toArray2(localNames) }, sccs, lets, st3, noErrs));
   })(registerExternsFrom(stmts, aliasMap, env2, st2)))(registerBuiltinCtorsFrom(builtinDeclsFor(stmts), aliasMap, env1, st1)))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
 });
 var scopeAliases = _curry17(2, (stmts, quals) => aliasMapFrom(stmts, qualAliasSeed(stmts, quals, new Map)));
@@ -14430,14 +14447,14 @@ var openMode = _curry22(2, (src, requested) => or13(requested, openDirective(src
 var noSuggestions2 = [];
 var stampStage = _curry22(2, (kind, e) => ({ kind, message: e.message, start: e.start, end: e.end, help: None21, suggestions: noSuggestions2 }));
 var stampType = (e) => ({ kind: "type", message: e.message, start: e.start, end: e.end, help: e.help, suggestions: e.suggestions });
-var typecheckWith = _curry22(3, (prog, open, plugins) => _Result_mapErr((e) => [stampType(e)], _Result_map7((_) => prog, inferProgramWith(prog, builtins, namespaces, open, plugins))));
+var typecheckWith = _curry22(3, (prog, open, plugins) => _Result_mapErr((es) => map14(stampType, es), _Result_map7((_) => prog, inferProgramWith(prog, builtins, namespaces, open, plugins))));
 var frontend = _curry22(2, (src, plugins) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err10([stampStage("lex", e)]))(_v) : _v._tag === "Ok" ? (({ value: tokens }) => ((parsed) => ((_v) => _v.length === 0 ? _Result_mapErr((es) => map14((e) => stampStage("check", e), es), checkAll(parsed.stmts)) : ((ds) => Err10(map14((e) => stampStage("parse", e), ds)))(_v))(parsed.diagnostics))(parseRecovering(tokens, plugins)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(lex(src)));
 var pipelineWith = _curry22(3, (src, open, plugins) => _Result_flatMap8((stmts) => typecheckWith(stmts, open, plugins), frontend(src, plugins)));
-var typedProgramWith = _curry22(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => _tuple13(stmts, r), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
+var typedProgramWith = _curry22(2, (src, opts) => _Result_flatMap8((stmts) => _Result_mapErr((es) => map14(stampType, es), _Result_map7((r) => _tuple13(stmts, r), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var typedProgram = (src) => typedProgramWith(src, defaultOpts);
-var typedQuery = _curry22(3, (src, stmts, opts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => ({ env: r.env, types: map14((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)), sym: hit.sym }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))));
+var typedQuery = _curry22(3, (src, stmts, opts) => _Result_mapErr((es) => map14(stampType, es), _Result_map7((r) => ({ env: r.env, types: map14((hit) => ({ span: hit.span, ty: hit.ty, display: showType(widenLits(hit.ty)), sym: hit.sym }), r.types), aliases: r.aliases, letParams: r.letParams }), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))));
 var inferTypesWith = _curry22(2, (src, opts) => _Result_flatMap8((stmts) => typedQuery(src, stmts, opts), frontend(src, opts.plugins)));
 var inferTypesRecoveringWith = _curry22(2, (src, opts) => ((_v) => _v._tag === "Err" ? (({ error: e }) => Err10([stampStage("lex", e)]))(_v) : _v._tag === "Ok" ? (({ value: tokens }) => ((parsed) => _Result_flatMap8((stmts) => typedQuery(src, stmts, opts), _Result_mapErr((es) => map14((e) => stampStage("check", e), es), checkAll(parsed.stmts))))(parseRecovering(tokens, opts.plugins)))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -14450,7 +14467,7 @@ var compileWith = _curry22(2, (src, opts) => _Result_map7((prog) => emitJsWith(p
 var compile = (src) => compileWith(src, defaultOpts);
 var noImportedKeys = new Map;
 var emitTsWith = _curry22(4, (stmts, r, runtimeImport, opts) => emitTsModuleWith(stmts, r.env, r.types, r.letParams, r.aliases, noImportedKeys, [], namespaceRuntime, preludeJsDefs, runtimeDeps, runtimeImport, opts.docs, bindingHooksFor(opts.plugins)));
-var compileTsWith = _curry22(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((e) => [stampType(e)], _Result_map7((r) => emitTsWith(stmts, r, runtimeImport, opts), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
+var compileTsWith = _curry22(3, (src, runtimeImport, opts) => _Result_flatMap8((stmts) => _Result_mapErr((es) => map14(stampType, es), _Result_map7((r) => emitTsWith(stmts, r, runtimeImport, opts), inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins))), frontend(src, opts.plugins)));
 var compileTs = _curry22(2, (src, runtimeImport) => compileTsWith(src, runtimeImport, defaultOpts));
 import { None as None22, _Array_append as _Array_append17, _Array_concat as _Array_concat12, _Array_contains as _Array_contains6, _Array_get as _Array_get20, _Array_prepend as _Array_prepend10, _Map_get as _Map_get11, _Map_getOr as _Map_getOr8, _Map_has as _Map_has7, _Map_keys as _Map_keys11, _Map_set as _Map_set10, _Option_isSome as _Option_isSome6, _Option_unwrapOr as _Option_unwrapOr13, _Result_map as _Result_map8, _Set_add as _Set_add9, _Set_fromArray as _Set_fromArray9, _Set_has as _Set_has8, _Set_toArray as _Set_toArray4, _Str_contains as _Str_contains4, _Str_endsWith as _Str_endsWith3, _Str_join as _Str_join9, _Str_length as _Str_length9, _Str_slice as _Str_slice5, _Str_startsWith as _Str_startsWith9, _curry as _curry23, and as and17, length as length17, map as map15, or as or14 } from "@mochi/compiler/runtime";
 var writtenQualsIn = _curry23(3, (te, local, acc) => ((_v) => _v._tag === "TyName" ? acc : _v._tag === "TyLit" ? acc : _v._tag === "TyArrow" ? (({ from, to }) => writtenQualsIn(to, local, writtenQualsIn(from, local, acc)))(_v) : _v._tag === "TyApp" ? (({ args }) => writtenQualsInAll(args, local, acc, 0))(_v) : _v._tag === "TyTuple" ? (({ elems }) => writtenQualsInAll(elems, local, acc, 0))(_v) : _v._tag === "TyList" ? (({ elem }) => writtenQualsIn(elem, local, acc))(_v) : _v._tag === "TyUnion" ? (({ members }) => writtenQualsInAll(members, local, acc, 0))(_v) : _v._tag === "TyQual" ? (({ alias, name, args }) => ((acc1) => writtenQualsInAll(args, local, acc1, 0))(or14(_Set_has8(name, local), _Map_has7(name, acc)) ? acc : _Map_set10(name, `${alias}.${name}`, acc)))(_v) : (() => {
