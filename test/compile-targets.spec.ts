@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { codegenTs } from "@mochi/compiler/codegen-ts";
-import { compile } from "@mochi/compiler/compile";
-import { compileTargets } from "@mochi/compiler/compile-targets";
-import { emitDts } from "@mochi/compiler/dts";
+import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
+import { compileTsBootstrapSync, emitDtsBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { codegenTs, compile, compileTargets, emitDts } from "@mochi/compiler/compile";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const src = `
@@ -28,5 +27,21 @@ describe("compileTargets", () => {
   test("surfaces diagnostics without partial emit", () => {
     const bad = compileTargets("let x = (\n", { runtime: true });
     expect(isErr(bad)).toBe(true);
+  });
+
+  // #102: the barrel's typed emit is the self-hosted core's, not the TS core's.
+  test("typed TS and .d.ts come from the bootstrap seed", () => {
+    const multi = unwrapOk(compileTargets(src));
+    expect(compileTsBootstrapSync(src, "@mochi/runtime")).toEqual({ _tag: "Ok", value: multi.ts });
+    expect(emitDtsBootstrapSyncWith(src, "@mochi/runtime", defaultBootstrapOptions)).toEqual({
+      _tag: "Ok",
+      value: multi.dts,
+    });
+  });
+
+  test("a type error keeps its kind and span", () => {
+    const bad = codegenTs('let x = 1 + "a"');
+    expect(isErr(bad) && bad.error[0]).toMatchObject({ kind: "type" });
+    expect(isErr(emitDts('let x = 1 + "a"'))).toBe(true);
   });
 });

@@ -1,8 +1,7 @@
 // Gleam-style external bindings: `extern name : type = "module" "export"`.
 import { expect, test } from "bun:test";
 import { check } from "@mochi/compiler/check";
-import { compile } from "@mochi/compiler/compile";
-import { compileTargets } from "@mochi/compiler/compile-targets";
+import { compile, compileTargets } from "@mochi/compiler/compile";
 import { inferProgram, showScheme } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
