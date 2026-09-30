@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
+import type { Stmt } from "@mochi/compiler/bootstrap/types";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
@@ -15,6 +15,13 @@ const evalJs = (src: string, ret: string): unknown => {
   const body = js(src).replace(/^import .*$/m, "");
   return new Function("match", `${body}\nreturn ${ret};`)(match);
 };
+type Lexed = { _tag: "Ok"; value: unknown } | { _tag: "Err"; error: unknown };
+type Parsed = { _tag: "Ok"; value: Stmt[] } | { _tag: "Err"; error: unknown };
+const parseSrc = (src: string): Parsed => {
+  const lexed = lex(src) as Lexed;
+  if (lexed._tag === "Err") throw new Error("lex failed");
+  return parse(lexed.value) as Parsed;
+};
 const errs = (src: string): string[] => {
   const r = compile(src);
   return isErr(r) ? r.error.map((d) => `${d.kind}: ${d.message}`) : [];
@@ -22,15 +29,15 @@ const errs = (src: string): string[] => {
 
 describe("parse", () => {
   it("parses loop params and a first-class recur node", () => {
-    const prog = unwrapOk(parse(unwrapOk(lex("let f = loop (a = 1, b = 2) { recur(a, b) }"))));
-    const stmt = prog.stmts[0]!;
-    if (stmt.kind !== "let" || stmt.value.kind !== "loop") throw new Error("expected loop");
+    const prog = unwrapOk(parseSrc("let f = loop (a = 1, b = 2) { recur(a, b) }"));
+    const stmt = prog[0]!;
+    if (stmt._tag !== "SLet" || stmt.value._tag !== "ELoop") throw new Error("expected loop");
     expect(stmt.value.params.map((p) => p.name)).toEqual(["a", "b"]);
-    expect(stmt.value.body.kind).toBe("recur");
+    expect(stmt.value.body._tag).toBe("ERecur");
   });
 
   it("rejects a param-less loop head", () => {
-    expect(isErr(parse(unwrapOk(lex("let f = loop () { 1 }"))))).toBe(true);
+    expect(isErr(parseSrc("let f = loop () { 1 }"))).toBe(true);
   });
 });
 

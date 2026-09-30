@@ -1,21 +1,11 @@
 // Boolean literals and patterns.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
-import { compileJs } from "@mochi/test-support";
+import { compileJs, typeOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapOk } from "@onrails/result";
+import { isErr } from "@onrails/result";
 
 const js = (src: string) => compileJs(src, { runtime: true });
-
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  return showScheme(unwrapOk(inferProgram(prog, preludeEnv, { open: true })).get(name)!);
-};
 
 const run = (src: string, ret: string): unknown => {
   // runtime off: this harness injects its own `gt`, so keep output prelude-free.
@@ -31,7 +21,7 @@ test("boolean literals compile to JS booleans", () => {
 });
 
 test("a boolean literal has type bool", () => {
-  expect(schemeOf("let t = true", "t")).toBe("bool");
+  expect(typeOf("let t = true", "t")).toBe("bool");
 });
 
 test("switching on both boolean cases is exhaustive without a catch-all", () => {

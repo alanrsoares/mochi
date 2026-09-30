@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
 import { inferProgram } from "@mochi/compiler/infer";
 import { lex } from "@mochi/compiler/lexer";
 import { parse } from "@mochi/compiler/parser";
@@ -14,7 +13,7 @@ test("check collects two independent non-exhaustive switches", () => {
     "type C = | A | B\n" +
     "let f = c => switch c { | A => 1 }\n" +
     "let g = c => switch c { | B => 2 }\n";
-  const r = check(prog(src));
+  const r = compile(src);
   expect(isErr(r)).toBe(true);
   const diags = unwrapErr(r);
   expect(diags).toHaveLength(2);
@@ -23,6 +22,7 @@ test("check collects two independent non-exhaustive switches", () => {
   expect(diags[1]!.message).toContain("missing A");
 });
 
+// #104: seed diverges — self-hosted infer stops at the first type error, so only one of the two lets is reported
 test("infer collects type errors across two top-level lets", () => {
   const src = 'let a = add(1, true)\nlet b = mul("x", 2)\n';
   const r = inferProgram(prog(src));
@@ -33,10 +33,10 @@ test("infer collects type errors across two top-level lets", () => {
 
 test("infer stays first-error-wins inside one expression", () => {
   // One bad call — should not invent follow-on junk from the same tree.
-  const src = "let bad = add(true, add(false, 1))\n";
-  const r = inferProgram(prog(src));
+  const r = compile("let bad = add(true, add(false, 1))\n");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)).toHaveLength(1);
+  expect(unwrapErr(r)[0]!.kind).toBe("type");
 });
 
 test("diagnostics() publishes every check/type finding", () => {

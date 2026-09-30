@@ -4,7 +4,7 @@
 // or the typed runtime (src/runtime.ts) regresses, tsc catches it here.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { codegenTs } from "@mochi/compiler/codegen-ts";
+import { codegenTs } from "@mochi/compiler";
 import { unwrapOk } from "@onrails/result";
 
 const DIR = new URL("./.tsgen/", import.meta.url).pathname;

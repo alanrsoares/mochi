@@ -1,9 +1,9 @@
 // Haskell-style operator sections: `(x op)` (left, missing right operand) and
 // `(op x)` (right, missing left operand) desugar to a one-param lambda calling
 // the same prelude builtin every infix operator already lowers to (see
-// `sectionLeft`/`tryParseRightSection` in `parser.ts`) — no new AST node.
+// the section parse in `bootstrap/parser.mochi`) — no new AST node.
 import { expect, test } from "bun:test";
-import { codegenTs } from "@mochi/compiler/codegen-ts";
+import { codegenTs } from "@mochi/compiler";
 import { compileJs } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 

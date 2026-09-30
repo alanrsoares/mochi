@@ -2,8 +2,7 @@
 
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import { compileJs } from "@mochi/test-support";
 import { formatSrc as fmt } from "@mochi/test-support/format";
 import { isErr, isOk, unwrapErr, unwrapOk } from "@onrails/result";
@@ -26,8 +25,9 @@ test("a non-unit expression statement is a type error", () => {
 });
 
 test("optional trailing semicolon is consumed", () => {
-  const prog = unwrapOk(parse(unwrapOk(lex("ignore(1); ignore(2)"))));
-  expect(prog.stmts.map((s) => s.kind)).toEqual(["expr", "expr"]);
+  const prog = unwrapOk(parseProgram("ignore(1); ignore(2)"));
+  expect(prog.diagnostics).toEqual([]);
+  expect(prog.stmts.map((s) => s._tag)).toEqual(["SExpr", "SExpr"]);
 });
 
 test("a do-block whose last expr is unit is a legal statement", () => {

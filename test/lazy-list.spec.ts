@@ -3,15 +3,9 @@
 // destructuring is the canonical `@{}` + `@{head, ...tail}` pair, lowered to an
 // iterator-stepping IIFE (not @onrails/pattern — a sequence has no length).
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { emitDts } from "@mochi/compiler/dts";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
+import { compile, emitDts } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
-import { compileAndEval, compileJs } from "@mochi/test-support";
+import { compileAndEval, compileJs, typeOf } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 // Compile standalone (prelude inlined) and evaluate a binding. `match` is
@@ -19,12 +13,6 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
 
 const js = (src: string) => compileJs(src);
-
-const typeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  const env = unwrapOk(inferProgram(prog, preludeEnv, { open: true }));
-  return showScheme(env.get(name)!);
-};
 
 // ---- literals + interop ----------------------------------------------------
 

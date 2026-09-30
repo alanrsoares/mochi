@@ -2,34 +2,29 @@
 // (distinct arities never unify), `switch` destructure + narrowing, codegen to
 // JS arrays, extern tuple signatures, and formatter round-trip.
 import { expect, test } from "bun:test";
-import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { type Type, tArrow, tNumber } from "@mochi/compiler/types";
+import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
+import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
 import { format } from "@mochi/dx/format";
-import { compileJs } from "@mochi/test-support";
+import { compileJs, typeOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapOk } from "@onrails/result";
+import { unwrapOk } from "@onrails/result";
 
-const numOps: Record<string, Type> = { add: tArrow(tNumber, tArrow(tNumber, tNumber)) };
-const infer = (src: string, builtins: Record<string, Type> = numOps) =>
-  inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), builtins);
-const typeOf = (env: Env, name: string): string => showScheme(env.get(name)!);
+const inferFails = (src: string): boolean =>
+  inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: true })._tag === "Err";
 const run = (src: string): unknown => {
   const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `${js}\nreturn r;`)(match);
 };
 
 test("a tuple literal infers a heterogeneous product type", () => {
-  const env = unwrapOk(infer('let t = (1, "a", true)'));
-  expect(typeOf(env, "t")).toBe("(number, string, bool)");
+  expect(typeOf('let t = (1, "a", true)', "t")).toBe("(number, string, bool)");
 });
 
 test("tuples of different arity are distinct types (never unify)", () => {
   // A switch arm returning a 2-tuple in one branch and a 3-tuple in another
   // must fail to unify the result type.
   const bad = "let f = p => switch p { | 0 => (1, 2) | _ => (1, 2, 3) }";
-  expect(isErr(infer(bad))).toBe(true);
+  expect(inferFails(bad)).toBe(true);
 });
 
 test("switch destructures a tuple (single catch-all arm)", () => {
@@ -47,8 +42,7 @@ test("a tuple compiles to a JS array and round-trips through swap", () => {
 });
 
 test("swap is inferred polymorphic: (a, b) -> (b, a)", () => {
-  const env = unwrapOk(infer("let swap = p => switch p { | (a, b) => (b, a) }", {}));
-  const t = typeOf(env, "swap");
+  const t = typeOf("let swap = p => switch p { | (a, b) => (b, a) }", "swap");
   const m = t.match(/^\('t(\d+), 't(\d+)\) -> \('t(\d+), 't(\d+)\)$/);
   expect(m).not.toBeNull();
   const [, a, b, c, d] = m!;
@@ -57,7 +51,7 @@ test("swap is inferred polymorphic: (a, b) -> (b, a)", () => {
 
 test("tuple types work in an extern signature", () => {
   const src = 'extern fst : (a, b) -> a = "./m" "fst"\nlet x = fst((1, "y"))';
-  expect(typeOf(unwrapOk(infer(src, {})), "x")).toBe("number");
+  expect(typeOf(src, "x")).toBe("number");
 });
 
 test("round-trips through the formatter", () => {

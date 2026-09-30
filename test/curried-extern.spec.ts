@@ -2,10 +2,15 @@
 // usage — `a -> b -> c` is one type, and parentheses in it are only grouping.
 // How the host itself is shaped is a property of the JS artifact, so it lives in
 // the calling-convention slot alongside `send`/`new`/`global` (ADR 0059).
-import { expect, test } from "bun:test";
-import { basename } from "node:path";
+import { afterAll, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { compile } from "@mochi/compiler";
-import { buildModulesTs } from "@mochi/compiler/module";
+import {
+  buildModulesTsBootstrapWith,
+  defaultBootstrapOptions,
+} from "@mochi/compiler/bootstrap/module";
 import { format } from "@mochi/dx/format";
 import { compileAndEval, compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
@@ -74,16 +79,17 @@ test("`curried` does not combine with a JS convention", () => {
   expect(res.error[0]?.message).toContain("'curried' applies to a module extern");
 });
 
-test("a curried host's .d.ts declares the host's own nested shape", async () => {
-  const files: Record<string, string> = {
-    "/p/main.mochi": `${CURRIED}extern tag : string -> string -> string = "./m" "tag"\nlet a = add(1, 2)\nlet b = tag("x", "y")\n`,
-  };
-  const built = await buildModulesTs("/p/main.mochi", async (p: string) => {
-    const src = files[p];
-    if (src === undefined) throw new Error(`no such file ${p}`);
-    return src;
-  });
-  if (isErr(built)) throw new Error(built.error[0]!.message);
+const dir = mkdtempSync(join(tmpdir(), "mochi-curried-extern-"));
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+test("a curried host's .d.ts declares the host's own nested shape", () => {
+  const entry = join(dir, "main.mochi");
+  writeFileSync(
+    entry,
+    `${CURRIED}extern tag : string -> string -> string = "./m" "tag"\nlet a = add(1, 2)\nlet b = tag("x", "y")\n`,
+  );
+  const built = buildModulesTsBootstrapWith(entry, "@mochi/runtime", defaultBootstrapOptions);
+  if (built._tag === "Err") throw new Error(built.error[0]!.message);
   const dts = built.value.find((o) => basename(o.path) === "m.d.ts");
   expect(dts).toBeDefined();
   // The sidecar describes the HOST: one argument per call, no partial-application

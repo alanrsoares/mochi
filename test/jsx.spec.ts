@@ -1,100 +1,102 @@
 import { describe, expect, it } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import { isErr, unwrapOk } from "@onrails/result";
+
+type ParsedLet = { _tag: string; name?: string; value?: unknown };
+
+/** The single `let` a one-statement program parses to, in the bootstrap AST. */
+const parseLet = (code: string): ParsedLet => {
+  const prog = unwrapOk(parseProgram(code));
+  expect(prog.diagnostics).toEqual([]);
+  expect(prog.stmts.length).toBe(1);
+  return prog.stmts[0] as ParsedLet;
+};
 
 describe("JSX syntax desugaring (ADR 0007)", () => {
   it("parses basic HTML tag into h(...) call", () => {
-    const code = `let el = <div className="card">{"hello"}</div>`;
-    const tokens = unwrapOk(lex(code));
-    const prog = unwrapOk(parse(tokens));
-    expect(prog.stmts.length).toBe(1);
-    const stmt = prog.stmts[0]!;
-    expect(stmt.kind).toBe("let");
-    if (stmt.kind === "let") {
-      expect(stmt.name).toBe("el");
-      expect(stmt.value.kind).toBe("call");
-      if (stmt.value.kind === "call") {
-        expect(stmt.value.fn).toEqual({ kind: "ref", name: "h", span: expect.anything() });
-        expect(stmt.value.args.length).toBe(3);
+    const stmt = parseLet(`let el = <div className="card">{"hello"}</div>`);
+    expect(stmt).toMatchObject({
+      _tag: "SLet",
+      name: "el",
+      value: {
+        _tag: "ECall",
+        fn: { _tag: "ERef", name: "h" },
         // Sugar provenance (ADR 0011 §5) — set once by the parser, not sniffed later.
-        expect(stmt.value.origin).toBe("jsx");
-        // Arg 0: tag "div"
-        expect(stmt.value.args[0]).toEqual({ kind: "str", value: "div", span: expect.anything() });
-        // Arg 1: props record { className: "card" }
-        expect(stmt.value.args[1]?.kind).toBe("record");
-        // Arg 2: children array ["hello"]
-        expect(stmt.value.args[2]?.kind).toBe("arr");
-      }
-    }
+        origin: { _tag: "Some", value: "jsx" },
+        args: [
+          // Arg 0: tag "div"
+          { _tag: "EStr", value: "div" },
+          // Arg 1: props record { className: "card" }
+          {
+            _tag: "ERecord",
+            fields: [{ name: "className", value: { _tag: "EStr", value: "card" } }],
+          },
+          // Arg 2: children array ["hello"]
+          { _tag: "EArr", elements: [{ _tag: "SEExpr", expr: { _tag: "EStr", value: "hello" } }] },
+        ],
+      },
+    });
   });
 
   it("does not mark a hand-written h(...) call with JSX provenance", () => {
-    const code = `let el = h("div", { className: "card" }, ["hello"])`;
-    const tokens = unwrapOk(lex(code));
-    const prog = unwrapOk(parse(tokens));
-    const stmt = prog.stmts[0]!;
-    if (stmt.kind === "let" && stmt.value.kind === "call") {
-      expect(stmt.value.origin).toBeUndefined();
-    }
+    const stmt = parseLet(`let el = h("div", { className: "card" }, ["hello"])`);
+    expect(stmt).toMatchObject({
+      _tag: "SLet",
+      value: { _tag: "ECall", origin: { _tag: "None" } },
+    });
   });
 
   it("parses self-closing component tag into h(Component, props, []) call", () => {
-    const code = `let el = <Card title="Mochi" count={42} disabled />`;
-    const tokens = unwrapOk(lex(code));
-    const prog = unwrapOk(parse(tokens));
-    const stmt = prog.stmts[0]!;
-    if (stmt.kind === "let" && stmt.value.kind === "call") {
-      // Arg 0: Component reference Card
-      expect(stmt.value.args[0]).toEqual({ kind: "ref", name: "Card", span: expect.anything() });
-      // Arg 1: props record
-      if (stmt.value.args[1]?.kind === "record") {
-        const fields = stmt.value.args[1].fields;
-        expect(fields.map((f) => f.name)).toEqual(["title", "count", "disabled"]);
-        expect(fields[0]?.value).toEqual({ kind: "str", value: "Mochi", span: expect.anything() });
-        expect(fields[1]?.value).toEqual({
-          kind: "num",
-          value: 42,
-          raw: "42",
-          span: expect.anything(),
-        });
-        expect(fields[2]?.value).toEqual({ kind: "bool", value: true, span: expect.anything() });
-      }
-      // Arg 2: empty children
-      expect(stmt.value.args[2]).toEqual({ kind: "arr", elements: [], span: expect.anything() });
-    }
+    const stmt = parseLet(`let el = <Card title="Mochi" count={42} disabled />`);
+    expect(stmt).toMatchObject({
+      value: {
+        _tag: "ECall",
+        args: [
+          // Arg 0: Component reference Card
+          { _tag: "ERef", name: "Card" },
+          // Arg 1: props record
+          {
+            _tag: "ERecord",
+            fields: [
+              { name: "title", value: { _tag: "EStr", value: "Mochi" } },
+              { name: "count", value: { _tag: "ENum", value: 42, raw: "42" } },
+              { name: "disabled", value: { _tag: "EBool", value: true } },
+            ],
+          },
+          // Arg 2: empty children
+          { _tag: "EArr", elements: [] },
+        ],
+      },
+    });
   });
 
   it("parses fragment syntax <>...</> into Fragment call", () => {
-    const code = `let el = <><span>{"1"}</span><span>{"2"}</span></>`;
-    const tokens = unwrapOk(lex(code));
-    const prog = unwrapOk(parse(tokens));
-    const stmt = prog.stmts[0]!;
-    if (stmt.kind === "let" && stmt.value.kind === "call") {
-      expect(stmt.value.args[0]).toEqual({
-        kind: "str",
-        value: "Fragment",
-        span: expect.anything(),
-      });
-      if (stmt.value.args[2]?.kind === "arr") {
-        expect(stmt.value.args[2].elements.length).toBe(2);
-      }
-    }
+    const stmt = parseLet(`let el = <><span>{"1"}</span><span>{"2"}</span></>`);
+    expect(stmt).toMatchObject({
+      value: {
+        _tag: "ECall",
+        args: [
+          { _tag: "EStr", value: "Fragment" },
+          { _tag: "ERecord" },
+          { _tag: "EArr", elements: [{ _tag: "SEExpr" }, { _tag: "SEExpr" }] },
+        ],
+      },
+    });
   });
 
   it("supports array spreads in children", () => {
-    const code = `let el = <ul className="list">{...items}</ul>`;
-    const tokens = unwrapOk(lex(code));
-    const prog = unwrapOk(parse(tokens));
-    const stmt = prog.stmts[0]!;
-    if (stmt.kind === "let" && stmt.value.kind === "call" && stmt.value.args[2]?.kind === "arr") {
-      const elems = stmt.value.args[2].elements;
-      expect(elems[0]).toEqual({
-        kind: "spread",
-        expr: { kind: "ref", name: "items", span: expect.anything() },
-      });
-    }
+    const stmt = parseLet(`let el = <ul className="list">{...items}</ul>`);
+    expect(stmt).toMatchObject({
+      value: {
+        _tag: "ECall",
+        args: [
+          { _tag: "EStr", value: "ul" },
+          { _tag: "ERecord" },
+          { _tag: "EArr", elements: [{ _tag: "SESpread", expr: { _tag: "ERef", name: "items" } }] },
+        ],
+      },
+    });
   });
 
   it("compiles and evaluates Mochi code with JSX against custom h builder", () => {

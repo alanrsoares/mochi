@@ -1,22 +1,23 @@
 import { expect, test } from "bun:test";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
+import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
 import { hoverAt } from "@mochi/dx/hover";
-import { isOk } from "@onrails/result";
+
+type Front<A> = BootstrapResult<A, BootstrapDiagnostic>;
 
 const src = `/// A successful or failed computation.
 export type Result<A, E> = | Ok(A) | Err(E)`;
 
 test("a doc comment attaches to an exported type declaration", () => {
-  const tokens = lex(src);
-  expect(isOk(tokens)).toBe(true);
-  if (!isOk(tokens)) return;
-  const program = parse(tokens.value);
-  expect(isOk(program)).toBe(true);
-  if (!isOk(program)) return;
-  expect(program.value.stmts[0]).toMatchObject({
-    kind: "type",
-    doc: "A successful or failed computation.",
+  const tokens = lex(src) as Front<unknown>;
+  expect(tokens._tag).toBe("Ok");
+  if (tokens._tag !== "Ok") return;
+  const program = parse(tokens.value) as Front<unknown[]>;
+  expect(program._tag).toBe("Ok");
+  if (program._tag !== "Ok") return;
+  expect(program.value[0]).toMatchObject({
+    _tag: "SType",
+    doc: { _tag: "Some", value: "A successful or failed computation." },
   });
 });
 
