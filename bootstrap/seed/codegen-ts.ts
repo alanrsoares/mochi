@@ -1457,11 +1457,23 @@ export const withoutOwnShape: <A, B>(
             })())(_Array_get(0, params)),
 );
 const typeHeaderFrom: _Curry<
-  [stmts: Stmt[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number],
+  [
+    stmts: Stmt[],
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    docs: boolean,
+    i: number,
+  ],
   string[]
 > = _curry(
-  4,
-  (stmts: Stmt[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
+  5,
+  (
+    stmts: Stmt[],
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    docs: boolean,
+    i: number,
+  ) =>
     ((_v) =>
       _v._tag === "None"
         ? ([] as string[])
@@ -1500,13 +1512,15 @@ ${docComment}type ${name} = { readonly [${name}]: never };`,
                                   })())(aliasType)
                         : (() => {
                             throw new Error("non-exhaustive match");
-                          })())(alias))(jsDoc(doc)))(typeHeaderFrom(stmts, aliases, recs, i + 1)))(
+                          })())(alias))(docs ? jsDoc(doc) : ""))(
+                typeHeaderFrom(stmts, aliases, recs, docs, i + 1),
+              ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                 value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
               },
             )
           : _v._tag === "Some"
-            ? typeHeaderFrom(stmts, aliases, recs, i + 1)
+            ? typeHeaderFrom(stmts, aliases, recs, docs, i + 1)
             : (() => {
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts)),
@@ -2204,7 +2218,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
       aliases,
       nullaryLocalNames(stmts, 0, _Set_fromArray([] as string[])),
     );
-    const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, 0);
+    const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, docs, 0);
     const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {
       ...tsGenOpts(stmts, env, types, letParams, aliases, bindingHooks),
       docs: docs,
@@ -2452,18 +2466,21 @@ const curriedHostType: _Curry<[t: Ty, arity: number], string> = _curry(
  * An UNCURRIED function host gets the same overloaded signature a runtime
  * builtin does, so both `f(a)(b)` and `f(a, b)` call sites resolve (ADR 0037).
  */
-const flatHostType: _Curry<[t: Ty, arity: number], string> = _curry(2, (t: Ty, arity: number) => {
-  const ids: number[] = freeIdsIn(t, [] as number[]);
-  const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
-  const head: string = genericHeadOf(ids, names);
-  return arity === 0
-    ? `${head}${tsOf(t, plainEnv(names))}`
-    : curriedOverloads(
-        head,
-        hostParams(t, arity, names, 0),
-        tsOf(hostReturn(t, arity, 0), plainEnv(names)),
-      );
-});
+export const flatHostType: _Curry<[t: Ty, arity: number], string> = _curry(
+  2,
+  (t: Ty, arity: number) => {
+    const ids: number[] = freeIdsIn(t, [] as number[]);
+    const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
+    const head: string = genericHeadOf(ids, names);
+    return arity === 0
+      ? `${head}${tsOf(t, plainEnv(names))}`
+      : curriedOverloads(
+          head,
+          hostParams(t, arity, names, 0),
+          tsOf(hostReturn(t, arity, 0), plainEnv(names)),
+        );
+  },
+);
 /**
  * One `export declare const` for a host binding. `e` is
  * `{ imported, scheme, curried }` — `imported` is the JS export name the

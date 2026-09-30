@@ -1,0 +1,22 @@
+export type Result<A, B> =
+  | { _tag: "Ok"; value: A }
+  | { _tag: "Err"; error: B };
+/**
+ * A positional variant.
+ */
+export type Reply<A, B> =
+  | { _tag: "Value"; _0: A }
+  | { _tag: "Failure"; _0: B };
+export type Color =
+  | { _tag: "Red" }
+  | { _tag: "Green" };
+export declare const answer: number;
+export declare const one: () => number;
+export declare const nothing: undefined;
+export declare const drop: <A>(x: A) => undefined;
+export declare const hs: ((a: unknown) => unknown)[];
+export declare const tasks: (() => Promise<Result<number, string>>)[];
+export declare const fmap: <A, B, C>(f: (a: A) => B) => (r: Reply<A, C>) => Reply<B, C>;
+export declare const p: { x: number; y: number };
+export declare const x: number;
+export declare const y: number;

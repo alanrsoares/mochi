@@ -2,6 +2,19 @@ import { assertEq, ok, test, testEach } from "@mochi/test"
 import { codegen, codegenWith, jsGenOpts } from "./codegen.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
+import { SError } from "./ast.mochi"
+
+test("an error node emits an explicit codegen invariant failure", () =>
+  codegen(
+    [SError({ start: 0, end: 3 })],
+    #{},
+    true,
+    namespaceRuntime,
+    preludeJsDefs,
+    runtimeDeps
+  )
+    |> Str.contains("codegen invariant")
+    |> ok)
 
 extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"

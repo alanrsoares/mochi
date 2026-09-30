@@ -1,12 +1,6 @@
-// The SELF-HOSTED half of the ADR 0090 north star: how many `tsc --strict`
-// errors the `bootstrap/` graph emits when the emitter is `bootstrap/`'s own
-// `buildModulesTs` from the executable bootstrap seed rather than the
-// TypeScript oracle's.
-//
-// `scripts/bootstrap-tsc.ts` measures the same graph through
-// `@mochi/compiler/module` and holds at 0. This script measures the emitted
-// stage-1 candidate: Mochi compiling Mochi to typed TS. The gap between the two
-// numbers is exactly the remaining self-hosting work on the TS backend.
+// ADR 0090 north star: the self-hosted compiler emits its entire graph as
+// TypeScript with zero `tsc --strict` errors. This is the sole TS-emission
+// ratchet after retiring the hand-authored TS oracle (ADR 0130).
 //
 //   bun scripts/bootstrap-self-tsc.ts            # human summary (by code, by file, total)
 //   bun scripts/bootstrap-self-tsc.ts --json     # machine-readable report

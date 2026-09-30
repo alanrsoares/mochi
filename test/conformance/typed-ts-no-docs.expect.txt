@@ -1,0 +1,14 @@
+export type Point = { x: number };
+export type Choice =
+  | { _tag: "Left"; _0: number }
+  | { _tag: "Right" };
+export type Count = "few" | "many";
+declare const Handle: unique symbol;
+type Handle = { readonly [Handle]: never };
+
+
+
+
+
+const answer = 42;
+

@@ -1,0 +1,19 @@
+/// A positional variant.
+type Reply<a, e> =
+  | Value(a)
+  | Failure(e)
+type Color =
+  | Red
+  | Green
+extern id : a -> a = "node:module" "id"
+extern task : Task<number, string> = "node:module" "task"
+let answer = 42
+let one = () => 1
+let nothing = ()
+let drop = x => ignore(x)
+let hs = [id]
+let tasks = [task]
+let fmap = f =>
+  r => switch r { | Value(v) => Value(f(v)) | Failure(e) => Failure(e) }
+let p = { x: 1, y: 2 }
+let { x, y } = p

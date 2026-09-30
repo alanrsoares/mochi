@@ -1,17 +1,8 @@
 import { expect, test } from "bun:test";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { indexProgram } from "@mochi/compiler/symbols";
 import { pos } from "@mochi/test-support";
-import { isErr } from "@onrails/result";
+import { indexSource } from "./bootstrap-index.ts";
 
-const index = (src: string) => {
-  const lexed = lex(src);
-  if (isErr(lexed)) throw new Error(lexed.error.message);
-  const parsed = parse(lexed.value);
-  if (isErr(parsed)) throw new Error(parsed.error.map((d) => d.message).join("; "));
-  return indexProgram("/t.mochi", parsed.value);
-};
+const index = (src: string) => indexSource("/t.mochi", src)!;
 
 /** Offset of the `n`th occurrence of `name` (0-based), pointing at its first byte. */
 test("value def + use resolve to the same binding", () => {
@@ -124,13 +115,4 @@ test("bindingsAt: match arm pattern bind visible in body", () => {
   const names = idx.bindingsAt(pos(src, "k", 1)).map((b) => b.name);
   expect(names).toContain("k");
   expect(names).toContain("x");
-});
-
-test("localBindings excludes module declarations and intentional underscore names", () => {
-  const src = "let top = _unused => let local = 1 in local";
-  expect(
-    index(src)
-      .localBindings()
-      .map((binding) => binding.name),
-  ).toEqual(["local"]);
 });

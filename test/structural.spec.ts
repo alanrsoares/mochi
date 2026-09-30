@@ -4,23 +4,10 @@
 // Array ops and the -By family (explicit projection = dictionary-passing by hand).
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv, preludeNamespaces } from "@mochi/compiler/prelude";
-import { compileAndEval } from "@mochi/test-support";
+import { compileAndEval, schemeOf } from "@mochi/test-support";
 import { unwrapOk } from "@onrails/result";
 
 const run = (src: string, ret: string): unknown => compileAndEval(src, ret);
-
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  const env = unwrapOk(
-    inferProgram(prog, preludeEnv, { open: true, namespaces: preludeNamespaces }),
-  );
-  return showScheme(env.get(name)!);
-};
 
 const UNWRAP = "let unwrap = o => switch o {\n | Some(v) => v\n | None => 0\n}\n";
 

@@ -52,7 +52,7 @@ type Case =
   | DtsCase
   | FormatCase;
 /** `plugins` names entries of `conformancePlugins`; the case compiles under them. */
-type ManifestCase = Case & { plugins?: string[] };
+type ManifestCase = Case & { plugins?: string[]; docs?: boolean };
 /**
  * `pending` cases pin behaviour the bootstrap compiler does not have yet. Their
  * expectations come from the accepted pre-deletion compiler, reviewed like any
@@ -83,10 +83,11 @@ const conformancePlugins: Record<string, BootstrapPlugin> = {
 };
 
 const optionsFor = (test: ManifestCase): BootstrapOptions | string => {
-  if (test.plugins === undefined) return baseOptions;
+  const opts = { ...baseOptions, docs: test.docs ?? baseOptions.docs };
+  if (test.plugins === undefined) return opts;
   const missing = test.plugins.filter((name) => !(name in conformancePlugins));
   if (missing.length > 0) return `no bootstrap plugin ${missing.map((n) => `'${n}'`).join(", ")}`;
-  return { ...baseOptions, plugins: test.plugins.map((name) => conformancePlugins[name]!) };
+  return { ...opts, plugins: test.plugins.map((name) => conformancePlugins[name]!) };
 };
 const fixtureRoot = resolve(import.meta.dir, "../test/conformance");
 const candidateRoot = join(fixtureRoot, ".candidate");

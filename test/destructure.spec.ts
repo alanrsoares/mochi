@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import { preludeJs } from "@mochi/compiler/prelude";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
@@ -12,12 +11,12 @@ const run = (src: string): unknown => {
 };
 
 test("record destructuring desugars to a temp + one field-access let per name", () => {
-  const prog = unwrapOk(parse(unwrapOk(lex("let { x, y } = p"))));
-  expect(prog.stmts.map((s) => s.kind)).toEqual(["let", "let", "let"]);
+  const prog = unwrapOk(parseProgram("let { x, y } = p"));
+  expect(prog.stmts.map((s) => s._tag)).toEqual(["SLet", "SLet", "SLet"]);
   const [tmp, bx, by] = prog.stmts;
-  expect(tmp!.kind === "let" && tmp!.name.startsWith("$")).toBe(true);
-  expect(bx!.kind === "let" && bx!.name).toBe("x");
-  expect(by!.kind === "let" && by!.name).toBe("y");
+  expect(tmp!._tag === "SLet" && tmp!.name.startsWith("$")).toBe(true);
+  expect(bx!._tag === "SLet" && bx!.name).toBe("x");
+  expect(by!._tag === "SLet" && by!.name).toBe("y");
 });
 
 test("destructured bindings evaluate to the matching fields", () => {

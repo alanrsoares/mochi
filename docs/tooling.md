@@ -69,7 +69,7 @@ bun run check          # biome + tsc + workspace + fmt + tests (skips north-star
 bun run check:full     # pre-push — check, check:north-star, test:mochi:coverage
 bun run check:north-star # north-star specs + seed:check (own CI job)
 bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3)
-bun run bootstrap:tsc  # count tsc --strict errors on the self-host (north-star: 0)
+bun run bootstrap:self-tsc  # count tsc --strict errors on the self-host (north-star: 0)
 ```
 
 `check` / `test` omit the four graph-sized north-star specs

@@ -3,9 +3,8 @@
 // consumer (errors, LSP ranges) relies on: a child node's span is always
 // contained within its parent's, and every span lies within the source.
 import { expect, test } from "bun:test";
-import type { Expr } from "@mochi/compiler/ast";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
+import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import type { Expr } from "@mochi/compiler/bootstrap/types";
 import { unwrapOk } from "@onrails/result";
 import fc from "fast-check";
 
@@ -32,45 +31,45 @@ const { expr } = fc.letrec<{ expr: string }>((tie) => ({
 
 // Direct sub-expressions of a node.
 const children = (e: Expr): Expr[] => {
-  switch (e.kind) {
-    case "num":
-    case "bool":
-    case "str":
-    case "ref":
-    case "unit":
+  switch (e._tag) {
+    case "ENum":
+    case "EBool":
+    case "EStr":
+    case "ERef":
+    case "EUnit":
       return [];
-    case "interp":
-      return e.parts.filter((p): p is Expr => typeof p !== "string");
-    case "call":
+    case "EInterp":
+      return e.parts.flatMap((p) => (p._tag === "IPExpr" ? [p.expr] : []));
+    case "ECall":
       return [e.fn, ...e.args];
-    case "lambda":
+    case "ELambda":
       return [e.body];
-    case "letin":
-    case "letbind":
+    case "ELetIn":
+    case "ELetBind":
       return [e.value, e.body];
-    case "tuple":
+    case "ETuple":
       return e.elements;
-    case "pipe":
+    case "EPipe":
       return [e.left, e.right];
-    case "do":
+    case "EDo":
       return e.exprs;
-    case "ternary":
-      return [e.cond, e.then, e.else];
-    case "match":
+    case "ETernary":
+      return [e.cond, e.thenE, e.elseE];
+    case "EMatch":
       return [e.scrutinee, ...e.arms.map((a) => a.body)];
-    case "record":
+    case "ERecord":
       return e.fields.map((f) => f.value);
-    case "field":
+    case "EField":
       return [e.target];
-    case "arr":
-    case "list":
-    case "set":
+    case "EArr":
+    case "EList":
+    case "ESet":
       return e.elements.map((el) => el.expr);
-    case "map":
+    case "EMap":
       return e.entries.flatMap((en) => [en.key, en.value]);
-    case "loop":
+    case "ELoop":
       return [...e.params.map((p) => p.init), e.body];
-    case "recur":
+    case "ERecur":
       return e.args;
   }
 };
@@ -79,7 +78,7 @@ test("every child span is contained within its parent's span", () => {
   fc.assert(
     fc.property(expr, (body) => {
       const src = `let v = ${body}`;
-      const prog = unwrapOk(parse(unwrapOk(lex(src))));
+      const prog = unwrapOk(parseProgram(src));
       const walk = (e: Expr): void => {
         expect(e.span.start).toBeGreaterThanOrEqual(0);
         expect(e.span.end).toBeLessThanOrEqual(src.length);
@@ -90,7 +89,7 @@ test("every child span is contained within its parent's span", () => {
         }
       };
       const stmt = prog.stmts[0]!;
-      if (stmt.kind === "let") walk(stmt.value);
+      if (stmt._tag === "SLet") walk(stmt.value);
     }),
   );
 });
@@ -107,7 +106,7 @@ test("a top-level statement's span covers its whole source text", () => {
   fc.assert(
     fc.property(fc.oneof(expr, paren), (body) => {
       for (const src of [`let v = ${body}`, `let f = x => ${body}`, `let g = x => (${body})`]) {
-        const stmt = unwrapOk(parse(unwrapOk(lex(src)))).stmts[0]!;
+        const stmt = unwrapOk(parseProgram(src)).stmts[0]!;
         expect(src.slice(stmt.span.start, stmt.span.end)).toBe(src);
       }
     }),
@@ -136,7 +135,7 @@ const STATEMENTS: readonly string[] = [
 
 test("every statement kind's span covers its whole source text", () => {
   for (const src of STATEMENTS) {
-    const prog = unwrapOk(parse(unwrapOk(lex(src))));
+    const prog = unwrapOk(parseProgram(src));
     expect(prog.stmts).toHaveLength(1);
     const stmt = prog.stmts[0]!;
     // A doc comment sits outside the statement it annotates.

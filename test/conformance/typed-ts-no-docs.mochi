@@ -1,0 +1,12 @@
+/// A point.
+type Point = { x: number }
+/// A choice.
+type Choice =
+  | Left(number)
+  | Right
+/// A transparent alias.
+type Count = "few" | "many"
+/// An opaque type.
+extern type Handle
+/// A value.
+let answer = 42

@@ -1,24 +1,17 @@
 import { expect, test } from "bun:test";
-import { type Env, inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv } from "@mochi/compiler/prelude";
-import { type Type, tArrow, tBool, tNumber } from "@mochi/compiler/types";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
+import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { typeOf as seedTypeOf } from "@mochi/test-support";
+import { isErr, map, unwrapErr, unwrapOk } from "@onrails/result";
 
-const numOps: Record<string, Type> = {
-  add: tArrow(tNumber, tArrow(tNumber, tNumber)),
-  mul: tArrow(tNumber, tArrow(tNumber, tNumber)),
-  square: tArrow(tNumber, tNumber),
-  pi: tNumber,
-};
-
-const infer = (src: string, builtins: Record<string, Type> = numOps) => {
-  const prog = unwrapOk(parse(unwrapOk(lex(src))));
-  return inferProgram(prog, builtins);
-};
-
-const typeOf = (env: Env, name: string): string => showScheme(env.get(name)!);
+const infer = (src: string) =>
+  map(inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: false }), () => src);
+const typeOf = (src: string, name: string): string =>
+  seedTypeOf(
+    /^[A-Z]/.test(name) ? `${src}\nlet probe = ${name}` : src,
+    /^[A-Z]/.test(name) ? "probe" : name,
+    { open: false },
+  );
 
 test("literal is number", () => {
   const env = unwrapOk(infer("let x = 42"));
@@ -41,7 +34,7 @@ test("nullary call peels unit", () => {
 });
 
 test("identity is generalized (polymorphic)", () => {
-  const env = unwrapOk(infer("let id = x => x", {}));
+  const env = unwrapOk(infer("let id = x => x"));
   // 'ta -> 'ta  (some quantified var)
   const t = typeOf(env, "id");
   expect(t).toMatch(/^'t\d+ -> 't\d+$/);
@@ -63,12 +56,12 @@ test("pipeline types like nested application", () => {
 test("a binding annotation pins a too-general value", () => {
   // Without the annotation `empty` would be `Map<'a, 'b>`; the alias pins both.
   const src = "type Reg = { m: Map string number }\nlet empty : Reg = { m: #{} }";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "empty")).toBe("{ m: Map<string, number> }");
 });
 
 test("a binding annotation is enforced (wrong type is a type error)", () => {
-  const r = infer('let bad : number = "hello"', {});
+  const r = infer('let bad : number = "hello"');
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)[0]!.message).toContain("unify");
 });
@@ -87,95 +80,94 @@ test("an explicit h(...) call is not treated as JSX sugar", () => {
 });
 
 test("record literal is a closed record", () => {
-  const env = unwrapOk(infer("let p = { x: 1, y: 2 }", {}));
+  const env = unwrapOk(infer("let p = { x: 1, y: 2 }"));
   expect(typeOf(env, "p")).toBe("{ x: number, y: number }");
 });
 
 // ADR 0098 — optional record fields.
 test("a value may omit optional alias fields", () => {
   const src = "type Props = { id?: string, n: number }\nlet ok : Props = { n: 1 }";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "ok")).toBe("{ id?: string, n: number }");
 });
 
 test("a required field still cannot be omitted", () => {
-  const r = infer('type Props = { id?: string, n: number }\nlet bad : Props = { id: "x" }', {});
+  const r = infer('type Props = { id?: string, n: number }\nlet bad : Props = { id: "x" }');
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)[0]!.message).toContain("n");
 });
 
 test("a required field satisfies an optional expected field", () => {
   const src = "type Opt = { x?: number }\nlet ok : Opt = { x: 1 }";
-  expect(isErr(infer(src, {}))).toBe(false);
+  expect(isErr(infer(src))).toBe(false);
 });
 
 test("an optional-typed value does not satisfy a required field", () => {
   const r = infer(
     "type Opt = { x?: number }\ntype Req = { x: number }\nlet o : Opt = {}\nlet bad : Req = o",
-    {},
   );
   expect(isErr(r)).toBe(true);
 });
 
 test("reading an optional field yields Option", () => {
   const src = "type Props = { id?: string }\nlet getId = (p: Props) => p.id";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "getId")).toBe("{ id?: string } -> Option<string>");
 });
 
 test("reading a required field stays the raw type", () => {
   const src = "type Props = { id?: string, n: number }\nlet getN = (p: Props) => p.n";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "getN")).toBe("{ id?: string, n: number } -> number");
 });
 
 test("a function expecting optional fields accepts a subset record", () => {
   const src =
     "type Props = { id?: string, n: number }\nlet f = (p: Props) => p.n\nlet r = f({ n: 2 })";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "r")).toBe("number");
 });
 
 // ADR 0098 §2 — labeled parameters lower to one record parameter.
 test("a labeled lambda is a unary record function", () => {
   const src = 'let f = (~tone: string = "rose", ~size?: number) => tone';
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "f")).toBe("{ tone?: string, size?: number } -> string");
 });
 
 test("a labeled call supplies a subset of the record", () => {
   const src = `let f = (~tone: string = "rose", ~size?: number) => tone
 let r = f(~tone="amber")`;
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "r")).toBe("string");
 });
 
 test("omitting every labeled argument is f()", () => {
   const src = `let f = (~tone: string = "rose") => tone
 let r = f()`;
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "r")).toBe("string");
 });
 
 test("a required labeled argument cannot be omitted", () => {
-  const r = infer("let f = (~tone: string) => tone\nlet r = f()", {});
+  const r = infer("let f = (~tone: string) => tone\nlet r = f()");
   expect(isErr(r)).toBe(true);
 });
 
 test("an optional labeled param is Option in the body", () => {
   const src = "let f = (~size?: number) => size";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "f")).toBe("{ size?: number } -> Option<number>");
 });
 
 test("a positional prefix stays curried in front of the labeled group", () => {
   const src = "let f = (x: number, ~tone: string) => x";
-  const env = unwrapOk(infer(src, {}));
+  const env = unwrapOk(infer(src));
   expect(typeOf(env, "f")).toBe("number -> { tone: string } -> number");
 });
 
 test("field access is row-polymorphic: works on ANY record with that field", () => {
-  const env = unwrapOk(infer("let getX = p => p.x", {}));
+  const env = unwrapOk(infer("let getX = p => p.x"));
   // p : { x: 'a | 'r } -> 'a
   const t = typeOf(env, "getX");
   expect(t).toMatch(/^\{ x: 't\d+ \| 'r\d+ \} -> 't\d+$/);
@@ -183,17 +175,14 @@ test("field access is row-polymorphic: works on ANY record with that field", () 
 
 test("duck typing: same getter used on two different record shapes", () => {
   const env = unwrapOk(
-    infer(
-      "let getX = p => p.x\nlet a = getX({ x: 1, y: 2 })\nlet b = getX({ x: 3, name: label })",
-      { label: tNumber },
-    ),
+    infer("let getX = p => p.x\nlet a = getX({ x: 1, y: 2 })\nlet b = getX({ x: 3, name: 0 })"),
   );
   expect(typeOf(env, "a")).toBe("number");
   expect(typeOf(env, "b")).toBe("number");
 });
 
 test("variant constructor has a function type into its variant", () => {
-  const env = unwrapOk(infer("type Shape = | Circle(float) | Rect(float, float)", {}));
+  const env = unwrapOk(infer("type Shape = | Circle(float) | Rect(float, float)"));
   expect(typeOf(env, "Circle")).toBe("number -> Shape");
   expect(typeOf(env, "Rect")).toBe("number -> number -> Shape");
 });
@@ -201,12 +190,8 @@ test("variant constructor has a function type into its variant", () => {
 test("self-recursive let is typed in strict mode (no open-world)", () => {
   // fact references itself; strict builtins → recursion must be typed, not
   // rescued by open-world. sub/mul/eq keep it number -> number.
-  const ops: Record<string, Type> = {
-    mul: tArrow(tNumber, tArrow(tNumber, tNumber)),
-    sub: tArrow(tNumber, tArrow(tNumber, tNumber)),
-  };
   const env = unwrapOk(
-    infer("let fact = n => switch n { | 0 => 1 | _ => mul(n, fact(sub(n, 1))) }", ops),
+    infer("let fact = n => switch n { | 0 => 1 | _ => mul(n, fact(sub(n, 1))) }"),
   );
   expect(typeOf(env, "fact")).toBe("number -> number");
 });
@@ -224,16 +209,16 @@ test("match infers a common result type and binds pattern vars", () => {
 // ---- type errors ----
 
 test("unbound variable is a type error", () => {
-  const r = infer("let x = nope", {});
+  const r = infer("let x = nope");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)[0]!.message).toContain("unbound variable 'nope'");
 });
 
 test("unbound variable suggests a close name from the env", () => {
-  const r = infer("let count = 1\nlet n = coun", {});
+  const r = infer("let count = 1\nlet n = coun");
   expect(isErr(r)).toBe(true);
   const e = unwrapErr(r)[0]!;
-  expect(e.help).toBe("did you mean 'count'?");
+  expect(e.help).toEqual({ _tag: "Some", value: "did you mean 'count'?" });
   expect(e.suggestions?.[0]?.replaceWith).toBe("count");
 });
 
@@ -245,18 +230,13 @@ test("applying a number as a function is a type error", () => {
 });
 
 test("field type conflict across two uses is a type error", () => {
-  const r = infer("let getX = p => p.x\nlet bad = add(getX({ x: 1 }), getX({ x: yes }))", {
-    add: tArrow(tNumber, tArrow(tNumber, tNumber)),
-    yes: tBool,
-  });
+  const r = infer("let getX = p => p.x\nlet bad = add(getX({ x: 1 }), getX({ x: true }))");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });
 
 test("match arms returning different types is a type error", () => {
-  const r = infer("type T = | A | B\nlet f = t => switch t { | A => 1 | B => flag }", {
-    flag: tBool,
-  });
+  const r = infer("type T = | A | B\nlet f = t => switch t { | A => 1 | B => true }");
   expect(isErr(r)).toBe(true);
   expect(unwrapErr(r)[0]!.message).toContain("cannot unify");
 });
@@ -292,7 +272,7 @@ test("arity mismatch hints at a missing argument", () => {
   }
 });
 
-const inferPrelude = (src: string) => inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), preludeEnv);
+const inferPrelude = (src: string) => infer(src);
 
 test("fast pipe binds tighter than ++ (ADR 0073)", () => {
   const src = `let gen = (c, n) => "ok"

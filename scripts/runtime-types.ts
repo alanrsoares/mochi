@@ -11,26 +11,8 @@
 // annotation gives importers real types; the body's own params are `any` (the
 // annotation is the contract, and the JS-backend differential tests are what
 // prove the body correct).
-import { flatFnType } from "@mochi/compiler/dts";
-import {
-  namespaceRuntime,
-  preludeEnv,
-  preludeNamespaces,
-  runtimeArity,
-} from "@mochi/compiler/prelude";
-import type { Type } from "@mochi/compiler/types";
-
-// jsId → HM type: top-level builtins by name, plus every namespace member keyed
-// by its runtime identifier (`Map.get` → `_Map_get`).
-const jsIdType = (): Map<string, Type> => {
-  const out = new Map<string, Type>(Object.entries(preludeEnv));
-  for (const [ns, members] of Object.entries(namespaceRuntime))
-    for (const [member, jsId] of Object.entries(members)) {
-      const sig = (preludeNamespaces[ns] as Record<string, Type> | undefined)?.[member];
-      if (sig && !out.has(jsId)) out.set(jsId, sig);
-    }
-  return out;
-};
+import { runtimeAnnotationBootstrapSync } from "@mochi/compiler/bootstrap/sync";
+import { runtimeArity } from "@mochi/compiler/prelude";
 
 // Builtin ctor factory types — stable (4 entries), hardcoded like infer.mochi's
 // `builtinTypeDecls` precedent rather than derived.
@@ -52,6 +34,5 @@ export const UNTYPED_BY_HM: readonly string[] = ["_list", "_tuple", "_recur", "_
 export const expectedAnnotation = (jsId: string): string | null => {
   if (UNTYPED_BY_HM.includes(jsId)) return null;
   if (CTOR_TYPES[jsId]) return CTOR_TYPES[jsId] as string;
-  const sig = jsIdType().get(jsId);
-  return sig ? flatFnType(sig, runtimeArity[jsId] ?? 0) : null;
+  return runtimeAnnotationBootstrapSync(jsId, runtimeArity[jsId] ?? 0);
 };

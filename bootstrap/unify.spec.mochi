@@ -1,0 +1,214 @@
+import { assertEq, ok, test, testEach } from "@mochi/test"
+import {
+  RowEmpty,
+  fits,
+  mkSt,
+  rExtend,
+  rField,
+  rVar,
+  showType,
+  tArrow,
+  tCon,
+  tLit,
+  tPrim,
+  tRecord,
+  tUnion,
+  tVar,
+  unify,
+  zonk
+} from "./types.mochi"
+
+let n = tPrim("number")
+let s = tPrim("string")
+let b = tPrim("bool")
+let vec = t => tCon("Vec", [t])
+let opt = t => tCon("Option", [t])
+let recordX = t => tRecord(rExtend("x", t, RowEmpty))
+
+testEach("unification solves types and rows", [
+  ("variable", tVar(0), n, tVar(0), "number"),
+  (
+    "arrow propagates left",
+    tArrow(tVar(0), tVar(0)),
+    tArrow(n, tVar(1)),
+    tVar(0),
+    "number"
+  ),
+  (
+    "arrow propagates right",
+    tArrow(tVar(0), tVar(0)),
+    tArrow(n, tVar(1)),
+    tVar(1),
+    "number"
+  ),
+  ("generic", vec(tVar(0)), vec(n), vec(tVar(0)), "Vec<number>"),
+  (
+    "nested generic",
+    vec(opt(tVar(0))),
+    vec(opt(n)),
+    vec(opt(tVar(0))),
+    "Vec<Option<number>>"
+  ),
+  (
+    "map key",
+    tCon("Map", [tVar(0), tVar(1)]),
+    tCon("Map", [s, vec(n)]),
+    tVar(0),
+    "string"
+  ),
+  (
+    "map value",
+    tCon("Map", [tVar(0), tVar(1)]),
+    tCon("Map", [s, vec(n)]),
+    tVar(1),
+    "Vec<number>"
+  ),
+  (
+    "closed row fills open tail",
+    tRecord(rExtend("x", n, rVar(0))),
+    tRecord(rExtend("x", n, rExtend("y", s, RowEmpty))),
+    tRecord(rExtend("x", n, rVar(0))),
+    "{ x: number, y: string }"
+  ),
+  (
+    "generic field",
+    tRecord(rExtend("items", vec(tVar(0)), rVar(1))),
+    tRecord(rExtend("items", vec(n), rExtend("size", n, RowEmpty))),
+    tRecord(rExtend("items", vec(tVar(0)), rVar(1))),
+    "{ items: Vec<number>, size: number }"
+  )
+], row =>
+  let (_, a, b, view, want) = row in
+    switch unify(a, b, mkSt(100)) {
+      | Ok(st) => showType(zonk(view, st)) |> assertEq(want)
+      | Err(_) => false |> ok
+    })
+
+testEach("unification rejects conflicting types and rows", [
+  ("concrete mismatch", n, b, "cannot unify number with bool"),
+  ("occurs check", tVar(0), tArrow(tVar(0), n), "infinite type"),
+  ("generic arity", tCon("Pair", [n]), tCon("Pair", [n, b]), "cannot unify"),
+  (
+    "nested conflict",
+    vec(opt(n)),
+    vec(opt(s)),
+    "cannot unify number with string"
+  ),
+  (
+    "extra field",
+    tRecord(rExtend("x", n, rExtend("y", s, RowEmpty))),
+    recordX(n),
+    "field 'y'"
+  ),
+  (
+    "missing field",
+    recordX(n),
+    tRecord(rExtend("x", n, rExtend("y", s, RowEmpty))),
+    "missing field 'y'"
+  ),
+  ("field conflict", recordX(n), recordX(s), "cannot unify number with string"),
+  (
+    "required versus optional",
+    recordX(n),
+    tRecord(rField("x", n, RowEmpty, true)),
+    "required but optional"
+  )
+], row =>
+  let (_, a, b, want) = row in
+    switch unify(a, b, mkSt(100)) {
+      | Err(e) => Str.contains(want, e.message) |> ok
+      | Ok(_) => false |> ok
+    })
+
+test("two open rows merge and share their tail", () =>
+  let left = tRecord(rExtend("x", n, rVar(0))) in
+  let right = tRecord(rExtend("y", s, rVar(1))) in
+    switch unify(left, right, mkSt(100)) {
+      | Ok(st) => do {
+          assertEq(
+            Array.get(1, Str.split("'r", showType(zonk(left, st)))),
+            Array.get(1, Str.split("'r", showType(zonk(right, st))))
+          );
+          let text = showType(zonk(left, st)) in
+            Str.contains(
+              "x: number",
+              text
+            ) && Str.contains("y: string", text) && Str.contains("'r", text)
+              |> ok
+        }
+      | Err(_) => false |> ok
+    })
+
+let colors = tUnion([tLit("rose"), tLit("amber")])
+testEach("literal unions accept members in either direction", [
+  ("literal widens", tLit("rose"), s),
+  ("reverse widen", s, tLit("rose")),
+  ("union member", tLit("rose"), colors),
+  ("reverse member", colors, tLit("rose")),
+  ("union order", colors, tUnion([tLit("amber"), tLit("rose")])),
+  ("nonliteral number member", n, tUnion([n, tArrow(n, n)])),
+  ("nonliteral function member", tArrow(n, n), tUnion([n, tArrow(n, n)]))
+], row =>
+  let (_, a, b) = row in
+    switch unify(a, b, mkSt(100)) {
+      | Ok(_) => true |> ok
+      | Err(_) => false |> ok
+    })
+
+testEach("literal unions reject nonmembers", [
+  ("foreign literal", tLit("taupe"), colors),
+  ("general string", s, colors),
+  ("reverse general string", colors, s),
+  ("nonliteral nonmember", s, tUnion([n, tArrow(n, n)]))
+], row =>
+  let (_, a, b) = row in
+    switch unify(a, b, mkSt(100)) {
+      | Err(_) => true |> ok
+      | Ok(_) => false |> ok
+    })
+
+test("optional fields print their question marks", () => {
+  showType(tRecord(rField("x", n, RowEmpty, true)))
+    |> assertEq("{ x?: number }");
+  showType(tRecord(rExtend("x", n, rField("y", s, RowEmpty, true))))
+    |> assertEq("{ x: number, y?: string }")
+})
+
+testEach("directional record fits", [
+  (
+    "omit optional",
+    tRecord(rExtend("n", n, RowEmpty)),
+    tRecord(rField("id", s, rExtend("n", n, RowEmpty), true)),
+    true
+  ),
+  (
+    "required satisfies optional",
+    recordX(n),
+    tRecord(rField("x", n, RowEmpty, true)),
+    true
+  ),
+  (
+    "optional cannot satisfy required",
+    tRecord(rField("x", n, RowEmpty, true)),
+    recordX(n),
+    false
+  ),
+  (
+    "empty satisfies optional",
+    tRecord(RowEmpty),
+    tRecord(rField("id", s, RowEmpty, true)),
+    true
+  ),
+  (
+    "extra actual field",
+    tRecord(rExtend("x", n, rExtend("z", b, RowEmpty))),
+    tRecord(rField("x", n, RowEmpty, true)),
+    false
+  )
+], row =>
+  let (_, actual, expected, want) = row in
+    switch fits(actual, expected, mkSt(100)) {
+      | Ok(_) => true
+      | Err(_) => false
+    }
+      |> assertEq(want))

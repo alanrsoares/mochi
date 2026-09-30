@@ -15,6 +15,19 @@ import { isErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("typed targets suppress docs on every declaration kind", () => {
+  const src = [
+    "/// A point.\ntype Point = { x: number }",
+    "/// A choice.\ntype Choice = Left(number) | Right",
+    '/// A synonym.\ntype Tone = "rose" | "amber"',
+    "/// A handle.\nextern type Handle",
+    "/// An answer.\nlet answer = 42",
+  ].join("\n");
+  const targets = unwrapOk(compileTargets(src, { docs: false }));
+  expect(targets.ts).not.toContain("/**");
+  expect(targets.dts).not.toContain("/**");
+});
+
 /** A recorded type's tag in the self-hosted `Type` union (`TyFn`, `TyCon`, …). */
 type Tagged = { _tag?: string };
 

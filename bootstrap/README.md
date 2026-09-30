@@ -15,7 +15,6 @@ Keep these checks green before handing off a core change:
 
 ```bash
 bun run fixpoint       # frozen stage 1 -> stage 2 == stage 3
-bun run bootstrap:tsc  # emitted graph remains strict-tsc clean
 bun run bootstrap:self-tsc # self-hosted TS emitter remains strict-tsc clean
 bun run bootstrap:conformance # reviewed behaviour corpus over the shipped seed
 bun run bootstrap:conformance:freeze # candidates in test/conformance/.candidate/ for review

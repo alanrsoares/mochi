@@ -21,6 +21,8 @@
       "dts",
       "dts-param-alias",
       "dts-qualified",
+      "dts-basics",
+      "typed-ts-no-docs",
       "jsx-dts",
       "format",
       "typed-ts",
@@ -51,6 +53,19 @@
     "pending": []
   },
   "cases": [
+    {
+      "id": "typed-ts-no-docs",
+      "kind": "typed-ts",
+      "source": "typed-ts-no-docs.mochi",
+      "expect": "typed-ts-no-docs.expect.txt",
+      "docs": false
+    },
+    {
+      "id": "dts-basics",
+      "kind": "dts",
+      "entry": "dts-basics.mochi",
+      "expect": "dts-basics.expect.txt"
+    },
     {
       "id": "single-js",
       "kind": "compile",

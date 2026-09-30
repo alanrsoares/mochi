@@ -243,11 +243,13 @@ const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(
           ? (({ args: [elem] }) =>
               ((inner: string) =>
                 ((_v) =>
-                  _v._tag === "TyFn"
+                  _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
                     ? `(${inner})[]`
-                    : _v._tag === "TyOneOf"
+                    : _v._tag === "TyFn"
                       ? `(${inner})[]`
-                      : `${inner}[]`)(widenLits(elem)))(shapeType(elem, vars)))(
+                      : _v._tag === "TyOneOf"
+                        ? `(${inner})[]`
+                        : `${inner}[]`)(widenLits(elem)))(shapeType(elem, vars)))(
               _v as Extract<Ty, { _tag: "TyCon" }>,
             )
           : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1
@@ -398,11 +400,13 @@ const tsOfRaw: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, (t: Ty, env: TsEn
         ? (({ args: [elem] }) =>
             ((inner: string) =>
               ((_v) =>
-                _v._tag === "TyFn"
+                _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
                   ? `(${inner})[]`
-                  : _v._tag === "TyOneOf"
+                  : _v._tag === "TyFn"
                     ? `(${inner})[]`
-                    : `${inner}[]`)(elem))(tsOfRaw(elem, env)))(
+                    : _v._tag === "TyOneOf"
+                      ? `(${inner})[]`
+                      : `${inner}[]`)(elem))(tsOfRaw(elem, env)))(
             _v as Extract<Ty, { _tag: "TyCon" }>,
           )
         : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1
