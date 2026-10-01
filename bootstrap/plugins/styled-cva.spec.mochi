@@ -24,3 +24,8 @@ test("tw rejects an unknown intrinsic tag", () => switch typecheck("extern tw : 
   | Err(e) => Str.contains("unknown HTML element 'divv'", e.message) |> ok
   | Ok(_) => false |> ok
 })
+
+test("a single tw variant rejects an unknown literal after generalization", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Badge = tw.span(\"base\", { variants: { $tone: { rose: \"a\" } } })\nlet Copy = Badge\nlet bad = Copy({ $tone: \"blue\" })\n") {
+  | Err(e) => Str.contains("cannot unify", e.message) |> ok
+  | Ok(_) => false |> ok
+})

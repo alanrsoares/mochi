@@ -295,7 +295,7 @@ var flattenUnionFrom = _curry4(3, (members, acc, i) => ((_v) => _v._tag === "Non
 })())(_Array_get2(i, members)));
 var tUnion = (members) => {
   const flat = flattenUnionFrom(members, [], 0);
-  return ((_v) => _v.length === 0 ? tPrim("string") : _v.length === 1 ? (([only]) => only)(_v) : TyOneOf(flat))(flat);
+  return ((_v) => _v.length === 0 ? tPrim("string") : _v.length === 1 && _v[0]._tag === "TySingleton" ? TyOneOf(flat) : _v.length === 1 ? (([only]) => only)(_v) : TyOneOf(flat))(flat);
 };
 var TUPLE = "tuple";
 var tTuple = (elems) => TyCon(TUPLE, elems);

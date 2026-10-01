@@ -29,6 +29,7 @@
       "typed-ts-graph",
       "styled-cva-compile",
       "styled-cva-bad-tone",
+      "styled-cva-single-key-bad-tone",
       "styled-cva-unknown-tag",
       "styled-cva-format",
       "styled-cva-format-paths",
@@ -218,6 +219,15 @@
       "kind": "diagnostic",
       "source": "styled-cva/bad-tone.mochi",
       "expect": "styled-cva-bad-tone.expect.json",
+      "plugins": [
+        "styled-cva"
+      ]
+    },
+    {
+      "id": "styled-cva-single-key-bad-tone",
+      "kind": "diagnostic",
+      "source": "styled-cva/single-key-bad-tone.mochi",
+      "expect": "styled-cva-single-key-bad-tone.expect.json",
       "plugins": [
         "styled-cva"
       ]
