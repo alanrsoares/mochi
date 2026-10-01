@@ -11,55 +11,15 @@ import {
   type BootstrapOptions,
   type BootstrapPlugin,
   defaultBootstrapOptions,
-  type SeedOptions,
   toSeedOptions,
 } from "./options.ts";
 
 /** One file's JS, typed TS and `.d.ts`, printed from one inference. */
 export type BootstrapTargets = { js: string; ts: string; dts: string };
 
-type SeedCompile = {
-  runtimeAnnotation: (
-    name: string,
-    arity: number,
-  ) => { _tag: "Some"; value: string } | { _tag: "None" };
-  compileWith: (src: string, opts: SeedOptions) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  compileTsWith: (
-    src: string,
-    runtimeImport: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  compileTargetsWith: (
-    src: string,
-    runtimeImport: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapTargets, BootstrapDiagnostic[]>;
-  emitDtsTextWith: (
-    src: string,
-    runtimeImport: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  inferTypesWith: (
-    src: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
-  inferTypesRecoveringWith: (
-    src: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapInferResult, BootstrapDiagnostic[]>;
-  nominalTypeName: (
-    ty: unknown,
-    aliases: Map<string, unknown>,
-  ) => { _tag: "Some"; value: string } | { _tag: "None" };
-  symbolIndexSync: (
-    path: string,
-    origins: BootstrapExportOrigins,
-    prelude: BootstrapPrelude,
-    stmts: unknown,
-  ) => BootstrapSymbolIndex;
-};
+import type { AliasInfo, Stmt, Ty } from "./types.ts";
 
-const seedCompile = seed as unknown as SeedCompile;
+const seedCompile = seed;
 
 /** Runtime's public annotation, printed from the seed prelude's HM signature. */
 export const runtimeAnnotationBootstrapSync = (name: string, arity: number): string | null => {
@@ -150,8 +110,8 @@ export const checkBootstrapSync = (
  * to under `aliases` (an inference result's own map). Otherwise null.
  */
 export const nominalTypeNameBootstrap = (
-  ty: unknown,
-  aliases: Map<string, unknown>,
+  ty: Ty,
+  aliases: Map<string, AliasInfo>,
 ): string | null => {
   const name = seedCompile.nominalTypeName(ty, aliases);
   return name._tag === "Some" ? name.value : null;
@@ -165,5 +125,6 @@ export const symbolIndexBootstrapSync = (
   path: string,
   origins: BootstrapExportOrigins,
   prelude: BootstrapPrelude,
-  stmts: unknown,
-): BootstrapSymbolIndex => seedCompile.symbolIndexSync(path, origins, prelude, stmts);
+  stmts: readonly Stmt[],
+): BootstrapSymbolIndex =>
+  seedCompile.symbolIndexSync(path, origins, prelude, stmts as Stmt[]) as BootstrapSymbolIndex;

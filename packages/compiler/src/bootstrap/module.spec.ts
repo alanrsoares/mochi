@@ -14,12 +14,14 @@ import {
   symbolOccurrencesBootstrap,
 } from "./module.ts";
 import { lex, parse } from "./syntax.ts";
+import type { Stmt } from "./types.ts";
 
-const parseBootstrap = (source: string): unknown => {
+const parseBootstrap = (source: string): Stmt[] => {
   const tokens = lex(source) as { _tag: string; value?: unknown };
   expect(tokens._tag).toBe("Ok");
-  const stmts = parse(tokens.value) as { _tag: string; value?: unknown };
+  const stmts = parse(tokens.value) as { _tag: "Ok"; value: Stmt[] } | { _tag: "Err" };
   expect(stmts._tag).toBe("Ok");
+  if (stmts._tag !== "Ok") throw new Error("fixture did not parse");
   return stmts.value;
 };
 

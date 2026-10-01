@@ -183,8 +183,9 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   parse hooks, inference, formatting, binding-type, and completion hooks consumed
   by compile, module graphs, DX, Vite, and LSP. Parse hooks extend atom syntax
   after core prefix tokens; errors are values, with no `ParseAbort`. Typed TS and
-  declaration emit share binding-type hooks. `LanguagePlugin` / `HostExtension`
-  remain compatibility host types, not the core compiler protocol.
+  declaration emit share binding-type hooks. The unused `LanguagePlugin` /
+  `HostExtension` host protocol was retired by
+  [ADR 0132](docs/adr/0132-simplify-seed-host-seams.md).
 - **Builtin plugin** — ships in the compiler itself and is registered by
   default on every standard compile path (`DEFAULT_PLUGINS`). `jsxPlugin`
   (`bootstrap/plugins/jsx.mochi`) is the first and owns all of JSX: parsing `<tag/>` →

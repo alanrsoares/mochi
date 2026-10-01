@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "@mochi/compiler";
+import { compile, compileTargets } from "@mochi/compiler";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
@@ -8,6 +8,16 @@ import { compileSyncTask } from "./compiler";
 const read = (p: string): string => readRepo(import.meta.url, p);
 
 describe("playground compile Task (ADR 0006)", () => {
+  test("playground uses the complete single-pass emit with its runtime path", async () => {
+    const source = "let values = Array.map(x => x + 1, [1, 2])";
+    const expected = compileTargets(source, { runtimeImport: "@mochi/compiler/runtime" });
+    const result = await compileSyncTask(source)();
+    expect(expected._tag).toBe("Ok");
+    expect(result._tag).toBe("Ok");
+    if (expected._tag !== "Ok" || result._tag !== "Ok") return;
+    expect(result.value).toMatchObject(expected.value);
+    expect(result.value.ts).toContain('from "@mochi/compiler/runtime"');
+  });
   test("Task-shaped compile settles Ok with js/ts/dts on clean source", async () => {
     const result = await compileSyncTask("let x = 1\nlet app = x\n")();
     expect(result._tag).toBe("Ok");

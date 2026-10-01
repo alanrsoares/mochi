@@ -344,7 +344,7 @@ const ctorDefsOnly = (js: string): string => {
 const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.(js|mochi)$/, "");
 
 // Modules that must be prepended (in order) when eval'ing a bootstrap pass that
-// imports the LanguagePlugin seam (Wave 8).
+// imports the BootstrapPlugin seam.
 const PLUGIN_SEAM = ["plugins/jsx", "plugins/preact", "extensions"];
 
 // Generated host-seam shims the plugin reaches through `extern`. Module wiring

@@ -1,3 +1,6 @@
+import type { SeedCompile } from "../../../../bootstrap/seed/compile-host-types";
+import type { SeedModule } from "../../../../bootstrap/seed/module-host-types";
+import type { Stmt } from "./types.ts";
 /**
  * The executable self-hosted compiler core (ADR 0090).
  *
@@ -31,25 +34,21 @@ export type BootstrapDiagnostic = {
 export type BootstrapModuleOutput = { path: string; js: string };
 /** Who a recorded binder span names (ADR 0119), as `SymbolInfo` does for the TS table. */
 export type BootstrapBinderSym = {
-  kind: "let" | "parameter" | "property" | "extern";
+  kind: string;
   name: string;
   doc: BootstrapHelp;
 };
 export type BootstrapTypeAt = {
   span: { start: number; end: number };
-  ty: unknown;
+  ty: import("./types.ts").Ty;
   display: string;
   /** Set where a name is bound (or a field read); `None` on other nodes. */
   sym: { _tag: "Some"; value: BootstrapBinderSym } | { _tag: "None" };
 };
-export type BootstrapInferResult = {
-  env: Map<string, unknown>;
-  types: BootstrapTypeAt[];
-  aliases: Map<string, unknown>;
-  letParams: unknown[];
-};
+type OkValue<R> = R extends { _tag: "Ok"; value: infer V } ? V : never;
+export type BootstrapInferResult = OkValue<ReturnType<SeedCompile["inferTypesWith"]>>;
 /** A generalized type as the seed builds it: quantified var ids and the type. */
-export type BootstrapScheme = { vars: number[]; rvars: number[]; ty: unknown };
+export type BootstrapScheme = BootstrapInferResult["env"] extends Map<string, infer S> ? S : never;
 
 /** An `import * as` scope: the type names it puts in type position. */
 export type BootstrapQualScope = { types: ReadonlySet<string> };
@@ -57,14 +56,14 @@ export type BootstrapQualScope = { types: ReadonlySet<string> };
 export type BootstrapGraphInferOutput = {
   path: string;
   types: BootstrapTypeAt[];
-  aliases: Map<string, unknown>;
+  aliases: Map<string, import("./types.ts").AliasInfo>;
   /** The scheme each named import binds, constructors included. */
   imports: Map<string, BootstrapScheme>;
   /** Each `import * as` alias's scope. */
   quals: Map<string, BootstrapQualScope>;
 };
-export type BootstrapGraphInferState = { outputs: BootstrapGraphInferOutput[] };
-export type BootstrapRecoveryGraphState = { ctx: unknown; errors: BootstrapDiagnostic[] };
+export type BootstrapGraphInferState = OkValue<ReturnType<SeedModule["inferGraphTypesFromWith"]>>;
+export type BootstrapRecoveryGraphState = ReturnType<SeedModule["freshRecoveryGraphState"]>;
 /** A declaration site: its file and name span. */
 export type BootstrapLoc = { path: string; start: number; end: number };
 /** A module's export sites per symbol space; a variant's ctors are also values. */
@@ -111,19 +110,19 @@ export type BootstrapOccurrence = {
 export type BootstrapParsedModule = {
   path: string;
   src: string;
-  stmts: Array<{ _tag?: string; from?: string }>;
+  stmts: Stmt[];
   origins: BootstrapExportOrigins;
 };
 
 /** A top-level statement, as far as the graph walks read it. */
-type GraphStmt = { _tag?: string; from?: string };
+type GraphStmt = Stmt;
 
 /** A strict parse of one module's source: its statements, or the lex/parse error. */
 type ParsedSource = BootstrapResult<GraphStmt[], BootstrapDiagnostic>;
 
 /** A recovering parse of one module's source. */
 type RecoveredSource = BootstrapResult<
-  { stmts: Array<{ _tag?: string; from?: string }>; diagnostics: BootstrapDiagnostic[] },
+  { stmts: Stmt[]; diagnostics: BootstrapDiagnostic[] },
   BootstrapDiagnostic
 >;
 
@@ -194,42 +193,8 @@ const importsOf = (
     .filter((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")
     .map((stmt) => resolveImport(path, stmt.from!));
 
-export type BootstrapCore = {
-  compile: (src: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  compileTs: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  buildModules: (entry: string) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
-  buildModulesTs: (
-    entry: string,
-    runtimeImport: string,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
-  /** Parse the entry and every dependency through the frozen bootstrap graph. */
-  loadGraph: (
-    entry: string,
-    src: string,
-    readFile: (path: string) => Promise<string>,
-    plugins?: readonly BootstrapPlugin[],
-  ) => Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>>;
-  /** Infer source spans through the bootstrap graph with the entry served from an editor buffer. */
-  inferGraphTypes: (
-    entry: string,
-    src: string,
-    readFile: (path: string) => Promise<string>,
-    cache?: BootstrapGraphCache,
-    plugins?: readonly BootstrapPlugin[],
-  ) => Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>>;
-  /** Check a graph using seed lexer/parser/infer, with the entry served from an editor buffer. */
-  checkGraph: (
-    entry: string,
-    src: string,
-    readFile: (path: string) => Promise<string>,
-    plugins?: readonly BootstrapPlugin[],
-  ) => Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>>;
-};
-
 import {
   type BootstrapGraphModule,
-  buildModulesBootstrap,
-  buildModulesTsBootstrap,
   compileGraphBootstrap,
   exportedOriginsBootstrap,
   freshInferGraphStateBootstrap,
@@ -242,7 +207,7 @@ import {
   recoverySliceOfBootstrap,
 } from "./module.ts";
 import { closures, moduleKeys } from "./slices.ts";
-import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
+import { inferTypesBootstrapSync } from "./sync.ts";
 
 export {
   emitDtsBootstrap,
@@ -382,124 +347,6 @@ const inferGraphSlices = (
 };
 
 /**
- * Load the frozen stage-1 graph on demand.
- *
- * The generated graph is checked by ADR 0090's strict-TS north star, but the
- * workspace deliberately adds `noUncheckedIndexedAccess`. Loading it through
- * this typed boundary prevents that stronger host policy from becoming an
- * accidental requirement of the emitted artifact.
- */
-export const loadBootstrapCore = async (): Promise<BootstrapCore> => {
-  const distance = (a: string, b: string): number => {
-    const row = Array.from({ length: b.length + 1 }, (_, i) => i);
-    for (let i = 1; i <= a.length; i++) {
-      let diagonal = row[0]!;
-      row[0] = i;
-      for (let j = 1; j <= b.length; j++) {
-        const above = row[j]!;
-        row[j] = a[i - 1] === b[j - 1] ? diagonal : 1 + Math.min(diagonal, above, row[j - 1]!);
-        diagonal = above;
-      }
-    }
-    return row[b.length]!;
-  };
-  const enrich = (error: BootstrapDiagnostic, source: string): BootstrapDiagnostic => {
-    const name = /unbound variable '([^']+)'/.exec(error.message)?.[1];
-    if (!name) return error;
-    const names = [...source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g)]
-      .map((match) => match[0]!)
-      .filter((candidate, index, all) => candidate !== name && all.indexOf(candidate) === index)
-      .map((candidate) => ({ candidate, score: distance(name, candidate) }))
-      .filter(({ score }) => score <= Math.max(2, Math.floor(name.length / 3)))
-      .sort((a, b) => a.score - b.score);
-    const best = names[0];
-    return best
-      ? {
-          ...error,
-          suggestions: [
-            {
-              title: `Did you mean '${best.candidate}'?`,
-              start: error.start,
-              end: error.end,
-              replaceWith: best.candidate,
-            },
-          ],
-        }
-      : error;
-  };
-
-  const loadGraph = (
-    entry: string,
-    src: string,
-    readFile: (path: string) => Promise<string>,
-    plugins?: readonly BootstrapPlugin[],
-    parses?: Map<string, ParsedSource>,
-  ): Promise<BootstrapResult<LoadedModule[], BootstrapDiagnostic>> =>
-    loadGraphWith(entry, src, readFile, plugins, parses);
-
-  const inferGraphTypes = async (
-    entry: string,
-    src: string,
-    readFile: (path: string) => Promise<string>,
-    cache?: BootstrapGraphCache,
-    plugins?: readonly BootstrapPlugin[],
-  ): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> => {
-    const loaded = await loadGraph(entry, src, readFile, plugins, cache?.parses);
-    if (loaded._tag === "Err") return loaded;
-    const graphKey = JSON.stringify(loaded.value.map(({ path, src: source }) => [path, source]));
-    const cached = cache?.entries.get(graphKey);
-    if (cached) return cached;
-    const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
-    const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
-    let result: BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
-    if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
-      const inferred = inferTypesBootstrapSync(src, plugins);
-      result =
-        inferred._tag === "Err"
-          ? { _tag: "Err", error: inferred.error[0]! }
-          : {
-              _tag: "Ok",
-              value: [
-                {
-                  path: entryPath,
-                  types: inferred.value.types,
-                  aliases: inferred.value.aliases,
-                  imports: new Map(),
-                  quals: new Map(),
-                },
-              ],
-            };
-    } else {
-      result = inferGraphSlices(loaded.value, plugins, cache?.modules);
-    }
-    cache?.entries.set(graphKey, result);
-    return result;
-  };
-
-  const checkGraph: BootstrapCore["checkGraph"] = async (entry, src, readFile, plugins) => {
-    const loaded = await loadGraph(entry, src, readFile, plugins);
-    if (loaded._tag === "Err") return { _tag: "Err", error: [loaded.error] };
-    const result = compileGraphBootstrap(loaded.value, plugins);
-    return result._tag === "Ok"
-      ? { _tag: "Ok", value: undefined }
-      : {
-          _tag: "Err",
-          error: result.error.map((error) => enrich(decodeModulePath(error), src)),
-        };
-  };
-
-  return {
-    compile: compileBootstrapSync,
-    compileTs: compileTsBootstrapSync,
-    buildModules: buildModulesBootstrap,
-    buildModulesTs: buildModulesTsBootstrap,
-    loadGraph,
-    inferGraphTypes,
-    checkGraph,
-  };
-};
-
-/**
  * Graph diagnostics are tagged `module '<path>': <message>` by the driver, so
  * a caller can tell which module failed. Editors want the bare message plus a
  * `path`, which is the shape every other façade query already returns.
@@ -509,42 +356,112 @@ const decodeModulePath = (error: BootstrapDiagnostic): BootstrapDiagnostic => {
   return tagged ? { ...error, path: tagged[1], message: tagged[2]! } : error;
 };
 
-/**
- * Dependency-ordered bootstrap parse graph for host query façades. `plugins`
- * means what it does in `BootstrapOptions` (ADR 0109); a cache is only valid
- * for the one plugin list it was filled under.
- */
-export const loadBootstrapGraph = async (
-  entry: string,
-  src: string,
-  readFile: (path: string) => Promise<string>,
-  plugins?: readonly BootstrapPlugin[],
-): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
-  (await loadBootstrapCore()).loadGraph(entry, src, readFile, plugins);
+const distance = (a: string, b: string): number => {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = row[0]!;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const above = row[j]!;
+      row[j] = a[i - 1] === b[j - 1] ? diagonal : 1 + Math.min(diagonal, above, row[j - 1]!);
+      diagonal = above;
+    }
+  }
+  return row[b.length]!;
+};
+const enrich = (error: BootstrapDiagnostic, source: string): BootstrapDiagnostic => {
+  const name = /unbound variable '([^']+)'/.exec(error.message)?.[1];
+  if (!name) return error;
+  const names = [...source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g)]
+    .map((match) => match[0]!)
+    .filter((candidate, index, all) => candidate !== name && all.indexOf(candidate) === index)
+    .map((candidate) => ({ candidate, score: distance(name, candidate) }))
+    .filter(({ score }) => score <= Math.max(2, Math.floor(name.length / 3)))
+    .sort((a, b) => a.score - b.score);
+  const best = names[0];
+  return best
+    ? {
+        ...error,
+        suggestions: [
+          {
+            title: `Did you mean '${best.candidate}'?`,
+            start: error.start,
+            end: error.end,
+            replaceWith: best.candidate,
+          },
+        ],
+      }
+    : error;
+};
 
-/** Narrow graph-checking seam for editor integrations: every type error of
- * the first failing module (ADR 0004). */
-export const checkGraphBootstrap = async (
-  entry: string,
-  src: string,
-  readFile: (path: string) => Promise<string>,
-  plugins?: readonly BootstrapPlugin[],
-): Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>> =>
-  (await loadBootstrapCore()).checkGraph(entry, src, readFile, plugins);
-
-/** Graph typed-query seam for editor integrations. */
 export const inferEntryGraphTypesBootstrap = async (
   entry: string,
   src: string,
   readFile: (path: string) => Promise<string>,
   cache?: BootstrapGraphCache,
   plugins?: readonly BootstrapPlugin[],
-): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> =>
-  (await loadBootstrapCore()).inferGraphTypes(entry, src, readFile, cache, plugins);
+): Promise<BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>> => {
+  const loaded = await loadGraphWith(entry, src, readFile, plugins, cache?.parses);
+  if (loaded._tag === "Err") return loaded;
+  const graphKey = JSON.stringify(loaded.value.map(({ path, src: source }) => [path, source]));
+  const cached = cache?.entries.get(graphKey);
+  if (cached) return cached;
+  const entryPath = await import("node:path").then(({ resolve }) => resolve(entry));
+  const entryStmts = loaded.value.find((module) => module.path === entryPath)?.stmts ?? [];
+  let result: BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
+  if (!entryStmts.some((stmt) => stmt._tag === "SImport" || stmt._tag === "SImportNs")) {
+    const inferred = inferTypesBootstrapSync(src, plugins);
+    result =
+      inferred._tag === "Err"
+        ? { _tag: "Err", error: inferred.error[0]! }
+        : {
+            _tag: "Ok",
+            value: [
+              {
+                path: entryPath,
+                types: inferred.value.types,
+                aliases: inferred.value.aliases,
+                imports: new Map(),
+                quals: new Map(),
+              },
+            ],
+          };
+  } else {
+    result = inferGraphSlices(loaded.value, plugins, cache?.modules);
+  }
+  cache?.entries.set(graphKey, result);
+  return result;
+};
+
+export const checkGraphBootstrap = async (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+  plugins?: readonly BootstrapPlugin[],
+): Promise<BootstrapResult<undefined, BootstrapDiagnostic[]>> => {
+  const loaded = await loadGraphWith(entry, src, readFile, plugins, undefined);
+  if (loaded._tag === "Err") return { _tag: "Err", error: [loaded.error] };
+  const result = compileGraphBootstrap(loaded.value, plugins);
+  return result._tag === "Ok"
+    ? { _tag: "Ok", value: undefined }
+    : {
+        _tag: "Err",
+        error: result.error.map((error) => enrich(decodeModulePath(error), src)),
+      };
+};
+
+/** Dependency-ordered parse graph with the entry served from its editor buffer. */
+export const loadBootstrapGraph = (
+  entry: string,
+  src: string,
+  readFile: (path: string) => Promise<string>,
+  plugins?: readonly BootstrapPlugin[],
+): Promise<BootstrapResult<BootstrapParsedModule[], BootstrapDiagnostic>> =>
+  loadGraphWith(entry, src, readFile, plugins, undefined);
 
 /** Recovering lex + parse of one module, through `parses` when given. */
 type RecoveredParse = {
-  stmts: Array<{ _tag?: string; from?: string }>;
+  stmts: Stmt[];
   diagnostics: BootstrapDiagnostic[];
 };
 

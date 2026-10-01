@@ -11,6 +11,9 @@ const root = repoRoot(import.meta.url);
 const compilerSrc = join(root, "packages/compiler/src");
 const CORE_DIRS = ["lexer", "parser", "check", "infer", "codegen", "module", "compile", "dts"];
 const CORE_SUBPATHS = [
+  "extensions",
+  "plugin-kit",
+  "plugins/jsx",
   "lexer",
   "parser",
   "check",
@@ -62,6 +65,14 @@ const SURVIVORS = ["packages", "scripts", "test", "apps", "examples"];
 
 test("the hand-authored TypeScript core stays deleted", () => {
   expect(CORE_DIRS.filter((dir) => existsSync(join(compilerSrc, dir)))).toEqual([]);
+  expect(
+    [
+      "extensions/extensions.ts",
+      "extensions/plugin-kit.ts",
+      "extensions/index.ts",
+      "extensions/plugins/jsx.ts",
+    ].filter((file) => existsSync(join(compilerSrc, file))),
+  ).toEqual([]);
 });
 
 test("the compiler publishes no TypeScript-core subpaths", () => {

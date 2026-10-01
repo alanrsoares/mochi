@@ -242,6 +242,8 @@ const prefixOf = (symbol: HoverSym | undefined): string => {
       return `(property) ${symbol.name}: `;
     case "extern":
       return `extern ${symbol.name}: `;
+    default:
+      return "";
   }
 };
 

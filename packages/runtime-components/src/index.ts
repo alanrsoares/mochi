@@ -2,7 +2,7 @@
  * Runtime composition with owned capability registrations (ADR 0058).
  *
  * This package is deliberately separate from the compiler's static
- * `LanguagePlugin` seam. Its host owns lifecycle order and cleanup for
+ * `BootstrapPlugin` seam. Its host owns lifecycle order and cleanup for
  * components that appear, disappear, or are replaced while a process runs.
  */
 import { err, isErr, ok, type Result, ResultAsync } from "@onrails/result";

@@ -1,7 +1,6 @@
 // Snapshot today's bootstrap graph as the ADR 0090 stage-1 TypeScript seed.
 // The current executable seed emits its successor; `scripts/fixpoint.ts` then
-// copies and runs that snapshot. The TypeScript compiler stays a differential
-// oracle, never the seed producer.
+// copies and runs that snapshot. There is no hand-authored TypeScript oracle.
 //
 //   bun scripts/freeze-seed.ts
 //
@@ -143,7 +142,22 @@ stripBundleSourceLabels(join(tmp, "compile.bundle.mjs"));
 rmSync(join(tmp, "compile-entry.ts"), { force: true });
 writeFileSync(
   join(tmp, "compile.bundle.d.mts"),
-  `export type BootstrapDiagnostic = { message: string; start: number; end: number };\nexport type BootstrapResult<A> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: BootstrapDiagnostic[] };\nexport type BootstrapInferResult = { env: Map<string, unknown>; types: Array<{ span: { start: number; end: number }; ty: unknown; display: string }>; aliases: Map<string, unknown>; letParams: unknown[] };\nexport const compile: (src: string) => BootstrapResult<string>;\nexport const compileTs: (src: string, runtimeImport: string) => BootstrapResult<string>;\nexport const inferTypes: (src: string) => BootstrapResult<BootstrapInferResult>;\n`,
+  `import type { SeedCompile } from "./compile-host-types";\n${[
+    "compile",
+    "compileTs",
+    "inferTypes",
+    "compileWith",
+    "compileTsWith",
+    "inferTypesWith",
+    "inferTypesRecoveringWith",
+    "nominalTypeName",
+    "symbolIndexSync",
+    "runtimeAnnotation",
+    "compileTargetsWith",
+    "emitDtsTextWith",
+  ]
+    .map((name) => `export declare const ${name}: SeedCompile["${name}"];`)
+    .join("\n")}\n`,
 );
 execFileSync(
   "bun",
@@ -196,6 +210,75 @@ rmSync(join(tmp, "syntax-entry.ts"), { force: true });
 
 // Types host plugins build against (ADR 0109), copied out of the emit so hosts
 // never compile the seed itself under their own, stricter flags.
+writeFileSync(
+  join(tmp, "compile-host-types.d.ts"),
+  hostTypesDts(
+    tmp,
+    [],
+    [
+      {
+        name: "SeedCompile",
+        saturated: true,
+        values: [
+          {
+            file: "compile.ts",
+            names: [
+              "compile",
+              "compileTs",
+              "inferTypes",
+              "compileWith",
+              "compileTsWith",
+              "inferTypesWith",
+              "inferTypesRecoveringWith",
+              "nominalTypeName",
+              "symbolIndexSync",
+              "runtimeAnnotation",
+            ],
+          },
+          { file: "dts.ts", names: ["compileTargetsWith", "emitDtsTextWith"] },
+        ],
+      },
+    ],
+  ),
+);
+writeFileSync(
+  join(tmp, "module-host-types.d.ts"),
+  hostTypesDts(
+    tmp,
+    [],
+    [
+      {
+        name: "SeedModule",
+        saturated: true,
+        values: [
+          {
+            file: "module.ts",
+            names: [
+              "buildModulesWith",
+              "buildModulesTsWith",
+              "compileGraphWith",
+              "inferGraphTypesWith",
+              "freshInferGraphState",
+              "inferGraphTypesFromWith",
+              "inferSliceOf",
+              "mergeInferStates",
+              "freshRecoveryGraphState",
+              "recoverModuleWith",
+              "recoverySliceOf",
+              "mergeRecoveryStates",
+              "compileGraphRecoveringWith",
+              "exportedOrigins",
+              "symbolOccurrences",
+              "symbolIndex",
+              "emitDts",
+              "emitDtsForFileWith",
+            ],
+          },
+        ],
+      },
+    ],
+  ),
+);
 writeFileSync(
   join(tmp, "host-types.d.ts"),
   hostTypesDts(
