@@ -55,6 +55,8 @@ const MODULES = [
   "suggest",
   "local-names",
   "infer",
+  "codegen-literals",
+  "codegen-pattern",
   "codegen",
   "ts-types",
   "codegen-ts",

@@ -255,6 +255,8 @@ const CTOR_MODULES = [
   "str-scan",
   "doc",
   "show-type-expr",
+  "codegen-literals",
+  "codegen-pattern",
 ];
 
 // Modules prepended for their constructors only, not their whole body.

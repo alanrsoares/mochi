@@ -59,6 +59,12 @@ through the façades.
 
 ## Two backends, one codegen
 
+Structural pattern compilation lives in `bootstrap/codegen-pattern.mochi`.
+Its three operations render ordered tests, binding slots, and refined TS types
+from a checked pattern and constructor field keys. Both emitters and lazy-List
+arm elements use this interface; expression emission and iterator pulling stay
+in `codegen.mochi` ([ADR 0135](adr/0135-structural-pattern-codegen.md)).
+
 mochi emits **JavaScript** and **strict-`tsc`-clean TypeScript** from the same AST. The
 JS backend (`bootstrap/codegen.mochi`) is pure and non-failing. `codegen-ts.mochi` wraps it, feeding type
 annotations pulled from the inference table; it does not re-emit — the two outputs are
