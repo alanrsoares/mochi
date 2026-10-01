@@ -1,0 +1,8 @@
+[
+  {
+    "kind": "type",
+    "message": "cannot unify \"blue\" with \"rose\"",
+    "start": 158,
+    "end": 194
+  }
+]

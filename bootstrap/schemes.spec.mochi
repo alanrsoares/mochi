@@ -20,6 +20,7 @@ import {
   tLit,
   tPrim,
   tRecord,
+  tUnion,
   tVar
 } from "./types.mochi"
 
@@ -52,10 +53,17 @@ test("generalization widens an unannotated string literal", () =>
     |> showType
     |> assertEq("string"))
 
-test("widenLits preserves finite literal unions", () =>
+test("widenLits widens a bare literal in a function domain", () =>
   widenLits(tArrow(tLit("yes"), tPrim("bool")))
     |> showType
     |> assertEq("string -> bool"))
+
+test("generalization preserves a singleton literal union", () =>
+  let ty = tArrow(tUnion([tLit("rose"), tLit("rose")]), tPrim("bool")) in
+  let sc = generalize(#{}, ty, mkSt(0), true) in
+    generalize(#{}, sc.ty, mkSt(0), true).ty
+      |> showType
+      |> assertEq("\"rose\" -> bool"))
 
 test("ctorScheme makes a polymorphic curried constructor", () =>
   let ctor = {

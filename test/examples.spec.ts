@@ -8,12 +8,27 @@ import {
   buildModulesBootstrapWith,
   defaultBootstrapOptions,
 } from "@mochi/compiler/bootstrap/module";
+import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
 import { compileAndEval, readRepo, repoPath, typesOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
+
+test("single-key styled-cva variants remain precise through component bindings", () => {
+  const component = `extern tw : a = "@styled-cva/react" "default"
+let Badge = tw.span("base", { variants: { $tone: { rose: "a" } } })
+let Copy = Badge`;
+  for (const name of ["Badge", "Copy"]) {
+    const valid = `${component}\nexport let good = <${name} $tone="rose" />`;
+    const invalid = `${component}\nexport let bad = <${name} $tone="blue" />`;
+    const opts = { plugins: [styledCvaBootstrap] };
+    expect(isErr(compile(invalid, opts))).toBe(true);
+    const targets = unwrapOk(compileTargets(valid, opts));
+    expect(targets.dts).toContain('$tone?: "rose"');
+  }
+});
 
 test("typed targets suppress docs on every declaration kind", () => {
   const src = [

@@ -113,11 +113,12 @@ let flattenUnionFrom = (members, acc, i) => switch Array.get(i, members) {
     }
 }
 
-/// Finite union. Flattens nested unions, dedupes, unwraps a singleton.
+/// Finite union. Keep singleton literal unions precise through generalization.
 export let tUnion = members =>
   let flat = flattenUnionFrom(members, [], 0) in
     switch flat {
       | [] => tPrim("string")
+      | [TySingleton(_, _)] => TyOneOf(flat)
       | [only] => only
       | _ => TyOneOf(flat)
     }

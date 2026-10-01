@@ -259,14 +259,18 @@ const flattenUnionFrom: _Curry<[members: Ty[], acc: Ty[], i: number], Ty[]> = _c
             })())(_Array_get(i, members)),
 );
 /**
- * Finite union. Flattens nested unions, dedupes, unwraps a singleton.
+ * Finite union. Keep singleton literal unions precise through generalization.
  */
 export const tUnion: (members: Ty[]) => Ty = (members: Ty[]) => {
   const flat: Ty[] = flattenUnionFrom(members, [] as Ty[], 0);
   return ((_v) =>
-    _v.length === 0 ? tPrim("string") : _v.length === 1 ? (([only]) => only)(_v) : TyOneOf(flat))(
-    flat,
-  );
+    _v.length === 0
+      ? tPrim("string")
+      : _v.length === 1 && _v[0]._tag === "TySingleton"
+        ? TyOneOf(flat)
+        : _v.length === 1
+          ? (([only]) => only)(_v)
+          : TyOneOf(flat))(flat);
 };
 const TUPLE: string = "tuple";
 export const tTuple: (elems: Ty[]) => Ty = (elems: Ty[]) => TyCon(TUPLE, elems);
