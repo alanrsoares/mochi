@@ -86,6 +86,8 @@ bun run bench compile --runs 3    # one suite, fewer runs
 bun run bench --save main         # write .cache/bench/main.json
 bun run bench --compare main      # Δ of each case's best against that baseline
 bun run bench compile --profile   # rerun under --cpu-prof; rank functions by inclusive time
+bun run bench loop --runs 12      # compiled loop/recur vs benchmark-only scalar rebinding
+bun scripts/bench-loop-node.ts    # the same fixtures under Node, plus separate GC traces
 ```
 
 `scripts/bench.ts` is the one harness for perf numbers quoted in PRs and ADRs. A
@@ -94,6 +96,11 @@ best is the headline, being the least noisy. Case names stay fixed across commit
 (sizes go in a note) so history lines up. `--profile` names the anonymous arrows
 of the esbuild seed bundles after their `var` binding, so the ranking reads as
 compiler passes (`generalize`, `inferMatch`) rather than `_curry` wrappers.
+
+The `loop` suite measures generated program execution, with compilation excluded.
+Its scalar variant is a benchmark-only alternative; it does not change codegen.
+See [the loop/recur investigation](loop-recur-benchmark.md) for measurements,
+methodology, and limitations.
 
 CI (`.github/workflows/bench.yml`) feeds `--json` to
 [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark):
