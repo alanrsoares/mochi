@@ -16,7 +16,7 @@ import {
 } from "@mochi/compiler/bootstrap";
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { lex as bootstrapLex } from "@mochi/compiler/bootstrap/syntax";
-import type { Stmt } from "@mochi/compiler/bootstrap/types";
+import type { AliasInfo, Stmt } from "@mochi/compiler/bootstrap/types";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import type { Location, Span } from "@mochi/compiler/span";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
@@ -180,7 +180,7 @@ const typeDeclOf = (name: string, idx: FileIndex, origins?: Map<string, Location
  */
 const nominalTypeAt = (
   types: readonly BootstrapTypeAt[],
-  aliases: Map<string, unknown>,
+  aliases: Map<string, AliasInfo>,
   offset: number,
 ): string | null => {
   const hit = tightestHit(types, offset, spanContainsClosed);

@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import type { SeedModule } from "../../../../bootstrap/seed/module-host-types";
 import type {
   BootstrapDiagnostic,
   BootstrapExportOrigins,
@@ -10,88 +13,21 @@ import type {
   BootstrapResult,
   BootstrapSymbolIndex,
 } from "./index.ts";
-
-type SeedModule = {
-  buildModulesWith: (
-    entry: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
-  buildModulesTsWith: (
-    entry: string,
-    runtimeImport: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
-  compileGraphWith: (
-    modules: BootstrapGraphModule[],
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapModuleOutput[], BootstrapDiagnostic[]>;
-  inferGraphTypesWith: (
-    modules: BootstrapGraphModule[],
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapGraphInferOutput[], BootstrapDiagnostic>;
-  freshInferGraphState: () => BootstrapGraphInferState;
-  inferGraphTypesFromWith: (
-    state: BootstrapGraphInferState,
-    modules: BootstrapGraphModule[],
-    opts: SeedOptions,
-  ) => BootstrapResult<BootstrapGraphInferState, BootstrapDiagnostic>;
-  inferSliceOf: (state: BootstrapGraphInferState, path: string) => BootstrapGraphInferState;
-  mergeInferStates: (
-    a: BootstrapGraphInferState,
-    b: BootstrapGraphInferState,
-  ) => BootstrapGraphInferState;
-  freshRecoveryGraphState: () => BootstrapRecoveryGraphState;
-  recoverModuleWith: (
-    state: BootstrapRecoveryGraphState,
-    module: BootstrapGraphModule,
-    isEntry: boolean,
-    opts: SeedOptions,
-  ) => BootstrapRecoveryGraphState;
-  recoverySliceOf: (
-    state: BootstrapRecoveryGraphState,
-    path: string,
-  ) => BootstrapRecoveryGraphState;
-  mergeRecoveryStates: (
-    a: BootstrapRecoveryGraphState,
-    b: BootstrapRecoveryGraphState,
-  ) => BootstrapRecoveryGraphState;
-  compileGraphRecoveringWith: (
-    modules: BootstrapGraphModule[],
-    opts: SeedOptions,
-  ) => BootstrapGraphRecovery;
-  exportedOrigins: (path: string, stmts: unknown) => BootstrapExportOrigins;
-  symbolOccurrences: (stmts: unknown) => BootstrapOccurrence[];
-  symbolIndex: (
-    path: string,
-    origins: BootstrapExportOrigins,
-    prelude: BootstrapPrelude,
-    stmts: unknown,
-  ) => BootstrapSymbolIndex;
-  emitDts: (src: string, runtimeImport: string) => BootstrapResult<string, BootstrapDiagnostic[]>;
-  emitDtsForFileWith: (
-    entry: string,
-    runtimeImport: string,
-    opts: SeedOptions,
-  ) => BootstrapResult<string, BootstrapDiagnostic>;
-};
-
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import {
   type BootstrapOptions,
   type BootstrapPlugin,
   defaultBootstrapOptions,
   editorBootstrapOptions,
-  type SeedOptions,
   toSeedOptions,
 } from "./options.ts";
 import { loadSeed, seedPath } from "./seed-path.ts";
+import type { Stmt } from "./types.ts";
 
 export type { BootstrapOptions };
 export { defaultBootstrapOptions, editorBootstrapOptions };
 
 /** A parsed graph module. `src` travels so each file's `"use open"` is visible. */
-export type BootstrapGraphModule = { path: string; src: string; stmts: unknown };
+export type BootstrapGraphModule = { path: string; src: string; stmts: Stmt[] };
 export type BootstrapGraphRecovery = {
   outputs: BootstrapModuleOutput[];
   errors: BootstrapDiagnostic[];
@@ -208,19 +144,19 @@ export const compileGraphBootstrapRecovering = (
 ): BootstrapGraphRecovery =>
   seed.compileGraphRecoveringWith(modules, toSeedOptions({ ...editorBootstrapOptions, plugins }));
 
-export const exportedOriginsBootstrap = (path: string, stmts: unknown): BootstrapExportOrigins =>
+export const exportedOriginsBootstrap = (path: string, stmts: Stmt[]): BootstrapExportOrigins =>
   seed.exportedOrigins(path, stmts);
 
-export const symbolOccurrencesBootstrap = (stmts: unknown): BootstrapOccurrence[] =>
-  seed.symbolOccurrences(stmts);
+export const symbolOccurrencesBootstrap = (stmts: readonly Stmt[]): BootstrapOccurrence[] =>
+  seed.symbolOccurrences(stmts as Stmt[]);
 
 /** The full symbol index of `stmts` at `path` (`bootstrap/symbols.mochi`). */
 export const symbolIndexBootstrap = (
   path: string,
   origins: BootstrapExportOrigins,
   prelude: BootstrapPrelude,
-  stmts: unknown,
-): BootstrapSymbolIndex => seed.symbolIndex(path, origins, prelude, stmts);
+  stmts: Stmt[],
+): BootstrapSymbolIndex => seed.symbolIndex(path, origins, prelude, stmts) as BootstrapSymbolIndex;
 
 /** `.d.ts` text for one source file, emitted by the frozen bootstrap graph. */
 export const emitDtsBootstrap = (

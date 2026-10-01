@@ -2,27 +2,26 @@ import { expect, test } from "bun:test";
 import { basename, join } from "node:path";
 import { repoRoot } from "@mochi/test-support";
 import {
+  checkGraphBootstrap,
   checkGraphBootstrapRecovering,
   createBootstrapGraphCache,
   createBootstrapRecoveryGraphCache,
   inferEntryGraphTypesBootstrap,
-  loadBootstrapCore,
 } from "./index.ts";
-import { inferTypesBootstrapSync } from "./sync.ts";
+import { buildModulesBootstrap } from "./module.ts";
+import { compileBootstrapSync, compileTsBootstrapSync, inferTypesBootstrapSync } from "./sync.ts";
 
 test("bootstrap runtime loads the manifest-verified seed compiler", async () => {
   const src = "type Flag = On | Off\nlet value = On\n";
-  const bootstrap = await loadBootstrapCore();
 
-  expect(bootstrap.compile(src)).toEqual({
+  expect(compileBootstrapSync(src)).toEqual({
     _tag: "Ok",
     value: expect.stringContaining('const On = { _tag: "On" }'),
   });
 });
 
 test("bootstrap runtime emits typed TypeScript", async () => {
-  const bootstrap = await loadBootstrapCore();
-  expect(bootstrap.compileTs("let answer = 42", "@mochi/runtime")).toEqual({
+  expect(compileTsBootstrapSync("let answer = 42", "@mochi/runtime")).toEqual({
     _tag: "Ok",
     value: expect.stringContaining("const answer"),
   });
@@ -43,9 +42,8 @@ test("bootstrap typed query records source spans", () => {
 test("bootstrap runtime builds a module graph", async () => {
   const root = repoRoot(import.meta.url);
   const entry = join(root, "examples/modules/main.mochi");
-  const bootstrap = await loadBootstrapCore();
 
-  const result = bootstrap.buildModules(entry);
+  const result = buildModulesBootstrap(entry);
   expect(result._tag).toBe("Ok");
   if (result._tag === "Ok") {
     expect(result.value.map((output) => basename(output.path))).toEqual([
@@ -171,21 +169,18 @@ test("bootstrap recovery judges only the entry strictly", async () => {
 });
 
 test("bootstrap runtime checks an editor buffer through its graph", async () => {
-  const bootstrap = await loadBootstrapCore();
-  expect(await bootstrap.checkGraph("/virtual/main.mochi", "let n = nope", async () => "")).toEqual(
-    {
-      _tag: "Err",
-      error: [
-        {
-          kind: "type",
-          message: "unbound variable 'nope'",
-          path: "/virtual/main.mochi",
-          start: 8,
-          end: 12,
-        },
-      ],
-    },
-  );
+  expect(await checkGraphBootstrap("/virtual/main.mochi", "let n = nope", async () => "")).toEqual({
+    _tag: "Err",
+    error: [
+      {
+        kind: "type",
+        message: "unbound variable 'nope'",
+        path: "/virtual/main.mochi",
+        start: 8,
+        end: 12,
+      },
+    ],
+  });
 });
 
 test("bootstrap graph recovery preserves multiple entry parse diagnostics", async () => {

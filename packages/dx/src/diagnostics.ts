@@ -15,7 +15,7 @@ import {
 } from "@mochi/compiler/bootstrap";
 import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
 import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
-import type { Diagnostic } from "@mochi/compiler/errors";
+import { type Diagnostic, diagnosticFromSeed } from "@mochi/compiler/errors";
 import { lineCol } from "@mochi/compiler/span";
 import { unusedBindings } from "./bootstrap-unused";
 
@@ -109,11 +109,7 @@ export type ModuleDiagnosticsOptions = {
   cache?: BootstrapRecoveryGraphCache;
 };
 
-type Kind = Diagnostic["kind"];
 type Span = { start: number; end: number };
-const KINDS: ReadonlySet<string> = new Set<Kind>(["lex", "parse", "check", "type"]);
-const kindOf = (error: BootstrapDiagnostic): Kind =>
-  error.kind !== undefined && KINDS.has(error.kind) ? (error.kind as Kind) : "type";
 
 const helpOf = (error: BootstrapDiagnostic, messageBody: string): string | undefined =>
   (error.help?._tag === "Some" ? error.help.value : undefined) ??
@@ -129,15 +125,10 @@ const fromBootstrap = (
   span: Span = { start: error.start, end: error.end },
   message = error.message,
 ): Diagnostic => ({
-  kind: kindOf(error),
+  ...diagnosticFromSeed(error, path),
   message,
   span,
   help: helpOf(error, message),
-  suggestions: error.suggestions?.map((suggestion) => ({
-    title: suggestion.title,
-    replaceWith: suggestion.replaceWith,
-    location: { path, span: { start: suggestion.start, end: suggestion.end } },
-  })),
 });
 
 /**

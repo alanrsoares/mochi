@@ -5,6 +5,7 @@
  */
 import { err, ok, type Result } from "@onrails/result";
 import type { Diagnostic } from "../errors/errors";
+import { diagnosticFromSeed } from "../errors/seed-diagnostic";
 import type { BootstrapDiagnostic, BootstrapResult } from "./index.ts";
 import type { BootstrapOptions, BootstrapPlugin } from "./options.ts";
 import {
@@ -34,29 +35,6 @@ export type EmitOptions = CompileOptions & { runtimeImport?: string };
 /** One file's JS, typed TS and `.d.ts`, printed from one inference. */
 export type CompileTargets = BootstrapTargets;
 
-const DIAG_KINDS = ["lex", "parse", "check", "type"] as const;
-
-const isDiagKind = (kind: string | undefined): kind is Diagnostic["kind"] =>
-  kind !== undefined && (DIAG_KINDS as readonly string[]).includes(kind);
-
-/** Seed diagnostics are `{message,start,end}` plus optional kind, help, suggestions. */
-const toDiagnostic = (d: BootstrapDiagnostic): Diagnostic => {
-  const help = d.help?._tag === "Some" ? d.help.value : undefined;
-  const suggestions = (d.suggestions ?? []).map((s) => ({
-    location: { path: "", span: { start: s.start, end: s.end } },
-    replaceWith: s.replaceWith,
-    ...(s.title ? { title: s.title } : {}),
-  }));
-  return {
-    kind: isDiagKind(d.kind) ? d.kind : "type",
-    message: d.message,
-    span: { start: d.start, end: d.end },
-    ...(d.path ? { path: d.path } : {}),
-    ...(help ? { help } : {}),
-    ...(suggestions.length > 0 ? { suggestions } : {}),
-  };
-};
-
 /** The barrel's options as the self-hosted core takes them, with the barrel's defaults. */
 const toBootstrapOptions = (opts: CompileOptions): BootstrapOptions => ({
   open: opts.open ?? false,
@@ -68,7 +46,7 @@ const toBootstrapOptions = (opts: CompileOptions): BootstrapOptions => ({
 });
 
 const fromBootstrap = <T>(r: BootstrapResult<T, BootstrapDiagnostic[]>): Result<T, Diagnostic[]> =>
-  r._tag === "Ok" ? ok(r.value) : err(r.error.map(toDiagnostic));
+  r._tag === "Ok" ? ok(r.value) : err(r.error.map((error) => diagnosticFromSeed(error)));
 
 /** Source → JS. */
 export function compile(src: string, opts: CompileOptions = {}): Result<string, Diagnostic[]> {

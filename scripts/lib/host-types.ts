@@ -14,7 +14,12 @@ export type HostTypeRoot = { file: string; names: readonly string[] };
  * Exported values a bundle re-exports, typed by their emitted annotations and
  * gathered into one record alias (`name`) that the host loads the bundle as.
  */
-export type HostValueRoot = { name: string; values: readonly HostTypeRoot[] };
+export type HostValueRoot = {
+  name: string;
+  values: readonly HostTypeRoot[];
+  /** Host drivers always supply every argument; constructors retain curry overloads. */
+  saturated?: boolean;
+};
 
 type SeedFile = {
   aliases: Map<string, string>;
@@ -97,6 +102,7 @@ export const hostTypesDts = (
     return loaded;
   };
   const owner = new Map<string, string>();
+  const visited = new Set<string>();
   const out: string[] = [];
   const visitRefs = (text: string, file: string, self: string | null): void => {
     for (const ref of words(text)) {
@@ -109,25 +115,34 @@ export const hostTypesDts = (
     }
   };
   const visit = (name: string, file: string): void => {
+    const key = `${file}:${name}`;
+    if (visited.has(key)) return;
     const seen = owner.get(name);
-    if (seen === file) return;
-    if (seen !== undefined)
-      throw new Error(`host type '${name}' is declared in both ${seen} and ${file}`);
     const decl = fileOf(file).aliases.get(name);
     if (decl === undefined) throw new Error(`${file} declares no type alias '${name}'`);
+    if (seen !== undefined && fileOf(seen).aliases.get(name) !== decl)
+      throw new Error(`host type '${name}' is declared differently in ${seen} and ${file}`);
+    visited.add(key);
+    if (seen !== undefined) {
+      visitRefs(decl.slice(decl.indexOf("=")), file, name);
+      return;
+    }
     owner.set(name, file);
     out.push(decl);
     visitRefs(decl.slice(decl.indexOf("=")), file, name);
   };
   for (const { file, names } of roots) for (const name of names) visit(name, file);
-  for (const { name, values } of valueRoots) {
+  if (valueRoots.some((root) => root.saturated))
+    out.push("type HostFn<A extends unknown[], R> = (...args: A) => R;");
+  for (const { name, values, saturated } of valueRoots) {
     const fields: string[] = [];
     for (const { file, names } of values)
       for (const value of names) {
         const annot = fileOf(file).consts.get(value);
         if (annot === undefined) throw new Error(`${file} exports no annotated const '${value}'`);
         visitRefs(annot, file, null);
-        fields.push(`  ${value}: ${annot};`);
+        const signature = saturated ? annot.replace(/^_Curry</, "HostFn<") : annot;
+        fields.push(`  ${value}: ${signature};`);
       }
     out.push(`export type ${name} = {\n${fields.join("\n")}\n};`);
   }

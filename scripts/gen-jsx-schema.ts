@@ -1,7 +1,7 @@
 // Generate `bootstrap/plugins/jsx-schema.gen.mjs` — the self-hosted plugin's view
 // of the intrinsic JSX element schema (ADR 0097). The SOURCE OF TRUTH is
-// `packages/compiler/src/extensions/plugins/jsx-schema.ts`, which `jsx.ts` and
-// `@mochi/dx` read directly.
+// `packages/compiler/src/extensions/plugins/jsx-schema.ts`, which `@mochi/dx`
+// reads directly and the self-hosted plugin consumes through the generated shim.
 //
 // The self-host reaches it through the host seam rather than as a compiled
 // module, exactly as `prelude.gen.mjs` carries the prelude tables (ADR 0075):

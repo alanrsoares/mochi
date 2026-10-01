@@ -98,7 +98,7 @@ export type BootstrapPlugin = {
 
 /** The options record as the seed reads it: `plugins` is an `Option`. */
 export type SeedOptions = Omit<BootstrapOptions, "plugins"> & {
-  plugins: BootstrapOption<readonly SeedPlugin[]>;
+  plugins: BootstrapOption<SeedPlugin[]>;
 };
 
 const none: { _tag: "None" } = { _tag: "None" };
@@ -125,7 +125,7 @@ const toSeedPlugin = (plugin: BootstrapPlugin): SeedPlugin => ({
 /** The seed's `pluginsOpt`: omitted = builtins, `[]` = hard opt-out. */
 export const toSeedPlugins = (
   plugins: readonly BootstrapPlugin[] | undefined,
-): BootstrapOption<readonly SeedPlugin[]> =>
+): BootstrapOption<SeedPlugin[]> =>
   plugins === undefined ? none : some(plugins.map(toSeedPlugin));
 
 export const toSeedOptions = ({ plugins, ...rest }: BootstrapOptions): SeedOptions => ({
