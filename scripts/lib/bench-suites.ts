@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
 import { compileGraphBootstrap } from "@mochi/compiler/bootstrap/module";
 import { format } from "@mochi/dx/format";
+import { loopCases } from "./bench-loop";
 import { vendorPluginsFor } from "./plugins";
 
 /** One measured operation. `name` must stay stable across commits: history keys on it. */
@@ -83,6 +84,10 @@ const compileCases = async (root: string, rel: string, label: string): Promise<B
 
 /** Wall-time suites for `bun run bench`: real-sized inputs. */
 export const SUITES: Record<string, BenchSuite> = {
+  loop: {
+    describe: "compiled loop/recur versus benchmark-only scalar rebinding",
+    cases: async () => loopCases(),
+  },
   fmt: {
     describe: "format three files of different sizes through @mochi/dx/format",
     cases: async (root) => FORMAT_FILES.map((rel) => fmtCase(root, rel)),
