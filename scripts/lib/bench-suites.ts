@@ -85,7 +85,7 @@ const compileCases = async (root: string, rel: string, label: string): Promise<B
 /** Wall-time suites for `bun run bench`: real-sized inputs. */
 export const SUITES: Record<string, BenchSuite> = {
   loop: {
-    describe: "compiled loop/recur versus benchmark-only scalar rebinding",
+    describe: "compiled scalar loop/recur versus the previous array rebinding",
     cases: async () => loopCases(),
   },
   fmt: {

@@ -1,5 +1,5 @@
-// Compare actual compiled loop/recur output with a benchmark-only scalar lowering.
-// The compiler is unchanged. Keep RHS evaluation ordered and finish it before rebinding.
+// Compare actual compiled scalar loop/recur output with the previous array lowering.
+// Only the rebinding block changes; runtime helpers stay identical.
 import { compileJs } from "@mochi/test-support";
 import type { BenchCase } from "./bench-suites";
 
@@ -14,7 +14,7 @@ type LoopFixture = {
 export type LoopKernel = {
   readonly name: string;
   readonly emitted: string;
-  readonly scalar: string;
+  readonly array: string;
   readonly expected: (n: number) => number;
 };
 
@@ -54,19 +54,22 @@ const FIXTURES: readonly LoopFixture[] = [
 export const loopKernels = (): readonly LoopKernel[] =>
   FIXTURES.map((fixture) => {
     const emitted = compileJs(fixture.source, { runtime: true, open: false, stripImports: true });
-    const rebind = `[${fixture.names.join(", ")}] = [${fixture.args.join(", ")}]; continue;`;
+    const temps = fixture.args.map((arg, i) => `const $recur${i} = ${arg};`);
+    const assignments = fixture.names.map((name, i) => `${name} = $recur${i};`);
+    const rebind = `{ ${temps.join(" ")} ${assignments.join(" ")} continue; }`;
     if (emitted.split(rebind).length !== 2) {
-      throw new Error(`${fixture.name}: expected exactly one direct recur rebinding`);
+      throw new Error(`${fixture.name}: expected exactly one scalar recur rebinding`);
     }
-    const temps = fixture.args.map((arg, i) => `const $next${i} = ${arg};`);
-    const assignments = fixture.names.map((name, i) => `${name} = $next${i};`);
-    const scalar = emitted.replace(rebind, `${temps.join(" ")} ${assignments.join(" ")} continue;`);
-    return { name: fixture.name, emitted, scalar, expected: fixture.expected };
+    const array = emitted.replace(
+      rebind,
+      `[${fixture.names.join(", ")}] = [${fixture.args.join(", ")}]; continue;`,
+    );
+    return { name: fixture.name, emitted, array, expected: fixture.expected };
   });
 
 export const loopCases = (): readonly BenchCase[] =>
   loopKernels().flatMap((kernel) =>
-    (["emitted", "scalar"] as const).map((variant) => {
+    (["array", "emitted"] as const).map((variant) => {
       const run = new Function(`${kernel[variant]}\nreturn run;`)() as (n: number) => number;
       // Check swaps and odd/even termination before timing. Warm the same function measured below.
       for (const n of [0, 1, 2, 3, 17, 10001]) {

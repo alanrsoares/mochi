@@ -221,8 +221,13 @@ const spaces: (n: number) => string = (n: number) => {
     if (k <= 0) {
       return acc;
     } else {
-      [k, acc] = [k - 1, `${acc} `];
-      continue;
+      {
+        const $recur0: number = k - 1;
+        const $recur1: string = `${acc} `;
+        k = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };

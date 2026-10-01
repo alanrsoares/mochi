@@ -83,6 +83,39 @@ describe("checkLoops diagnostics", () => {
 });
 
 describe("semantics", () => {
+  it("evaluates recur arguments left to right before rebinding any parameter", () => {
+    const run = evalJs(
+      `let run = log => loop (a = 1, b = 2) {
+      a > 2 ? (a, b) : recur(log(b), log(a + b))
+    }`,
+      "run",
+    ) as (log: (n: number) => number) => number[];
+    const seen: number[] = [];
+    expect(
+      run((n) => {
+        seen.push(n);
+        return n;
+      }),
+    ).toEqual([3, 5]);
+    expect(seen).toEqual([2, 3, 3, 5]);
+  });
+
+  it("preserves closures over the mutable loop parameters", () => {
+    const src = `let out = loop (i = 0, read = () => 0) {
+      i >= 2 ? read() : recur(i + 1, () => i)
+    }`;
+    expect(evalJs(src, "out")).toBe(2);
+  });
+
+  it("avoids temporary collisions with user bindings and loop parameters", () => {
+    const src = `let $recur0 = 10
+      let $recur0$ = 20
+      let out = loop ($recur1 = 0, total = 0) {
+        $recur1 >= 2 ? total : recur($recur1 + 1, total + $recur0 + $recur0$)
+      }`;
+    expect(evalJs(src, "out")).toBe(60);
+  });
+
   it("accumulates through the step protocol (switch tail)", () => {
     const src = `
       let sum = (xs) =>
@@ -143,6 +176,13 @@ describe("semantics", () => {
 });
 
 describe("emit contract", () => {
+  it("direct multi-parameter recur uses scalar temporaries", () => {
+    const out = js("let out = loop (a = 1, b = 2) { a > 2 ? b : recur(b, a + b) }");
+    expect(out).toContain("const $recur0 = b;");
+    expect(out).toContain("a = $recur0; b = $recur1; continue;");
+    expect(out).not.toContain("[a, b] =");
+  });
+
   it("a loop directly under a lambda is a bare block, not an IIFE", () => {
     const out = js("let count = (n) => loop (i = 0) { i >= n ? i : recur(i + 1) }");
     expect(out).toContain("while (true)");

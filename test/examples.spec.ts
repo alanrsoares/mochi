@@ -16,6 +16,16 @@ import { isErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("direct loop/recur rotates state simultaneously across nested loop scopes", () => {
+  const src = `let out = loop (i = 0, a = 1, b = 2, c = 3) {
+    i >= 4 ? (a, b, c) : recur(
+      loop (j = i, k = 0) { k >= 1 ? j : recur(j + 1, k + 1) },
+      b, c, a
+    )
+  }`;
+  expect(compileAndEval(src, "out")).toEqual([2, 3, 1]);
+});
+
 test("tuple wildcards discard positions in lambdas and let bindings", () => {
   for (const names of ["a, _, _", "_, a, _", "_, _, a", "_, _, _"]) {
     const value = names.includes("a") ? "a" : "42";
