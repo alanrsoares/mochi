@@ -1095,7 +1095,18 @@ const genParam: (p: LamParam) => string = (p: LamParam) =>
       : _v._tag === "LPName"
         ? (({ name }) => name)(_v)
         : _v._tag === "LPTuple"
-          ? (({ names }) => `[${_Str_join(", ", names)}]`)(_v)
+          ? (({ names }) =>
+              ((slots: string) =>
+                ((tail: string) => `[${slots}${tail}]`)(
+                  ((_v) => (_v._tag === "Some" && _v.value === "_" ? "," : ""))(
+                    _Array_get(sub(length(names), 1), names),
+                  ),
+                ))(
+                _Str_join(
+                  ", ",
+                  map((name: string) => (name === "_" ? "" : name), names),
+                ),
+              ))(_v)
           : _v._tag === "LPRecord"
             ? (({ fields }) => `{ ${_Str_join(", ", fields)} }`)(_v)
             : _v._tag === "LPLabeled"

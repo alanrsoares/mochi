@@ -6556,10 +6556,10 @@ var parseJsxAtom = _curry7(3, (toks, pos, parseExpr) => jxTokAt(toks, pos).tok._
 var seqElemExpr = (el) => ((_v) => _v._tag === "SEExpr" ? (({ expr: e }) => e)(_v) : _v._tag === "SESpread" ? (({ expr: e }) => e)(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(el);
-var inferJsxArrElems = _curry7(3, (elements, st, inferExpr) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 ? (([el, ...rest]) => _Result_flatMap2(([_, st1]) => inferJsxArrElems(rest, st1, inferExpr), inferExpr(seqElemExpr(el), st)))(_v) : (() => {
+var inferJsxArrElems = _curry7(3, (elements, st, inferExpr) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 ? (([el, ...rest]) => _Result_flatMap2(([, st1]) => inferJsxArrElems(rest, st1, inferExpr), inferExpr(seqElemExpr(el), st)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(elements));
-var inferJsxChildren = _curry7(3, (children, st, inferExpr) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 && _v[0]._tag === "EArr" ? (([{ elements }, ...rest]) => _Result_flatMap2((st1) => inferJsxChildren(rest, st1, inferExpr), inferJsxArrElems(elements, st, inferExpr)))(_v) : _v.length >= 1 ? (([child, ...rest]) => _Result_flatMap2(([_, st1]) => inferJsxChildren(rest, st1, inferExpr), inferExpr(child, st)))(_v) : (() => {
+var inferJsxChildren = _curry7(3, (children, st, inferExpr) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 && _v[0]._tag === "EArr" ? (([{ elements }, ...rest]) => _Result_flatMap2((st1) => inferJsxChildren(rest, st1, inferExpr), inferJsxArrElems(elements, st, inferExpr)))(_v) : _v.length >= 1 ? (([child, ...rest]) => _Result_flatMap2(([, st1]) => inferJsxChildren(rest, st1, inferExpr), inferExpr(child, st)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(children));
 var rowField = _curry7(2, (row, label) => ((_v) => _v._tag === "RowExtend" ? (({ label: l, fieldType, rest }) => eq4(l, label) ? Some6(fieldType) : rowField(rest, label))(_v) : _v._tag === "RowEmpty" ? None6 : _v._tag === "RowVar" ? None6 : (() => {
@@ -6589,7 +6589,7 @@ var unknownProp = _curry7(4, (tag, name, value, schema) => {
 });
 var noteProp = _curry7(3, (f, t, st) => recordBinder(f.nameSpan, t, "property", f.name, None6, st));
 var handlerType = TyFn(tPrim("Event"), tPrim("unit"));
-var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 ? (([f, ...rest]) => ((cont) => ((_v) => _v._tag === "Some" ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v) : _v._tag === "None" ? or5(_Str_startsWith2("data-", f.name), _Str_startsWith2("aria-", f.name)) ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "None" ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : _v._tag === "Some" ? (({ value: m }) => ((expected) => ((_v) => _v._tag === "None" ? unknownProp(tag, f.name, f.value, m) : _v._tag === "Some" ? (({ value: kind }) => kind === "event" ? checkHandler(f.name, f.value, st, api, (st1) => cont(noteProp(f, handlerType, st1))) : kind === "any" ? _Result_flatMap2(([_, st1]) => cont(noteProp(f, tPrim("any"), st1)), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "Some" ? (({ value: expectedT }) => _Result_flatMap2(([valT, st1]) => _Result_flatMap2((st2) => cont(noteProp(f, expectedT, st2)), api.unify(valT, expectedT, st1, jxExprSpan(f.value))), api.inferExpr(f.value, st)))(_v) : _v._tag === "None" ? _Result_flatMap2(([_, st1]) => cont(st1), api.inferExpr(f.value, st)) : (() => {
+var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 ? (([f, ...rest]) => ((cont) => ((_v) => _v._tag === "Some" ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v) : _v._tag === "None" ? or5(_Str_startsWith2("data-", f.name), _Str_startsWith2("aria-", f.name)) ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "None" ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : _v._tag === "Some" ? (({ value: m }) => ((expected) => ((_v) => _v._tag === "None" ? unknownProp(tag, f.name, f.value, m) : _v._tag === "Some" ? (({ value: kind }) => kind === "event" ? checkHandler(f.name, f.value, st, api, (st1) => cont(noteProp(f, handlerType, st1))) : kind === "any" ? _Result_flatMap2(([, st1]) => cont(noteProp(f, tPrim("any"), st1)), api.inferExpr(f.value, st)) : ((_v) => _v._tag === "Some" ? (({ value: expectedT }) => _Result_flatMap2(([valT, st1]) => _Result_flatMap2((st2) => cont(noteProp(f, expectedT, st2)), api.unify(valT, expectedT, st1, jxExprSpan(f.value))), api.inferExpr(f.value, st)))(_v) : _v._tag === "None" ? _Result_flatMap2(([, st1]) => cont(st1), api.inferExpr(f.value, st)) : (() => {
   throw new Error("non-exhaustive match");
 })())(attrKindType(kind)))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -6602,7 +6602,7 @@ var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => ((_v) =>
 })())(mismatchHint(f.name)))((st1) => inferIntrinsicFields(tag, rest, st1, api, schema)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(fields));
-var inferFragmentFields = _curry7(3, (fields, st, api) => match(fields).with((_v) => _v.length === 0, () => Ok3(st)).with((_v) => _v.length >= 1, ([f, ...rest]) => f.name === "key" ? _Result_flatMap2(([_, st1]) => inferFragmentFields(rest, st1, api), api.inferExpr(f.value, st)) : jxTypeErr(`JSX fragments only accept the 'key' prop, got '${f.name}'`, jxExprSpan(f.value))).otherwise(() => {
+var inferFragmentFields = _curry7(3, (fields, st, api) => match(fields).with((_v) => _v.length === 0, () => Ok3(st)).with((_v) => _v.length >= 1, ([f, ...rest]) => f.name === "key" ? _Result_flatMap2(([, st1]) => inferFragmentFields(rest, st1, api), api.inferExpr(f.value, st)) : jxTypeErr(`JSX fragments only accept the 'key' prop, got '${f.name}'`, jxExprSpan(f.value))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var unknownTagErr = _curry7(2, (tagName, sp) => {
@@ -6821,7 +6821,7 @@ var aliasLocalVarsFrom = _curry9(3, (params, args, st) => match3(params).with((_
 var aliasFieldsFrom = _curry9(5, (fields, vars, st, aliases, expanding) => ((_v) => _v.length === 0 ? _tuple4(RowEmpty, st) : _v.length >= 1 ? (([fld, ...rest]) => (([ft, vars1, st1]) => (([restRow, st2]) => _tuple4(rField(fld.name, ft, restRow, fld.optional), st2))(aliasFieldsFrom(rest, vars1, st1, aliases, expanding)))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(fields));
-var aliasRow = _curry9(6, (name, info, args, st, aliases, expanding) => _Set_has(name, expanding) ? _tuple4(tCon(name, args), st) : ((_v) => _v._tag === "Some" ? (({ value: te }) => (([local, st1]) => (([t, _, st2]) => _tuple4(t, st2))(typeExprToType(te, local, st1, aliases, _Set_add(name, expanding))))(aliasLocalVarsFrom(info.params, args, st)))(_v) : _v._tag === "None" ? (([local, st1]) => {
+var aliasRow = _curry9(6, (name, info, args, st, aliases, expanding) => _Set_has(name, expanding) ? _tuple4(tCon(name, args), st) : ((_v) => _v._tag === "Some" ? (({ value: te }) => (([local, st1]) => (([t, , st2]) => _tuple4(t, st2))(typeExprToType(te, local, st1, aliases, _Set_add(name, expanding))))(aliasLocalVarsFrom(info.params, args, st)))(_v) : _v._tag === "None" ? (([local, st1]) => {
   const next = _Set_add(name, expanding);
   return (([row, st2]) => _tuple4(tRecord(row), st2))(aliasFieldsFrom(info.fields, local, st1, aliases, next));
 })(aliasLocalVarsFrom(info.params, args, st)) : (() => {
@@ -6830,7 +6830,7 @@ var aliasRow = _curry9(6, (name, info, args, st, aliases, expanding) => _Set_has
 var pvarsFrom = _curry9(2, (params, st) => match3(params).with((_v) => _v.length === 0, () => _tuple4(new Map, [], st)).with((_v) => _v.length >= 1, ([p, ...rest]) => (([v, st1]) => (([restMap, restVars, st2]) => _tuple4(_Map_set3(p, v, restMap), _Array_prepend3(v, restVars), st2))(pvarsFrom(rest, st1)))(freshVar(st))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var ctorFieldsArrowFrom = _curry9(5, (fields, pvars, st, aliases, result) => ((_v) => _v.length === 0 ? _tuple4(result, st) : _v.length >= 1 ? (([fld, ...rest]) => (([ft, _, st1]) => (([restT, st2]) => _tuple4(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([]))))(_v) : (() => {
+var ctorFieldsArrowFrom = _curry9(5, (fields, pvars, st, aliases, result) => ((_v) => _v.length === 0 ? _tuple4(result, st) : _v.length >= 1 ? (([fld, ...rest]) => (([ft, , st1]) => (([restT, st2]) => _tuple4(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([]))))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(fields));
 var ctorScheme = _curry9(5, (typeName, params, c, st, aliases) => (([pvars, pvarTypes, st1]) => {
@@ -6903,7 +6903,7 @@ var isRef = _curry10(2, (fn, name) => ((_v) => _v._tag === "ERef" ? (({ name: ac
 var preactSpan = (e) => ((_v) => _v._tag === "ENum" ? (({ span: sp }) => sp)(_v) : _v._tag === "EUnit" ? (({ span: sp }) => sp)(_v) : _v._tag === "EBool" ? (({ span: sp }) => sp)(_v) : _v._tag === "EStr" ? (({ span: sp }) => sp)(_v) : _v._tag === "ERef" ? (({ span: sp }) => sp)(_v) : _v._tag === "ECall" ? (({ span: sp }) => sp)(_v) : _v._tag === "ELambda" ? (({ span: sp }) => sp)(_v) : _v._tag === "ELetIn" ? (({ span: sp }) => sp)(_v) : _v._tag === "ELetBind" ? (({ span: sp }) => sp)(_v) : _v._tag === "EPipe" ? (({ span: sp }) => sp)(_v) : _v._tag === "EDo" ? (({ span: sp }) => sp)(_v) : _v._tag === "ETernary" ? (({ span: sp }) => sp)(_v) : _v._tag === "EMatch" ? (({ span: sp }) => sp)(_v) : _v._tag === "ELoop" ? (({ span: sp }) => sp)(_v) : _v._tag === "ERecur" ? (({ span: sp }) => sp)(_v) : _v._tag === "ERecord" ? (({ span: sp }) => sp)(_v) : _v._tag === "EField" ? (({ span: sp }) => sp)(_v) : _v._tag === "ETuple" ? (({ span: sp }) => sp)(_v) : _v._tag === "EArr" ? (({ span: sp }) => sp)(_v) : _v._tag === "EList" ? (({ span: sp }) => sp)(_v) : _v._tag === "ESet" ? (({ span: sp }) => sp)(_v) : _v._tag === "EMap" ? (({ span: sp }) => sp)(_v) : _v._tag === "EInterp" ? (({ span: sp }) => sp)(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(e);
-var inferArgs = _curry10(3, (args, st, inferExpr) => match4(args).with((_v) => _v.length === 0, () => Ok5(st)).with((_v) => _v.length >= 1, ([arg, ...rest]) => _Result_flatMap4(([_, st1]) => inferArgs(rest, st1, inferExpr), inferExpr(arg, st))).otherwise(() => {
+var inferArgs = _curry10(3, (args, st, inferExpr) => match4(args).with((_v) => _v.length === 0, () => Ok5(st)).with((_v) => _v.length >= 1, ([arg, ...rest]) => _Result_flatMap4(([, st1]) => inferArgs(rest, st1, inferExpr), inferExpr(arg, st))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var inferUseState = _curry10(4, (fn, args, st, api) => and7(isRef(fn, "useState"), length7(args) === 1) ? ((_v) => _v._tag === "None" ? Ok5(None9) : _v._tag === "Some" ? (({ value: init }) => _Result_map4(([state, st1]) => {

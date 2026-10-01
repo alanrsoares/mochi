@@ -186,6 +186,10 @@ lambda params (`({ x, y }) => …`, `((a, b)) => …`) and in `let` (`let { x, y
 (`f((1, 2))` on a two-arg lambda, or `f(1, 2)` on a tuple-param lambda) is a type
 error that names this rule.
 
+Use `_` to discard tuple positions: `((a, _, _)) => a` takes one three-element
+tuple and returns its first element. Discards may repeat, including in
+`let (a, _, _) = p in a`; each position keeps its own inferred type.
+
 ## Collections
 
 Three literal forms, each a distinct type:

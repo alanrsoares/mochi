@@ -14,6 +14,13 @@ const RUNTIME_IMPORT = "../../packages/compiler/src/prelude/runtime";
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).
 const PROGRAMS: Record<string, string> = {
+  tupleWildcards: `
+let first = ((a, _, _)) => a
+let middle = ((_, a, _)) => a
+let last = ((_, _, a)) => a
+let discard = ((_, _, _)) => 42
+let values = (first((10, "ignored", true)), middle((false, 20, "ignored")), last(("ignored", false, 30)), discard((1, "two", false)))
+let fromLet = let (_, _, a) = (false, "ignored", 30) in a`,
   // A ctor nested under an array slot, and under a tuple slot, of an enclosing
   // pattern (ADR 0031). The arm's type predicate has to refine all the way down
   // or the handler destructures an un-narrowed union — TS2339 on `_0`/`args`.

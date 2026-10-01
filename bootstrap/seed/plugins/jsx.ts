@@ -747,7 +747,7 @@ const inferJsxArrElems: <A, B, C>(
         : _v.length >= 1
           ? (([el, ...rest]) =>
               _Result_flatMap(
-                ([_, st1]: [B, A]) => inferJsxArrElems(rest, st1, inferExpr),
+                ([, st1]: [B, A]) => inferJsxArrElems(rest, st1, inferExpr),
                 inferExpr(seqElemExpr(el), st),
               ))(_v)
           : (() => {
@@ -773,7 +773,7 @@ const inferJsxChildren: <A, B, C>(
           : _v.length >= 1
             ? (([child, ...rest]) =>
                 _Result_flatMap(
-                  ([_, st1]: [B, A]) => inferJsxChildren(rest, st1, inferExpr),
+                  ([, st1]: [B, A]) => inferJsxChildren(rest, st1, inferExpr),
                   inferExpr(child, st),
                 ))(_v)
             : (() => {
@@ -1082,7 +1082,7 @@ const inferIntrinsicFields: <A>(
                                                     )
                                                   : kind === "any"
                                                     ? _Result_flatMap(
-                                                        ([_, st1]) =>
+                                                        ([, st1]) =>
                                                           cont(noteProp(f, tPrim("any"), st1)),
                                                         api.inferExpr(f.value, st),
                                                       )
@@ -1107,7 +1107,7 @@ const inferIntrinsicFields: <A>(
                                                               ))(_v)
                                                           : _v._tag === "None"
                                                             ? _Result_flatMap(
-                                                                ([_, st1]) => cont(st1),
+                                                                ([, st1]) => cont(st1),
                                                                 api.inferExpr(f.value, st),
                                                               )
                                                             : (() => {
@@ -1162,7 +1162,7 @@ const inferFragmentFields: <A, B, C, D>(
         ([f, ...rest]) =>
           f.name === "key"
             ? _Result_flatMap(
-                ([_, st1]) => inferFragmentFields(rest, st1, api),
+                ([, st1]) => inferFragmentFields(rest, st1, api),
                 api.inferExpr(f.value, st),
               )
             : jxTypeErr(
