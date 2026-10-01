@@ -6,7 +6,7 @@ duplicate policy in editor-specific configuration.
 
 `mochi` is a small statically-typed functional language that compiles to readable JS
 **and** to strict-`tsc`-clean typed TypeScript — the two backends share one codegen
-(`docs/compiler.md`). ~3.4k LOC of TypeScript on [Bun](https://bun.sh). Hindley–Milner
+(`docs/compiler.md`). A self-hosted core with TypeScript host tooling on [Bun](https://bun.sh). Hindley–Milner
 (Algorithm W) with row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter
 are first-class. The self-hosted `bootstrap/` graph emits **0 `tsc --strict` errors** —
 the compiler is written in a language whose TS output typechecks.
@@ -39,34 +39,34 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 | Module | Responsibility |
 |---|---|
-| `lexer/` | text → tokens, each with a half-open `Span`; `///` docs attach via `pendingDoc` |
-| `parser/` | Pratt parser → `Program`; throws `ParseAbort` internally, caught at the `parse` boundary |
-| `ast/` | `Expr`/`Pattern`/`TypeExpr`/`Stmt` unions; `Type`/`Row` representation; spans; ctors |
-| `check/` | name registry, duplicate-decl, `switch` exhaustiveness; `symbols` index for IDE |
-| `infer/` | Algorithm W (SCC), `unify`, `schemes`, `show-type-expr`, `suggest` |
-| `codegen/` | **pure, non-failing** AST → JS; `codegen-ts` wraps it for strict-clean TS (ADR 0026) |
-| `extensions/` | `LanguagePlugin` seam (ADR 0011); `plugins/jsx` builtin |
+| `bootstrap/lexer.mochi` | text → tokens with half-open spans and attached docs |
+| `bootstrap/parser.mochi` | Pratt parser → `Program`; errors are values, with recovery holes |
+| `bootstrap/ast.mochi` · `packages/compiler/src/ast/` | core tagged AST and host DTOs; types, spans, ctors |
+| `bootstrap/check.mochi` · `bootstrap/symbols.mochi` | name registry, duplicate-decl, exhaustiveness; symbol index for IDE |
+| `bootstrap/infer.mochi` | Algorithm W (SCC), unification, schemes, type display |
+| `bootstrap/codegen.mochi` · `bootstrap/codegen-ts.mochi` | **pure, non-failing** AST → JS / strict-clean TS |
+| `bootstrap/extensions.mochi` | `BootstrapPlugin` seam; `bootstrap/plugins/jsx.mochi` builtin |
 | `doc/` | Wadler-style `Doc` IR + layout engine for hover type text; the formatter is `bootstrap/format.mochi` (ADR 0114) |
-| `module/` | `buildModules(): ResultAsync<…>` — DFS load, cycle detection, compile graph |
+| `bootstrap/module.mochi` | DFS load, cycle detection, compile graph; host façade returns `ResultAsync` |
 | `prelude/` | builtin HM signatures + namespace tables; `runtime.ts` is the runtime source of truth, `js-defs.gen.ts` its stripped JS view (ADR 0075) |
-| `dts/` | `.d.ts` emit (TS backend shares printers) |
-| `compile/` | single-file railway, `compile-targets` |
+| `bootstrap/dts.mochi` | `.d.ts` emit (TS backend shares printers) |
+| `bootstrap/compile.mochi` · `packages/compiler/src/bootstrap/` | single-file railway and host compile/emit façades |
 | `@mochi/cli` | host CLI — composes compiler + `@mochi/dx` (`fmt`) + `@mochi/codemod` |
 | `@mochi/codemod` · `@mochi/dx` · `@mochi/lsp` · `@mochi/vite-plugin` | codemods; format + IDE queries; LSP adapter; Vite (ADR 0048) |
 
 ## Conventions
 
 - **Errors are values.** Every pass returns `Result`/`ResultAsync` (`@onrails/result`).
-  One union `Diagnostic` (`kind: lex|parse|check|type`). `unify.ts`'s narrower `TypeErr`
-  becomes `Diagnostic` only at `infer.ts`'s `u()` seam (which attaches the span) — keep it.
-- **No throws** except `parser.ts`'s `ParseAbort` marker and one codegen invariant.
-- **Bootstrap-covered core is Mochi-first.** Change the matching `bootstrap/*.mochi`
-  source first, then port it to `packages/compiler/src/`; TypeScript remains the
-  temporary seed until #105, while seed-owned specs and ADR 0105 conformance define
-  behavior. See `bootstrap/README.md` and ADR 0078.
+  One host union `Diagnostic` (`kind: lex|parse|check|type`); bootstrap passes use
+  tagged diagnostics. Inference attaches spans to unification errors.
+- **No throws** in ordinary compiler control flow; codegen may emit an invariant failure.
+- **Core is authored only in Mochi.** Change `bootstrap/*.mochi`, extend seed-owned
+  specs or ADR 0105 conformance, then refresh the generated `bootstrap/seed/` with
+  `bun run seed:freeze`. Never hand-edit the seed or port changes to a TS twin:
+  the hand-authored core is gone (ADR 0131, superseding ADR 0078's dual-write rule).
 - **`ResultAsync<T,E>`, never `Promise<Result<…>>`** (`no-promise-result.grit`).
-- **One match lib:** `@onrails/pattern` `.exhaustive()` both *inside* the compiler
-  (missing an `Expr` case = TS error) and *emitted* into user JS.
+- **One host match lib:** `@onrails/pattern` `.exhaustive()` in TypeScript tooling.
+  Core Mochi uses exhaustive `switch`; emitted switches normally use ternaries (ADR 0113).
 - **Spans travel** on every token/node/type — hover/diagnostics depend on it.
 - **Named types, not inline object params** (`no-inline-struct-type.grit`).
 - **Immutable data** — `prefer-immutable-{arrays,objects}.grit` (not enforced under tests).

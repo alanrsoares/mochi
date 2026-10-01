@@ -1,6 +1,9 @@
 # 0078 — Mochi-first authoring for the self-hosted core
 
 - **Status:** Accepted
+- **Superseded in part:** ADR 0131 retires the dual-write requirement and the
+  independent hand-authored TypeScript seed/oracle consequences. The historical
+  decision below is retained; current core ownership is Mochi-only.
 - **Date:** 2026-08-27
 - **Source:** `bootstrap/`, `scripts/fixpoint.ts`, `scripts/bootstrap-tsc.ts`, [compiler self-hosting](../compiler.md#self-hosting)
 

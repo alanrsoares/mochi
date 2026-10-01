@@ -5,7 +5,8 @@ implements lexing, parsing, checking, inference, code generation, module builds,
 and the compile/build CLI. The emitted `.js` files are build artefacts; edit the
 matching `.mochi` source instead.
 
-For a bootstrap-covered core change, work in this directory first. `seed/` is the checked-in,
+Core changes are authored only in this directory; there is no hand-authored
+TypeScript twin to port them to (ADR 0131). `seed/` is the checked-in,
 SHA-256-manifested TypeScript stage-1 graph (ADR 0090): an emitted artifact
 Bun executes, never an authoring source. Compiler behavior remains a change
 to `bootstrap/*.mochi`. ADR 0105's reviewed conformance corpus now guards
@@ -31,10 +32,15 @@ guards reviewed observable behavior (ADR 0105).
 
 The boundary is intentional. `host.mjs` is the small hand-written IO/resolver
 seam, `prelude.gen.mjs` is generated from the TypeScript runtime/prelude, and
-declaration emit, IDE/LSP, Vite, codemods, and apps remain outside the
+IDE/LSP host adapters, Vite, codemods, and apps remain outside the
 self-hosted graph. The formatter joined it with `mochic fmt`: `format.mochi`
 reaches fixpoint and stays strict-tsc clean like any other module, and it is
 Mochi-first as of [ADR 0078](../docs/adr/0078-mochi-first-self-hosted-core.md)'s
 2026-09-02 amendment, and since [ADR 0114](../docs/adr/0114-bootstrap-formatter-ships.md)
 it is the only formatter: `mochi fmt`, the LSP and `bun run fmt:mochi` all run
 the seed's copy through `@mochi/dx/format`.
+
+JS, typed TS, and declaration emission all belong to the self-hosted graph.
+The committed seed emits its successor; fixpoint, strict self-emission,
+conformance, and `seed:check` guard that chain. ADR 0131 supersedes ADR 0078's
+temporary dual-write and independent TypeScript-oracle consequences.

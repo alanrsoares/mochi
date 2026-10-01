@@ -1,5 +1,5 @@
 // bootstrap/usefulness.mochi — exhaustiveness by Maranget's usefulness
-// algorithm, in mochi. Ported from packages/compiler/src/check/usefulness.ts;
+// algorithm, in mochi. Originally ported from the now-retired TS checker;
 // usefulness.spec.mochi and check.spec.mochi pin the verdict per ADR 0066.
 //
 // Shape notes vs the TS original:
