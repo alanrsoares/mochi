@@ -1,7 +1,10 @@
 # CONTEXT.md — the mochi domain model
 
 The shared vocabulary for designing and discussing the compiler. When a term here has
-a precise meaning, use it precisely. Identifiers are exact — they exist in `src/`.
+a precise meaning, use it precisely. Core authoring lives in `bootstrap/*.mochi`;
+`packages/compiler/src/` contains host façades and compatibility DTOs, not a
+second compiler (ADR 0131). The committed generated seed compiles its successor;
+core changes do not require a TypeScript port.
 
 Companion to `AGENTS.md` (how to work) and `docs/` (the language, compiler, and tooling).
 This file is the
@@ -42,7 +45,10 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 - Every `Located`, every AST node, and every inferred `TypeAt` carries a `Span`. This
   is what makes hover, inlay hints, and diagnostics possible (see ADR on spans-first).
 
-## AST (`src/ast.ts`)
+## AST (`bootstrap/ast.mochi`; host DTOs in `packages/compiler/src/ast/`)
+
+The lowercase `kind` shapes below describe host DTOs. The self-hosted graph
+uses tagged unions (`ENum`, `SLet`, `TyVar`, etc.); façades adapt them at the boundary.
 
 - **Expr** kinds: `num`, `bool`, `str`, `ref`, `call`, `lambda`, `pipe`, `match`,
   `record`, `field`, `arr`, `list`, `map`.
@@ -74,28 +80,30 @@ Empty `#{}` is Map. Array / List / Set literals share expression spreads (`[a, .
 `@{a, ...xs}`, `#{a, ...s}` — ADR 0001). `List` is lazy — its patterns lower to a
 buffered pull, not to `@onrails/pattern`.
 
-## Types & schemes (`src/types.ts`, `src/infer.ts`)
+## Types & schemes (`bootstrap/types.mochi`, `bootstrap/infer.mochi`)
 
 - **Type** — `var | con | arrow | record`. Constructors `tVar`, `tCon`, `tArrow`,
   `tRecord`, `tApp` (sugar for `tCon` with args).
 - **Row** — `empty | rvar | extend` (`extend` carries `optional: bool`, ADR 0098).
   Constructors `rEmpty`, `rVar`, `rExtend` (optionality defaults to required). Records
   are rows; **row polymorphism** is real (open tails), not faked subtyping.
-- **Scheme** — `{ vars, rvars, type }` — a generalized (∀-quantified) type. **Env** —
-  `Map<string, Scheme>`. `mono(t)`, `generalize(env, t, s)`, `instantiate(sc, f)`.
-- **Fresh** — `{ next }`; the inference supply starts at `1000`, so any type-var id
-  `< 1000` is a prelude/alias marker, not an inference var.
-- **AliasDef** — `{ name, params, template }`. `foldAliases(t, aliases)` folds a
+- **Scheme** — a generalized (∀-quantified) type: host `{ vars, rvars, type }`,
+  core `{ vars, rvars, ty }` in `bootstrap/schemes.mochi`. **Env** —
+  `Map<string, Scheme>`; `mono`, `generalize`, and `instantiate` manage schemes.
+- **Fresh supply** — `St.next` in the core; fresh-variable allocation threads
+  immutable inference state alongside the new type.
+- **Aliases** — host `AliasDef` / core `AliasInfo`. `foldAliases(t, aliases)` folds a
   matching closed record back to its alias name **for display only** (ADR 0005).
 - **Numeric:** one runtime type, `number`. `int`/`float` are transparent aliases today —
   same checking, erase to `number` — with the names reserved for a future split.
 
-## Unification (`src/unify.ts`)
+## Unification (`bootstrap/types.mochi`)
 
-- **Subst** — `{ tvars: Map<number, Type>, rvars: Map<number, Row> }`.
-- **TypeErr** — `{ message }` — unify's narrow error, distinct from `Diagnostic`.
-  Enriched (labels / help) only when lifted at `infer.ts`'s `u()` seam.
-- `resolve`/`resolveRow` (one-level follow), `zonk`/`zonkRow` (fully apply a subst),
+- **St** — immutable threaded core state containing type/row substitutions,
+  the fresh-variable supply, and recorded types. `mkSt` initializes it.
+- **Unification error** — a narrow error value, enriched with a source span
+  when lifted at the inference seam; façades adapt tagged diagnostics to host DTOs.
+- `resolve`/`resolveRow` (follow substitutions), `zonk`/`zonkRow` (fully apply them),
   the `occurs` family (occurs-check), `bindVar`/`bindRowVar`, and `rewriteRow` — which
   brings a label to a row's head, extending an open `rvar` tail with a fresh field +
   fresh tail. That is the mechanism behind row polymorphism.
@@ -168,22 +176,18 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 ## Language plugins ([ADR 0011](docs/adr/0011-language-plugins.md))
 
 - **Core (surface)** — HM + rows + variants + `Expr.call`; no kit-specific or
-  JSX-specific knowledge lives in `parser.ts` / `infer.ts` / `format.mochi` /
-  `dts.ts` (ADR 0011).
-- **`LanguagePlugin`** — the cross-pass registration seam (`src/extensions.ts`):
-  optional `parse` / `inferCall` / `bindingType` / `dtsBinding` hooks,
-  consumed by `compile`, the module
-  graph, `dts`, the Vite plugin, and the LSP. A `parse` hook is consulted at atom
-  position *after* core's own prefix tokens (so a plugin extends the grammar but
-  never shadows it) and signals errors via `ParserApi.fail` — the `ParseAbort`
-  marker stays private to `parser.ts`. Formatting hooks live on the
-  self-hosted core's `BootstrapPlugin` only (ADR 0114). `bindingType` sits inside the
-  `bindingTsType` both the `.d.ts` writer and the TS backend share, so a plugin
-  cannot type a binding one way in `.d.ts` and another in emitted `.ts`.
-  `HostExtension` is a back-compat alias/subset of `LanguagePlugin`.
+  JSX-specific knowledge lives in `bootstrap/{parser,infer,format,dts}.mochi`
+  (ADR 0011).
+- **`BootstrapPlugin`** — the shipped cross-pass registration seam
+  (`bootstrap/extensions.mochi`, host `bootstrap/options.ts`): Result/token-cursor
+  parse hooks, inference, formatting, binding-type, and completion hooks consumed
+  by compile, module graphs, DX, Vite, and LSP. Parse hooks extend atom syntax
+  after core prefix tokens; errors are values, with no `ParseAbort`. Typed TS and
+  declaration emit share binding-type hooks. `LanguagePlugin` / `HostExtension`
+  remain compatibility host types, not the core compiler protocol.
 - **Builtin plugin** — ships in the compiler itself and is registered by
   default on every standard compile path (`DEFAULT_PLUGINS`). `jsxPlugin`
-  (`src/plugins/jsx.ts`) is the first and owns all of JSX: parsing `<tag/>` →
+  (`bootstrap/plugins/jsx.mochi`) is the first and owns all of JSX: parsing `<tag/>` →
   `h(tag, props, children)`, JSX inference, the formatter's `<tag>` re-fold, and
   `VNode` component dts. The lexer stays generic — `<` is a plain `lt` token.
 - **Vendor plugin** — a library-owned adapter a project opts into, not part of
@@ -219,10 +223,10 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 - **Not primary:** inbound “read host `.d.ts` into HM” (ReScript genType is
   outbound-only). Wave 6 AST→string dts plugins are **bridges**.
 
-## Module graph (`src/module.ts`)
+## Module graph (`bootstrap/module.mochi`; host `bootstrap/module.ts` façade)
 
-- **ModuleOutput** — `{ path, js }`. **Loaded** — `{ path, prog }`. **ReadFile** —
-  `(path) => Promise<string>`.
+- **ModuleOutput** — `{ path, js }`. Core **Loaded** — `{ path, src, stmts }`.
+  Host **ReadFile** — `(path) => Promise<string>`.
 - `loadGraph` does DFS with cycle detection (`import cycle through '…'`); `compileGraph`
   compiles each module against its dependencies' already-built `Env`/registry; a missing
   export errors `'<mod>' has no export '<name>'`.
@@ -242,5 +246,6 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 - Every stage except `codegen` and `format` returns `Result<_, Diagnostic>`.
 - `format` runs lex + parse only — it never type-checks.
 - A `switch` is checked for exhaustiveness (including over imported variants) before codegen.
-- Generated `switch` uses `@onrails/pattern` (`_tag` discriminant); lazy-`List` matches
+- Generated `switch` normally uses ternaries (`_tag` discriminant); typed output
+  may use `@onrails/pattern` for nested generic arms (ADR 0113). Lazy-`List` matches
   lower to a self-contained pull IIFE instead.

@@ -1,9 +1,9 @@
-// #70 deletes the hand-authored TypeScript core. Modules that outlive it — the
+// ADR 0131 deleted the hand-authored TypeScript core. Surviving modules — the
 // barrel and its bootstrap façades (ADR 0127), the plugin seam (ADR 0011), the
-// prelude tables, `ast/`, `errors/`, DX and LSP — must not import it, or the deletion breaks them.
+// prelude tables, `ast/`, `errors/`, DX and LSP — must not reintroduce it.
 // Specs outside the core must observe the same boundary (ADR 0130).
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { repoRoot } from "@mochi/test-support";
 
@@ -59,6 +59,10 @@ const isCore = (path: string): boolean => {
 };
 
 const SURVIVORS = ["packages", "scripts", "test", "apps", "examples"];
+
+test("the hand-authored TypeScript core stays deleted", () => {
+  expect(CORE_DIRS.filter((dir) => existsSync(join(compilerSrc, dir)))).toEqual([]);
+});
 
 test("the compiler publishes no TypeScript-core subpaths", () => {
   expect(

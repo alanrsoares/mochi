@@ -174,8 +174,9 @@ real programs — a CLI, Game of Life, Snake, async, multi-file module graphs.
 
 mochi compiles itself. The self-hosted compiler in [`bootstrap/`](bootstrap/) emits
 TypeScript with **0 `tsc --strict` errors** — verified in CI on every commit, alongside a
-fixpoint check that the compiler reproduces itself byte-for-byte. About 3.4k lines of
-TypeScript, running on [Bun](https://bun.sh).
+fixpoint check that the compiler reproduces itself byte-for-byte. The compiler core
+is authored in Mochi; its generated seed and TypeScript host tooling run on
+[Bun](https://bun.sh). There is no hand-authored TypeScript compiler twin.
 
 ```bash
 bun run check        # lint + typecheck + tests

@@ -1,13 +1,13 @@
 # mochi docs
 
 `mochi` is a small statically-typed functional language. It runs on [Bun](https://bun.sh)
-(~3.4k LOC of TypeScript) and compiles a single surface language to **two** backends that
+with a Mochi-authored core and TypeScript host tooling, and compiles a single surface language to **two** backends that
 share one codegen: readable JavaScript, and typed TypeScript that is clean under
 `tsc --strict`.
 
 **Current state:**
 
-- **Self-hosting.** The compiler is re-implemented in mochi under `bootstrap/`. The
+- **Self-hosting.** The compiler is authored only in mochi under `bootstrap/` (ADR 0131). The
   shipped binary compiles that source and reproduces itself byte-for-byte at the
   fixpoint — `bun run fixpoint` is green.
 - **Dual backend, strict-clean.** The self-hosted graph emits **0 `tsc --strict`
