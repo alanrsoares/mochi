@@ -27,6 +27,8 @@ test("all bootstrap modules in the fixpoint graph are covered", () => {
       "check",
       "cli",
       "codegen",
+      "codegen-literals",
+      "codegen-pattern",
       "codegen-ts",
       "compile",
       "dts",

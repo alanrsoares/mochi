@@ -1,0 +1,24 @@
+import * as Ast from "./ast.mochi"
+
+// Encode a decoded mochi string VALUE back as a JS string literal. The
+// lexer only ever decodes \\ \" \n \t (lexer.mochi scanString — \r is NOT
+// decoded: it falls through to a literal "r"), so no mochi string value can
+// contain any other escape-worthy character — this is a complete encoder for
+// anything this compiler could have produced, and it must byte-match
+// `JSON.stringify` on that same restricted alphabet.
+let escChar = c => switch c {
+  | "\\" => "\\\\"
+  | "\"" => "\\\""
+  | "\n" => "\\n"
+  | "\t" => "\\t"
+  | _ => c
+}
+export let jsStringLit = s =>
+  "\"${Str.join("", Str.chars(s) |> map(escChar))}\""
+
+export let litValue = p => switch p {
+  | Ast.PStr(v, _) => jsStringLit(v)
+  | Ast.PLit(_, raw, _) => raw
+  | Ast.PBool(v, _) => v ? "true" : "false"
+  | _ => ""
+}

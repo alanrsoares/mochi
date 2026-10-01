@@ -1,25 +1,11 @@
-// bootstrap/codegen.mochi — the mochi codegen pass, in mochi. Ported from
-// src/codegen.ts; codegen.spec.mochi, conformance, and fixpoint pin its output.
-//
-// Shape notes vs TS original:
-// - AST declared again here (bootstrap/parser.mochi's shape/tags — same
-//   convention as check.mochi/infer.mochi): until modules arrive, each bootstrap
-//   file's runtime `_tag`s must match by hand, not by import.
-// - `ctorKeys` (TS module-level mutable Map) becomes `GCtx = { keys, ns }`,
-//   threaded through every generator/pattern-compiler function. `ns` is
-//   `namespaceRuntime` (`Ns.member` -> JS identifier).
-// - `exprRefs`'s mutable `Set` accumulator becomes an explicit
-//   threaded/returned immutable Set.
-// - `namespaceRuntime` / `preludeJsDefs` / `runtimeDeps` are NOT
-//   reimplemented — the generated prelude shim passes the shared tables in as
-//   Map arguments (one prelude, not forked — docs/PATH_TO_BOOTSTRAP.md §6).
-//   Only `builtinTypeDecls`' ctor keys
-//   (Some/None/Ok/Err — 4 entries) are small/stable enough to hardcode
-//   directly, matching infer.mochi's precedent for `builtinTypeDecls`.
-// - TS `for`/`forEach`/`flatMap` loops become tail-recursive `Array.get(i,
-//   xs)` cursor loops (matches check.mochi/infer.mochi's established idiom).
+// Shared, pure JS / strict-TS emitter. Structural pattern compilation lives
+// in codegen-pattern.mochi; this module owns expression/arm assembly, runtime
+// dependency analysis, and annotation-hook composition. Seed-owned specs,
+// conformance snapshots, and fixpoint pin its output (ADR 0131 / 0135).
 
 import * as Ast from "./ast.mochi"
+import { patSlot, patConds, patTarget } from "./codegen-pattern.mochi"
+import { jsStringLit, litValue } from "./codegen-literals.mochi"
 import { localBinderNames } from "./local-names.mochi"
 
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors.mochi"
@@ -226,21 +212,6 @@ let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | Some(x) => f(x) ? true : someOfFrom(f, xs, i + 1)
 }
 let someOf = (f, xs) => someOfFrom(f, xs, 0)
-
-// Encode a decoded mochi string VALUE back as a JS string literal. The
-// lexer only ever decodes \\ \" \n \t (src/lexer.ts scanString — \r is NOT
-// decoded: it falls through to a literal "r"), so no mochi string value can
-// contain any other escape-worthy character — this is a complete encoder for
-// anything this compiler could have produced, and it must byte-match
-// `JSON.stringify` on that same restricted alphabet.
-let escChar = c => switch c {
-  | "\\" => "\\\\"
-  | "\"" => "\\\""
-  | "\n" => "\\n"
-  | "\t" => "\\t"
-  | _ => c
-}
-let jsStringLit = s => "\"${Str.join("", Str.chars(s) |> map(escChar))}\""
 
 // Re-escape a decoded literal chunk for a JS template literal: backslashes
 // first (else the escapes we're about to insert double-escape), then the
@@ -1016,133 +987,6 @@ let isCatchAll = p => switch p {
 
 let isPList = p => switch p { | Ast.PList(_, _, _) => true | _ => false }
 
-// ---- general pattern compiler ----------------------------------------------
-// Nested patterns can't lower to matcher objects: @onrails/pattern's matcher
-// compares object values shallowly (`!==`), so `{ value: { _tag: "Sm" } }`
-// never matches. A nesting arm instead lowers to the guard form — the same
-// one array/tuple arms already use — `.with((_v) => conds, (slot) => body)`.
-// `patConds` renders the refutable tests against a path expression; `patSlot`
-// renders the JS destructuring target that binds names ("" = a hole, nothing
-// binds beneath). Lazy `plist` never reaches either: nested occurrences are
-// rejected by check.ts, top-level arms go through `genListMatch`.
-
-// `{ key: sub }` entry, punned when the bound name IS the key.
-let keyedSlot = (key, sub) => sub == key ? key : "${key}: ${sub}"
-
-let pctorEntries = (ctx: GCtx, ctor, args, i) => switch Array.get(i, args) {
-  | None => []
-  | Some(a) => let s = ctx->patSlot(a) in
-    let restEntries = ctx->pctorEntries(ctor, args, i + 1) in
-      s == ""
-        ? restEntries
-        : Array.prepend(keyedSlot(ctx->keyAt(ctor, i), s), restEntries)
-}
-
-let precordEntries = (ctx: GCtx, fields, i) => switch Array.get(i, fields) {
-  | None => []
-  | Some(f) => let s = ctx->patSlot(f.pat) in
-    let restEntries = ctx->precordEntries(fields, i + 1) in
-      s == "" ? restEntries : Array.prepend(keyedSlot(f.label, s), restEntries)
-}
-
-let patSlot = (ctx: GCtx, p) => switch p {
-  | Ast.PAs(pat, name, _, _) => let inner = ctx->patSlot(pat) in
-      inner == "" ? name : "${inner}, ${name}"
-  | Ast.PBind(name, _) => name
-  | Ast.PWild(_) => ""
-  | Ast.PUnit(_) => ""
-  | Ast.PLit(_, _, _) => ""
-  | Ast.PBool(_, _) => ""
-  | Ast.PStr(_, _) => ""
-  | Ast.PList(_, _, _) => ""
-  | Ast.PCtor(ctor, args, _, _) => let entries = ctx->pctorEntries(
-      ctor,
-      args,
-      0
-    ) in
-      Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
-  | Ast.PRecord(fields, _) => let entries = ctx->precordEntries(fields, 0) in
-      Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
-  | Ast.PTuple(elems, _) => let slots = elems |> map(el => ctx->patSlot(el)) in
-      someOf(s => s != "", slots) ? "[${Str.join(", ", slots)}]" : ""
-  | Ast.PArr(elems, rest, _) => let slots = elems
-      |> map(el => ctx->patSlot(el)) in
-    let slots2 = switch rest {
-      | Some(Ast.PBind(name, _)) => Array.append("...${name}", slots)
-      | _ => slots
-    } in
-      someOf(s => s != "", slots2) ? "[${Str.join(", ", slots2)}]" : ""
-  | Ast.POr(alts, _) =>
-    // The first alt's destructure serves the whole arm — every alt binds the
-    // same names at the same positions (enforced by check.mochi).
-    switch Array.head(alts) {
-      | Some(first) => ctx->patSlot(first)
-      | None => ""
-    }
-}
-
-let pctorConds = (ctx: GCtx, ctor, args, i, path) => switch Array.get(i, args) {
-  | None => []
-  | Some(a) => Array.concat(
-      ctx->patConds(a, "${path}.${ctx->keyAt(ctor, i)}"),
-      ctx->pctorConds(ctor, args, i + 1, path)
-    )
-}
-let precordConds = (ctx: GCtx, fields, i, path) => switch Array.get(i, fields) {
-  | None => []
-  | Some(f) => Array.concat(
-      ctx->patConds(f.pat, "${path}.${f.label}"),
-      ctx->precordConds(fields, i + 1, path)
-    )
-}
-let ptupleConds = (ctx: GCtx, elems, i, path) => switch Array.get(i, elems) {
-  | None => []
-  | Some(el) => Array.concat(
-      ctx->patConds(el, "${path}[${show(i)}]"),
-      ctx->ptupleConds(elems, i + 1, path)
-    )
-}
-let parrConds = (ctx: GCtx, elems, i, path) => switch Array.get(i, elems) {
-  | None => []
-  | Some(el) => Array.concat(
-      ctx->patConds(el, "${path}[${show(i)}]"),
-      ctx->parrConds(elems, i + 1, path)
-    )
-}
-
-let patConds = (ctx: GCtx, p, path) => switch p {
-  | Ast.PAs(pat, _, _, _) => ctx->patConds(pat, path)
-  | Ast.PWild(_) => []
-  | Ast.PUnit(_) =>
-    // `PUnit` needs no test: `unit` has exactly one inhabitant, so the type alone decides.
-    []
-  | Ast.PBind(_, _) => []
-  | Ast.PList(_, _, _) => []
-  | Ast.PLit(_, _, _) => ["${path} === ${litValue(p)}"]
-  | Ast.PBool(_, _) => ["${path} === ${litValue(p)}"]
-  | Ast.PStr(_, _) => ["${path} === ${litValue(p)}"]
-  | Ast.PCtor(ctor, args, _, _) => Array.prepend(
-      "${path}._tag === ${jsStringLit(ctor)}",
-      ctx->pctorConds(ctor, args, 0, path)
-    )
-  | Ast.PRecord(fields, _) => ctx->precordConds(fields, 0, path)
-  | Ast.PTuple(elems, _) =>
-    // No length guard — tuple arity is guaranteed by the type.
-    ctx->ptupleConds(elems, 0, path)
-  | Ast.PArr(elems, rest, _) => Array.prepend(
-      "${path}.length ${Option.isSome(rest) ? ">=" : "==="} ${show(Array.length(elems))}",
-      ctx->parrConds(elems, 0, path)
-    )
-  | Ast.POr(alts, _) =>
-    // Each alt's own conds &&-join into one guard; the alts ||-join into one.
-    let altCond = alt =>
-      let conds = ctx->patConds(alt, path) in
-        Array.length(conds) == 0
-          ? "true"
-          : Str.join(" && ", conds |> map(c => "(${c})")) in
-      [Str.join(" || ", alts |> map(alt => "(${altCond(alt)})"))]
-}
-
 // The handler parameter for a catch-all pattern: bind the name, destructure a
 // record's/tuple's binds, or ignore the value.
 let catchAllParam = (ctx: GCtx, p) => switch p {
@@ -1154,7 +998,7 @@ let catchAllParam = (ctx: GCtx, p) => switch p {
       | Some(Ast.PBind(name, _)) => "(${name})"
       | _ => "()"
     }
-  | _ => let slot = ctx->patSlot(p) in slot == "" ? "()" : "(${slot})"
+  | _ => let slot = ctx.keys->patSlot(p) in slot == "" ? "()" : "(${slot})"
 }
 
 // A switch is a "lazy-List match" when it has a narrowing `@{}`/`@{h,...t}`
@@ -1174,14 +1018,14 @@ let listTail = from =>
 let listArmGuards = (ctx: GCtx, elems, i) => switch Array.get(i, elems) {
   | None => []
   | Some(el) => Array.concat(
-      ctx->patConds(el, "_b[${show(i)}]"),
+      ctx.keys->patConds(el, "_b[${show(i)}]"),
       ctx->listArmGuards(elems, i + 1)
     )
 }
 let listArmBinds = (ctx: GCtx, elems, i) => switch Array.get(i, elems) {
   | None => ([], [])
   | Some(el) => let (restParams, restArgs) = ctx->listArmBinds(elems, i + 1) in
-    let slot = ctx->patSlot(el) in
+    let slot = ctx.keys->patSlot(el) in
       slot == ""
         ? (restParams, restArgs)
         : (
@@ -1294,7 +1138,7 @@ let hasArrArm = arms =>
 /// arm's `patTarget` (ADR 0031).
 let isShallowArm = (ctx: GCtx, p) => switch p {
   | Ast.PAs(pat, _, _, _) => isShallowPat(pat)
-  | _ => isShallowPat(p) || ctx->patSlot(p) == ""
+  | _ => isShallowPat(p) || ctx.keys->patSlot(p) == ""
 }
 
 let isShallowPat = p => switch p {
@@ -1313,23 +1157,23 @@ let armView = (ctx: GCtx, p, base) => switch base {
   | Some(b) when !(ctx->isShallowArm(p)) =>
     // Only a refining target: `_v as base` would close a row-polymorphic
     // `{…} & R` scrutinee and lose `R` (ADR 0034).
-    let target = ctx->patTarget(p, b) in
+    let target = ctx.keys->patTarget(p, b) in
       target == b ? "_v" : "(_v as ${target})"
   | _ => "_v"
 }
 
 /// Run `body` under the pattern's bindings, destructured from `view`.
 let underBinds = (ctx: GCtx, p, view, body) => switch p {
-  | Ast.PAs(pat, name, _, _) => let slot = ctx->patSlot(pat) in
+  | Ast.PAs(pat, name, _, _) => let slot = ctx.keys->patSlot(pat) in
       slot == ""
         ? "((${name}) => ${body})(${view})"
         : "((${name}) => ((${slot}) => ${body})(${name}))(${view})"
-  | _ => let slot = ctx->patSlot(p) in
+  | _ => let slot = ctx.keys->patSlot(p) in
       slot == "" ? body : "((${slot}) => ${body})(${view})"
 }
 
 let ternArmTest = (ctx: GCtx, p, guardOpt, base) =>
-  let conds = ctx->patConds(p, "_v") in
+  let conds = ctx.keys->patConds(p, "_v") in
   let all = switch guardOpt {
     | Some(g) => Array.append(
         ctx->underBinds(p, ctx->armView(p, base), "(${ctx->genExpr(g)})"),
@@ -1392,122 +1236,6 @@ let genMatchChain = (ctx: GCtx, scrutinee, arms, base) =>
       )
     )
 
-let litValue = p => switch p {
-  | Ast.PStr(v, _) => jsStringLit(v)
-  | Ast.PLit(_, raw, _) => raw
-  | Ast.PBool(v, _) => v ? "true" : "false"
-  | _ => ""
-}
-
-// ---- type-predicate targets (ADR 0031) -------------------------------------
-//
-// `@onrails/pattern`'s `Narrow` only refines a handler's input for an `x is U`
-// guard, not a plain boolean one — so a nested-pattern handler would otherwise
-// see the whole union. `patTarget` builds that `U`, narrowing `base` the same
-// way the arm's structural tests do.
-
-/// A field's refined type when its sub-pattern narrows it, else `None` — a
-/// bind/wildcard/literal needs no narrowing and keeps its declared type.
-/// Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
-/// is two slots down, and without this the predicate stopped at the top level
-/// while the handler destructured all the way (TS2339 on the inner field).
-let fieldRefine = (ctx: GCtx, p, fieldBase) => switch p {
-  | Ast.PCtor(_, _, _, _) => Some(ctx->patTarget(p, fieldBase))
-  | Ast.PRecord(_, _) => let t = ctx->patTarget(p, fieldBase) in
-      t == fieldBase ? None : Some(t)
-  | Ast.PTuple(_, _) => let t = ctx->patTarget(p, fieldBase) in
-      t == fieldBase ? None : Some(t)
-  | Ast.PArr(_, _, _) => let t = ctx->patTarget(p, fieldBase) in
-      t == fieldBase ? None : Some(t)
-  | _ => None
-}
-
-let ctorRefines = (ctx: GCtx, args, keys, member, i) => switch Array.get(i, args) {
-  | None => []
-  | Some(a) => let rest = ctx->ctorRefines(args, keys, member, i + 1) in
-    let key = Option.unwrapOr("_${show(i)}", Array.get(i, keys)) in
-      switch ctx->fieldRefine(a, "${member}[${jsStringLit(key)}]") {
-        | Some(sub) => Array.prepend("${jsStringLit(key)}: ${sub}", rest)
-        | None => rest
-      }
-}
-
-let recordRefines = (ctx: GCtx, fields, base, i) => switch Array.get(i, fields) {
-  | None => []
-  | Some(f) => let rest = ctx->recordRefines(fields, base, i + 1) in
-      switch ctx->fieldRefine(f.pat, "${base}[${jsStringLit(f.label)}]") {
-        | Some(sub) => Array.prepend("${jsStringLit(f.label)}: ${sub}", rest)
-        | None => rest
-      }
-}
-
-/// A tuple slot is indexed positionally, so each element has its own base.
-let tupleSlotBase = (base, i) => "(${base})[${show(i)}]"
-
-let tupleTargets = (ctx: GCtx, elems, base, i) => switch Array.get(i, elems) {
-  | None => []
-  | Some(el) => let slotBase = tupleSlotBase(base, i) in
-      Array.prepend(
-        Option.unwrapOr(slotBase, ctx->fieldRefine(el, slotBase)),
-        ctx->tupleTargets(elems, base, i + 1)
-      )
-}
-
-let tupleRefines = (ctx: GCtx, elems, base, i) => switch Array.get(i, elems) {
-  | None => false
-  | Some(el) => Option.isSome(
-      ctx->fieldRefine(el, tupleSlotBase(base, i))
-    ) || ctx->tupleRefines(elems, base, i + 1)
-}
-
-/// Array elements all share one element base (`T[number]`).
-let arrTargets = (ctx: GCtx, elems, elemBase, i) => switch Array.get(i, elems) {
-  | None => []
-  | Some(el) => Array.prepend(
-      Option.unwrapOr(elemBase, ctx->fieldRefine(el, elemBase)),
-      ctx->arrTargets(elems, elemBase, i + 1)
-    )
-}
-
-let arrRefines = (ctx: GCtx, elems, elemBase, i) => switch Array.get(i, elems) {
-  | None => false
-  | Some(el) => Option.isSome(
-      ctx->fieldRefine(el, elemBase)
-    ) || ctx->arrRefines(elems, elemBase, i + 1)
-}
-
-/// Refine `base` by everything the pattern structurally tests. An or-pattern
-/// keeps the base — per-alternative narrowing would need a union target.
-let patTarget = (ctx: GCtx, p, base) => switch p {
-  | Ast.PAs(pat, _, _, _) => ctx->patTarget(pat, base)
-  | Ast.PCtor(ctor, args, _, _) => let member = "Extract<${base}, { _tag: ${jsStringLit(ctor)} }>" in
-    let keys = Option.unwrapOr([], Map.get(ctor, ctx.keys)) in
-    let refines = ctx->ctorRefines(args, keys, member, 0) in
-      Array.length(refines) == 0
-        ? member
-        : "${member} & { ${Str.join("; ", refines)} }"
-  | Ast.PRecord(fields, _) => let refines = ctx->recordRefines(
-      fields,
-      base,
-      0
-    ) in
-      Array.length(refines) == 0
-        ? base
-        : "${base} & { ${Str.join("; ", refines)} }"
-  | Ast.PTuple(elems, _) => !(ctx->tupleRefines(elems, base, 0))
-      ? base
-      : "[${Str.join(", ", ctx->tupleTargets(elems, base, 0))}]"
-  | Ast.PArr(elems, restOpt, _) => let elemBase = "(${base})[number]" in
-      !(ctx->arrRefines(elems, elemBase, 0))
-        ? base
-        : let heads = Str.join(", ", ctx->arrTargets(elems, elemBase, 0)) in
-          switch restOpt {
-            | Some(_) => "[${heads}, ...${base}]"
-            | None => "[${heads}]"
-          }
-  | _ => base
-}
-
 // General arm: predicate + destructuring handler, built by the pattern
 // compiler. Handles arbitrary nesting (`Sm(Sm(n))`, `Ok((a, b))`, ctors
 // inside tuples/arrays) and `when` guards. A guard runs after the
@@ -1517,10 +1245,10 @@ let genGuardArm = (ctx: GCtx, p, body, guardOpt, base) =>
   // TS mode tests a widened `_g` copy so the boolean body does not fight
   // `_v`'s narrowed type; JS mode tests `_v` directly.
   let root = Option.isSome(base) ? "_g" : "_v" in
-  let conds0 = ctx->patConds(p, root) in
+  let conds0 = ctx.keys->patConds(p, root) in
   let slot = switch p {
-    | Ast.PAs(pat, _, _, _) => ctx->patSlot(pat)
-    | _ => ctx->patSlot(p)
+    | Ast.PAs(pat, _, _, _) => ctx.keys->patSlot(pat)
+    | _ => ctx.keys->patSlot(p)
   } in
   let conds = switch guardOpt {
     | Some(g) => switch p {
@@ -1552,7 +1280,7 @@ let genGuardArm = (ctx: GCtx, p, body, guardOpt, base) =>
     // its declared (open) type (ADR 0031 / 0034).
     switch base {
       | None => ".with((_v) => ${test}, ${handler})"
-      | Some(b) => let target = ctx->patTarget(p, b) in
+      | Some(b) => let target = ctx.keys->patTarget(p, b) in
           target == b
             ? ".with((_v) => { const _g: any = _v; return ${test}; }, ${handler})"
             : ".with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})"
@@ -1601,7 +1329,7 @@ let ctorArgParts = (ctx: GCtx, ctor, args, i) => switch Array.get(i, args) {
     let key = ctx->keyAt(ctor, i) in
       switch a {
         | Ast.PBind(name, _) => (
-            Array.prepend(keyedSlot(key, name), restBinds),
+            Array.prepend(key == name ? key : "${key}: ${name}", restBinds),
             restLits
           )
         | Ast.PLit(_, _, _) => (
@@ -1632,7 +1360,7 @@ let genWithArm = (ctx: GCtx, p, body, base) => switch p {
   | Ast.PStr(_, _) => ".with(${litValue(p)}, () => ${ctx->genLambdaBody(body)})"
   | Ast.PRecord(fields, _) => allOf(f => isFlatSub(f.pat), fields)
       ? let lits = recordLits(fields, 0) in
-      let slot = ctx->patSlot(p) in
+      let slot = ctx.keys->patSlot(p) in
         ".with({ ${Str.join(", ", lits)} }, ${slot == "" ? "()" : "(${slot})"} => ${ctx->genLambdaBody(body)})"
       : ctx->genGuardArm(p, body, None, base)
   | Ast.PCtor(ctor, args, _, _) =>

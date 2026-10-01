@@ -92,7 +92,6 @@ import {
   _Array_append,
   _Array_concat,
   _Array_get,
-  _Array_head,
   _Array_prepend,
   _List_concat,
   _Map_get,
@@ -144,6 +143,8 @@ import {
 import { match } from "@onrails/pattern";
 
 import * as Ast from "./ast";
+import { patSlot, patConds, patTarget } from "./codegen-pattern";
+import { jsStringLit, litValue } from "./codegen-literals";
 import { localBinderNames } from "./local-names";
 import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "./ctors";
 
@@ -363,11 +364,6 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
   <A>(f: (a: A) => boolean, xs: A[]) => someOfFrom(f, xs, 0),
 );
-const escChar: (c: string) => string = (c: string) =>
-  ((_v) =>
-    _v === "\\" ? "\\\\" : _v === '"' ? '\\"' : _v === "\n" ? "\\n" : _v === "\t" ? "\\t" : c)(c);
-const jsStringLit: (s: string) => string = (s: string) =>
-  `"${_Str_join("", map(escChar, _Str_chars(s)))}"`;
 const escTemplateLoop: _Curry<[chars: string[], i0: number, acc0: string], string> = _curry(
   3,
   (chars: string[], i0: number, acc0: string) => {
@@ -1099,7 +1095,7 @@ const genParam: (p: LamParam) => string = (p: LamParam) =>
               ((slots: string) =>
                 ((tail: string) => `[${slots}${tail}]`)(
                   ((_v) => (_v._tag === "Some" && _v.value === "_" ? "," : ""))(
-                    _Array_get(sub(length(names), 1), names),
+                    _Array_get(length(names) - 1, names),
                   ),
                 ))(
                 _Str_join(
@@ -1611,235 +1607,6 @@ const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
                     : false)(p);
 const isPList: (p: Pattern) => boolean = (p: Pattern) =>
   ((_v) => (_v._tag === "PList" ? true : false))(p);
-const keyedSlot: _Curry<[key: string, sub: string], string> = _curry(
-  2,
-  (key: string, sub: string) => (eq(sub, key) ? key : `${key}: ${sub}`),
-);
-const pctorEntries: _Curry<[ctx: GCtx, ctor: string, args: Pattern[], i: number], string[]> =
-  _curry(4, (ctx: GCtx, ctor: string, args: Pattern[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: a }) =>
-              ((s: string) =>
-                ((restEntries: string[]) =>
-                  s === ""
-                    ? restEntries
-                    : _Array_prepend(keyedSlot(keyAt(ctx, ctor, i), s), restEntries))(
-                  pctorEntries(ctx, ctor, args, i + 1),
-                ))(patSlot(ctx, a)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, args)),
-  );
-const precordEntries: _Curry<[ctx: GCtx, fields: PatField[], i: number], string[]> = _curry(
-  3,
-  (ctx: GCtx, fields: PatField[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              ((s: string) =>
-                ((restEntries: string[]) =>
-                  s === "" ? restEntries : _Array_prepend(keyedSlot(f.label, s), restEntries))(
-                  precordEntries(ctx, fields, i + 1),
-                ))(patSlot(ctx, f.pat)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
-);
-const patSlot: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, (ctx: GCtx, p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PAs"
-      ? (({ pat, name }) =>
-          ((inner: string) => (inner === "" ? name : `${inner}, ${name}`))(patSlot(ctx, pat)))(_v)
-      : _v._tag === "PBind"
-        ? (({ name }) => name)(_v)
-        : _v._tag === "PWild"
-          ? ""
-          : _v._tag === "PUnit"
-            ? ""
-            : _v._tag === "PLit"
-              ? ""
-              : _v._tag === "PBool"
-                ? ""
-                : _v._tag === "PStr"
-                  ? ""
-                  : _v._tag === "PList"
-                    ? ""
-                    : _v._tag === "PCtor"
-                      ? (({ ctor, args }) =>
-                          ((entries: string[]) =>
-                            length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`)(
-                            pctorEntries(ctx, ctor, args, 0),
-                          ))(_v)
-                      : _v._tag === "PRecord"
-                        ? (({ fields }) =>
-                            ((entries: string[]) =>
-                              length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`)(
-                              precordEntries(ctx, fields, 0),
-                            ))(_v)
-                        : _v._tag === "PTuple"
-                          ? (({ elems }) =>
-                              ((slots: string[]) =>
-                                someOf((s: string) => s !== "", slots)
-                                  ? `[${_Str_join(", ", slots)}]`
-                                  : "")(map((el: Pattern) => patSlot(ctx, el), elems)))(_v)
-                          : _v._tag === "PArr"
-                            ? (({ elems, rest }) =>
-                                ((slots: string[]) =>
-                                  ((slots2: string[]) =>
-                                    someOf((s: string) => s !== "", slots2)
-                                      ? `[${_Str_join(", ", slots2)}]`
-                                      : "")(
-                                    ((_v) =>
-                                      _v._tag === "Some" && _v.value._tag === "PBind"
-                                        ? (({ value: { name } }) =>
-                                            _Array_append(`...${name}`, slots))(
-                                            _v as Extract<Option<Pattern>, { _tag: "Some" }> & {
-                                              value: Extract<
-                                                Extract<Option<Pattern>, { _tag: "Some" }>["value"],
-                                                { _tag: "PBind" }
-                                              >;
-                                            },
-                                          )
-                                        : slots)(rest),
-                                  ))(map((el: Pattern) => patSlot(ctx, el), elems)))(_v)
-                            : _v._tag === "POr"
-                              ? (({ alts }) =>
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: first }) => patSlot(ctx, first))(_v)
-                                      : _v._tag === "None"
-                                        ? ""
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(_Array_head(alts)))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(p),
-);
-const pctorConds: _Curry<
-  [ctx: GCtx, ctor: string, args: Pattern[], i: number, path: string],
-  string[]
-> = _curry(5, (ctx: GCtx, ctor: string, args: Pattern[], i: number, path: string) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: a }) =>
-            _Array_concat(
-              patConds(ctx, a, `${path}.${keyAt(ctx, ctor, i)}`),
-              pctorConds(ctx, ctor, args, i + 1, path),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, args)),
-);
-const precordConds: _Curry<[ctx: GCtx, fields: PatField[], i: number, path: string], string[]> =
-  _curry(4, (ctx: GCtx, fields: PatField[], i: number, path: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              _Array_concat(
-                patConds(ctx, f.pat, `${path}.${f.label}`),
-                precordConds(ctx, fields, i + 1, path),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
-  );
-const ptupleConds: _Curry<[ctx: GCtx, elems: Pattern[], i: number, path: string], string[]> =
-  _curry(4, (ctx: GCtx, elems: Pattern[], i: number, path: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: el }) =>
-              _Array_concat(
-                patConds(ctx, el, `${path}[${show(i)}]`),
-                ptupleConds(ctx, elems, i + 1, path),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, elems)),
-  );
-const parrConds: _Curry<[ctx: GCtx, elems: Pattern[], i: number, path: string], string[]> = _curry(
-  4,
-  (ctx: GCtx, elems: Pattern[], i: number, path: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: el }) =>
-              _Array_concat(
-                patConds(ctx, el, `${path}[${show(i)}]`),
-                parrConds(ctx, elems, i + 1, path),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, elems)),
-);
-const patConds: _Curry<[ctx: GCtx, p: Pattern, path: string], string[]> = _curry(
-  3,
-  (ctx: GCtx, p: Pattern, path: string) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat }) => patConds(ctx, pat, path))(_v)
-        : _v._tag === "PWild"
-          ? ([] as string[])
-          : _v._tag === "PUnit"
-            ? ([] as string[])
-            : _v._tag === "PBind"
-              ? ([] as string[])
-              : _v._tag === "PList"
-                ? ([] as string[])
-                : _v._tag === "PLit"
-                  ? [`${path} === ${litValue(p)}`]
-                  : _v._tag === "PBool"
-                    ? [`${path} === ${litValue(p)}`]
-                    : _v._tag === "PStr"
-                      ? [`${path} === ${litValue(p)}`]
-                      : _v._tag === "PCtor"
-                        ? (({ ctor, args }) =>
-                            _Array_prepend(
-                              `${path}._tag === ${jsStringLit(ctor)}`,
-                              pctorConds(ctx, ctor, args, 0, path),
-                            ))(_v)
-                        : _v._tag === "PRecord"
-                          ? (({ fields }) => precordConds(ctx, fields, 0, path))(_v)
-                          : _v._tag === "PTuple"
-                            ? (({ elems }) => ptupleConds(ctx, elems, 0, path))(_v)
-                            : _v._tag === "PArr"
-                              ? (({ elems, rest }) =>
-                                  _Array_prepend(
-                                    `${path}.length ${_Option_isSome(rest) ? ">=" : "==="} ${show(length(elems))}`,
-                                    parrConds(ctx, elems, 0, path),
-                                  ))(_v)
-                              : _v._tag === "POr"
-                                ? (({ alts }) =>
-                                    ((altCond: (a: Pattern) => string) => [
-                                      _Str_join(
-                                        " || ",
-                                        map((alt: Pattern) => `(${altCond(alt)})`, alts),
-                                      ),
-                                    ])((alt: Pattern) => {
-                                      const conds: string[] = patConds(ctx, alt, path);
-                                      return length(conds) === 0
-                                        ? "true"
-                                        : _Str_join(
-                                            " && ",
-                                            map((c: string) => `(${c})`, conds),
-                                          );
-                                    }))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(p),
-);
 const catchAllParam: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, (ctx: GCtx, p: Pattern) =>
   ((_v) =>
     _v._tag === "PArr"
@@ -1868,7 +1635,7 @@ const catchAllParam: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, (ctx: G
                     },
                   )
                 : "()")(rest))(_v)
-        : ((slot: string) => (slot === "" ? "()" : `(${slot})`))(patSlot(ctx, p)))(p),
+        : ((slot: string) => (slot === "" ? "()" : `(${slot})`))(patSlot(ctx.keys, p)))(p),
 );
 const isListMatch: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
   arms: ({ pattern: Pattern } & A)[],
@@ -1889,9 +1656,10 @@ const listArmGuards: _Curry<[ctx: GCtx, elems: Pattern[], i: number], string[]> 
         ? ([] as string[])
         : _v._tag === "Some"
           ? (({ value: el }) =>
-              _Array_concat(patConds(ctx, el, `_b[${show(i)}]`), listArmGuards(ctx, elems, i + 1)))(
-              _v,
-            )
+              _Array_concat(
+                patConds(ctx.keys, el, `_b[${show(i)}]`),
+                listArmGuards(ctx, elems, i + 1),
+              ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, elems)),
@@ -1905,7 +1673,7 @@ const listArmBinds: _Curry<[ctx: GCtx, elems: Pattern[], i: number], [string[], 
         : _v._tag === "Some"
           ? (({ value: el }) =>
               (([restParams, restArgs]: [string[], string[]]) => {
-                const slot: string = patSlot(ctx, el);
+                const slot: string = patSlot(ctx.keys, el);
                 return slot === ""
                   ? _tuple(restParams, restArgs)
                   : _tuple(
@@ -2105,7 +1873,7 @@ const isShallowArm: _Curry<[ctx: GCtx, p: Pattern], boolean> = _curry(2, (ctx: G
   ((_v) =>
     _v._tag === "PAs"
       ? (({ pat }) => isShallowPat(pat))(_v)
-      : or(isShallowPat(p), patSlot(ctx, p) === ""))(p),
+      : or(isShallowPat(p), patSlot(ctx.keys, p) === ""))(p),
 );
 const isShallowPat: (p: Pattern) => boolean = (p: Pattern) =>
   ((_v) =>
@@ -2132,7 +1900,7 @@ const armView: _Curry<[ctx: GCtx, p: Pattern, base: Option<string>], string> = _
       _v._tag === "Some" && (({ value: b }) => !isShallowArm(ctx, p))(_v)
         ? (({ value: b }) =>
             ((target: string) => (eq(target, b) ? "_v" : `(_v as ${target})`))(
-              patTarget(ctx, p, b),
+              patTarget(ctx.keys, p, b),
             ))(_v)
         : "_v")(base),
 );
@@ -2148,16 +1916,18 @@ const underBinds: _Curry<[ctx: GCtx, p: Pattern, view: string, body: string], st
             ((slot: string) =>
               slot === ""
                 ? `((${name}) => ${body})(${view})`
-                : `((${name}) => ((${slot}) => ${body})(${name}))(${view})`)(patSlot(ctx, pat)))(_v)
+                : `((${name}) => ((${slot}) => ${body})(${name}))(${view})`)(
+              patSlot(ctx.keys, pat),
+            ))(_v)
         : ((slot: string) => (slot === "" ? body : `((${slot}) => ${body})(${view})`))(
-            patSlot(ctx, p),
+            patSlot(ctx.keys, p),
           ))(p),
 );
 const ternArmTest: _Curry<
   [ctx: GCtx, p: Pattern, guardOpt: Option<Expr>, base: Option<string>],
   string
 > = _curry(4, (ctx: GCtx, p: Pattern, guardOpt: Option<Expr>, base: Option<string>) => {
-  const conds: string[] = patConds(ctx, p, "_v");
+  const conds: string[] = patConds(ctx.keys, p, "_v");
   const all: string[] = ((_v) =>
     _v._tag === "Some"
       ? (({ value: g }) =>
@@ -2242,222 +2012,14 @@ const genMatchChain: _Curry<
     );
   })(matchArmsLoop(ctx, arms, 0, base)),
 );
-const litValue: (p: Pattern) => string = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PStr"
-      ? (({ value: v }) => jsStringLit(v))(_v)
-      : _v._tag === "PLit"
-        ? (({ raw }) => raw)(_v)
-        : _v._tag === "PBool"
-          ? (({ value: v }) => (v ? "true" : "false"))(_v)
-          : "")(p);
-/**
- * A field's refined type when its sub-pattern narrows it, else `None` — a
- * bind/wildcard/literal needs no narrowing and keeps its declared type.
- * Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
- * is two slots down, and without this the predicate stopped at the top level
- * while the handler destructured all the way (TS2339 on the inner field).
- */
-const fieldRefine: _Curry<[ctx: GCtx, p: Pattern, fieldBase: string], Option<string>> = _curry(
-  3,
-  (ctx: GCtx, p: Pattern, fieldBase: string) =>
-    ((_v) =>
-      _v._tag === "PCtor"
-        ? (Some(patTarget(ctx, p, fieldBase)) as Option<string>)
-        : _v._tag === "PRecord"
-          ? ((t: string) =>
-              eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
-              patTarget(ctx, p, fieldBase),
-            )
-          : _v._tag === "PTuple"
-            ? ((t: string) =>
-                eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
-                patTarget(ctx, p, fieldBase),
-              )
-            : _v._tag === "PArr"
-              ? ((t: string) =>
-                  eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
-                  patTarget(ctx, p, fieldBase),
-                )
-              : (None as Option<string>))(p),
-);
-const ctorRefines: _Curry<
-  [ctx: GCtx, args: Pattern[], keys: string[], member: string, i: number],
-  string[]
-> = _curry(5, (ctx: GCtx, args: Pattern[], keys: string[], member: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: a }) =>
-            ((rest: string[]) =>
-              ((key: string) =>
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: sub }) => _Array_prepend(`${jsStringLit(key)}: ${sub}`, rest))(_v)
-                    : _v._tag === "None"
-                      ? rest
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(fieldRefine(ctx, a, `${member}[${jsStringLit(key)}]`)))(
-                _Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys)),
-              ))(ctorRefines(ctx, args, keys, member, i + 1)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, args)),
-);
-const recordRefines: _Curry<[ctx: GCtx, fields: PatField[], base: string, i: number], string[]> =
-  _curry(4, (ctx: GCtx, fields: PatField[], base: string, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              ((rest: string[]) =>
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: sub }) => _Array_prepend(`${jsStringLit(f.label)}: ${sub}`, rest))(
-                        _v,
-                      )
-                    : _v._tag === "None"
-                      ? rest
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(fieldRefine(ctx, f.pat, `${base}[${jsStringLit(f.label)}]`)))(
-                recordRefines(ctx, fields, base, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
-  );
-/**
- * A tuple slot is indexed positionally, so each element has its own base.
- */
-const tupleSlotBase: <A>(base: string, i: A) => string = _curry(
-  2,
-  <A>(base: string, i: A) => `(${base})[${show(i)}]`,
-);
-const tupleTargets: _Curry<[ctx: GCtx, elems: Pattern[], base: string, i: number], string[]> =
-  _curry(4, (ctx: GCtx, elems: Pattern[], base: string, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: el }) =>
-              ((slotBase: string) =>
-                _Array_prepend(
-                  _Option_unwrapOr(slotBase, fieldRefine(ctx, el, slotBase)),
-                  tupleTargets(ctx, elems, base, i + 1),
-                ))(tupleSlotBase(base, i)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, elems)),
-  );
-const tupleRefines: _Curry<[ctx: GCtx, elems: Pattern[], base: string, i: number], boolean> =
-  _curry(4, (ctx: GCtx, elems: Pattern[], base: string, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? false
-        : _v._tag === "Some"
-          ? (({ value: el }) =>
-              or(
-                _Option_isSome(fieldRefine(ctx, el, tupleSlotBase(base, i))),
-                tupleRefines(ctx, elems, base, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, elems)),
-  );
-/**
- * Array elements all share one element base (`T[number]`).
- */
-const arrTargets: _Curry<[ctx: GCtx, elems: Pattern[], elemBase: string, i: number], string[]> =
-  _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: el }) =>
-              _Array_prepend(
-                _Option_unwrapOr(elemBase, fieldRefine(ctx, el, elemBase)),
-                arrTargets(ctx, elems, elemBase, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, elems)),
-  );
-const arrRefines: _Curry<[ctx: GCtx, elems: Pattern[], elemBase: string, i: number], boolean> =
-  _curry(4, (ctx: GCtx, elems: Pattern[], elemBase: string, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? false
-        : _v._tag === "Some"
-          ? (({ value: el }) =>
-              or(
-                _Option_isSome(fieldRefine(ctx, el, elemBase)),
-                arrRefines(ctx, elems, elemBase, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, elems)),
-  );
-/**
- * Refine `base` by everything the pattern structurally tests. An or-pattern
- * keeps the base — per-alternative narrowing would need a union target.
- */
-const patTarget: _Curry<[ctx: GCtx, p: Pattern, base: string], string> = _curry(
-  3,
-  (ctx: GCtx, p: Pattern, base: string) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat }) => patTarget(ctx, pat, base))(_v)
-        : _v._tag === "PCtor"
-          ? (({ ctor, args }) =>
-              ((member: string) =>
-                ((keys: string[]) =>
-                  ((refines: string[]) =>
-                    length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`)(
-                    ctorRefines(ctx, args, keys, member, 0),
-                  ))(_Option_unwrapOr([] as string[], _Map_get(ctor, ctx.keys))))(
-                `Extract<${base}, { _tag: ${jsStringLit(ctor)} }>`,
-              ))(_v)
-          : _v._tag === "PRecord"
-            ? (({ fields }) =>
-                ((refines: string[]) =>
-                  length(refines) === 0 ? base : `${base} & { ${_Str_join("; ", refines)} }`)(
-                  recordRefines(ctx, fields, base, 0),
-                ))(_v)
-            : _v._tag === "PTuple"
-              ? (({ elems }) =>
-                  !tupleRefines(ctx, elems, base, 0)
-                    ? base
-                    : `[${_Str_join(", ", tupleTargets(ctx, elems, base, 0))}]`)(_v)
-              : _v._tag === "PArr"
-                ? (({ elems, rest: restOpt }) =>
-                    ((elemBase: string) =>
-                      !arrRefines(ctx, elems, elemBase, 0)
-                        ? base
-                        : ((heads: string) =>
-                            ((_v) =>
-                              _v._tag === "Some"
-                                ? `[${heads}, ...${base}]`
-                                : _v._tag === "None"
-                                  ? `[${heads}]`
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(restOpt))(
-                            _Str_join(", ", arrTargets(ctx, elems, elemBase, 0)),
-                          ))(`(${base})[number]`))(_v)
-                : base)(p),
-);
 const genGuardArm: _Curry<
   [ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>],
   string
 > = _curry(5, (ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>) => {
   const root: string = _Option_isSome(base) ? "_g" : "_v";
-  const conds0: string[] = patConds(ctx, p, root);
+  const conds0: string[] = patConds(ctx.keys, p, root);
   const slot: string = ((_v) =>
-    _v._tag === "PAs" ? (({ pat }) => patSlot(ctx, pat))(_v) : patSlot(ctx, p))(p);
+    _v._tag === "PAs" ? (({ pat }) => patSlot(ctx.keys, pat))(_v) : patSlot(ctx.keys, p))(p);
   const conds: string[] = ((_v) =>
     _v._tag === "Some"
       ? (({ value: g }) =>
@@ -2498,7 +2060,7 @@ const genGuardArm: _Curry<
               eq(target, b)
                 ? `.with((_v) => { const _g: any = _v; return ${test}; }, ${handler})`
                 : `.with((_v): _v is ${target} => { const _g: any = _v; return ${test}; }, ${handler})`)(
-              patTarget(ctx, p, b),
+              patTarget(ctx.keys, p, b),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -2553,7 +2115,10 @@ const ctorArgParts: _Curry<
               return ((_v) =>
                 _v._tag === "PBind"
                   ? (({ name }) =>
-                      _tuple(_Array_prepend(keyedSlot(key, name), restBinds), restLits))(_v)
+                      _tuple(
+                        _Array_prepend(eq(key, name) ? key : `${key}: ${name}`, restBinds),
+                        restLits,
+                      ))(_v)
                   : _v._tag === "PLit"
                     ? _tuple(restBinds, _Array_prepend(`${key}: ${litValue(a)}`, restLits))
                     : _v._tag === "PBool"
@@ -2589,7 +2154,7 @@ const genWithArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr, base: Option<string
                             ? ((lits: string[]) =>
                                 ((slot: string) =>
                                   `.with({ ${_Str_join(", ", lits)} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(ctx, body)})`)(
-                                  patSlot(ctx, p),
+                                  patSlot(ctx.keys, p),
                                 ))(recordLits(fields, 0))
                             : genGuardArm(ctx, p, body, None as Option<Expr>, base))(_v)
                       : _v._tag === "PCtor"
@@ -2823,7 +2388,7 @@ const ${name} = _curry(${show(arity)}, (${args}) => ${ctor});`)(`new ${raw}(${ar
                               args === ""
                                 ? `($receiver) => $receiver[${jsStringLit(target)}]()`
                                 : `($receiver, ${args}) => $receiver[${jsStringLit(target)}](${args})`,
-                            ))(externArgs(sub(arity, 1))))(typeExprArity(typeExpr)))(
+                            ))(externArgs(arity - 1)))(typeExprArity(typeExpr)))(
                         _Str_slice(11, _Str_length(modName), modName),
                       )
                     : imported === "default"
@@ -2845,7 +2410,7 @@ const ${name} = _curry(${show(arity)}, ${flat});`)(
                                 ))(_Str_concat("$", name)))(typeExprArity(typeExpr)))(_v)
       : "")(s);
 const stripAlExt: (s: string) => string = (s: string) =>
-  _Str_endsWith(".mochi", s) ? _Str_slice(0, sub(_Str_length(s), 6), s) : s;
+  _Str_endsWith(".mochi", s) ? _Str_slice(0, _Str_length(s) - 6, s) : s;
 /**
  * Relative `./` / `../` get `ext` (`.js` for the JS backend, `""` for TS —
  * tsc resolves the extensionless sibling); bare package specs keep their
