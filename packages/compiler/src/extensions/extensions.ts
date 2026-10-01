@@ -66,9 +66,7 @@ export type ParseHook = (api: ParserApi) => Expr | null;
  * Dispatch is unchanged for now (hooks still chain in registration order and
  * self-guard by peeking); token-table dispatch is a follow-up slice.
  *
- * Distinct from `LanguagePlugin.syncTokens`: `tokens` says "my expression
- * atom *starts* here", `syncTokens` says "error recovery may *resume* at my
- * top-level keyword" — different semantics, deliberately separate fields.
+ * Error recovery resumes only at core declaration keywords (ADR 0130).
  */
 export type ParseDecl = {
   tokens: readonly Tok["t"][];
@@ -169,14 +167,6 @@ export type {
 export type LanguagePlugin = {
   name: string;
   parse?: ParseDecl;
-  /**
-   * Extra token tags the parser may resynchronise on after an error (ADR 0045).
-   * A plugin that owns a *top-level* form registers its leading keyword here so
-   * panic-mode recovery can resume at it; core's sync set stays the language's own
-   * declaration keywords. `jsxPlugin` contributes none — JSX is expression-level,
-   * which is exactly why core must not name it.
-   */
-  syncTokens?: readonly Tok["t"][];
   inferCall?: InferCallDecl;
   bindingType?: BindingTypeHook;
   dtsBinding?: DtsBindingHook;

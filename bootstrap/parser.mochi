@@ -1946,8 +1946,8 @@ let widenHeadToExport = (start, stmts) => switch stmts {
 // --- recovery (ADR 0045) ---
 
 /// Core sync set for panic-mode recovery: the language's own declaration keywords.
-/// TEof always terminates. TS lets plugins contribute `syncTokens`; no builtin
-/// plugin declares any, so this mirror carries the core set only.
+/// TEof always terminates. Plugin recovery anchors retired in ADR 0130;
+/// the shipped parser carries the core set only.
 let isSyncTok = t => switch t {
   | TLet => true
   | TType => true

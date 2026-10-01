@@ -1,7 +1,7 @@
 // #70 deletes the hand-authored TypeScript core. Modules that outlive it — the
 // barrel and its bootstrap façades (ADR 0127), the plugin seam (ADR 0011), the
-// prelude tables, `ast/`, `errors/`, DX and LSP — must not import it, or the deletion breaks them. Specs are exempt: #104
-// retires the ones that exercise the core.
+// prelude tables, `ast/`, `errors/`, DX and LSP — must not import it, or the deletion breaks them.
+// Specs outside the core must observe the same boundary (ADR 0130).
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -9,7 +9,24 @@ import { repoRoot } from "@mochi/test-support";
 
 const root = repoRoot(import.meta.url);
 const compilerSrc = join(root, "packages/compiler/src");
-const CORE_DIRS = ["lexer", "parser", "check", "infer", "codegen", "module", "compile"];
+const CORE_DIRS = ["lexer", "parser", "check", "infer", "codegen", "module", "compile", "dts"];
+const CORE_SUBPATHS = [
+  "lexer",
+  "parser",
+  "check",
+  "infer",
+  "codegen",
+  "codegen-ts",
+  "module",
+  "compile",
+  "dts",
+  "unify",
+  "scc",
+  "schemes",
+  "show-type-expr",
+  "symbols",
+  "compile-targets",
+];
 
 const exportsMap = JSON.parse(readFileSync(join(root, "packages/compiler/package.json"), "utf8"))
   .exports as Record<string, string>;
@@ -19,8 +36,9 @@ const sources = (dir: string): string[] =>
     ? [dir]
     : readdirSync(dir).flatMap((name) => {
         const p = join(dir, name);
+        if (["node_modules", "dist", ".cache", ".output"].includes(name)) return [];
         if (statSync(p).isDirectory()) return sources(p);
-        return /\.tsx?$/.test(name) && !/\.spec\.tsx?$/.test(name) ? [p] : [];
+        return /\.(?:tsx?|mts|mochi)$/.test(name) ? [p] : [];
       });
 
 const SPECIFIER = /(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g;
@@ -40,26 +58,33 @@ const isCore = (path: string): boolean => {
   return CORE_DIRS.some((d) => rel === d || rel.startsWith(`${d}/`));
 };
 
-const SURVIVORS = [
-  "packages/compiler/src/index.ts",
-  "packages/compiler/src/bootstrap",
-  "packages/compiler/src/ast",
-  "packages/compiler/src/errors",
-  "packages/compiler/src/extensions",
-  "packages/compiler/src/prelude",
-  "packages/dx/src",
-  "packages/lsp/src",
-];
+const SURVIVORS = ["packages", "scripts", "test", "apps", "examples"];
+
+test("the compiler publishes no TypeScript-core subpaths", () => {
+  expect(
+    Object.values(exportsMap).filter((path) => isCore(resolve(root, "packages/compiler", path))),
+  ).toEqual([]);
+  expect(CORE_SUBPATHS.filter((sub) => `./${sub}` in exportsMap)).toEqual([]);
+});
 
 test.each(SURVIVORS)("%s imports no TypeScript-core module", (dir) => {
-  const hits = sources(join(root, dir)).flatMap((file) =>
-    [...readFileSync(file, "utf8").matchAll(SPECIFIER)]
-      .map((m) => m[2] as string)
-      .filter((spec) => {
-        const path = target(file, spec);
-        return path !== null && isCore(path);
-      })
-      .map((spec) => `${relative(root, file)}: ${spec}`),
-  );
+  const hits = sources(join(root, dir))
+    .filter((file) => !isCore(file))
+    .flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(SPECIFIER)]
+        .map((m) => m[2] as string)
+        .filter((spec) => {
+          if (
+            CORE_SUBPATHS.some(
+              (sub) =>
+                spec === `@mochi/compiler/${sub}` || spec.startsWith(`@mochi/compiler/${sub}/`),
+            )
+          )
+            return true;
+          const path = target(file, spec);
+          return path !== null && isCore(path);
+        })
+        .map((spec) => `${relative(root, file)}: ${spec}`),
+    );
   expect(hits).toEqual([]);
 });

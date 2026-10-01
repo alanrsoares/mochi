@@ -133,6 +133,7 @@ let shapeType = (t, vars) => switch widenLits(t) {
     }
   | TyCon("Array", [elem]) => let inner = shapeType(elem, vars) in
       switch widenLits(elem) {
+        | TyCon("Task", [_, _]) => "(${inner})[]"
         | TyFn(_, _) => "(${inner})[]"
         | TyOneOf(_) => "(${inner})[]"
         | _ => "${inner}[]"
@@ -230,6 +231,7 @@ let tsOfRaw = (t, env: TsEnv) => switch t {
   | TyVar(id) => Option.unwrapOr("unknown", Map.get(id, env.vars))
   | TyCon("Array", [elem]) => let inner = tsOfRaw(elem, env) in
       switch elem {
+        | TyCon("Task", [_, _]) => "(${inner})[]"
         | TyFn(_, _) => "(${inner})[]"
         | TyOneOf(_) => "(${inner})[]"
         | _ => "${inner}[]"

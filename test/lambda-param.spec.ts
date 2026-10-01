@@ -1,19 +1,10 @@
 // Record-destructuring lambda parameters: `({ x, y }) => ...`.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { check } from "@mochi/compiler/check";
-import { inferProgram, showScheme } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { preludeEnv, preludeJsDefs } from "@mochi/compiler/prelude";
-import { compileJs } from "@mochi/test-support";
+import { preludeJsDefs } from "@mochi/compiler/prelude";
+import { compileJs, schemeOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
-
-const schemeOf = (src: string, name: string): string => {
-  const prog = unwrapOk(check(unwrapOk(parse(unwrapOk(lex(src))))));
-  return showScheme(unwrapOk(inferProgram(prog, preludeEnv, { open: true })).get(name)!);
-};
 
 const run = (src: string, ret: string): unknown => {
   const js = compileJs(src, { stripImports: true });

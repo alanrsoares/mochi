@@ -1,6 +1,6 @@
 // TypeScript declaration emission.
 import { expect, test } from "bun:test";
-import { emitDts } from "@mochi/compiler/dts";
+import { emitDts } from "@mochi/compiler";
 import { unwrapOk } from "@onrails/result";
 
 const dts = (src: string): string => unwrapOk(emitDts(src)).trim();

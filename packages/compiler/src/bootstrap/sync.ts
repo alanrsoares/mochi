@@ -19,6 +19,10 @@ import {
 export type BootstrapTargets = { js: string; ts: string; dts: string };
 
 type SeedCompile = {
+  runtimeAnnotation: (
+    name: string,
+    arity: number,
+  ) => { _tag: "Some"; value: string } | { _tag: "None" };
   compileWith: (src: string, opts: SeedOptions) => BootstrapResult<string, BootstrapDiagnostic[]>;
   compileTsWith: (
     src: string,
@@ -56,6 +60,12 @@ type SeedCompile = {
 };
 
 const seedCompile = seed as unknown as SeedCompile;
+
+/** Runtime's public annotation, printed from the seed prelude's HM signature. */
+export const runtimeAnnotationBootstrapSync = (name: string, arity: number): string | null => {
+  const annotation = seedCompile.runtimeAnnotation(name, arity);
+  return annotation._tag === "Some" ? annotation.value : null;
+};
 
 /** Synchronous seam for integrations with sync transform hooks. */
 export const compileBootstrapSyncWith = (

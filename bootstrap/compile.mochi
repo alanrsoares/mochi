@@ -11,7 +11,7 @@ import { checkAll } from "./check.mochi"
 import { inferProgramWith, inferProgramTypesWith } from "./infer.mochi"
 import { codegenWith, jsGenOpts } from "./codegen.mochi"
 import * as Infer from "./infer.mochi"
-import { emitTsModuleWith } from "./codegen-ts.mochi"
+import { emitTsModuleWith, flatHostType } from "./codegen-ts.mochi"
 import { bindingHooksFor } from "./extensions.mochi"
 import { showType } from "./types.mochi"
 import { widenLits } from "./schemes.mochi"
@@ -26,6 +26,30 @@ extern namespaces : Map<string, Map<string, a>> = "./prelude.gen.mjs" "namespace
 extern namespaceRuntime : Map<string, Map<string, string>> = "./prelude.gen.mjs" "namespaceRuntime"
 extern preludeJsDefs : Map<string, string> = "./prelude.gen.mjs" "preludeJsDefs"
 extern runtimeDeps : Map<string, [string]> = "./prelude.gen.mjs" "runtimeDeps"
+
+/// Runtime annotation from the same prelude signatures and printer as host FFI.
+export let runtimeAnnotation = (name, arity) =>
+  let ty = switch Map.get(name, builtins) {
+    | Some(t) => Some(t)
+    | None => namespaceRuntime
+        |> Map.keys
+        |> Array.reduce(
+          (found, ns) =>
+            let members = Map.get(ns, namespaceRuntime)
+              |> Option.unwrapOr(#{}) in
+              members
+                |> Map.keys
+                |> Array.reduce(
+                  (acc, key) =>
+                    Map.get(key, members) == Some(name)
+                      ? Map.get(ns, namespaces) |> Option.flatMap(Map.get(key))
+                      : acc,
+                  found
+                ),
+          None
+        )
+  } in
+    ty |> Option.map(t => flatHostType(t, arity))
 
 /// Caller-supplied knobs: `open` selects open-world inference (host globals
 /// resolve to fresh vars), `runtime` inlines the prelude helpers a program

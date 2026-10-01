@@ -1,6 +1,6 @@
 // TypeScript backend (ADR 0026) — typed `.ts` emission.
 import { expect, test } from "bun:test";
-import { codegenTs } from "@mochi/compiler/codegen-ts";
+import { codegenTs } from "@mochi/compiler";
 import { unwrapOk } from "@onrails/result";
 
 const ts = (src: string): string => unwrapOk(codegenTs(src)).trim();

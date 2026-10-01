@@ -22,6 +22,7 @@ import type { Row, SpanAt, St, Ty } from "./types";
 import type { Doc } from "./doc";
 import type { FormatApi } from "./format-api";
 import type { BoundErr } from "./plugins/jsx";
+import type { Plugin } from "./infer";
 
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type PErr = { message: string; start: number; end: number };
@@ -4185,8 +4186,8 @@ const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stm
 );
 /**
  * Core sync set for panic-mode recovery: the language's own declaration keywords.
- * TEof always terminates. TS lets plugins contribute `syncTokens`; no builtin
- * plugin declares any, so this mirror carries the core set only.
+ * TEof always terminates. Plugin recovery anchors retired in ADR 0130;
+ * the shipped parser carries the core set only.
  */
 const isSyncTok: (t: Tok) => boolean = (t: Tok) =>
   ((_v) =>

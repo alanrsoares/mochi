@@ -67,8 +67,7 @@ export type RecoveredParse = { program: Program; diagnostics: Diagnostic[] };
 
 /**
  * Core sync set for panic-mode recovery (ADR 0045): the language's own declaration
- * keywords. `eof` always terminates. Plugins add their own top-level keywords via
- * `LanguagePlugin.syncTokens` — core never names plugin syntax.
+ * keywords. `eof` always terminates. Plugin recovery anchors retired in ADR 0130.
  */
 const CORE_SYNC_TOKENS: readonly Tok["t"][] = ["let", "type", "extern", "import", "export"];
 
@@ -97,10 +96,7 @@ export function parseRecovering(toks: Located[], opts: ParseOptions = {}): Recov
    */
   const clashes = pluginClashes(plugins);
   const parseHooks: Map<Tok["t"], ParseHook> = parseHookTable(plugins);
-  const syncTokens = new Set<Tok["t"]>([
-    ...CORE_SYNC_TOKENS,
-    ...plugins.flatMap((p) => [...(p.syncTokens ?? [])]),
-  ]);
+  const syncTokens = new Set<Tok["t"]>(CORE_SYNC_TOKENS);
   // A string-literal module prologue is metadata, not a top-level expression.
   let pos = toks[0]?.t === "str" && toks[0].v === "use open" ? 1 : 0;
   let tmpCount = 0; // supplies fresh names for destructuring temporaries

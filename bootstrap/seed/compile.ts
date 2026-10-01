@@ -43,6 +43,11 @@ import {
   None,
   Ok,
   Some,
+  _Map_get,
+  _Map_keys,
+  _Option_flatMap,
+  _Option_map,
+  _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
   _Result_mapErr,
@@ -52,8 +57,10 @@ import {
   _curry,
   _tuple,
   and,
+  eq,
   map,
   or,
+  reduce,
 } from "@mochi/compiler/runtime";
 
 import { lex } from "./lexer";
@@ -62,7 +69,7 @@ import { checkAll } from "./check";
 import { inferProgramWith, inferProgramTypesWith } from "./infer";
 import { codegenWith, jsGenOpts } from "./codegen";
 import * as Infer from "./infer";
-import { emitTsModuleWith } from "./codegen-ts";
+import { emitTsModuleWith, flatHostType } from "./codegen-ts";
 import { bindingHooksFor } from "./extensions";
 import { showType } from "./types";
 import { widenLits } from "./schemes";
@@ -73,6 +80,41 @@ import { namespaces } from "./prelude.gen.mjs";
 import { namespaceRuntime } from "./prelude.gen.mjs";
 import { preludeJsDefs } from "./prelude.gen.mjs";
 import { runtimeDeps } from "./prelude.gen.mjs";
+/**
+ * Runtime annotation from the same prelude signatures and printer as host FFI.
+ */
+export const runtimeAnnotation: _Curry<[name: string, arity: number], Option<string>> = _curry(
+  2,
+  (name: string, arity: number) => {
+    const ty: Option<Ty> = ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: t }) => Some(t))(_v)
+        : _v._tag === "None"
+          ? reduce(
+              _curry(2, (found, ns: string) => {
+                const members: Map<string, string> = _Option_unwrapOr(
+                  new Map<string, string>(),
+                  _Map_get(ns, namespaceRuntime),
+                );
+                return reduce(
+                  _curry(2, (acc, key: string) =>
+                    eq(_Map_get(key, members), Some(name) as Option<string>)
+                      ? _Option_flatMap(_Map_get(key), _Map_get(ns, namespaces))
+                      : acc,
+                  ),
+                  found,
+                  _Map_keys(members),
+                );
+              }),
+              None,
+              _Map_keys(namespaceRuntime),
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Map_get(name, builtins));
+    return _Option_map((t: Ty) => flatHostType(t, arity), ty);
+  },
+);
 
 /**
  * The default every arity-preserving entrypoint below passes: strict

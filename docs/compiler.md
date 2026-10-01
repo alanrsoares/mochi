@@ -19,7 +19,9 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 | codegen | `codegen/` | **pure, non-failing** AST → JS; TS backend in `codegen-ts` |
 
 Sources live under `packages/compiler/src/<component>/` — each folder has an `index.ts`
-barrel and colocated unit specs. `@mochi/compiler/*` export URLs are unchanged.
+barrel. The public API runs through bootstrap façades; TypeScript-core subpaths
+are retired (ADR 0130). Compiler contracts live in seed-owned specs,
+conformance cases, and host integration tests.
 
 `module/` (`buildModules`) drives multi-file graphs: DFS load, cycle detection,
 cross-module inference and exhaustiveness. `prelude/` holds the builtin HM signatures
@@ -112,13 +114,14 @@ Two invariants are enforced in CI-style scripts:
   Refresh the snapshot with `bun run seed:freeze`.
 - **`bun run bootstrap:conformance`** — checked-in black-box contracts guard
   emitted output, diagnostics, graph behavior, runtime behavior, and typed TS.
-- **`bun run bootstrap:tsc`** — emit the whole graph as TypeScript and count
+- **`bun run bootstrap:self-tsc`** — emit the whole graph with the self-hosted
+  backend as TypeScript and count
   `tsc --strict` errors. The north-star number is **0**; a ratchet fails the build if it
   regresses above 0.
 
-`bun run bootstrap:self-tsc` is the third self-hosting invariant: it emits the
-graph with the SELF-HOSTED backend and requires **0** `tsc --strict` errors.
-`check:full` runs it alongside `fixpoint` and `bootstrap:tsc`.
+`check:full` runs these invariants alongside `seed:check`. The duplicate
+TypeScript-oracle `bootstrap:tsc` ratchet was folded into `bootstrap:self-tsc`
+(ADR 0130).
 
 ### Development ownership
 

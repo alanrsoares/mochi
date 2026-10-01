@@ -738,15 +738,16 @@ export let withoutOwnShape = (fields: [Ast.AliasField], params, aliases: Map<str
     }
 }
 
-let typeHeaderFrom = (stmts, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, stmts) {
+let typeHeaderFrom = (stmts, aliases: Map<string, AliasInfo>, recs, docs, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SType(name, _, params, ctors, alias, aliasType, _, doc, _)) => let rest = typeHeaderFrom(
       stmts,
       aliases,
       recs,
+      docs,
       i + 1
     ) in
-    let docComment = jsDoc(doc) in
+    let docComment = docs ? jsDoc(doc) : "" in
       switch alias {
         | Some(fields) => Array.prepend(
             // Its OWN entry is dropped, or the alias would render as itself
@@ -771,7 +772,7 @@ let typeHeaderFrom = (stmts, aliases: Map<string, AliasInfo>, recs, i) => switch
                 )
           }
       }
-  | Some(_) => typeHeaderFrom(stmts, aliases, recs, i + 1)
+  | Some(_) => typeHeaderFrom(stmts, aliases, recs, docs, i + 1)
 }
 
 /// Generic top-level function bindings, keyed by their value-lambda span ->
@@ -1150,7 +1151,7 @@ export let emitTsModuleWith = (stmts, env, types, letParams, aliases: Map<string
     aliases,
     nullaryLocalNames(stmts, 0, Set.fromArray([]))
   ) in
-  let typeHeader = typeHeaderFrom(stmts, aliases, recs, 0) in
+  let typeHeader = typeHeaderFrom(stmts, aliases, recs, docs, 0) in
   let body = codegenWith(
     stmts,
     imported,
@@ -1290,7 +1291,7 @@ let curriedHostType = (t, arity) =>
 
 /// An UNCURRIED function host gets the same overloaded signature a runtime
 /// builtin does, so both `f(a)(b)` and `f(a, b)` call sites resolve (ADR 0037).
-let flatHostType = (t, arity) =>
+export let flatHostType = (t, arity) =>
   let ids = freeIdsIn(t, []) in
   let names = lettersFor(ids, 0, #{}) in
   let head = genericHeadOf(ids, names) in

@@ -7,13 +7,12 @@
  */
 
 import { expect, test } from "bun:test";
-import { inferProgram } from "@mochi/compiler/infer";
-import { lex } from "@mochi/compiler/lexer";
-import { parse } from "@mochi/compiler/parser";
-import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
+import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { isErr, unwrapErr } from "@onrails/result";
 
 const inferOpen = (src: string) =>
-  inferProgram(unwrapOk(parse(unwrapOk(lex(src)))), {}, { open: true });
+  inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: true });
 
 const messages = (src: string): string[] => unwrapErr(inferOpen(src)).map((d) => d.message);
 
@@ -72,5 +71,5 @@ test("the diagnostic points at the offending use, not the binder", () => {
 }`;
   const [diag] = unwrapErr(inferOpen(src));
   // The last `n` — the one outside the binder — not either earlier occurrence.
-  expect(diag?.span?.start).toBe(src.lastIndexOf("n"));
+  expect(diag?.start).toBe(src.lastIndexOf("n"));
 });
