@@ -792,7 +792,7 @@ export const aliasRow: _Curry<
           _v._tag === "Some"
             ? (({ value: te }) =>
                 (([local, st1]: [Map<string, Ty>, St]) =>
-                  (([t, _, st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
+                  (([t, , st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
                     typeExprToType(te, local, st1, aliases, _Set_add(name, expanding)),
                   ))(aliasLocalVarsFrom(info.params, args, st)))(_v)
             : _v._tag === "None"
@@ -850,7 +850,7 @@ const ctorFieldsArrowFrom: _Curry<
         ? _tuple(result, st)
         : _v.length >= 1
           ? (([fld, ...rest]) =>
-              (([ft, _, st1]: [Ty, Map<string, Ty>, St]) =>
+              (([ft, , st1]: [Ty, Map<string, Ty>, St]) =>
                 (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
                   ctorFieldsArrowFrom(rest, pvars, st1, aliases, result),
                 ))(

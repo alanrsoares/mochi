@@ -106,10 +106,7 @@ const inferArgs: <A, B, C, D>(
       .with(
         (_v) => _v.length >= 1,
         ([arg, ...rest]) =>
-          _Result_flatMap(
-            ([_, st1]: [C, B]) => inferArgs(rest, st1, inferExpr),
-            inferExpr(arg, st),
-          ),
+          _Result_flatMap(([, st1]: [C, B]) => inferArgs(rest, st1, inferExpr), inferExpr(arg, st)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");

@@ -654,7 +654,16 @@ let genList = (ctx: GCtx, elements) =>
 let genParam = p => switch p {
   | Ast.LPSpanned(inner, _) => genParam(inner)
   | Ast.LPName(name, _) => name
-  | Ast.LPTuple(names) => "[${Str.join(", ", names)}]"
+  | Ast.LPTuple(names) => let slots = Str.join(
+      ", ",
+      names |> map(name => name == "_" ? "" : name)
+    ) in
+    // A trailing hole needs its own comma: [a, ,] discards the second slot.
+    let tail = switch Array.get(Array.length(names) - 1, names) {
+      | Some("_") => ","
+      | _ => ""
+    } in
+      "[${slots}${tail}]"
   | Ast.LPRecord(fields) => "{ ${Str.join(", ", fields)} }"
   | Ast.LPLabeled(name, _, _, _) =>
     // `collapseLambda` already replaced a labeled group with its `$lab` name,

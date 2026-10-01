@@ -28,6 +28,16 @@ let genSrc = src =>
 
 testEach("codegen emits runtime forms", [
   {
+    label: "tuple wildcards become destructuring holes",
+    src: "let pick = ((a, _, _)) => a",
+    want: "const pick = ([a, , ,]) => a;"
+  },
+  {
+    label: "leading tuple wildcards preserve named positions",
+    src: "let pick = ((_, _, a)) => a",
+    want: "const pick = ([, , a]) => a;"
+  },
+  {
     label: "curried multi-argument lambda",
     src: "let addPair = (a, b) => add(a, b)",
     want: "const addPair = _curry(2, (a, b) => add(a, b));"

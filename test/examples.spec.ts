@@ -16,6 +16,17 @@ import { isErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("tuple wildcards discard positions in lambdas and let bindings", () => {
+  for (const names of ["a, _, _", "_, a, _", "_, _, a", "_, _, _"]) {
+    const value = names.includes("a") ? "a" : "42";
+    const src = `let pick = ((${names})) => ${value}
+let viaLambda = pick((10, 20, 30))
+let viaLet = let (${names}) = (10, 20, 30) in ${value}`;
+    const expected = names.includes("a") ? [10, 20, 30][names.split(", ").indexOf("a")] : 42;
+    expect(compileAndEval(src, "[viaLambda, viaLet]")).toEqual([expected, expected]);
+  }
+});
+
 test("single-key styled-cva variants remain precise through component bindings", () => {
   const component = `extern tw : a = "@styled-cva/react" "default"
 let Badge = tw.span("base", { variants: { $tone: { rose: "a" } } })

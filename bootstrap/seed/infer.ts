@@ -3298,7 +3298,7 @@ const inferExprRaw: _Curry<
                                     ((_v) =>
                                       _v._tag === "Some"
                                         ? (({ value: te }) =>
-                                            (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                                            (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
                                               _Result_map(
                                                 (stB: St) => _tuple(at, stB),
                                                 checkFits(ctx, valT, at, stA, annotSpan(te)),
@@ -3540,7 +3540,7 @@ const inferDo: _Curry<
           ? (([last]) => inferExpr(ctx, last, st))(_v)
           : _v.length >= 1
             ? (([first, ...rest]) =>
-                _Result_flatMap(([_, st1]) => inferDo(ctx, rest, st1), inferExpr(ctx, first, st)))(
+                _Result_flatMap(([, st1]) => inferDo(ctx, rest, st1), inferExpr(ctx, first, st)))(
                 _v,
               )
             : (() => {
@@ -5098,7 +5098,7 @@ const registerExternsFrom: _Curry<
                 _v._tag === "SExtern"
                   ? (({ name, nameSpan, params, typeExpr, doc }) =>
                       (([vars, st0]: [Map<string, Ty>, St]) =>
-                        (([t, _, st1]: [Ty, Map<string, Ty>, St]) => {
+                        (([t, , st1]: [Ty, Map<string, Ty>, St]) => {
                           const sc: Scheme = generalize(env, t, st1, false);
                           return registerExternsFrom(
                             rest,
@@ -5328,7 +5328,7 @@ const inferMember: _Curry<
                                   ((_v) =>
                                     _v._tag === "Some"
                                       ? (({ value: te }) =>
-                                          (([at, _, stA]: [Ty, Map<string, Ty>, St]) =>
+                                          (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
                                             ((_v) =>
                                               _v._tag === "Ok"
                                                 ? (({ value: stB }) =>
