@@ -454,8 +454,13 @@ var initRow = (n) => {
     if (j > n) {
       return row;
     } else {
-      [j, row] = [j + 1, _Array_append3(j, row)];
-      continue;
+      {
+        const $recur0 = j + 1;
+        const $recur1 = _Array_append3(j, row);
+        j = $recur0;
+        row = $recur1;
+        continue;
+      }
     }
   }
 };
@@ -470,8 +475,13 @@ var fillRow = _curry5(5, (a, b, i, prev, n) => {
     if (j > n) {
       return cur;
     } else {
-      [j, cur] = [j + 1, _Array_append3(cellAt(a, b, i, j, prev, cur), cur)];
-      continue;
+      {
+        const $recur0 = j + 1;
+        const $recur1 = _Array_append3(cellAt(a, b, i, j, prev, cur), cur);
+        j = $recur0;
+        cur = $recur1;
+        continue;
+      }
     }
   }
 });
@@ -482,8 +492,13 @@ var levFrom = _curry5(4, (a, b, m, n) => {
     if (i > m) {
       return at(prev, n, n);
     } else {
-      [i, prev] = [i + 1, fillRow(a, b, i, prev, n)];
-      continue;
+      {
+        const $recur0 = i + 1;
+        const $recur1 = fillRow(a, b, i, prev, n);
+        i = $recur0;
+        prev = $recur1;
+        continue;
+      }
     }
   }
 });
@@ -583,8 +598,13 @@ var spaces = (n) => {
     if (k <= 0) {
       return acc;
     } else {
-      [k, acc] = [k - 1, `${acc} `];
-      continue;
+      {
+        const $recur0 = k - 1;
+        const $recur1 = `${acc} `;
+        k = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };

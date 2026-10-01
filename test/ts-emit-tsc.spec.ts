@@ -235,6 +235,12 @@ let runAll = xs => switch xs {
   // protocol (switch tail: ts-pattern chain yields _recur/_done, the while
   // dispatches on _tag). Loop param lets carry inferred annotations.
   loops: `
+let rotate = n => loop (i = 0, a = 1, b = 2, c = 3) { i >= n ? (a, b, c) : recur(i + 1, b, c, a) }
+let mixed = n => loop (i = 0, a = "left", b = "right", flag = true) { i >= n ? (a, flag) : recur(i + 1, b, a, !flag) }
+let captured = loop (i = 0, read = () => 0) { i >= 2 ? read() : recur(i + 1, () => i) }
+let identity = (value, n) => loop (i = 0, current = value) { i >= n ? current : recur(i + 1, current) }
+let $recur0 = 10
+let collision = loop (i = 0, total = 0) { i >= 2 ? total : recur(i + 1, total + $recur0) }
 let count = (n) => loop (i = 0) { i >= n ? i : recur(i + 1) }
 let sum = (xs) =>
   loop (acc = 0, i = 0) {

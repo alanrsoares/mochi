@@ -52,8 +52,13 @@ const initRow: (n: number) => number[] = (n: number) => {
     if (j > n) {
       return row;
     } else {
-      [j, row] = [j + 1, _Array_append(j, row)];
-      continue;
+      {
+        const $recur0: number = j + 1;
+        const $recur1: number[] = _Array_append(j, row);
+        j = $recur0;
+        row = $recur1;
+        continue;
+      }
     }
   }
 };
@@ -72,8 +77,13 @@ const fillRow: _Curry<[a: string, b: string, i: number, prev: number[], n: numbe
       if (j > n) {
         return cur;
       } else {
-        [j, cur] = [j + 1, _Array_append(cellAt(a, b, i, j, prev, cur), cur)];
-        continue;
+        {
+          const $recur0: number = j + 1;
+          const $recur1: number[] = _Array_append(cellAt(a, b, i, j, prev, cur), cur);
+          j = $recur0;
+          cur = $recur1;
+          continue;
+        }
       }
     }
   });
@@ -86,8 +96,13 @@ const levFrom: _Curry<[a: string, b: string, m: number, n: number], number> = _c
       if (i > m) {
         return at(prev, n, n);
       } else {
-        [i, prev] = [i + 1, fillRow(a, b, i, prev, n)];
-        continue;
+        {
+          const $recur0: number = i + 1;
+          const $recur1: number[] = fillRow(a, b, i, prev, n);
+          i = $recur0;
+          prev = $recur1;
+          continue;
+        }
       }
     }
   },

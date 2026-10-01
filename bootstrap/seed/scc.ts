@@ -145,8 +145,13 @@ const connectAllFrom: _Curry<[i: number, n: number, adj: number[][], st: TSt], T
       if (j >= n) {
         return current;
       } else {
-        [j, current] = [j + 1, hasIndex(j, current) ? current : connect(j, adj, current)];
-        continue;
+        {
+          const $recur0: number = j + 1;
+          const $recur1: TSt = hasIndex(j, current) ? current : connect(j, adj, current);
+          j = $recur0;
+          current = $recur1;
+          continue;
+        }
       }
     }
   },

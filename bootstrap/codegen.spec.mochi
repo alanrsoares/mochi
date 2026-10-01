@@ -28,6 +28,16 @@ let genSrc = src =>
 
 testEach("codegen emits runtime forms", [
   {
+    label: "recur temporaries avoid open-world references",
+    src: "let run = loop (i = 0, acc = 0) { i >= 1 ? acc : recur(i + 1, $recur0) }",
+    want: "const $recur0$ = add(i, 1); const $recur1 = $recur0;"
+  },
+  {
+    label: "direct recur evaluates all arguments before scalar assignments",
+    src: "let run = loop (a = 1, b = 2) { a > 2 ? b : recur(b, a + b) }",
+    want: "{ const $recur0 = b; const $recur1 = add(a, b); a = $recur0; b = $recur1; continue; }"
+  },
+  {
     label: "tuple wildcards become destructuring holes",
     src: "let pick = ((a, _, _)) => a",
     want: "const pick = ([a, , ,]) => a;"

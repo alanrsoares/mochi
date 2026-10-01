@@ -1302,6 +1302,43 @@ const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
     ", ",
     map((p: { name: string } & A) => p.name, params),
   );
+const recurTempName: _Curry<[ctx: GCtx, name: string], string> = _curry(
+  2,
+  (ctx: GCtx, name: string) =>
+    or(_Set_has(name, ctx.userNames), _Set_has(name, ctx.valueRefs))
+      ? recurTempName(ctx, `${name}$`)
+      : name,
+);
+const genRecurTemps: _Curry<[ctx: GCtx, args: Expr[], params: LoopParam[], i: number], string> =
+  _curry(4, (ctx: GCtx, args: Expr[], params: LoopParam[], i: number) =>
+    ((_v) =>
+      _v[0]._tag === "Some" && _v[1]._tag === "Some"
+        ? (([{ value: a }, { value: p }]) =>
+            ((name: string) =>
+              `const ${suffixOr(name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, a)}; ${genRecurTemps(ctx, args, params, i + 1)}`)(
+              recurTempName(ctx, `$recur${show(i)}`),
+            ))(
+            _v as [
+              Extract<[Option<Expr>, Option<LoopParam>][0], { _tag: "Some" }>,
+              Extract<[Option<Expr>, Option<LoopParam>][1], { _tag: "Some" }>,
+            ],
+          )
+        : "")(_tuple(_Array_get(i, args), _Array_get(i, params))),
+  );
+const genRecurAssignments: <A>(ctx: GCtx, params: ({ name: string } & A)[], i: number) => string =
+  _curry(3, <A>(ctx: GCtx, params: ({ name: string } & A)[], i: number) =>
+    ((_v) =>
+      _v._tag === "None"
+        ? ""
+        : _v._tag === "Some"
+          ? (({ value: p }) =>
+              `${p.name} = ${recurTempName(ctx, `$recur${show(i)}`)}; ${genRecurAssignments(ctx, params, i + 1)}`)(
+              _v,
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(_Array_get(i, params)),
+  );
 const genLoopTail: _Curry<[ctx: GCtx, e: Expr, params: LoopParam[]], string> = _curry(
   3,
   (ctx: GCtx, e: Expr, params: LoopParam[]) =>
@@ -1311,10 +1348,9 @@ const genLoopTail: _Curry<[ctx: GCtx, e: Expr, params: LoopParam[]], string> = _
             ((_v) =>
               _v[0].length === 1 && _v[1].length === 1
                 ? (([[p], [a]]) => `${p.name} = ${genExpr(ctx, a)}; continue;`)(_v)
-                : `[${loopParamNames(params)}] = [${_Str_join(
-                    ", ",
-                    map((a: Expr) => genExpr(ctx, a), args),
-                  )}]; continue;`)(_tuple(params, args)))(_v)
+                : `{ ${genRecurTemps(ctx, args, params, 0)}${genRecurAssignments(ctx, params, 0)}continue; }`)(
+              _tuple(params, args),
+            ))(_v)
         : _v._tag === "ETernary"
           ? (({ cond, thenE, elseE }) =>
               hasRecur(e)
@@ -2702,8 +2738,13 @@ const externArgs: (n: number) => string = (n: number) => {
     if (i >= n) {
       return acc;
     } else {
-      [i, acc] = [i + 1, acc === "" ? `$a${show(i)}` : `${acc}, $a${show(i)}`];
-      continue;
+      {
+        const $recur0: number = i + 1;
+        const $recur1: string = acc === "" ? `$a${show(i)}` : `${acc}, $a${show(i)}`;
+        i = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };
@@ -2717,8 +2758,13 @@ const externApplied: (n: number) => string = (n: number) => {
     if (i >= n) {
       return acc;
     } else {
-      [i, acc] = [i + 1, `${acc}($a${show(i)})`];
-      continue;
+      {
+        const $recur0: number = i + 1;
+        const $recur1: string = `${acc}($a${show(i)})`;
+        i = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };

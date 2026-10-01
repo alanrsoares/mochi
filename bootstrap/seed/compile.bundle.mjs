@@ -459,8 +459,13 @@ var initRow = (n) => {
     if (j > n) {
       return row;
     } else {
-      [j, row] = [j + 1, _Array_append3(j, row)];
-      continue;
+      {
+        const $recur0 = j + 1;
+        const $recur1 = _Array_append3(j, row);
+        j = $recur0;
+        row = $recur1;
+        continue;
+      }
     }
   }
 };
@@ -475,8 +480,13 @@ var fillRow = _curry5(5, (a, b, i, prev, n) => {
     if (j > n) {
       return cur;
     } else {
-      [j, cur] = [j + 1, _Array_append3(cellAt(a, b, i, j, prev, cur), cur)];
-      continue;
+      {
+        const $recur0 = j + 1;
+        const $recur1 = _Array_append3(cellAt(a, b, i, j, prev, cur), cur);
+        j = $recur0;
+        cur = $recur1;
+        continue;
+      }
     }
   }
 });
@@ -487,8 +497,13 @@ var levFrom = _curry5(4, (a, b, m, n) => {
     if (i > m) {
       return at(prev, n, n);
     } else {
-      [i, prev] = [i + 1, fillRow(a, b, i, prev, n)];
-      continue;
+      {
+        const $recur0 = i + 1;
+        const $recur1 = fillRow(a, b, i, prev, n);
+        i = $recur0;
+        prev = $recur1;
+        continue;
+      }
     }
   }
 });
@@ -582,8 +597,13 @@ var spaces = (n) => {
     if (k <= 0) {
       return acc;
     } else {
-      [k, acc] = [k - 1, `${acc} `];
-      continue;
+      {
+        const $recur0 = k - 1;
+        const $recur1 = `${acc} `;
+        k = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };
@@ -7997,8 +8017,13 @@ var connectAllFrom = _curry16(4, (i, n, adj, st) => {
     if (j >= n) {
       return current;
     } else {
-      [j, current] = [j + 1, hasIndex(j, current) ? current : connect(j, adj, current)];
-      continue;
+      {
+        const $recur0 = j + 1;
+        const $recur1 = hasIndex(j, current) ? current : connect(j, adj, current);
+        j = $recur0;
+        current = $recur1;
+        continue;
+      }
     }
   }
 });
@@ -8677,7 +8702,12 @@ var wrapDoStepTail = _curry18(2, (exprs, sp) => ((_v) => _v.length === 1 ? (([la
   throw new Error("non-exhaustive match");
 })())(exprs));
 var loopParamNames = (params) => _Str_join6(", ", map10((p) => p.name, params));
-var genLoopTail = _curry18(3, (ctx, e, params) => ((_v) => _v._tag === "ERecur" ? (({ args }) => ((_v) => _v[0].length === 1 && _v[1].length === 1 ? (([[p], [a]]) => `${p.name} = ${genExpr(ctx, a)}; continue;`)(_v) : `[${loopParamNames(params)}] = [${_Str_join6(", ", map10((a) => genExpr(ctx, a), args))}]; continue;`)(_tuple9(params, args)))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => hasRecur(e) ? `if (${genExpr(ctx, cond)}) { ${genLoopTail(ctx, thenE, params)} } else { ${genLoopTail(ctx, elseE, params)} }` : `return ${genExpr(ctx, e)};`)(_v) : _v._tag === "ELetIn" ? (({ name, value, body }) => hasRecur(e) ? `{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }` : `return ${genExpr(ctx, e)};`)(_v) : _v._tag === "EDo" ? (({ exprs }) => hasRecur(e) ? `{ ${genDoLoopTail(ctx, exprs, params)} }` : `return ${genExpr(ctx, e)};`)(_v) : _v._tag === "EMatch" ? (({ span: sp }) => hasRecur(e) ? ((step) => ((rebind) => `const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;`)(((_v) => _v.length === 1 ? (([p]) => `${p.name} = _step.args[0];`)(_v) : `[${loopParamNames(params)}] = _step.args;`)(params)))(genExpr(ctx, wrapStepTails(e, sp))) : `return ${genExpr(ctx, e)};`)(_v) : `return ${genExpr(ctx, e)};`)(e));
+var recurTempName = _curry18(2, (ctx, name) => or9(_Set_has5(name, ctx.userNames), _Set_has5(name, ctx.valueRefs)) ? recurTempName(ctx, `${name}$`) : name);
+var genRecurTemps = _curry18(4, (ctx, args, params, i) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: a }, { value: p }]) => ((name) => `const ${suffixOr(name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, a)}; ${genRecurTemps(ctx, args, params, i + 1)}`)(recurTempName(ctx, `$recur${show7(i)}`)))(_v) : "")(_tuple9(_Array_get16(i, args), _Array_get16(i, params))));
+var genRecurAssignments = _curry18(3, (ctx, params, i) => ((_v) => _v._tag === "None" ? "" : _v._tag === "Some" ? (({ value: p }) => `${p.name} = ${recurTempName(ctx, `$recur${show7(i)}`)}; ${genRecurAssignments(ctx, params, i + 1)}`)(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(_Array_get16(i, params)));
+var genLoopTail = _curry18(3, (ctx, e, params) => ((_v) => _v._tag === "ERecur" ? (({ args }) => ((_v) => _v[0].length === 1 && _v[1].length === 1 ? (([[p], [a]]) => `${p.name} = ${genExpr(ctx, a)}; continue;`)(_v) : `{ ${genRecurTemps(ctx, args, params, 0)}${genRecurAssignments(ctx, params, 0)}continue; }`)(_tuple9(params, args)))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => hasRecur(e) ? `if (${genExpr(ctx, cond)}) { ${genLoopTail(ctx, thenE, params)} } else { ${genLoopTail(ctx, elseE, params)} }` : `return ${genExpr(ctx, e)};`)(_v) : _v._tag === "ELetIn" ? (({ name, value, body }) => hasRecur(e) ? `{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }` : `return ${genExpr(ctx, e)};`)(_v) : _v._tag === "EDo" ? (({ exprs }) => hasRecur(e) ? `{ ${genDoLoopTail(ctx, exprs, params)} }` : `return ${genExpr(ctx, e)};`)(_v) : _v._tag === "EMatch" ? (({ span: sp }) => hasRecur(e) ? ((step) => ((rebind) => `const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;`)(((_v) => _v.length === 1 ? (([p]) => `${p.name} = _step.args[0];`)(_v) : `[${loopParamNames(params)}] = _step.args;`)(params)))(genExpr(ctx, wrapStepTails(e, sp))) : `return ${genExpr(ctx, e)};`)(_v) : `return ${genExpr(ctx, e)};`)(e));
 var genDoLoopTail = _curry18(3, (ctx, exprs, params) => ((_v) => _v.length === 1 ? (([last]) => genLoopTail(ctx, last, params))(_v) : _v.length >= 1 ? (([first, ...rest]) => `${genExpr(ctx, first)}; ${genDoLoopTail(ctx, rest, params)}`)(_v) : _v.length === 0 ? "return undefined;" : (() => {
   throw new Error("non-exhaustive match");
 })())(exprs));
@@ -8875,8 +8905,13 @@ var externArgs = (n) => {
     if (i >= n) {
       return acc;
     } else {
-      [i, acc] = [i + 1, acc === "" ? `$a${show7(i)}` : `${acc}, $a${show7(i)}`];
-      continue;
+      {
+        const $recur0 = i + 1;
+        const $recur1 = acc === "" ? `$a${show7(i)}` : `${acc}, $a${show7(i)}`;
+        i = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };
@@ -8887,8 +8922,13 @@ var externApplied = (n) => {
     if (i >= n) {
       return acc;
     } else {
-      [i, acc] = [i + 1, `${acc}($a${show7(i)})`];
-      continue;
+      {
+        const $recur0 = i + 1;
+        const $recur1 = `${acc}($a${show7(i)})`;
+        i = $recur0;
+        acc = $recur1;
+        continue;
+      }
     }
   }
 };

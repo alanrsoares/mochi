@@ -13,7 +13,7 @@ if (version.status !== 0) throw new Error(version.stderr || "Node is required");
 console.log(`Node ${version.stdout.trim()}; 12 runs of 2,000,000 iterations`);
 
 for (const kernel of loopKernels()) {
-  for (const variant of ["emitted", "scalar"] as const) {
+  for (const variant of ["array", "emitted"] as const) {
     const name = `${kernel.name.replace("/", "-")}-${variant}`;
     const file = join(out, `${name}.mjs`);
     writeFileSync(

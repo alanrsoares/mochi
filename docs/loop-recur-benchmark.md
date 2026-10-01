@@ -4,8 +4,8 @@ Investigation of `.scratch/issues-syntax-and-codegen-traps.md`, issue 1.
 Measured on 2026-10-02, macOS arm64, Bun 1.4.2 and Node 22.22.3, against
 `cb83290` plus the benchmark harness. The compiler was unchanged.
 
-Scalar temporaries are worth investigating as a compiler optimization. The
-current array lowering costs time on Bun in every tested case, and causes
+Scalar temporaries are worth adopting as a compiler optimization. The
+previous array lowering costs time on Bun in every tested case, and causes
 substantial allocation churn for the large numeric sum on Node. The draft's
 claim that every loop iteration necessarily allocates a heap array is too broad:
 the other Node fixtures show no comparable churn.
@@ -32,8 +32,11 @@ rotation, and mixed string/boolean/number state.
 The scalar candidate replaces only the single direct rebinding statement in
 the actual compiled JS. All runtime helpers stay identical. It evaluates every
 argument left to right into a temporary before assigning any loop parameter,
-preserving swaps and dependencies on old values. This is a benchmark-only
-transformation; the compiler still emits array destructuring.
+preserving swaps and dependencies on old values. This was a benchmark-only
+transformation in the original investigation. The compiler now emits scalar
+temporaries; the harness reconstructs the previous array assignment as the
+`array` baseline and measures actual compiled output as `emitted`. Historical
+`emitted` columns below refer to the array lowering at `cb83290`.
 
 | Fixture | Bun emitted best / median (ms) | Bun scalar best / median (ms) | Node emitted best / median (ms) | Node scalar best / median (ms) |
 |---|---:|---:|---:|---:|
@@ -63,3 +66,35 @@ and typed TypeScript output are outside this comparison. A production change
 needs guards for argument evaluation order, old-value captures, scope and name
 collisions, and strict TS output; it should then be checked with compiler and
 formatter benchmarks as well as this suite.
+
+## Production lowering validation (2026-10-02)
+
+Direct multi-parameter recur now uses a scoped block of typed, collision-free
+scalar temporaries, then assigns the parameters and continues. Single-parameter
+recur and the tail-switch step protocol keep their existing lowering. Runtime
+guards cover ordered effectful calls, simultaneous rotation, nested loops,
+closures over mutable parameters, and names resembling synthetic temporaries.
+Strict TS guards cover mixed state, closures, and generic state.
+
+A fully warmed Bun run of the production emitter versus reconstructed arrays:
+
+| Fixture | Array best / median (ms) | Emitted scalar best / median (ms) |
+|---|---:|---:|
+| count | 6.6 / 7.2 | 2.5 / 2.8 |
+| sum | 98.5 / 102.2 | 7.5 / 8.0 |
+| rotation | 11.7 / 12.6 | 2.2 / 2.2 |
+| mixed state | 10.4 / 12.1 | 4.6 / 5.0 |
+
+Node production sum best times are 6.11 ms for arrays and 1.88 ms for emitted
+scalar code. The separate GC run records 746 events / 768,651,680 traced bytes
+versus one forced collection / 651,296 bytes across 24 million iterations.
+Other fixtures retain the original finding of no substantial GC churn.
+
+Compiler/formatter comparison loads the frozen bundles from `4615aaf` and the
+new seed, uses identical current sources, warms each operation three times,
+then alternates old/new order across 12 measured calls. Bootstrap graph
+check+infer+codegen best times are 1092 versus 1116 ms; medians are 1143 versus
+1148 ms (0.4% difference). Formatter medians are 66.9 versus 66.4 ms for the
+parser, 70.9 versus 68.6 ms for inference, and 11.0 versus 10.8 ms for the snake
+component. This run shows no material compiler/formatter regression; these
+small wall-time differences need repeated sampling before inferring a trend.

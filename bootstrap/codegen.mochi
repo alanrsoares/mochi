@@ -796,11 +796,31 @@ let wrapDoStepTail = (exprs, sp) => switch exprs {
 
 let loopParamNames = params => Str.join(", ", params |> map(p => p.name))
 
+// Both bound names and open-world references must stay visible through the
+// temporary block. Numbered bases keep different argument slots distinct.
+let recurTempName = (ctx: GCtx, name) =>
+  Set.has(name, ctx.userNames) || Set.has(name, ctx.valueRefs)
+    ? ctx->recurTempName("${name}$")
+    : name
+
+let genRecurTemps = (ctx: GCtx, args, params, i) => switch (Array.get(i, args), Array.get(i, params)) {
+  | (Some(a), Some(p)) => let name = ctx->recurTempName("$recur${show(i)}") in
+      // Reuse the loop parameter's monomorphic annotation to break TS
+      // inference cycles through the subsequent assignment.
+      "const ${suffixOr(name, hook1(ctx.annotateLetin, p.init))} = ${ctx->genExpr(a)}; ${ctx->genRecurTemps(args, params, i + 1)}"
+  | _ => ""
+}
+
+let genRecurAssignments = (ctx: GCtx, params, i) => switch Array.get(i, params) {
+  | None => ""
+  | Some(p) => "${p.name} = ${ctx->recurTempName("$recur${show(i)}")}; ${ctx->genRecurAssignments(params, i + 1)}"
+}
+
 // Lower one loop-body tail to statements inside `while (true)`.
 let genLoopTail = (ctx: GCtx, e, params) => switch e {
   | Ast.ERecur(args, _) => switch (params, args) {
       | ([p], [a]) => "${p.name} = ${ctx->genExpr(a)}; continue;"
-      | (_, _) => "[${loopParamNames(params)}] = [${Str.join(", ", args |> map(a => ctx->genExpr(a)))}]; continue;"
+      | (_, _) => "{ ${ctx->genRecurTemps(args, params, 0)}${ctx->genRecurAssignments(params, 0)}continue; }"
     }
   | Ast.ETernary(cond, thenE, elseE, _) => hasRecur(e)
       ? "if (${ctx->genExpr(cond)}) { ${ctx->genLoopTail(thenE, params)} } else { ${ctx->genLoopTail(elseE, params)} }"
