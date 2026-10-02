@@ -14005,7 +14005,7 @@ var _preludeJsDefs = {
   if (kx.length !== ky.length)
     return false;
   for (const k of kx)
-    if (!eq(x[k], y[k]))
+    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))
       return false;
   return true;
 });`,

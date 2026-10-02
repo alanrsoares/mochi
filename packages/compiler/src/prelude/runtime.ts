@@ -151,7 +151,8 @@ export const eq: { <A>(a: A): (b: A) => boolean; <A>(a: A, b: A): boolean } = _c
     const kx = Object.keys(x),
       ky = Object.keys(y);
     if (kx.length !== ky.length) return false;
-    for (const k of kx) if (!eq(x[k], y[k])) return false;
+    for (const k of kx)
+      if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k])) return false;
     return true;
   },
 );
