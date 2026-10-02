@@ -261,11 +261,13 @@ enclosing loop. For iteration purely for effect, use
   opaque host values `show` enumerable fields; a hot loop pays O(n) with no call-site
   warning. `eq`/`compare` on a lazy List throw (`List.toArray` first); `show` prints
   `<List>` without pulling. Map/Set **keys** use host identity, not deep `eq`.
-  The List exception also applies when a structural walk reaches a List nested
-  inside a record, variant, array or Map value. Convert known finite Lists with
-  `List.toArray` before comparing, including nested fields, or compare a safe
-  projection. Identity shortcuts or earlier mismatches can avoid reaching the
-  List; a successful comparison does not establish that every input is safe.
+  `eq` can reach Lists nested in records, variants, arrays and Map values.
+  `compare` can reach Lists in arrays, Map keys and values, and Set elements; it
+  uses `JSON.stringify` for ordinary objects rather than recursively comparing
+  record or variant fields. Convert known finite Lists with `List.toArray`
+  before comparing when traversal reaches them, or compare a safe projection.
+  Identity shortcuts or earlier mismatches can avoid reaching a List; a
+  successful comparison does not establish that every input is safe.
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.
