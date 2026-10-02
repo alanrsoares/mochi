@@ -1,49 +1,58 @@
 "use open"
 
-// Right-hand pane chrome: tab strip + pane body.
-import { PresetSelect } from "../ui/primitives"
-
-export type PlaygroundRightProps = { tabs: [VNode], pane: VNode }
+// Result workspace: persistent example control, three views, then their content.
+export type PlaygroundRightProps = {
+  tabs: [VNode],
+  examples: VNode,
+  pane: VNode,
+  panelId: string,
+  labelledBy: string
+}
 
 export let PlaygroundRight : PlaygroundRightProps -> VNode = props =>
-  <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-peach">
+  <section
+    className="flex min-h-0 min-w-0 flex-1 flex-col bg-paper"
+    ariaLabel="Playground results"
+  >
+    <div className="shrink-0 border-b border-line bg-peach px-4 py-3">
+      {props.examples}
+    </div>
     <div
-      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-line border-b-2 px-2 scrollbar-none [&::-webkit-scrollbar]:hidden"
+      className="flex shrink-0 border-b border-line bg-paper px-2"
       role="tablist"
-      ariaLabel="Output panes"
+      ariaLabel="Result views"
     >
       {props.tabs}
     </div>
-    <div className="relative min-h-0 flex-1 overflow-auto p-3 sm:p-4">
+    <div
+      id={props.panelId}
+      role="tabpanel"
+      tabIndex={0}
+      ariaLabelledBy={props.labelledBy}
+      className="relative min-h-0 flex-1 overflow-auto"
+    >
       {props.pane}
     </div>
-  </div>
+  </section>
 
-export type PlaygroundSettingsProps = {
+export type PlaygroundExamplesProps = {
   onPreset: any -> (),
   presetKey: string,
   presetOptions: [VNode]
 }
 
-export let PlaygroundSettings : PlaygroundSettingsProps -> VNode = props =>
-  <div className="max-w-sm space-y-4 font-mono text-xs">
-    <div>
-      <label
-        htmlFor="playground-preset"
-        className="mb-1.5 block text-2xs text-mute"
-      >
-        {"Preset"}
-      </label>
-      <PresetSelect
-        id="playground-preset"
-        value={props.presetKey}
-        onChange={props.onPreset}
-      >
-        <option value="" disabled={true}>{"Choose an example"}</option>
-        {props.presetOptions}
-      </PresetSelect>
-    </div>
-    <p className="text-2xs text-mute leading-relaxed">
-      {"⌘E run · ⌘S format · share link is a compressed ?code= payload. Right pane shows JS, typed TS, and .d.ts emit."}
-    </p>
+export let PlaygroundExamples : PlaygroundExamplesProps -> VNode = props =>
+  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <label htmlFor="playground-preset" className="font-semibold text-sm">
+      {"Example"}
+    </label>
+    <select
+      id="playground-preset"
+      value={props.presetKey}
+      onChange={props.onPreset}
+      className="min-w-0 flex-1 rounded-lg border border-line bg-foam px-3 py-2 text-base text-ink focus-visible:outline-2 focus-visible:outline-fur sm:text-sm"
+    >
+      <option value="" disabled={true}>{"Your code"}</option>
+      {props.presetOptions}
+    </select>
   </div>

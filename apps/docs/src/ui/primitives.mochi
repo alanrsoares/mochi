@@ -192,11 +192,6 @@ export let DemoInput = tw.input(
     ++ " text-xs placeholder:text-mute/70 focus:border-fur focus:outline-none"
 )
 
-export let PresetSelect = tw.select(
-  "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-ink"
-    ++ " text-base sm:text-xs focus:border-fur focus:outline-none"
-)
-
 /// `text-base sm:text-xs`: 16px on phones so iOS Safari does not zoom the
 /// focused textarea; mirror + overlay must use the same size or the ghost
 /// text drifts off the caret.
@@ -216,16 +211,6 @@ export let EditorInput = tw.textarea(
 export let DiagBox = tw.div(
   "max-h-87.5 overflow-auto whitespace-pre-wrap rounded-panel border-2"
     ++ " border-fur bg-fur-tint p-4 font-mono text-fur-deep text-xs"
-)
-
-export let PreviewPane = tw.div(
-  "flex min-h-80 flex-1 items-center justify-center rounded-panel border-2"
-    ++ " border-line bg-foam p-6"
-)
-
-export let EmitPane = tw.pre(
-  "max-h-87.5 flex-1 overflow-auto rounded-panel border-2 border-line bg-foam"
-    ++ " p-4 font-mono text-ink text-xs leading-relaxed"
 )
 
 // Hover-token chrome. The host merges a `className` prop into the base classes,
