@@ -1,0 +1,5 @@
+// Only name and price are required. Every other field survives.
+export let searchProducts = (query, products) =>
+  products
+    |> filter(p => Str.contains(Str.toLower(query), Str.toLower(p.name)))
+    |> Array.sortBy(p => p.price)

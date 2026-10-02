@@ -1,12 +1,9 @@
-// greet accepts any record with name + role
+// Edit the age. name and id survive without appearing in birthday's type.
+let birthday = person => { ...person, age: person.age + 1 }
+let before = { name: "Ada", age: 36, id: 42 }
+let after = birthday(before)
 
-let greet = person => "Hello, " ++ person.name ++ " (" ++ person.role ++ ")"
-
-let user = { name: "Mochi", role: "Compiler", id: 42 }
-let message = greet(user)
-
-let app = <div
-  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-plum"
->
-  {message}
+let app = <div>
+  <p>{"Before: " ++ show(before)}</p>
+  <p>{"After: " ++ show(after)}</p>
 </div>

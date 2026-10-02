@@ -8,3 +8,6 @@ let area = shape => switch shape {
 }
 
 let widen = (k, box) => { ...box, w: box.w * k }
+
+let circleArea = area(Circle(2))
+let wider = widen(3, { w: 2, label: "box" })

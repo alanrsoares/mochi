@@ -244,7 +244,7 @@ test("docs tour snippets compile (source of HighlightCode panels)", () => {
 });
 
 test("docs playground presets emit every displayed target", () => {
-  for (const name of ["jsx", "result", "task", "row-poly", "fib"] as const) {
+  for (const name of ["jsx", "result", "task", "row-poly", "pipelines"] as const) {
     const src = read(`apps/docs/src/examples/presets/${name}.mochi`);
     const result = compileTargets(src, { runtime: true });
     expect(

@@ -21,6 +21,7 @@ export let PlaygroundRight : PlaygroundRightProps -> VNode = props =>
 
 export type PlaygroundSettingsProps = {
   onPreset: any -> (),
+  presetKey: string,
   presetOptions: [VNode]
 }
 
@@ -33,7 +34,12 @@ export let PlaygroundSettings : PlaygroundSettingsProps -> VNode = props =>
       >
         {"Preset"}
       </label>
-      <PresetSelect id="playground-preset" onChange={props.onPreset}>
+      <PresetSelect
+        id="playground-preset"
+        value={props.presetKey}
+        onChange={props.onPreset}
+      >
+        <option value="" disabled={true}>{"Choose an example"}</option>
         {props.presetOptions}
       </PresetSelect>
     </div>

@@ -1,16 +1,12 @@
-// Result is a sum type (Ok | Err). Pattern matching is exhaustive,
-// and `let?` provides monadic unwrapping with early error return.
-
+// let? stops at the first Err. Change 40 or 10 to try another input.
 let half = n => n % 2 == 0 ? Ok(n / 2) : Err("odd number")
-
 let quarter = n => let? h = half(n) in let? q = half(h) in Ok(q)
+let describe = result => switch result {
+  | Ok(n) => "Quarter: " ++ show(n)
+  | Err(reason) => "Stopped: " ++ reason
+}
 
-let step1 = quarter(40)
-let step2 = quarter(10)
-
-let app = <div
-  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep space-y-2"
->
-  <div>{"quarter(40) = " ++ show(step1)}</div>
-  <div>{"quarter(10) = " ++ show(step2)}</div>
+let app = <div>
+  <p>{describe(quarter(40))}</p>
+  <p>{describe(quarter(10))}</p>
 </div>

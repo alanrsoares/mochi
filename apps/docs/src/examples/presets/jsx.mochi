@@ -1,25 +1,9 @@
-// JSX is built in. It compiles to whatever h() your host gives you.
+// Change label or disabled. Props are checked at each call.
+type Props = { label: string, disabled: bool }
+let Button : Props -> VNode = props =>
+  <button disabled={props.disabled}>{props.label}</button>
 
-let Badge = props =>
-  <span
-    className="px-2.5 py-0.5 text-3xs font-mono font-bold tracking-wider rounded uppercase bg-fur-subtle text-fur-deep border border-fur-border"
-  >
-    {props.text}
-  </span>
-
-let Card = props =>
-  <div
-    className="w-full max-w-md p-5 bg-paper border-2 border-line rounded-panel space-y-3 shadow-soft"
-  >
-    <div className="flex items-center justify-between gap-3">
-      <h3 className="text-base font-bold text-ink font-display">
-        {props.title}
-      </h3>
-      <Badge text="0 tsc errors" />
-    </div>
-    <p className="text-xs font-mono text-mute leading-relaxed">
-      {"Edit the source on the left. The JS and TypeScript panes update as you type."}
-    </p>
-  </div>
-
-let app = <Card title="Components, no boilerplate" />
+let app = <div>
+  <Button label="Save changes" disabled={false} />
+  <Button label="Already saved" disabled={true} />
+</div>

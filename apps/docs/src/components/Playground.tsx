@@ -83,7 +83,8 @@ export function Playground() {
       return;
     }
     renderPreview(el, outputJs);
-  });
+    return () => clearPreview(el);
+  }, [diagnostics, activeTab, outputJs]);
 
   const handleFormat = useCallback(() => {
     const res = format(code);
@@ -145,7 +146,11 @@ export function Playground() {
   const handlePresetSelect = (e: Event) => {
     const key = (e.target as HTMLSelectElement).value;
     const preset = presetEntries.find(([k]) => k === key)?.[1];
-    if (preset) setCode(preset.code);
+    if (preset) {
+      setCode(preset.code);
+      setActiveTab("output");
+      setMobilePane("result");
+    }
   };
 
   const problemCount = diagnostics.length;
@@ -219,6 +224,7 @@ export function Playground() {
     activePane = (
       <PlaygroundSettings
         onPreset={handlePresetSelect as () => void}
+        presetKey={presetEntries.find(([, p]) => p.code === code)?.[0] ?? ""}
         presetOptions={presetEntries.map(([key, p]) => (
           <option key={key} value={key}>
             {p.name}

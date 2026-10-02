@@ -1,10 +1,7 @@
-// JSX is built in. It compiles to whatever h() your host gives you.
+// An explicit prop contract checks every component call.
+type Props = { label: string, disabled: bool }
+let Button : Props -> VNode = props =>
+  <button disabled={props.disabled}>{props.label}</button>
 
-let Button = props =>
-  //  ^?
-  <button className={props.kind} disabled={props.disabled}>
-    {props.label}
-  </button>
-
-let app = <Button kind="primary" label="Click me" disabled={false} />
+let app = <Button label="Save changes" disabled={false} />
 //  ^?

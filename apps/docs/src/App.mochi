@@ -1,11 +1,14 @@
 "use open"
 
-import { RailwayDemo } from "./components/RailwayDemo"
 import { HeaderBadge } from "./components/HeaderBadge"
 import { SyntaxPanel } from "./components/SyntaxPanel"
 import { CodegenPanels } from "./components/CodegenPanels"
 import { HeroCarousel } from "./components/HeroCarousel"
-import { HighlightedCode, ColorSchemeToggle } from "./host/widgets.host"
+import {
+  HighlightedCode,
+  ColorSchemeToggle,
+  IntegrationDemo
+} from "./host/widgets.host"
 import { Icon } from "./host/icon.host"
 import { githubUrl, SiteFooter } from "./components/SiteChrome"
 import {
@@ -147,7 +150,7 @@ export let App : Props -> VNode = props =>
             <SectionEyebrow>{"codegen"}</SectionEyebrow>
             <SectionTitle>{"One language, two clean outputs"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed">
-              {"The JavaScript is what you'd have written by hand. The TypeScript is fully annotated and passes tsc --strict."}
+              {"Inspect the JavaScript and inferred TypeScript from the same source."}
             </p>
           </div>
           <CtaPill href={props.playgroundHref}>
@@ -176,7 +179,7 @@ export let App : Props -> VNode = props =>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <SyntaxPanel
-            title="Variants & Pattern Matching"
+            title="Result & Pattern Matching"
             badge="Result a e"
             $tone="fur"
           >
@@ -216,16 +219,16 @@ export let App : Props -> VNode = props =>
         >
           <div>
             <SectionEyebrow>{"interop"}</SectionEyebrow>
-            <SectionTitle>{"JS & React Integration"}</SectionTitle>
+            <SectionTitle>{"Use Mochi in your existing app"}</SectionTitle>
             <p className="mt-2 text-sm text-mute leading-relaxed max-w-xl">
-              {"Mochi is meant to live inside a JavaScript codebase, not replace it. Call npm packages, use React and Preact hooks, and let existing TypeScript import your modules with full types."}
+              {"Keep your UI in TypeScript. Import a Mochi function for filtering and sorting, with inferred types checked at the boundary."}
             </p>
           </div>
           <span className="font-mono text-2xs text-mute whitespace-nowrap">
             {"live — type below"}
           </span>
         </div>
-        <RailwayDemo />
+        <IntegrationDemo />
         <div className="border-t-2 border-line">
           <InteropRow
             $tone="fur"
@@ -236,7 +239,7 @@ export let App : Props -> VNode = props =>
           <InteropRow
             $tone="lavender"
             label="npm & libs"
-            title="Zero-overhead JS bindings"
+            title="Typed JavaScript bindings"
             body="Declare extern functions to call npm packages or browser APIs directly with static type safety."
           />
           <InteropRow
