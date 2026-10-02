@@ -20,9 +20,13 @@ let double = x => x * 2              // lambda
 let hypot = (a, b) => sqrt(square(a) + square(b))  // multi-arg
 let one = () => 1                    // nullary → `() -> number` (ADR 0014)
 let pipeline = 5 |> double |> inc |> double            // left-to-right pipe
-let shifted = 5 -> (+ 3)                               // add(5, 3), fast pipe
+let shifted = 5 -> add(3)                              // add(5, 3), fast pipe
 let glued = "hi" ++ ctx->label()                       // "hi" ++ label(ctx) — `->` tighter than `++` (ADR 0073)
 ```
+
+Fast pipe `->` inserts the value into a call's first argument and requires a call
+on its right. Use `5 |> (+ 3)` for an operator section or `5 |> double` for a
+function value; `5 -> (+ 3)` and `5 -> double` are rejected.
 
 Use `do { … }` to sequence expressions and return the final one. An arrow body
 can omit `do`, which keeps callback-heavy code compact:
@@ -257,6 +261,13 @@ enclosing loop. For iteration purely for effect, use
   opaque host values `show` enumerable fields; a hot loop pays O(n) with no call-site
   warning. `eq`/`compare` on a lazy List throw (`List.toArray` first); `show` prints
   `<List>` without pulling. Map/Set **keys** use host identity, not deep `eq`.
+  `eq` can reach Lists nested in records, variants, arrays and Map values.
+  `compare` can reach Lists in arrays, Map keys and values, and Set elements; it
+  uses `JSON.stringify` for ordinary objects rather than recursively comparing
+  record or variant fields. Convert known finite Lists with `List.toArray`
+  before comparing when traversal reaches them, or compare a safe projection.
+  Identity shortcuts or earlier mismatches can avoid reaching a List; a
+  successful comparison does not establish that every input is safe.
 - Builtin `Option` (`Some`/`None`) and `Result` (`Ok`/`Err`); `Map.get`/`Array.head`
   return `Option`. Field names match `@onrails/result`/`@onrails/maybe`, so values flow
   straight into those combinators at the JS boundary.

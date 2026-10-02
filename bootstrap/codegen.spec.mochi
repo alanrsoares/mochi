@@ -3,6 +3,7 @@ import { codegen, codegenWith, jsGenOpts } from "./codegen.mochi"
 import { lex } from "./lexer.mochi"
 import { parse } from "./parser.mochi"
 import { SError } from "./ast.mochi"
+import * as Ast from "./ast.mochi"
 
 test("an error node emits an explicit codegen invariant failure", () =>
   codegen(
@@ -25,6 +26,102 @@ let genSrc = src =>
     |> Result.flatMap(parse)
     |> Result.map(stmts =>
       codegen(stmts, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
+
+let optionalSpan = { start: 0, end: 0 }
+let optionalPayload = Ast.PBind("value", optionalSpan)
+let optionalSome = payload =>
+  {
+    pattern: Ast.PCtor("Some", [payload], None, optionalSpan),
+    guard: None,
+    body: Ast.ERef("value", optionalSpan)
+  }
+let optionalNone = {
+  pattern: Ast.PCtor("None", [], None, optionalSpan),
+  guard: None,
+  body: Ast.ENum(0, "0", optionalSpan)
+}
+let optionalProgram = arms =>
+  [
+    Ast.SLet(
+      "out",
+      optionalSpan,
+      None,
+      Ast.EMatch(
+        Ast.EField(Ast.ERef("row", optionalSpan), "value", true, optionalSpan),
+        arms,
+        optionalSpan
+      ),
+      false,
+      None,
+      optionalSpan
+    )
+  ]
+
+testEach("optional match fusion preserves its eligibility boundary", [
+  {
+    label: "Some first",
+    arms: [optionalSome(optionalPayload), optionalNone],
+    keys: #{},
+    fused: true
+  },
+  {
+    label: "None first",
+    arms: [optionalNone, optionalSome(optionalPayload)],
+    keys: #{},
+    fused: true
+  },
+  {
+    label: "local constructor layout",
+    arms: [optionalSome(optionalPayload), optionalNone],
+    keys: #{ "Some": ["_0"] },
+    fused: false
+  },
+  {
+    label: "qualified constructor",
+    arms: [
+      {
+        ...optionalSome(optionalPayload),
+        pattern: Ast.PCtor(
+          "Some",
+          [optionalPayload],
+          Some("Local"),
+          optionalSpan
+        )
+      },
+      optionalNone
+    ],
+    keys: #{},
+    fused: false
+  },
+  {
+    label: "nested payload pattern",
+    arms: [
+      optionalSome(Ast.PTuple([optionalPayload], optionalSpan)),
+      optionalNone
+    ],
+    keys: #{},
+    fused: false
+  },
+  {
+    label: "catch-all binding",
+    arms: [
+      optionalSome(optionalPayload),
+      { ...optionalNone, pattern: Ast.PBind("rest", optionalSpan) }
+    ],
+    keys: #{},
+    fused: false
+  }
+], row =>
+  codegen(
+    optionalProgram(row.arms),
+    row.keys,
+    false,
+    namespaceRuntime,
+    preludeJsDefs,
+    runtimeDeps
+  )
+    |> Str.contains("if ($optional != null)")
+    |> assertEq(row.fused))
 
 testEach("codegen emits runtime forms", [
   {

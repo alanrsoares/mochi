@@ -555,7 +555,10 @@ let genExpr = (ctx: GCtx, e) => switch e {
           | Some(rt) => rt
           | None => let member = "${ctx->genMember(target)}.${name}" in
               optional
-                ? "((v) => v != null ? { _tag: \"Some\", value: v } : { _tag: \"None\" })(${member})"
+                ? let tagType = Option.isSome(ctx.guardBaseType)
+                  ? " as const"
+                  : "" in
+                  "((v) => v != null ? { _tag: \"Some\"${tagType}, value: v } : { _tag: \"None\"${tagType} })(${member})"
                 : member
         }
     }
@@ -767,15 +770,15 @@ let wrapDoStepTail = (exprs, sp) => switch exprs {
 
 let loopParamNames = params => Str.join(", ", params |> map(p => p.name))
 
-// Both bound names and open-world references must stay visible through the
-// temporary block. Numbered bases keep different argument slots distinct.
-let recurTempName = (ctx: GCtx, name) =>
+// Synthetic temporaries must not capture bound names or open-world references.
+// Numbered recur bases keep different argument slots distinct.
+let tempName = (ctx: GCtx, name) =>
   Set.has(name, ctx.userNames) || Set.has(name, ctx.valueRefs)
-    ? ctx->recurTempName("${name}$")
+    ? ctx->tempName("${name}$")
     : name
 
 let genRecurTemps = (ctx: GCtx, args, params, i) => switch (Array.get(i, args), Array.get(i, params)) {
-  | (Some(a), Some(p)) => let name = ctx->recurTempName("$recur${show(i)}") in
+  | (Some(a), Some(p)) => let name = ctx->tempName("$recur${show(i)}") in
       // Reuse the loop parameter's monomorphic annotation to break TS
       // inference cycles through the subsequent assignment.
       "const ${suffixOr(name, hook1(ctx.annotateLetin, p.init))} = ${ctx->genExpr(a)}; ${ctx->genRecurTemps(args, params, i + 1)}"
@@ -784,7 +787,7 @@ let genRecurTemps = (ctx: GCtx, args, params, i) => switch (Array.get(i, args), 
 
 let genRecurAssignments = (ctx: GCtx, params, i) => switch Array.get(i, params) {
   | None => ""
-  | Some(p) => "${p.name} = ${ctx->recurTempName("$recur${show(i)}")}; ${ctx->genRecurAssignments(params, i + 1)}"
+  | Some(p) => "${p.name} = ${ctx->tempName("$recur${show(i)}")}; ${ctx->genRecurAssignments(params, i + 1)}"
 }
 
 // Lower one loop-body tail to statements inside `while (true)`.
@@ -1202,7 +1205,69 @@ let ternaryTypes = (ctx: GCtx, arms, base) =>
     ctx.guardBaseType
   ) || Option.isSome(base) || allOf(a => ctx->isShallowArm(a.pattern), arms)
 
-let genMatch = (ctx: GCtx, scrutinee, arms) =>
+// Only eliminate an Option that no arm can observe as a value. Constructor
+// layout and namespace checks keep local/imported variants on the normal path.
+type OptionalMatch = { binding: string, present: Ast.Expr, absent: Ast.Expr }
+
+let isOptionalNone = pattern => switch pattern {
+  | Ast.PCtor("None", args, ns, _) => Array.length(
+      args
+    ) == 0 && Option.isNone(ns)
+  | _ => false
+}
+
+let optionalMatchPair = (present, absent) =>
+  Option.isSome(
+    present.guard
+  ) || Option.isSome(absent.guard) || !isOptionalNone(absent.pattern)
+    ? None
+    : switch present.pattern {
+      | Ast.PCtor("Some", args, ns, _) => Array.length(
+          args
+        ) == 1 && Option.isNone(ns)
+          ? switch Array.get(0, args) {
+            | Some(Ast.PBind(name, _)) => Some(
+                { binding: name, present: present.body, absent: absent.body }
+              )
+            | Some(Ast.PWild(_)) => Some(
+                { binding: "", present: present.body, absent: absent.body }
+              )
+            | _ => None
+          }
+          : None
+      | _ => None
+    }
+
+let optionalMatch = arms => switch arms {
+  | [a, b] => switch optionalMatchPair(a, b) {
+      | Some(plan) => Some(plan)
+      | None => optionalMatchPair(b, a)
+    }
+  | _ => None
+}
+
+let genOptionalMatch = (ctx: GCtx, scrutinee, arms) => switch scrutinee {
+  | Ast.EField(target, name, true, _) => switch (Map.get("Some", ctx.keys), Map.get("None", ctx.keys)) {
+      | (Some(["value"]), Some([])) => switch optionalMatch(arms) {
+          | None => None
+          | Some(plan) => Some(ctx->genOptionalBranches(target, name, plan))
+        }
+      | _ => None
+    }
+  | _ => None
+}
+
+let genOptionalBranches = (ctx: GCtx, target, name, plan: OptionalMatch) =>
+  let value = ctx->tempName("$optional") in
+  let bind = plan.binding == "" ? "" : "const ${plan.binding} = ${value}; " in
+    "((${value}) => { if (${value} != null) { ${bind}return ${ctx->genExpr(plan.present)}; } return ${ctx->genExpr(plan.absent)}; })(${ctx->genMember(target)}.${name})"
+
+let genMatch = (ctx: GCtx, scrutinee, arms) => switch ctx->genOptionalMatch(scrutinee, arms) {
+  | Some(fused) => fused
+  | None => ctx->genOrdinaryMatch(scrutinee, arms)
+}
+
+let genOrdinaryMatch = (ctx: GCtx, scrutinee, arms) =>
   isListMatch(arms)
     ? ctx->genListMatch(scrutinee, arms)
     : let base = hook1(ctx.guardBaseType, scrutinee) in
