@@ -110,6 +110,12 @@ step transport. See the [direct-recur investigation](loop-recur-benchmark.md) an
 methodology and limitations. Standalone investigation scripts document their
 own workloads and sampling methods.
 
+The README's runtime benchmark widget is generated from recorded measurements in
+`docs/benchmarks/runtime-snapshots.json`, rather than running benchmarks during a
+build. After validating a new snapshot against its report, run
+`bun run --cwd apps/docs gen:benchmarks`. The docs build regenerates the SVG;
+docs checks and the saved-output test reject a stale committed widget.
+
 CI (`.github/workflows/bench.yml`) feeds `--json` to
 [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark):
 `main` pushes append to a history kept in the Actions cache, and a pull request is

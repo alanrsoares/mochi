@@ -3,8 +3,26 @@ import { compile } from "@mochi/compiler";
 import { _curry, add, gt, mul, pi, square } from "@mochi/compiler/runtime";
 import { readRepo, repoPath } from "@mochi/test-support";
 import { isErr } from "@onrails/result";
+import snapshots from "../docs/benchmarks/runtime-snapshots.json";
 
 const read = (path: string): string => readRepo(import.meta.url, path);
+
+test("benchmark widget is fresh and its timings match the recorded reports", () => {
+  const result = Bun.spawnSync([
+    "bun",
+    repoPath(import.meta.url, "scripts/gen-benchmark-widget.ts"),
+    "--check",
+  ]);
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  for (const workload of snapshots.workloads) {
+    for (const timing of [workload.bun, workload.node]) {
+      const pair = [timing.before, timing.after]
+        .map((n) => n.toFixed(workload.precision))
+        .join(" | ");
+      expect(read(workload.report)).toContain(pair);
+    }
+  }
+});
 
 test("saved docs output panels match the current generator", () => {
   const result = Bun.spawnSync([
