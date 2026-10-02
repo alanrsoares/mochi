@@ -62,7 +62,7 @@ const description = snapshots.workloads
 const render = (
   palette: Palette,
 ): string => `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="604" viewBox="0 0 640 604" role="img" aria-labelledby="title description">
-  <title id="title">Mochi runtime benchmark snapshots</title>
+  <title id="title">Mochi runtime optimization snapshots</title>
   <desc id="description">${xmlEscape(description)} Historical median speedups against previous Mochi implementations; microbenchmarks, not application throughput.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: ${palette.text}; }
@@ -74,7 +74,7 @@ const render = (
     .divider { stroke: ${palette.border}; }
   </style>
   <rect x="0.5" y="0.5" width="639" height="603" rx="6" fill="${palette.background}" stroke="${palette.border}"/>
-  <text x="32" y="43" font-size="22" font-weight="600">Runtime benchmarks</text>
+  <text x="32" y="43" font-size="22" font-weight="600">Runtime optimization snapshots</text>
   <text x="32" y="68" class="muted">Historical medians · previous → optimized Mochi</text>
 ${cards}
   <path d="M24 536H616" class="divider"/>

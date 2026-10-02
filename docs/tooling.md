@@ -117,6 +117,15 @@ build. After validating a new snapshot against its report, run
 and dark SVGs; docs checks and the saved-output test reject stale committed
 widgets. The README uses `<picture>` with `prefers-color-scheme` so GitHub selects
 the matching image for the reader's theme, with the light image as a fallback.
+Its speedups compare historical Mochi implementations. The separate
+[current Mochi versus JS comparison](runtime-comparison-benchmark.md) includes
+unique/repeated ID distributions and a record-processing pipeline. Run
+`bun scripts/bench-runtime-comparison.ts` explicitly to collect four fresh-process
+rounds with alternating implementation and engine order. Raw samples and frozen
+fixtures go to `.cache/bench/runtime-comparison/results.json`; validated published
+results are recorded in `docs/benchmarks/runtime-comparison.json`. Docs builds
+do not execute this benchmark. Update the report and README together when
+publishing a new run; the saved-data guard checks their displayed medians.
 
 CI (`.github/workflows/bench.yml`) feeds `--json` to
 [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark):
