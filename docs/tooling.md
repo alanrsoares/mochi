@@ -113,8 +113,10 @@ own workloads and sampling methods.
 The README's runtime benchmark widget is generated from recorded measurements in
 `docs/benchmarks/runtime-snapshots.json`, rather than running benchmarks during a
 build. After validating a new snapshot against its report, run
-`bun run --cwd apps/docs gen:benchmarks`. The docs build regenerates the SVG;
-docs checks and the saved-output test reject a stale committed widget.
+`bun run --cwd apps/docs gen:benchmarks`. The docs build regenerates both light
+and dark SVGs; docs checks and the saved-output test reject stale committed
+widgets. The README uses `<picture>` with `prefers-color-scheme` so GitHub selects
+the matching image for the reader's theme, with the light image as a fallback.
 
 CI (`.github/workflows/bench.yml`) feeds `--json` to
 [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark):

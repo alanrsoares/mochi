@@ -2,15 +2,15 @@
   <title id="title">Mochi runtime benchmark snapshots</title>
   <desc id="description">Deduplicate records by ID, 4,000 records · numeric projection keys: Bun 186×, Node 202×. Sum through a tail switch, 2 million loop iterations: Bun 2.8×, Node 14×. Match optional field reads, 1 million immediate Some / None matches: Bun 2.9×, Node 2.9×. Historical median speedups against previous Mochi implementations; microbenchmarks, not application throughput.</desc>
   <style>
-    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1f2328; }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f0f6fc; }
     .name { font-size: 20px; font-weight: 600; }
-    .size, .muted { font-size: 14px; fill: #59636e; }
-    .engine { font-size: 14px; font-weight: 600; fill: #59636e; }
-    .gain { font-size: 28px; font-weight: 600; fill: #1a7f37; }
+    .size, .muted { font-size: 14px; fill: #9198a1; }
+    .engine { font-size: 14px; font-weight: 600; fill: #9198a1; }
+    .gain { font-size: 28px; font-weight: 600; fill: #3fb950; }
     .timing { font-size: 16px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
-    .divider { stroke: #d1d9e0; }
+    .divider { stroke: #30363d; }
   </style>
-  <rect x="0.5" y="0.5" width="639" height="603" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
+  <rect x="0.5" y="0.5" width="639" height="603" rx="6" fill="#0d1117" stroke="#30363d"/>
   <text x="32" y="43" font-size="22" font-weight="600">Runtime benchmarks</text>
   <text x="32" y="68" class="muted">Historical medians · previous → optimized Mochi</text>
 

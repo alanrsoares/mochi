@@ -206,7 +206,10 @@ performance in CI. Its current cases compile, infer, load or format source; they
 do not run the runtime workloads below. The standalone runtime benchmarks have
 their own reproduction scripts and reports.
 
-<img src="apps/docs/public/benchmarks.svg" alt="Recorded Mochi runtime speedups for record-ID dedupe, tail-switch sum and optional matches, with Bun and Node median timings. Full results are available in the linked reports." width="640" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/benchmarks-dark.svg" />
+  <img src="apps/docs/public/benchmarks.svg" alt="Recorded Mochi runtime speedups for record-ID dedupe, tail-switch sum and optional matches, with Bun and Node median timings. Full results are available in the linked reports." width="640" />
+</picture>
 
 Workloads and methodology: [record-ID dedupe](docs/dedupe-by-benchmark.md),
 [tail-switch sum](docs/tail-switch-benchmark.md), and
