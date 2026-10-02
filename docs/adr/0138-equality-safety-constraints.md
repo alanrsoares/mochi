@@ -7,10 +7,13 @@
 
 ## Context
 
-`eq : a -> a -> bool` and `compare` accept records containing lazy Lists, then
-throw if their structural walk reaches distinct List values. Identity shortcuts
-and earlier mismatches can avoid the exception. An apparently harmless change
-from Array to List can therefore break a generic consumer at runtime.
+`eq : a -> a -> bool` accepts records containing lazy Lists, then throws if its
+structural walk reaches distinct List values. `compare` reaches Lists through
+arrays, Map keys/values and Set elements; ordinary records and variants instead
+use its `JSON.stringify` fallback. Equality and ordering thus need different
+eligibility rules. Identity shortcuts and earlier mismatches can avoid the
+exception. An apparently harmless change from Array to List can therefore break
+a generic consumer at runtime.
 
 ## Proposed decision
 

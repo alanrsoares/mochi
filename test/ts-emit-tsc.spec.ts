@@ -255,14 +255,21 @@ let runAll = xs => switch xs {
       | Ok(_) => runAll(rest)
     }
 }`,
-  // ADR 0056: loop/recur — direct rebind form (ternary tail) and the step
-  // protocol (switch tail: ts-pattern chain yields _recur/_done, the while
+  // ADR 0056/0140: direct and flat-switch scalar recur, plus the step fallback.
+  // The step protocol handles guarded and nested patterns while the while
   // dispatches on _tag). Loop param lets carry inferred annotations.
   loops: `
 let rotate = n => loop (i = 0, a = 1, b = 2, c = 3) { i >= n ? (a, b, c) : recur(i + 1, b, c, a) }
 let mixed = n => loop (i = 0, a = "left", b = "right", flag = true) { i >= n ? (a, flag) : recur(i + 1, b, a, !flag) }
 let captured = loop (i = 0, read = () => 0) { i >= 2 ? read() : recur(i + 1, () => i) }
 let identity = (value, n) => loop (i = 0, current = value) { i >= n ? current : recur(i + 1, current) }
+let switchIdentity = (value, n) => loop (i = 0, current = value) { switch i >= n { | true => current | false => recur(i + 1, current) } }
+let switchCapture = n => loop (i = 0, read = () => 0) { switch i >= n { | true => read() | false => recur(i + 1, () => i) } }
+let guarded = n => loop (i = 0) { switch i { | x when x >= n => x | _ => recur(i + 1) } }
+let shadowed = n => loop (i = 0) { switch Some(i) { | Some(i) => i >= n ? i : recur(i + 1) | None => i } }
+let nested = n => loop (i = 0) { switch i >= n { | true => i | false => switch Some(i) { | Some(x) when x == 1 => recur(x + 1) | _ => recur(i + 1) } } }
+let $loopMatch = 10
+let switchCollision = n => loop (i = 0, a = "left", b = "right") { switch i >= n { | true => (a, b, $loopMatch) | false => recur(i + 1, b, a) } }
 let $recur0 = 10
 let collision = loop (i = 0, total = 0) { i >= 2 ? total : recur(i + 1, total + $recur0) }
 let count = (n) => loop (i = 0) { i >= n ? i : recur(i + 1) }

@@ -195,13 +195,14 @@ describe("emit contract", () => {
     expect(out).not.toContain("_recur(");
   });
 
-  it("a switch tail uses the step protocol and a ternary chain", () => {
+  it("a flat switch tail uses statements and scalar recur", () => {
     const out = js(
       "let f = (xs) => loop (acc = 0, i = 0) { switch Array.get(i, xs) { | None => acc | Some(x) => recur(acc + x, i + 1) } }",
     );
-    expect(out).toContain('_step._tag === "recur"');
-    expect(out).toContain("_done(acc)");
-    expect(out).toContain('((_v) => _v._tag === "None"');
+    expect(out).not.toContain("_step");
+    expect(out).not.toContain("_done(");
+    expect(out).toContain('if ($loopMatch._tag === "None")');
+    expect(out).toContain("const $recur0 = add(acc, x)");
   });
 
   it("an expression-position loop wraps in an IIFE", () => {

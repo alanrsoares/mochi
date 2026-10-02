@@ -11,10 +11,95 @@ import {
 import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
 import { compileAndEval, compileJs, readRepo, repoPath, typesOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
+
+test("invalid fast pipes explain how to use sections and bare functions", () => {
+  for (const source of ["let x = 5 -> (+ 3)", "let x = 5 -> inc"]) {
+    expect(unwrapErr(compile(source))[0]?.message).toContain("use `|>`");
+  }
+  expect(compileAndEval("let inc = n => n + 1\nlet x = 5 |> inc |> (+ 3)", "x")).toBe(9);
+});
+
+test("tail switch evaluates its scrutinee and recur arguments once in order", () => {
+  const source = `let run = (choose: number -> bool, mark: number -> number) =>
+    loop (i = 0, total = 0) { switch choose(i) {
+      | true => total
+      | false => recur(mark(i + 1), mark(total + i))
+    } }`;
+  const run = compileAndEval(source, "run") as (
+    choose: (i: number) => boolean,
+    mark: (n: number) => number,
+  ) => number;
+  const events: string[] = [];
+  expect(
+    run(
+      (i) => {
+        events.push(`choose:${i}`);
+        return i === 2;
+      },
+      (n) => {
+        events.push(`mark:${n}`);
+        return n;
+      },
+    ),
+  ).toBe(1);
+  expect(events).toEqual([
+    "choose:0",
+    "mark:1",
+    "mark:0",
+    "choose:1",
+    "mark:2",
+    "mark:1",
+    "choose:2",
+  ]);
+  expect(compileJs(source)).not.toContain("_step");
+});
+
+test("tail switch scalar assignments preserve rotation, captures and synthetic names", () => {
+  const source = `let $loopMatch = 10
+let $loopMatch$ = 20
+let run = n => loop (i = 0, a = 1, b = 2, c = 3, read = () => 0) {
+  switch i >= n { | true => (a, b, c, read(), $loopMatch + $loopMatch$)
+    | false => recur(i + 1, b, c, a, () => i) }
+}`;
+  const run = compileAndEval(source, "run") as (n: number) => number[];
+  expect(run(2)).toEqual([3, 1, 2, 2, 30]);
+  expect(compileJs(source)).toContain("const $loopMatch$$ =");
+});
+
+test.each([
+  { label: "guard", body: "switch i { | x when x >= 3 => i | _ => recur(i + 1) }" },
+  {
+    label: "shadow",
+    body: "switch Some(i) { | Some(i) => i >= 3 ? i : recur(i + 1) | None => i }",
+  },
+  {
+    label: "nested pattern",
+    body: "switch Some(Some(i)) { | Some(Some(x)) => x >= 3 ? x : recur(x + 1) | _ => i }",
+  },
+  { label: "array", body: "switch [i] { | [x] => x >= 3 ? x : recur(x + 1) | _ => i }" },
+])("tail switch retains the step fallback for $label", ({ body }) => {
+  const source = `let out = loop (i = 0) { ${body} }`;
+  expect(compileAndEval(source, "out")).toBe(3);
+  expect(compileJs(source)).toContain("const _step");
+});
+
+test("nested tail switches can combine statement and step lowering", () => {
+  const source = `let run = n => loop (i = 0, total = 0) { switch i >= n {
+    | true => total
+    | false => let next = i + 1 in switch Some(i) {
+      | Some(x) when x == 1 => recur(next, total + 10)
+      | _ => recur(next, total + i)
+    }
+  } }`;
+  expect(compileAndEval(`${source}\nlet out = run(3)`, "out")).toBe(12);
+  const js = compileJs(source);
+  expect(js).toContain("const $loopMatch");
+  expect(js).toContain("const _step");
+});
 
 test.each([
   { label: "Some first", arms: "| Some(v) => v | None => 99", expected: [0, 7, 99, 99] },

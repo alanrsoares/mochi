@@ -674,7 +674,7 @@ let parseInfix = (toks, minBp, left, pos, hooks) =>
               }
             )
           | _ => errAt(
-              "fast pipe needs a call on the right, like `a -> f(b)`",
+              "fast pipe needs a call on the right, like `a -> f(b)`; use `|>` for a bare function or operator section, like `a |> f` or `a |> (+ 3)`",
               lt
             )
         }

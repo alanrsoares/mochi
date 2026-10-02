@@ -1322,7 +1322,10 @@ const parseInfix: _Curry<
                         p: p,
                         matched: true,
                       }) as Result<{ left: Expr; p: number; matched: boolean }, PErr>)(_v)
-                  : errAt("fast pipe needs a call on the right, like `a -> f(b)`", lt))(right),
+                  : errAt(
+                      "fast pipe needs a call on the right, like `a -> f(b)`; use `|>` for a bare function or operator section, like `a |> f` or `a |> (+ 3)`",
+                      lt,
+                    ))(right),
             parseAtomOrCall(toks, pos + 1, hooks),
           )
         : and(composeAt(toks, pos), COMPOSE_BP >= minBp)
