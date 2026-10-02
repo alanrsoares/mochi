@@ -4,7 +4,7 @@ All tooling is driven from the compiler itself — the LSP, formatter, and `.d.t
 generator are surfaces over the same passes, not separate reimplementations.
 
 Package boundary ([ADR 0048](adr/0048-core-dx-package-boundary.md)): **`@mochi/compiler`**
-is the bootstrap mirror + foundation (`packages/compiler`); **`@mochi/dx`** owns format + IDE
+provides the self-hosted core's host façades and foundation (`packages/compiler`); **`@mochi/dx`** owns format + IDE
 queries; **`@mochi/cli`** composes compiler + DX for the `mochi` binary; **`@mochi/codemod`**
 runs parse → transform → format over `.mochi` globs; **`@mochi/lsp`** is the protocol adapter;
 **`@mochi/vite-plugin`** is the Vite transform. Core must not import DX.
@@ -72,8 +72,8 @@ bun run fixpoint       # self-host reproduces itself (stage2 ≡ stage3)
 bun run bootstrap:self-tsc  # count tsc --strict errors on the self-host (north-star: 0)
 ```
 
-`check` / `test` omit the four graph-sized north-star specs
-(`test/bootstrap-{fixpoint-binary,seed-alias,self-tsc,tsc}.spec.ts`);
+`check` / `test` omit the three graph-sized north-star specs
+(`test/bootstrap-{fixpoint-binary,seed-alias,self-tsc}.spec.ts`);
 `test:north-star` runs only those, and `test:full` runs both. CI runs `check` and
 `check:north-star` and `test:mochi:coverage` as parallel jobs, so none shares
 cores with another.
@@ -81,16 +81,17 @@ cores with another.
 ## Benchmarks
 
 ```bash
-bun run bench                     # every suite: fmt, fmt:repo, compile (best of 8)
+bun run bench                     # every suite: loop, fmt, fmt:repo, compile (best of 8)
 bun run bench compile --runs 3    # one suite, fewer runs
 bun run bench --save main         # write .cache/bench/main.json
 bun run bench --compare main      # Δ of each case's best against that baseline
 bun run bench compile --profile   # rerun under --cpu-prof; rank functions by inclusive time
-bun run bench loop --runs 12      # compiled loop/recur vs benchmark-only scalar rebinding
+bun run bench loop --runs 12      # emitted scalar loop/recur vs previous array rebinding
 bun scripts/bench-loop-node.ts    # the same fixtures under Node, plus separate GC traces
+bun scripts/bench-tail-switch.ts  # emitted tail switches vs previous step transport, Bun/Node
 ```
 
-`scripts/bench.ts` is the one harness for perf numbers quoted in PRs and ADRs. A
+`scripts/bench.ts` runs the standard compiler, formatter and loop suites. A
 case reports best and median wall time over `--runs` runs in one warm process;
 best is the headline, being the least noisy. Case names stay fixed across commits
 (sizes go in a note) so history lines up. `--profile` names the anonymous arrows
@@ -98,9 +99,15 @@ of the esbuild seed bundles after their `var` binding, so the ranking reads as
 compiler passes (`generalize`, `inferMatch`) rather than `_curry` wrappers.
 
 The `loop` suite measures generated program execution, with compilation excluded.
-Its scalar variant is a benchmark-only alternative; it does not change codegen.
-See [the loop/recur investigation](loop-recur-benchmark.md) for measurements,
-methodology, and limitations.
+It compares production scalar rebinding with a reconstructed previous array
+assignment ([ADR 0134](adr/0134-scalar-direct-recur.md)). The standalone tail-switch
+benchmark compares production statement lowering with previous `_recur`/`_done`
+step transport ([ADR 0140](adr/0140-scalar-tail-switch-recur.md)). Supported shallow,
+unguarded tail switches use scalar rebinding; complex patterns and guards retain
+step transport. See the [direct-recur investigation](loop-recur-benchmark.md) and
+[tail-switch investigation](tail-switch-benchmark.md) for measurements,
+methodology and limitations. Standalone investigation scripts document their
+own workloads and sampling methods.
 
 CI (`.github/workflows/bench.yml`) feeds `--json` to
 [github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark):
@@ -209,8 +216,9 @@ extension).
 unbound names), filtered to the diagnostics overlapping the requested range. A file
   using `"use open"` deliberately treats unknown names as
   host globals, so typo suggestions are not guessed there.
-- **Diagnostics** — the same `Diagnostic` values the compiler produces, with spans; a
-  `--json` structured form is available for machine consumers. Check/infer may emit
+- **Diagnostics** — the same structured `Diagnostic` values the compiler produces,
+  with spans. Compiler APIs expose these values to machine consumers; the CLI
+  renders them as text and has no `--json` diagnostics option. Check/infer may emit
   **several** diagnostics in one run (ADR 0004); lex/parse still stop at the first.
   The LSP maps each to a `PublishDiagnostic` (range + message + `related` from labels;
   help is appended to the message). Suggestions ride along for code actions

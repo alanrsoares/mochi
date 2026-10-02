@@ -162,7 +162,7 @@ really returns nothing should say `-> ()`, and then its calls need no `ignore` a
 
 `switch` is exhaustive — a missing case is a compile error, including for imported
 variants. Arms match constructors, literals, wildcards, a binding catch-all, records
-(shallow, may narrow on a literal field), tuples, and lists:
+(including nested patterns and literal-field narrowing), tuples, and lists:
 
 ```mochi
 let area = shape => switch shape {
@@ -180,7 +180,16 @@ let sum = xs => switch xs {                   // [] / [head, ...tail]
   | [] => 0
   | [head, ...tail] => head + sum(tail)
 }
+
+let childValue = row => switch row {
+  | { child: { value } } => value
+}
 ```
+
+Lazy-List patterns (`@{...}`) must be at the top level of an arm; they cannot
+nest inside another pattern. Lazy-List switches also reject `when` guards,
+because matching pulls from the sequence. Nested record, constructor, tuple
+and eager-Array patterns do not have that lazy-List restriction.
 
 A `when` clause adds a guard (no exhaustiveness credit). Destructuring also works in
 lambda params (`({ x, y }) => …`, `((a, b)) => …`) and in `let` (`let { x, y } = r`,
@@ -196,7 +205,7 @@ tuple and returns its first element. Discards may repeat, including in
 
 ## Collections
 
-Three literal forms, each a distinct type:
+Four literal forms, each a distinct type:
 
 | Syntax | Type | Runtime |
 |---|---|---|
@@ -347,7 +356,7 @@ ReScript-informed):
 
 1. **Typed `extern`** — declare an honest HM type on the seam when you can.
 2. **Core literals / unions** — so prop types like `$tone: "rose" | "amber"` are
-   real in infer (Wave 7), not only in generated `.d.mochi.ts`.
+   checked by inference as well as represented in generated `.d.mochi.ts`.
 3. **Thin sugar plugins** — derive what a signature cannot name (e.g. CVA
    variant keys → literal unions). Assign core types; do not invent a kit
    typechecker.

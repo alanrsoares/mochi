@@ -116,8 +116,9 @@ buffered pull, not to `@onrails/pattern`.
   optional fields rather than a second calling convention: a label with a default
   or written `~x?` is an optional row field, `f(~k=v)` is parsed straight into
   `f({ k: v })` (`origin: "labeled"`), and `f()` applies `{}` when every label is
-  omittable. Defaults are filled in the **callee** (`ast/labeled.ts` holds the
-  split/collapse helpers shared by infer, codegen, and the formatter).
+  omittable. Defaults are filled in the **callee**. The self-hosted inference,
+  codegen and formatter passes own their labeled-parameter lowering;
+  `packages/compiler/src/ast/labeled.ts` provides helpers for host AST tooling.
 
 ## Diagnostics & editor DX
 
