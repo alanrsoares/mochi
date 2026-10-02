@@ -1,0 +1,5 @@
+// Add an order or change the cutoff. Each step takes the data last.
+let orders = [12, 40, 8, 25]
+let total = orders |> filter(n => n >= 20) |> map(n => n * 2) |> reduce(add, 0)
+
+let app = <p>{"Double orders of 20 or more, then sum: " ++ show(total)}</p>

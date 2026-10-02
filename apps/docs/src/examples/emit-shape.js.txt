@@ -1,5 +1,5 @@
 // Runtime helper definitions omitted.
-
+const Circle = (_0) => ({ _tag: "Circle", _0 });
 const area = (shape) =>
   ((_v) =>
     _v._tag === "Circle"
@@ -10,3 +10,5 @@ const area = (shape) =>
             throw new Error("non-exhaustive match");
           })())(shape);
 const widen = _curry(2, (k, box) => ({ ...box, w: mul(box.w, k) }));
+const circleArea = area(Circle(2));
+const wider = widen(3, { w: 2, label: "box" });

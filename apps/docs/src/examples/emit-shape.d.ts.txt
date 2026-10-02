@@ -6,3 +6,5 @@ export declare const widen: <A>(
   k: number,
   box: { w: number } & A,
 ) => { w: number } & A;
+export declare const circleArea: number;
+export declare const wider: { w: number; label: string };

@@ -1,9 +1,5 @@
-// formatUser needs name + role. Anything with them fits — id rides along.
-
-let formatUser = user =>
-  //  ^?
-  user.name ++ " (" ++ user.role ++ ")"
-
-let admin = { name: "Alan", role: "Maintainer", id: 42 }
-let formatted = formatUser(admin)
+// A record update preserves fields the function never mentions.
+let birthday = person => { ...person, age: person.age + 1 }
+//  ^?
+let next = birthday({ name: "Ada", age: 36, id: 42 })
 //  ^?

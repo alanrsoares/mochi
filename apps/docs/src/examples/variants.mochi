@@ -1,8 +1,8 @@
-// No null checks. Miss a case and it won't compile.
-
-let unwrapOr = (res, fallback) =>
-  //  ^?
-  switch res { | Ok(value) => value | Err(_) => fallback }
-
-let demo = unwrapOr(Ok(42), 0)
+// Both Result cases are handled. Remove an arm to see the error.
+let describe = result => switch result {
+  | Ok(value) => "Saved " ++ show(value) ++ " items"
+  | Err(reason) => "Could not save: " ++ reason
+}
 //  ^?
+let saved = describe(Ok(3))
+let failed = describe(Err("offline"))

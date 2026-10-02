@@ -1,21 +1,11 @@
-// A Task carries an error channel next to its value, so failures stay typed
-// instead of thrown. Nothing runs until you ask it to.
+// A Task stays lazy until run. The preview runs a Task bound to app.
+// Change the delay or the failure reason and press Run.
+let lookup = found =>
+  let! _ = Task.delay(300, ()) in
+    found ? Task.of("Ada") : Task.fail("user not found")
 
-type ApiError =
-  | NotFound(number)
-  | Offline(string)
+let describe = task =>
+  task |> Task.match(concat("Loaded: "), concat("Failed: "))
 
-let classify = (id, reason) => reason == "404" ? NotFound(id) : Offline(reason)
-
-// mapErr and recover are no-ops while the pipeline is still Ok.
-let program = Task.of(21)
-  |> Task.map(mul(2))
-  |> Task.mapErr(classify(0))
-  |> Task.recover(_ => Task.of(0))
-  |> Task.match(n => "ok: ${show(n)}", e => "err: ${show(e)}")
-
-let app = <div
-  className="w-full max-w-md p-4 bg-paper border-2 border-line rounded-panel font-mono text-xs text-fur-deep"
->
-  {"This pipeline settles to \"ok: 42\" — run it and see the JS pane"}
-</div>
+let app = Task.all([describe(lookup(true)), describe(lookup(false))])
+  |> Task.map(messages => <div>{messages |> map(text => <p>{text}</p>)}</div>)
