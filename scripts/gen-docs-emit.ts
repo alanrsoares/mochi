@@ -1,62 +1,38 @@
 import { join } from "node:path";
+import { compileTargets } from "@mochi/compiler";
+import { isErr } from "@onrails/result";
 import { $ } from "bun";
-import { repoPath } from "./lib";
+import { repoPath, syncGeneratedFile } from "./lib";
 
 /** Matches the panel's rendered width at text-xs in a half-grid column. */
 const LINE_WIDTH = 72;
-
-const cli = repoPath("packages/cli/src/cli.ts");
 const examples = repoPath("apps/docs/src/examples");
 const source = join(examples, "emit-shape.mochi");
-
-const compile = async (target: "js" | "ts" | "dts"): Promise<string> => {
-  const args = target === "js" ? [source] : [target, source];
-  return (await $`bun ${cli} ${args}`.text()).trim();
-};
 
 const format = async (code: string, ext: "js" | "ts"): Promise<string> =>
   (
     await $`echo ${code} | bunx biome format --stdin-file-path=emit.${ext} --line-width=${LINE_WIDTH}`.text()
   ).trim();
 
-/** Names the TS backend imports from the runtime — i.e. the prelude helpers. */
-const preludeNames = (ts: string): readonly string[] => {
-  const match = ts.match(/import\s*\{([^}]*)\}\s*from\s*"@mochi\/runtime"/);
-  const group = match?.[1];
-  return !group
-    ? []
-    : group
-        .split(",")
-        .map((n) => n.trim())
-        .filter(Boolean);
-};
-
-const collapsePrelude = (js: string, names: readonly string[]): string => {
-  if (names.length === 0) return js;
-  const declares = new Set(names);
-  const kept = js
-    .split("\n")
-    .filter((line) => {
-      const decl = line.match(/^const\s+([A-Za-z_$][\w$]*)\s*=/);
-      const name = decl?.[1];
-      return !(name && declares.has(name));
-    })
-    .join("\n");
-  return kept.replace(
-    /^(import .*\n)+/,
-    (imports) => `${imports}// …prelude helpers (${names.join(", ")})…\n`,
-  );
-};
-
-const [js, ts, dts] = await Promise.all([compile("js"), compile("ts"), compile("dts")]);
+// Ask the compiler to omit runtime definitions rather than deleting declaration
+// lines: helpers can span many lines, and JS and TS use different helper sets.
+const targets = compileTargets(await Bun.file(source).text(), { runtime: false });
+if (isErr(targets)) {
+  console.error(targets.error);
+  process.exit(1);
+}
 
 const outputs = {
-  "emit-shape.js.txt": await format(collapsePrelude(js, preludeNames(ts)), "js"),
-  "emit-shape.ts.txt": await format(ts, "ts"),
-  "emit-shape.d.ts.txt": await format(dts, "ts"),
+  "emit-shape.js.txt": await format(
+    `// Runtime helper definitions omitted.\n${targets.value.js}`,
+    "js",
+  ),
+  "emit-shape.ts.txt": await format(targets.value.ts, "ts"),
+  "emit-shape.d.ts.txt": await format(targets.value.dts, "ts"),
 };
 
 for (const [name, content] of Object.entries(outputs)) {
-  await Bun.write(join(examples, name), `${content}\n`);
-  console.log(`wrote ${name} (${content.split("\n").length} lines)`);
+  syncGeneratedFile(join(examples, name), `${content}\n`, {
+    regenCommand: "bun run --cwd apps/docs gen:emit",
+  });
 }
