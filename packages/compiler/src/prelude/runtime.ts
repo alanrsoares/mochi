@@ -564,11 +564,19 @@ export const _Array_dedupeBy: {
   <A, B>(a: (a: A) => B): (b: A[]) => A[];
   <A, B>(a: (a: A) => B, b: A[]): A[];
 } = _curry(2, (f: any, xs: any) => {
-  const seen: any[] = [];
+  const primitive = new Set();
+  const structural: any[] = [];
   return xs.filter((x: any) => {
     const k = f(x);
-    if (seen.some((s: any) => eq(s, k))) return false;
-    seen.push(k);
+    if (k !== null && typeof k === "object") {
+      if (structural.some((s: any) => eq(s, k))) return false;
+      structural.push(k);
+      return true;
+    }
+    // eq(NaN, NaN) is false; keep every projected NaN as before.
+    if (Number.isNaN(k)) return true;
+    if (primitive.has(k)) return false;
+    primitive.add(k);
     return true;
   });
 });

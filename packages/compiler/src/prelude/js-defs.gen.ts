@@ -115,7 +115,7 @@ export const preludeJsDefs: Record<string, string> = {
   _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
   _Array_sortBy: "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
   _Array_dedupe: "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
-  _Array_dedupeBy: "const _Array_dedupeBy = _curry(2, (f, xs) => {\n  const seen = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (seen.some((s) => eq(s, k)))\n      return false;\n    seen.push(k);\n    return true;\n  });\n});",
+  _Array_dedupeBy: "const _Array_dedupeBy = _curry(2, (f, xs) => {\n  const primitive = new Set;\n  const structural = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (k !== null && typeof k === \"object\") {\n      if (structural.some((s) => eq(s, k)))\n        return false;\n      structural.push(k);\n      return true;\n    }\n    if (Number.isNaN(k))\n      return true;\n    if (primitive.has(k))\n      return false;\n    primitive.add(k);\n    return true;\n  });\n});",
   _Array_max: "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
   _Array_min: "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
   _Array_maxBy: "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
