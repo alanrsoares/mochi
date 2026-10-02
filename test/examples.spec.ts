@@ -16,6 +16,17 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("compiled equality distinguishes missing optional keys from present undefined", () => {
+  const same = compileAndEval(
+    "type Fields = { a?: number, b?: number }\nlet same = (left: Fields, right: Fields) => left == right",
+    "same",
+  ) as (left: Record<string, unknown>, right: Record<string, unknown>) => boolean;
+  expect(same({ a: undefined }, { b: undefined })).toBe(false);
+  expect(same({ a: undefined }, {})).toBe(false);
+  expect(same({ a: undefined }, { a: undefined })).toBe(true);
+  expect(same({ a: 1 }, Object.assign(Object.create({ a: 1 }), { b: 2 }))).toBe(false);
+});
+
 test("invalid fast pipes explain how to use sections and bare functions", () => {
   for (const source of ["let x = 5 -> (+ 3)", "let x = 5 -> inc"]) {
     expect(unwrapErr(compile(source))[0]?.message).toContain("use `|>`");
