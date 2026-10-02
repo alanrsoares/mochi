@@ -4,7 +4,7 @@ import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 
-type ProblemProps = { diagnosticsFormatted: string; hasProblems: boolean };
+type ProblemProps = { diagnosticsFormatted: string; hasProblems: boolean; hasRun: boolean };
 type ProblemVNode = { tag: unknown; props: unknown; children: unknown };
 
 const loadMochiApi = () => {
@@ -30,10 +30,11 @@ describe("PlaygroundProblems.mochi", () => {
     const vnode = api.PlaygroundProblems({
       diagnosticsFormatted: "line 1: unbound x",
       hasProblems: true,
+      hasRun: true,
     });
     expect(vnode.tag).toBe("DiagBox");
     expect(vnode.children).toEqual([
-      { tag: "div", props: { className: "mb-1 font-bold" }, children: ["diagnostics"] },
+      { tag: "div", props: { className: "mb-1 font-bold" }, children: ["Compilation problems"] },
       "line 1: unbound x",
     ]);
   });
@@ -42,8 +43,17 @@ describe("PlaygroundProblems.mochi", () => {
     const vnode = api.PlaygroundProblems({
       diagnosticsFormatted: "",
       hasProblems: false,
+      hasRun: true,
     });
     expect(vnode.tag).toBe("p");
-    expect(vnode.children).toEqual(["No problems."]);
+    expect(vnode.children).toEqual(["No compilation problems."]);
+  });
+  test("does not report a clean compile before running", () => {
+    const vnode = api.PlaygroundProblems({
+      diagnosticsFormatted: "",
+      hasProblems: false,
+      hasRun: false,
+    });
+    expect(vnode.children).toEqual(["Run your source to check for problems."]);
   });
 });

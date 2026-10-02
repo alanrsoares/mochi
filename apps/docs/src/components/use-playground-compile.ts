@@ -15,6 +15,7 @@ export type PlaygroundCompile = {
   outputJs: string;
   outputTs: string;
   outputDts: string;
+  outputSource: string | null;
   diagnostics: Diagnostic[];
   compileMs: number | null;
   compiling: boolean;
@@ -29,6 +30,7 @@ export function usePlaygroundCompile(
   const [outputJs, setOutputJs] = useState("");
   const [outputTs, setOutputTs] = useState("");
   const [outputDts, setOutputDts] = useState("");
+  const [outputSource, setOutputSource] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [compileMs, setCompileMs] = useState<number | null>(null);
   const [compiling, setCompiling] = useState(false);
@@ -51,12 +53,14 @@ export function usePlaygroundCompile(
         setCompiling(false);
         if (result._tag === "Ok") {
           setDiagnostics([]);
+          setOutputSource(source);
           setOutputJs(result.value.js);
           setOutputTs(result.value.ts);
           setOutputDts(result.value.dts);
           setCompileMs(result.value.ms);
           return;
         }
+        setOutputSource(null);
         setOutputJs("");
         setOutputTs("");
         setOutputDts("");
@@ -81,7 +85,16 @@ export function usePlaygroundCompile(
     return () => window.clearTimeout(id);
   }, [autoRun, bootstrapped, code, evaluate]);
 
-  return { outputJs, outputTs, outputDts, diagnostics, compileMs, compiling, evaluate };
+  return {
+    outputJs,
+    outputTs,
+    outputDts,
+    outputSource,
+    diagnostics,
+    compileMs,
+    compiling,
+    evaluate,
+  };
 }
 
 export type { PlaygroundStatus };

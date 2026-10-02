@@ -5,11 +5,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preac
 import { presetEntries } from "../lib/playground/presets.mochi";
 import { clearPreview, renderPreview } from "../lib/playground/preview";
 import { persistAutorun, readAutorun } from "../lib/playground/session";
-import { EditorInput, EditorMirror, EmitPane, PaneTab, PreviewPane } from "../ui/primitives.mochi";
+import { EditorInput, EditorMirror, PaneTab } from "../ui/primitives.mochi";
 import { HighlightedCode } from "./HighlightCode";
 import { Icon } from "./Icon";
 import { PlaygroundProblems } from "./PlaygroundProblems.mochi";
-import { PlaygroundRight, PlaygroundSettings } from "./PlaygroundRight.mochi";
+import { PlaygroundExamples, PlaygroundRight } from "./PlaygroundRight.mochi";
 import { PlaygroundView } from "./PlaygroundView.mochi";
 import { playgroundStatus, usePlaygroundCompile } from "./use-playground-compile";
 import { usePlaygroundSource } from "./use-playground-source";
@@ -19,13 +19,37 @@ const EDITOR_LINE_HEIGHT = 19.5;
 /** Editor `p-4` top padding — active-line bar + gutter share it. */
 const EDITOR_PAD_TOP = 16;
 
-type RightTab = "js" | "ts" | "dts" | "output" | "problems" | "settings";
+type RightTab = "preview" | "code" | "problems";
+type EmitTarget = "js" | "ts" | "dts";
 
-/** The three emit tabs share one pane shape — id picks the emit, lang the highlighter. */
-const EMIT_TABS = [
-  { id: "js", lang: "js", empty: "No emit yet — fix Problems or hit Run." },
-  { id: "ts", lang: "ts", empty: "No TypeScript emit yet — fix Problems or hit Run." },
-  { id: "dts", lang: "ts", empty: "No .d.ts emit yet — fix Problems or hit Run." },
+const EMIT_TARGETS = [
+  {
+    id: "js",
+    label: "JavaScript",
+    lang: "js",
+    file: "app.js",
+    detail: "JavaScript executed by the preview.",
+  },
+  {
+    id: "ts",
+    label: "TypeScript",
+    lang: "ts",
+    file: "app.ts",
+    detail: "TypeScript with inferred annotations.",
+  },
+  {
+    id: "dts",
+    label: "Declarations",
+    lang: "ts",
+    file: "app.d.mochi.ts",
+    detail: "The inferred types available to TypeScript consumers.",
+  },
+] as const;
+
+const RESULT_VIEWS = [
+  { id: "preview", label: "Preview", icon: "play" },
+  { id: "code", label: "Generated code", icon: "code" },
+  { id: "problems", label: "Problems", icon: "circle-alert" },
 ] as const;
 
 const diagSpans = (diags: readonly Diagnostic[]): { start: number; end: number }[] =>
@@ -34,14 +58,25 @@ const diagSpans = (diags: readonly Diagnostic[]): { start: number; end: number }
 export function Playground() {
   const { code, setCode, bootstrapped, syncShareUrl } = usePlaygroundSource();
   const [autoRun, setAutoRun] = useState(readAutorun);
-  const { outputJs, outputTs, outputDts, diagnostics, compileMs, compiling, evaluate } =
-    usePlaygroundCompile(code, autoRun, bootstrapped);
-  const [activeTab, setActiveTab] = useState<RightTab>("js");
+  const {
+    outputJs,
+    outputTs,
+    outputDts,
+    outputSource,
+    diagnostics,
+    compileMs,
+    compiling,
+    evaluate,
+  } = usePlaygroundCompile(code, autoRun, bootstrapped);
+  const [activeTab, setActiveTab] = useState<RightTab>("preview");
+  const [emitTarget, setEmitTarget] = useState<EmitTarget>("js");
+  const [copyNotice, setCopyNotice] = useState("");
+  const copySeq = useRef(0);
   const [shareCopied, setShareCopied] = useState(false);
   const [formatNotice, setFormatNotice] = useState(false);
   const [splitPct, setSplitPct] = useState(50);
   const [mobilePane, setMobilePane] = useState<"code" | "result">("code");
-  const previewRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
   const splitRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLPreElement>(null);
@@ -74,11 +109,16 @@ export function Playground() {
     persistAutorun(autoRun);
   }, [autoRun]);
 
+  useEffect(() => {
+    ++copySeq.current;
+    setCopyNotice("");
+  }, [outputJs, outputTs, outputDts, emitTarget]);
+
   // Keep preview host mounted; imperative render survives parent re-renders.
   useLayoutEffect(() => {
     const el = previewRef.current;
     if (!el) return;
-    if (diagnostics.length > 0 || activeTab !== "output" || !outputJs) {
+    if (diagnostics.length > 0 || activeTab !== "preview" || !outputJs) {
       clearPreview(el);
       return;
     }
@@ -148,7 +188,7 @@ export function Playground() {
     const preset = presetEntries.find(([k]) => k === key)?.[1];
     if (preset) {
       setCode(preset.code);
-      setActiveTab("output");
+      setActiveTab("preview");
       setMobilePane("result");
     }
   };
@@ -157,82 +197,155 @@ export function Playground() {
   const errorSpans = diagSpans(diagnostics);
   const statusOk = diagnostics.length === 0;
   const { text: statusText, state: statusState } = playgroundStatus(compiling, compileMs, statusOk);
-  const tabs = (
-    [
-      { id: "js" as const, label: "JavaScript" },
-      { id: "ts" as const, label: "TypeScript" },
-      { id: "dts" as const, label: ".d.ts" },
-      { id: "output" as const, label: "Output" },
-      {
-        id: "problems" as const,
-        label: `Problems${problemCount ? ` (${problemCount})` : ""}`,
-        icon: "circle-alert" as const,
-      },
-      { id: "settings" as const, label: "Settings", icon: "settings-2" as const },
-    ] as const
-  ).map((tab) => (
+  const tabs = RESULT_VIEWS.map((tab, index) => (
     <PaneTab
       key={tab.id}
+      id={`result-tab-${tab.id}`}
       role="tab"
       aria-selected={activeTab === tab.id}
+      aria-controls="result-panel"
+      tabIndex={activeTab === tab.id ? 0 : -1}
       onClick={() => setActiveTab(tab.id)}
+      onKeyDown={(event: KeyboardEvent) => {
+        const next =
+          event.key === "ArrowRight"
+            ? (index + 1) % RESULT_VIEWS.length
+            : event.key === "ArrowLeft"
+              ? (index + RESULT_VIEWS.length - 1) % RESULT_VIEWS.length
+              : event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? RESULT_VIEWS.length - 1
+                  : null;
+        if (next === null) return;
+        event.preventDefault();
+        const view = RESULT_VIEWS[next]!;
+        setActiveTab(view.id);
+        document.getElementById(`result-tab-${view.id}`)?.focus();
+      }}
       $active={activeTab === tab.id ? "on" : "off"}
+      className="px-2.5 focus-visible:outline-2 focus-visible:outline-fur focus-visible:outline-offset-[-2px] sm:px-3"
     >
-      {"icon" in tab ? <Icon name={tab.icon} className="size-3.5 shrink-0" /> : null}
+      <Icon name={tab.icon} className="hidden size-3.5 shrink-0 sm:block" />
       {tab.label}
+      {tab.id === "problems" && problemCount > 0 ? (
+        <span className="rounded bg-fur/15 px-1.5 text-fur-deep">{problemCount}</span>
+      ) : null}
     </PaneTab>
   ));
 
-  // Keep Output host mounted across tab switches so imperative preview isn't wiped.
   const outputHost = (
-    <div
-      className={activeTab === "output" && statusOk ? "flex h-full min-h-72 flex-col" : "hidden"}
-    >
-      <PreviewPane ref={previewRef} className="min-h-72 lg:min-h-0" />
+    <div className={activeTab === "preview" ? "block" : "hidden"}>
+      <div className="border-line border-b px-4 py-4 sm:px-6">
+        <h2 className="font-semibold text-sm">Live preview</h2>
+        <p className="mt-1 text-mute text-xs">
+          The UI bound to <code>app</code>, including Task results.
+        </p>
+      </div>
+      {diagnostics.length > 0 ? (
+        <div className="space-y-3 px-4 py-6 sm:px-6">
+          <p className="font-semibold text-sm">Fix the source to see its result.</p>
+          <button
+            type="button"
+            className="text-fur-deep text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-fur"
+            onClick={() => setActiveTab("problems")}
+          >
+            View {problemCount} {problemCount === 1 ? "problem" : "problems"}
+          </button>
+        </div>
+      ) : !outputJs ? (
+        <p className="px-4 py-6 text-mute text-sm" role="status">
+          {compiling ? "Compiling your source…" : "Run your source to see its result."}
+        </p>
+      ) : null}
+      <section
+        ref={previewRef}
+        className={statusOk && outputJs ? "min-h-48 overflow-auto bg-foam p-4 sm:p-6" : "hidden"}
+        aria-label="Live preview"
+        aria-live="polite"
+      />
     </div>
   );
 
-  const emits: Record<(typeof EMIT_TABS)[number]["id"], string> = {
-    js: outputJs,
-    ts: outputTs,
-    dts: outputDts,
+  const emits: Record<EmitTarget, string> = { js: outputJs, ts: outputTs, dts: outputDts };
+  const target = EMIT_TARGETS.find((t) => t.id === emitTarget)!;
+  const generated = emits[emitTarget];
+  const copyGenerated = async (): Promise<void> => {
+    const seq = ++copySeq.current;
+    try {
+      await navigator.clipboard.writeText(generated);
+      if (seq === copySeq.current) setCopyNotice("Copied");
+    } catch {
+      if (seq === copySeq.current) setCopyNotice("Could not copy. Select the code to copy it.");
+    }
   };
-  const emitTab = EMIT_TABS.find((t) => t.id === activeTab);
 
-  let activePane = null;
-  if (emitTab) {
-    activePane = (
-      <EmitPane className="max-h-none min-h-72 lg:min-h-0">
-        {emits[emitTab.id] ? (
-          <HighlightedCode code={emits[emitTab.id]} lang={emitTab.lang} />
+  const activePane =
+    activeTab === "code" ? (
+      <div>
+        <div className="space-y-2 border-line border-b px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="sr-only">Generated code format</span>
+              <select
+                aria-label="Generated code format"
+                value={emitTarget}
+                onChange={(event) => {
+                  ++copySeq.current;
+                  setCopyNotice("");
+                  setEmitTarget(event.currentTarget.value as EmitTarget);
+                }}
+                className="rounded-lg border border-line bg-foam px-2 py-1.5 text-base text-ink focus-visible:outline-2 focus-visible:outline-fur sm:text-sm"
+              >
+                {EMIT_TARGETS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <span className="font-mono text-mute text-xs">{target.file}</span>
+            </label>
+            <button
+              type="button"
+              disabled={!generated}
+              onClick={() => void copyGenerated()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-sm hover:bg-peach focus-visible:outline-2 focus-visible:outline-fur disabled:opacity-40"
+              aria-label="Copy generated code"
+            >
+              <Icon name={copyNotice === "Copied" ? "check" : "copy"} className="size-3.5" />
+              {copyNotice === "Copied" ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <p className="text-mute text-xs">{target.detail}</p>
+          {copyNotice ? (
+            <p role="status" className="text-mute text-xs">
+              {copyNotice}
+            </p>
+          ) : null}
+        </div>
+        {generated ? (
+          <pre className="m-0 overflow-auto whitespace-pre bg-foam p-4 font-mono text-xs leading-5 [&>code]:min-w-max">
+            <HighlightedCode code={generated} lang={target.lang} overlay lineHeightPx={20} />
+          </pre>
         ) : (
-          <span className="inline-flex items-center gap-2 text-mute">
-            <Icon name="file-code" className="size-4 shrink-0 opacity-70" />
-            {emitTab.empty}
-          </span>
+          <p role="status" className="px-4 py-6 text-mute text-sm">
+            {compiling
+              ? "Compiling your source…"
+              : diagnostics.length
+                ? "Generated code is unavailable until the source compiles."
+                : "Run your source to generate code."}
+          </p>
         )}
-      </EmitPane>
-    );
-  } else if (activeTab === "problems") {
-    activePane = (
-      <PlaygroundProblems
-        hasProblems={diagnostics.length > 0}
-        diagnosticsFormatted={diagnostics.map((d) => formatError(d, code)).join("\n\n")}
-      />
-    );
-  } else if (activeTab === "settings") {
-    activePane = (
-      <PlaygroundSettings
-        onPreset={handlePresetSelect as () => void}
-        presetKey={presetEntries.find(([, p]) => p.code === code)?.[0] ?? ""}
-        presetOptions={presetEntries.map(([key, p]) => (
-          <option key={key} value={key}>
-            {p.name}
-          </option>
-        ))}
-      />
-    );
-  }
+      </div>
+    ) : activeTab === "problems" ? (
+      <div className="p-4 sm:p-6">
+        <PlaygroundProblems
+          hasProblems={diagnostics.length > 0}
+          hasRun={compileMs !== null}
+          diagnosticsFormatted={diagnostics.map((d) => formatError(d, code)).join("\n\n")}
+        />
+      </div>
+    ) : null;
 
   return (
     <PlaygroundView
@@ -371,8 +484,28 @@ export function Playground() {
             >
               <PlaygroundRight
                 tabs={tabs}
+                panelId="result-panel"
+                labelledBy={`result-tab-${activeTab}`}
+                examples={
+                  <PlaygroundExamples
+                    onPreset={handlePresetSelect as () => void}
+                    presetKey={presetEntries.find(([, p]) => p.code === code)?.[0] ?? ""}
+                    presetOptions={presetEntries.map(([key, p]) => (
+                      <option key={key} value={key}>
+                        {p.name}
+                      </option>
+                    ))}
+                  />
+                }
                 pane={
                   <>
+                    {outputSource !== null && outputSource !== code ? (
+                      <p role="status" className="border-line border-b bg-peach px-4 py-3 text-sm">
+                        {autoRun
+                          ? "Updating this result…"
+                          : "Source changed. Run to update this result."}
+                      </p>
+                    ) : null}
                     {outputHost}
                     {activePane}
                   </>
