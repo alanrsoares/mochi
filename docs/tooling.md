@@ -89,6 +89,7 @@ bun run bench compile --profile   # rerun under --cpu-prof; rank functions by in
 bun run bench loop --runs 12      # emitted scalar loop/recur vs previous array rebinding
 bun scripts/bench-loop-node.ts    # the same fixtures under Node, plus separate GC traces
 bun scripts/bench-tail-switch.ts  # emitted tail switches vs previous step transport, Bun/Node
+bun scripts/bench-dedupe-by.ts    # primitive projection cache vs previous equality scan, Bun/Node
 ```
 
 `scripts/bench.ts` runs the standard compiler, formatter and loop suites. A

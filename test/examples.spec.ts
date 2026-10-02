@@ -16,6 +16,29 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+type DedupeRow = { id: number };
+
+test("dedupeBy keeps first projected representatives and evaluates projections in order", () => {
+  const visits: number[] = [];
+  const run = compileAndEval(
+    'let run = project => Array.dedupeBy(project, [{id: 2, name: "first"}, {id: 1, name: "second"}, {id: 2, name: "last"}])',
+    "run",
+  ) as (project: (row: DedupeRow) => number) => unknown;
+  expect(
+    run((row) => {
+      visits.push(row.id);
+      return row.id;
+    }),
+  ).toEqual([
+    { id: 2, name: "first" },
+    { id: 1, name: "second" },
+  ]);
+  expect(visits).toEqual([2, 1, 2]);
+  expect(
+    compileAndEval("let result = Array.dedupeBy(x => {key: x % 2}, [1, 2, 3, 4])", "result"),
+  ).toEqual([1, 2]);
+});
+
 test("compiled equality distinguishes missing optional keys from present undefined", () => {
   const same = compileAndEval(
     "type Fields = { a?: number, b?: number }\nlet same = (left: Fields, right: Fields) => left == right",

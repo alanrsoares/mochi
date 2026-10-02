@@ -14217,12 +14217,21 @@ var _preludeJsDefs = {
   _Array_sortBy: "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
   _Array_dedupe: "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
   _Array_dedupeBy: `const _Array_dedupeBy = _curry(2, (f, xs) => {
-  const seen = [];
+  const primitive = new Set;
+  const structural = [];
   return xs.filter((x) => {
     const k = f(x);
-    if (seen.some((s) => eq(s, k)))
+    if (k !== null && typeof k === "object") {
+      if (structural.some((s) => eq(s, k)))
+        return false;
+      structural.push(k);
+      return true;
+    }
+    if (Number.isNaN(k))
+      return true;
+    if (primitive.has(k))
       return false;
-    seen.push(k);
+    primitive.add(k);
     return true;
   });
 });`,
