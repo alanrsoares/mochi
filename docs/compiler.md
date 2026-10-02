@@ -67,8 +67,10 @@ in `codegen.mochi` ([ADR 0135](adr/0135-structural-pattern-codegen.md)).
 
 mochi emits **JavaScript** and **strict-`tsc`-clean TypeScript** from the same AST. The
 JS backend (`bootstrap/codegen.mochi`) is pure and non-failing. `codegen-ts.mochi` wraps it, feeding type
-annotations pulled from the inference table; it does not re-emit — the two outputs are
-byte-identical apart from the annotations TS adds. The result typechecks under
+annotations pulled from the inference table. Both outputs share expression and
+pattern lowering, with targeted differences: TS uses native arithmetic where JS
+uses prelude helpers, and some generic nested patterns need a TS matcher fallback.
+The self-hosted graph typechecks under
 `tsc --strict` with no `any` and no escape hatches.
 
 What ships runs `bootstrap/codegen-ts.mochi` and

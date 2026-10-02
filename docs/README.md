@@ -11,8 +11,9 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
   shipped binary compiles that source and reproduces itself byte-for-byte at the
   fixpoint — `bun run fixpoint` is green.
 - **Dual backend, strict-clean.** The self-hosted graph emits **0 `tsc --strict`
-  errors** (`bun run bootstrap:self-tsc`), and the JS and TS emitters are byte-identical up
-  to the type annotations the TS backend adds.
+  errors** (`bun run bootstrap:self-tsc`). JS and TS share one emitter, with
+  inferred TS annotations and targeted differences in arithmetic and generic
+  pattern lowering ([compiler](compiler.md#two-backends-one-codegen)).
 - **Tooling.** Hover, a width-based formatter, `.d.ts` generation, and structured
   diagnostics all ship, driven from the compiler (the LSP is a thin adapter).
 

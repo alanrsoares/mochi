@@ -26,7 +26,8 @@ the compiler's own passes rather than a separate model of your code. Write
 
 ## One language, two clean outputs
 
-Same source. No runtime bloat in the JS, full annotations in the TS.
+Same source. JavaScript with only the runtime helpers it uses; TypeScript with
+inferred annotations. Runtime helper definitions are omitted below.
 
 <table>
 <tr><th><code>app.mochi</code></th></tr>
@@ -52,10 +53,13 @@ let birthday = user => { ...user, age: user.age + 1 }
 <tr valign="top"><td>
 
 ```js
-const greet = (user) => match(gt(user.age, 17))
-  .with(true, () => `Welcome, ${user.name}`)
-  .with(false, () => `Sorry, ${user.name}`)
-  .exhaustive();
+const greet = (user) => ((_v) => _v === true
+  ? `Welcome, ${user.name}`
+  : _v === false
+  ? `Sorry, ${user.name}`
+  : (() => { throw new Error("non-exhaustive match"); })())(
+    gt(user.age, 17)
+  );
 
 const birthday = (user) =>
   ({ ...user, age: add(user.age, 1) });
@@ -69,12 +73,18 @@ export type User = { name: string; age: number };
 const greet:
   <A>(user: { age: number; name: string } & A) => string
   = <A>(user: { age: number; name: string } & A) =>
-    /* …same body as the JS column… */;
+    ((_v) => _v === true
+      ? `Welcome, ${user.name}`
+      : _v === false
+      ? `Sorry, ${user.name}`
+      : (() => { throw new Error("non-exhaustive match"); })())(
+        user.age > 17
+      );
 
 const birthday:
   <A>(user: { age: number } & A) => { age: number } & A
   = <A>(user: { age: number } & A) =>
-    ({ ...user, age: add(user.age, 1) });
+    ({ ...user, age: user.age + 1 });
 ```
 
 </td></tr>
@@ -86,7 +96,11 @@ that signature. It fell out of inference.
 
 ## Quick start
 
+Clone the repo and save the source above as `app.mochi` in its root:
+
 ```bash
+git clone https://github.com/alanrsoares/mochi.git
+cd mochi
 bun install
 bun run mochi app.mochi          # compile to JS on stdout
 bun run mochi ts app.mochi       # compile to strict-clean TypeScript
@@ -104,7 +118,7 @@ Run the local playground with `bun run docs:dev`, or browse its
 | **Types** | `const add = (a: number, b: number) => a + b` | `let add = (a, b) => a + b` — inferred |
 | **Matching** | `switch (r.type) { case "ok": … }`, hope you covered it | `switch r { \| Ok(v) => v \| Err(e) => 0 }` — miss a case, it won't compile |
 | **Records** | write an `interface`, then keep it in sync | `{ id: "123", name: "Alice" }` — fields inferred, structural |
-| **Optionals** | `?.` and `??` scattered everywhere | `Maybe`/`Result` variants; the compiler makes you handle the empty case |
+| **Optionals** | `?.` and `??` scattered everywhere | `Option`/`Result` variants; the compiler makes you handle the empty case |
 | **JSX** | configure `jsx: react-jsx` in tsconfig | built in — compiles to whatever `h()` you point it at |
 
 ## The tour
@@ -166,8 +180,10 @@ real programs — a CLI, Game of Life, Snake, async, multi-file module graphs.
 
 - **Call any npm package.** Declare an `extern` with a type signature and use it.
 - **React and Preact hooks** work inside mochi components — call them directly.
-- **Export to TypeScript.** Every module gets a `.d.mochi.ts` sidecar, so existing TS code
-  imports mochi with no configuration and full types.
+- **Export to TypeScript.** Run `bun run mochi dts --write src` to generate
+  `.d.mochi.ts` sidecars, and enable `allowArbitraryExtensions` in `tsconfig.json`.
+  Use the Bun preload or Vite plugin to run `.mochi` imports
+  ([setup](docs/tooling.md#mochi-in-a-bun-typescript-codebase)).
 - **Vite plugin** for `.mochi` files in an existing app.
 
 ## Is it real?
