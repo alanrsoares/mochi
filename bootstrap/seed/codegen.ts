@@ -83,6 +83,7 @@ export type GCtx = {
   userNames: Set<string>;
   docs: boolean;
 };
+export type OptionalMatch = { binding: string; present: Expr; absent: Expr };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -932,7 +933,12 @@ const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, (ctx: GCtx, e: E
                                                       : _v._tag === "None"
                                                         ? ((member: string) =>
                                                             optional
-                                                              ? `((v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" })(${member})`
+                                                              ? ((tagType: string) =>
+                                                                  `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(
+                                                                  _Option_isSome(ctx.guardBaseType)
+                                                                    ? " as const"
+                                                                    : "",
+                                                                )
                                                               : member)(
                                                             `${genMember(ctx, target)}.${name}`,
                                                           )
@@ -1298,12 +1304,10 @@ const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
     ", ",
     map((p: { name: string } & A) => p.name, params),
   );
-const recurTempName: _Curry<[ctx: GCtx, name: string], string> = _curry(
-  2,
-  (ctx: GCtx, name: string) =>
-    or(_Set_has(name, ctx.userNames), _Set_has(name, ctx.valueRefs))
-      ? recurTempName(ctx, `${name}$`)
-      : name,
+const tempName: _Curry<[ctx: GCtx, name: string], string> = _curry(2, (ctx: GCtx, name: string) =>
+  or(_Set_has(name, ctx.userNames), _Set_has(name, ctx.valueRefs))
+    ? tempName(ctx, `${name}$`)
+    : name,
 );
 const genRecurTemps: _Curry<[ctx: GCtx, args: Expr[], params: LoopParam[], i: number], string> =
   _curry(4, (ctx: GCtx, args: Expr[], params: LoopParam[], i: number) =>
@@ -1312,7 +1316,7 @@ const genRecurTemps: _Curry<[ctx: GCtx, args: Expr[], params: LoopParam[], i: nu
         ? (([{ value: a }, { value: p }]) =>
             ((name: string) =>
               `const ${suffixOr(name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, a)}; ${genRecurTemps(ctx, args, params, i + 1)}`)(
-              recurTempName(ctx, `$recur${show(i)}`),
+              tempName(ctx, `$recur${show(i)}`),
             ))(
             _v as [
               Extract<[Option<Expr>, Option<LoopParam>][0], { _tag: "Some" }>,
@@ -1328,7 +1332,7 @@ const genRecurAssignments: <A>(ctx: GCtx, params: ({ name: string } & A)[], i: n
         ? ""
         : _v._tag === "Some"
           ? (({ value: p }) =>
-              `${p.name} = ${recurTempName(ctx, `$recur${show(i)}`)}; ${genRecurAssignments(ctx, params, i + 1)}`)(
+              `${p.name} = ${tempName(ctx, `$recur${show(i)}`)}; ${genRecurAssignments(ctx, params, i + 1)}`)(
               _v,
             )
           : (() => {
@@ -1975,7 +1979,114 @@ const ternaryTypes: <A, B>(
     allOf((a: { pattern: Pattern } & B) => isShallowArm(ctx, a.pattern), arms),
   ),
 );
+
+const isOptionalNone: (pattern: Pattern) => boolean = (pattern: Pattern) =>
+  ((_v) =>
+    _v._tag === "PCtor" && _v.ctor === "None"
+      ? (({ args, ns }) => and(length(args) === 0, _Option_isNone(ns)))(_v)
+      : false)(pattern);
+const optionalMatchPair: <A, C, E, F>(
+  present: { guard: Option<A>; pattern: Pattern; body: Expr } & E,
+  absent: { guard: Option<C>; pattern: Pattern; body: Expr } & F,
+) => Option<OptionalMatch> = _curry(
+  2,
+  <A, C, E, F>(
+    present: { guard: Option<A>; pattern: Pattern; body: Expr } & E,
+    absent: { guard: Option<C>; pattern: Pattern; body: Expr } & F,
+  ) =>
+    or(
+      or(_Option_isSome(present.guard), _Option_isSome(absent.guard)),
+      !isOptionalNone(absent.pattern),
+    )
+      ? None
+      : ((_v) =>
+          _v._tag === "PCtor" && _v.ctor === "Some"
+            ? (({ args, ns }) =>
+                and(length(args) === 1, _Option_isNone(ns))
+                  ? ((_v) =>
+                      _v._tag === "Some" && _v.value._tag === "PBind"
+                        ? (({ value: { name } }) =>
+                            Some({ binding: name, present: present.body, absent: absent.body }))(
+                            _v as Extract<Option<Pattern>, { _tag: "Some" }> & {
+                              value: Extract<
+                                Extract<Option<Pattern>, { _tag: "Some" }>["value"],
+                                { _tag: "PBind" }
+                              >;
+                            },
+                          )
+                        : _v._tag === "Some" && _v.value._tag === "PWild"
+                          ? Some({ binding: "", present: present.body, absent: absent.body })
+                          : None)(_Array_get(0, args))
+                  : None)(_v)
+            : None)(present.pattern),
+);
+const optionalMatch: <A, C>(
+  arms: ({ guard: Option<A>; pattern: Pattern; body: Expr } & C)[],
+) => Option<OptionalMatch> = <A, C>(
+  arms: ({ guard: Option<A>; pattern: Pattern; body: Expr } & C)[],
+) =>
+  match(arms)
+    .with(
+      (_v) => _v.length === 2,
+      ([a, b]) =>
+        ((_v) =>
+          _v._tag === "Some"
+            ? (({ value: plan }) => Some(plan))(_v)
+            : _v._tag === "None"
+              ? optionalMatchPair(b, a)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(optionalMatchPair(a, b)),
+    )
+    .otherwise(() => None);
+const genOptionalMatch: _Curry<
+  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[]],
+  Option<string>
+> = _curry(3, (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
+  ((_v) =>
+    _v._tag === "EField" && _v.optional === true
+      ? (({ target, name }) =>
+          ((_v) =>
+            _v[0]._tag === "Some" &&
+            _v[0].value.length === 1 &&
+            _v[0].value[0] === "value" &&
+            _v[1]._tag === "Some" &&
+            _v[1].value.length === 0
+              ? ((_v) =>
+                  _v._tag === "None"
+                    ? (None as Option<string>)
+                    : _v._tag === "Some"
+                      ? (({ value: plan }) =>
+                          Some(genOptionalBranches(ctx, target, name, plan)) as Option<string>)(_v)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(optionalMatch(arms))
+              : (None as Option<string>))(
+            _tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)),
+          ))(_v)
+      : (None as Option<string>))(scrutinee),
+);
+const genOptionalBranches: _Curry<
+  [ctx: GCtx, target: Expr, name: string, plan: OptionalMatch],
+  string
+> = _curry(4, (ctx: GCtx, target: Expr, name: string, plan: OptionalMatch) => {
+  const value: string = tempName(ctx, "$optional");
+  const bind: string = plan.binding === "" ? "" : `const ${plan.binding} = ${value}; `;
+  return `((${value}) => { if (${value} != null) { ${bind}return ${genExpr(ctx, plan.present)}; } return ${genExpr(ctx, plan.absent)}; })(${genMember(ctx, target)}.${name})`;
+});
 const genMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
+  3,
+  (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
+    ((_v) =>
+      _v._tag === "Some"
+        ? (({ value: fused }) => fused)(_v)
+        : _v._tag === "None"
+          ? genOrdinaryMatch(ctx, scrutinee, arms)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(genOptionalMatch(ctx, scrutinee, arms)),
+);
+const genOrdinaryMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
   3,
   (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]) =>
     isListMatch(arms)

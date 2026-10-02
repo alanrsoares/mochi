@@ -14,6 +14,30 @@ const RUNTIME_IMPORT = "../../packages/compiler/src/prelude/runtime";
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).
 const PROGRAMS: Record<string, string> = {
+  optionalMatchFusion: `
+type Row a = { value?: a }
+let $optional = 5
+let $optional$ = 2
+let getOr = (row: Row<a>, fallback: a) => switch row.value {
+  | Some(v) => v
+  | None => fallback
+}
+let reversed = (row: Row<number>) => switch row.value {
+  | None => { value: $optional, next: () => $optional$ }
+  | Some(v) => let old = v in { value: old + $optional, next: () => v }
+}
+let ignore = (row: Row<a>) => switch row.value { | Some(_) => true | None => false }
+let nested = (outer: Row<Row<number>>) => switch outer.value {
+  | Some(inner) => switch inner.value { | Some(n) => n | None => 1 }
+  | None => 0
+}
+let get = (target: () -> Row<a>, fallback: a) => switch target().value { | Some(v) => v | None => fallback }
+let guarded = (row: Row<number>) => switch row.value { | Some(v) when v > 0 => v | Some(_) => 0 | None => 0 }
+let exposed = (row: Row<number>) => switch row.value { | Some(v) when v > 0 => Some(v) | rest => rest }
+let payload = (row: Row<(number, string)>) => switch row.value { | Some((n, _)) => n | None => 0 }
+let loopMatch = (row: Row<number>) => loop (i = 0) { switch row.value { | Some(n) => i >= n ? i : recur(i + 1) | None => i } }
+let inner : Row<number> = { value: 2 }
+let values = (getOr({}, 3), reversed({ value: 7 }), ignore({}), nested({ value: inner }), get(() => inner, 4), guarded({}), exposed({}), payload({ value: (2, "x") }))`,
   tupleWildcards: `
 let first = ((a, _, _)) => a
 let middle = ((_, a, _)) => a

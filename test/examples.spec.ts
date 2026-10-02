@@ -9,12 +9,133 @@ import {
   defaultBootstrapOptions,
 } from "@mochi/compiler/bootstrap/module";
 import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
-import { compileAndEval, readRepo, repoPath, typesOf } from "@mochi/test-support";
+import { compileAndEval, compileJs, readRepo, repoPath, typesOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
+
+test.each([
+  { label: "Some first", arms: "| Some(v) => v | None => 99", expected: [0, 7, 99, 99] },
+  { label: "None first", arms: "| None => 99 | Some(v) => v", expected: [0, 7, 99, 99] },
+  {
+    label: "payload uses synthetic base",
+    arms: "| Some($optional) => $optional | None => 99",
+    expected: [0, 7, 99, 99],
+  },
+  { label: "discard payload", arms: "| Some(_) => 1 | None => 99", expected: [1, 1, 99, 99] },
+])("optional field match fusion: $label", ({ arms, expected }) => {
+  const src = `type Row = { value?: number }
+let read = (row: Row) => switch row.value { ${arms} }`;
+  const fn = compileAndEval(src, "read") as (row: Record<string, unknown>) => number;
+  expect([0, 7, undefined, null].map((value) => fn({ value }))).toEqual([...expected]);
+  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+});
+
+test("optional match fusion evaluates targets and getters once, before only the selected body", () => {
+  const src = `type Row = { value?: number }
+let read = (get: () -> Row, mark: number -> number) => switch get().value {
+  | Some(v) => mark(v)
+  | None => mark(99)
+}`;
+  const fn = compileAndEval(src, "read") as (
+    get: () => Record<string, unknown>,
+    mark: (value: number) => number,
+  ) => number;
+  const events: string[] = [];
+  expect(
+    fn(
+      () => {
+        events.push("target");
+        return {
+          get value() {
+            events.push("field");
+            return 7;
+          },
+        };
+      },
+      (value) => {
+        events.push(`body:${value}`);
+        return value;
+      },
+    ),
+  ).toBe(7);
+  expect(events).toEqual(["target", "field", "body:7"]);
+  events.length = 0;
+  expect(
+    fn(
+      () => {
+        events.push("target");
+        return {
+          get value() {
+            events.push("field");
+            return undefined;
+          },
+        };
+      },
+      (value) => {
+        events.push(`body:${value}`);
+        return value;
+      },
+    ),
+  ).toBe(99);
+  expect(events).toEqual(["target", "field", "body:99"]);
+  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+});
+
+test("optional match fusion preserves nested bindings, record results and synthetic-name references", () => {
+  const src = `type Row = { value?: number }
+let $optional = 5
+let $optional$ = 2
+let read = (row: Row) => switch row.value {
+  | Some(v) => let old = v in { value: old + $optional + $optional$, next: () => v }
+  | None => { value: $optional, next: () => $optional$ }
+}
+let present = read({ value: 7 })
+let absent = read({})`;
+  expect(
+    compileAndEval(src, "[present.value, present.next(), absent.value, absent.next()]"),
+  ).toEqual([14, 7, 5, 2]);
+  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+});
+
+test("optional match fusion composes with loop tail-switch lowering", () => {
+  const src = `type Row = { value?: number }
+let run = (row: Row) => loop (i = 0) {
+  switch row.value {
+    | Some(n) => i >= n ? i : recur(i + 1)
+    | None => i
+  }
+}`;
+  const fn = compileAndEval(src, "run") as (row: Record<string, unknown>) => number;
+  expect([fn({ value: 7 }), fn({})]).toEqual([7, 0]);
+  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+});
+
+test.each([
+  {
+    label: "guard",
+    arms: "| Some(v) when v > 3 => v | Some(_) => 1 | None => 0",
+    expected: [1, 7, 0],
+  },
+  {
+    label: "catch-all binding exposes Option",
+    arms: "| Some(v) when v > 3 => Some(v) | rest => rest",
+    expected: [{ _tag: "Some", value: 0 }, { _tag: "Some", value: 7 }, { _tag: "None" }],
+  },
+  {
+    label: "nested payload pattern",
+    arms: "| Some(0) => 10 | Some(v) => v | None => 0",
+    expected: [10, 7, 0],
+  },
+])("optional field match fallback: $label", ({ arms, expected }) => {
+  const src = `type Row = { value?: number }
+let read = (row: Row) => switch row.value { ${arms} }`;
+  const fn = compileAndEval(src, "read") as (row: Record<string, unknown>) => unknown;
+  expect([0, 7, undefined].map((value) => fn({ value }))).toEqual([...expected]);
+  expect(compileJs(src, { open: false })).toContain('_tag: "Some"');
+});
 
 test("direct loop/recur rotates state simultaneously across nested loop scopes", () => {
   const src = `let out = loop (i = 0, a = 1, b = 2, c = 3) {
