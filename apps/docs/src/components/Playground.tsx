@@ -324,7 +324,7 @@ export function Playground() {
           ) : null}
         </div>
         {generated ? (
-          <pre className="m-0 overflow-auto whitespace-pre bg-foam p-4 font-mono text-xs leading-5">
+          <pre className="m-0 overflow-auto whitespace-pre bg-foam p-4 font-mono text-xs leading-5 [&>code]:min-w-max">
             <HighlightedCode code={generated} lang={target.lang} overlay lineHeightPx={20} />
           </pre>
         ) : (
