@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="604" viewBox="0 0 640 604" role="img" aria-labelledby="title description">
+  <title id="title">Mochi runtime benchmark snapshots</title>
+  <desc id="description">Deduplicate records by ID, 4,000 records · numeric projection keys: Bun 186×, Node 202×. Sum through a tail switch, 2 million loop iterations: Bun 2.8×, Node 14×. Match optional field reads, 1 million immediate Some / None matches: Bun 2.9×, Node 2.9×. Historical median speedups against previous Mochi implementations; microbenchmarks, not application throughput.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #302e28; }
+    .name { font-size: 20px; font-weight: 650; }
+    .size { font-size: 14px; fill: #65645c; }
+    .engine { font-size: 14px; font-weight: 650; fill: #65645c; }
+    .gain { font-size: 30px; font-weight: 750; fill: #236444; }
+    .timing { font-size: 17px; }
+  </style>
+  <rect width="640" height="604" rx="24" fill="#f6f3eb"/>
+  <text x="32" y="45" font-size="27" font-weight="750">Less work. Faster runtime.</text>
+  <text x="32" y="70" font-size="16" fill="#65645c">Historical medians · previous → optimized Mochi</text>
+  
+  <rect x="32" y="92" width="576" height="136" rx="16" fill="#ffffff" stroke="#e4ddd2"/>
+  <text x="48" y="121" class="name">Deduplicate records by ID</text>
+  <text x="48" y="143" class="size">4,000 records · numeric projection keys</text>
+  
+  <text x="48" y="177" class="engine">BUN</text>
+  <text x="113" y="179" class="gain">186×</text>
+  <text x="48" y="206" class="timing">27.031 → 0.145 ms</text>
+  
+  <text x="344" y="177" class="engine">NODE</text>
+  <text x="409" y="179" class="gain">202×</text>
+  <text x="344" y="206" class="timing">50.825 → 0.251 ms</text>
+
+  <rect x="32" y="240" width="576" height="136" rx="16" fill="#ffffff" stroke="#e4ddd2"/>
+  <text x="48" y="269" class="name">Sum through a tail switch</text>
+  <text x="48" y="291" class="size">2 million loop iterations</text>
+  
+  <text x="48" y="325" class="engine">BUN</text>
+  <text x="113" y="327" class="gain">2.8×</text>
+  <text x="48" y="354" class="timing">31.29 → 11.19 ms</text>
+  
+  <text x="344" y="325" class="engine">NODE</text>
+  <text x="409" y="327" class="gain">14×</text>
+  <text x="344" y="354" class="timing">41.79 → 2.93 ms</text>
+
+  <rect x="32" y="388" width="576" height="136" rx="16" fill="#ffffff" stroke="#e4ddd2"/>
+  <text x="48" y="417" class="name">Match optional field reads</text>
+  <text x="48" y="439" class="size">1 million immediate Some / None matches</text>
+  
+  <text x="48" y="473" class="engine">BUN</text>
+  <text x="113" y="475" class="gain">2.9×</text>
+  <text x="48" y="502" class="timing">7.79 → 2.65 ms</text>
+  
+  <text x="344" y="473" class="engine">NODE</text>
+  <text x="409" y="475" class="gain">2.9×</text>
+  <text x="344" y="502" class="timing">4.16 → 1.44 ms</text>
+  <text x="32" y="555" font-size="14">Bun 1.4.2 · Node 22.22.3 · macOS arm64</text>
+  <text x="32" y="577" font-size="13">Measured October 2–3, 2026 · Microbenchmarks, not app throughput.</text>
+</svg>

@@ -1,0 +1,30 @@
+{
+  "measured": "October 2–3, 2026",
+  "environment": "Bun 1.4.2 · Node 22.22.3 · macOS arm64",
+  "workloads": [
+    {
+      "name": "Deduplicate records by ID",
+      "size": "4,000 records · numeric projection keys",
+      "report": "docs/dedupe-by-benchmark.md",
+      "precision": 3,
+      "bun": { "before": 27.031, "after": 0.145 },
+      "node": { "before": 50.825, "after": 0.251 }
+    },
+    {
+      "name": "Sum through a tail switch",
+      "size": "2 million loop iterations",
+      "report": "docs/tail-switch-benchmark.md",
+      "precision": 2,
+      "bun": { "before": 31.29, "after": 11.19 },
+      "node": { "before": 41.79, "after": 2.93 }
+    },
+    {
+      "name": "Match optional field reads",
+      "size": "1 million immediate Some / None matches",
+      "report": "docs/optional-read-benchmark.md",
+      "precision": 2,
+      "bun": { "before": 7.79, "after": 2.65 },
+      "node": { "before": 4.16, "after": 1.44 }
+    }
+  ]
+}

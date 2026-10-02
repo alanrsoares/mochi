@@ -199,6 +199,34 @@ bun run check        # lint + typecheck + tests
 bun run check:full   # + self-host north-stars (what CI runs)
 ```
 
+## Benchmarks
+
+[CodSpeed](https://app.codspeed.io/alanrsoares/mochi) tracks compiler and tooling
+performance in CI. Its current cases compile, infer, load or format source; they
+do not run the runtime workloads below. The standalone runtime benchmarks have
+their own reproduction scripts and reports.
+
+<img src="apps/docs/public/benchmarks.svg" alt="Recorded Mochi runtime speedups for record-ID dedupe, tail-switch sum and optional matches, with Bun and Node median timings. Full results are available in the linked reports." width="640" />
+
+Workloads and methodology: [record-ID dedupe](docs/dedupe-by-benchmark.md),
+[tail-switch sum](docs/tail-switch-benchmark.md), and
+[optional-field matches](docs/optional-read-benchmark.md).
+
+These compare earlier Mochi implementations with optimized output, not Mochi
+against handwritten JavaScript or TypeScript. They are microbenchmarks, not
+application throughput claims. Structural dedupe keys retain the existing scan;
+the reports include workload limits, repeat runs and regressions.
+
+```bash
+bun run bench                     # compiler, formatter and direct-loop suites
+bun scripts/bench-dedupe-by.ts     # previous scan vs primitive projection cache
+bun scripts/bench-tail-switch.ts   # previous steps vs scalar tail switches
+bun scripts/bench-optional-read.ts # previous wrappers vs immediate-match fusion
+```
+
+See [benchmark tooling](docs/tooling.md#benchmarks) for CI coverage, profiling
+and saving/comparing local runs.
+
 ## Learn more
 
 - [`docs/language.md`](docs/language.md) — the language itself.
