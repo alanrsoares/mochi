@@ -54,8 +54,6 @@ import {
   _Str_codeAt,
   _Str_join,
   _curry,
-  _done,
-  _recur,
   _tuple,
   add,
   and,
@@ -96,27 +94,28 @@ const firstSomeFrom: <A, B>(f: (a: A) => Option<B>, xs: A[], i0: number) => Opti
   <A, B>(f: (a: A) => Option<B>, xs: A[], i0: number) => {
     let i: number = i0;
     while (true) {
-      const _step = ((_v) =>
-        _v._tag === "None"
-          ? _done(None)
-          : _v._tag === "Some"
-            ? (({ value: x }) =>
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: e }) => _done(Some(e)))(_v)
-                    : _v._tag === "None"
-                      ? _recur(i + 1)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(f(x)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_get(i, xs));
-      if (_step._tag === "recur") {
-        i = _step.args[0];
-        continue;
+      {
+        const $loopMatch = _Array_get(i, xs);
+        if ($loopMatch._tag === "None") {
+          return None;
+        }
+        if ($loopMatch._tag === "Some") {
+          const { value: x } = $loopMatch;
+          {
+            const $loopMatch = f(x);
+            if ($loopMatch._tag === "Some") {
+              const { value: e } = $loopMatch;
+              return Some(e);
+            }
+            if ($loopMatch._tag === "None") {
+              i = i + 1;
+              continue;
+            }
+            throw new Error("non-exhaustive match");
+          }
+        }
+        throw new Error("non-exhaustive match");
       }
-      return _step.value;
     }
   },
 );
@@ -129,19 +128,22 @@ const allOfFrom: <A>(f: (a: A) => boolean, xs: A[], i0: number) => boolean = _cu
   <A>(f: (a: A) => boolean, xs: A[], i0: number) => {
     let i: number = i0;
     while (true) {
-      const _step = ((_v) =>
-        _v._tag === "None"
-          ? _done(true)
-          : _v._tag === "Some"
-            ? (({ value: x }) => (f(x) ? _recur(i + 1) : _done(false)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_get(i, xs));
-      if (_step._tag === "recur") {
-        i = _step.args[0];
-        continue;
+      {
+        const $loopMatch = _Array_get(i, xs);
+        if ($loopMatch._tag === "None") {
+          return true;
+        }
+        if ($loopMatch._tag === "Some") {
+          const { value: x } = $loopMatch;
+          if (f(x)) {
+            i = i + 1;
+            continue;
+          } else {
+            return false;
+          }
+        }
+        throw new Error("non-exhaustive match");
       }
-      return _step.value;
     }
   },
 );
@@ -154,19 +156,22 @@ const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i0: number) => boolean = _c
   <A>(f: (a: A) => boolean, xs: A[], i0: number) => {
     let i: number = i0;
     while (true) {
-      const _step = ((_v) =>
-        _v._tag === "None"
-          ? _done(false)
-          : _v._tag === "Some"
-            ? (({ value: x }) => (f(x) ? _done(true) : _recur(i + 1)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_get(i, xs));
-      if (_step._tag === "recur") {
-        i = _step.args[0];
-        continue;
+      {
+        const $loopMatch = _Array_get(i, xs);
+        if ($loopMatch._tag === "None") {
+          return false;
+        }
+        if ($loopMatch._tag === "Some") {
+          const { value: x } = $loopMatch;
+          if (f(x)) {
+            return true;
+          } else {
+            i = i + 1;
+            continue;
+          }
+        }
+        throw new Error("non-exhaustive match");
       }
-      return _step.value;
     }
   },
 );
@@ -617,20 +622,22 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
   (arms: MatchArm[], i0: number) => {
     let i: number = i0;
     while (true) {
-      const _step = ((_v) =>
-        _v._tag === "None"
-          ? _done(None as Option<number>)
-          : _v._tag === "Some"
-            ? (({ value: a }) =>
-                armUnguardedCatchAll(a) ? _done(Some(i) as Option<number>) : _recur(i + 1))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_get(i, arms));
-      if (_step._tag === "recur") {
-        i = _step.args[0];
-        continue;
+      {
+        const $loopMatch = _Array_get(i, arms);
+        if ($loopMatch._tag === "None") {
+          return None as Option<number>;
+        }
+        if ($loopMatch._tag === "Some") {
+          const { value: a } = $loopMatch;
+          if (armUnguardedCatchAll(a)) {
+            return Some(i) as Option<number>;
+          } else {
+            i = i + 1;
+            continue;
+          }
+        }
+        throw new Error("non-exhaustive match");
       }
-      return _step.value;
     }
   },
 );
@@ -2187,22 +2194,27 @@ const duplicateLoopParam: <C, D>(
   let i: number = 0;
   let seen: Set<string> = _Set_fromArray([] as string[]);
   while (true) {
-    const _step = ((_v) =>
-      _v._tag === "None"
-        ? _done(None)
-        : _v._tag === "Some"
-          ? (({ value: p }) =>
-              _Set_has(p.name, seen)
-                ? _done(Some(checkErr(`duplicate loop param '${p.name}'`, p.nameSpan)))
-                : _recur(i + 1, _Set_add(p.name, seen)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params));
-    if (_step._tag === "recur") {
-      [i, seen] = _step.args;
-      continue;
+    {
+      const $loopMatch = _Array_get(i, params);
+      if ($loopMatch._tag === "None") {
+        return None;
+      }
+      if ($loopMatch._tag === "Some") {
+        const { value: p } = $loopMatch;
+        if (_Set_has(p.name, seen)) {
+          return Some(checkErr(`duplicate loop param '${p.name}'`, p.nameSpan));
+        } else {
+          {
+            const $recur0: number = i + 1;
+            const $recur1: Set<string> = _Set_add(p.name, seen);
+            i = $recur0;
+            seen = $recur1;
+            continue;
+          }
+        }
+      }
+      throw new Error("non-exhaustive match");
     }
-    return _step.value;
   }
 };
 const checkLoopDo: _Curry<
@@ -2211,29 +2223,32 @@ const checkLoopDo: _Curry<
 > = _curry(3, (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean) => {
   let i: number = 0;
   while (true) {
-    const _step = ((_v) =>
-      _v._tag === "None"
-        ? _done(None as Option<PErr>)
-        : _v._tag === "Some"
-          ? (({ value: expr }) =>
-              _Option_isNone(_Array_get(i + 1, exprs))
-                ? _done(checkLoopExpr(expr, frame, tail))
-                : ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: error }) => _done(Some(error) as Option<PErr>))(_v)
-                      : _v._tag === "None"
-                        ? _recur(i + 1)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(checkLoopExpr(expr, frame, false)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, exprs));
-    if (_step._tag === "recur") {
-      i = _step.args[0];
-      continue;
+    {
+      const $loopMatch = _Array_get(i, exprs);
+      if ($loopMatch._tag === "None") {
+        return None as Option<PErr>;
+      }
+      if ($loopMatch._tag === "Some") {
+        const { value: expr } = $loopMatch;
+        if (_Option_isNone(_Array_get(i + 1, exprs))) {
+          return checkLoopExpr(expr, frame, tail);
+        } else {
+          {
+            const $loopMatch = checkLoopExpr(expr, frame, false);
+            if ($loopMatch._tag === "Some") {
+              const { value: error } = $loopMatch;
+              return Some(error) as Option<PErr>;
+            }
+            if ($loopMatch._tag === "None") {
+              i = i + 1;
+              continue;
+            }
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      throw new Error("non-exhaustive match");
     }
-    return _step.value;
   }
 });
 const checkLoopExpr: _Curry<
@@ -2469,26 +2484,27 @@ const loopParamErrors: <C, D>(
   let seen: Set<string> = _Set_fromArray([] as string[]);
   let errors = [] as PErr[];
   while (true) {
-    const _step = ((_v) =>
-      _v._tag === "None"
-        ? _done(errors)
-        : _v._tag === "Some"
-          ? (({ value: p }) =>
-              _recur(
-                i + 1,
-                _Set_add(p.name, seen),
-                _Set_has(p.name, seen)
-                  ? [...errors, checkErr(`duplicate loop param '${p.name}'`, p.nameSpan)]
-                  : errors,
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params));
-    if (_step._tag === "recur") {
-      [i, seen, errors] = _step.args;
-      continue;
+    {
+      const $loopMatch = _Array_get(i, params);
+      if ($loopMatch._tag === "None") {
+        return errors;
+      }
+      if ($loopMatch._tag === "Some") {
+        const { value: p } = $loopMatch;
+        {
+          const $recur0: number = i + 1;
+          const $recur1: Set<string> = _Set_add(p.name, seen);
+          const $recur2 = _Set_has(p.name, seen)
+            ? [...errors, checkErr(`duplicate loop param '${p.name}'`, p.nameSpan)]
+            : errors;
+          i = $recur0;
+          seen = $recur1;
+          errors = $recur2;
+          continue;
+        }
+      }
+      throw new Error("non-exhaustive match");
     }
-    return _step.value;
   }
 };
 const checkLoopDoAll: _Curry<[exprs: Expr[], frame: Option<LoopFrame>, tail: boolean], PErr[]> =
@@ -2496,24 +2512,29 @@ const checkLoopDoAll: _Curry<[exprs: Expr[], frame: Option<LoopFrame>, tail: boo
     let i: number = 0;
     let errors: PErr[] = [] as PErr[];
     while (true) {
-      const _step = ((_v) =>
-        _v._tag === "None"
-          ? _done(errors)
-          : _v._tag === "Some"
-            ? (({ value: expr }) =>
-                ((isLast: boolean) =>
-                  _recur(i + 1, [
-                    ...errors,
-                    ...checkLoopExprs(expr, frame, isLast ? tail : false),
-                  ]))(_Option_isNone(_Array_get(i + 1, exprs))))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_get(i, exprs));
-      if (_step._tag === "recur") {
-        [i, errors] = _step.args;
-        continue;
+      {
+        const $loopMatch = _Array_get(i, exprs);
+        if ($loopMatch._tag === "None") {
+          return errors;
+        }
+        if ($loopMatch._tag === "Some") {
+          const { value: expr } = $loopMatch;
+          {
+            const isLast: boolean = _Option_isNone(_Array_get(i + 1, exprs));
+            {
+              const $recur0: number = i + 1;
+              const $recur1: PErr[] = [
+                ...errors,
+                ...checkLoopExprs(expr, frame, isLast ? tail : false),
+              ];
+              i = $recur0;
+              errors = $recur1;
+              continue;
+            }
+          }
+        }
+        throw new Error("non-exhaustive match");
       }
-      return _step.value;
     }
   });
 const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean], PErr[]> = _curry(

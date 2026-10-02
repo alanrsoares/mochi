@@ -713,13 +713,85 @@ let hasRecur = e => switch e {
 
 // Will this loop body need the _recur/_done step protocol? Only when a switch
 // sits in tail position with a recur inside.
-let loopNeedsStep = e => switch e {
-  | Ast.ETernary(_, thenE, elseE, _) => loopNeedsStep(
-      thenE
-    ) || loopNeedsStep(elseE)
-  | Ast.ELetIn(_, _, _, _, body, _) => loopNeedsStep(body)
-  | Ast.EDo(exprs, _) => loopNeedsStep(lastDoExpr(exprs))
-  | Ast.EMatch(_, _, _) => hasRecur(e)
+let loopNeedsStep = (ctx: GCtx, e, params) => switch e {
+  | Ast.ETernary(_, thenE, elseE, _) => ctx->loopNeedsStep(
+      thenE,
+      params
+    ) || ctx->loopNeedsStep(elseE, params)
+  | Ast.ELetIn(_, _, _, _, body, _) => ctx->loopNeedsStep(body, params)
+  | Ast.EDo(exprs, _) => ctx->loopNeedsStep(lastDoExpr(exprs), params)
+  | Ast.EMatch(_, arms, _) => hasRecur(
+      e
+    ) && (!canStatementMatch(
+      arms,
+      params
+    ) || someOf(a => ctx->loopNeedsStep(a.body, params), arms))
+  | _ => false
+}
+
+// Keep the statement path deliberately shallow. In particular, bindings that
+// shadow a mutable loop parameter must keep the expression/step boundary.
+let loopBindingSafe = (name, params) => !someOf(p => p.name == name, params)
+let loopPayloadSafe = (pattern, params) => switch pattern {
+  | Ast.PBind(name, _) => loopBindingSafe(name, params)
+  | Ast.PWild(_) => true
+  | _ => false
+}
+let loopPatternSafe = (pattern, params) => switch pattern {
+  | Ast.PCtor(_, args, _, _) => allOf(p => loopPayloadSafe(p, params), args)
+  | Ast.PBind(name, _) => loopBindingSafe(name, params)
+  | Ast.PWild(_) => true
+  | Ast.PBool(_, _) => true
+  | Ast.PLit(_, _, _) => true
+  | Ast.PStr(_, _) => true
+  | Ast.PUnit(_) => true
+  | _ => false
+}
+let canStatementMatch = (arms, params) =>
+  allOf(a => Option.isNone(a.guard) && loopPatternSafe(a.pattern, params), arms)
+
+let genLoopMatchArms = (ctx: GCtx, arms, i, root, params) => switch Array.get(i, arms) {
+  | None => "throw new Error(\"non-exhaustive match\");"
+  | Some(a) => let slot = ctx.keys->patSlot(a.pattern) in
+    let bind = slot == "" ? "" : "const ${slot} = ${root}; " in
+    let body = "{ ${bind}${ctx->genLoopTail(a.body, params)} }" in
+      isCatchAll(a.pattern)
+        ? body
+        : let conds = ctx.keys->patConds(a.pattern, root) in
+          "if (${Str.join(" && ", conds)}) ${body} ${ctx->genLoopMatchArms(arms, i + 1, root, params)}"
+}
+
+let genLoopMatch = (ctx: GCtx, scrutinee, arms, params) => switch ctx->genOptionalLoopMatch(scrutinee, arms, params) {
+  | Some(fused) => fused
+  | None => let root = ctx->tempName("$loopMatch") in
+      "{ const ${root} = ${ctx->genExpr(scrutinee)}; ${ctx->genLoopMatchArms(arms, 0, root, params)} }"
+}
+
+let genOptionalLoopMatch = (ctx: GCtx, scrutinee, arms, params) => switch scrutinee {
+  | Ast.EField(target, name, true, _) => switch (Map.get("Some", ctx.keys), Map.get("None", ctx.keys)) {
+      | (Some(["value"]), Some([])) => switch optionalMatch(arms) {
+          | None => None
+          | Some(plan) => let value = ctx->tempName("$optional") in
+            let bind = plan.binding == ""
+              ? ""
+              : "const ${plan.binding} = ${value}; " in
+              Some(
+                "{ const ${value} = ${ctx->genMember(target)}.${name}; if (${value} != null) { ${bind}${ctx->genLoopTail(plan.present, params)} } else { ${ctx->genLoopTail(plan.absent, params)} } }"
+              )
+        }
+      | _ => None
+    }
+  | _ => None
+}
+
+let alwaysRecur = e => switch e {
+  | Ast.ERecur(_, _) => true
+  | Ast.ETernary(_, a, b, _) => alwaysRecur(a) && alwaysRecur(b)
+  | Ast.ELetIn(_, _, _, _, body, _) => alwaysRecur(body)
+  | Ast.EDo(exprs, _) => alwaysRecur(lastDoExpr(exprs))
+  | Ast.EMatch(_, arms, _) => Array.length(
+      arms
+    ) > 0 && allOf(a => alwaysRecur(a.body), arms)
   | _ => false
 }
 
@@ -810,13 +882,17 @@ let genLoopTail = (ctx: GCtx, e, params) => switch e {
   | Ast.EDo(exprs, _) => hasRecur(e)
       ? "{ ${ctx->genDoLoopTail(exprs, params)} }"
       : "return ${ctx->genExpr(e)};"
-  | Ast.EMatch(_, _, sp) => hasRecur(e)
-      ? let step = ctx->genExpr(wrapStepTails(e, sp)) in
-      let rebind = switch params {
-        | [p] => "${p.name} = _step.args[0];"
-        | _ => "[${loopParamNames(params)}] = _step.args;"
-      } in
-        "const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;"
+  | Ast.EMatch(scrutinee, arms, sp) => hasRecur(e)
+      ? canStatementMatch(arms, params)
+        ? ctx->genLoopMatch(scrutinee, arms, params)
+        : let step = ctx->genExpr(wrapStepTails(e, sp)) in
+        let rebind = switch params {
+          | [p] => "${p.name} = _step.args[0];"
+          | _ => "[${loopParamNames(params)}] = _step.args;"
+        } in
+          alwaysRecur(e)
+            ? "const _step = ${step}; ${rebind} continue;"
+            : "const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;"
       : "return ${ctx->genExpr(e)};"
   | _ => "return ${ctx->genExpr(e)};"
 }
@@ -1877,7 +1953,7 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
     }
   | Ast.ELoop(params, body, _) =>
     // A switch in tail position with a recur lowers via the step protocol.
-    let acc1 = loopNeedsStep(body)
+    let acc1 = ctx->loopNeedsStep(body, params)
       ? Set.add("_recur", Set.add("_done", acc))
       : acc in
     let acc2 = ctx->loopInitRefsFrom(params, 0, acc1) in

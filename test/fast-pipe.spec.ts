@@ -3,7 +3,7 @@ import { compile } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
 import { compileJs } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
-import { isErr, unwrapOk } from "@onrails/result";
+import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 const run = (src: string): unknown => {
   const js = compileJs(src, { stripImports: true, runtime: true });
@@ -29,6 +29,17 @@ test("fast pipe keeps type arrows available in annotations", () => {
 
 test("fast pipe requires a call on its right", () => {
   expect(isErr(compile("let result = 1 -> add"))).toBe(true);
+});
+
+test.each(["5 -> (+ 3)", "5 -> add"])("invalid fast pipe %s suggests |> alternatives", (expr) => {
+  const errors = unwrapErr(compile(`let result = ${expr}`));
+  expect(errors[0]?.message).toContain("use `|>`");
+  expect(errors[0]?.span).toEqual({ start: 15, end: 17 });
+});
+
+test("ordinary pipe accepts the suggested alternatives", () => {
+  expect(run("let result = 5 |> (+ 3)")).toBe(8);
+  expect(run("let inc = x => x + 1\nlet result = 5 |> inc")).toBe(6);
 });
 
 test("formatter keeps fast pipe snug", () => {

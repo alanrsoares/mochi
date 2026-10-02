@@ -101,19 +101,23 @@ const consParts: _Curry<[parts: Doc[], i: number, m: string, tail: Work], Work> 
       if (k < 0) {
         return w;
       } else {
-        const _step = ((_v) =>
-          _v._tag === "None"
-            ? _done(w)
-            : _v._tag === "Some"
-              ? (({ value: d }) => _recur(k - 1, WCons({ i: i, m: m, d: d }, w)))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(k, parts));
-        if (_step._tag === "recur") {
-          [k, w] = _step.args;
-          continue;
+        {
+          const $loopMatch = _Array_get(k, parts);
+          if ($loopMatch._tag === "None") {
+            return w;
+          }
+          if ($loopMatch._tag === "Some") {
+            const { value: d } = $loopMatch;
+            {
+              const $recur0: number = k - 1;
+              const $recur1: Work = WCons({ i: i, m: m, d: d }, w);
+              k = $recur0;
+              w = $recur1;
+              continue;
+            }
+          }
+          throw new Error("non-exhaustive match");
         }
-        return _step.value;
       }
     }
   },
@@ -252,19 +256,23 @@ const consItems: _Curry<[items: Item[], tail: Work], Work> = _curry(
       if (k < 0) {
         return w;
       } else {
-        const _step = ((_v) =>
-          _v._tag === "None"
-            ? _done(w)
-            : _v._tag === "Some"
-              ? (({ value: it }) => _recur(k - 1, WCons(it, w)))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(k, items));
-        if (_step._tag === "recur") {
-          [k, w] = _step.args;
-          continue;
+        {
+          const $loopMatch = _Array_get(k, items);
+          if ($loopMatch._tag === "None") {
+            return w;
+          }
+          if ($loopMatch._tag === "Some") {
+            const { value: it } = $loopMatch;
+            {
+              const $recur0: number = k - 1;
+              const $recur1: Work = WCons(it, w);
+              k = $recur0;
+              w = $recur1;
+              continue;
+            }
+          }
+          throw new Error("non-exhaustive match");
         }
-        return _step.value;
       }
     }
   },

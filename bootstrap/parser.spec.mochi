@@ -5,6 +5,14 @@ import { parse, parseRecovering } from "./parser.mochi"
 
 let parseSrc = src => lex(src) |> Result.flatMap(parse)
 
+testEach("invalid fast pipes explain the ordinary pipe alternative", [
+  "let value = 5 -> (+ 3)",
+  "let value = 5 -> add"
+], src => switch parseSrc(src) {
+  | Err(e) => e.message |> Str.contains("use `|>`") |> ok
+  | Ok(_) => false |> ok
+})
+
 test("a let declaration preserves its name, doc, and lambda shape", () => switch parseSrc("/// increments\nlet inc = n => n + 1") {
   | Ok([Ast.SLet("inc", _, None, Ast.ELambda([Ast.LPSpanned(Ast.LPName("n", None), [span])], _, _), false, Some("increments"), _)]) => span.start == 25 && span.end == 26
       |> ok

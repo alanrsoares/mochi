@@ -1233,17 +1233,168 @@ const hasRecur: (e: Expr) => boolean = (e: Expr) =>
                                               entries,
                                             ))(_v)
                                         : false)(e);
-const loopNeedsStep: (e: Expr) => boolean = (e: Expr) =>
+const loopNeedsStep: <A>(ctx: GCtx, e: Expr, params: ({ name: string } & A)[]) => boolean = _curry(
+  3,
+  <A>(ctx: GCtx, e: Expr, params: ({ name: string } & A)[]) =>
+    ((_v) =>
+      _v._tag === "ETernary"
+        ? (({ thenE, elseE }) =>
+            or(loopNeedsStep(ctx, thenE, params), loopNeedsStep(ctx, elseE, params)))(_v)
+        : _v._tag === "ELetIn"
+          ? (({ body }) => loopNeedsStep(ctx, body, params))(_v)
+          : _v._tag === "EDo"
+            ? (({ exprs }) => loopNeedsStep(ctx, lastDoExpr(exprs), params))(_v)
+            : _v._tag === "EMatch"
+              ? (({ arms }) =>
+                  and(
+                    hasRecur(e),
+                    or(
+                      !canStatementMatch(arms, params),
+                      someOf((a: MatchArm) => loopNeedsStep(ctx, a.body, params), arms),
+                    ),
+                  ))(_v)
+              : false)(e),
+);
+const loopBindingSafe: <A, B>(name: A, params: ({ name: A } & B)[]) => boolean = _curry(
+  2,
+  <A, B>(name: A, params: ({ name: A } & B)[]) =>
+    !someOf((p: { name: A } & B) => eq(p.name, name), params),
+);
+const loopPayloadSafe: <A>(pattern: Pattern, params: ({ name: string } & A)[]) => boolean = _curry(
+  2,
+  <A>(pattern: Pattern, params: ({ name: string } & A)[]) =>
+    ((_v) =>
+      _v._tag === "PBind"
+        ? (({ name }) => loopBindingSafe(name, params))(_v)
+        : _v._tag === "PWild"
+          ? true
+          : false)(pattern),
+);
+const loopPatternSafe: <A>(pattern: Pattern, params: ({ name: string } & A)[]) => boolean = _curry(
+  2,
+  <A>(pattern: Pattern, params: ({ name: string } & A)[]) =>
+    ((_v) =>
+      _v._tag === "PCtor"
+        ? (({ args }) => allOf((p: Pattern) => loopPayloadSafe(p, params), args))(_v)
+        : _v._tag === "PBind"
+          ? (({ name }) => loopBindingSafe(name, params))(_v)
+          : _v._tag === "PWild"
+            ? true
+            : _v._tag === "PBool"
+              ? true
+              : _v._tag === "PLit"
+                ? true
+                : _v._tag === "PStr"
+                  ? true
+                  : _v._tag === "PUnit"
+                    ? true
+                    : false)(pattern),
+);
+const canStatementMatch: <A, B, C>(
+  arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
+  params: ({ name: string } & C)[],
+) => boolean = _curry(
+  2,
+  <A, B, C>(
+    arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
+    params: ({ name: string } & C)[],
+  ) =>
+    allOf(
+      (a: { guard: Option<A>; pattern: Pattern } & B) =>
+        and(_Option_isNone(a.guard), loopPatternSafe(a.pattern, params)),
+      arms,
+    ),
+);
+const genLoopMatchArms: _Curry<
+  [ctx: GCtx, arms: MatchArm[], i: number, root: string, params: LoopParam[]],
+  string
+> = _curry(5, (ctx: GCtx, arms: MatchArm[], i: number, root: string, params: LoopParam[]) =>
   ((_v) =>
-    _v._tag === "ETernary"
-      ? (({ thenE, elseE }) => or(loopNeedsStep(thenE), loopNeedsStep(elseE)))(_v)
-      : _v._tag === "ELetIn"
-        ? (({ body }) => loopNeedsStep(body))(_v)
-        : _v._tag === "EDo"
-          ? (({ exprs }) => loopNeedsStep(lastDoExpr(exprs)))(_v)
-          : _v._tag === "EMatch"
-            ? hasRecur(e)
-            : false)(e);
+    _v._tag === "None"
+      ? 'throw new Error("non-exhaustive match");'
+      : _v._tag === "Some"
+        ? (({ value: a }) =>
+            ((slot: string) =>
+              ((bind: string) =>
+                ((body: string) =>
+                  isCatchAll(a.pattern)
+                    ? body
+                    : ((conds: string[]) =>
+                        `if (${_Str_join(" && ", conds)}) ${body} ${genLoopMatchArms(ctx, arms, i + 1, root, params)}`)(
+                        patConds(ctx.keys, a.pattern, root),
+                      ))(`{ ${bind}${genLoopTail(ctx, a.body, params)} }`))(
+                slot === "" ? "" : `const ${slot} = ${root}; `,
+              ))(patSlot(ctx.keys, a.pattern)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(_Array_get(i, arms)),
+);
+const genLoopMatch: _Curry<
+  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]],
+  string
+> = _curry(4, (ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]) =>
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: fused }) => fused)(_v)
+      : _v._tag === "None"
+        ? ((root: string) =>
+            `{ const ${root} = ${genExpr(ctx, scrutinee)}; ${genLoopMatchArms(ctx, arms, 0, root, params)} }`)(
+            tempName(ctx, "$loopMatch"),
+          )
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(genOptionalLoopMatch(ctx, scrutinee, arms, params)),
+);
+const genOptionalLoopMatch: _Curry<
+  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]],
+  Option<string>
+> = _curry(4, (ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]) =>
+  ((_v) =>
+    _v._tag === "EField" && _v.optional === true
+      ? (({ target, name }) =>
+          ((_v) =>
+            _v[0]._tag === "Some" &&
+            _v[0].value.length === 1 &&
+            _v[0].value[0] === "value" &&
+            _v[1]._tag === "Some" &&
+            _v[1].value.length === 0
+              ? ((_v) =>
+                  _v._tag === "None"
+                    ? (None as Option<string>)
+                    : _v._tag === "Some"
+                      ? (({ value: plan }) =>
+                          ((value: string) =>
+                            ((bind: string) =>
+                              Some(
+                                `{ const ${value} = ${genMember(ctx, target)}.${name}; if (${value} != null) { ${bind}${genLoopTail(ctx, plan.present, params)} } else { ${genLoopTail(ctx, plan.absent, params)} } }`,
+                              ) as Option<string>)(
+                              plan.binding === "" ? "" : `const ${plan.binding} = ${value}; `,
+                            ))(tempName(ctx, "$optional")))(_v)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(optionalMatch(arms))
+              : (None as Option<string>))(
+            _tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)),
+          ))(_v)
+      : (None as Option<string>))(scrutinee),
+);
+const alwaysRecur: (e: Expr) => boolean = (e: Expr) =>
+  ((_v) =>
+    _v._tag === "ERecur"
+      ? true
+      : _v._tag === "ETernary"
+        ? (({ thenE: a, elseE: b }) => and(alwaysRecur(a), alwaysRecur(b)))(_v)
+        : _v._tag === "ELetIn"
+          ? (({ body }) => alwaysRecur(body))(_v)
+          : _v._tag === "EDo"
+            ? (({ exprs }) => alwaysRecur(lastDoExpr(exprs)))(_v)
+            : _v._tag === "EMatch"
+              ? (({ arms }) =>
+                  and(
+                    length(arms) > 0,
+                    allOf((a: MatchArm) => alwaysRecur(a.body), arms),
+                  ))(_v)
+              : false)(e);
 const lastDoExpr: (exprs: Expr[]) => Expr = (exprs: Expr[]) =>
   ((_v) =>
     _v.length === 1
@@ -1367,16 +1518,20 @@ const genLoopTail: _Curry<[ctx: GCtx, e: Expr, params: LoopParam[]], string> = _
                     ? `{ ${genDoLoopTail(ctx, exprs, params)} }`
                     : `return ${genExpr(ctx, e)};`)(_v)
               : _v._tag === "EMatch"
-                ? (({ span: sp }) =>
+                ? (({ scrutinee, arms, span: sp }) =>
                     hasRecur(e)
-                      ? ((step: string) =>
-                          ((rebind: string) =>
-                            `const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;`)(
-                            ((_v) =>
-                              _v.length === 1
-                                ? (([p]) => `${p.name} = _step.args[0];`)(_v)
-                                : `[${loopParamNames(params)}] = _step.args;`)(params),
-                          ))(genExpr(ctx, wrapStepTails(e, sp)))
+                      ? canStatementMatch(arms, params)
+                        ? genLoopMatch(ctx, scrutinee, arms, params)
+                        : ((step: string) =>
+                            ((rebind: string) =>
+                              alwaysRecur(e)
+                                ? `const _step = ${step}; ${rebind} continue;`
+                                : `const _step = ${step}; if (_step._tag === ${jsStringLit("recur")}) { ${rebind} continue; } return _step.value;`)(
+                              ((_v) =>
+                                _v.length === 1
+                                  ? (([p]) => `${p.name} = _step.args[0];`)(_v)
+                                  : `[${loopParamNames(params)}] = _step.args;`)(params),
+                            ))(genExpr(ctx, wrapStepTails(e, sp)))
                       : `return ${genExpr(ctx, e)};`)(_v)
                 : `return ${genExpr(ctx, e)};`)(e),
 );
@@ -3058,7 +3213,7 @@ const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _c
                                             ((acc2: Set<string>) => exprRefs(ctx, body, acc2))(
                                               loopInitRefsFrom(ctx, params, 0, acc1),
                                             ))(
-                                            loopNeedsStep(body)
+                                            loopNeedsStep(ctx, body, params)
                                               ? _Set_add("_recur", _Set_add("_done", acc))
                                               : acc,
                                           ))(_v)

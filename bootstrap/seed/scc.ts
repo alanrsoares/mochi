@@ -59,19 +59,22 @@ const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
   <A>(v: A, xs: A[], i: number) => {
     let j: number = i;
     while (true) {
-      const _step = ((_v) =>
-        _v._tag === "None"
-          ? _done(-1)
-          : _v._tag === "Some"
-            ? (({ value: x }) => (eq(x, v) ? _done(j) : _recur(j + 1)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_get(j, xs));
-      if (_step._tag === "recur") {
-        j = _step.args[0];
-        continue;
+      {
+        const $loopMatch = _Array_get(j, xs);
+        if ($loopMatch._tag === "None") {
+          return -1;
+        }
+        if ($loopMatch._tag === "Some") {
+          const { value: x } = $loopMatch;
+          if (eq(x, v)) {
+            return j;
+          } else {
+            j = j + 1;
+            continue;
+          }
+        }
+        throw new Error("non-exhaustive match");
       }
-      return _step.value;
     }
   },
 );

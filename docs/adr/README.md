@@ -176,6 +176,7 @@ What else was on the table and why not.
 | [0129](0129-seed-parity-diagnostics-and-dts-aliases.md) | Seed parity: per-let type errors, graph diagnostic kinds, `.d.ts` alias folding | Accepted |
 | [0138](0138-equality-safety-constraints.md) | Static safety for structural equality and ordering | Proposed |
 | [0139](0139-fuse-optional-field-matches.md) | Fuse immediate optional-field matches | Accepted |
+| [0140](0140-scalar-tail-switch-recur.md) | Scalar recur for shallow tail switches | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

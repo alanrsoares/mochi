@@ -27,6 +27,24 @@ let genSrc = src =>
     |> Result.map(stmts =>
       codegen(stmts, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
 
+test("flat tail switch uses scalar statements without step helpers", () => switch genSrc("let run = n => loop (i = 0, total = 0) { switch i >= n { | true => total | false => recur(i + 1, total + i) } }") {
+  | Ok(js) => (js
+      |> Str.contains(
+        "if ($loopMatch === true)"
+      )) && !(js |> Str.contains("_recur"))
+      |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("unsupported tail switch patterns retain step helpers", [
+  "switch i { | x when x >= 3 => i | _ => recur(i + 1) }",
+  "switch Some(i) { | Some(i) => i >= 3 ? i : recur(i + 1) | None => i }",
+  "switch [i] { | [x] => x >= 3 ? x : recur(x + 1) | _ => i }"
+], body => switch genSrc("let out = loop (i = 0) { ${body} }") {
+  | Ok(js) => js |> Str.contains("const _step") |> ok
+  | Err(_) => false |> ok
+})
+
 let optionalSpan = { start: 0, end: 0 }
 let optionalPayload = Ast.PBind("value", optionalSpan)
 let optionalSome = payload =>
