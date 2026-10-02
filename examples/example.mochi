@@ -95,7 +95,7 @@ let describeList = xs => switch xs {
 // --- lazy List: `@{...}` (distinct from the eager Array `[...]`) ---
 // A List is a generator-backed pull-sequence: producers/slicers stay lazy, so
 // infinite streams work as long as you only ever pull a finite prefix. `@` is
-// the List sigil. Map has its own literal `#{...}`; Set has no literal sigil.
+// the List sigil. Set uses `#{1, 2}`; Map uses `#{key: value}`.
 let ns = @{1, 2, 3} // List number  (lazy)
 let firstThree = range(0, 100) |> take(3) // 0..99 built lazily, only 3 forced
 let evens = iterate(x => x + 2, 0) // INFINITE: 0, 2, 4, 6, ...
@@ -142,10 +142,9 @@ let inf3 = iterate(inc, 0)
   |> take(3)
   |> toArray // [0, 3, 6]
 
-// --- Set: `Set.fromArray([...])` — native JS Set, deduped, unordered ---
-// No literal sigil (dropped `${…}` — it collides with JS template literals).
+// --- Set: `#{...}` — native JS Set, deduped, insertion-ordered ---
 // Elements must share a type. Ops are qualified + immutable (return a fresh Set).
-let tags = Set.fromArray([1, 2, 2, 3]) // Set number — dedups to {1,2,3}
+let tags = #{1, 2, 2, 3} // Set number — dedups to {1,2,3}
 let hasTwo = Set.has(2, tags) // true
 let merged = Set.union(Set.fromArray([1, 2]), Set.fromArray([2, 3]))
   |> Set.toArray // [1, 2, 3]
@@ -154,7 +153,7 @@ let shared = Set.intersect(Set.fromArray([1, 2, 3]), Set.fromArray([2, 3, 4]))
 
 // --- Map: `#{ key: value }` (native JS Map) ---
 // Keys share a type, values share a type → Map k v. `getOr` reads with a
-// fallback (an Option-returning `get` waits on the prelude slice). Immutable.
+// fallback; `Map.get` returns Option. Updates return a fresh Map.
 let ages = #{ "alice": 30, "bob": 25 }
 let alice = Map.getOr(0, "alice", ages) // 30
 let nobody = Map.getOr(0, "carol", ages) // 0 — fallback
@@ -173,7 +172,7 @@ let shout2 = Str.join(" ", ["mochi", "rocks"]) |> Str.toUpper // "MOCHI ROCKS"
 let flipped = Array.reverse([1, 2, 3]) |> Array.append(0) // [3, 2, 1, 0]
 
 // builtin Option — `Map.get`/`Array.head` return Option, no `type` decl needed.
-// (This file declares its own Option/Result below; the builtin is used when a
+// (This file declares its own Option/Result above; the builtin is used when a
 // program doesn't. Either way Some/None share one runtime shape.)
 let lookedUp = Map.get("alice", ages) // Option number
 let firstName = Array.head(names) // Option string
@@ -207,11 +206,11 @@ let translate = (p, dx, dy) => { x: p.x + dx, y: p.y + dy }
 let dist = (a, b) => hypot(b.x - a.x, b.y - a.y)
 
 // duck typing: distTo works on ANY record with x and y — regardless of
-// what else it carries. (Enforced by the HM inferencer, next slice.)
+// what else it carries, enforced by row-polymorphic inference.
 let distToOrigin = p => hypot(p.x, p.y)
 // --- record patterns in switch: bind fields, narrow on literals ---
 // `{ x, y }` puns both fields into scope; a literal field (`x: 0`) narrows the
-// match. Patterns are shallow — a field binds or matches a literal, never nests.
+// match. Fields may also contain nested record or constructor patterns.
 let quadrant = p => switch p {
   | { x: 0, y: 0 } => "at origin"
   | { x, y } => "elsewhere"
