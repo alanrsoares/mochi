@@ -182,6 +182,7 @@ What else was on the table and why not.
 | [0143](0143-compiler-module-layout.md) | Colocate compiler modules and retire migration names | Accepted |
 | [0144](0144-host-types-in-declarations.md) | Preserve host types in declaration output | Accepted |
 | [0145](0145-structural-ordering.md) | Structural ordering for records and variants | Accepted |
+| [0146](0146-builtin-match-dispatch.md) | Flat dispatch for builtin Result and Option matches | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

@@ -116,6 +116,7 @@ import {
   _Map_keys,
   _Map_set,
   _Map_size,
+  _Option_match,
   _Str_codeAt,
   _Str_length,
   _Str_startsWith,
@@ -161,26 +162,20 @@ const locOf: _Curry<[env: SymEnv, span: SpanAt], Loc> = _curry(2, (env: SymEnv, 
   end: span.end,
 }));
 const upperStart: (s: string) => boolean = (s: string) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: c }) => and(c >= 65, c <= 90))(_v)
-      : _v._tag === "None"
-        ? false
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Str_codeAt(0, s));
+  _Option_match(
+    _Str_codeAt(0, s),
+    () => false,
+    (c) => and(c >= 65, c <= 90),
+  );
 const parked: (a: string) => boolean = _Str_startsWith("$");
 const orElse: _Curry<[first: Option<Loc>, second: () => Option<Loc>], Option<Loc>> = _curry(
   2,
   (first: Option<Loc>, second: () => Option<Loc>) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: loc }) => Some(loc) as Option<Loc>)(_v)
-        : _v._tag === "None"
-          ? second()
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(first),
+    _Option_match(
+      first,
+      () => second(),
+      (loc) => Some(loc) as Option<Loc>,
+    ),
 );
 const lookup: _Curry<[env: SymEnv, space: string, name: string], Option<Loc>> = _curry(
   3,
@@ -200,14 +195,11 @@ const lookup: _Curry<[env: SymEnv, space: string, name: string], Option<Loc>> = 
 );
 const use: _Curry<[env: SymEnv, space: string, name: string, span: SpanAt], SymOccurrence[]> =
   _curry(4, (env: SymEnv, space: string, name: string, span: SpanAt) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: def }) => [occ(name, space, def, span, "use")])(_v)
-        : _v._tag === "None"
-          ? ([] as SymOccurrence[])
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(lookup(env, space, name)),
+    _Option_match(
+      lookup(env, space, name),
+      () => [] as SymOccurrence[],
+      (def) => [occ(name, space, def, span, "use")],
+    ),
   );
 const walked: _Curry<[occs: SymOccurrence[], fields: Map<string, Loc>], Walked> = _curry(
   2,
@@ -267,14 +259,11 @@ const newBinds: _Curry<[outer: SymEnv, inner: SymEnv], Map<string, Loc>> = _curr
       _curry(2, (acc: Map<string, Loc>, name: string) =>
         or(sameLoc(_Map_get(name, outer.locals), _Map_get(name, inner.locals)), parked(name))
           ? acc
-          : ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: def }) => _Map_set(name, def, acc))(_v)
-                : _v._tag === "None"
-                  ? acc
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(_Map_get(name, inner.locals)),
+          : _Option_match(
+              _Map_get(name, inner.locals),
+              () => acc,
+              (def) => _Map_set(name, def, acc),
+            ),
       ),
       new Map<string, Loc>(),
       _Map_keys(inner.locals),
@@ -301,17 +290,14 @@ const touchField: _Curry<
   [env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: def }) => walked([occ(name, "field", def, span, "use")], fields))(_v)
-      : _v._tag === "None"
-        ? ((def: Loc) =>
-            walked([occ(name, "field", def, span, "def")], _Map_set(name, def, fields)))(
-            locOf(env, span),
-          )
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Map_get(name, fields)),
+  _Option_match(
+    _Map_get(name, fields),
+    () => {
+      const def: Loc = locOf(env, span);
+      return walked([occ(name, "field", def, span, "def")], _Map_set(name, def, fields));
+    },
+    (def) => walked([occ(name, "field", def, span, "use")], fields),
+  ),
 );
 /**
  * Bind a local value in `env`'s innermost scope.
@@ -397,14 +383,11 @@ const bindNames: _Curry<
 const walkTypes: _Curry<[env: SymEnv, types: TypeExpr[], i: number], SymOccurrence[]> = _curry(
   3,
   (env: SymEnv, types: TypeExpr[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as SymOccurrence[])
-        : _v._tag === "Some"
-          ? (({ value: t }) => _Array_concat(walkType(env, t), walkTypes(env, types, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, types)),
+    _Option_match(
+      _Array_get(i, types),
+      () => [] as SymOccurrence[],
+      (t) => _Array_concat(walkType(env, t), walkTypes(env, types, i + 1)),
+    ),
 );
 const walkType: _Curry<[env: SymEnv, t: TypeExpr], SymOccurrence[]> = _curry(
   2,
@@ -439,14 +422,11 @@ const walkType: _Curry<[env: SymEnv, t: TypeExpr], SymOccurrence[]> = _curry(
 const walkAnnot: _Curry<[env: SymEnv, annot: Option<TypeExpr>], SymOccurrence[]> = _curry(
   2,
   (env: SymEnv, annot: Option<TypeExpr>) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: t }) => walkType(env, t))(_v)
-        : _v._tag === "None"
-          ? ([] as SymOccurrence[])
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(annot),
+    _Option_match(
+      annot,
+      () => [] as SymOccurrence[],
+      (t) => walkType(env, t),
+    ),
 );
 const bindParam: _Curry<[env: SymEnv, param: LamParam, fields: Map<string, Loc>], BoundScope> =
   _curry(3, (env: SymEnv, param: LamParam, fields: Map<string, Loc>) =>
@@ -475,14 +455,11 @@ const bindParam: _Curry<[env: SymEnv, param: LamParam, fields: Map<string, Loc>]
                           boundWith(b.env, _Array_append(b.occ, before), dflt))(
                           bindLocal(env, name, span),
                         ))(_Array_concat(annotOccs, dflt.occs)))(
-                  ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: e }) => walkExpr(env, e, fields))(_v)
-                      : _v._tag === "None"
-                        ? none(fields)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(defaultValue),
+                  _Option_match(
+                    defaultValue,
+                    () => none(fields),
+                    (e) => walkExpr(env, e, fields),
+                  ),
                 ))(walkAnnot(env, annot)))(
               _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
                 param: Extract<
@@ -516,14 +493,11 @@ const bindParam: _Curry<[env: SymEnv, param: LamParam, fields: Map<string, Loc>]
                   ? (({ annot, defaultValue }) =>
                       ((dflt: Walked) =>
                         boundWith(env, _Array_concat(walkAnnot(env, annot), dflt.occs), dflt))(
-                        ((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: e }) => walkExpr(env, e, fields))(_v)
-                            : _v._tag === "None"
-                              ? none(fields)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(defaultValue),
+                        _Option_match(
+                          defaultValue,
+                          () => none(fields),
+                          (e) => walkExpr(env, e, fields),
+                        ),
                       ))(_v)
                   : bound(env, [] as SymOccurrence[], fields))(param),
   );
@@ -531,69 +505,58 @@ const bindParams: _Curry<
   [env: SymEnv, params: LamParam[], i: number, fields: Map<string, Loc>],
   BoundScope
 > = _curry(4, (env: SymEnv, params: LamParam[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? bound(env, [] as SymOccurrence[], fields)
-      : _v._tag === "Some"
-        ? (({ value: param }) =>
-            boundThen(
-              bindParam(env, param, fields),
-              _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindParams(e, params, i + 1, fs)),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, params)),
+  _Option_match(
+    _Array_get(i, params),
+    () => bound(env, [] as SymOccurrence[], fields),
+    (param) =>
+      boundThen(
+        bindParam(env, param, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindParams(e, params, i + 1, fs)),
+      ),
+  ),
 );
 const walkPatOpt: _Curry<
   [env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>],
   BoundScope
 > = _curry(3, (env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: p }) => walkPat(env, p, fields))(_v)
-      : _v._tag === "None"
-        ? bound(env, [] as SymOccurrence[], fields)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(pat),
+  _Option_match(
+    pat,
+    () => bound(env, [] as SymOccurrence[], fields),
+    (p) => walkPat(env, p, fields),
+  ),
 );
 const walkPats: _Curry<
   [env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>],
   BoundScope
 > = _curry(4, (env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? bound(env, [] as SymOccurrence[], fields)
-      : _v._tag === "Some"
-        ? (({ value: p }) =>
-            boundThen(
-              walkPat(env, p, fields),
-              _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats(e, pats, i + 1, fs)),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, pats)),
+  _Option_match(
+    _Array_get(i, pats),
+    () => bound(env, [] as SymOccurrence[], fields),
+    (p) =>
+      boundThen(
+        walkPat(env, p, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats(e, pats, i + 1, fs)),
+      ),
+  ),
 );
 const walkPatFields: _Curry<
   [env: SymEnv, pfs: PatField[], i: number, fields: Map<string, Loc>],
   BoundScope
 > = _curry(4, (env: SymEnv, pfs: PatField[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? bound(env, [] as SymOccurrence[], fields)
-      : _v._tag === "Some"
-        ? (({ value: pf }) =>
-            ((label: Walked) =>
-              boundThen(
-                boundThen(
-                  bound(env, label.occs, label.fields),
-                  _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPat(e, pf.pat, fs)),
-                ),
-                _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatFields(e, pfs, i + 1, fs)),
-              ))(touchField(env, pf.label, pf.labelSpan, fields)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, pfs)),
+  _Option_match(
+    _Array_get(i, pfs),
+    () => bound(env, [] as SymOccurrence[], fields),
+    (pf) => {
+      const label: Walked = touchField(env, pf.label, pf.labelSpan, fields);
+      return boundThen(
+        boundThen(
+          bound(env, label.occs, label.fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPat(e, pf.pat, fs)),
+        ),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatFields(e, pfs, i + 1, fs)),
+      );
+    },
+  ),
 );
 const walkPat: _Curry<[env: SymEnv, pat: Pattern, fields: Map<string, Loc>], BoundScope> = _curry(
   3,
@@ -655,49 +618,40 @@ const walkPatUsesList: _Curry<
   [env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? none(fields)
-      : _v._tag === "Some"
-        ? (({ value: p }) =>
-            andThen(walkPatUses(env, p, fields), (fs: Map<string, Loc>) =>
-              walkPatUsesList(env, pats, i + 1, fs),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, pats)),
+  _Option_match(
+    _Array_get(i, pats),
+    () => none(fields),
+    (p) =>
+      andThen(walkPatUses(env, p, fields), (fs: Map<string, Loc>) =>
+        walkPatUsesList(env, pats, i + 1, fs),
+      ),
+  ),
 );
 const walkPatUsesOpt: _Curry<
   [env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>],
   Walked
 > = _curry(3, (env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: p }) => walkPatUses(env, p, fields))(_v)
-      : _v._tag === "None"
-        ? none(fields)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(pat),
+  _Option_match(
+    pat,
+    () => none(fields),
+    (p) => walkPatUses(env, p, fields),
+  ),
 );
 const walkPatFieldUses: _Curry<
   [env: SymEnv, pfs: PatField[], i: number, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, pfs: PatField[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? none(fields)
-      : _v._tag === "Some"
-        ? (({ value: pf }) =>
-            andThen(
-              andThen(touchField(env, pf.label, pf.labelSpan, fields), (fs: Map<string, Loc>) =>
-                walkPatUses(env, pf.pat, fs),
-              ),
-              (fs: Map<string, Loc>) => walkPatFieldUses(env, pfs, i + 1, fs),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, pfs)),
+  _Option_match(
+    _Array_get(i, pfs),
+    () => none(fields),
+    (pf) =>
+      andThen(
+        andThen(touchField(env, pf.label, pf.labelSpan, fields), (fs: Map<string, Loc>) =>
+          walkPatUses(env, pf.pat, fs),
+        ),
+        (fs: Map<string, Loc>) => walkPatFieldUses(env, pfs, i + 1, fs),
+      ),
+  ),
 );
 /**
  * A pattern walk that records uses (ctors, fields) but binds nothing.
@@ -731,17 +685,14 @@ const walkPatUses: _Curry<[env: SymEnv, pat: Pattern, fields: Map<string, Loc>],
 );
 const walkExprs: _Curry<[env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>], Walked> =
   _curry(4, (env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? none(fields)
-        : _v._tag === "Some"
-          ? (({ value: e }) =>
-              andThen(walkExpr(env, e, fields), (fs: Map<string, Loc>) =>
-                walkExprs(env, exprs, i + 1, fs),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, exprs)),
+    _Option_match(
+      _Array_get(i, exprs),
+      () => none(fields),
+      (e) =>
+        andThen(walkExpr(env, e, fields), (fs: Map<string, Loc>) =>
+          walkExprs(env, exprs, i + 1, fs),
+        ),
+    ),
   );
 const walkSeqs: _Curry<
   [env: SymEnv, elems: SeqElem[], i: number, fields: Map<string, Loc>],
@@ -807,88 +758,70 @@ const walkRecordFields: _Curry<
   [env: SymEnv, rfs: Field[], i: number, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, rfs: Field[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? none(fields)
-      : _v._tag === "Some"
-        ? (({ value: f }) =>
-            andThen(
-              andThen(touchField(env, f.name, f.nameSpan, fields), (fs: Map<string, Loc>) =>
-                walkExpr(env, f.value, fs),
-              ),
-              (fs: Map<string, Loc>) => walkRecordFields(env, rfs, i + 1, fs),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, rfs)),
+  _Option_match(
+    _Array_get(i, rfs),
+    () => none(fields),
+    (f) =>
+      andThen(
+        andThen(touchField(env, f.name, f.nameSpan, fields), (fs: Map<string, Loc>) =>
+          walkExpr(env, f.value, fs),
+        ),
+        (fs: Map<string, Loc>) => walkRecordFields(env, rfs, i + 1, fs),
+      ),
+  ),
 );
 const walkEntries: _Curry<
   [env: SymEnv, entries: MapEntry[], i: number, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, entries: MapEntry[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? none(fields)
-      : _v._tag === "Some"
-        ? (({ value: entry }) =>
-            andThen(
-              andThen(walkExpr(env, entry.key, fields), (fs: Map<string, Loc>) =>
-                walkExpr(env, entry.value, fs),
-              ),
-              (fs: Map<string, Loc>) => walkEntries(env, entries, i + 1, fs),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, entries)),
+  _Option_match(
+    _Array_get(i, entries),
+    () => none(fields),
+    (entry) =>
+      andThen(
+        andThen(walkExpr(env, entry.key, fields), (fs: Map<string, Loc>) =>
+          walkExpr(env, entry.value, fs),
+        ),
+        (fs: Map<string, Loc>) => walkEntries(env, entries, i + 1, fs),
+      ),
+  ),
 );
 const walkArms: _Curry<
   [env: SymEnv, arms: MatchArm[], i: number, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, arms: MatchArm[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? none(fields)
-      : _v._tag === "Some"
-        ? (({ value: arm }) =>
-            ((pat: BoundScope) =>
-              ((guard: Walked) =>
-                ((body: Walked) =>
-                  ((armSpan: SpanAt) =>
-                    andThen(framed(env, pat.env, armSpan, body), (fs: Map<string, Loc>) =>
-                      walkArms(env, arms, i + 1, fs),
-                    ))({ start: patSpan(arm.pattern).start, end: exprSpan(arm.body).end }))(
-                  andThen(prefixed(pat.occs, guard), (fs: Map<string, Loc>) =>
-                    walkExpr(pat.env, arm.body, fs),
-                  ),
-                ))(
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: g }) => walkExpr(pat.env, g, pat.fields))(_v)
-                    : _v._tag === "None"
-                      ? none(pat.fields)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(arm.guard),
-              ))(walkPat(env, arm.pattern, fields)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, arms)),
+  _Option_match(
+    _Array_get(i, arms),
+    () => none(fields),
+    (arm) => {
+      const pat: BoundScope = walkPat(env, arm.pattern, fields);
+      const guard: Walked = _Option_match(
+        arm.guard,
+        () => none(pat.fields),
+        (g) => walkExpr(pat.env, g, pat.fields),
+      );
+      const body: Walked = andThen(prefixed(pat.occs, guard), (fs: Map<string, Loc>) =>
+        walkExpr(pat.env, arm.body, fs),
+      );
+      const armSpan: SpanAt = { start: patSpan(arm.pattern).start, end: exprSpan(arm.body).end };
+      return andThen(framed(env, pat.env, armSpan, body), (fs: Map<string, Loc>) =>
+        walkArms(env, arms, i + 1, fs),
+      );
+    },
+  ),
 );
 const walkLoopInits: _Curry<
   [env: SymEnv, params: LoopParam[], i: number, fields: Map<string, Loc>],
   Walked
 > = _curry(4, (env: SymEnv, params: LoopParam[], i: number, fields: Map<string, Loc>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? none(fields)
-      : _v._tag === "Some"
-        ? (({ value: param }) =>
-            andThen(walkExpr(env, param.init, fields), (fs: Map<string, Loc>) =>
-              walkLoopInits(env, params, i + 1, fs),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, params)),
+  _Option_match(
+    _Array_get(i, params),
+    () => none(fields),
+    (param) =>
+      andThen(walkExpr(env, param.init, fields), (fs: Map<string, Loc>) =>
+        walkLoopInits(env, params, i + 1, fs),
+      ),
+  ),
 );
 const bindLoopParams: <A>(
   env: SymEnv,
@@ -903,20 +836,15 @@ const bindLoopParams: <A>(
     i: number,
     fields: Map<string, Loc>,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? bound(env, [] as SymOccurrence[], fields)
-        : _v._tag === "Some"
-          ? (({ value: param }) =>
-              boundThen(
-                bindName(env, param.name, param.nameSpan, fields),
-                _curry(2, (e: SymEnv, fs: Map<string, Loc>) =>
-                  bindLoopParams(e, params, i + 1, fs),
-                ),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () => bound(env, [] as SymOccurrence[], fields),
+      (param) =>
+        boundThen(
+          bindName(env, param.name, param.nameSpan, fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindLoopParams(e, params, i + 1, fs)),
+        ),
+    ),
 );
 
 const letRun: _Curry<[e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]], LetRun> = _curry(
@@ -1011,14 +939,11 @@ const walkFieldAccess: _Curry<
       ? (({ name: ns }) => _Map_get(`${ns}.${name}`, env.prelude.members))(_v)
       : (None as Option<Loc>))(target);
   return andThen(walkExpr(env, target, fields), (fs: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: def }) => walked([occ(name, "value", def, nameSpan, "use")], fs))(_v)
-        : _v._tag === "None"
-          ? touchField(env, name, nameSpan, fs)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(member),
+    _Option_match(
+      member,
+      () => touchField(env, name, nameSpan, fs),
+      (def) => walked([occ(name, "value", def, nameSpan, "use")], fs),
+    ),
   );
 });
 const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walked> = _curry(
@@ -1141,19 +1066,16 @@ const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walk
                                   ))(_v)
                               : _v._tag === "ERecord"
                                 ? (({ fields: rfs, spread }) =>
-                                    ((_v) =>
-                                      _v._tag === "Some"
-                                        ? (({ value: base }) =>
-                                            andThen(
-                                              walkExpr(env, base, fields),
-                                              (fs: Map<string, Loc>) =>
-                                                walkRecordFields(env, rfs, 0, fs),
-                                            ))(_v)
-                                        : _v._tag === "None"
-                                          ? walkRecordFields(env, rfs, 0, fields)
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(spread))(_v)
+                                    _Option_match(
+                                      spread,
+                                      () => walkRecordFields(env, rfs, 0, fields),
+                                      (base) =>
+                                        andThen(
+                                          walkExpr(env, base, fields),
+                                          (fs: Map<string, Loc>) =>
+                                            walkRecordFields(env, rfs, 0, fs),
+                                        ),
+                                    ))(_v)
                                 : _v._tag === "EField"
                                   ? (({ target, name, span }) =>
                                       walkFieldAccess(env, target, name, span, fields))(_v)
@@ -1286,62 +1208,46 @@ const bindImports: <A>(
     names: ({ name: string; span: SpanAt } & A)[],
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: n }) =>
-              bindImports(
-                env,
-                origins,
-                bindImport(env, origins, acc, n.name, n.span),
-                names,
-                i + 1,
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, names)),
+    _Option_match(
+      _Array_get(i, names),
+      () => acc,
+      (n) => bindImports(env, origins, bindImport(env, origins, acc, n.name, n.span), names, i + 1),
+    ),
 );
 const bindCtors: _Curry<[env: SymEnv, acc: TopScope, ctors: Ctor[], i: number], TopScope> = _curry(
   4,
   (env: SymEnv, acc: TopScope, ctors: Ctor[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: c }) =>
-              ((def: Loc) =>
-                bindCtors(
-                  env,
-                  topThen(
-                    acc,
-                    [occ(c.name, "ctor", def, c.span, "def")],
-                    withCtor(acc.top, c.name, def),
-                    acc.fields,
-                  ),
-                  ctors,
-                  i + 1,
-                ))(locOf(env, c.span)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ctors)),
+    _Option_match(
+      _Array_get(i, ctors),
+      () => acc,
+      (c) => {
+        const def: Loc = locOf(env, c.span);
+        return bindCtors(
+          env,
+          topThen(
+            acc,
+            [occ(c.name, "ctor", def, c.span, "def")],
+            withCtor(acc.top, c.name, def),
+            acc.fields,
+          ),
+          ctors,
+          i + 1,
+        );
+      },
+    ),
 );
 const touchAliasFields: _Curry<
   [env: SymEnv, acc: TopScope, afs: AliasField[], i: number],
   TopScope
 > = _curry(4, (env: SymEnv, acc: TopScope, afs: AliasField[], i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: f }) =>
-            ((w: Walked) =>
-              touchAliasFields(env, topThen(acc, w.occs, acc.top, w.fields), afs, i + 1))(
-              touchField(env, f.name, f.nameSpan, acc.fields),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, afs)),
+  _Option_match(
+    _Array_get(i, afs),
+    () => acc,
+    (f) => {
+      const w: Walked = touchField(env, f.name, f.nameSpan, acc.fields);
+      return touchAliasFields(env, topThen(acc, w.occs, acc.top, w.fields), afs, i + 1);
+    },
+  ),
 );
 const bindTopValue: _Curry<[env: SymEnv, acc: TopScope, name: string, span: SpanAt], TopScope> =
   _curry(4, (env: SymEnv, acc: TopScope, name: string, span: SpanAt) => {
@@ -1357,57 +1263,49 @@ const bindTopLevels: _Curry<
   [env: SymEnv, origins: Origins, stmts: Stmt[], i: number, acc: TopScope],
   TopScope
 > = _curry(5, (env: SymEnv, origins: Origins, stmts: Stmt[], i: number, acc: TopScope) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: stmt }) =>
-            bindTopLevels(
-              env,
-              origins,
-              stmts,
-              i + 1,
-              ((_v) =>
-                _v._tag === "SImportNs"
-                  ? (({ alias }) => bindTopValue(env, acc, alias.name, alias.span))(_v)
-                  : _v._tag === "SImport"
-                    ? (({ names }) => bindImports(env, origins, acc, names, 0))(_v)
-                    : _v._tag === "SType"
-                      ? (({ name, nameSpan, ctors, alias }) =>
-                          ((def: Loc) =>
-                            ((withCtors: TopScope) =>
-                              ((_v) =>
-                                _v._tag === "Some"
-                                  ? (({ value: afs }) => touchAliasFields(env, withCtors, afs, 0))(
-                                      _v,
-                                    )
-                                  : _v._tag === "None"
-                                    ? withCtors
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(alias))(
-                              bindCtors(
-                                env,
-                                topThen(
-                                  acc,
-                                  [occ(name, "type", def, nameSpan, "def")],
-                                  withType(acc.top, name, def),
-                                  acc.fields,
-                                ),
-                                ctors,
-                                0,
-                              ),
-                            ))(locOf(env, nameSpan)))(_v)
-                      : _v._tag === "SLet"
-                        ? (({ name, nameSpan }) =>
-                            parked(name) ? acc : bindTopValue(env, acc, name, nameSpan))(_v)
-                        : _v._tag === "SExtern"
-                          ? (({ name, nameSpan }) => bindTopValue(env, acc, name, nameSpan))(_v)
-                          : acc)(stmt),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, stmts)),
+  _Option_match(
+    _Array_get(i, stmts),
+    () => acc,
+    (stmt) =>
+      bindTopLevels(
+        env,
+        origins,
+        stmts,
+        i + 1,
+        ((_v) =>
+          _v._tag === "SImportNs"
+            ? (({ alias }) => bindTopValue(env, acc, alias.name, alias.span))(_v)
+            : _v._tag === "SImport"
+              ? (({ names }) => bindImports(env, origins, acc, names, 0))(_v)
+              : _v._tag === "SType"
+                ? (({ name, nameSpan, ctors, alias }) =>
+                    ((def: Loc) =>
+                      ((withCtors: TopScope) =>
+                        _Option_match(
+                          alias,
+                          () => withCtors,
+                          (afs) => touchAliasFields(env, withCtors, afs, 0),
+                        ))(
+                        bindCtors(
+                          env,
+                          topThen(
+                            acc,
+                            [occ(name, "type", def, nameSpan, "def")],
+                            withType(acc.top, name, def),
+                            acc.fields,
+                          ),
+                          ctors,
+                          0,
+                        ),
+                      ))(locOf(env, nameSpan)))(_v)
+                : _v._tag === "SLet"
+                  ? (({ name, nameSpan }) =>
+                      parked(name) ? acc : bindTopValue(env, acc, name, nameSpan))(_v)
+                  : _v._tag === "SExtern"
+                    ? (({ name, nameSpan }) => bindTopValue(env, acc, name, nameSpan))(_v)
+                    : acc)(stmt),
+      ),
+  ),
 );
 const ctorFieldTypes: (ctors: Ctor[]) => TypeExpr[] = (ctors: Ctor[]) =>
   _Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors);
@@ -1431,30 +1329,24 @@ const walkStmt: _Curry<[env: SymEnv, stmt: Stmt, fields: Map<string, Loc>], Walk
                       ),
                       fields,
                     ))(
-                    ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: afs }) => map((f: AliasField) => f.fieldType, afs))(_v)
-                        : _v._tag === "None"
-                          ? ([] as TypeExpr[])
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(alias),
+                    _Option_match(
+                      alias,
+                      () => [] as TypeExpr[],
+                      (afs) => map((f: AliasField) => f.fieldType, afs),
+                    ),
                   ))(_v)
               : none(fields))(stmt),
 );
 const walkStmts: _Curry<[env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>], Walked> =
   _curry(4, (env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? none(fields)
-        : _v._tag === "Some"
-          ? (({ value: stmt }) =>
-              andThen(walkStmt(env, stmt, fields), (fs: Map<string, Loc>) =>
-                walkStmts(env, stmts, i + 1, fs),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, stmts)),
+    _Option_match(
+      _Array_get(i, stmts),
+      () => none(fields),
+      (stmt) =>
+        andThen(walkStmt(env, stmt, fields), (fs: Map<string, Loc>) =>
+          walkStmts(env, stmts, i + 1, fs),
+        ),
+    ),
   );
 /**
  * indexWith : string -> Origins -> SymPrelude -> [Stmt] -> SymIndex

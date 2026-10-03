@@ -27,6 +27,16 @@ let genSrc = src =>
     |> Result.map(stmts =>
       codegen(stmts, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
 
+testEach("builtin matches select their flat runtime dispatch", [
+  ("let f = x => switch x { | Ok(n) => n | Err(_) => 0 }", "_Result_match("),
+  ("let f = x => switch x { | Err(_) => 0 | Ok(n) => n }", "_Result_match("),
+  ("let f = x => switch x { | Some(n) => n | None => 0 }", "_Option_match("),
+  ("let f = x => switch x { | None => 0 | Some(n) => n }", "_Option_match(")
+], ((source, helper)) => switch genSrc(source) {
+  | Ok(js) => js |> Str.contains(helper) |> ok
+  | Err(_) => false |> ok
+})
+
 test("flat tail switch uses scalar statements without step helpers", () => switch genSrc("let run = n => loop (i = 0, total = 0) { switch i >= n { | true => total | false => recur(i + 1, total + i) } }") {
   | Ok(js) => (js
       |> Str.contains(

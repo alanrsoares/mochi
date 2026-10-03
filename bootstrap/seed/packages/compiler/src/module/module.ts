@@ -57,9 +57,11 @@ import {
   _Map_keys,
   _Map_set,
   _Option_mapOr,
+  _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_mapErr,
+  _Result_match,
   _Set_add,
   _Set_fromArray,
   _Set_has,
@@ -197,53 +199,41 @@ const firstAtPath: <A>(
 ) => MErr = _curry(
   2,
   <A>(path: string, es: ({ end: number; start: number; message: string } & A)[]) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: e }) => atPath("type", path, e))(_v)
-        : _v._tag === "None"
-          ? { kind: "type", message: `module '${path}': type error`, start: 0, end: 0 }
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(0, es)),
+    _Option_match(
+      _Array_get(0, es),
+      () => ({ kind: "type", message: `module '${path}': type error`, start: 0, end: 0 }),
+      (e) => atPath("type", path, e),
+    ),
 );
 const parseModule: _Curry<
   [src: string, plugins: Option<HostPlugin[]>],
   Result<Stmt[], MErr>
 > = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
-  ((_v) =>
-    _v._tag === "Err"
-      ? (({ error: e }) => Err(stamp("lex", e)) as Result<Stmt[], MErr>)(_v)
-      : _v._tag === "Ok"
-        ? (({ value: toks }) =>
-            ((_v) =>
-              _v._tag === "Err"
-                ? (({ error: e }) => Err(stamp("parse", e)) as Result<Stmt[], MErr>)(_v)
-                : _v._tag === "Ok"
-                  ? (({ value: stmts }) => Ok(stmts) as Result<Stmt[], MErr>)(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(parseWith(toks, plugins)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(lex(src)),
+  _Result_match(
+    lex(src),
+    (e) => Err(stamp("lex", e)) as Result<Stmt[], MErr>,
+    (toks) =>
+      _Result_match(
+        parseWith(toks, plugins),
+        (e) => Err(stamp("parse", e)) as Result<Stmt[], MErr>,
+        (stmts) => Ok(stmts) as Result<Stmt[], MErr>,
+      ),
+  ),
 );
 const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
   3,
   (stmts: Stmt[], i: number, acc: string[]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: s }) =>
-              ((_v) =>
-                _v._tag === "SImport"
-                  ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
-                  : _v._tag === "SImportNs"
-                    ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
-                    : importFromsFrom(stmts, i + 1, acc))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, stmts)),
+    _Option_match(
+      _Array_get(i, stmts),
+      () => acc,
+      (s) =>
+        ((_v) =>
+          _v._tag === "SImport"
+            ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
+            : _v._tag === "SImportNs"
+              ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
+              : importFromsFrom(stmts, i + 1, acc))(s),
+    ),
 );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
   importFromsFrom(stmts, 0, [] as string[]);
@@ -258,42 +248,27 @@ const visit: _Curry<
       : _v._tag === "Some" && _v.value === "loading"
         ? (Err(mErr(`import cycle through '${path}'`)) as Result<Acc, MErr>)
         : ((acc1: Acc) =>
-            ((_v) =>
-              _v._tag === "Err"
-                ? (Err(mErr(`cannot read module '${path}'`)) as Result<Acc, MErr>)
-                : _v._tag === "Ok"
-                  ? (({ value: src }) =>
-                      ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: e }) => Err(e) as Result<Acc, MErr>)(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: stmts }) =>
-                                ((_v) =>
-                                  _v._tag === "Err"
-                                    ? (({ error: e }) => Err(e) as Result<Acc, MErr>)(_v)
-                                    : _v._tag === "Ok"
-                                      ? (({ value: acc2 }) =>
-                                          Ok({
-                                            state: _Map_set(path, "done", acc2.state),
-                                            order: _Array_append(
-                                              { path: path, src: src, stmts: stmts },
-                                              acc2.order,
-                                            ),
-                                          }) as Result<Acc, MErr>)(_v)
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(visitAll(importFroms(stmts), path, acc1, plugins)))(
-                                _v,
-                              )
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(parseModule(src, plugins)))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(readFile(path)))({
-            state: _Map_set(path, "loading", acc.state),
-            order: acc.order,
-          }))(_Map_get(path, acc.state)),
+            _Result_match(
+              readFile(path),
+              () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, MErr>,
+              (src) =>
+                _Result_match(
+                  parseModule(src, plugins),
+                  (e) => Err(e) as Result<Acc, MErr>,
+                  (stmts) =>
+                    _Result_match(
+                      visitAll(importFroms(stmts), path, acc1, plugins),
+                      (e) => Err(e) as Result<Acc, MErr>,
+                      (acc2) =>
+                        Ok({
+                          state: _Map_set(path, "done", acc2.state),
+                          order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
+                        }) as Result<Acc, MErr>,
+                    ),
+                ),
+            ))({ state: _Map_set(path, "loading", acc.state), order: acc.order }))(
+    _Map_get(path, acc.state),
+  ),
 );
 const visitAll: _Curry<
   [froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>],
@@ -304,14 +279,11 @@ const visitAll: _Curry<
       ? (Ok(acc) as Result<Acc, MErr>)
       : _v.length >= 1
         ? (([from, ...rest]) =>
-            ((_v) =>
-              _v._tag === "Err"
-                ? (({ error: e }) => Err(e) as Result<Acc, MErr>)(_v)
-                : _v._tag === "Ok"
-                  ? (({ value: acc1 }) => visitAll(rest, importer, acc1, plugins))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(visit(resolveImport(importer, from), acc, plugins)))(_v)
+            _Result_match(
+              visit(resolveImport(importer, from), acc, plugins),
+              (e) => Err(e) as Result<Acc, MErr>,
+              (acc1) => visitAll(rest, importer, acc1, plugins),
+            ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(froms),
@@ -354,14 +326,11 @@ const mergeInto: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A, B
           mergeInto(
             rest,
             from,
-            ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: v }) => _Map_set(k, v, into))(_v)
-                : _v._tag === "None"
-                  ? into
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(_Map_get(k, from)),
+            _Option_match(
+              _Map_get(k, from),
+              () => into,
+              (v) => _Map_set(k, v, into),
+            ),
           ),
       )
       .otherwise(() => {
@@ -502,23 +471,17 @@ const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
     nsImports: res.nsImports,
     reg: {
       ctors: _Map_set(name, info, res.reg.ctors),
-      types: ((_v) =>
-        _v._tag === "Some"
-          ? (({ value: cs }) => _Map_set(info.owner, cs, res.reg.types))(_v)
-          : _v._tag === "None"
-            ? res.reg.types
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Map_get(info.owner, depReg.types)),
+      types: _Option_match(
+        _Map_get(info.owner, depReg.types),
+        () => res.reg.types,
+        (cs) => _Map_set(info.owner, cs, res.reg.types),
+      ),
     },
-    keys: ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: ks }) => _Map_set(name, ks, res.keys))(_v)
-        : _v._tag === "None"
-          ? res.keys
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(name, depKeys)),
+    keys: _Option_match(
+      _Map_get(name, depKeys),
+      () => res.keys,
+      (ks) => _Map_set(name, ks, res.keys),
+    ),
     quals: res.quals,
   }),
 );
@@ -558,30 +521,24 @@ const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
       imports: H;
     },
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? Ok(res)
-        : _v._tag === "Some"
-          ? (({ value: info }) =>
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: prior }) =>
-                      !eq(prior.owner, info.owner)
-                        ? Err({
-                            kind: "check",
-                            message: `duplicate constructor '${name}'`,
-                            start: span.start,
-                            end: span.end,
-                          })
-                        : Ok(withNamedCtor(name, info, depReg, depKeys, res)))(_v)
-                  : _v._tag === "None"
-                    ? Ok(withNamedCtor(name, info, depReg, depKeys, res))
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(name, res.reg.ctors)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(name, depReg.ctors)),
+    _Option_match(
+      _Map_get(name, depReg.ctors),
+      () => Ok(res),
+      (info) =>
+        _Option_match(
+          _Map_get(name, res.reg.ctors),
+          () => Ok(withNamedCtor(name, info, depReg, depKeys, res)),
+          (prior) =>
+            !eq(prior.owner, info.owner)
+              ? Err({
+                  kind: "check",
+                  message: `duplicate constructor '${name}'`,
+                  start: span.start,
+                  end: span.end,
+                })
+              : Ok(withNamedCtor(name, info, depReg, depKeys, res)),
+        ),
+    ),
 );
 const prefixCtorsInto: <A>(
   keys: string[],
@@ -600,14 +557,11 @@ const prefixCtorsInto: <A>(
                 rest,
                 alias,
                 from,
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: v }) => _Map_set(`${alias}.${k}`, v, into))(_v)
-                    : _v._tag === "None"
-                      ? into
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(k, from)),
+                _Option_match(
+                  _Map_get(k, from),
+                  () => into,
+                  (v) => _Map_set(`${alias}.${k}`, v, into),
+                ),
               ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -661,9 +615,10 @@ const resolveNames: <D, E, F, G, H, I, J, K, L>(
       .with(
         (_v) => _v.length >= 1,
         ([n, ...rest]) =>
-          ((_v) =>
-            _v._tag === "None"
-              ? recovering
+          _Option_match(
+            _Map_get(n.name, depExports),
+            () =>
+              recovering
                 ? resolveNames(
                     rest,
                     from,
@@ -684,37 +639,20 @@ const resolveNames: <D, E, F, G, H, I, J, K, L>(
                     message: `'${from}' has no export '${n.name}'`,
                     start: n.span.start,
                     end: n.span.end,
-                  })
-              : _v._tag === "Some"
-                ? (({ value: sc }) =>
-                    ((_v) =>
-                      _v._tag === "Err"
-                        ? (({ error: e }) => Err(e))(_v)
-                        : _v._tag === "Ok"
-                          ? (({ value: res1 }) =>
-                              resolveNames(
-                                rest,
-                                from,
-                                depExports,
-                                depReg,
-                                depKeys,
-                                res1,
-                                recovering,
-                              ))(_v)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(
-                      takeNamedCtor(n.name, n.span, depReg, depKeys, {
-                        imports: _Map_set(n.name, sc, res.imports),
-                        nsImports: res.nsImports,
-                        reg: res.reg,
-                        keys: res.keys,
-                        quals: res.quals,
-                      }),
-                    ))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(n.name, depExports)),
+                  }),
+            (sc) =>
+              _Result_match(
+                takeNamedCtor(n.name, n.span, depReg, depKeys, {
+                  imports: _Map_set(n.name, sc, res.imports),
+                  nsImports: res.nsImports,
+                  reg: res.reg,
+                  keys: res.keys,
+                  quals: res.quals,
+                }),
+                (e) => Err(e),
+                (res1) => resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering),
+              ),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -777,16 +715,10 @@ const resolveImportsFrom: <B, C, D>(
                 ((depExports) =>
                   ((depReg: Registry) =>
                     ((depKeys) =>
-                      ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: e }) => Err(e))(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: res1 }) =>
-                                resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(
+                      _Result_match(
                         resolveNames(names, from, depExports, depReg, depKeys, res, recovering),
+                        (e) => Err(e),
+                        (res1) => resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
                       ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
                     _Map_getOr(emptyReg, dp, ctx.regByPath),
                   ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
@@ -823,14 +755,11 @@ const resolveImportsFrom: <B, C, D>(
                               types: mergeMap(depReg.types, res.reg.types),
                             },
                             keys: mergeMap(depKeys, res.keys),
-                            quals: ((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: q }) => _Map_set(alias.name, q, res.quals))(_v)
-                                : _v._tag === "None"
-                                  ? res.quals
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(_Map_get(dp, ctx.qualsByPath)),
+                            quals: _Option_match(
+                              _Map_get(dp, ctx.qualsByPath),
+                              () => res.quals,
+                              (q) => _Map_set(alias.name, q, res.quals),
+                            ),
                           },
                           recovering,
                         ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
@@ -883,81 +812,7 @@ const compileOne: <A>(
     isEntry: boolean,
     opts: Opts,
   ) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) => Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>)(
-            _v,
-          )
-        : _v._tag === "Ok"
-          ? (({ value: res }) =>
-              ((_v) =>
-                _v._tag === "Err"
-                  ? (({ error: e }) =>
-                      Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>)(_v)
-                  : _v._tag === "Ok"
-                    ? ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: es }) =>
-                              Err(map((e: IErr) => atPath("type", loaded.path, e), es)) as Result<
-                                RecoveryCtx,
-                                MErr[]
-                              >)(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: env }) =>
-                                ((js: string) =>
-                                  Ok({
-                                    exportsByPath: _Map_set(
-                                      loaded.path,
-                                      exportedSchemes(loaded.stmts, env),
-                                      ctx.exportsByPath,
-                                    ),
-                                    regByPath: _Map_set(
-                                      loaded.path,
-                                      exportedRegistry(loaded.stmts),
-                                      ctx.regByPath,
-                                    ),
-                                    keysByPath: _Map_set(
-                                      loaded.path,
-                                      exportedCtorKeys(loaded.stmts),
-                                      ctx.keysByPath,
-                                    ),
-                                    qualsByPath: _Map_set(
-                                      loaded.path,
-                                      qualScopeOf(loaded.stmts, res.quals),
-                                      ctx.qualsByPath,
-                                    ),
-                                    outputs: [...ctx.outputs, { path: loaded.path, js: js }],
-                                  }) as Result<RecoveryCtx, MErr[]>)(
-                                  codegenWith(
-                                    loaded.stmts,
-                                    res.keys,
-                                    opts.runtime,
-                                    namespaceRuntime,
-                                    preludeJsDefs,
-                                    runtimeDeps,
-                                    { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
-                                  ),
-                                ))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(
-                        inferProgramImports(
-                          loaded.stmts,
-                          builtins,
-                          namespaces,
-                          openFor(loaded, isEntry, opts),
-                          res.imports,
-                          res.nsImports,
-                          res.quals,
-                          opts.plugins,
-                        ),
-                      )
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(
+    _Result_match(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -972,6 +827,56 @@ const compileOne: <A>(
         },
         recovering,
       ),
+      (e) => Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) => Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>,
+          () =>
+            _Result_match(
+              inferProgramImports(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openFor(loaded, isEntry, opts),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(map((e: IErr) => atPath("type", loaded.path, e), es)) as Result<
+                  RecoveryCtx,
+                  MErr[]
+                >,
+              (env) => {
+                const js: string = codegenWith(
+                  loaded.stmts,
+                  res.keys,
+                  opts.runtime,
+                  namespaceRuntime,
+                  preludeJsDefs,
+                  runtimeDeps,
+                  { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
+                );
+                return Ok({
+                  exportsByPath: _Map_set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, env),
+                    ctx.exportsByPath,
+                  ),
+                  regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
+                  qualsByPath: _Map_set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts, res.quals),
+                    ctx.qualsByPath,
+                  ),
+                  outputs: [...ctx.outputs, { path: loaded.path, js: js }],
+                }) as Result<RecoveryCtx, MErr[]>;
+              },
+            ),
+        ),
     ),
 );
 const compileAll: _Curry<
@@ -983,14 +888,11 @@ const compileAll: _Curry<
       ? (Ok(ctx.outputs) as Result<ModuleOutput[], MErr[]>)
       : _v.length >= 1
         ? (([m, ...rest]) =>
-            ((_v) =>
-              _v._tag === "Err"
-                ? (({ error: e }) => Err(e) as Result<ModuleOutput[], MErr[]>)(_v)
-                : _v._tag === "Ok"
-                  ? (({ value: ctx1 }) => compileAll(ctx1, rest, opts))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(compileOne(ctx, m, false, length(rest) === 0, opts)))(_v)
+            _Result_match(
+              compileOne(ctx, m, false, length(rest) === 0, opts),
+              (e) => Err(e) as Result<ModuleOutput[], MErr[]>,
+              (ctx1) => compileAll(ctx1, rest, opts),
+            ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(graph),
@@ -1070,14 +972,7 @@ const checkErrorsRecovering: <B, C, D>(
     loaded: Loaded,
   ) => {
     const importErrors: MErr[] = depsPublished(ctx, loaded.stmts, 0, loaded.path)
-      ? ((_v) =>
-          _v._tag === "Err"
-            ? (({ error: e }) => [atPath("check", loaded.path, e)])(_v)
-            : _v._tag === "Ok"
-              ? ([] as MErr[])
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(
+      ? _Result_match(
           resolveImportsFrom(
             ctx,
             loaded.stmts,
@@ -1092,28 +987,11 @@ const checkErrorsRecovering: <B, C, D>(
             },
             false,
           ),
+          (e) => [atPath("check", loaded.path, e)],
+          () => [] as MErr[],
         )
       : ([] as MErr[]);
-    return ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) => [atPath("check", loaded.path, e)])(_v)
-        : _v._tag === "Ok"
-          ? (({ value: res }) =>
-              ((_v) =>
-                _v._tag === "Err"
-                  ? (({ error: es }) =>
-                      _Array_concat(
-                        importErrors,
-                        map((e: StageErr) => atPath("check", loaded.path, e), es),
-                      ))(_v)
-                  : _v._tag === "Ok"
-                    ? importErrors
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(checkAllWith(loaded.stmts, res.reg, res.quals)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(
+    return _Result_match(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -1128,6 +1006,17 @@ const checkErrorsRecovering: <B, C, D>(
         },
         true,
       ),
+      (e) => [atPath("check", loaded.path, e)],
+      (res) =>
+        _Result_match(
+          checkAllWith(loaded.stmts, res.reg, res.quals),
+          (es) =>
+            _Array_concat(
+              importErrors,
+              map((e: StageErr) => atPath("check", loaded.path, e), es),
+            ),
+          () => importErrors,
+        ),
     );
   },
 );
@@ -1149,18 +1038,14 @@ const recoverOne: _Curry<
   [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts],
   RecoveryGraphState
 > = _curry(5, (ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts) =>
-  ((_v) =>
-    _v._tag === "Err"
-      ? (({ error: es }) =>
-          ((checks: MErr[]) => ({
-            ctx: ctx,
-            errors: _Array_concat(errors, mergeRecovered(es, checks)),
-          }))(checkErrorsRecovering(ctx, m)))(_v)
-      : _v._tag === "Ok"
-        ? (({ value: ctx1 }) => ({ ctx: ctx1, errors: errors }))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(compileOne(ctx, m, true, isEntry, opts)),
+  _Result_match(
+    compileOne(ctx, m, true, isEntry, opts),
+    (es) => {
+      const checks: MErr[] = checkErrorsRecovering(ctx, m);
+      return { ctx: ctx, errors: _Array_concat(errors, mergeRecovered(es, checks)) };
+    },
+    (ctx1) => ({ ctx: ctx1, errors: errors }),
+  ),
 );
 const compileAllRecovering: _Curry<
   [ctx: RecoveryCtx, graph: Loaded[], errors: MErr[], opts: Opts],
@@ -1229,14 +1114,11 @@ export const recoverModuleWith: _Curry<
 const keepOnly: <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => Map<A, B> = _curry(
   4,
   <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? m
-        : _v._tag === "Some"
-          ? (({ value: k }) => keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => m,
+      (k) => keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m)),
+    ),
 );
 const onlyAt: <A, B>(key: A, m: Map<A, B>) => Map<A, B> = _curry(2, <A, B>(key: A, m: Map<A, B>) =>
   keepOnly(key, _Map_keys(m), 0, m),
@@ -1340,9 +1222,43 @@ const inferOne: <A, B>(
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
   ) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) =>
+    _Result_match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, RecoveryQualScope>(),
+        },
+        false,
+      ),
+      (e) =>
+        Err(atPath("check", loaded.path, e)) as Result<
+          {
+            exportsByPath: Map<string, Map<string, Scheme>>;
+            regByPath: Map<string, Registry>;
+            keysByPath: Map<string, Map<string, string[]>>;
+            qualsByPath: Map<string, RecoveryQualScope>;
+            aliases: Map<string, RecoveryAliasInfo>;
+            outputs: {
+              path: string;
+              types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+              aliases: Map<string, RecoveryAliasInfo>;
+              imports: Map<string, Scheme>;
+              quals: Map<string, RecoveryQualScope>;
+            }[];
+          },
+          MErr
+        >,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) =>
             Err(atPath("check", loaded.path, e)) as Result<
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
@@ -1359,158 +1275,89 @@ const inferOne: <A, B>(
                 }[];
               },
               MErr
-            >)(_v)
-        : _v._tag === "Ok"
-          ? (({ value: res }) =>
-              ((_v) =>
-                _v._tag === "Err"
-                  ? (({ error: e }) =>
-                      Err(atPath("check", loaded.path, e)) as Result<
-                        {
-                          exportsByPath: Map<string, Map<string, Scheme>>;
-                          regByPath: Map<string, Registry>;
-                          keysByPath: Map<string, Map<string, string[]>>;
-                          qualsByPath: Map<string, RecoveryQualScope>;
-                          aliases: Map<string, RecoveryAliasInfo>;
-                          outputs: {
-                            path: string;
-                            types: {
-                              span: SpanAt;
-                              ty: Ty;
-                              display: string;
-                              sym: Option<BinderSym>;
-                            }[];
-                            aliases: Map<string, RecoveryAliasInfo>;
-                            imports: Map<string, Scheme>;
-                            quals: Map<string, RecoveryQualScope>;
-                          }[];
-                        },
-                        MErr
-                      >)(_v)
-                  : _v._tag === "Ok"
-                    ? ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: es }) =>
-                              Err(firstAtPath(loaded.path, es)) as Result<
-                                {
-                                  exportsByPath: Map<string, Map<string, Scheme>>;
-                                  regByPath: Map<string, Registry>;
-                                  keysByPath: Map<string, Map<string, string[]>>;
-                                  qualsByPath: Map<string, RecoveryQualScope>;
-                                  aliases: Map<string, RecoveryAliasInfo>;
-                                  outputs: {
-                                    path: string;
-                                    types: {
-                                      span: SpanAt;
-                                      ty: Ty;
-                                      display: string;
-                                      sym: Option<BinderSym>;
-                                    }[];
-                                    aliases: Map<string, RecoveryAliasInfo>;
-                                    imports: Map<string, Scheme>;
-                                    quals: Map<string, RecoveryQualScope>;
-                                  }[];
-                                },
-                                MErr
-                              >)(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: r }) =>
-                                Ok({
-                                  exportsByPath: _Map_set(
-                                    loaded.path,
-                                    exportedSchemes(loaded.stmts, r.env),
-                                    ctx.exportsByPath,
-                                  ),
-                                  regByPath: _Map_set(
-                                    loaded.path,
-                                    exportedRegistry(loaded.stmts),
-                                    ctx.regByPath,
-                                  ),
-                                  keysByPath: _Map_set(
-                                    loaded.path,
-                                    exportedCtorKeys(loaded.stmts),
-                                    ctx.keysByPath,
-                                  ),
-                                  qualsByPath: _Map_set(
-                                    loaded.path,
-                                    qualScopeOf(loaded.stmts, res.quals),
-                                    ctx.qualsByPath,
-                                  ),
-                                  aliases: mergeMap(r.aliases, ctx.aliases),
-                                  outputs: [
-                                    ...ctx.outputs,
-                                    {
-                                      path: loaded.path,
-                                      types: map(
-                                        (hit: TypeAt) => ({
-                                          span: hit.span,
-                                          ty: hit.ty,
-                                          display: showType(widenLits(hit.ty)),
-                                          sym: hit.sym,
-                                        }),
-                                        r.types,
-                                      ),
-                                      aliases: mergeMap(r.aliases, ctx.aliases),
-                                      imports: res.imports,
-                                      quals: res.quals,
-                                    },
-                                  ],
-                                }) as Result<
-                                  {
-                                    exportsByPath: Map<string, Map<string, Scheme>>;
-                                    regByPath: Map<string, Registry>;
-                                    keysByPath: Map<string, Map<string, string[]>>;
-                                    qualsByPath: Map<string, RecoveryQualScope>;
-                                    aliases: Map<string, RecoveryAliasInfo>;
-                                    outputs: {
-                                      path: string;
-                                      types: {
-                                        span: SpanAt;
-                                        ty: Ty;
-                                        display: string;
-                                        sym: Option<BinderSym>;
-                                      }[];
-                                      aliases: Map<string, RecoveryAliasInfo>;
-                                      imports: Map<string, Scheme>;
-                                      quals: Map<string, RecoveryQualScope>;
-                                    }[];
-                                  },
-                                  MErr
-                                >)(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(
-                        inferProgramImportsTypes(
-                          loaded.stmts,
-                          builtins,
-                          namespaces,
-                          openMode(loaded.src, opts.open),
-                          res.imports,
-                          res.nsImports,
-                          res.quals,
-                          opts.plugins,
-                        ),
-                      )
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(
-      resolveImportsFrom(
-        ctx,
-        loaded.stmts,
-        0,
-        loaded.path,
-        {
-          imports: new Map<string, Scheme>(),
-          nsImports: new Map<string, Map<string, Scheme>>(),
-          reg: emptyReg,
-          keys: new Map<string, string[]>(),
-          quals: new Map<string, RecoveryQualScope>(),
-        },
-        false,
-      ),
+            >,
+          () =>
+            _Result_match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(firstAtPath(loaded.path, es)) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<string, RecoveryQualScope>;
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    outputs: {
+                      path: string;
+                      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+                      aliases: Map<string, RecoveryAliasInfo>;
+                      imports: Map<string, Scheme>;
+                      quals: Map<string, RecoveryQualScope>;
+                    }[];
+                  },
+                  MErr
+                >,
+              (r) =>
+                Ok({
+                  exportsByPath: _Map_set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, r.env),
+                    ctx.exportsByPath,
+                  ),
+                  regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
+                  qualsByPath: _Map_set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts, res.quals),
+                    ctx.qualsByPath,
+                  ),
+                  aliases: mergeMap(r.aliases, ctx.aliases),
+                  outputs: [
+                    ...ctx.outputs,
+                    {
+                      path: loaded.path,
+                      types: map(
+                        (hit: TypeAt) => ({
+                          span: hit.span,
+                          ty: hit.ty,
+                          display: showType(widenLits(hit.ty)),
+                          sym: hit.sym,
+                        }),
+                        r.types,
+                      ),
+                      aliases: mergeMap(r.aliases, ctx.aliases),
+                      imports: res.imports,
+                      quals: res.quals,
+                    },
+                  ],
+                }) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<string, RecoveryQualScope>;
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    outputs: {
+                      path: string;
+                      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+                      aliases: Map<string, RecoveryAliasInfo>;
+                      imports: Map<string, Scheme>;
+                      quals: Map<string, RecoveryQualScope>;
+                    }[];
+                  },
+                  MErr
+                >,
+            ),
+        ),
     ),
 );
 const inferAll: <A>(
@@ -1591,31 +1438,28 @@ const inferAll: <A>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Err"
-              ? (({ error: e }) =>
-                  Err(e) as Result<
-                    {
-                      exportsByPath: Map<string, Map<string, Scheme>>;
-                      regByPath: Map<string, Registry>;
-                      keysByPath: Map<string, Map<string, string[]>>;
-                      qualsByPath: Map<string, RecoveryQualScope>;
-                      outputs: {
-                        path: string;
-                        types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-                        aliases: Map<string, RecoveryAliasInfo>;
-                        imports: Map<string, Scheme>;
-                        quals: Map<string, RecoveryQualScope>;
-                      }[];
-                      aliases: Map<string, RecoveryAliasInfo>;
-                    },
-                    MErr
-                  >)(_v)
-              : _v._tag === "Ok"
-                ? (({ value: ctx1 }) => inferAll(ctx1, rest, opts))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(inferOne(ctx, m, opts)),
+          _Result_match(
+            inferOne(ctx, m, opts),
+            (e) =>
+              Err(e) as Result<
+                {
+                  exportsByPath: Map<string, Map<string, Scheme>>;
+                  regByPath: Map<string, Registry>;
+                  keysByPath: Map<string, Map<string, string[]>>;
+                  qualsByPath: Map<string, RecoveryQualScope>;
+                  outputs: {
+                    path: string;
+                    types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    imports: Map<string, Scheme>;
+                    quals: Map<string, RecoveryQualScope>;
+                  }[];
+                  aliases: Map<string, RecoveryAliasInfo>;
+                },
+                MErr
+              >,
+            (ctx1) => inferAll(ctx1, rest, opts),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -1907,20 +1751,16 @@ export const buildModulesWith: _Curry<
   [entry: string, opts: Opts],
   Result<ModuleOutput[], MErr[]>
 > = _curry(2, (entry: string, opts: Opts) =>
-  ((_v) =>
-    _v._tag === "Err"
-      ? (({ error: e }) => Err([e]) as Result<ModuleOutput[], MErr[]>)(_v)
-      : _v._tag === "Ok"
-        ? (({ value: graph }) =>
-            ((recovered: GraphRecovery) =>
-              length(recovered.errors) === 0
-                ? compileGraphWith(graph, opts)
-                : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>))(
-              compileGraphRecoveringWith(graph, opts),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(loadGraphWith(entry, opts.plugins)),
+  _Result_match(
+    loadGraphWith(entry, opts.plugins),
+    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
+    (graph) => {
+      const recovered: GraphRecovery = compileGraphRecoveringWith(graph, opts);
+      return length(recovered.errors) === 0
+        ? compileGraphWith(graph, opts)
+        : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
+    },
+  ),
 );
 export const buildModules: (entry: string) => Result<ModuleOutput[], MErr[]> = (entry: string) =>
   buildModulesWith(entry, defaultOpts);
@@ -1929,21 +1769,15 @@ const relSpec = _curry(2, $relSpec);
 import { externDtsPath as $externDtsPath } from "./host.mjs";
 const externDtsPath = _curry(2, $externDtsPath);
 const isIdentChar: (c: string) => boolean = (c: string) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? false
-      : _v._tag === "Some"
-        ? (({ value: n }) =>
-            or(
-              or(
-                or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)),
-                n === 95,
-              ),
-              n === 36,
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Str_codeAt(0, c));
+  _Option_match(
+    _Str_codeAt(0, c),
+    () => false,
+    (n) =>
+      or(
+        or(or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)), n === 95),
+        n === 36,
+      ),
+  );
 const endsAtBoundary: (part: string) => boolean = (part: string) =>
   _Str_length(part) === 0
     ? true
@@ -1953,20 +1787,14 @@ const startsAtBoundary: (part: string) => boolean = (part: string) =>
 const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
   2,
   (parts: string[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? false
-        : _v._tag === "Some"
-          ? (({ value: after }) =>
-              and(
-                _Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)),
-                startsAtBoundary(after),
-              )
-                ? true
-                : occursAsWordFrom(parts, i + 1))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, parts)),
+    _Option_match(
+      _Array_get(i, parts),
+      () => false,
+      (after) =>
+        and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
+          ? true
+          : occursAsWordFrom(parts, i + 1),
+    ),
 );
 const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(
   2,
@@ -1979,27 +1807,21 @@ const importedBinding: (spec: string) => string = (spec: string) => {
 const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
   2,
   (line: string, acc: Set<string>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: rest }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? acc
-                  : _v._tag === "Some"
-                    ? (({ value: names }) =>
-                        reduce(
-                          _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
-                          acc,
-                          _Str_split(",", names),
-                        ))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Array_get(0, _Str_split("}", rest))))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(1, _Str_split("{", line))),
+    _Option_match(
+      _Array_get(1, _Str_split("{", line)),
+      () => acc,
+      (rest) =>
+        _Option_match(
+          _Array_get(0, _Str_split("}", rest)),
+          () => acc,
+          (names) =>
+            reduce(
+              _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
+              acc,
+              _Str_split(",", names),
+            ),
+        ),
+    ),
 );
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
@@ -2066,14 +1888,11 @@ const nullaryDeclared: <A, B, C, D>(
   name: A,
   local: Map<A, { params: B[]; fields: C[] } & D>,
 ) => boolean = _curry(2, <A, B, C, D>(name: A, local: Map<A, { params: B[]; fields: C[] } & D>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? false
-      : _v._tag === "Some"
-        ? (({ value: info }) => and(length(info.params) === 0, length(info.fields) > 0))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Map_get(name, local)),
+  _Option_match(
+    _Map_get(name, local),
+    () => false,
+    (info) => and(length(info.params) === 0, length(info.fields) > 0),
+  ),
 );
 /**
  * A synthetic parameterised homonym makes `withoutAmbiguousAlias` blank the
@@ -2093,35 +1912,32 @@ const addDupMarkers: <A, B, E>(
     acc: Map<string, RecoveryAliasInfo>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: name }) =>
-              addDupMarkers(
-                names,
-                local,
-                nullaryDeclared(name, local)
-                  ? acc
-                  : _Map_set(
-                      `dup.${name}`,
-                      {
-                        params: ["_"],
-                        fields: [] as {
-                          fieldType: TypeExpr;
-                          name: string;
-                          nameSpan: { end: number; start: number };
-                          optional: boolean;
-                        }[],
-                        expr: None,
-                      },
-                      acc,
-                    ),
-                i + 1,
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, names)),
+    _Option_match(
+      _Array_get(i, names),
+      () => acc,
+      (name) =>
+        addDupMarkers(
+          names,
+          local,
+          nullaryDeclared(name, local)
+            ? acc
+            : _Map_set(
+                `dup.${name}`,
+                {
+                  params: ["_"],
+                  fields: [] as {
+                    fieldType: TypeExpr;
+                    name: string;
+                    nameSpan: { end: number; start: number };
+                    optional: boolean;
+                  }[],
+                  expr: None,
+                },
+                acc,
+              ),
+          i + 1,
+        ),
+    ),
 );
 const aliasesForTs: <C, D, E>(
   merged: Map<string, RecoveryAliasInfo>,
@@ -2229,27 +2045,25 @@ const externBindingsInto: <A>(
             ? (({ name, module: hostModule, imported, curried }) =>
                 _Str_startsWith("mochi:", hostModule)
                   ? a
-                  : ((_v) =>
-                      _v._tag === "None"
-                        ? a
-                        : _v._tag === "Some"
-                          ? (({ value: sc }) =>
-                              ((dp: string) =>
-                                _Map_set(
-                                  dp,
-                                  _Array_append(
-                                    { imported: imported, scheme: sc, curried: curried },
-                                    _Map_getOr(
-                                      [] as { imported: string; scheme: A; curried: boolean }[],
-                                      dp,
-                                      a,
-                                    ),
-                                  ),
-                                  a,
-                                ))(externDtsPath(path, hostModule)))(_v)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(_Map_get(name, env)))(_v)
+                  : _Option_match(
+                      _Map_get(name, env),
+                      () => a,
+                      (sc) => {
+                        const dp: string = externDtsPath(path, hostModule);
+                        return _Map_set(
+                          dp,
+                          _Array_append(
+                            { imported: imported, scheme: sc, curried: curried },
+                            _Map_getOr(
+                              [] as { imported: string; scheme: A; curried: boolean }[],
+                              dp,
+                              a,
+                            ),
+                          ),
+                          a,
+                        );
+                      },
+                    ))(_v)
             : a)(s),
       ),
       acc,
@@ -2303,177 +2117,7 @@ const compileOneTs: <A, B>(
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
   ) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) =>
-            Err(atPath("check", loaded.path, e)) as Result<
-              {
-                exportsByPath: Map<string, Map<string, Scheme>>;
-                regByPath: Map<string, Registry>;
-                keysByPath: Map<string, Map<string, string[]>>;
-                qualsByPath: Map<string, RecoveryQualScope>;
-                aliases: Map<string, RecoveryAliasInfo>;
-                typeOwner: Map<string, string>;
-                dupNames: string[];
-                runtimeImport: string;
-                externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
-                outputs: ModuleOutput[];
-              },
-              MErr
-            >)(_v)
-        : _v._tag === "Ok"
-          ? (({ value: res }) =>
-              ((_v) =>
-                _v._tag === "Err"
-                  ? (({ error: e }) =>
-                      Err(atPath("check", loaded.path, e)) as Result<
-                        {
-                          exportsByPath: Map<string, Map<string, Scheme>>;
-                          regByPath: Map<string, Registry>;
-                          keysByPath: Map<string, Map<string, string[]>>;
-                          qualsByPath: Map<string, RecoveryQualScope>;
-                          aliases: Map<string, RecoveryAliasInfo>;
-                          typeOwner: Map<string, string>;
-                          dupNames: string[];
-                          runtimeImport: string;
-                          externs: Map<
-                            string,
-                            { imported: string; scheme: Scheme; curried: boolean }[]
-                          >;
-                          outputs: ModuleOutput[];
-                        },
-                        MErr
-                      >)(_v)
-                  : _v._tag === "Ok"
-                    ? ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: es }) =>
-                              Err(firstAtPath(loaded.path, es)) as Result<
-                                {
-                                  exportsByPath: Map<string, Map<string, Scheme>>;
-                                  regByPath: Map<string, Registry>;
-                                  keysByPath: Map<string, Map<string, string[]>>;
-                                  qualsByPath: Map<string, RecoveryQualScope>;
-                                  aliases: Map<string, RecoveryAliasInfo>;
-                                  typeOwner: Map<string, string>;
-                                  dupNames: string[];
-                                  runtimeImport: string;
-                                  externs: Map<
-                                    string,
-                                    { imported: string; scheme: Scheme; curried: boolean }[]
-                                  >;
-                                  outputs: ModuleOutput[];
-                                },
-                                MErr
-                              >)(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: r }) =>
-                                ((body: string) =>
-                                  ((lines: string[]) =>
-                                    ((ts: string) =>
-                                      Ok({
-                                        exportsByPath: _Map_set(
-                                          loaded.path,
-                                          exportedSchemes(loaded.stmts, r.env),
-                                          ctx.exportsByPath,
-                                        ),
-                                        regByPath: _Map_set(
-                                          loaded.path,
-                                          exportedRegistry(loaded.stmts),
-                                          ctx.regByPath,
-                                        ),
-                                        keysByPath: _Map_set(
-                                          loaded.path,
-                                          exportedCtorKeys(loaded.stmts),
-                                          ctx.keysByPath,
-                                        ),
-                                        qualsByPath: _Map_set(
-                                          loaded.path,
-                                          qualScopeOf(loaded.stmts, res.quals),
-                                          ctx.qualsByPath,
-                                        ),
-                                        aliases: mergeMap(r.aliases, ctx.aliases),
-                                        typeOwner: ctx.typeOwner,
-                                        dupNames: ctx.dupNames,
-                                        runtimeImport: ctx.runtimeImport,
-                                        externs: externBindingsInto(
-                                          loaded.stmts,
-                                          loaded.path,
-                                          r.env,
-                                          ctx.externs,
-                                        ),
-                                        outputs: [...ctx.outputs, { path: loaded.path, js: ts }],
-                                      }) as Result<
-                                        {
-                                          exportsByPath: Map<string, Map<string, Scheme>>;
-                                          regByPath: Map<string, Registry>;
-                                          keysByPath: Map<string, Map<string, string[]>>;
-                                          qualsByPath: Map<string, RecoveryQualScope>;
-                                          aliases: Map<string, RecoveryAliasInfo>;
-                                          typeOwner: Map<string, string>;
-                                          dupNames: string[];
-                                          runtimeImport: string;
-                                          externs: Map<
-                                            string,
-                                            { imported: string; scheme: Scheme; curried: boolean }[]
-                                          >;
-                                          outputs: ModuleOutput[];
-                                        },
-                                        MErr
-                                      >)(
-                                      length(lines) === 0
-                                        ? body
-                                        : `${_Str_join("\n", lines)}
-
-${body}`,
-                                    ))(
-                                    crossModuleTypeImports(
-                                      body,
-                                      loaded.path,
-                                      localTypeNames(loaded.stmts),
-                                      ctx.typeOwner,
-                                    ),
-                                  ))(
-                                  emitTsModuleWith(
-                                    loaded.stmts,
-                                    r.env,
-                                    r.types,
-                                    r.letParams,
-                                    aliasesForTs(
-                                      mergeMap(r.aliases, ctx.aliases),
-                                      aliasesOf(loaded.stmts),
-                                      ctx.dupNames,
-                                    ),
-                                    res.keys,
-                                    [] as string[],
-                                    namespaceRuntime,
-                                    preludeJsDefs,
-                                    runtimeDeps,
-                                    ctx.runtimeImport,
-                                    opts.docs,
-                                    bindingHooksFor(opts.plugins),
-                                  ),
-                                ))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(
-                        inferProgramImportsTypes(
-                          loaded.stmts,
-                          builtins,
-                          namespaces,
-                          openMode(loaded.src, opts.open),
-                          res.imports,
-                          res.nsImports,
-                          res.quals,
-                          opts.plugins,
-                        ),
-                      )
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(
+    _Result_match(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -2488,6 +2132,138 @@ ${body}`,
         },
         false,
       ),
+      (e) =>
+        Err(atPath("check", loaded.path, e)) as Result<
+          {
+            exportsByPath: Map<string, Map<string, Scheme>>;
+            regByPath: Map<string, Registry>;
+            keysByPath: Map<string, Map<string, string[]>>;
+            qualsByPath: Map<string, RecoveryQualScope>;
+            aliases: Map<string, RecoveryAliasInfo>;
+            typeOwner: Map<string, string>;
+            dupNames: string[];
+            runtimeImport: string;
+            externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
+            outputs: ModuleOutput[];
+          },
+          MErr
+        >,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) =>
+            Err(atPath("check", loaded.path, e)) as Result<
+              {
+                exportsByPath: Map<string, Map<string, Scheme>>;
+                regByPath: Map<string, Registry>;
+                keysByPath: Map<string, Map<string, string[]>>;
+                qualsByPath: Map<string, RecoveryQualScope>;
+                aliases: Map<string, RecoveryAliasInfo>;
+                typeOwner: Map<string, string>;
+                dupNames: string[];
+                runtimeImport: string;
+                externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
+                outputs: ModuleOutput[];
+              },
+              MErr
+            >,
+          () =>
+            _Result_match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(firstAtPath(loaded.path, es)) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<string, RecoveryQualScope>;
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    typeOwner: Map<string, string>;
+                    dupNames: string[];
+                    runtimeImport: string;
+                    externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
+                    outputs: ModuleOutput[];
+                  },
+                  MErr
+                >,
+              (r) => {
+                const body: string = emitTsModuleWith(
+                  loaded.stmts,
+                  r.env,
+                  r.types,
+                  r.letParams,
+                  aliasesForTs(
+                    mergeMap(r.aliases, ctx.aliases),
+                    aliasesOf(loaded.stmts),
+                    ctx.dupNames,
+                  ),
+                  res.keys,
+                  [] as string[],
+                  namespaceRuntime,
+                  preludeJsDefs,
+                  runtimeDeps,
+                  ctx.runtimeImport,
+                  opts.docs,
+                  bindingHooksFor(opts.plugins),
+                );
+                const lines: string[] = crossModuleTypeImports(
+                  body,
+                  loaded.path,
+                  localTypeNames(loaded.stmts),
+                  ctx.typeOwner,
+                );
+                const ts: string =
+                  length(lines) === 0
+                    ? body
+                    : `${_Str_join("\n", lines)}
+
+${body}`;
+                return Ok({
+                  exportsByPath: _Map_set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, r.env),
+                    ctx.exportsByPath,
+                  ),
+                  regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
+                  qualsByPath: _Map_set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts, res.quals),
+                    ctx.qualsByPath,
+                  ),
+                  aliases: mergeMap(r.aliases, ctx.aliases),
+                  typeOwner: ctx.typeOwner,
+                  dupNames: ctx.dupNames,
+                  runtimeImport: ctx.runtimeImport,
+                  externs: externBindingsInto(loaded.stmts, loaded.path, r.env, ctx.externs),
+                  outputs: [...ctx.outputs, { path: loaded.path, js: ts }],
+                }) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<string, RecoveryQualScope>;
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    typeOwner: Map<string, string>;
+                    dupNames: string[];
+                    runtimeImport: string;
+                    externs: Map<string, { imported: string; scheme: Scheme; curried: boolean }[]>;
+                    outputs: ModuleOutput[];
+                  },
+                  MErr
+                >;
+              },
+            ),
+        ),
     ),
 );
 const noAliases: Map<string, RecoveryAliasInfo> = aliasesOf([] as Stmt[]);
@@ -2555,14 +2331,11 @@ const compileAllTs: <A>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Err"
-              ? (({ error: e }) => Err(e) as Result<ModuleOutput[], MErr>)(_v)
-              : _v._tag === "Ok"
-                ? (({ value: ctx1 }) => compileAllTs(ctx1, rest, opts))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(compileOneTs(ctx, m, opts)),
+          _Result_match(
+            compileOneTs(ctx, m, opts),
+            (e) => Err(e) as Result<ModuleOutput[], MErr>,
+            (ctx1) => compileAllTs(ctx1, rest, opts),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -2654,129 +2427,7 @@ const dtsOne: <A, B>(
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
   ) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) =>
-            Err(atPath("check", loaded.path, e)) as Result<
-              {
-                exportsByPath: Map<string, Map<string, Scheme>>;
-                regByPath: Map<string, Registry>;
-                keysByPath: Map<string, Map<string, string[]>>;
-                qualsByPath: Map<string, RecoveryQualScope>;
-                aliases: Map<string, RecoveryAliasInfo>;
-                runtimeImport: string;
-                target: string;
-                dts: string;
-              },
-              MErr
-            >)(_v)
-        : _v._tag === "Ok"
-          ? (({ value: res }) =>
-              ((_v) =>
-                _v._tag === "Err"
-                  ? (({ error: e }) =>
-                      Err(atPath("check", loaded.path, e)) as Result<
-                        {
-                          exportsByPath: Map<string, Map<string, Scheme>>;
-                          regByPath: Map<string, Registry>;
-                          keysByPath: Map<string, Map<string, string[]>>;
-                          qualsByPath: Map<string, RecoveryQualScope>;
-                          aliases: Map<string, RecoveryAliasInfo>;
-                          runtimeImport: string;
-                          target: string;
-                          dts: string;
-                        },
-                        MErr
-                      >)(_v)
-                  : _v._tag === "Ok"
-                    ? ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: es }) =>
-                              Err(firstAtPath(loaded.path, es)) as Result<
-                                {
-                                  exportsByPath: Map<string, Map<string, Scheme>>;
-                                  regByPath: Map<string, Registry>;
-                                  keysByPath: Map<string, Map<string, string[]>>;
-                                  qualsByPath: Map<string, RecoveryQualScope>;
-                                  aliases: Map<string, RecoveryAliasInfo>;
-                                  runtimeImport: string;
-                                  target: string;
-                                  dts: string;
-                                },
-                                MErr
-                              >)(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: r }) =>
-                                Ok({
-                                  exportsByPath: _Map_set(
-                                    loaded.path,
-                                    exportedSchemes(loaded.stmts, r.env),
-                                    ctx.exportsByPath,
-                                  ),
-                                  regByPath: _Map_set(
-                                    loaded.path,
-                                    exportedRegistry(loaded.stmts),
-                                    ctx.regByPath,
-                                  ),
-                                  keysByPath: _Map_set(
-                                    loaded.path,
-                                    exportedCtorKeys(loaded.stmts),
-                                    ctx.keysByPath,
-                                  ),
-                                  qualsByPath: _Map_set(
-                                    loaded.path,
-                                    qualScopeOf(loaded.stmts, res.quals),
-                                    ctx.qualsByPath,
-                                  ),
-                                  aliases: mergeMap(r.aliases, ctx.aliases),
-                                  runtimeImport: ctx.runtimeImport,
-                                  target: ctx.target,
-                                  dts: eq(loaded.path, ctx.target)
-                                    ? emitDtsFromTypedWith(
-                                        loaded.stmts,
-                                        r.env,
-                                        mergeMap(r.aliases, ctx.aliases),
-                                        qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
-                                        ctx.runtimeImport,
-                                        opts.docs,
-                                        dtsHooksFor(opts.plugins),
-                                        bindingHooksFor(opts.plugins),
-                                        opts.dtsTypeNames,
-                                      )
-                                    : ctx.dts,
-                                }) as Result<
-                                  {
-                                    exportsByPath: Map<string, Map<string, Scheme>>;
-                                    regByPath: Map<string, Registry>;
-                                    keysByPath: Map<string, Map<string, string[]>>;
-                                    qualsByPath: Map<string, RecoveryQualScope>;
-                                    aliases: Map<string, RecoveryAliasInfo>;
-                                    runtimeImport: string;
-                                    target: string;
-                                    dts: string;
-                                  },
-                                  MErr
-                                >)(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(
-                        inferProgramImportsTypes(
-                          loaded.stmts,
-                          builtins,
-                          namespaces,
-                          openMode(loaded.src, opts.open),
-                          res.imports,
-                          res.nsImports,
-                          res.quals,
-                          opts.plugins,
-                        ),
-                      )
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(checkWith(loaded.stmts, res.reg, res.quals)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(
+    _Result_match(
       resolveImportsFrom(
         ctx,
         loaded.stmts,
@@ -2791,6 +2442,108 @@ const dtsOne: <A, B>(
         },
         false,
       ),
+      (e) =>
+        Err(atPath("check", loaded.path, e)) as Result<
+          {
+            exportsByPath: Map<string, Map<string, Scheme>>;
+            regByPath: Map<string, Registry>;
+            keysByPath: Map<string, Map<string, string[]>>;
+            qualsByPath: Map<string, RecoveryQualScope>;
+            aliases: Map<string, RecoveryAliasInfo>;
+            runtimeImport: string;
+            target: string;
+            dts: string;
+          },
+          MErr
+        >,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) =>
+            Err(atPath("check", loaded.path, e)) as Result<
+              {
+                exportsByPath: Map<string, Map<string, Scheme>>;
+                regByPath: Map<string, Registry>;
+                keysByPath: Map<string, Map<string, string[]>>;
+                qualsByPath: Map<string, RecoveryQualScope>;
+                aliases: Map<string, RecoveryAliasInfo>;
+                runtimeImport: string;
+                target: string;
+                dts: string;
+              },
+              MErr
+            >,
+          () =>
+            _Result_match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(firstAtPath(loaded.path, es)) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<string, RecoveryQualScope>;
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    runtimeImport: string;
+                    target: string;
+                    dts: string;
+                  },
+                  MErr
+                >,
+              (r) =>
+                Ok({
+                  exportsByPath: _Map_set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, r.env),
+                    ctx.exportsByPath,
+                  ),
+                  regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
+                  qualsByPath: _Map_set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts, res.quals),
+                    ctx.qualsByPath,
+                  ),
+                  aliases: mergeMap(r.aliases, ctx.aliases),
+                  runtimeImport: ctx.runtimeImport,
+                  target: ctx.target,
+                  dts: eq(loaded.path, ctx.target)
+                    ? emitDtsFromTypedWith(
+                        loaded.stmts,
+                        r.env,
+                        mergeMap(r.aliases, ctx.aliases),
+                        qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
+                        ctx.runtimeImport,
+                        opts.docs,
+                        dtsHooksFor(opts.plugins),
+                        bindingHooksFor(opts.plugins),
+                        opts.dtsTypeNames,
+                      )
+                    : ctx.dts,
+                }) as Result<
+                  {
+                    exportsByPath: Map<string, Map<string, Scheme>>;
+                    regByPath: Map<string, Registry>;
+                    keysByPath: Map<string, Map<string, string[]>>;
+                    qualsByPath: Map<string, RecoveryQualScope>;
+                    aliases: Map<string, RecoveryAliasInfo>;
+                    runtimeImport: string;
+                    target: string;
+                    dts: string;
+                  },
+                  MErr
+                >,
+            ),
+        ),
     ),
 );
 const dtsAll: <A>(
@@ -2830,14 +2583,11 @@ const dtsAll: <A>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Err"
-              ? (({ error: e }) => Err(e) as Result<string, MErr>)(_v)
-              : _v._tag === "Ok"
-                ? (({ value: ctx1 }) => dtsAll(ctx1, rest, opts))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(dtsOne(ctx, m, opts)),
+          _Result_match(
+            dtsOne(ctx, m, opts),
+            (e) => Err(e) as Result<string, MErr>,
+            (ctx1) => dtsAll(ctx1, rest, opts),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -2885,20 +2635,19 @@ export const buildModulesTsWith: _Curry<
   [entry: string, runtimeImport: string, opts: Opts],
   Result<ModuleOutput[], MErr[]>
 > = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
-  ((_v) =>
-    _v._tag === "Err"
-      ? (({ error: e }) => Err([e]) as Result<ModuleOutput[], MErr[]>)(_v)
-      : _v._tag === "Ok"
-        ? (({ value: graph }) =>
-            ((recovered: GraphRecovery) =>
-              length(recovered.errors) === 0
-                ? _Result_mapErr((e: MErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
-                : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>))(
-              compileGraphRecoveringWith(graph, { ...opts, strictEntry: false }),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(loadGraphWith(entry, opts.plugins)),
+  _Result_match(
+    loadGraphWith(entry, opts.plugins),
+    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
+    (graph) => {
+      const recovered: GraphRecovery = compileGraphRecoveringWith(graph, {
+        ...opts,
+        strictEntry: false,
+      });
+      return length(recovered.errors) === 0
+        ? _Result_mapErr((e: MErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
+        : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
+    },
+  ),
 );
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],

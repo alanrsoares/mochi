@@ -54,6 +54,7 @@ import {
   _Map_getOr,
   _Map_keys,
   _Option_isSome,
+  _Option_match,
   _Option_unwrapOr,
   _Str_concat,
   _Str_endsWith,
@@ -184,27 +185,21 @@ const headOf: (mp: MP) => Option<MHead> = (mp: MP) =>
 const colOf: <A>(m: A[][]) => A[] = <A>(m: A[][]) =>
   _Array_flatMap(
     (row: A[]) =>
-      ((_v) =>
-        _v._tag === "None"
-          ? ([] as A[])
-          : _v._tag === "Some"
-            ? (({ value: hd }) => [hd])(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_head(row)),
+      _Option_match(
+        _Array_head(row),
+        () => [] as A[],
+        (hd) => [hd],
+      ),
     m,
   );
 const headsOf: (col: MP[]) => MHead[] = (col: MP[]) =>
   _Array_flatMap(
     (mp: MP) =>
-      ((_v) =>
-        _v._tag === "None"
-          ? ([] as MHead[])
-          : _v._tag === "Some"
-            ? (({ value: h }) => [h])(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(headOf(mp)),
+      _Option_match(
+        headOf(mp),
+        () => [] as MHead[],
+        (h) => [h],
+      ),
     col,
   );
 const addLabel: <A>(acc: A[], l: A) => A[] = _curry(2, <A>(acc: A[], l: A) =>
@@ -218,14 +213,11 @@ const recordLabelsOf: (col: MP[]) => string[] = (col: MP[]) =>
 const indexOfLabel: <A>(l: A, labels: A[], i: number) => number = _curry(
   3,
   <A>(l: A, labels: A[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? sub(0, 1)
-        : _v._tag === "Some"
-          ? (({ value: x }) => (eq(x, l) ? i : indexOfLabel(l, labels, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, labels)),
+    _Option_match(
+      _Array_get(i, labels),
+      () => sub(0, 1),
+      (x) => (eq(x, l) ? i : indexOfLabel(l, labels, i + 1)),
+    ),
 );
 const fieldOf: <A>(l: A, labels: A[], pats: MP[]) => MP = _curry(
   3,
@@ -243,14 +235,11 @@ const arrShapeStep: _Curry<[acc: ArrShape, mp: MP], ArrShape> = _curry(2, (acc: 
             rest
               ? {
                   fixed: acc.fixed,
-                  restFrom: ((_v) =>
-                    _v._tag === "None"
-                      ? (Some(n) as Option<number>)
-                      : _v._tag === "Some"
-                        ? (({ value: m }) => Some(m < n ? m : n) as Option<number>)(_v)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(acc.restFrom),
+                  restFrom: _Option_match(
+                    acc.restFrom,
+                    () => Some(n) as Option<number>,
+                    (m) => Some(m < n ? m : n) as Option<number>,
+                  ),
                 }
               : {
                   fixed: _Array_contains(n, acc.fixed) ? acc.fixed : _Array_append(n, acc.fixed),
@@ -268,28 +257,22 @@ const rangeCovered: <A>(shape: { fixed: number[] } & A, i: number, n: number) =>
 const arrComplete: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => boolean = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
 ) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? false
-      : _v._tag === "Some"
-        ? (({ value: r }) => rangeCovered(shape, 0, r))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(shape.restFrom);
+  _Option_match(
+    shape.restFrom,
+    () => false,
+    (r) => rangeCovered(shape, 0, r),
+  );
 const arrMissingLen: <A>(
   shape: { fixed: number[]; restFrom: Option<number> } & A,
   n: number,
 ) => number = _curry(2, <A>(shape: { fixed: number[]; restFrom: Option<number> } & A, n: number) =>
   and(
     !_Array_contains(n, shape.fixed),
-    ((_v) =>
-      _v._tag === "None"
-        ? true
-        : _v._tag === "Some"
-          ? (({ value: r }) => n < r)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(shape.restFrom),
+    _Option_match(
+      shape.restFrom,
+      () => true,
+      (r) => n < r,
+    ),
   )
     ? n
     : arrMissingLen(shape, n + 1),
@@ -376,25 +359,20 @@ const specializeRow: _Curry<[h: MHead, mp: MP, labels: string[]], Option<MP[]>> 
 );
 const specializeOne: _Curry<[h: MHead, arity: number, labels: string[], row: MP[]], MP[][]> =
   _curry(4, (h: MHead, arity: number, labels: string[], row: MP[]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as MP[][])
-        : _v._tag === "Some"
-          ? (({ value: hd }) =>
-              ((rest: MP[]) =>
-                isWildMP(hd)
-                  ? [_Array_concat(mWilds(arity), rest)]
-                  : ((_v) =>
-                      _v._tag === "None"
-                        ? ([] as MP[][])
-                        : _v._tag === "Some"
-                          ? (({ value: sub }) => [_Array_concat(sub, rest)])(_v)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(specializeRow(h, hd, labels)))(_Array_tail(row)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_head(row)),
+    _Option_match(
+      _Array_head(row),
+      () => [] as MP[][],
+      (hd) => {
+        const rest: MP[] = _Array_tail(row);
+        return isWildMP(hd)
+          ? [_Array_concat(mWilds(arity), rest)]
+          : _Option_match(
+              specializeRow(h, hd, labels),
+              () => [] as MP[][],
+              (sub) => [_Array_concat(sub, rest)],
+            );
+      },
+    ),
   );
 const specializeM: _Curry<[m: MP[][], h: MHead, arity: number, labels: string[]], MP[][]> = _curry(
   4,
@@ -404,14 +382,11 @@ const specializeM: _Curry<[m: MP[][], h: MHead, arity: number, labels: string[]]
 const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
   _Array_flatMap(
     (row: MP[]) =>
-      ((_v) =>
-        _v._tag === "None"
-          ? ([] as MP[][])
-          : _v._tag === "Some"
-            ? (({ value: hd }) => (isWildMP(hd) ? [_Array_tail(row)] : ([] as MP[][])))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Array_head(row)),
+      _Option_match(
+        _Array_head(row),
+        () => [] as MP[][],
+        (hd) => (isWildMP(hd) ? [_Array_tail(row)] : ([] as MP[][])),
+      ),
     m,
   );
 const rebuild: _Curry<[h: MHead, args: MP[], labels: string[]], MP> = _curry(
@@ -490,38 +465,29 @@ const ctorInfoSuffixed: _Curry<
 const ctorInfoOf: _Curry<[reg: Registry, n: string], Option<CtorInfo>> = _curry(
   2,
   (reg: Registry, n: string) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: info }) => Some(info) as Option<CtorInfo>)(_v)
-        : _v._tag === "None"
-          ? ctorInfoSuffixed(_Map_keys(reg.ctors), reg, n)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(n, reg.ctors)),
+    _Option_match(
+      _Map_get(n, reg.ctors),
+      () => ctorInfoSuffixed(_Map_keys(reg.ctors), reg, n),
+      (info) => Some(info) as Option<CtorInfo>,
+    ),
 );
 const arityOfCtor: _Curry<[reg: Registry, n: string], number> = _curry(
   2,
   (reg: Registry, n: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? 0
-        : _v._tag === "Some"
-          ? (({ value: info }) => info.arity)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(ctorInfoOf(reg, n)),
+    _Option_match(
+      ctorInfoOf(reg, n),
+      () => 0,
+      (info) => info.arity,
+    ),
 );
 const ownerOfCtor: _Curry<[reg: Registry, n: string], Option<string>> = _curry(
   2,
   (reg: Registry, n: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (None as Option<string>)
-        : _v._tag === "Some"
-          ? (({ value: info }) => Some(info.owner) as Option<string>)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(ctorInfoOf(reg, n)),
+    _Option_match(
+      ctorInfoOf(reg, n),
+      () => None as Option<string>,
+      (info) => Some(info.owner) as Option<string>,
+    ),
 );
 const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[], names: A[]) =>
   reduce(
@@ -548,14 +514,11 @@ const usefulSplit: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number
   (m: MP[][], width: number, reg: Registry, fuel: number) => {
     const col: MP[] = colOf(m);
     const heads: MHead[] = headsOf(col);
-    return ((_v) =>
-      _v._tag === "None"
-        ? prependWitness(MWild as MP, useful(defaultM(m), sub(width, 1), reg, fuel))
-        : _v._tag === "Some"
-          ? (({ value: h0 }) => usefulHead(m, col, heads, h0, width, reg, fuel))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_head(heads));
+    return _Option_match(
+      _Array_head(heads),
+      () => prependWitness(MWild as MP, useful(defaultM(m), sub(width, 1), reg, fuel)),
+      (h0) => usefulHead(m, col, heads, h0, width, reg, fuel),
+    );
   },
 );
 const prependWitness: _Curry<[mp: MP, r: URes], URes> = _curry(2, (mp: MP, r: URes) =>
@@ -594,35 +557,30 @@ const tryHeads: _Curry<
     fuel: number,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? UNone(fuel)
-        : _v._tag === "Some"
-          ? (({ value: h }) =>
-              ((arity: number) =>
-                ((_v) =>
-                  _v._tag === "UFuel"
-                    ? (UFuel as URes)
-                    : _v._tag === "UNone"
-                      ? (({ fuel: f2 }) =>
-                          tryHeads(m, heads, arities, labels, width, reg, f2, i + 1))(_v)
-                      : _v._tag === "USome"
-                        ? (({ row, fuel: f2 }) =>
-                            USome(
-                              _Array_prepend(
-                                rebuild(h, _Array_take(arity, row), labels),
-                                _Array_drop(arity, row),
-                              ),
-                              f2,
-                            ))(_v)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(
-                  useful(specializeM(m, h, arity, labels), sub(arity + width, 1), reg, fuel),
-                ))(_Option_unwrapOr(0, _Array_get(i, arities))))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, heads)),
+    _Option_match(
+      _Array_get(i, heads),
+      () => UNone(fuel),
+      (h) => {
+        const arity: number = _Option_unwrapOr(0, _Array_get(i, arities));
+        return ((_v) =>
+          _v._tag === "UFuel"
+            ? (UFuel as URes)
+            : _v._tag === "UNone"
+              ? (({ fuel: f2 }) => tryHeads(m, heads, arities, labels, width, reg, f2, i + 1))(_v)
+              : _v._tag === "USome"
+                ? (({ row, fuel: f2 }) =>
+                    USome(
+                      _Array_prepend(
+                        rebuild(h, _Array_take(arity, row), labels),
+                        _Array_drop(arity, row),
+                      ),
+                      f2,
+                    ))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(useful(specializeM(m, h, arity, labels), sub(arity + width, 1), reg, fuel));
+      },
+    ),
 );
 const usefulHead: _Curry<
   [m: MP[][], col: MP[], heads: MHead[], h0: MHead, width: number, reg: Registry, fuel: number],
@@ -664,22 +622,16 @@ const usefulCtor: _Curry<
   URes
 > = _curry(5, (m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number) => {
   const names: string[] = ctorNames(heads);
-  const ownerOpt: Option<string> = ((_v) =>
-    _v._tag === "None"
-      ? (None as Option<string>)
-      : _v._tag === "Some"
-        ? (({ value: n }) => ownerOfCtor(reg, n))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_head(names));
-  const all: string[] = ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: o }) => _Map_getOr([] as string[], o, reg.types))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(ownerOpt);
+  const ownerOpt: Option<string> = _Option_match(
+    _Array_head(names),
+    () => None as Option<string>,
+    (n) => ownerOfCtor(reg, n),
+  );
+  const all: string[] = _Option_match(
+    ownerOpt,
+    () => [] as string[],
+    (o) => _Map_getOr([] as string[], o, reg.types),
+  );
   return and(length(all) > 0, allNamesIn(all, names))
     ? tryHeads(
         m,
@@ -692,14 +644,11 @@ const usefulCtor: _Curry<
         0,
       )
     : prependWitness(
-        ((_v) =>
-          _v._tag === "None"
-            ? (MWild as MP)
-            : _v._tag === "Some"
-              ? (({ value: n }) => MCtor(n, mWilds(arityOfCtor(reg, n))))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_head(filter((n: string) => !_Array_contains(n, names), all))),
+        _Option_match(
+          _Array_head(filter((n: string) => !_Array_contains(n, names), all)),
+          () => MWild as MP,
+          (n) => MCtor(n, mWilds(arityOfCtor(reg, n))),
+        ),
         useful(defaultM(m), sub(width, 1), reg, fuel),
       );
 });
@@ -736,18 +685,15 @@ const usefulArr: _Curry<[m: MP[][], col: MP[], width: number, reg: Registry, fue
 const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = _curry(
   3,
   (labels: string[], pats: MP[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: l }) =>
-              _Array_prepend(
-                `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
-                showFields(labels, pats, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, labels)),
+    _Option_match(
+      _Array_get(i, labels),
+      () => [] as string[],
+      (l) =>
+        _Array_prepend(
+          `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
+          showFields(labels, pats, i + 1),
+        ),
+    ),
 );
 /**
  * Render a witness the way the user would have to write it as an arm.

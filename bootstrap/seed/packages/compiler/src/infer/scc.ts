@@ -7,7 +7,7 @@ export type TSt = {
   sccs: number[][];
 };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, _Curry } from "@mochi/compiler/runtime";
 
 import {
   None,
@@ -19,6 +19,7 @@ import {
   _Map_getOr,
   _Map_has,
   _Map_set,
+  _Option_match,
   _Set_add,
   _Set_diff,
   _Set_fromArray,
@@ -45,14 +46,11 @@ const lowOfV: <A, B>(v: A, st: { low: Map<A, number> } & B) => number = _curry(
   <A, B>(v: A, st: { low: Map<A, number> } & B) => _Map_getOr(-1, v, st.low),
 );
 const neighborsOf: <A>(v: number, adj: A[][]) => A[] = _curry(2, <A>(v: number, adj: A[][]) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: ws }) => ws)(_v)
-      : _v._tag === "None"
-        ? ([] as A[])
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(v, adj)),
+  _Option_match(
+    _Array_get(v, adj),
+    () => [] as A[],
+    (ws) => ws,
+  ),
 );
 const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
   3,

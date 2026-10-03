@@ -2,7 +2,7 @@ import type { StageErr, Stamped } from "../../compiler/src/compile/compile";
 
 export type Diag = { message: string; start: number; end: number };
 
-import type { Result, _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
 import {
   Err,
@@ -10,9 +10,11 @@ import {
   Ok,
   Some,
   _Array_get,
+  _Option_match,
   _Result_flatMap,
   _Result_map,
   _Result_mapErr,
+  _Result_match,
   _Str_endsWith,
   _Str_join,
   _Str_length,
@@ -149,14 +151,14 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
       .with(
         (_v) => _v.length >= 1,
         ([o, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Err"
-              ? (({ error: e }) => _done(Err(e) as Result<string, string>))(_v)
-              : _v._tag === "Ok"
-                ? (({ value: w }) => ((_printed) => _recur(rest))(print(`  wrote ${w}`)))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(writeFile(outPath(o.path), o.js)),
+          _Result_match(
+            writeFile(outPath(o.path), o.js),
+            (e) => _done(Err(e) as Result<string, string>),
+            (w) => {
+              const _printed = print(`  wrote ${w}`);
+              return _recur(rest);
+            },
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -189,14 +191,14 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
         .with(
           (_v) => _v.length >= 1,
           ([o, ...rest]) =>
-            ((_v) =>
-              _v._tag === "Err"
-                ? (({ error: e }) => _done(Err(e) as Result<string, string>))(_v)
-                : _v._tag === "Ok"
-                  ? (({ value: w }) => ((_printed) => _recur(rest))(print(`  wrote ${w}`)))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(writeFile(tsWritePath(o.path, o.js), o.js)),
+            _Result_match(
+              writeFile(tsWritePath(o.path, o.js), o.js),
+              (e) => _done(Err(e) as Result<string, string>),
+              (w) => {
+                const _printed = print(`  wrote ${w}`);
+                return _recur(rest);
+              },
+            ),
         )
         .otherwise(() => {
           throw new Error("non-exhaustive match");
@@ -233,104 +235,74 @@ const _runEntry = isCliEntry(undefined)
           )
         : _v._tag === "Some" && _v.value === "fmt"
           ? ((write: boolean) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? die("usage: mochic fmt [--write] <file.mochi>")
-                  : _v._tag === "Some"
-                    ? (({ value: path }) =>
-                        ((_v) =>
-                          _v._tag === "Ok"
-                            ? ""
-                            : _v._tag === "Err"
-                              ? (({ error: msg }) => die(msg))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(fmtOne(path, write)))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Array_get(write ? 2 : 1, argv)))(
+              _Option_match(
+                _Array_get(write ? 2 : 1, argv),
+                () => die("usage: mochic fmt [--write] <file.mochi>"),
+                (path) =>
+                  _Result_match(
+                    fmtOne(path, write),
+                    (msg) => die(msg),
+                    () => "",
+                  ),
+              ))(
               ((_v) => (_v._tag === "Some" && _v.value === "--write" ? true : false))(
                 _Array_get(1, argv),
               ),
             )
           : _v._tag === "Some" && _v.value === "ts"
-            ? ((_v) =>
-                _v._tag === "None"
-                  ? die("usage: mochic ts <file.mochi>")
-                  : _v._tag === "Some"
-                    ? (({ value: path }) =>
-                        ((_v) =>
-                          _v._tag === "Ok"
-                            ? (({ value: out }) => print(`wrote ${out}`))(_v)
-                            : _v._tag === "Err"
-                              ? (({ error: msg }) => die(msg))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(buildOneTs(path, "@mochi/runtime")))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Array_get(1, argv))
+            ? _Option_match(
+                _Array_get(1, argv),
+                () => die("usage: mochic ts <file.mochi>"),
+                (path) =>
+                  _Result_match(
+                    buildOneTs(path, "@mochi/runtime"),
+                    (msg) => die(msg),
+                    (out) => print(`wrote ${out}`),
+                  ),
+              )
             : _v._tag === "Some" && _v.value === "dts"
-              ? ((_v) =>
-                  _v._tag === "None"
-                    ? die("usage: mochic dts <file.mochi>")
-                    : _v._tag === "Some"
-                      ? (({ value: path }) =>
-                          ((_v) =>
-                            _v._tag === "Ok"
-                              ? (({ value: out }) => print(`wrote ${out}`))(_v)
-                              : _v._tag === "Err"
-                                ? (({ error: msg }) => die(msg))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(buildOneDts(path, "@mochi/runtime")))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Array_get(1, argv))
+              ? _Option_match(
+                  _Array_get(1, argv),
+                  () => die("usage: mochic dts <file.mochi>"),
+                  (path) =>
+                    _Result_match(
+                      buildOneDts(path, "@mochi/runtime"),
+                      (msg) => die(msg),
+                      (out) => print(`wrote ${out}`),
+                    ),
+                )
               : _v._tag === "Some" && _v.value === "build"
                 ? ((_v) =>
                     _v._tag === "None"
                       ? die("usage: mochic build [--emit=ts] <entry.mochi>")
                       : _v._tag === "Some" && _v.value === "--emit=ts"
-                        ? ((_v) =>
-                            _v._tag === "None"
-                              ? die("usage: mochic build --emit=ts <entry.mochi>")
-                              : _v._tag === "Some"
-                                ? (({ value: entry }) =>
-                                    ((_v) =>
-                                      _v._tag === "Ok"
-                                        ? print("build ok")
-                                        : _v._tag === "Err"
-                                          ? (({ error: msg }) => die(msg))(_v)
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(buildMultiTs(entry, "@mochi/runtime")))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(_Array_get(2, argv))
+                        ? _Option_match(
+                            _Array_get(2, argv),
+                            () => die("usage: mochic build --emit=ts <entry.mochi>"),
+                            (entry) =>
+                              _Result_match(
+                                buildMultiTs(entry, "@mochi/runtime"),
+                                (msg) => die(msg),
+                                () => print("build ok"),
+                              ),
+                          )
                         : _v._tag === "Some"
                           ? (({ value: entry }) =>
-                              ((_v) =>
-                                _v._tag === "Ok"
-                                  ? print("build ok")
-                                  : _v._tag === "Err"
-                                    ? (({ error: msg }) => die(msg))(_v)
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(buildMulti(entry)))(_v)
+                              _Result_match(
+                                buildMulti(entry),
+                                (msg) => die(msg),
+                                () => print("build ok"),
+                              ))(_v)
                           : (() => {
                               throw new Error("non-exhaustive match");
                             })())(_Array_get(1, argv))
                 : _v._tag === "Some"
                   ? (({ value: path }) =>
-                      ((_v) =>
-                        _v._tag === "Ok"
-                          ? (({ value: out }) => print(`wrote ${out}`))(_v)
-                          : _v._tag === "Err"
-                            ? (({ error: msg }) => die(msg))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(buildOne(path)))(_v)
+                      _Result_match(
+                        buildOne(path),
+                        (msg) => die(msg),
+                        (out) => print(`wrote ${out}`),
+                      ))(_v)
                   : (() => {
                       throw new Error("non-exhaustive match");
                     })())(_Array_get(0, argv))

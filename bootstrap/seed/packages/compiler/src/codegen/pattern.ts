@@ -12,6 +12,7 @@ import {
   _Array_prepend,
   _Map_get,
   _Option_isSome,
+  _Option_match,
   _Option_unwrapOr,
   _Str_join,
   _curry,
@@ -28,14 +29,11 @@ import { jsStringLit, litValue } from "./literals";
 const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
   3,
   <A>(f: (a: A) => boolean, xs: A[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? false
-        : _v._tag === "Some"
-          ? (({ value: x }) => (f(x) ? true : someOfFrom(f, xs, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, xs)),
+    _Option_match(
+      _Array_get(i, xs),
+      () => false,
+      (x) => (f(x) ? true : someOfFrom(f, xs, i + 1)),
+    ),
 );
 const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
@@ -43,14 +41,11 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
 );
 const patternKeyAt: _Curry<[ctorKeys: Map<string, string[]>, ctor: string, i: number], string> =
   _curry(3, (ctorKeys: Map<string, string[]>, ctor: string, i: number) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: ks }) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)))(_v)
-        : _v._tag === "None"
-          ? `_${show(i)}`
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(ctor, ctorKeys)),
+    _Option_match(
+      _Map_get(ctor, ctorKeys),
+      () => `_${show(i)}`,
+      (ks) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)),
+    ),
   );
 const keyedSlot: _Curry<[key: string, sub: string], string> = _curry(
   2,
@@ -60,39 +55,31 @@ const pctorEntries: _Curry<
   [ctorKeys: Map<string, string[]>, ctor: string, args: Pattern[], i: number],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, ctor: string, args: Pattern[], i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: a }) =>
-            ((s: string) =>
-              ((restEntries: string[]) =>
-                s === ""
-                  ? restEntries
-                  : _Array_prepend(keyedSlot(patternKeyAt(ctorKeys, ctor, i), s), restEntries))(
-                pctorEntries(ctorKeys, ctor, args, i + 1),
-              ))(patSlot(ctorKeys, a)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, args)),
+  _Option_match(
+    _Array_get(i, args),
+    () => [] as string[],
+    (a) => {
+      const s: string = patSlot(ctorKeys, a);
+      const restEntries: string[] = pctorEntries(ctorKeys, ctor, args, i + 1);
+      return s === ""
+        ? restEntries
+        : _Array_prepend(keyedSlot(patternKeyAt(ctorKeys, ctor, i), s), restEntries);
+    },
+  ),
 );
 const precordEntries: _Curry<
   [ctorKeys: Map<string, string[]>, fields: PatField[], i: number],
   string[]
 > = _curry(3, (ctorKeys: Map<string, string[]>, fields: PatField[], i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: f }) =>
-            ((s: string) =>
-              ((restEntries: string[]) =>
-                s === "" ? restEntries : _Array_prepend(keyedSlot(f.label, s), restEntries))(
-                precordEntries(ctorKeys, fields, i + 1),
-              ))(patSlot(ctorKeys, f.pat)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, fields)),
+  _Option_match(
+    _Array_get(i, fields),
+    () => [] as string[],
+    (f) => {
+      const s: string = patSlot(ctorKeys, f.pat);
+      const restEntries: string[] = precordEntries(ctorKeys, fields, i + 1);
+      return s === "" ? restEntries : _Array_prepend(keyedSlot(f.label, s), restEntries);
+    },
+  ),
 );
 export const patSlot: _Curry<[ctorKeys: Map<string, string[]>, p: Pattern], string> = _curry(
   2,
@@ -160,14 +147,11 @@ export const patSlot: _Curry<[ctorKeys: Map<string, string[]>, p: Pattern], stri
                                     ))(map((el: Pattern) => patSlot(ctorKeys, el), elems)))(_v)
                               : _v._tag === "POr"
                                 ? (({ alts }) =>
-                                    ((_v) =>
-                                      _v._tag === "Some"
-                                        ? (({ value: first }) => patSlot(ctorKeys, first))(_v)
-                                        : _v._tag === "None"
-                                          ? ""
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(_Array_head(alts)))(_v)
+                                    _Option_match(
+                                      _Array_head(alts),
+                                      () => "",
+                                      (first) => patSlot(ctorKeys, first),
+                                    ))(_v)
                                 : (() => {
                                     throw new Error("non-exhaustive match");
                                   })())(p),
@@ -178,69 +162,57 @@ const pctorConds: _Curry<
 > = _curry(
   5,
   (ctorKeys: Map<string, string[]>, ctor: string, args: Pattern[], i: number, path: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: a }) =>
-              _Array_concat(
-                patConds(ctorKeys, a, `${path}.${patternKeyAt(ctorKeys, ctor, i)}`),
-                pctorConds(ctorKeys, ctor, args, i + 1, path),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, args)),
+    _Option_match(
+      _Array_get(i, args),
+      () => [] as string[],
+      (a) =>
+        _Array_concat(
+          patConds(ctorKeys, a, `${path}.${patternKeyAt(ctorKeys, ctor, i)}`),
+          pctorConds(ctorKeys, ctor, args, i + 1, path),
+        ),
+    ),
 );
 const precordConds: _Curry<
   [ctorKeys: Map<string, string[]>, fields: PatField[], i: number, path: string],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, fields: PatField[], i: number, path: string) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: f }) =>
-            _Array_concat(
-              patConds(ctorKeys, f.pat, `${path}.${f.label}`),
-              precordConds(ctorKeys, fields, i + 1, path),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, fields)),
+  _Option_match(
+    _Array_get(i, fields),
+    () => [] as string[],
+    (f) =>
+      _Array_concat(
+        patConds(ctorKeys, f.pat, `${path}.${f.label}`),
+        precordConds(ctorKeys, fields, i + 1, path),
+      ),
+  ),
 );
 const ptupleConds: _Curry<
   [ctorKeys: Map<string, string[]>, elems: Pattern[], i: number, path: string],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, elems: Pattern[], i: number, path: string) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: el }) =>
-            _Array_concat(
-              patConds(ctorKeys, el, `${path}[${show(i)}]`),
-              ptupleConds(ctorKeys, elems, i + 1, path),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => [] as string[],
+    (el) =>
+      _Array_concat(
+        patConds(ctorKeys, el, `${path}[${show(i)}]`),
+        ptupleConds(ctorKeys, elems, i + 1, path),
+      ),
+  ),
 );
 const parrConds: _Curry<
   [ctorKeys: Map<string, string[]>, elems: Pattern[], i: number, path: string],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, elems: Pattern[], i: number, path: string) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: el }) =>
-            _Array_concat(
-              patConds(ctorKeys, el, `${path}[${show(i)}]`),
-              parrConds(ctorKeys, elems, i + 1, path),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => [] as string[],
+    (el) =>
+      _Array_concat(
+        patConds(ctorKeys, el, `${path}[${show(i)}]`),
+        parrConds(ctorKeys, elems, i + 1, path),
+      ),
+  ),
 );
 export const patConds: _Curry<
   [ctorKeys: Map<string, string[]>, p: Pattern, path: string],
@@ -336,54 +308,36 @@ const ctorRefines: _Curry<
 > = _curry(
   5,
   (ctorKeys: Map<string, string[]>, args: Pattern[], keys: string[], member: string, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: a }) =>
-              ((rest: string[]) =>
-                ((key: string) =>
-                  ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: sub }) => _Array_prepend(`${jsStringLit(key)}: ${sub}`, rest))(
-                          _v,
-                        )
-                      : _v._tag === "None"
-                        ? rest
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(fieldRefine(ctorKeys, a, `${member}[${jsStringLit(key)}]`)))(
-                  _Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys)),
-                ))(ctorRefines(ctorKeys, args, keys, member, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, args)),
+    _Option_match(
+      _Array_get(i, args),
+      () => [] as string[],
+      (a) => {
+        const rest: string[] = ctorRefines(ctorKeys, args, keys, member, i + 1);
+        const key: string = _Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys));
+        return _Option_match(
+          fieldRefine(ctorKeys, a, `${member}[${jsStringLit(key)}]`),
+          () => rest,
+          (sub) => _Array_prepend(`${jsStringLit(key)}: ${sub}`, rest),
+        );
+      },
+    ),
 );
 const recordRefines: _Curry<
   [ctorKeys: Map<string, string[]>, fields: PatField[], base: string, i: number],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, fields: PatField[], base: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: f }) =>
-            ((rest: string[]) =>
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: sub }) => _Array_prepend(`${jsStringLit(f.label)}: ${sub}`, rest))(
-                      _v,
-                    )
-                  : _v._tag === "None"
-                    ? rest
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(fieldRefine(ctorKeys, f.pat, `${base}[${jsStringLit(f.label)}]`)))(
-              recordRefines(ctorKeys, fields, base, i + 1),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, fields)),
+  _Option_match(
+    _Array_get(i, fields),
+    () => [] as string[],
+    (f) => {
+      const rest: string[] = recordRefines(ctorKeys, fields, base, i + 1);
+      return _Option_match(
+        fieldRefine(ctorKeys, f.pat, `${base}[${jsStringLit(f.label)}]`),
+        () => rest,
+        (sub) => _Array_prepend(`${jsStringLit(f.label)}: ${sub}`, rest),
+      );
+    },
+  ),
 );
 /**
  * A tuple slot is indexed positionally, so each element has its own base.
@@ -396,36 +350,31 @@ const tupleTargets: _Curry<
   [ctorKeys: Map<string, string[]>, elems: Pattern[], base: string, i: number],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, elems: Pattern[], base: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: el }) =>
-            ((slotBase: string) =>
-              _Array_prepend(
-                _Option_unwrapOr(slotBase, fieldRefine(ctorKeys, el, slotBase)),
-                tupleTargets(ctorKeys, elems, base, i + 1),
-              ))(tupleSlotBase(base, i)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => [] as string[],
+    (el) => {
+      const slotBase: string = tupleSlotBase(base, i);
+      return _Array_prepend(
+        _Option_unwrapOr(slotBase, fieldRefine(ctorKeys, el, slotBase)),
+        tupleTargets(ctorKeys, elems, base, i + 1),
+      );
+    },
+  ),
 );
 const tupleRefines: _Curry<
   [ctorKeys: Map<string, string[]>, elems: Pattern[], base: string, i: number],
   boolean
 > = _curry(4, (ctorKeys: Map<string, string[]>, elems: Pattern[], base: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? false
-      : _v._tag === "Some"
-        ? (({ value: el }) =>
-            or(
-              _Option_isSome(fieldRefine(ctorKeys, el, tupleSlotBase(base, i))),
-              tupleRefines(ctorKeys, elems, base, i + 1),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => false,
+    (el) =>
+      or(
+        _Option_isSome(fieldRefine(ctorKeys, el, tupleSlotBase(base, i))),
+        tupleRefines(ctorKeys, elems, base, i + 1),
+      ),
+  ),
 );
 /**
  * Array elements all share one element base (`T[number]`).
@@ -434,35 +383,29 @@ const arrTargets: _Curry<
   [ctorKeys: Map<string, string[]>, elems: Pattern[], elemBase: string, i: number],
   string[]
 > = _curry(4, (ctorKeys: Map<string, string[]>, elems: Pattern[], elemBase: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: el }) =>
-            _Array_prepend(
-              _Option_unwrapOr(elemBase, fieldRefine(ctorKeys, el, elemBase)),
-              arrTargets(ctorKeys, elems, elemBase, i + 1),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => [] as string[],
+    (el) =>
+      _Array_prepend(
+        _Option_unwrapOr(elemBase, fieldRefine(ctorKeys, el, elemBase)),
+        arrTargets(ctorKeys, elems, elemBase, i + 1),
+      ),
+  ),
 );
 const arrRefines: _Curry<
   [ctorKeys: Map<string, string[]>, elems: Pattern[], elemBase: string, i: number],
   boolean
 > = _curry(4, (ctorKeys: Map<string, string[]>, elems: Pattern[], elemBase: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? false
-      : _v._tag === "Some"
-        ? (({ value: el }) =>
-            or(
-              _Option_isSome(fieldRefine(ctorKeys, el, elemBase)),
-              arrRefines(ctorKeys, elems, elemBase, i + 1),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => false,
+    (el) =>
+      or(
+        _Option_isSome(fieldRefine(ctorKeys, el, elemBase)),
+        arrRefines(ctorKeys, elems, elemBase, i + 1),
+      ),
+  ),
 );
 /**
  * Refine `base` by everything the pattern structurally tests. An or-pattern
@@ -502,15 +445,12 @@ export const patTarget: _Curry<
                     !arrRefines(ctorKeys, elems, elemBase, 0)
                       ? base
                       : ((heads: string) =>
-                          ((_v) =>
-                            _v._tag === "Some"
-                              ? `[${heads}, ...${base}]`
-                              : _v._tag === "None"
-                                ? `[${heads}]`
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(restOpt))(
-                          _Str_join(", ", arrTargets(ctorKeys, elems, elemBase, 0)),
-                        ))(`(${base})[number]`))(_v)
+                          _Option_match(
+                            restOpt,
+                            () => `[${heads}]`,
+                            () => `[${heads}, ...${base}]`,
+                          ))(_Str_join(", ", arrTargets(ctorKeys, elems, elemBase, 0))))(
+                    `(${base})[number]`,
+                  ))(_v)
               : base)(p),
 );

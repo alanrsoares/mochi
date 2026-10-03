@@ -6,6 +6,8 @@ import { expect, test } from "bun:test";
 import {
   _Array_dedupeBy,
   _curry,
+  _Option_match,
+  _Result_match,
   add,
   compare,
   eq,
@@ -159,6 +161,32 @@ test("record ordering reads the first field once when later fields decide", () =
 test("Option ctors match the runtime tag shape", () => {
   expect(Some(1)).toEqual({ _tag: "Some", value: 1 });
   expect(None).toEqual({ _tag: "None" });
+});
+
+test("builtin match helpers dispatch only the selected callback and payload", () => {
+  const events: string[] = [];
+  const failure = (e: string) => {
+    events.push(`error:${e}`);
+    return 1;
+  };
+  const success = (n: number) => {
+    events.push(`value:${n}`);
+    return "success";
+  };
+  expect(_Result_match({ _tag: "Err", error: "oops" }, failure, success)).toBe(1);
+  expect(_Result_match({ _tag: "Ok", value: 2 }, failure, success)).toBe("success");
+  expect(
+    _Option_match(
+      None,
+      () => {
+        events.push("none");
+        return 0;
+      },
+      success,
+    ),
+  ).toBe(0);
+  expect(_Option_match(Some(3), () => 0, success)).toBe("success");
+  expect(events).toEqual(["error:oops", "value:2", "none", "value:3"]);
 });
 
 test("dedupeBy preserves the previous equality model for mixed keys", () => {

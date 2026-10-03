@@ -83,6 +83,7 @@ type GenOpts = {
 /// once per function instead of naming it.
 type GCtx = {
   keys: Map<string, [string]>,
+  customCtorKeys: Map<string, [string]>,
   ns: Map<string, Map<string, string>>,
   annotateLet: Option<string -> Ast.Expr -> Option<string>>,
   annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs>>,
@@ -1347,13 +1348,96 @@ let genMatch = (ctx: GCtx, scrutinee, arms) => switch ctx->genOptionalMatch(scru
   | None => ctx->genOrdinaryMatch(scrutinee, arms)
 }
 
-let genOrdinaryMatch = (ctx: GCtx, scrutinee, arms) =>
-  isListMatch(arms)
-    ? ctx->genListMatch(scrutinee, arms)
-    : let base = hook1(ctx.guardBaseType, scrutinee) in
-      ctx->ternaryTypes(arms, base)
-        ? "((_v) => ${ctx->ternArms(arms, 0, base)})(${ctx->genExpr(scrutinee)})"
-        : ctx->genMatchChain(scrutinee, arms, base)
+let genOrdinaryMatch = (ctx: GCtx, scrutinee, arms) => switch ctx->builtinMatchPlan(scrutinee, arms) {
+  | Some(plan) => ctx->genBuiltinMatch(scrutinee, plan)
+  | None => isListMatch(arms)
+      ? ctx->genListMatch(scrutinee, arms)
+      : let base = hook1(ctx.guardBaseType, scrutinee) in
+        ctx->ternaryTypes(arms, base)
+          ? "((_v) => ${ctx->ternArms(arms, 0, base)})(${ctx->genExpr(scrutinee)})"
+          : ctx->genMatchChain(scrutinee, arms, base)
+}
+
+type BuiltinMatchPlan = {
+  helper: string,
+  leftBinding: string,
+  left: Ast.Expr,
+  rightBinding: string,
+  right: Ast.Expr
+}
+
+let builtinPayload = (pattern, ctor, arity) => switch pattern {
+  | Ast.PCtor(name, args, None, _) when name == ctor => switch (arity, args) {
+      | (0, []) => Some("")
+      | (1, [Ast.PBind(name, _)]) => Some(name)
+      | (1, [Ast.PWild(_)]) => Some("")
+      | _ => None
+    }
+  | _ => None
+}
+
+let builtinPair = (ctx: GCtx, left, right, helper, leftCtor, rightCtor, leftArity) =>
+  Option.isSome(
+    left.guard
+  ) || Option.isSome(
+    right.guard
+  ) || Map.has(
+    leftCtor,
+    ctx.customCtorKeys
+  ) || Map.has(rightCtor, ctx.customCtorKeys) || Set.has(helper, ctx.userNames)
+    ? None
+    : switch (builtinPayload(left.pattern, leftCtor, leftArity), builtinPayload(right.pattern, rightCtor, 1)) {
+      | (Some(leftBinding), Some(rightBinding)) => Some(
+          {
+            helper,
+            leftBinding,
+            left: left.body,
+            rightBinding,
+            right: right.body
+          }
+        )
+      | _ => None
+    }
+
+let builtinMatchPair = (ctx: GCtx, left, right) => switch (Map.get("Err", ctx.keys), Map.get("Ok", ctx.keys)) {
+  | (Some(["error"]), Some(["value"])) => switch ctx->builtinPair(left, right, "_Result_match", "Err", "Ok", 1) {
+      | Some(plan) => Some(plan)
+      | None => ctx->builtinOptionPair(left, right)
+    }
+  | _ => ctx->builtinOptionPair(left, right)
+}
+
+let builtinOptionPair = (ctx: GCtx, left, right) => switch (Map.get("None", ctx.keys), Map.get("Some", ctx.keys)) {
+  | (Some([]), Some(["value"])) => ctx->builtinPair(
+      left,
+      right,
+      "_Option_match",
+      "None",
+      "Some",
+      0
+    )
+  | _ => None
+}
+
+let builtinMatchPlan = (ctx: GCtx, scrutinee, arms) =>
+  // Immediate optional-field matching retains the allocation-free fused path.
+  switch scrutinee {
+    | Ast.EField(_, _, true, _) when Option.isSome(optionalMatch(arms)) => None
+    | _ => switch arms {
+        | [left, right] => switch ctx->builtinMatchPair(left, right) {
+            | Some(plan) => Some(plan)
+            | None => ctx->builtinMatchPair(right, left)
+          }
+        | _ => None
+      }
+  }
+
+let genBuiltinHandler = (ctx: GCtx, binding, body) =>
+  let bound = binding == "" ? Set.fromArray([]) : Set.fromArray([binding]) in
+    "(${binding}) => ${ctx->genLambdaBodyIn(body, bound, "")}"
+
+let genBuiltinMatch = (ctx: GCtx, scrutinee, plan: BuiltinMatchPlan) =>
+  "${plan.helper}(${ctx->genExpr(scrutinee)}, ${ctx->genBuiltinHandler(plan.leftBinding, plan.left)}, ${ctx->genBuiltinHandler(plan.rightBinding, plan.right)})"
 
 /// The `@onrails/pattern` chain.
 let genMatchChain = (ctx: GCtx, scrutinee, arms, base) =>
@@ -1936,7 +2020,14 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
     )
       ? Set.add("_list", acc1)
       : acc1 in
-      ctx->exprRefsArmsFrom(arms, 0, acc2)
+      ctx->exprRefsArmsFrom(
+        arms,
+        0,
+        switch ctx->builtinMatchPlan(scrutinee, arms) {
+          | Some(plan) => Set.add(plan.helper, acc2)
+          | None => acc2
+        }
+      )
   | Ast.ERecord(fields, spread, _) => ctx->exprRefsFieldsFrom(
       fields,
       0,
@@ -2122,6 +2213,7 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
   let keys = seedBuiltinCtorKeys(stmts, keys0) in
   let ctx0 = {
     keys,
+    customCtorKeys: keys0,
     ns,
     annotateLet: opts.annotateLet,
     annotateCtor: opts.annotateCtor,
@@ -2136,7 +2228,10 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     preserveJsx: opts.preserveJsx,
     moduleExt: opts.moduleExt,
     valueRefs: Set.fromArray([]),
-    userNames: Set.fromArray([]),
+    userNames: Set.union(
+      boundNames(Set.fromArray([]), stmts),
+      localBinderNames(stmts)
+    ),
     docs: opts.docs
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in
@@ -2168,9 +2263,11 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
 /// `import { … } from "@mochi/runtime"` line. Builds the same ctx `codegenWith`
 /// does, so the two agree on ctor keys and namespace ids.
 export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
-  let keys = stmts->seedBuiltinCtorKeys(ctorKeysFromStmts(stmts, imported)) in
+  let keys0 = ctorKeysFromStmts(stmts, imported) in
+  let keys = stmts->seedBuiltinCtorKeys(keys0) in
   let ctx0 = {
     keys,
+    customCtorKeys: keys0,
     ns,
     annotateLet: None,
     annotateCtor: None,
@@ -2185,7 +2282,10 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     preserveJsx: false,
     moduleExt: ".js",
     valueRefs: Set.fromArray([]),
-    userNames: Set.fromArray([]),
+    userNames: Set.union(
+      boundNames(Set.fromArray([]), stmts),
+      localBinderNames(stmts)
+    ),
     docs: false
   } in
   let valueRefs = collectValueRefs(ctx0, stmts, 0, Set.fromArray([])) in

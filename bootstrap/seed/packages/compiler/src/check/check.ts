@@ -45,9 +45,11 @@ import {
   _Map_set,
   _Option_isNone,
   _Option_isSome,
+  _Option_match,
   _Option_orElse,
   _Option_unwrapOr,
   _Result_flatMap,
+  _Result_match,
   _Set_add,
   _Set_fromArray,
   _Set_has,
@@ -289,14 +291,11 @@ const ctorNameOf: (p: Pattern) => string = (p: Pattern) =>
 const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(
   2,
   (ctor: string, ns: Option<string>) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: alias }) => `${alias}.${ctor}`)(_v)
-        : _v._tag === "None"
-          ? ctor
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(ns),
+    _Option_match(
+      ns,
+      () => ctor,
+      (alias) => `${alias}.${ctor}`,
+    ),
 );
 const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) =>
   ((_v) =>
@@ -320,22 +319,19 @@ const checkPattern: <A, B>(
         : _v._tag === "PCtor"
           ? (({ ctor, args, ns, span: sp }) =>
               ((key: string) =>
-                ((_v) =>
-                  _v._tag === "None"
-                    ? (Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>)
-                    : _v._tag === "Some"
-                      ? (({ value: info }) =>
-                          eq(length(args), info.arity)
-                            ? firstSome((a: Pattern) => checkPattern(a, reg, false), args)
-                            : (Some(
-                                checkErr(
-                                  `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
-                                  sp,
-                                ),
-                              ) as Option<PErr>))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(key, reg.ctors)))(patCtorKey(ctor, ns)))(_v)
+                _Option_match(
+                  _Map_get(key, reg.ctors),
+                  () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>,
+                  (info) =>
+                    eq(length(args), info.arity)
+                      ? firstSome((a: Pattern) => checkPattern(a, reg, false), args)
+                      : (Some(
+                          checkErr(
+                            `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
+                            sp,
+                          ),
+                        ) as Option<PErr>),
+                ))(patCtorKey(ctor, ns)))(_v)
           : _v._tag === "PRecord"
             ? (({ fields }) => firstSome((f: PatField) => checkPattern(f.pat, reg, false), fields))(
                 _v,
@@ -345,28 +341,22 @@ const checkPattern: <A, B>(
               : _v._tag === "PArr"
                 ? (({ elems, rest }) =>
                     _Option_orElse(
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: r }) => checkPattern(r, reg, false))(_v)
-                          : _v._tag === "None"
-                            ? (None as Option<PErr>)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(rest),
+                      _Option_match(
+                        rest,
+                        () => None as Option<PErr>,
+                        (r) => checkPattern(r, reg, false),
+                      ),
                       firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
                     ))(_v)
                 : _v._tag === "PList"
                   ? (({ elems, rest, span: sp }) =>
                       top
                         ? _Option_orElse(
-                            ((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: r }) => checkPattern(r, reg, false))(_v)
-                                : _v._tag === "None"
-                                  ? (None as Option<PErr>)
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(rest),
+                            _Option_match(
+                              rest,
+                              () => None as Option<PErr>,
+                              (r) => checkPattern(r, reg, false),
+                            ),
                             firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
                           )
                         : (Some(
@@ -383,52 +373,43 @@ const binderPathsArgs: _Curry<
   [args: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
 > = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? (Ok(acc) as Result<Map<string, string>, PErr>)
-      : _v._tag === "Some"
-        ? (({ value: a }) =>
-            _Result_flatMap(
-              (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
-              binderPaths(a, `${at}.a${show(i)}`, acc),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, args)),
+  _Option_match(
+    _Array_get(i, args),
+    () => Ok(acc) as Result<Map<string, string>, PErr>,
+    (a) =>
+      _Result_flatMap(
+        (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
+        binderPaths(a, `${at}.a${show(i)}`, acc),
+      ),
+  ),
 );
 const binderPathsFields: _Curry<
   [fields: PatField[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
 > = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? (Ok(acc) as Result<Map<string, string>, PErr>)
-      : _v._tag === "Some"
-        ? (({ value: f }) =>
-            _Result_flatMap(
-              (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
-              binderPaths(f.pat, `${at}.${f.label}`, acc),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, fields)),
+  _Option_match(
+    _Array_get(i, fields),
+    () => Ok(acc) as Result<Map<string, string>, PErr>,
+    (f) =>
+      _Result_flatMap(
+        (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
+        binderPaths(f.pat, `${at}.${f.label}`, acc),
+      ),
+  ),
 );
 const binderPathsElems: _Curry<
   [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
 > = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? (Ok(acc) as Result<Map<string, string>, PErr>)
-      : _v._tag === "Some"
-        ? (({ value: e }) =>
-            _Result_flatMap(
-              (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
-              binderPaths(e, `${at}.t${show(i)}`, acc),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, elems)),
+  _Option_match(
+    _Array_get(i, elems),
+    () => Ok(acc) as Result<Map<string, string>, PErr>,
+    (e) =>
+      _Result_flatMap(
+        (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
+        binderPaths(e, `${at}.t${show(i)}`, acc),
+      ),
+  ),
 );
 const binderPaths: _Curry<
   [p: Pattern, at: string, acc: Map<string, string>],
@@ -476,39 +457,34 @@ const altMapsFrom: <A, B>(
     reg: { ctors: Map<string, { arity: number } & A> } & B,
     acc: Map<string, string>[],
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(acc) as Result<Map<string, string>[], PErr>)
-        : _v._tag === "Some"
-          ? (({ value: alt }) =>
-              isCatchAll(alt)
-                ? (Err(
-                    checkErr(
-                      "an or-pattern alternative can't be a catch-all (`_` or a bare binding)",
-                      patSpan(alt),
-                    ),
-                  ) as Result<Map<string, string>[], PErr>)
-                : _Option_isSome(seqElemsRest(alt))
-                  ? (Err(
-                      checkErr(
-                        "array/list patterns can't appear as an or-pattern alternative",
-                        patSpan(alt),
-                      ),
-                    ) as Result<Map<string, string>[], PErr>)
-                  : ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: e }) => Err(e) as Result<Map<string, string>[], PErr>)(_v)
-                        : _v._tag === "None"
-                          ? _Result_flatMap(
-                              (m) => altMapsFrom(alts, i + 1, reg, _Array_append(m, acc)),
-                              binderPaths(alt, "", new Map<string, string>()),
-                            )
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(checkPattern(alt, reg, false)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, alts)),
+    _Option_match(
+      _Array_get(i, alts),
+      () => Ok(acc) as Result<Map<string, string>[], PErr>,
+      (alt) =>
+        isCatchAll(alt)
+          ? (Err(
+              checkErr(
+                "an or-pattern alternative can't be a catch-all (`_` or a bare binding)",
+                patSpan(alt),
+              ),
+            ) as Result<Map<string, string>[], PErr>)
+          : _Option_isSome(seqElemsRest(alt))
+            ? (Err(
+                checkErr(
+                  "array/list patterns can't appear as an or-pattern alternative",
+                  patSpan(alt),
+                ),
+              ) as Result<Map<string, string>[], PErr>)
+            : _Option_match(
+                checkPattern(alt, reg, false),
+                () =>
+                  _Result_flatMap(
+                    (m) => altMapsFrom(alts, i + 1, reg, _Array_append(m, acc)),
+                    binderPaths(alt, "", new Map<string, string>()),
+                  ),
+                (e) => Err(e) as Result<Map<string, string>[], PErr>,
+              ),
+    ),
 );
 const missingNameErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
   2,
@@ -531,37 +507,34 @@ const consistentBindsFrom: <C>(
     ref: Map<string, string>,
     sp: { end: number; start: number } & C,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? None
-        : _v._tag === "Some"
-          ? (({ value: m }) =>
-              _Option_orElse(
-                consistentBindsFrom(maps, i + 1, ref, sp),
-                _Option_orElse(
-                  firstSome(
-                    (name: string) =>
-                      _Map_has(name, ref)
-                        ? eq(_Map_getOr("", name, ref), _Map_getOr("", name, m))
-                          ? None
-                          : Some(
-                              checkErr(
-                                `or-pattern binds '${name}' at a differing position across alternatives`,
-                                sp,
-                              ),
-                            )
-                        : Some(missingNameErr(name, sp)),
-                    _Map_keys(m),
-                  ),
-                  firstSome(
-                    (name: string) => (_Map_has(name, m) ? None : Some(missingNameErr(name, sp))),
-                    _Map_keys(ref),
-                  ),
-                ),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, maps)),
+    _Option_match(
+      _Array_get(i, maps),
+      () => None,
+      (m) =>
+        _Option_orElse(
+          consistentBindsFrom(maps, i + 1, ref, sp),
+          _Option_orElse(
+            firstSome(
+              (name: string) =>
+                _Map_has(name, ref)
+                  ? eq(_Map_getOr("", name, ref), _Map_getOr("", name, m))
+                    ? None
+                    : Some(
+                        checkErr(
+                          `or-pattern binds '${name}' at a differing position across alternatives`,
+                          sp,
+                        ),
+                      )
+                  : Some(missingNameErr(name, sp)),
+              _Map_keys(m),
+            ),
+            firstSome(
+              (name: string) => (_Map_has(name, m) ? None : Some(missingNameErr(name, sp))),
+              _Map_keys(ref),
+            ),
+          ),
+        ),
+    ),
 );
 const checkOrPattern: <A, B>(
   alts: Pattern[],
@@ -570,22 +543,16 @@ const checkOrPattern: <A, B>(
 ) => Option<PErr> = _curry(
   3,
   <A, B>(alts: Pattern[], sp: SpanAt, reg: { ctors: Map<string, { arity: number } & A> } & B) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) => Some(e) as Option<PErr>)(_v)
-        : _v._tag === "Ok"
-          ? (({ value: maps }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? (None as Option<PErr>)
-                  : _v._tag === "Some"
-                    ? (({ value: ref }) => consistentBindsFrom(maps, 1, ref, sp))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Array_head(maps)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(altMapsFrom(alts, 0, reg, [] as Map<string, string>[])),
+    _Result_match(
+      altMapsFrom(alts, 0, reg, [] as Map<string, string>[]),
+      (e) => Some(e) as Option<PErr>,
+      (maps) =>
+        _Option_match(
+          _Array_head(maps),
+          () => None as Option<PErr>,
+          (ref) => consistentBindsFrom(maps, 1, ref, sp),
+        ),
+    ),
 );
 const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B) => boolean = <
   A,
@@ -598,22 +565,19 @@ const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<PErr>> =
   (arms: MatchArm[], listSwitch: boolean) =>
     firstSome(
       (a: MatchArm) =>
-        ((_v) =>
-          _v._tag === "None"
-            ? (None as Option<PErr>)
-            : _v._tag === "Some"
-              ? (({ value: g }) =>
-                  or(isPList(a.pattern), listSwitch)
-                    ? (Some(
-                        checkErr(
-                          "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
-                          exprSpan(g),
-                        ),
-                      ) as Option<PErr>)
-                    : (None as Option<PErr>))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(a.guard),
+        _Option_match(
+          a.guard,
+          () => None as Option<PErr>,
+          (g) =>
+            or(isPList(a.pattern), listSwitch)
+              ? (Some(
+                  checkErr(
+                    "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+                    exprSpan(g),
+                  ),
+                ) as Option<PErr>)
+              : (None as Option<PErr>),
+        ),
       arms,
     ),
 );
@@ -642,28 +606,19 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
   },
 );
 const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? (None as Option<PErr>)
-      : _v._tag === "Some"
-        ? (({ value: i }) =>
-            ((_v) =>
-              _v._tag === "None"
-                ? (None as Option<PErr>)
-                : _v._tag === "Some"
-                  ? (({ value: a }) =>
-                      Some(
-                        checkErr(
-                          "unreachable arm: a catch-all arm above it matches first",
-                          patSpan(a.pattern),
-                        ),
-                      ) as Option<PErr>)(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(_Array_get(i + 1, arms)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(firstCatchIdx(arms, 0));
+  _Option_match(
+    firstCatchIdx(arms, 0),
+    () => None as Option<PErr>,
+    (i) =>
+      _Option_match(
+        _Array_get(i + 1, arms),
+        () => None as Option<PErr>,
+        (a) =>
+          Some(
+            checkErr("unreachable arm: a catch-all arm above it matches first", patSpan(a.pattern)),
+          ) as Option<PErr>,
+      ),
+  );
 const SeqNotSeq: SeqCheck = { _tag: "SeqNotSeq" };
 const SeqTotal: SeqCheck = { _tag: "SeqTotal" };
 const SeqFail = (e: PErr): SeqCheck => ({ _tag: "SeqFail", e });
@@ -736,59 +691,53 @@ const ctorLoop: <A, B, C, D>(
     owner: Option<string>,
     covered: Set<string>,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>)
-        : _v._tag === "Some"
-          ? (({ value: a }) =>
-              ((_v) =>
-                _v._tag === "PCtor"
-                  ? (({ ctor, args, ns, span: sp }) =>
-                      ((key: string) =>
-                        ((_v) =>
-                          _v._tag === "None"
-                            ? (Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
-                                [Option<string>, Set<string>],
-                                PErr
-                              >)
-                            : _v._tag === "Some"
-                              ? (({ value: info }) =>
-                                  !eq(length(args), info.arity)
-                                    ? (Err(
-                                        checkErr(
-                                          `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
-                                          sp,
-                                        ),
-                                      ) as Result<[Option<string>, Set<string>], PErr>)
-                                    : ((_v) =>
-                                        _v._tag === "Some" &&
-                                        (({ value: own }) => !eq(own, info.owner))(_v)
-                                          ? (({ value: own }) =>
-                                              Err(
-                                                checkErr(
-                                                  `switch mixes variants of '${own}' and '${info.owner}'`,
-                                                  sp,
-                                                ),
-                                              ) as Result<[Option<string>, Set<string>], PErr>)(_v)
-                                          : ((covered2: Set<string>) =>
-                                              ctorLoop(
-                                                arms,
-                                                i + 1,
-                                                reg,
-                                                Some(info.owner) as Option<string>,
-                                                covered2,
-                                              ))(
-                                              and(allOf(isCatchAll, args), _Option_isNone(a.guard))
-                                                ? _Set_add(ctor, covered)
-                                                : covered,
-                                            ))(owner))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(_Map_get(key, reg.ctors)))(patCtorKey(ctor, ns)))(_v)
-                  : ctorLoop(arms, i + 1, reg, owner, covered))(a.pattern))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, arms)),
+    _Option_match(
+      _Array_get(i, arms),
+      () => Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>,
+      (a) =>
+        ((_v) =>
+          _v._tag === "PCtor"
+            ? (({ ctor, args, ns, span: sp }) =>
+                ((key: string) =>
+                  _Option_match(
+                    _Map_get(key, reg.ctors),
+                    () =>
+                      Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
+                        [Option<string>, Set<string>],
+                        PErr
+                      >,
+                    (info) =>
+                      !eq(length(args), info.arity)
+                        ? (Err(
+                            checkErr(
+                              `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
+                              sp,
+                            ),
+                          ) as Result<[Option<string>, Set<string>], PErr>)
+                        : ((_v) =>
+                            _v._tag === "Some" && (({ value: own }) => !eq(own, info.owner))(_v)
+                              ? (({ value: own }) =>
+                                  Err(
+                                    checkErr(
+                                      `switch mixes variants of '${own}' and '${info.owner}'`,
+                                      sp,
+                                    ),
+                                  ) as Result<[Option<string>, Set<string>], PErr>)(_v)
+                              : ((covered2: Set<string>) =>
+                                  ctorLoop(
+                                    arms,
+                                    i + 1,
+                                    reg,
+                                    Some(info.owner) as Option<string>,
+                                    covered2,
+                                  ))(
+                                  and(allOf(isCatchAll, args), _Option_isNone(a.guard))
+                                    ? _Set_add(ctor, covered)
+                                    : covered,
+                                ))(owner),
+                  ))(patCtorKey(ctor, ns)))(_v)
+            : ctorLoop(arms, i + 1, reg, owner, covered))(a.pattern),
+    ),
 );
 const seqVerdict: <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => Option<PErr> =
   _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) =>
@@ -890,73 +839,62 @@ const checkMatch: <A>(
 ) => Option<PErr> = _curry(
   3,
   <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: e }) => Some(e) as Option<PErr>)(_v)
-        : _v._tag === "None"
-          ? ((listSwitch: boolean) =>
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: e }) => Some(e) as Option<PErr>)(_v)
-                  : _v._tag === "None"
-                    ? ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: e }) => Some(e) as Option<PErr>)(_v)
-                          : _v._tag === "None"
-                            ? ((hasCatchAll: boolean) =>
-                                ((leaves: { pattern: Pattern; guard: Option<Expr> }[]) =>
-                                  ((ctorArms: { pattern: Pattern; guard: Option<Expr> }[]) =>
-                                    someOf((a: MatchArm) => isPList(a.pattern), arms)
-                                      ? hasCatchAll
-                                        ? (None as Option<PErr>)
-                                        : seqVerdict(arms, mSpan)
-                                      : ((_v) =>
-                                          _v._tag === "Err"
-                                            ? (({ error: e }) => Some(e) as Option<PErr>)(_v)
-                                            : _v._tag === "Ok"
-                                              ? (({ value: [ownerOpt] }) =>
-                                                  matrixVerdict(
-                                                    arms,
-                                                    leaves,
-                                                    ownerOpt,
-                                                    mSpan,
-                                                    reg,
-                                                  ))(
-                                                  _v as Extract<
-                                                    Result<[Option<string>, Set<string>], PErr>,
-                                                    { _tag: "Ok" }
-                                                  >,
-                                                )
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(
-                                          ctorLoop(
-                                            ctorArms,
-                                            0,
-                                            reg,
-                                            None as Option<string>,
-                                            _Set_fromArray([] as string[]),
-                                          ),
-                                        ))(
-                                    filter(
-                                      (a: { pattern: Pattern; guard: Option<Expr> }) =>
-                                        isPCtor(a.pattern),
-                                      leaves,
-                                    ),
-                                  ))(_Array_flatMap(leavesOfArm, arms)))(
-                                someOf(armUnguardedCatchAll, arms),
-                              )
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(unreachableAfterCatch(arms))
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(guardErrs(arms, listSwitch)))(
-              someOf((a: MatchArm) => and(isPList(a.pattern), !isCatchAll(a.pattern)), arms),
-            )
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms)),
+    _Option_match(
+      firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms),
+      () => {
+        const listSwitch: boolean = someOf(
+          (a: MatchArm) => and(isPList(a.pattern), !isCatchAll(a.pattern)),
+          arms,
+        );
+        return _Option_match(
+          guardErrs(arms, listSwitch),
+          () =>
+            _Option_match(
+              unreachableAfterCatch(arms),
+              () => {
+                const hasCatchAll: boolean = someOf(armUnguardedCatchAll, arms);
+                const leaves: { pattern: Pattern; guard: Option<Expr> }[] = _Array_flatMap(
+                  leavesOfArm,
+                  arms,
+                );
+                const ctorArms: { pattern: Pattern; guard: Option<Expr> }[] = filter(
+                  (a: { pattern: Pattern; guard: Option<Expr> }) => isPCtor(a.pattern),
+                  leaves,
+                );
+                return someOf((a: MatchArm) => isPList(a.pattern), arms)
+                  ? hasCatchAll
+                    ? (None as Option<PErr>)
+                    : seqVerdict(arms, mSpan)
+                  : ((_v) =>
+                      _v._tag === "Err"
+                        ? (({ error: e }) => Some(e) as Option<PErr>)(_v)
+                        : _v._tag === "Ok"
+                          ? (({ value: [ownerOpt] }) =>
+                              matrixVerdict(arms, leaves, ownerOpt, mSpan, reg))(
+                              _v as Extract<
+                                Result<[Option<string>, Set<string>], PErr>,
+                                { _tag: "Ok" }
+                              >,
+                            )
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(
+                      ctorLoop(
+                        ctorArms,
+                        0,
+                        reg,
+                        None as Option<string>,
+                        _Set_fromArray([] as string[]),
+                      ),
+                    );
+              },
+              (e) => Some(e) as Option<PErr>,
+            ),
+          (e) => Some(e) as Option<PErr>,
+        );
+      },
+      (e) => Some(e) as Option<PErr>,
+    ),
 );
 const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(
   2,
@@ -1006,14 +944,11 @@ const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(
                                           (a: MatchArm) =>
                                             _Option_orElse(
                                               checkExpr(a.body, reg),
-                                              ((_v) =>
-                                                _v._tag === "Some"
-                                                  ? (({ value: g }) => checkExpr(g, reg))(_v)
-                                                  : _v._tag === "None"
-                                                    ? (None as Option<PErr>)
-                                                    : (() => {
-                                                        throw new Error("non-exhaustive match");
-                                                      })())(a.guard),
+                                              _Option_match(
+                                                a.guard,
+                                                () => None as Option<PErr>,
+                                                (g) => checkExpr(g, reg),
+                                              ),
                                             ),
                                           arms,
                                         ),
@@ -1024,14 +959,11 @@ const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(
                                   ? (({ fields, spread }) =>
                                       _Option_orElse(
                                         firstSome((f: Field) => checkExpr(f.value, reg), fields),
-                                        ((_v) =>
-                                          _v._tag === "Some"
-                                            ? (({ value: s }) => checkExpr(s, reg))(_v)
-                                            : _v._tag === "None"
-                                              ? (None as Option<PErr>)
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(spread),
+                                        _Option_match(
+                                          spread,
+                                          () => None as Option<PErr>,
+                                          (s) => checkExpr(s, reg),
+                                        ),
                                       ))(_v)
                                   : _v._tag === "EField"
                                     ? (({ target }) => checkExpr(target, reg))(_v)
@@ -1189,37 +1121,28 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
                                   ...checkExprs(scrutinee, reg),
                                   ..._Array_flatMap(
                                     (a: MatchArm) => [
-                                      ...((_v) =>
-                                        _v._tag === "Some"
-                                          ? (({ value: g }) => checkExprs(g, reg))(_v)
-                                          : _v._tag === "None"
-                                            ? ([] as PErr[])
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(a.guard),
+                                      ..._Option_match(
+                                        a.guard,
+                                        () => [] as PErr[],
+                                        (g) => checkExprs(g, reg),
+                                      ),
                                       ...checkExprs(a.body, reg),
                                     ],
                                     arms,
                                   ),
-                                  ...((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: e }) => [e])(_v)
-                                      : _v._tag === "None"
-                                        ? ([] as PErr[])
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(checkMatch(arms, sp, reg)),
+                                  ..._Option_match(
+                                    checkMatch(arms, sp, reg),
+                                    () => [] as PErr[],
+                                    (e) => [e],
+                                  ),
                                 ])(_v)
                               : _v._tag === "ERecord"
                                 ? (({ fields, spread }) => [
-                                    ...((_v) =>
-                                      _v._tag === "Some"
-                                        ? (({ value: s }) => checkExprs(s, reg))(_v)
-                                        : _v._tag === "None"
-                                          ? ([] as PErr[])
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(spread),
+                                    ..._Option_match(
+                                      spread,
+                                      () => [] as PErr[],
+                                      (s) => checkExprs(s, reg),
+                                    ),
                                     ..._Array_flatMap(
                                       (f: Field) => checkExprs(f.value, reg),
                                       fields,
@@ -1527,14 +1450,11 @@ const checkReservedParam: _Curry<[param: LamParam, sp: SpanAt], PErr[]> = _curry
             : _v._tag === "LPLabeled"
               ? (({ name, defaultValue }) => [
                   ...reservedWord(name, sp),
-                  ...((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value }) => checkReservedExpr(value))(_v)
-                      : _v._tag === "None"
-                        ? ([] as PErr[])
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(defaultValue),
+                  ..._Option_match(
+                    defaultValue,
+                    () => [] as PErr[],
+                    (value) => checkReservedExpr(value),
+                  ),
                 ])(_v)
               : _v._tag === "LPSpanned"
                 ? (({ param: inner }) => checkReservedParam(inner, sp))(_v)
@@ -1561,26 +1481,20 @@ const checkReservedPattern: (pat: Pattern) => PErr[] = (pat: Pattern) =>
               : _v._tag === "PArr"
                 ? (({ elems, rest }) => [
                     ..._Array_flatMap(checkReservedPattern, elems),
-                    ...((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value }) => checkReservedPattern(value))(_v)
-                        : _v._tag === "None"
-                          ? ([] as PErr[])
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(rest),
+                    ..._Option_match(
+                      rest,
+                      () => [] as PErr[],
+                      (value) => checkReservedPattern(value),
+                    ),
                   ])(_v)
                 : _v._tag === "PList"
                   ? (({ elems, rest }) => [
                       ..._Array_flatMap(checkReservedPattern, elems),
-                      ...((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value }) => checkReservedPattern(value))(_v)
-                          : _v._tag === "None"
-                            ? ([] as PErr[])
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(rest),
+                      ..._Option_match(
+                        rest,
+                        () => [] as PErr[],
+                        (value) => checkReservedPattern(value),
+                      ),
                     ])(_v)
                   : _v._tag === "POr"
                     ? (({ alts }) => _Array_flatMap(checkReservedPattern, alts))(_v)
@@ -1633,14 +1547,11 @@ const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) =>
                         ..._Array_flatMap(
                           (arm: MatchArm) => [
                             ...checkReservedPattern(arm.pattern),
-                            ...((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: guard }) => checkReservedExpr(guard))(_v)
-                                : _v._tag === "None"
-                                  ? ([] as PErr[])
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(arm.guard),
+                            ..._Option_match(
+                              arm.guard,
+                              () => [] as PErr[],
+                              (guard) => checkReservedExpr(guard),
+                            ),
                             ...checkReservedExpr(arm.body),
                           ],
                           arms,
@@ -1648,14 +1559,11 @@ const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) =>
                       ])(_v)
                     : _v._tag === "ERecord"
                       ? (({ fields, spread }) => [
-                          ...((_v) =>
-                            _v._tag === "Some"
-                              ? (({ value }) => checkReservedExpr(value))(_v)
-                              : _v._tag === "None"
-                                ? ([] as PErr[])
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(spread),
+                          ..._Option_match(
+                            spread,
+                            () => [] as PErr[],
+                            (value) => checkReservedExpr(value),
+                          ),
                           ..._Array_flatMap(
                             (field: Field) => checkReservedExpr(field.value),
                             fields,
@@ -1732,15 +1640,11 @@ const checkReservedWordsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
                       (ctor: Ctor) =>
                         _Array_flatMap(
                           (field: CtorField) =>
-                            ((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: name }) =>
-                                    reservedWord(name, typeExprSpan(field.fieldType)))(_v)
-                                : _v._tag === "None"
-                                  ? ([] as PErr[])
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(field.name),
+                            _Option_match(
+                              field.name,
+                              () => [] as PErr[],
+                              (name) => reservedWord(name, typeExprSpan(field.fieldType)),
+                            ),
                           ctor.fields,
                         ),
                       ctors,
@@ -1751,14 +1655,11 @@ const checkReservedWordsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
 const checkReservedWords: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   _Array_head(checkReservedWordsAll(stmts));
 const isUpperStart: (s: string) => boolean = (s: string) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: c }) => and(c >= 65, c <= 90))(_v)
-      : _v._tag === "None"
-        ? false
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Str_codeAt(0, s));
+  _Option_match(
+    _Str_codeAt(0, s),
+    () => false,
+    (c) => and(c >= 65, c <= 90),
+  );
 const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, SpanAt]>> = _curry(
   2,
   (params: string[], te: TypeExpr) =>
@@ -1939,14 +1840,11 @@ const letInAnnots: (e: Expr) => TypeExpr[] = (e: Expr) =>
                     ? (({ annot, value, body }) => [
                         ...letInAnnots(value),
                         ...letInAnnots(body),
-                        ...((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: te }) => [te])(_v)
-                            : _v._tag === "None"
-                              ? ([] as TypeExpr[])
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(annot),
+                        ..._Option_match(
+                          annot,
+                          () => [] as TypeExpr[],
+                          (te) => [te],
+                        ),
                       ])(_v)
                     : _v._tag === "ELetBind"
                       ? (({ value, body }) => [...letInAnnots(value), ...letInAnnots(body)])(_v)
@@ -1965,14 +1863,11 @@ const letInAnnots: (e: Expr) => TypeExpr[] = (e: Expr) =>
                                   ...letInAnnots(scrutinee),
                                   ..._Array_flatMap(
                                     (a: MatchArm) => [
-                                      ...((_v) =>
-                                        _v._tag === "Some"
-                                          ? (({ value: g }) => letInAnnots(g))(_v)
-                                          : _v._tag === "None"
-                                            ? ([] as TypeExpr[])
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(a.guard),
+                                      ..._Option_match(
+                                        a.guard,
+                                        () => [] as TypeExpr[],
+                                        (g) => letInAnnots(g),
+                                      ),
                                       ...letInAnnots(a.body),
                                     ],
                                     arms,
@@ -1980,14 +1875,11 @@ const letInAnnots: (e: Expr) => TypeExpr[] = (e: Expr) =>
                                 ])(_v)
                               : _v._tag === "ERecord"
                                 ? (({ fields, spread }) => [
-                                    ...((_v) =>
-                                      _v._tag === "Some"
-                                        ? (({ value: sp }) => letInAnnots(sp))(_v)
-                                        : _v._tag === "None"
-                                          ? ([] as TypeExpr[])
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(spread),
+                                    ..._Option_match(
+                                      spread,
+                                      () => [] as TypeExpr[],
+                                      (sp) => letInAnnots(sp),
+                                    ),
                                     ..._Array_flatMap((f: Field) => letInAnnots(f.value), fields),
                                   ])(_v)
                                 : _v._tag === "EField"
@@ -2061,14 +1953,11 @@ const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
           ? (({ typeExpr: te }) => [te])(_v)
           : _v._tag === "SLet"
             ? (({ annot, value }) => [
-                ...((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: te }) => [te])(_v)
-                    : _v._tag === "None"
-                      ? ([] as TypeExpr[])
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(annot),
+                ..._Option_match(
+                  annot,
+                  () => [] as TypeExpr[],
+                  (te) => [te],
+                ),
                 ...letInAnnots(value),
               ])(_v)
             : _v._tag === "SExpr"
@@ -2079,22 +1968,16 @@ const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
                       (c: Ctor) => map((f: CtorField) => f.fieldType, c.fields),
                       ctors,
                     ),
-                    ...((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: fields }) => map((f: AliasField) => f.fieldType, fields))(_v)
-                        : _v._tag === "None"
-                          ? ([] as TypeExpr[])
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(alias),
-                    ...((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: te }) => [te])(_v)
-                        : _v._tag === "None"
-                          ? ([] as TypeExpr[])
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(aliasType),
+                    ..._Option_match(
+                      alias,
+                      () => [] as TypeExpr[],
+                      (fields) => map((f: AliasField) => f.fieldType, fields),
+                    ),
+                    ..._Option_match(
+                      aliasType,
+                      () => [] as TypeExpr[],
+                      (te) => [te],
+                    ),
                   ])(_v)
                 : ([] as TypeExpr[]))(s),
     stmts,
@@ -2118,22 +2001,19 @@ const checkQualifiedTypeNames: <A>(
     return firstSome(
       (q: { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }) =>
         _Set_has(q.alias, nsAliases)
-          ? ((_v) =>
-              _v._tag === "None"
-                ? (None as Option<PErr>)
-                : _v._tag === "Some"
-                  ? (({ value: dep }) =>
-                      _Set_has(q.name, dep.types)
-                        ? (None as Option<PErr>)
-                        : (Some(
-                            checkErr(
-                              `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
-                              q.nameSpan,
-                            ),
-                          ) as Option<PErr>))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(_Map_get(q.alias, quals))
+          ? _Option_match(
+              _Map_get(q.alias, quals),
+              () => None as Option<PErr>,
+              (dep) =>
+                _Set_has(q.name, dep.types)
+                  ? (None as Option<PErr>)
+                  : (Some(
+                      checkErr(
+                        `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
+                        q.nameSpan,
+                      ),
+                    ) as Option<PErr>),
+            )
           : (Some(
               checkErr(
                 `unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from "…"'`,
@@ -2160,22 +2040,19 @@ const checkQualifiedTypeNamesAll: <A>(
   return _Array_flatMap(
     (q: { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }) =>
       _Set_has(q.alias, nsAliases)
-        ? ((_v) =>
-            _v._tag === "None"
-              ? ([] as PErr[])
-              : _v._tag === "Some"
-                ? (({ value: dep }) =>
-                    _Set_has(q.name, dep.types)
-                      ? ([] as PErr[])
-                      : [
-                          checkErr(
-                            `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
-                            q.nameSpan,
-                          ),
-                        ])(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(q.alias, quals))
+        ? _Option_match(
+            _Map_get(q.alias, quals),
+            () => [] as PErr[],
+            (dep) =>
+              _Set_has(q.name, dep.types)
+                ? ([] as PErr[])
+                : [
+                    checkErr(
+                      `module alias '${q.alias}' has no exported type '${q.name}' — export it from the imported module ('export type ${q.name} = …')`,
+                      q.nameSpan,
+                    ),
+                  ],
+          )
         : [
             checkErr(
               `unknown module alias '${q.alias}' in type '${q.alias}.${q.name}' — a qualified type name needs a matching 'import * as ${q.alias} from "…"'`,
@@ -2274,26 +2151,23 @@ const checkLoopExpr: _Curry<
           ))(_v)
       : _v._tag === "ERecur"
         ? (({ args, span: sp }) =>
-            ((_v) =>
-              _v._tag === "None"
-                ? (Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>)
-                : _v._tag === "Some"
-                  ? (({ value: current }) =>
-                      !tail
-                        ? (Some(
-                            checkErr("'recur' must be in tail position of its enclosing loop", sp),
-                          ) as Option<PErr>)
-                        : !eq(length(args), current.arity)
-                          ? (Some(
-                              checkErr(
-                                `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
-                                sp,
-                              ),
-                            ) as Option<PErr>)
-                          : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(frame))(_v)
+            _Option_match(
+              frame,
+              () => Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>,
+              (current) =>
+                !tail
+                  ? (Some(
+                      checkErr("'recur' must be in tail position of its enclosing loop", sp),
+                    ) as Option<PErr>)
+                  : !eq(length(args), current.arity)
+                    ? (Some(
+                        checkErr(
+                          `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                          sp,
+                        ),
+                      ) as Option<PErr>)
+                    : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+            ))(_v)
         : _v._tag === "ETernary"
           ? (({ cond, thenE, elseE }) =>
               _Option_orElse(
@@ -2308,18 +2182,15 @@ const checkLoopExpr: _Curry<
                 _Option_orElse(
                   firstSome(
                     (arm: MatchArm) =>
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: guard }) =>
-                              _Option_orElse(
-                                checkLoopExpr(arm.body, frame, tail),
-                                checkLoopExpr(guard, frame, false),
-                              ))(_v)
-                          : _v._tag === "None"
-                            ? checkLoopExpr(arm.body, frame, tail)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(arm.guard),
+                      _Option_match(
+                        arm.guard,
+                        () => checkLoopExpr(arm.body, frame, tail),
+                        (guard) =>
+                          _Option_orElse(
+                            checkLoopExpr(arm.body, frame, tail),
+                            checkLoopExpr(guard, frame, false),
+                          ),
+                      ),
                     arms,
                   ),
                   checkLoopExpr(scrutinee, frame, false),
@@ -2372,14 +2243,11 @@ const checkLoopExpr: _Curry<
                                   (field: Field) => checkLoopExpr(field.value, frame, false),
                                   fields,
                                 ),
-                                ((_v) =>
-                                  _v._tag === "Some"
-                                    ? (({ value }) => checkLoopExpr(value, frame, false))(_v)
-                                    : _v._tag === "None"
-                                      ? (None as Option<PErr>)
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(spread),
+                                _Option_match(
+                                  spread,
+                                  () => None as Option<PErr>,
+                                  (value) => checkLoopExpr(value, frame, false),
+                                ),
                               ))(_v)
                           : _v._tag === "EField"
                             ? (({ target }) => checkLoopExpr(target, frame, false))(_v)
@@ -2560,31 +2428,23 @@ const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean],
                 ...siteErrors,
                 ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
               ])(
-                ((_v) =>
-                  _v._tag === "None"
-                    ? [checkErr("'recur' is only legal inside a loop body", sp)]
-                    : _v._tag === "Some"
-                      ? (({ value: current }) => [
-                          ...(!tail
-                            ? [
-                                checkErr(
-                                  "'recur' must be in tail position of its enclosing loop",
-                                  sp,
-                                ),
-                              ]
-                            : ([] as PErr[])),
-                          ...(!eq(length(args), current.arity)
-                            ? [
-                                checkErr(
-                                  `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
-                                  sp,
-                                ),
-                              ]
-                            : ([] as PErr[])),
-                        ])(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(frame),
+                _Option_match(
+                  frame,
+                  () => [checkErr("'recur' is only legal inside a loop body", sp)],
+                  (current) => [
+                    ...(!tail
+                      ? [checkErr("'recur' must be in tail position of its enclosing loop", sp)]
+                      : ([] as PErr[])),
+                    ...(!eq(length(args), current.arity)
+                      ? [
+                          checkErr(
+                            `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                            sp,
+                          ),
+                        ]
+                      : ([] as PErr[])),
+                  ],
+                ),
               ))(_v)
           : _v._tag === "ETernary"
             ? (({ cond, thenE, elseE }) => [
@@ -2597,14 +2457,11 @@ const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean],
                   ...checkLoopExprs(scrutinee, frame, false),
                   ..._Array_flatMap(
                     (arm: MatchArm) => [
-                      ...((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: guard }) => checkLoopExprs(guard, frame, false))(_v)
-                          : _v._tag === "None"
-                            ? ([] as PErr[])
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(arm.guard),
+                      ..._Option_match(
+                        arm.guard,
+                        () => [] as PErr[],
+                        (guard) => checkLoopExprs(guard, frame, false),
+                      ),
                       ...checkLoopExprs(arm.body, frame, tail),
                     ],
                     arms,
@@ -2646,14 +2503,11 @@ const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean],
                           ? (({ exprs }) => checkLoopDoAll(exprs, frame, tail))(_v)
                           : _v._tag === "ERecord"
                             ? (({ fields, spread }) => [
-                                ...((_v) =>
-                                  _v._tag === "Some"
-                                    ? (({ value }) => checkLoopExprs(value, frame, false))(_v)
-                                    : _v._tag === "None"
-                                      ? ([] as PErr[])
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(spread),
+                                ..._Option_match(
+                                  spread,
+                                  () => [] as PErr[],
+                                  (value) => checkLoopExprs(value, frame, false),
+                                ),
                                 ..._Array_flatMap(
                                   (field: Field) => checkLoopExprs(field.value, frame, false),
                                   fields,
@@ -2763,15 +2617,11 @@ const mergeMissing: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A
       .with(
         (_v) => _v.length >= 1,
         ([k, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: v }) =>
-                  mergeMissing(rest, from, _Map_has(k, into) ? into : _Map_set(k, v, into)))(_v)
-              : _v._tag === "None"
-                ? mergeMissing(rest, from, into)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(k, from)),
+          _Option_match(
+            _Map_get(k, from),
+            () => mergeMissing(rest, from, into),
+            (v) => mergeMissing(rest, from, _Map_has(k, into) ? into : _Map_set(k, v, into)),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -2794,79 +2644,61 @@ export const checkWith: <A, B>(
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
   ) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: e }) => Err(e) as Result<Stmt[], PErr>)(_v)
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: e }) => Err(e) as Result<Stmt[], PErr>)(_v)
-                : _v._tag === "None"
-                  ? ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: e }) => Err(e) as Result<Stmt[], PErr>)(_v)
-                        : _v._tag === "None"
-                          ? ((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: e }) => Err(e) as Result<Stmt[], PErr>)(_v)
-                                : _v._tag === "None"
-                                  ? ((_v) =>
-                                      _v._tag === "Some"
-                                        ? (({ value: e }) => Err(e) as Result<Stmt[], PErr>)(_v)
-                                        : _v._tag === "None"
-                                          ? _Result_flatMap(
-                                              (reg0) =>
-                                                ((reg: Registry) =>
-                                                  ((_v) =>
-                                                    _v._tag === "Some"
-                                                      ? (({ value: e }) =>
-                                                          Err(e) as Result<Stmt[], PErr>)(_v)
-                                                      : _v._tag === "None"
-                                                        ? (Ok(stmts) as Result<Stmt[], PErr>)
-                                                        : (() => {
-                                                            throw new Error("non-exhaustive match");
-                                                          })())(
-                                                    firstSome(
-                                                      (s: Stmt) =>
-                                                        ((_v) =>
-                                                          _v._tag === "SLet"
-                                                            ? (({ value }) =>
-                                                                checkExpr(value, reg))(_v)
-                                                            : _v._tag === "SExpr"
-                                                              ? (({ value }) =>
-                                                                  checkExpr(value, reg))(_v)
-                                                              : (None as Option<PErr>))(s),
-                                                      stmts,
-                                                    ),
-                                                  ))({
-                                                  ctors: mergeMissing(
-                                                    _Map_keys(imported.ctors),
-                                                    imported.ctors,
-                                                    reg0.ctors,
-                                                  ),
-                                                  types: mergeMissing(
-                                                    _Map_keys(imported.types),
-                                                    imported.types,
-                                                    reg0.types,
-                                                  ),
-                                                }),
-                                              buildRegistry(stmts),
-                                            )
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(checkLoops(stmts))
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(checkQualifiedTypeNames(stmts, quals))
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(checkCtorFieldVars(stmts))
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(checkReservedWords(stmts))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(checkReservedNames(stmts)),
+    _Option_match(
+      checkReservedNames(stmts),
+      () =>
+        _Option_match(
+          checkReservedWords(stmts),
+          () =>
+            _Option_match(
+              checkCtorFieldVars(stmts),
+              () =>
+                _Option_match(
+                  checkQualifiedTypeNames(stmts, quals),
+                  () =>
+                    _Option_match(
+                      checkLoops(stmts),
+                      () =>
+                        _Result_flatMap(
+                          (reg0) =>
+                            ((reg: Registry) =>
+                              _Option_match(
+                                firstSome(
+                                  (s: Stmt) =>
+                                    ((_v) =>
+                                      _v._tag === "SLet"
+                                        ? (({ value }) => checkExpr(value, reg))(_v)
+                                        : _v._tag === "SExpr"
+                                          ? (({ value }) => checkExpr(value, reg))(_v)
+                                          : (None as Option<PErr>))(s),
+                                  stmts,
+                                ),
+                                () => Ok(stmts) as Result<Stmt[], PErr>,
+                                (e) => Err(e) as Result<Stmt[], PErr>,
+                              ))({
+                              ctors: mergeMissing(
+                                _Map_keys(imported.ctors),
+                                imported.ctors,
+                                reg0.ctors,
+                              ),
+                              types: mergeMissing(
+                                _Map_keys(imported.types),
+                                imported.types,
+                                reg0.types,
+                              ),
+                            }),
+                          buildRegistry(stmts),
+                        ),
+                      (e) => Err(e) as Result<Stmt[], PErr>,
+                    ),
+                  (e) => Err(e) as Result<Stmt[], PErr>,
+                ),
+              (e) => Err(e) as Result<Stmt[], PErr>,
+            ),
+          (e) => Err(e) as Result<Stmt[], PErr>,
+        ),
+      (e) => Err(e) as Result<Stmt[], PErr>,
+    ),
 );
 export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
   checkWith(
@@ -2890,49 +2722,48 @@ export const checkAllWith: <A, B>(
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
   ) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) =>
-            ((errors: PErr[]) =>
-              length(errors) === 0
-                ? (Ok(stmts) as Result<Stmt[], PErr[]>)
-                : (Err(errors) as Result<Stmt[], PErr[]>))([
-              ...checkReservedNamesAll(stmts),
-              ...checkReservedWordsAll(stmts),
-              ...checkCtorFieldVarsAll(stmts),
-              ...checkQualifiedTypeNamesAll(stmts, quals),
-              ...checkLoopsAll(stmts),
-              e,
-            ]))(_v)
-        : _v._tag === "Ok"
-          ? (({ value: reg0 }) =>
-              ((reg: Registry) =>
-                ((errors: PErr[]) =>
-                  length(errors) === 0
-                    ? (Ok(stmts) as Result<Stmt[], PErr[]>)
-                    : (Err(errors) as Result<Stmt[], PErr[]>))([
-                  ...checkReservedNamesAll(stmts),
-                  ...checkReservedWordsAll(stmts),
-                  ...checkCtorFieldVarsAll(stmts),
-                  ...checkQualifiedTypeNamesAll(stmts, quals),
-                  ...checkLoopsAll(stmts),
-                  ..._Array_flatMap(
-                    (stmt: Stmt) =>
-                      ((_v) =>
-                        _v._tag === "SLet"
-                          ? (({ value }) => checkExprs(value, reg))(_v)
-                          : _v._tag === "SExpr"
-                            ? (({ value }) => checkExprs(value, reg))(_v)
-                            : ([] as PErr[]))(stmt),
-                    stmts,
-                  ),
-                ]))({
-                ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
-                types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
-              }))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(buildRegistry(stmts)),
+    _Result_match(
+      buildRegistry(stmts),
+      (e) => {
+        const errors: PErr[] = [
+          ...checkReservedNamesAll(stmts),
+          ...checkReservedWordsAll(stmts),
+          ...checkCtorFieldVarsAll(stmts),
+          ...checkQualifiedTypeNamesAll(stmts, quals),
+          ...checkLoopsAll(stmts),
+          e,
+        ];
+        return length(errors) === 0
+          ? (Ok(stmts) as Result<Stmt[], PErr[]>)
+          : (Err(errors) as Result<Stmt[], PErr[]>);
+      },
+      (reg0) => {
+        const reg: Registry = {
+          ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
+          types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
+        };
+        const errors: PErr[] = [
+          ...checkReservedNamesAll(stmts),
+          ...checkReservedWordsAll(stmts),
+          ...checkCtorFieldVarsAll(stmts),
+          ...checkQualifiedTypeNamesAll(stmts, quals),
+          ...checkLoopsAll(stmts),
+          ..._Array_flatMap(
+            (stmt: Stmt) =>
+              ((_v) =>
+                _v._tag === "SLet"
+                  ? (({ value }) => checkExprs(value, reg))(_v)
+                  : _v._tag === "SExpr"
+                    ? (({ value }) => checkExprs(value, reg))(_v)
+                    : ([] as PErr[]))(stmt),
+            stmts,
+          ),
+        ];
+        return length(errors) === 0
+          ? (Ok(stmts) as Result<Stmt[], PErr[]>)
+          : (Err(errors) as Result<Stmt[], PErr[]>);
+      },
+    ),
 );
 export const checkAll: (stmts: Stmt[]) => Result<Stmt[], PErr[]> = (stmts: Stmt[]) =>
   checkAllWith(

@@ -15,6 +15,7 @@ import {
   _Array_prepend,
   _Map_has,
   _Map_set,
+  _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
@@ -45,17 +46,11 @@ export const primTypeNames = ["number", "int", "float", "string", "bool", "unit"
 const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => string[] = _curry(
   2,
   <A>(fields: ({ name: Option<string> } & A)[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1)))(
-              _v,
-            )
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => [] as string[],
+      (f) => _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1)),
+    ),
 );
 export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] = <A>(
   fields: ({ name: Option<string> } & A)[],
@@ -141,22 +136,19 @@ const seedRegCtorsFrom: <A, B, D>(
     owner: string,
     acc: Map<A, CtorInfo>,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: c }) =>
-              seedRegCtorsFrom(
-                ctors,
-                i + 1,
-                owner,
-                _Map_has(c.name, acc)
-                  ? acc
-                  : _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ctors)),
+    _Option_match(
+      _Array_get(i, ctors),
+      () => acc,
+      (c) =>
+        seedRegCtorsFrom(
+          ctors,
+          i + 1,
+          owner,
+          _Map_has(c.name, acc)
+            ? acc
+            : _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
+        ),
+    ),
 );
 const seedRegDeclsFrom: <C, D, E>(
   decls: ({ name: string; ctors: ({ name: string; fields: C[] } & D)[] } & E)[],
@@ -169,22 +161,19 @@ const seedRegDeclsFrom: <C, D, E>(
     i: number,
     reg: Registry,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? reg
-        : _v._tag === "Some"
-          ? (({ value: bt }) =>
-              seedRegDeclsFrom(decls, i + 1, {
-                ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
-                types: _Map_set(
-                  bt.name,
-                  map((c: { name: string; fields: C[] } & D) => c.name, bt.ctors),
-                  reg.types,
-                ),
-              }))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, decls)),
+    _Option_match(
+      _Array_get(i, decls),
+      () => reg,
+      (bt) =>
+        seedRegDeclsFrom(decls, i + 1, {
+          ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
+          types: _Map_set(
+            bt.name,
+            map((c: { name: string; fields: C[] } & D) => c.name, bt.ctors),
+            reg.types,
+          ),
+        }),
+    ),
 );
 const ctorErr: <A, B, C, D>(
   message: A,
@@ -212,23 +201,20 @@ const ctorsInto: <A, C, D, E, F>(
     sp: { end: C; start: D } & F,
     acc: Map<string, CtorInfo>,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? Ok(acc)
-        : _v._tag === "Some"
-          ? (({ value: c }) =>
-              _Map_has(c.name, acc)
-                ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
-                : ctorsInto(
-                    ctors,
-                    i + 1,
-                    owner,
-                    sp,
-                    _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-                  ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ctors)),
+    _Option_match(
+      _Array_get(i, ctors),
+      () => Ok(acc),
+      (c) =>
+        _Map_has(c.name, acc)
+          ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
+          : ctorsInto(
+              ctors,
+              i + 1,
+              owner,
+              sp,
+              _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
+            ),
+    ),
 );
 const buildLoop: _Curry<
   [stmts: Stmt[], i: number, reg: Registry],
