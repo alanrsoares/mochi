@@ -36,7 +36,7 @@ for await (const p of new Glob("test/.mochi-cli-*").scan({
   n++;
 }
 
-// All `.js` outside node_modules (mochi build emit). Bootstrap TS emit beside sources.
+// All `.js` outside node_modules (mochi build emit). Legacy root TS emit cleanup.
 for (const pattern of ["**/*.js", "bootstrap/*.ts", "bootstrap/*.d.mts"] as const) {
   for await (const p of new Glob(pattern).scan({ cwd: root, absolute: true })) {
     if (p.includes(`${root}/node_modules/`) || p.includes("/node_modules/")) continue;

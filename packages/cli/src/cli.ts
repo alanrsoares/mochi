@@ -14,17 +14,10 @@ import {
   printProjectErrors,
   transformProject,
 } from "@mochi/codemod";
-import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
-import {
-  buildModulesBootstrapWith,
-  buildModulesTsBootstrapWith,
-  emitDtsForFileBootstrapWith,
-} from "@mochi/compiler/bootstrap/module";
-import {
-  compileBootstrapSyncWith,
-  compileTsBootstrapSyncWith,
-} from "@mochi/compiler/bootstrap/sync";
+import { compileSyncWith, compileTsSyncWith } from "@mochi/compiler/compile/sync";
 import { type Diagnostic, formatError } from "@mochi/compiler/errors";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import { buildModulesTsWith, buildModulesWith, emitDtsForFileWith } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
@@ -56,7 +49,7 @@ function die(es: Diagnostic | Diagnostic[], src?: string): never {
 }
 
 /** The self-hosted graph's compact diagnostic, rendered by its host-equivalent format. */
-function dieBootstrap(path: string, src: string, errors: readonly BootstrapDiagnostic[]): never {
+function dieCompiler(path: string, src: string, errors: readonly CompilerDiagnostic[]): never {
   for (const error of errors) {
     const before = src.slice(0, error.start);
     const line = before.split("\n").length;
@@ -130,14 +123,14 @@ await match(cmd)
     );
     // Type imports name `.mochi` siblings, so stdout and sidecars share one emit.
     const emit = (file: string): string => {
-      const result = emitDtsForFileBootstrapWith(file, "@mochi/runtime", {
+      const result = emitDtsForFileWith(file, "@mochi/runtime", {
         open,
         runtime: true,
         docs,
         moduleExt: ".js",
         strictEntry: false,
       });
-      if (result._tag === "Err") dieBootstrap(file, readFileSync(file, "utf8"), [result.error]);
+      if (result._tag === "Err") dieCompiler(file, readFileSync(file, "utf8"), [result.error]);
       return result.value;
     };
     if (!write) {
@@ -157,14 +150,14 @@ await match(cmd)
       `usage: mochi ts [--open] [--no-docs] <file.mochi>\n${USAGE}`,
     );
     const src = await Bun.file(path).text();
-    const result = compileTsBootstrapSyncWith(src, "@mochi/runtime", {
+    const result = compileTsSyncWith(src, "@mochi/runtime", {
       open,
       runtime: true,
       docs,
       moduleExt: ".js",
       strictEntry: false,
     });
-    if (result._tag === "Err") dieBootstrap(path, src, result.error);
+    if (result._tag === "Err") dieCompiler(path, src, result.error);
     process.stdout.write(result.value);
   })
   .with("build", async () => {
@@ -176,14 +169,14 @@ await match(cmd)
       `usage: mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>\n${USAGE}`,
     );
     const result = emitTs
-      ? buildModulesTsBootstrapWith(entry, "@mochi/runtime", {
+      ? buildModulesTsWith(entry, "@mochi/runtime", {
           open,
           runtime: true,
           docs,
           moduleExt: ".js",
           strictEntry: false,
         })
-      : buildModulesBootstrapWith(entry, {
+      : buildModulesWith(entry, {
           open,
           runtime: true,
           docs,
@@ -192,7 +185,7 @@ await match(cmd)
         });
     if (result._tag === "Err") {
       const src = await Bun.file(entry).text();
-      dieBootstrap(entry, src, result.error);
+      dieCompiler(entry, src, result.error);
     }
     const outputs = result.value;
     const ext = emitTs ? ".ts" : ".js";
@@ -211,13 +204,13 @@ await match(cmd)
       USAGE,
     );
     const src = await Bun.file(file).text();
-    const result = compileBootstrapSyncWith(src, {
+    const result = compileSyncWith(src, {
       open,
       runtime: true,
       docs,
       moduleExt: ".js",
       strictEntry: false,
     });
-    if (result._tag === "Err") dieBootstrap(file, src, result.error);
+    if (result._tag === "Err") dieCompiler(file, src, result.error);
     process.stdout.write(result.value);
   });

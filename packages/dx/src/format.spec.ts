@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
-import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import { lex, parse } from "@mochi/compiler/syntax";
 import { formatSrc as fmt } from "@mochi/test-support/format";
+import type { Result } from "@onrails/result";
 import { unwrapOk } from "@onrails/result";
 import { format } from "./format";
 
-type Parsed = BootstrapResult<unknown, BootstrapDiagnostic>;
+type Parsed = Result<unknown, CompilerDiagnostic>;
 
 /** Whether `src` lexes and parses cleanly through the self-hosted front end. */
 const reparses = (src: string): boolean => {

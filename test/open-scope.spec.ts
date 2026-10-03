@@ -7,12 +7,11 @@
  */
 
 import { expect, test } from "bun:test";
-import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
-import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { inferTypesSyncWith } from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { isErr, unwrapErr } from "@onrails/result";
 
-const inferOpen = (src: string) =>
-  inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: true });
+const inferOpen = (src: string) => inferTypesSyncWith(src, { ...defaultOptions, open: true });
 
 const messages = (src: string): string[] => unwrapErr(inferOpen(src)).map((d) => d.message);
 

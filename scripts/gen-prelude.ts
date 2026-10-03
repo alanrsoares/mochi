@@ -1,4 +1,4 @@
-// Generator for `bootstrap/prelude.gen.mjs` — the standalone prelude-table shim
+// Generator for `packages/compiler/src/prelude/prelude.gen.mjs` — the standalone prelude-table shim
 // the shipped self-hosted compiler imports (ticket 0004). The five tables live
 // once in `src/prelude.ts`; the shipped `mochic` cannot import from `src/`, so
 // this script lowers them into a plain ESM data module.
@@ -15,7 +15,7 @@
 // differential test does) so the embedded data can never drift from the shape
 // the bootstrap inferrer expects.
 
-import { compileBootstrapSync } from "@mochi/compiler/bootstrap/sync";
+import { compileSync } from "@mochi/compiler/compile/sync";
 import {
   namespaceRuntime,
   preludeEnv,
@@ -27,7 +27,7 @@ import type { Row, Type } from "@mochi/compiler/types";
 import { match } from "@onrails/pattern";
 import { repoPath, syncGeneratedFile } from "./lib";
 
-export const SHIM_PATH = "bootstrap/prelude.gen.mjs";
+export const SHIM_PATH = "packages/compiler/src/prelude/prelude.gen.mjs";
 
 // --- load infer.mochi's Ty/Row constructors from the compiled module ---
 type AlInfer = {
@@ -79,7 +79,7 @@ const makeConverters = (al: AlInfer) => {
 // Build the shim's ESM source. Pure function of src/prelude.ts + infer.mochi, so
 // the parity test can call it and compare against the checked-in file.
 export const buildShimSource = (): string => {
-  const compiled = compileBootstrapSync(readTypes());
+  const compiled = compileSync(readTypes());
   if (compiled._tag === "Err")
     throw new Error(`bootstrap types emit failed: ${JSON.stringify(compiled.error)}`);
   const alInfer = evalAlNames<AlInfer>(compiled.value, [
@@ -135,7 +135,7 @@ export const runtimeDeps = _map(_runtimeDeps);
 // still compiles single-file open-world, unlike infer.mochi.
 const readTypes = (): string => {
   const { readFileSync } = require("node:fs");
-  return readFileSync(repoPath("bootstrap/types.mochi"), "utf8");
+  return readFileSync(repoPath("packages/compiler/src/infer/types.mochi"), "utf8");
 };
 
 // Run directly: (re)write the checked-in shim.

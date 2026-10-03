@@ -5,8 +5,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
-import { compileGraphBootstrap } from "@mochi/compiler/bootstrap/module";
+import { loadGraph } from "@mochi/compiler/graph";
+import { compileGraph } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { loopCases } from "./bench-loop";
 import { vendorPluginsFor } from "./plugins";
@@ -26,8 +26,8 @@ export type BenchSuite = {
 };
 
 const FORMAT_FILES = [
-  "bootstrap/parser.mochi",
-  "bootstrap/infer.mochi",
+  "packages/compiler/src/parser/parser.mochi",
+  "packages/compiler/src/infer/infer.mochi",
   "examples/snake/src/App.mochi",
 ];
 
@@ -70,14 +70,14 @@ const fmtCase = (root: string, rel: string): BenchCase => {
 const compileCases = async (root: string, rel: string, label: string): Promise<BenchCase[]> => {
   const entry = join(root, rel);
   const src = readFileSync(entry, "utf8");
-  const load = () => loadBootstrapGraph(entry, src, (p) => readFile(p, "utf8"));
+  const load = () => loadGraph(entry, src, (p) => readFile(p, "utf8"));
   const graph = expectOk(await load(), "load");
   return [
-    { name: `${label}: load (lex+parse)`, run: load },
+    { name: `${label}: load (lex+parse)`, run: () => load().resolve() },
     {
       name: `${label}: check+infer+codegen`,
       note: `${graph.length} modules`,
-      run: () => expectOk(compileGraphBootstrap(graph), "compile"),
+      run: () => expectOk(compileGraph(graph), "compile"),
     },
   ];
 };
@@ -111,8 +111,8 @@ export const SUITES: Record<string, BenchSuite> = {
     },
   },
   compile: {
-    describe: "load and compile the bootstrap/cli.mochi module graph",
-    cases: (root) => compileCases(root, "bootstrap/cli.mochi", "compile"),
+    describe: "load and compile the packages/cli/src/driver.mochi module graph",
+    cases: (root) => compileCases(root, "packages/cli/src/driver.mochi", "compile"),
   },
 };
 
@@ -127,12 +127,12 @@ export const CODSPEED_SUITES: Record<string, BenchSuite> = {
   fmt: {
     describe: "format a compiler module and a JSX component",
     cases: async (root) => [
-      fmtCase(root, "bootstrap/scc.mochi"),
+      fmtCase(root, "packages/compiler/src/infer/scc.mochi"),
       fmtCase(root, "examples/snake/src/App.mochi"),
     ],
   },
   compile: {
-    describe: "load and compile the bootstrap/ctors.mochi module graph",
-    cases: (root) => compileCases(root, "bootstrap/ctors.mochi", "compile ctors"),
+    describe: "load and compile the packages/compiler/src/ast/ctors.mochi module graph",
+    cases: (root) => compileCases(root, "packages/compiler/src/ast/ctors.mochi", "compile ctors"),
   },
 };

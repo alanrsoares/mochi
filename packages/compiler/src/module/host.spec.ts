@@ -1,0 +1,202 @@
+import { expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { repoRoot } from "@mochi/test-support";
+import { unwrapOk } from "@onrails/result";
+import type { Stmt } from "../infer/host-types.ts";
+import { lex, parse as parseTokens } from "../parser/syntax.ts";
+import {
+  buildModules,
+  buildModulesTsWith,
+  buildModulesWith,
+  defaultOptions,
+  editorOptions,
+  inferGraphTypes,
+  symbolOccurrences,
+} from "./host.ts";
+
+const parse = (source: string): Stmt[] => {
+  const tokens = lex(source) as { _tag: string; value?: unknown };
+  expect(tokens._tag).toBe("Ok");
+  const stmts = parseTokens(tokens.value) as { _tag: "Ok"; value: Stmt[] } | { _tag: "Err" };
+  expect(stmts._tag).toBe("Ok");
+  if (stmts._tag !== "Ok") throw new Error("fixture did not parse");
+  return stmts.value;
+};
+
+test("bundled bootstrap module graph orders dependencies first", () => {
+  const entry = join(repoRoot(import.meta.url), "examples/modules/main.mochi");
+  const bootstrap = buildModules(entry);
+  expect(bootstrap._tag).toBe("Ok");
+  if (bootstrap._tag === "Ok") {
+    expect(bootstrap.value.map((output) => basename(output.path))).toEqual([
+      "geometry.mochi",
+      "main.mochi",
+    ]);
+    expect(bootstrap.value.every((output) => output.js.length > 0)).toBe(true);
+  }
+});
+
+test("bundled graph facade emits .js sibling imports by default", () => {
+  const result = buildModules(join(repoRoot(import.meta.url), "examples/modules/main.mochi"));
+  expect(unwrapOk(result).some((output) => output.js.includes('from "./geometry.js"'))).toBe(true);
+});
+
+// Vite wants sibling imports left as `.mochi` so they re-enter its plugin.
+test("bundled graph facade honours a caller's moduleExt", () => {
+  const result = buildModulesWith(join(repoRoot(import.meta.url), "examples/modules/main.mochi"), {
+    open: false,
+    runtime: true,
+    docs: true,
+    moduleExt: ".mochi",
+    strictEntry: false,
+  });
+  expect(unwrapOk(result).some((output) => output.js.includes('from "./geometry.mochi"'))).toBe(
+    true,
+  );
+});
+
+test("bundled graph query preserves inferred spans across imports", () => {
+  const result = inferGraphTypes([
+    {
+      path: "/virtual/dep.mochi",
+      src: "export let value = 1",
+      stmts: parse("export let value = 1"),
+    },
+    {
+      path: "/virtual/main.mochi",
+      src: 'import { value } from "./dep"\nlet answer = value',
+      stmts: parse('import { value } from "./dep"\nlet answer = value'),
+    },
+  ]);
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.arrayContaining([
+      expect.objectContaining({
+        path: "/virtual/main.mochi",
+        types: expect.arrayContaining([
+          expect.objectContaining({ span: { start: 43, end: 48 }, display: "number" }),
+        ]),
+      }),
+    ]),
+  });
+});
+
+test("bundled graph exposes lexical binding identity", () => {
+  const occurrences = symbolOccurrences(parse("let x = 1\nlet f = let x = 2 in x\nx"));
+  expect(occurrences).toEqual([
+    expect.objectContaining({ name: "x", defStart: 4, start: 4, role: "def" }),
+    expect.objectContaining({ name: "f", role: "def" }),
+    expect.objectContaining({ name: "x", defStart: 22, start: 22, role: "def" }),
+    expect.objectContaining({ name: "x", defStart: 22, start: 31, role: "use" }),
+    expect.objectContaining({ name: "x", defStart: 4, start: 33, role: "use" }),
+  ]);
+});
+
+// --- graph options ---------------------------------------------------------
+//
+// The self-hosted graph takes `open` / `runtime` / `docs` / `moduleExt` / `strictEntry` as
+// real options. Before it did, the host CLI fell back to the TypeScript
+// compiler whenever a caller asked for anything but the defaults, and the graph
+// driver inferred every module open-world — so `mochi build` silently accepted
+// an unbound name that `mochi <file>` rejected.
+
+const inTmp = (files: Record<string, string>): string => {
+  const dir = mkdtempSync(join(tmpdir(), "mochi-graph-opts-"));
+  for (const [name, source] of Object.entries(files)) writeFileSync(join(dir, name), source);
+  return dir;
+};
+
+test("graph build rejects an unbound variable, like the single-file railway", () => {
+  const dir = inTmp({
+    "dep.mochi": "export let x = 1\n",
+    "main.mochi": 'import { x } from "./dep.mochi"\nexport let y = x + nope\n',
+  });
+  const result = buildModules(join(dir, "main.mochi"));
+  expect(result._tag).toBe("Err");
+  if (result._tag === "Err") expect(result.error[0]?.message).toContain("unbound variable 'nope'");
+});
+
+test("graph build collects independent checker errors in one module", () => {
+  const dir = inTmp({
+    "dep.mochi": "export type Choice = | One | Two\n",
+    "main.mochi":
+      'import { One, Two } from "./dep.mochi"\n' +
+      "let first = value => switch value { | One => 1 }\n" +
+      "let second = value => switch value { | Two => 2 }\n",
+  });
+  const result = buildModules(join(dir, "main.mochi"));
+  expect(result._tag).toBe("Err");
+  if (result._tag === "Err") {
+    expect(result.error).toHaveLength(2);
+    expect(result.error.map((error) => error.message)).toEqual([
+      expect.stringContaining("missing Two"),
+      expect.stringContaining("missing One"),
+    ]);
+  }
+});
+
+// Recovery resolves imports twice so the placeholder pass cannot swallow this:
+// the strict error array replaces the one the caller would otherwise have kept,
+// so a module with both faults used to report the checker error alone.
+test("graph build keeps a missing export beside the checker errors it hides", () => {
+  const dir = inTmp({
+    "dep.mochi": "export type Choice = | One | Two\n",
+    "main.mochi":
+      'import { One, Missing } from "./dep.mochi"\n' +
+      "let first = value => switch value { | One => 1 }\n",
+  });
+  const result = buildModules(join(dir, "main.mochi"));
+  expect(result._tag).toBe("Err");
+  if (result._tag === "Err") {
+    expect(result.error.map((error) => error.message)).toEqual([
+      expect.stringContaining("has no export 'Missing'"),
+      expect.stringContaining("missing Two"),
+    ]);
+  }
+});
+
+test("a dependency's own `use open` directive is honoured", () => {
+  const dir = inTmp({
+    "dep.mochi": '"use open"\nexport let value = hostGlobal\n',
+    "main.mochi": 'import { value } from "./dep.mochi"\nexport let use = value\n',
+  });
+  expect(buildModules(join(dir, "main.mochi"))._tag).toBe("Ok");
+});
+
+test("`strictEntry` judges the entry by the caller's flag, not its directive", () => {
+  const dir = inTmp({ "main.mochi": '"use open"\nexport let value = hostGlobal\n' });
+  const entry = join(dir, "main.mochi");
+  expect(buildModulesWith(entry, defaultOptions)._tag).toBe("Ok");
+  expect(buildModulesWith(entry, editorOptions)._tag).toBe("Err");
+});
+
+// The TS rail reads the entry's own directive everywhere, so its recovery
+// preflight — which runs the JS rail — must not apply the JS entry rule, or the
+// preflight rejects an entry the TS compiler it guards would have accepted.
+test("typed graph emit honours the entry's `use open` even under `strictEntry`", () => {
+  const dir = inTmp({ "main.mochi": '"use open"\nexport let value = hostGlobal\n' });
+  const entry = join(dir, "main.mochi");
+  expect(buildModulesWith(entry, editorOptions)._tag).toBe("Err");
+  expect(buildModulesTsWith(entry, "@mochi/runtime", editorOptions)._tag).toBe("Ok");
+});
+
+test("`docs: false` drops docstrings from the emitted JS", () => {
+  const dir = inTmp({ "main.mochi": "/// Doubles.\nexport let double = n => n * 2\n" });
+  const entry = join(dir, "main.mochi");
+  const withDocs = unwrapOk(buildModulesWith(entry, defaultOptions));
+  const without = unwrapOk(buildModulesWith(entry, { ...defaultOptions, docs: false }));
+  expect(withDocs[0]?.js).toContain("Doubles.");
+  expect(without[0]?.js).not.toContain("Doubles.");
+});
+
+test("`runtime: false` leaves prelude helpers to the caller", () => {
+  const dir = inTmp({ "main.mochi": "export let answer = add(1, 2)\n" });
+  const entry = join(dir, "main.mochi");
+  const withRuntime = unwrapOk(buildModulesWith(entry, defaultOptions));
+  const withoutRuntime = unwrapOk(buildModulesWith(entry, { ...defaultOptions, runtime: false }));
+  expect(withRuntime[0]?.js).toContain("const add = _curry");
+  expect(withoutRuntime[0]?.js).not.toContain("const add = _curry");
+  expect(withoutRuntime[0]?.js).toContain("add(1, 2)");
+});

@@ -1,11 +1,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
 import { isErr } from "@onrails/result";
 import { type CodemodOptions, type CodemodTransform, transformSource } from "./transform.ts";
 
 export type PathTransformResult =
   | { ok: true; path: string; changed: boolean; out: string }
-  | { ok: false; path: string; diagnostics: BootstrapDiagnostic[] };
+  | { ok: false; path: string; diagnostics: CompilerDiagnostic[] };
 
 export type ProjectOptions = CodemodOptions & {
   /** Apply changes in place. */
@@ -17,7 +17,7 @@ export type ProjectOptions = CodemodOptions & {
 export type ProjectReport = {
   changed: string[];
   unchanged: string[];
-  errors: { path: string; diagnostics: BootstrapDiagnostic[] }[];
+  errors: { path: string; diagnostics: CompilerDiagnostic[] }[];
 };
 
 const defaultIgnore = (part: string) =>
@@ -80,7 +80,7 @@ export const transformProject = (
 };
 
 /** `path:line:col: message`, as the CLI prints the bootstrap graph's diagnostics. */
-export const formatDiagnostic = (path: string, src: string, d: BootstrapDiagnostic): string => {
+export const formatDiagnostic = (path: string, src: string, d: CompilerDiagnostic): string => {
   const before = src.slice(0, d.start);
   const line = before.split("\n").length;
   const col = d.start - before.lastIndexOf("\n");

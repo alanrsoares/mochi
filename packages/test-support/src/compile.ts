@@ -1,8 +1,8 @@
-import type { BootstrapOptions } from "@mochi/compiler/bootstrap/module";
-import { compileBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { compileSyncWith } from "@mochi/compiler/compile/sync";
+import type { CompilerOptions } from "@mochi/compiler/module";
 import { unwrapOk } from "@onrails/result";
 
-export type CompileJsOpts = Partial<Pick<BootstrapOptions, "runtime" | "moduleExt" | "open">> & {
+export type CompileJsOpts = Partial<Pick<CompilerOptions, "runtime" | "moduleExt" | "open">> & {
   /** Drop emitted `import …` lines (standalone eval harnesses). */
   stripImports?: boolean;
 };
@@ -11,7 +11,7 @@ export type CompileJsOpts = Partial<Pick<BootstrapOptions, "runtime" | "moduleEx
 export const compileJs = (src: string, opts: CompileJsOpts = {}): string => {
   const { stripImports = false, runtime = false, open = true, moduleExt = ".js" } = opts;
   let out = unwrapOk(
-    compileBootstrapSyncWith(src, {
+    compileSyncWith(src, {
       open,
       runtime,
       docs: true,

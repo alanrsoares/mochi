@@ -12,7 +12,7 @@ import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
 const root = repoRoot(import.meta.url);
-const bs = (f: string) => join(root, `bootstrap/${f}`);
+const bs = (owner: string, file: string) => join(root, "packages/compiler/src", owner, file);
 
 type Res<T> = { _tag: "Ok"; value: T } | { _tag: "Err"; error: { message: string } };
 type AlOption<T> = { _tag: "None" } | { _tag: "Some"; value: T };
@@ -49,12 +49,12 @@ const parseAl = (src: string): Stmts => unwrap(parse(unwrap(lex(src))));
 
 beforeAll(async () => {
   ensureInTreeBootstrapBuild();
-  ({ lex } = await import(bs("lexer.js")));
-  ({ parse } = await import(bs("parser.js")));
-  ({ check, checkWith } = await import(bs("check.js")));
-  ({ exportedRegistry, exportedCtorKeys } = await import(bs("ctors.js")));
-  ({ inferProgram, inferProgramImports } = await import(bs("infer.js")));
-  ({ builtins, namespaces } = await import(bs("prelude.gen.mjs")));
+  ({ lex } = await import(bs("lexer", "lexer.js")));
+  ({ parse } = await import(bs("parser", "parser.js")));
+  ({ check, checkWith } = await import(bs("check", "check.js")));
+  ({ exportedRegistry, exportedCtorKeys } = await import(bs("ast", "ctors.js")));
+  ({ inferProgram, inferProgramImports } = await import(bs("infer", "infer.js")));
+  ({ builtins, namespaces } = await import(bs("prelude", "prelude.gen.mjs")));
 }, BOOTSTRAP_BUILD_HOOK_MS);
 
 // ---- exportedRegistry ------------------------------------------------------

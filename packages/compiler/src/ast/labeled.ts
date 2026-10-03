@@ -2,7 +2,7 @@
  * Labeled-parameter sugar (ADR 0098 §2): a trailing `~name` group is one
  * record parameter, not a second HM calling convention.
  */
-import type { LabeledParam, LamParam } from "./ast";
+import type { LabeledParam, LamParam } from "./dto";
 import type { Span } from "./span";
 
 export type { LabeledParam };

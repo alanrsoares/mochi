@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { tString } from "@mochi/compiler/bootstrap/types";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import { tString } from "@mochi/compiler/infer/types";
 import { repoRoot } from "@mochi/test-support";
 import { languagePluginsComponent, mochiPlugin } from "@mochi/vite-plugin";
 import { ResultAsync } from "@onrails/result";
@@ -26,7 +26,7 @@ type TestPlugin = Omit<
 const testPlugin = (...args: Parameters<typeof mochiPlugin>): TestPlugin =>
   mochiPlugin(...args) as TestPlugin;
 
-const runtimeLanguagePlugin: BootstrapPlugin = {
+const runtimeLanguagePlugin: CompilerPlugin = {
   name: "runtime-test",
   inferCall: (fn, _args, _origin, st) =>
     fn._tag === "ERef" && fn.name === "dynamic"

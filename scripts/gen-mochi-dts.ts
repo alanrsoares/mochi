@@ -14,10 +14,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  defaultBootstrapOptions,
-  emitDtsForFileBootstrapWith,
-} from "@mochi/compiler/bootstrap/module";
+import { defaultOptions, emitDtsForFileWith } from "@mochi/compiler/module";
 import { repoPath, vendorPluginsFor } from "./lib";
 
 const args = process.argv.slice(2);
@@ -62,8 +59,8 @@ for (const file of files) {
   const plugins = vendorPluginsFor(targetRoot);
   // Graph-aware: a module importing a sibling needs that sibling's schemes, which
   // single-file `emitDts` reports as unbound.
-  const r = emitDtsForFileBootstrapWith(file, "@mochi/runtime", {
-    ...defaultBootstrapOptions,
+  const r = emitDtsForFileWith(file, "@mochi/runtime", {
+    ...defaultOptions,
     plugins,
   });
   if (r._tag === "Err") {

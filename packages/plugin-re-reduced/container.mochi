@@ -1,5 +1,5 @@
 // Typed re-reduced container seam (ADR 0051). Import in apps; register
-// `reReducedBootstrap` on the project plugin list — `inferCall` types the
+// `reReducedPlugin` on the project plugin list — `inferCall` types the
 // whole `defineContainer` config (state signals, per-action payloads,
 // `derive`, the `effects` reaction builder) and the `Intent.*` vocabulary.
 //

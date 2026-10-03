@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import { parseProgram } from "@mochi/compiler/syntax";
 import { format } from "@mochi/dx/format";
 import { unwrapOk } from "@onrails/result";
 

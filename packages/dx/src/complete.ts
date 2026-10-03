@@ -1,7 +1,7 @@
 /** Completion exports over the self-hosted query implementation. */
-export type { CompletionItem, CompletionKind } from "@mochi/compiler/bootstrap/options";
+export type { CompletionItem, CompletionKind } from "@mochi/compiler/extensions";
 export {
-  type BootstrapCompleteOptions as CompleteOptions,
-  bootstrapCompleteAt as completeAt,
-  moduleBootstrapCompleteAt as moduleCompleteAt,
-} from "./bootstrap-complete";
+  type CompilerCompleteOptions as CompleteOptions,
+  completeAt,
+  moduleCompleteAt,
+} from "./completion-query";

@@ -171,7 +171,7 @@ It re-exports `@mochi/bun/preload`, the same loader any Bun process that imports
 A spec file is top-level `test(...)` / `describe(...)` / `testEach(...)` /
 `check(...)` / `testTask(...)` / `testEachTask(...)` / `checkTask(...)`
 statements ([ADR 0087](adr/0087-expr-statements.md)).
-Bootstrap unit specs live next to the source (`bootstrap/*.spec.mochi`);
+Compiler unit specs live next to the source (`bootstrap/*.spec.mochi`);
 black-box compiler behavior lives in the ADR 0105 conformance corpus, with
 host-facing façade and north-star tests under `test/`.
 
@@ -212,7 +212,7 @@ extension).
   Otherwise-unhoverable syntax such as `let`, `extern`, `loop`, and collection sigils has a
   concise fallback hint rather than competing with a more-specific semantic hover.
   Hover runs on the self-hosted core: `hoverAt` (browser-safe, the docs site uses it) and the
-  graph-aware `moduleHoverAt` in `@mochi/dx/bootstrap-hover`
+  graph-aware `moduleHoverAt` in `@mochi/dx/hover-query`
   ([ADR 0122](adr/0122-bootstrap-hover.md)).
 - **Go to definition / document highlight** — lexical symbol index (values, types, ctors,
   same-file record fields); works when typecheck fails. Prelude / builtins (including
@@ -251,7 +251,7 @@ unbound names), filtered to the diagnostics overlapping the requested range. A f
   compiled, and closing a document retracts its diagnostics.
 - **Formatter** — width-based pretty-printing that runs on lex + parse only (no type
   information needed), which is why it can format even code that doesn't yet type-check.
-  It is the self-hosted `bootstrap/format.mochi`, run from the seed by `mochi fmt`, the
+  It is the self-hosted `packages/compiler/src/format/format.mochi`, run from the seed by `mochi fmt`, the
   LSP and `bun run fmt:mochi` ([ADR 0114](adr/0114-bootstrap-formatter-ships.md)). Vendor
   `format` hooks come from the manifest's self-hosted-core `plugins`.
 - **`bun run lint:mochi [globs…]`** — the same `moduleDiagnostics` the LSP publishes, run
@@ -277,7 +277,7 @@ Completion (`completeAt` / `moduleCompleteAt`, [ADR 0013](adr/0013-lsp-completio
 lists prelude/`import * as` members, record fields, plugin-backed `tw.*` tags, JSX
 props, and the values visible at the cursor; the LSP is a thin adapter with
 `triggerCharacters: ["."]`. It runs on the self-hosted core
-([ADR 0120](adr/0120-bootstrap-completion.md)); a `BootstrapPlugin`'s host-only
+([ADR 0120](adr/0120-bootstrap-completion.md)); a `CompilerPlugin`'s host-only
 `completeMembers` hook lists members of an opaque receiver such as `tw`
 ([ADR 0121](adr/0121-bootstrap-complete-members.md)).
 
@@ -289,7 +289,7 @@ Apps keep one typed manifest — `mochi.plugins.ts` — read by Vite, `gen-mochi
 and the LSP (the extension walks upward from each open `.mochi` file; loads only
 in a **trusted** workspace and only when the manifest resolves inside a workspace
 folder). Export `default` or named `plugins` as the self-hosted-core list
-(`BootstrapPlugin[]`, from each vendor's `/bootstrap` entry); the build and every
+(`CompilerPlugin[]`, from each vendor's `/bootstrap` entry); the build and every
 editor query read it ([ADR 0110](adr/0110-plugin-manifest-bootstrap-first.md),
 [ADR 0123](adr/0123-manifest-drops-dx-plugins.md)). Vite may
 also import a project-specific alias (`docsVendorPlugins`, …). A legacy `mochi.plugins.mjs`

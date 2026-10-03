@@ -6,7 +6,7 @@
 // copies just the requested aliases, plus every alias they reference, into one
 // `.d.ts`, which `skipLibCheck` leaves alone.
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, normalize } from "node:path";
 
 export type HostTypeRoot = { file: string; names: readonly string[] };
 
@@ -71,12 +71,12 @@ const readSeedFile = (dir: string, file: string): SeedFile => {
     consts.set(m[1]!, src.slice(from, annotationEnd(src, from)).trim());
   }
   const imports = new Map<string, string>();
-  for (const m of src.matchAll(/^import type \{([^}]*)\} from "\.\/([\w/-]+)";?$/gm)) {
+  for (const m of src.matchAll(/^import type \{([^}]*)\} from "([.\w/-]+)";?$/gm)) {
     for (const name of m[1]!
       .split(",")
       .map((n) => n.trim())
       .filter(Boolean))
-      imports.set(name, `${m[2]}.ts`);
+      imports.set(name, normalize(join(dirname(file), `${m[2]}.ts`)));
   }
   return { aliases, consts, imports };
 };

@@ -6,12 +6,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile } from "@mochi/compiler";
-import {
-  buildModulesBootstrapWith,
-  defaultBootstrapOptions,
-  emitDtsForFileBootstrapWith,
-} from "@mochi/compiler/bootstrap/module";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import { buildModulesWith, defaultOptions, emitDtsForFileWith } from "@mochi/compiler/module";
+import { parseProgram } from "@mochi/compiler/syntax";
 import { format } from "@mochi/dx/format";
 import { isErr, unwrapOk } from "@onrails/result";
 
@@ -29,7 +25,7 @@ const writeGraph = (files: Record<string, string>, entry: string): string => {
 };
 
 const build = (files: Record<string, string>, entry: string) =>
-  buildModulesBootstrapWith(writeGraph(files, entry), defaultBootstrapOptions);
+  buildModulesWith(writeGraph(files, entry), defaultOptions);
 
 const errorsOf = (files: Record<string, string>, entry: string) => {
   const r = build(files, entry);
@@ -228,11 +224,7 @@ test("dts qualifies an inferred imported variant (C5 dts)", () => {
       "",
     ].join("\n"),
   };
-  const r = emitDtsForFileBootstrapWith(
-    writeGraph(files, "main.mochi"),
-    "@mochi/runtime",
-    defaultBootstrapOptions,
-  );
+  const r = emitDtsForFileWith(writeGraph(files, "main.mochi"), "@mochi/runtime", defaultOptions);
   if (r._tag === "Err") throw new Error(r.error.message);
   const dts = r.value;
   expect(dts).toContain('import type * as D from "./shapes.mochi";');

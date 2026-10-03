@@ -6,7 +6,7 @@ extern lex<A, B> : string -> Result<A, B> = "./lex-tokens" "lexTokens"
 extern hoverAt<A> : string -> number -> Option<A> = "@mochi/dx/hover" "hoverAtOption"
 
 /// Closed token shape — pins bootstrap/TS schemes (open-row link mismatch
-/// under Array.append([]) / spread, same class as bootstrap/scc.mochi ADR note).
+/// under Array.append([]) / spread, same class as packages/compiler/src/infer/scc.mochi ADR note).
 type SpanTok = { text: string, kind: string, start: number }
 
 let keywords = Set.fromArray(

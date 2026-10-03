@@ -1,0 +1,61 @@
+import { ok, test } from "@mochi/test"
+import { lex } from "../../lexer/lexer.mochi"
+import { parse } from "../../parser/parser.mochi"
+import { inferProgramWith } from "../../infer/infer.mochi"
+import { preactPlugin } from "./preact.mochi"
+
+let typecheck = (src, plugins) =>
+  let? toks = lex(src) in
+  let? stmts = parse(toks) in
+    inferProgramWith(stmts, #{}, #{}, true, Some(plugins))
+      |> // Inference collects every type error (ADR 0004); these cases read the
+      // first.
+      Result.mapErr(es => switch Array.get(0, es) {
+        | Some(e) => { message: e.message, start: e.start, end: e.end }
+        | None => { message: "<none>", start: 0, end: 0 }
+      })
+
+test("useState pins the setter's state type", () => switch typecheck("extern useState : a -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (n, setN) = useState(0) in setN(\"oops\")\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useState widens a literal initial state", () => switch typecheck("extern useState : a -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (tab, setTab) = useState(\"js\") in setTab(\"ts\")\n", [preactPlugin]) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
+})
+
+test("without the plugin, the loose useRef extern remains unpinned", () => switch typecheck("extern useRef : a -> b = \"preact/hooks\" \"useRef\"\nlet r = useRef(\"x\")\nlet n : number = r.current\n", []) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
+})
+
+test("useRef ties current to its initializer", () => switch typecheck("extern useRef : a -> b = \"preact/hooks\" \"useRef\"\nlet r = useRef(\"x\")\nlet n : number = r.current\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useLazyState requires an initializer thunk", () => switch typecheck("extern useLazyState : (() -> a) -> (a, a -> b) = \"preact/hooks\" \"useState\"\nlet test = _ => let (n, _) = useLazyState(0) in n\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useMemo returns its thunk result", () => switch typecheck("extern useMemo : (() -> a) -> b -> a = \"preact/hooks\" \"useMemo\"\nlet value = useMemo(() => \"x\", [])\nlet n : number = value\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useEffect rejects a non-array dependency list", () => switch typecheck("extern useEffect : (() -> c) -> d -> e = \"preact/hooks\" \"useEffect\"\nlet x = useEffect(() => (), 42)\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useMemo rejects a surplus argument", () => switch typecheck("extern useMemo : (() -> a) -> b -> a = \"preact/hooks\" \"useMemo\"\nlet x = useMemo(() => 1, [], 2)\n", [preactPlugin]) {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("useEffect accepts an array dependency list", () => switch typecheck("extern useEffect : (() -> c) -> d -> e = \"preact/hooks\" \"useEffect\"\nlet x = useEffect(() => (), [])\n", [preactPlugin]) {
+  | Err(_) => false |> ok
+  | Ok(_) => true |> ok
+})

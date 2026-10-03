@@ -1,6 +1,6 @@
 // ADR 0097 — `packages/compiler/src/extensions/plugins/jsx-schema.ts` is the one
 // source of truth for the intrinsic JSX element schema, and
-// `bootstrap/plugins/jsx-schema.gen.mjs` is its projection across the self-host's
+// `packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs` is its projection across the self-host's
 // host seam.
 //
 // Two guards:

@@ -1,8 +1,8 @@
 // `() -> T` in TypeExpr / extern signatures (ADR 0014 surface + ADR 0015).
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
-import type { Stmt } from "@mochi/compiler/bootstrap/types";
+import type { Stmt } from "@mochi/compiler/infer/types";
+import { lex, parse } from "@mochi/compiler/syntax";
 import { hoverAt } from "@mochi/dx/hover";
 import { isOk, unwrapOk } from "@onrails/result";
 

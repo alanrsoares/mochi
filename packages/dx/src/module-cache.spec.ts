@@ -6,10 +6,10 @@
 // Every assertion also pins a non-empty result: comparing two `null`s would
 // pass while measuring nothing.
 import { expect, test } from "bun:test";
-import { createBootstrapGraphCache } from "@mochi/compiler/bootstrap";
-import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
+import { createGraphCache } from "@mochi/compiler/graph";
 import { moduleCompleteAt } from "@mochi/dx/complete";
 import { documentDiagnostics } from "@mochi/dx/diagnostics";
+import { moduleHoverAt } from "@mochi/dx/hover-query";
 import { moduleTypeDefinitionAt } from "@mochi/dx/nav";
 import { memRead } from "@mochi/test-support";
 
@@ -31,7 +31,7 @@ const atCtor = src.lastIndexOf("Circle") + 2;
 const atBinding = src.indexOf("let shape") + 5;
 
 test("a shared cache does not change hover or go-to-type", async () => {
-  const cache = createBootstrapGraphCache();
+  const cache = createGraphCache();
   const read = memRead(files);
   expect(await documentDiagnostics("/app.mochi", src, read)).toEqual([]);
 
@@ -45,7 +45,7 @@ test("a shared cache does not change hover or go-to-type", async () => {
 });
 
 test("a shared bootstrap graph cache does not change completion or go-to-type", async () => {
-  const bootstrapCache = createBootstrapGraphCache();
+  const graphCache = createGraphCache();
   const read = memRead(files);
   const recordSrc = 'import { point } from "/point.mochi"\nlet x = point.';
 
@@ -54,19 +54,19 @@ test("a shared bootstrap graph cache does not change completion or go-to-type", 
     recordSrc,
     recordSrc.length,
     async (path) => (path === "/point.mochi" ? "export let point = { x: 1, y: 2 }" : read(path)),
-    { cache: bootstrapCache },
+    { cache: graphCache },
   );
   expect(items.map((item) => item.label)).toEqual(["x", "y"]);
 
   const target = await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read, {
-    cache: bootstrapCache,
+    cache: graphCache,
   });
   expect(target?.path).toBe("/shapes.mochi");
   expect(target).toEqual(await moduleTypeDefinitionAt("/app.mochi", src, atBinding, read));
 });
 
 test("a warm query sees a dependency edit", async () => {
-  const cache = createBootstrapGraphCache();
+  const cache = createGraphCache();
   const before = await moduleHoverAt("/app.mochi", src, atCtor, memRead(files), { cache });
   expect(before?.code).toBe("number -> Shape");
 

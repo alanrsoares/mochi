@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { pos } from "@mochi/test-support";
-import { indexSource } from "./bootstrap-index.ts";
+import { indexSource } from "./file-index.ts";
 
 const index = (src: string) => indexSource("/t.mochi", src)!;
 

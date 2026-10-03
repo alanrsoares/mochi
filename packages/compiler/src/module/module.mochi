@@ -1,0 +1,1291 @@
+// Ticket 0013 (part a) — module-graph loader. Resolve the import graph of `.mochi`
+// files reachable from an entry, depth-first, and yield the modules in
+// DEPENDENCY ORDER (a module lands after everything it imports), detecting
+// import cycles. Sync throughout: the host IO returns `Result` directly (ticket
+// 0001), so there is no ResultAsync here — unlike `src/module.ts`, whose async
+// file reads force its loader half into a ResultAsync.
+//
+// Cross-module scheme/registry threading and the actual compileGraph land in
+// parts (b) and (c); this half only parses and orders.
+import { lex } from "../lexer/lexer.mochi"
+import { parseWith } from "../parser/parser.mochi"
+import { checkAllWith, checkWith } from "../check/check.mochi"
+import { exportedRegistry, exportedCtorKeys } from "../ast/ctors.mochi"
+import {
+  inferProgramImports,
+  inferProgramImportsTypes,
+  exportedSchemes,
+  scopeAliases
+} from "../infer/infer.mochi"
+import { codegenWith, jsGenOpts } from "../codegen/codegen.mochi"
+import * as Infer from "../infer/infer.mochi"
+import { emitTsModuleWith, externModuleDts } from "../codegen/typescript.mochi"
+import { showType, tVar } from "../infer/types.mochi"
+import { widenLits } from "../infer/schemes.mochi"
+import { index, indexWith, originsOf } from "../check/symbols.mochi"
+import {
+  emitDtsFromTypedWith,
+  emitDtsText,
+  qualifierMapOf
+} from "../dts/dts.mochi"
+import { bindingHooksFor, dtsHooksFor } from "../extensions/extensions.mochi"
+import { openMode } from "../compile/compile.mochi"
+
+// Prelude tables from the generated shim (as in compile.mochi). Threaded opaquely
+// into inferProgramImports / codegen; module.mochi never inspects them.
+extern builtins : Map<string, a> = "../prelude/prelude.gen.mjs" "builtins"
+extern namespaces : Map<string, Map<string, a>> = "../prelude/prelude.gen.mjs" "namespaces"
+extern namespaceRuntime : Map<string, Map<string, string>> = "../prelude/prelude.gen.mjs" "namespaceRuntime"
+extern preludeJsDefs : Map<string, string> = "../prelude/prelude.gen.mjs" "preludeJsDefs"
+extern runtimeDeps : Map<string, [string]> = "../prelude/prelude.gen.mjs" "runtimeDeps"
+
+// Stmt/Pattern ctors via namespace import (ADR 0002) — only SImport/SImportNs are
+// destructured here; other stmts flow opaquely to the passes.
+import * as Ast from "../ast/ast.mochi"
+
+/// Host-facing `.d.ts` emit. Lives here for the same reason the TypeScript
+/// mirror puts `emitDtsForFile` in its module driver: declaration emit is a
+/// whole-file query the graph owns, not a single-expression one.
+export let emitDts = (src, runtimeImport) => emitDtsText(src, runtimeImport)
+
+/// Host-facing lexical occurrence query. The index itself is source-owned;
+/// this re-export makes it reachable from the frozen graph without teaching
+/// host DX code about bootstrap's internal module layout.
+export let symbolOccurrences = stmts => index(stmts)
+
+/// Host-facing symbol index over all four spaces, imports resolved through
+/// `origins` and builtins through the host's virtual `prelude`.
+export let symbolIndex = (path, origins, prelude, stmts) =>
+  indexWith(path, origins, prelude, stmts)
+
+/// A module's export sites, the `origins` an importer's `symbolIndex` takes.
+export let exportedOrigins = (path, stmts) => originsOf(path, stmts)
+
+// Caller knobs, structurally identical to compile.mochi's `Opts` (ADR 0005),
+// so they unify across the module boundary without a type import.
+type Opts = {
+  open: bool,
+  runtime: bool,
+  docs: bool,
+  moduleExt: string,
+  strictEntry: bool,
+  plugins: Option<[Infer.HostPlugin]>
+}
+
+let defaultOpts : Opts = {
+  open: false,
+  runtime: true,
+  docs: true,
+  moduleExt: ".js",
+  strictEntry: false,
+  plugins: None
+}
+
+// One loaded module: its canonical path, source, and parsed statements. The
+// source rides along so every module can honour its own `"use open"`.
+type Loaded = { path: string, src: string, stmts: [Stmt] }
+
+type ModuleOutput = { path: string, js: string }
+
+// Export locations are a deliberately shallow graph query for host navigation:
+// values point at their own binders, while ctor names point at their owning
+// type (Ctor carries no source span in the bootstrap AST).
+type ExportOrigins = {
+  values: Map<string, Span>,
+  types: Map<string, Span>,
+  ctors: Map<string, Span>
+}
+
+// A driver error, shaped like the compiler's `CErr`; the graph phase has no
+// meaningful span, so both offsets are 0 (matching src/module.ts). `kind` is the
+// stage that raised it (lex|parse|check|type), as src/module.ts's Diagnostic.
+type MErr = { kind: string, message: string, start: number, end: number }
+
+extern readFile : string -> Result<string, string> = "./host.mjs" "readFile"
+extern resolveImport : string -> string -> string = "./host.mjs" "resolveImport"
+extern absPath : string -> string = "./host.mjs" "absPath"
+
+let mErr : string -> MErr = message =>
+  { kind: "check", message, start: 0, end: 0 }
+// Tag a stage error with its kind. `kind: string` so the TS emit widens it
+// rather than narrowing to the literal at each call site.
+let stamp = (kind: string, e) =>
+  { kind, message: e.message, start: e.start, end: e.end }
+// An unresolved import stands for an independently-instantiable host value,
+// not one shared type variable: `forall a. a` keeps later checks moving
+// without inventing an infinite-type cascade at each use site.
+let recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) }
+let atPath = (kind: string, path: string, e) =>
+  {
+    kind,
+    message: "module '${path}': ${e.message}",
+    start: e.start,
+    end: e.end
+  }
+// The typed-query and TS-emit rails stay single-error at the host API: they
+// report the first of a module's type errors (inference collects them all,
+// ADR 0004 §3). Never empty in practice — inference fails with at least one.
+let firstAtPath = (path, es) => switch Array.get(0, es) {
+  | Some(e) => atPath("type", path, e)
+  | None => {
+      kind: "type",
+      message: "module '${path}': type error",
+      start: 0,
+      end: 0
+    }
+}
+
+// Lex + parse a source file to statements. No check/infer — both need the whole
+// graph's exports resolved first, which only happens in a later part.
+let parseModule = (src, plugins: Option<[Infer.HostPlugin]>) => switch lex(src) {
+  | Err(e) => Err(stamp("lex", e))
+  | Ok(toks) => switch toks->parseWith(plugins) {
+      | Err(e) => Err(stamp("parse", e))
+      | Ok(stmts) => Ok(stmts)
+    }
+}
+
+// The `from` specs of a module's import statements, in source order.
+let importFromsFrom = (stmts, i, acc) => switch Array.get(i, stmts) {
+  | None => acc
+  | Some(s) => switch s {
+      | Ast.SImport(_, from, _) => importFromsFrom(
+          stmts,
+          i + 1,
+          Array.append(from, acc)
+        )
+      | Ast.SImportNs(_, from, _) => importFromsFrom(
+          stmts,
+          i + 1,
+          Array.append(from, acc)
+        )
+      | _ => importFromsFrom(stmts, i + 1, acc)
+    }
+}
+let importFroms = stmts => importFromsFrom(stmts, 0, [])
+
+// The DFS accumulator: `state` marks each path "loading" (on the stack, so
+// re-entry is a cycle) or "done"; `order` collects modules in dependency order.
+type Acc = { state: Map<string, string>, order: [Loaded] }
+
+// Visit one module: mark it loading, parse it, recurse into its deps, then mark
+// it done and append it to `order`. First Err short-circuits. A path already
+// "loading" is a cycle; already "done" is a no-op.
+let visit = (path, acc, plugins: Option<[Infer.HostPlugin]>) => switch Map.get(path, acc.state) {
+  | Some("done") => Ok(acc)
+  | Some("loading") => Err(mErr("import cycle through '${path}'"))
+  | _ => let acc1 = {
+      state: Map.set(path, "loading", acc.state),
+      order: acc.order
+    } in
+      switch readFile(path) {
+        | Err(_) => Err(mErr("cannot read module '${path}'"))
+        | Ok(src) => switch parseModule(src, plugins) {
+            | Err(e) => Err(e)
+            | Ok(stmts) => switch visitAll(importFroms(stmts), path, acc1, plugins) {
+                | Err(e) => Err(e)
+                | Ok(acc2) => Ok(
+                    {
+                      state: Map.set(path, "done", acc2.state),
+                      order: Array.append({ path, src, stmts }, acc2.order)
+                    }
+                  )
+              }
+          }
+      }
+}
+
+// Visit each dep spec, resolved against `importer`, threading the accumulator.
+let visitAll = (froms, importer, acc, plugins: Option<[Infer.HostPlugin]>) => switch froms {
+  | [] => Ok(acc)
+  | [from, ...rest] => switch visit(resolveImport(importer, from), acc, plugins) {
+      | Err(e) => Err(e)
+      | Ok(acc1) => visitAll(rest, importer, acc1, plugins)
+    }
+}
+
+/// loadGraphWith : string -> Option [Plugin] -> Result [Loaded] MErr
+/// Load every module reachable from `entry`, in dependency order, parsing
+/// each under the host's plugin list (ADR 0109).
+export let loadGraphWith = (entry, plugins: Option<[Infer.HostPlugin]>) =>
+  let? acc = absPath(entry)->visit({ state: #{}, order: [] }, plugins) in
+    Ok(acc.order)
+
+/// loadGraph : string -> Result [Loaded] MErr — default plugins.
+export let loadGraph = entry => entry->loadGraphWith(None)
+
+// --- part (b): compile the loaded graph -------------------------------------
+// Each module checks + infers + codegens with the prelude PLUS everything its
+// imports resolve to: their export SCHEMES (inference), their variant REGISTRY
+// (cross-module exhaustiveness), and their ctor field KEYS (destructuring). A
+// missing export is reported against the import site. Mirrors src/module.ts's
+// compileGraph — sync, since loadGraph already did the IO.
+
+// The registry shape, named locally so `emptyReg` can be annotated (ADR 0044) —
+// its empty maps would otherwise infer `Map k v` and, threaded into the generic
+// `resolveImportsFrom`, leave the registry map types unpinned (a `tsc --strict`
+// error on the emitted `.ts`). Structural aliases (ADR 0005), so this unifies
+// with check.mochi's `Registry` without a cross-module type import.
+type CtorInfo = { owner: string, arity: number }
+type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
+
+let emptyReg : Registry = { ctors: #{}, types: #{} }
+
+// Map has no bulk merge, so fold `from`'s keys into `into` (later source wins).
+let mergeInto = (keys, from, into) => switch keys {
+  | [] => into
+  | [k, ...rest] => mergeInto(
+      rest,
+      from,
+      switch Map.get(k, from) {
+        | Some(v) => Map.set(k, v, into)
+        | None => into
+      }
+    )
+}
+
+let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
+
+// --- qualified type names (C5 slice d, ADR 0046) --------------------------
+// A module hands its importers the set of type names it EXPORTS, plus its OWN
+// alias scope, so a transparent record alias expands in the module that
+// DECLARED it. Mirrors src/module.ts's `qualScopeOf`/`exportedTypeNames`.
+
+let exportedTypeNames = stmts =>
+  stmts
+    |> Array.flatMap(s => switch s {
+      | Ast.SType(name, _, _, _, _, _, true, _, _) => [name]
+      | _ => []
+    })
+    |> Set.fromArray
+
+// Local record aliases, keyed by name — the `aliases` map schemes.mochi
+// expands through. Mirrors infer.mochi's `aliasMapFrom` seed.
+let aliasesOf = stmts =>
+  stmts
+    |> Array.reduce(
+      (acc, s) => switch s {
+        | Ast.SType(name, _, params, _, Some(fields), _, _, _, _) => acc
+            |> Map.set(name, { params, fields, expr: None })
+        | Ast.SType(name, _, params, _, _, Some(te), _, _, _) => acc
+            |> Map.set(name, { params, fields: [], expr: Some(te) })
+        | _ => acc
+      },
+      #{}
+    )
+
+// src/module.ts nests the dep's FULL type scope here (`scope.quals`), so a
+// qualified name written inside the dep's own alias expands too. The bootstrap
+// mirror flattens that scope instead: `aliases` is the dep's own alias map WITH
+// its namespace imports already seeded (`Types.St`), and `qualifyTe` requalifies
+// those under the importer's alias (`Infer.Types.St`), so resolution stays
+// transitive without a recursive record type.
+let qualScopeOf = (stmts, quals) =>
+  { types: stmts->exportedTypeNames(), aliases: stmts->scopeAliases(quals) }
+
+// Seed one named constructor into the importer. Sibling ctors stay out of the
+// ctor map; the owning type's full list still lands so exhaustiveness is sound.
+// A second Empty from a different owner is duplicate constructor (ADR 0082).
+let withNamedCtor = (name, info, depReg, depKeys, res) =>
+  {
+    imports: res.imports,
+    nsImports: res.nsImports,
+    reg: {
+      ctors: Map.set(name, info, res.reg.ctors),
+      types: switch Map.get(info.owner, depReg.types) {
+        | Some(cs) => Map.set(info.owner, cs, res.reg.types)
+        | None => res.reg.types
+      }
+    },
+    keys: switch depKeys |> Map.get(name) {
+      | Some(ks) => res.keys |> Map.set(name, ks)
+      | None => res.keys
+    },
+    quals: res.quals
+  }
+
+let takeNamedCtor = (name, span, depReg, depKeys, res) => switch Map.get(name, depReg.ctors) {
+  | None => Ok(res)
+  | Some(info) => switch Map.get(name, res.reg.ctors) {
+      | Some(prior) => prior.owner != info.owner
+          ? Err(
+            {
+              kind: "check",
+              message: "duplicate constructor '${name}'",
+              start: span.start,
+              end: span.end
+            }
+          )
+          : Ok(withNamedCtor(name, info, depReg, depKeys, res))
+      | None => Ok(withNamedCtor(name, info, depReg, depKeys, res))
+    }
+}
+
+// Namespace import: ctors live under `Alias.Ctor`; type map stays bare.
+let prefixCtorsInto = (keys, alias, from, into) => switch keys {
+  | [] => into
+  | [k, ...rest] => prefixCtorsInto(
+      rest,
+      alias,
+      from,
+      switch Map.get(k, from) {
+        | Some(v) => Map.set("${alias}.${k}", v, into)
+        | None => into
+      }
+    )
+}
+
+// Pull each imported name's scheme out of the dep's published exports, folding
+// into `res.imports`. A name the dep does not export errors at the name's span.
+let resolveNames = (names, from, depExports, depReg, depKeys, res, recovering) => switch names {
+  | [] => Ok(res)
+  | [n, ...rest] => switch Map.get(n.name, depExports) {
+      | None => recovering
+          ? resolveNames(
+            rest,
+            from,
+            depExports,
+            depReg,
+            depKeys,
+            {
+              imports: Map.set(n.name, recoveryScheme, res.imports),
+              nsImports: res.nsImports,
+              reg: res.reg,
+              keys: res.keys,
+              quals: res.quals
+            },
+            recovering
+          )
+          : Err(
+            {
+              kind: "check",
+              message: "'${from}' has no export '${n.name}'",
+              start: n.span.start,
+              end: n.span.end
+            }
+          )
+      | Some(sc) => switch takeNamedCtor(n.name, n.span, depReg, depKeys, { imports: Map.set(n.name, sc, res.imports), nsImports: res.nsImports, reg: res.reg, keys: res.keys, quals: res.quals }) {
+          | Err(e) => Err(e)
+          | Ok(res1) => resolveNames(
+              rest,
+              from,
+              depExports,
+              depReg,
+              depKeys,
+              res1,
+              recovering
+            )
+        }
+    }
+}
+
+// Fold a module's import statements into resolved { imports, nsImports, reg,
+// keys }: named imports bring only the ctors they list; `import * as` registers
+// ctors under `Alias.Ctor` (ADR 0082). Field keys still merge under the bare
+// ctor name so destructure emit stays `Circle`, not `S.Circle`.
+let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.get(i, stmts) {
+  | None => Ok(res)
+  | Some(Ast.SImport(names, from, _)) => let dp = resolveImport(path, from) in
+    let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
+    let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
+    let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
+      switch resolveNames(names, from, depExports, depReg, depKeys, res, recovering) {
+        | Err(e) => Err(e)
+        | Ok(res1) => ctx->resolveImportsFrom(
+            stmts,
+            i + 1,
+            path,
+            res1,
+            recovering
+          )
+      }
+  | Some(Ast.SImportNs(alias, from, _)) => let dp = resolveImport(path, from) in
+    let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
+    let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
+    let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
+      ctx->resolveImportsFrom(
+        stmts,
+        i + 1,
+        path,
+        {
+          imports: res.imports,
+          nsImports: Map.set(alias.name, depExports, res.nsImports),
+          reg: {
+            ctors: prefixCtorsInto(
+              Map.keys(depReg.ctors),
+              alias.name,
+              depReg.ctors,
+              res.reg.ctors
+            ),
+            types: mergeMap(depReg.types, res.reg.types)
+          },
+          keys: mergeMap(depKeys, res.keys),
+          quals: // …and every exported TYPE of the dep becomes namable as `Alias.T`.
+          // Absent from `qualsByPath` (a dep that failed to publish) leaves the
+          // alias unmapped, which check.mochi reads as "not graph-compiled" and
+          // stays silent — same fallback as src/module.ts.
+          switch Map.get(dp, ctx.qualsByPath) {
+            | Some(q) => Map.set(alias.name, q, res.quals)
+            | None => res.quals
+          }
+        },
+        recovering
+      )
+  | Some(_) => ctx->resolveImportsFrom(stmts, i + 1, path, res, recovering)
+}
+
+// Compile one module: resolve imports, check (with imported registry), infer
+// (with imported schemes), codegen (with imported ctor keys), then publish this
+// module's own exports/registry/keys into the ctx for later dependents.
+// Which open mode one module is inferred under. Dependencies always honour
+// their own `"use open"`. Under `strictEntry` the ENTRY instead takes the
+// caller's flag verbatim, so an editor can still flag a typo in a file that
+// opted into host globals — `dx/diagnostics.ts` passes `open: false` there for
+// exactly this reason, while `mochi build` leaves the directive in charge.
+let openFor = (loaded: Loaded, isEntry, opts: Opts) =>
+  isEntry && opts.strictEntry ? opts.open : openMode(loaded.src, opts.open)
+
+let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
+  | Err(e) => Err([atPath("check", loaded.path, e)])
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err([atPath("check", loaded.path, e)])
+      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, opts.plugins) {
+          | Err(es) => Err(es |> map(e => atPath("type", loaded.path, e)))
+          | Ok(env) => let js = codegenWith(
+              loaded.stmts,
+              res.keys,
+              opts.runtime,
+              namespaceRuntime,
+              preludeJsDefs,
+              runtimeDeps,
+              { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt }
+            ) in
+              Ok(
+                {
+                  exportsByPath: Map.set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, env),
+                    ctx.exportsByPath
+                  ),
+                  regByPath: Map.set(
+                    loaded.path,
+                    exportedRegistry(loaded.stmts),
+                    ctx.regByPath
+                  ),
+                  keysByPath: Map.set(
+                    loaded.path,
+                    exportedCtorKeys(loaded.stmts),
+                    ctx.keysByPath
+                  ),
+                  qualsByPath: Map.set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts, res.quals),
+                    ctx.qualsByPath
+                  ),
+                  outputs: [...ctx.outputs, { path: loaded.path, js }]
+                }
+              )
+        }
+    }
+}
+
+// Compile the whole ordered graph, threading the ctx; the first failing module
+// short-circuits, with every type error it has.
+let compileAll = (ctx, graph, opts) => switch graph {
+  | [] => Ok(ctx.outputs)
+  | [m, ...rest] => switch ctx->compileOne(m, false, Array.length(rest) == 0, opts) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->compileAll(rest, opts)
+    }
+}
+
+/// compileGraph : [Loaded] -> Result [ModuleOutput] [MErr]
+/// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
+/// multi-param function uncurried, so a partial application is a tsc error.
+export let compileGraphWith = (graph, opts: Opts) =>
+  compileAll(
+    {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      outputs: []
+    },
+    graph,
+    opts
+  )
+
+export let compileGraph = graph => graph->compileGraphWith(defaultOpts)
+
+type GraphRecovery = { outputs: [ModuleOutput], errors: [MErr] }
+
+// Pin the empty recovery seed. Without this named shape, every empty map and
+// list generalizes independently, making the exported resumable state unusable
+// by `recoverGraphFrom` in strict emitted TypeScript.
+type RecoveryAliasInfo = {
+  params: [string],
+  fields: [Ast.AliasField],
+  expr: Option<Ast.TypeExpr>
+}
+
+type RecoveryQualScope = {
+  types: Set<string>,
+  aliases: Map<string, RecoveryAliasInfo>
+}
+
+type RecoveryScheme = { vars: [number], rvars: [number], ty: Ty }
+
+type RecoveryCtx = {
+  exportsByPath: Map<string, Map<string, RecoveryScheme>>,
+  regByPath: Map<string, Registry>,
+  keysByPath: Map<string, Map<string, [string]>>,
+  qualsByPath: Map<string, RecoveryQualScope>,
+  outputs: [ModuleOutput]
+}
+
+type RecoveryGraphState = { ctx: RecoveryCtx, errors: [MErr] }
+
+// The recovery rail is the graph's diagnostic boundary: unlike strict emit it
+// keeps visiting later modules. When strict compilation fails, re-run only its
+// checker prefix with `checkAllWith` so one module's independent structural
+// errors are retained before placeholder exports let downstream modules proceed.
+// Recovery resolves imports twice on purpose. The `recovering: true` pass gives
+// the registry `checkAllWith` needs, but it swallows "'x' has no export 'y'" —
+// that is what placeholder schemes are FOR. So resolve strictly first, purely to
+// collect that diagnostic: without it, a module with both a missing import and a
+// checker error reports only the checker error, because this array replaces the
+// strict error the caller would otherwise have kept.
+// Whether every module this one imports FROM actually published its exports. A
+// dep that failed to compile publishes nothing, so each name taken from it reads
+// as missing — the cascade placeholder schemes exist to suppress. The strict
+// import pass below is only trustworthy once this holds.
+let depsPublished = (ctx, stmts, i, path) => switch Array.get(i, stmts) {
+  | None => true
+  | Some(Ast.SImport(_, from, _)) => Map.has(
+      resolveImport(path, from),
+      ctx.exportsByPath
+    ) && ctx->depsPublished(stmts, i + 1, path)
+  | Some(_) => ctx->depsPublished(stmts, i + 1, path)
+}
+
+// The empty accumulator stays inline at each call site, as at every other
+// `resolveImportsFrom` caller: hoisting it to a `let` strands `#{}` with no
+// parameter type to infer from, and the self-hosted TS emit stops typechecking.
+let checkErrorsRecovering = (ctx, loaded: Loaded) =>
+  let importErrors = ctx->depsPublished(loaded.stmts, 0, loaded.path)
+    ? switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+      | Err(e) => [atPath("check", loaded.path, e)]
+      | Ok(_) => []
+    }
+    : [] in
+    switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, true) {
+      | Err(e) =>
+        // An error the recovering pass still raises is not import-shaped (a ctor
+        // clash, say) and stands alone — reporting `importErrors` beside it would
+        // double up on the same statement.
+        [atPath("check", loaded.path, e)]
+      | Ok(res) => switch checkAllWith(loaded.stmts, res.reg, res.quals) {
+          | Err(es) => Array.concat(
+              importErrors,
+              es |> map(e => atPath("check", loaded.path, e))
+            )
+          | Ok(_) => importErrors
+        }
+    }
+
+let sameErr = (a: MErr, b: MErr) =>
+  a.kind == b.kind && a.message == b.message && a.start == b.start && a.end == b.end
+
+// `es` is the strict rail's failure — its one resolve/check error, or every
+// type error inference collected — and `checks` the recovering rail's
+// independent ones, usually overlapping. Union with a dedupe, so neither side
+// can hide the other: `checks` alone dropped an inference error like an unbound
+// name (no checker error to report it), while `es` alone dropped every check
+// error after the first.
+let mergeRecovered = (es: [MErr], checks) =>
+  Array.concat(
+    checks,
+    Array.filter(
+      e => Array.length(Array.filter(c => sameErr(c, e), checks)) == 0,
+      es
+    )
+  )
+
+let recoverOne = (ctx, m, isEntry, errors, opts) => switch ctx->compileOne(m, true, isEntry, opts) {
+  | Err(es) => let checks = ctx->checkErrorsRecovering(m) in
+      { ctx, errors: Array.concat(errors, mergeRecovered(es, checks)) }
+  | Ok(ctx1) => { ctx: ctx1, errors }
+}
+
+let compileAllRecovering = (ctx, graph, errors, opts) => switch graph {
+  | [] => { ctx, errors }
+  | [m, ...rest] => let next = ctx->recoverOne(
+      m,
+      Array.length(rest) == 0,
+      errors,
+      opts
+    ) in
+      next.ctx->compileAllRecovering(rest, next.errors, opts)
+}
+
+/// freshRecoveryGraphState : unit -> RecoveryGraphState
+/// Opaque open-world graph context plus accumulated errors. Hosts retain this
+/// at dependency prefixes so recovery queries can resume at a sibling entry.
+export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
+  {
+    ctx: {
+      exportsByPath: #{},
+      regByPath: #{},
+      keysByPath: #{},
+      qualsByPath: #{},
+      outputs: []
+    },
+    errors: []
+  }
+
+/// recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
+/// Advance a graph recovery state by a dependency-ordered suffix.
+export let recoverGraphFromWith = (state, graph, opts: Opts) =>
+  state.ctx->compileAllRecovering(graph, state.errors, opts)
+
+export let recoverGraphFrom = (state, graph) =>
+  state->recoverGraphFromWith(graph, defaultOpts)
+
+// --- per-module slices (ADR 0111) ---------------------------------------------
+// A module reads only its own imports' entries out of a graph state, and every
+// such read is keyed by the dependency's path. So one module's entries are a
+// slice a host can cache per module, and any dependency closure can be rebuilt
+// by merging its members' slices, whatever order the entry walked them in.
+
+/// recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Opts -> RecoveryGraphState
+/// Recover one module on top of a state that already holds its dependencies.
+/// A host stepping module by module says which one is the entry: a one-module
+/// suffix cannot tell, and `strictEntry` judges only the entry strictly.
+export let recoverModuleWith = (state: RecoveryGraphState, loaded: Loaded, isEntry, opts: Opts) =>
+  state.ctx->recoverOne(loaded, isEntry, state.errors, opts)
+
+// `m` with every key but `key` removed, so the result keeps `m`'s own type.
+let keepOnly = (key, keys, i, m) => switch Array.get(i, keys) {
+  | None => m
+  | Some(k) => keepOnly(key, keys, i + 1, k == key ? m : Map.delete(k, m))
+}
+
+let onlyAt = (key, m) => keepOnly(key, Map.keys(m), 0, m)
+
+/// recoverySliceOf : RecoveryGraphState -> string -> RecoveryGraphState
+/// The entries `path` published into `state`, and no errors: the host keeps
+/// each module's errors itself, as the suffix `recoverModuleWith` appended.
+export let recoverySliceOf = (state: RecoveryGraphState, path) =>
+  {
+    ctx: {
+      exportsByPath: onlyAt(path, state.ctx.exportsByPath),
+      regByPath: onlyAt(path, state.ctx.regByPath),
+      keysByPath: onlyAt(path, state.ctx.keysByPath),
+      qualsByPath: onlyAt(path, state.ctx.qualsByPath),
+      outputs: Array.filter(o => o.path == path, state.ctx.outputs)
+    },
+    errors: []
+  }
+
+/// mergeRecoveryStates : RecoveryGraphState -> RecoveryGraphState -> RecoveryGraphState
+/// `b`'s modules after `a`'s. Slices hold disjoint paths, so no entry is lost.
+export let mergeRecoveryStates = (a: RecoveryGraphState, b: RecoveryGraphState) =>
+  {
+    ctx: {
+      exportsByPath: mergeMap(b.ctx.exportsByPath, a.ctx.exportsByPath),
+      regByPath: mergeMap(b.ctx.regByPath, a.ctx.regByPath),
+      keysByPath: mergeMap(b.ctx.keysByPath, a.ctx.keysByPath),
+      qualsByPath: mergeMap(b.ctx.qualsByPath, a.ctx.qualsByPath),
+      outputs: Array.concat(a.ctx.outputs, b.ctx.outputs)
+    },
+    errors: Array.concat(a.errors, b.errors)
+  }
+
+/// Recovery graph driver: keeps checking after failures and gives downstream
+/// imports a polymorphic placeholder rather than an unbound-name cascade.
+export let compileGraphRecoveringWith = (graph, opts: Opts) =>
+  let state = freshRecoveryGraphState()->recoverGraphFromWith(graph, opts) in
+    { outputs: state.ctx.outputs, errors: state.errors }
+
+export let compileGraphRecovering = graph =>
+  graph->compileGraphRecoveringWith(defaultOpts)
+
+// --- typed graph queries -----------------------------------------------------
+// Editor tooling needs the same imports-aware inference result as TS emission,
+// without paying for code generation or reconstructing the import environment
+// in the TypeScript host. Keep every module's recorded spans together with the
+// alias scope accumulated through its dependencies.
+let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+  | Err(e) => Err(atPath("check", loaded.path, e))
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err(atPath("check", loaded.path, e))
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
+          | Err(es) => Err(firstAtPath(loaded.path, es))
+          | Ok(r) => Ok(
+              {
+                exportsByPath: Map.set(
+                  loaded.path,
+                  exportedSchemes(loaded.stmts, r.env),
+                  ctx.exportsByPath
+                ),
+                regByPath: Map.set(
+                  loaded.path,
+                  exportedRegistry(loaded.stmts),
+                  ctx.regByPath
+                ),
+                keysByPath: Map.set(
+                  loaded.path,
+                  exportedCtorKeys(loaded.stmts),
+                  ctx.keysByPath
+                ),
+                qualsByPath: Map.set(
+                  loaded.path,
+                  qualScopeOf(loaded.stmts, res.quals),
+                  ctx.qualsByPath
+                ),
+                aliases: mergeMap(r.aliases, ctx.aliases),
+                outputs: [
+                  ...ctx.outputs,
+                  {
+                    path: loaded.path,
+                    types: r.types
+                      |> map(hit =>
+                        {
+                          span: hit.span,
+                          ty: hit.ty,
+                          display: hit.ty->widenLits()->showType(),
+                          sym: hit.sym
+                        }),
+                    aliases: mergeMap(r.aliases, ctx.aliases),
+                    imports: // What the module's imports bound, for hover (#103): the
+                    // scheme of each named import, and each `import * as`
+                    // scope, whose `types` a hover requalifies (`D.E`).
+                    res.imports,
+                    quals: res.quals
+                  }
+                ]
+              }
+            )
+        }
+    }
+}
+
+let inferAll = (ctx, graph, opts) => switch graph {
+  | [] => Ok(ctx)
+  | [m, ...rest] => switch ctx->inferOne(m, opts) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->inferAll(rest, opts)
+    }
+}
+
+/// freshInferGraphState : unit -> InferGraphState
+/// Opaque imports-aware inference context for host-owned graph caching. A state
+/// records every dependency's exports plus its accumulated typed outputs.
+export let freshInferGraphState = () =>
+  {
+    exportsByPath: #{},
+    regByPath: #{},
+    keysByPath: #{},
+    qualsByPath: #{},
+    aliases: #{},
+    outputs: []
+  }
+
+/// inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
+/// Advance an existing dependency-ordered graph state. The host may retain a
+/// state at a shared dependency prefix, then infer only a sibling entry tail.
+export let inferGraphTypesFromWith = (state, graph, opts: Opts) =>
+  state->inferAll(graph, opts)
+
+export let inferGraphTypesFrom = (state, graph) =>
+  state->inferGraphTypesFromWith(graph, defaultOpts)
+
+/// inferSliceOf : InferGraphState -> string -> InferGraphState
+/// The entries and typed output `path` added to `state` (ADR 0111). `aliases`
+/// is the whole accumulated scope, which merging leaves unchanged.
+export let inferSliceOf = (state, path) =>
+  {
+    exportsByPath: onlyAt(path, state.exportsByPath),
+    regByPath: onlyAt(path, state.regByPath),
+    keysByPath: onlyAt(path, state.keysByPath),
+    qualsByPath: onlyAt(path, state.qualsByPath),
+    aliases: state.aliases,
+    outputs: Array.filter(o => o.path == path, state.outputs)
+  }
+
+/// mergeInferStates : InferGraphState -> InferGraphState -> InferGraphState
+/// `b`'s modules after `a`'s.
+export let mergeInferStates = (a, b) =>
+  {
+    exportsByPath: mergeMap(b.exportsByPath, a.exportsByPath),
+    regByPath: mergeMap(b.regByPath, a.regByPath),
+    keysByPath: mergeMap(b.keysByPath, a.keysByPath),
+    qualsByPath: mergeMap(b.qualsByPath, a.qualsByPath),
+    aliases: mergeMap(b.aliases, a.aliases),
+    outputs: Array.concat(a.outputs, b.outputs)
+  }
+
+/// inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
+/// Infer every dependency-ordered module with the exact import environment its
+/// emitter would use. This is the bootstrap graph typed-query boundary.
+export let inferGraphTypesWith = (graph, opts: Opts) =>
+  let? state = freshInferGraphState()->inferGraphTypesFromWith(graph, opts) in
+    Ok(state.outputs)
+
+export let inferGraphTypes = graph => graph->inferGraphTypesWith(defaultOpts)
+
+/// buildModules : string -> Result [ModuleOutput] [MErr]
+/// Resolve the graph, collect every recoverable module diagnostic, then emit.
+/// Graph-load failures are singular but normalize to `[MErr]` at this public
+/// boundary, matching the single-file compiler railway.
+export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraphWith(opts.plugins) {
+  | Err(e) => Err([e])
+  | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
+      Array.length(recovered.errors) == 0
+        ? graph->compileGraphWith(opts)
+        : Err(recovered.errors)
+}
+
+export let buildModules = entry => entry->buildModulesWith(defaultOpts)
+
+// --- part (d): the typed-TypeScript graph driver (ADR 0090) -----------------
+// The same railway as compileGraph, but each module emits typed `.ts` instead of
+// `.js`. Three things a single-file `compileTs` never needs show up here:
+//
+//   1. inference must KEEP its span -> type table across the graph, so the
+//      driver calls `inferProgramImportsTypes` rather than the env-only view;
+//   2. a type declared in one module and referenced in another needs an
+//      `import type` line, computed from the EMITTED text (a type name can
+//      surface through an annotation with no AST reference to find);
+//   3. every `extern` host module needs a sidecar `.d.ts` / `.d.mts`, or the
+//      emitted `import` of it is a tsc TS2307.
+//
+// Mirrors src/module.ts's `compileGraphTs`.
+
+extern relSpec : string -> string -> string = "./host.mjs" "relSpec"
+extern externDtsPath : string -> string -> string = "./host.mjs" "externDtsPath"
+
+// A TS identifier character — the poor man's `\b`, since mochi has no regex.
+let isIdentChar = c => switch Str.codeAt(0, c) {
+  | None => false
+  | Some(n) => n >= 48 && n <= 57 || (n >= 65 && n <= 90) || (n >= 97 && n <= 122) || n == 95 || n == 36
+}
+
+// A run flanking an occurrence: empty means the occurrence sat at the very
+// start (or end) of the text, which is a boundary too.
+let endsAtBoundary = part =>
+  Str.length(part) == 0
+    ? true
+    : !isIdentChar(Option.unwrapOr("", Str.get(Str.length(part) - 1, part)))
+
+let startsAtBoundary = part =>
+  Str.length(part) == 0
+    ? true
+    : !isIdentChar(Option.unwrapOr("", Str.get(0, part)))
+
+// `\bname\b` without a regex: split ONCE on the name, then test the characters
+// flanking each occurrence. `Rest` must not match inside `Restriction`, and a
+// per-index scan over every emitted module for every candidate name is the
+// quadratic version of this.
+let occursAsWordFrom = (parts, i) => switch Array.get(i, parts) {
+  | None => false
+  | Some(after) => (Array.get(i - 1, parts)
+      |> Option.mapOr(false, endsAtBoundary)) && startsAtBoundary(after)
+      ? true
+      : occursAsWordFrom(parts, i + 1)
+}
+
+let occursAsWord = (name, text) => occursAsWordFrom(Str.split(name, text), 1)
+
+// The name an import clause entry BINDS — `x as y` binds `y`.
+let importedBinding = spec =>
+  let parts = Str.split(" as ", spec) in
+    Str.trim(Option.unwrapOr(spec, Array.get(Array.length(parts) - 1, parts)))
+
+let bindingsInLine = (line, acc) => switch Array.get(1, Str.split("{", line)) {
+  | None => acc
+  | Some(rest) => switch Array.get(0, Str.split("}", rest)) {
+      | None => acc
+      | Some(names) => Str.split(",", names)
+          |> Array.reduce((a, n) => Set.add(importedBinding(n), a), acc)
+    }
+}
+
+// Names already bound by a VALUE import in the emitted text. Re-importing one as
+// a type is a TS2300 duplicate identifier, so those are skipped below.
+let valueImported = ts =>
+  ts
+    |> Str.split("\n")
+    |> filter(Str.startsWith("import {"))
+    |> Array.reduce((acc, line) => bindingsInLine(line, acc), Set.fromArray([]))
+
+// Every top-level `type` name in the graph -> the module that declares it. Type
+// names are globally visible, so one flat table serves every importer.
+let ownTypesInto = (stmts, path, acc) =>
+  stmts
+    |> Array.reduce(
+      (a, s) => switch s {
+        | Ast.SType(name, _, _, _, _, _, _, _, _) => Map.has(name, a.owner)
+            ? {
+              owner: Map.set(name, path, a.owner),
+              dups: Set.add(name, a.dups),
+              dupNames: Set.has(name, a.dups)
+                ? a.dupNames
+                : Array.append(name, a.dupNames)
+            }
+            : {
+              owner: Map.set(name, path, a.owner),
+              dups: a.dups,
+              dupNames: a.dupNames
+            }
+        | _ => a
+      },
+      acc
+    )
+
+let typeOwnerOf = graph =>
+  graph
+    |> Array.reduce(
+      (acc, m) => ownTypesInto(m.stmts, m.path, acc),
+      { owner: #{}, dups: Set.fromArray([]), dupNames: [] }
+    )
+
+/// A bare name declared in two modules (`LocTok` in parser and `LocTok<t>` in
+/// infer) must not be the fold target outside the module whose own alias is
+/// the nullary record. The import table keeps one owner, and it may be the
+/// parameterised declaration.
+let nullaryDeclared = (name, local) => switch Map.get(name, local) {
+  | None => false
+  | Some(info) => Array.length(
+      info.params
+    ) == 0 && Array.length(info.fields) > 0
+}
+
+/// A synthetic parameterised homonym makes `withoutAmbiguousAlias` blank the
+/// printed name while the nullary shape stays in the index, so the variables
+/// still pin and the row prints structurally.
+let addDupMarkers = (names, local, acc, i) => switch Array.get(i, names) {
+  | None => acc
+  | Some(name) => addDupMarkers(
+      names,
+      local,
+      nullaryDeclared(name, local)
+        ? acc
+        : Map.set(
+          "dup.${name}",
+          { params: ["_"], fields: [], expr: None },
+          acc
+        ),
+      i + 1
+    )
+}
+
+let aliasesForTs = (merged, local, dupNames) =>
+  addDupMarkers(dupNames, local, merged, 0)
+
+let localTypeNames = stmts =>
+  stmts
+    |> Array.flatMap(s => switch s {
+      | Ast.SType(name, _, _, _, _, _, _, _, _) => [name]
+      | _ => []
+    })
+    |> Set.fromArray
+
+// Group the wanted type names by the spec of their declaring module. A name is
+// wanted when another module declares it, no value import already binds it, and
+// it actually occurs in the emitted text.
+let groupByOwner = (names, ctx) =>
+  names
+    |> Array.reduce(
+      (acc, name) =>
+        let owner = ctx.typeOwner |> Map.getOr("", name) in
+          owner == ctx.importer || Set.has(
+            name,
+            ctx.localTypes
+          ) || Set.has(name, ctx.bound) || !occursAsWord(name, ctx.ts)
+            ? acc
+            : let spec = relSpec(ctx.importer, owner) in
+              acc
+                |> Map.set(spec, Array.append(name, Map.getOr([], spec, acc))),
+      #{}
+    )
+
+/// `import type { … }` lines for every non-local type name the EMITTED text
+/// references, grouped by declaring module. Builtin variants never appear in
+/// `typeOwner` — the emitter inlines their decls instead (ADR 0031).
+let crossModuleTypeImports = (ts, importer, localTypes, typeOwner) =>
+  let byOwner = groupByOwner(
+    Map.keys(typeOwner),
+    { ts, importer, localTypes, typeOwner, bound: valueImported(ts) }
+  ) in
+    Map.keys(byOwner)
+      |> map(spec =>
+        "import type { ${Str.join(", ", Array.sort(Map.getOr([], spec, byOwner)))} } from \"${spec}\";")
+
+// Bucket this module's externs by the sidecar path they belong in. A `mochi:`
+// module lowers inline — a JS convention, not a host import — so it has no
+// sidecar to declare. Duplicates are fine here: two mochi bindings may alias one
+// host export, and `externModuleDts` dedupes on `imported` when it renders.
+let externBindingsInto = (stmts, path, env, acc) =>
+  stmts
+    |> Array.reduce(
+      (a, s) => switch s {
+        | Ast.SExtern(name, _, _, _, hostModule, imported, curried, _, _, _) => Str.startsWith(
+            "mochi:",
+            hostModule
+          )
+            ? a
+            : switch Map.get(name, env) {
+              | None => a
+              | Some(sc) => let dp = externDtsPath(path, hostModule) in
+                  a
+                    |> Map.set(
+                      dp,
+                      Array.append(
+                        { imported, scheme: sc, curried },
+                        Map.getOr([], dp, a)
+                      )
+                    )
+            }
+        | _ => a
+      },
+      acc
+    )
+
+// Compile one module to typed TS: the same resolve/check/infer prefix as
+// `compileOne`, then emit, then prepend the `import type` lines the emitted text
+// turned out to need.
+let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+  | Err(e) => Err(atPath("check", loaded.path, e))
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err(atPath("check", loaded.path, e))
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
+          | Err(es) => Err(firstAtPath(loaded.path, es))
+          | Ok(r) => let body = emitTsModuleWith(
+              loaded.stmts,
+              r.env,
+              r.types,
+              r.letParams,
+              // Keep dependency aliases in scope for TS rendering. Inference
+              // expands record aliases to rows, so without this accumulated
+              // index a type imported from an earlier module prints inline
+              // instead of as the alias that module declared. A bare name
+              // declared twice is kept only for the module whose own alias is
+              // the nullary record (ADR 0106).
+              aliasesForTs(
+                mergeMap(r.aliases, ctx.aliases),
+                aliasesOf(loaded.stmts),
+                ctx.dupNames
+              ),
+              res.keys,
+              [],
+              namespaceRuntime,
+              preludeJsDefs,
+              runtimeDeps,
+              ctx.runtimeImport,
+              opts.docs,
+              bindingHooksFor(opts.plugins)
+            ) in
+            let lines = crossModuleTypeImports(
+              body,
+              loaded.path,
+              localTypeNames(loaded.stmts),
+              ctx.typeOwner
+            ) in
+            let ts = Array.length(lines) == 0
+              ? body
+              : "${Str.join("\n", lines)}\n\n${body}" in
+              Ok(
+                {
+                  exportsByPath: Map.set(
+                    loaded.path,
+                    exportedSchemes(loaded.stmts, r.env),
+                    ctx.exportsByPath
+                  ),
+                  regByPath: Map.set(
+                    loaded.path,
+                    exportedRegistry(loaded.stmts),
+                    ctx.regByPath
+                  ),
+                  keysByPath: Map.set(
+                    loaded.path,
+                    exportedCtorKeys(loaded.stmts),
+                    ctx.keysByPath
+                  ),
+                  qualsByPath: Map.set(
+                    loaded.path,
+                    qualScopeOf(loaded.stmts, res.quals),
+                    ctx.qualsByPath
+                  ),
+                  aliases: mergeMap(r.aliases, ctx.aliases),
+                  typeOwner: ctx.typeOwner,
+                  dupNames: ctx.dupNames,
+                  runtimeImport: ctx.runtimeImport,
+                  externs: externBindingsInto(
+                    loaded.stmts,
+                    loaded.path,
+                    r.env,
+                    ctx.externs
+                  ),
+                  outputs: [...ctx.outputs, { path: loaded.path, js: ts }]
+                }
+              )
+        }
+    }
+}
+
+// A builtin ctor's field types never name a user alias, so the sidecars render
+// under an EMPTY alias scope. Built through `aliasesOf` rather than written as a
+// bare `#{}`, which generalizes and leaves the emitted TS a `Map<string,
+// unknown>` against `externModuleDts`'s pinned parameter (ADR 0044).
+let noAliases = aliasesOf([])
+
+// The sidecar declaration files, one per host module the graph externs from.
+// Appended after every module, so a host imported by several modules collects
+// all of their bindings into one file.
+let externOutputs = externs =>
+  Map.keys(externs)
+    |> map(dp =>
+      { path: dp, js: externModuleDts(Map.getOr([], dp, externs), noAliases) })
+
+let compileAllTs = (ctx, graph, opts) => switch graph {
+  | [] => Ok(Array.concat(ctx.outputs, externOutputs(ctx.externs)))
+  | [m, ...rest] => switch ctx->compileOneTs(m, opts) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->compileAllTs(rest, opts)
+    }
+}
+
+/// compileGraphTs : [Loaded] -> string -> Result [ModuleOutput] MErr
+/// Emit the whole ordered graph as typed TypeScript (ADR 0090). Outputs are the
+/// `.mochi` module paths (the writer swaps the extension) followed by the extern
+/// sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
+export let compileGraphTsWith = (graph, runtimeImport, opts: Opts) =>
+  let noted = typeOwnerOf(graph) in
+    compileAllTs(
+      {
+        exportsByPath: #{},
+        regByPath: #{},
+        keysByPath: #{},
+        qualsByPath: #{},
+        aliases: #{},
+        typeOwner: noted.owner,
+        dupNames: noted.dupNames,
+        runtimeImport,
+        externs: #{},
+        outputs: []
+      },
+      graph,
+      opts
+    )
+
+export let compileGraphTs = (graph, runtimeImport) =>
+  graph->compileGraphTsWith(runtimeImport, defaultOpts)
+
+// Walk the graph exactly as inference does, so a module's imports, registry and
+// qualified type scopes are in place, and emit `.d.ts` for ONE target path. The
+// dependencies are inferred, not emitted — `.d.ts` is a per-file question.
+let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+  | Err(e) => Err(atPath("check", loaded.path, e))
+  | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
+      | Err(e) => Err(atPath("check", loaded.path, e))
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
+          | Err(es) => Err(firstAtPath(loaded.path, es))
+          | Ok(r) => Ok(
+              {
+                exportsByPath: Map.set(
+                  loaded.path,
+                  exportedSchemes(loaded.stmts, r.env),
+                  ctx.exportsByPath
+                ),
+                regByPath: Map.set(
+                  loaded.path,
+                  exportedRegistry(loaded.stmts),
+                  ctx.regByPath
+                ),
+                keysByPath: Map.set(
+                  loaded.path,
+                  exportedCtorKeys(loaded.stmts),
+                  ctx.keysByPath
+                ),
+                qualsByPath: Map.set(
+                  loaded.path,
+                  qualScopeOf(loaded.stmts, res.quals),
+                  ctx.qualsByPath
+                ),
+                aliases: mergeMap(r.aliases, ctx.aliases),
+                runtimeImport: ctx.runtimeImport,
+                target: ctx.target,
+                dts: loaded.path == ctx.target
+                  ? emitDtsFromTypedWith(
+                    loaded.stmts,
+                    r.env,
+                    // Dependency aliases stay in scope for the same reason the
+                    // `.ts` backend keeps them: inference expands record aliases
+                    // to rows, so without them an imported type prints inline.
+                    mergeMap(r.aliases, ctx.aliases),
+                    qualifierMapOf(res.quals, localTypeNames(loaded.stmts)),
+                    ctx.runtimeImport,
+                    opts.docs,
+                    dtsHooksFor(opts.plugins),
+                    bindingHooksFor(opts.plugins)
+                  )
+                  : ctx.dts
+              }
+            )
+        }
+    }
+}
+
+let dtsAll = (ctx, graph, opts) => switch graph {
+  | [] => Ok(ctx.dts)
+  | [m, ...rest] => switch ctx->dtsOne(m, opts) {
+      | Err(e) => Err(e)
+      | Ok(ctx1) => ctx1->dtsAll(rest, opts)
+    }
+}
+
+/// emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
+/// file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
+export let emitDtsForFileWith = (entry, runtimeImport, opts: Opts) =>
+  let? graph = entry->loadGraphWith(opts.plugins) in
+    dtsAll(
+      {
+        exportsByPath: #{},
+        regByPath: #{},
+        keysByPath: #{},
+        qualsByPath: #{},
+        aliases: #{},
+        runtimeImport,
+        target: absPath(entry),
+        dts: ""
+      },
+      graph,
+      opts
+    )
+
+export let emitDtsForFile = (entry, runtimeImport) =>
+  entry->emitDtsForFileWith(runtimeImport, defaultOpts)
+
+/// buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
+/// Typed graph emit shares the recovery preflight with JS graph emit, so both
+/// CLI targets render the same complete diagnostic set.
+export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) => switch entry->loadGraphWith(opts.plugins) {
+  | Err(e) => Err([e])
+  | Ok(graph) =>
+    // The preflight runs the JS rail, whose `openFor` hands the ENTRY `opts.open`
+    // verbatim under `strictEntry`. Every TS path instead reads the entry's own
+    // `"use open"`, so preflighting with `strictEntry` on can reject an entry the
+    // TS compiler would accept — and then never call it. Clear the flag so both
+    // halves judge the entry by the same rule.
+    let recovered = graph->compileGraphRecoveringWith(
+      { ...opts, strictEntry: false }
+    ) in
+      Array.length(recovered.errors) == 0
+        ? graph->compileGraphTsWith(runtimeImport, opts)
+          |> Result.mapErr(e => [e])
+        : Err(recovered.errors)
+}
+
+export let buildModulesTs = (entry, runtimeImport) =>
+  entry->buildModulesTsWith(runtimeImport, defaultOpts)

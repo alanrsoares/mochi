@@ -1,0 +1,263 @@
+// Structural patterns for both emitted JS and typed TS. Callers supply only
+// constructor field keys; expression emission and annotation hooks stay outside.
+// Inputs are checked patterns: nested lazy Lists are rejected by the checker,
+// and every or-pattern alternative has aligned binding positions.
+import * as Ast from "../ast/ast.mochi"
+import { jsStringLit, litValue } from "./literals.mochi"
+
+let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
+  | None => false
+  | Some(x) => f(x) ? true : someOfFrom(f, xs, i + 1)
+}
+let someOf = (f, xs) => someOfFrom(f, xs, 0)
+
+let patternKeyAt = (ctorKeys: Map<string, [string]>, ctor, i) => switch Map.get(ctor, ctorKeys) {
+  | Some(ks) => Option.unwrapOr("_${show(i)}", Array.get(i, ks))
+  | None => "_${show(i)}"
+}
+
+// ---- general pattern compiler ----------------------------------------------
+// Nested patterns can't lower to matcher objects: @onrails/pattern's matcher
+// compares object values shallowly (`!==`), so `{ value: { _tag: "Sm" } }`
+// never matches. A nesting arm instead lowers to the guard form — the same
+// one array/tuple arms already use — `.with((_v) => conds, (slot) => body)`.
+// `patConds` renders the refutable tests against a path expression; `patSlot`
+// renders the JS destructuring target that binds names ("" = a hole, nothing
+// binds beneath). Lazy `plist` never reaches either: nested occurrences are
+// rejected by check.mochi, top-level arms go through `genListMatch`.
+
+// `{ key: sub }` entry, punned when the bound name IS the key.
+let keyedSlot = (key, sub) => sub == key ? key : "${key}: ${sub}"
+
+let pctorEntries = (ctorKeys: Map<string, [string]>, ctor, args, i) => switch Array.get(i, args) {
+  | None => []
+  | Some(a) => let s = ctorKeys->patSlot(a) in
+    let restEntries = ctorKeys->pctorEntries(ctor, args, i + 1) in
+      s == ""
+        ? restEntries
+        : Array.prepend(
+          keyedSlot(ctorKeys->patternKeyAt(ctor, i), s),
+          restEntries
+        )
+}
+
+let precordEntries = (ctorKeys: Map<string, [string]>, fields, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => let s = ctorKeys->patSlot(f.pat) in
+    let restEntries = ctorKeys->precordEntries(fields, i + 1) in
+      s == "" ? restEntries : Array.prepend(keyedSlot(f.label, s), restEntries)
+}
+
+export let patSlot = (ctorKeys: Map<string, [string]>, p) => switch p {
+  | Ast.PAs(pat, name, _, _) => let inner = ctorKeys->patSlot(pat) in
+      inner == "" ? name : "${inner}, ${name}"
+  | Ast.PBind(name, _) => name
+  | Ast.PWild(_) => ""
+  | Ast.PUnit(_) => ""
+  | Ast.PLit(_, _, _) => ""
+  | Ast.PBool(_, _) => ""
+  | Ast.PStr(_, _) => ""
+  | Ast.PList(_, _, _) => ""
+  | Ast.PCtor(ctor, args, _, _) => let entries = ctorKeys->pctorEntries(
+      ctor,
+      args,
+      0
+    ) in
+      Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
+  | Ast.PRecord(fields, _) => let entries = ctorKeys->precordEntries(
+      fields,
+      0
+    ) in
+      Array.length(entries) == 0 ? "" : "{ ${Str.join(", ", entries)} }"
+  | Ast.PTuple(elems, _) => let slots = elems
+      |> map(el => ctorKeys->patSlot(el)) in
+      someOf(s => s != "", slots) ? "[${Str.join(", ", slots)}]" : ""
+  | Ast.PArr(elems, rest, _) => let slots = elems
+      |> map(el => ctorKeys->patSlot(el)) in
+    let slots2 = switch rest {
+      | Some(Ast.PBind(name, _)) => Array.append("...${name}", slots)
+      | _ => slots
+    } in
+      someOf(s => s != "", slots2) ? "[${Str.join(", ", slots2)}]" : ""
+  | Ast.POr(alts, _) =>
+    // The first alt's destructure serves the whole arm — every alt binds the
+    // same names at the same positions (enforced by check.mochi).
+    switch Array.head(alts) {
+      | Some(first) => ctorKeys->patSlot(first)
+      | None => ""
+    }
+}
+
+let pctorConds = (ctorKeys: Map<string, [string]>, ctor, args, i, path) => switch Array.get(i, args) {
+  | None => []
+  | Some(a) => Array.concat(
+      ctorKeys->patConds(a, "${path}.${ctorKeys->patternKeyAt(ctor, i)}"),
+      ctorKeys->pctorConds(ctor, args, i + 1, path)
+    )
+}
+let precordConds = (ctorKeys: Map<string, [string]>, fields, i, path) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => Array.concat(
+      ctorKeys->patConds(f.pat, "${path}.${f.label}"),
+      ctorKeys->precordConds(fields, i + 1, path)
+    )
+}
+let ptupleConds = (ctorKeys: Map<string, [string]>, elems, i, path) => switch Array.get(i, elems) {
+  | None => []
+  | Some(el) => Array.concat(
+      ctorKeys->patConds(el, "${path}[${show(i)}]"),
+      ctorKeys->ptupleConds(elems, i + 1, path)
+    )
+}
+let parrConds = (ctorKeys: Map<string, [string]>, elems, i, path) => switch Array.get(i, elems) {
+  | None => []
+  | Some(el) => Array.concat(
+      ctorKeys->patConds(el, "${path}[${show(i)}]"),
+      ctorKeys->parrConds(elems, i + 1, path)
+    )
+}
+
+export let patConds = (ctorKeys: Map<string, [string]>, p, path) => switch p {
+  | Ast.PAs(pat, _, _, _) => ctorKeys->patConds(pat, path)
+  | Ast.PWild(_) => []
+  | Ast.PUnit(_) =>
+    // `PUnit` needs no test: `unit` has exactly one inhabitant, so the type alone decides.
+    []
+  | Ast.PBind(_, _) => []
+  | Ast.PList(_, _, _) => []
+  | Ast.PLit(_, _, _) => ["${path} === ${litValue(p)}"]
+  | Ast.PBool(_, _) => ["${path} === ${litValue(p)}"]
+  | Ast.PStr(_, _) => ["${path} === ${litValue(p)}"]
+  | Ast.PCtor(ctor, args, _, _) => Array.prepend(
+      "${path}._tag === ${jsStringLit(ctor)}",
+      ctorKeys->pctorConds(ctor, args, 0, path)
+    )
+  | Ast.PRecord(fields, _) => ctorKeys->precordConds(fields, 0, path)
+  | Ast.PTuple(elems, _) =>
+    // No length guard — tuple arity is guaranteed by the type.
+    ctorKeys->ptupleConds(elems, 0, path)
+  | Ast.PArr(elems, rest, _) => Array.prepend(
+      "${path}.length ${Option.isSome(rest) ? ">=" : "==="} ${show(Array.length(elems))}",
+      ctorKeys->parrConds(elems, 0, path)
+    )
+  | Ast.POr(alts, _) =>
+    // Each alt's own conds &&-join into one guard; the alts ||-join into one.
+    let altCond = alt =>
+      let conds = ctorKeys->patConds(alt, path) in
+        Array.length(conds) == 0
+          ? "true"
+          : Str.join(" && ", conds |> map(c => "(${c})")) in
+      [Str.join(" || ", alts |> map(alt => "(${altCond(alt)})"))]
+}
+
+// ---- type-predicate targets (ADR 0031) -------------------------------------
+//
+// `@onrails/pattern`'s `Narrow` only refines a handler's input for an `x is U`
+// guard, not a plain boolean one — so a nested-pattern handler would otherwise
+// see the whole union. `patTarget` builds that `U`, narrowing `base` the same
+// way the arm's structural tests do.
+
+/// A field's refined type when its sub-pattern narrows it, else `None` — a
+/// bind/wildcard/literal needs no narrowing and keeps its declared type.
+/// Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
+/// is two slots down, and without this the predicate stopped at the top level
+/// while the handler destructured all the way (TS2339 on the inner field).
+let fieldRefine = (ctorKeys: Map<string, [string]>, p, fieldBase) => switch p {
+  | Ast.PCtor(_, _, _, _) => Some(ctorKeys->patTarget(p, fieldBase))
+  | Ast.PRecord(_, _) => let t = ctorKeys->patTarget(p, fieldBase) in
+      t == fieldBase ? None : Some(t)
+  | Ast.PTuple(_, _) => let t = ctorKeys->patTarget(p, fieldBase) in
+      t == fieldBase ? None : Some(t)
+  | Ast.PArr(_, _, _) => let t = ctorKeys->patTarget(p, fieldBase) in
+      t == fieldBase ? None : Some(t)
+  | _ => None
+}
+
+let ctorRefines = (ctorKeys: Map<string, [string]>, args, keys, member, i) => switch Array.get(i, args) {
+  | None => []
+  | Some(a) => let rest = ctorKeys->ctorRefines(args, keys, member, i + 1) in
+    let key = Option.unwrapOr("_${show(i)}", Array.get(i, keys)) in
+      switch ctorKeys->fieldRefine(a, "${member}[${jsStringLit(key)}]") {
+        | Some(sub) => Array.prepend("${jsStringLit(key)}: ${sub}", rest)
+        | None => rest
+      }
+}
+
+let recordRefines = (ctorKeys: Map<string, [string]>, fields, base, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => let rest = ctorKeys->recordRefines(fields, base, i + 1) in
+      switch ctorKeys->fieldRefine(f.pat, "${base}[${jsStringLit(f.label)}]") {
+        | Some(sub) => Array.prepend("${jsStringLit(f.label)}: ${sub}", rest)
+        | None => rest
+      }
+}
+
+/// A tuple slot is indexed positionally, so each element has its own base.
+let tupleSlotBase = (base, i) => "(${base})[${show(i)}]"
+
+let tupleTargets = (ctorKeys: Map<string, [string]>, elems, base, i) => switch Array.get(i, elems) {
+  | None => []
+  | Some(el) => let slotBase = tupleSlotBase(base, i) in
+      Array.prepend(
+        Option.unwrapOr(slotBase, ctorKeys->fieldRefine(el, slotBase)),
+        ctorKeys->tupleTargets(elems, base, i + 1)
+      )
+}
+
+let tupleRefines = (ctorKeys: Map<string, [string]>, elems, base, i) => switch Array.get(i, elems) {
+  | None => false
+  | Some(el) => Option.isSome(
+      ctorKeys->fieldRefine(el, tupleSlotBase(base, i))
+    ) || ctorKeys->tupleRefines(elems, base, i + 1)
+}
+
+/// Array elements all share one element base (`T[number]`).
+let arrTargets = (ctorKeys: Map<string, [string]>, elems, elemBase, i) => switch Array.get(i, elems) {
+  | None => []
+  | Some(el) => Array.prepend(
+      Option.unwrapOr(elemBase, ctorKeys->fieldRefine(el, elemBase)),
+      ctorKeys->arrTargets(elems, elemBase, i + 1)
+    )
+}
+
+let arrRefines = (ctorKeys: Map<string, [string]>, elems, elemBase, i) => switch Array.get(i, elems) {
+  | None => false
+  | Some(el) => Option.isSome(
+      ctorKeys->fieldRefine(el, elemBase)
+    ) || ctorKeys->arrRefines(elems, elemBase, i + 1)
+}
+
+/// Refine `base` by everything the pattern structurally tests. An or-pattern
+/// keeps the base — per-alternative narrowing would need a union target.
+export let patTarget = (ctorKeys: Map<string, [string]>, p, base) => switch p {
+  | Ast.PAs(pat, _, _, _) => ctorKeys->patTarget(pat, base)
+  | Ast.PCtor(ctor, args, _, _) => let member = "Extract<${base}, { _tag: ${jsStringLit(ctor)} }>" in
+    let keys = Option.unwrapOr([], Map.get(ctor, ctorKeys)) in
+    let refines = ctorKeys->ctorRefines(args, keys, member, 0) in
+      Array.length(refines) == 0
+        ? member
+        : "${member} & { ${Str.join("; ", refines)} }"
+  | Ast.PRecord(fields, _) => let refines = ctorKeys->recordRefines(
+      fields,
+      base,
+      0
+    ) in
+      Array.length(refines) == 0
+        ? base
+        : "${base} & { ${Str.join("; ", refines)} }"
+  | Ast.PTuple(elems, _) => !(ctorKeys->tupleRefines(elems, base, 0))
+      ? base
+      : "[${Str.join(", ", ctorKeys->tupleTargets(elems, base, 0))}]"
+  | Ast.PArr(elems, restOpt, _) => let elemBase = "(${base})[number]" in
+      !(ctorKeys->arrRefines(elems, elemBase, 0))
+        ? base
+        : let heads = Str.join(
+          ", ",
+          ctorKeys->arrTargets(elems, elemBase, 0)
+        ) in
+          switch restOpt {
+            | Some(_) => "[${heads}, ...${base}]"
+            | None => "[${heads}]"
+          }
+  | _ => base
+}

@@ -1,4 +1,4 @@
-// Ticket 0005 — bootstrap/compile.mochi is the whole pipeline as one mochi
+// Ticket 0005 — packages/compiler/src/compile/compile.mochi is the whole pipeline as one mochi
 // function: string -> Result string Err. It runs check and infer as real
 // gates. We eval the compiled compile.mochi with its five pass-imports and the
 // five prelude-shim tables injected (the extern/import bindings become
@@ -32,25 +32,32 @@ const evalNames = <T extends Record<string, unknown>>(
 let alCompile: (src: string) => AlResult;
 
 beforeAll(async () => {
-  const shim = await import(join(root, "bootstrap/prelude.gen.mjs"));
-  const { lex } = evalNames<{ lex: unknown }>(compileAl("bootstrap/lexer.mochi"), ["lex"]);
+  const shim = await import(join(root, "packages/compiler/src/prelude/prelude.gen.mjs"));
+  const { lex } = evalNames<{ lex: unknown }>(
+    compileAl("packages/compiler/src/lexer/lexer.mochi"),
+    ["lex"],
+  );
   const { parseRecovering } = evalNames<{ parseRecovering: unknown }>(
-    compileAl("bootstrap/parser.mochi"),
+    compileAl("packages/compiler/src/parser/parser.mochi"),
     ["parseRecovering"],
   );
-  const { checkAll } = evalNames<{ checkAll: unknown }>(compileAl("bootstrap/check.mochi"), [
-    "checkAll",
-  ]);
+  const { checkAll } = evalNames<{ checkAll: unknown }>(
+    compileAl("packages/compiler/src/check/check.mochi"),
+    ["checkAll"],
+  );
   const { inferProgramWith, inferProgramTypesWith } = evalNames<{
     inferProgramWith: unknown;
     inferProgramTypesWith: unknown;
-  }>(compileAl("bootstrap/infer.mochi"), ["inferProgramWith", "inferProgramTypesWith"]);
+  }>(compileAl("packages/compiler/src/infer/infer.mochi"), [
+    "inferProgramWith",
+    "inferProgramTypesWith",
+  ]);
   const { codegenWith, jsGenOpts } = evalNames<{ codegenWith: unknown; jsGenOpts: unknown }>(
-    compileAl("bootstrap/codegen.mochi"),
+    compileAl("packages/compiler/src/codegen/codegen.mochi"),
     ["codegenWith", "jsGenOpts"],
   );
   alCompile = evalNames<{ compile: (s: string) => AlResult }>(
-    compileAl("bootstrap/compile.mochi"),
+    compileAl("packages/compiler/src/compile/compile.mochi"),
     ["compile"],
     {
       lex,

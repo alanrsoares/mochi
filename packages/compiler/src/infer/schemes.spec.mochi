@@ -1,0 +1,111 @@
+import { assertEq, ok, test } from "@mochi/test"
+import * as Ast from "../ast/ast.mochi"
+import {
+  ctorScheme,
+  foldAliases,
+  foldAliasesAt,
+  generalize,
+  generalizeOver,
+  instantiate,
+  mono,
+  widenLits
+} from "./schemes.mochi"
+import {
+  mkSt,
+  RowEmpty,
+  RowVar,
+  rField,
+  showType,
+  tArrow,
+  tLit,
+  tPrim,
+  tRecord,
+  tUnion,
+  tVar
+} from "./types.mochi"
+
+let identityType = tArrow(tVar(0), tVar(0))
+let sp = { start: 0, end: 0 }
+
+test("generalize quantifies variables not free in the environment", () =>
+  let env = Map.set("fixed", mono(tVar(0)), #{}) in
+  let sc = generalize(env, tArrow(tVar(0), tVar(1)), mkSt(2), false) in
+    sc.vars |> assertEq([1]))
+
+test("generalizeOver reads free variables only from the named entries", () =>
+  let env = Map.set("fixed", mono(tVar(0)), #{}) in
+  let t = tArrow(tVar(0), tVar(1)) in
+    (
+      generalizeOver(env, ["fixed"], t, mkSt(2), false).vars,
+      generalizeOver(env, [], t, mkSt(2), false).vars
+    )
+      |> assertEq(([1], [0, 1])))
+
+test("instantiate makes each quantified variable fresh", () =>
+  let (ty, st) = instantiate(
+    { vars: [0], rvars: [], ty: identityType },
+    mkSt(5)
+  ) in
+    showType(ty) == "'t5 -> 't5" && st.next == 6 |> ok)
+
+test("generalization widens an unannotated string literal", () =>
+  generalize(#{}, tLit("hi"), mkSt(0), true).ty
+    |> showType
+    |> assertEq("string"))
+
+test("widenLits widens a bare literal in a function domain", () =>
+  widenLits(tArrow(tLit("yes"), tPrim("bool")))
+    |> showType
+    |> assertEq("string -> bool"))
+
+test("generalization preserves a singleton literal union", () =>
+  let ty = tArrow(tUnion([tLit("rose"), tLit("rose")]), tPrim("bool")) in
+  let sc = generalize(#{}, ty, mkSt(0), true) in
+    generalize(#{}, sc.ty, mkSt(0), true).ty
+      |> showType
+      |> assertEq("\"rose\" -> bool"))
+
+test("ctorScheme makes a polymorphic curried constructor", () =>
+  let ctor = {
+    name: "Some",
+    fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
+  } in
+  let (sc, _) = ctorScheme("Option", ["a"], ctor, mkSt(0), #{}) in
+    sc.vars == [0] && showType(sc.ty) == "'t0 -> Option<'t0>" |> ok)
+
+let boxAlias = {
+  params: ["a"],
+  fields: [
+    {
+      name: "value",
+      nameSpan: sp,
+      fieldType: Ast.TyName("a", sp),
+      optional: false
+    }
+  ],
+  expr: None
+}
+
+let boxOf = t => tRecord(rField("value", t, RowEmpty, false))
+
+test("foldAliases names a closed record, its argument folded too", () =>
+  foldAliases(boxOf(boxOf(tPrim("number"))), Map.set("Box", boxAlias, #{}))
+    |> showType
+    |> assertEq("Box<Box<number>>"))
+
+test("foldAliases leaves an open row structural", () =>
+  foldAliases(
+    tRecord(rField("value", tPrim("number"), RowVar(1), false)),
+    Map.set("Box", boxAlias, #{})
+  )
+    |> showType
+    |> assertEq("{ value: number | 'r1 }"))
+
+test("foldAliasesAt folds only the named aliases", () =>
+  let aliases = Map.set("Box", boxAlias, #{}) in
+  let t = boxOf(tPrim("number")) in
+    (
+      showType(foldAliasesAt(t, ["Box"], aliases)),
+      showType(foldAliasesAt(t, [], aliases))
+    )
+      |> assertEq(("Box<number>", "{ value: number }")))

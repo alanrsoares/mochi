@@ -8,7 +8,7 @@ duplicate policy in editor-specific configuration.
 **and** to strict-`tsc`-clean typed TypeScript — the two backends share one codegen
 (`docs/compiler.md`). A self-hosted core with TypeScript host tooling on [Bun](https://bun.sh). Hindley–Milner
 (Algorithm W) with row-polymorphic records and parametric variants; LSP/`.d.ts`/formatter
-are first-class. The self-hosted `bootstrap/` graph emits **0 `tsc --strict` errors** —
+are first-class. The self-hosted compiler graph emits **0 `tsc --strict` errors** —
 the compiler is written in a language whose TS output typechecks.
 
 Read this, then `CONTEXT.md` for vocabulary and `docs/` for the language, compiler, and tooling.
@@ -39,28 +39,28 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 
 | Module | Responsibility |
 |---|---|
-| `bootstrap/lexer.mochi` | text → tokens with half-open spans and attached docs |
-| `bootstrap/parser.mochi` | Pratt parser → `Program`; errors are values, with recovery holes |
-| `bootstrap/ast.mochi` · `packages/compiler/src/ast/` | core tagged AST and host DTOs; types, spans, ctors |
-| `bootstrap/check.mochi` · `bootstrap/symbols.mochi` | name registry, duplicate-decl, exhaustiveness; symbol index for IDE |
-| `bootstrap/infer.mochi` | Algorithm W (SCC), unification, schemes, type display |
-| `bootstrap/codegen.mochi` · `bootstrap/codegen-ts.mochi` | **pure, non-failing** AST → JS / strict-clean TS |
-| `bootstrap/extensions.mochi` | `BootstrapPlugin` seam; `bootstrap/plugins/jsx.mochi` builtin |
-| `doc/` | Wadler-style `Doc` IR + layout engine for hover type text; the formatter is `bootstrap/format.mochi` (ADR 0114) |
-| `bootstrap/module.mochi` | DFS load, cycle detection, compile graph; host façade returns `ResultAsync` |
+| `packages/compiler/src/lexer/lexer.mochi` | text → tokens with half-open spans and attached docs |
+| `packages/compiler/src/parser/parser.mochi` | Pratt parser → `Program`; errors are values, with recovery holes |
+| `packages/compiler/src/ast/ast.mochi` · `packages/compiler/src/ast/` | core tagged AST and host DTOs; types, spans, ctors |
+| `packages/compiler/src/check/check.mochi` · `packages/compiler/src/check/symbols.mochi` | name registry, duplicate-decl, exhaustiveness; symbol index for IDE |
+| `packages/compiler/src/infer/infer.mochi` | Algorithm W (SCC), unification, schemes, type display |
+| `packages/compiler/src/codegen/codegen.mochi` · `packages/compiler/src/codegen/typescript.mochi` | **pure, non-failing** AST → JS / strict-clean TS |
+| `packages/compiler/src/extensions/extensions.mochi` | `CompilerPlugin` seam; `packages/compiler/src/extensions/plugins/jsx.mochi` builtin |
+| `doc/` | Wadler-style `Doc` IR + layout engine for hover type text; the formatter is `packages/compiler/src/format/format.mochi` (ADR 0114) |
+| `packages/compiler/src/module/module.mochi` | DFS load, cycle detection, compile graph; host façade returns `ResultAsync` |
 | `prelude/` | builtin HM signatures + namespace tables; `runtime.ts` is the runtime source of truth, `js-defs.gen.ts` its stripped JS view (ADR 0075) |
-| `bootstrap/dts.mochi` | `.d.ts` emit (TS backend shares printers) |
-| `bootstrap/compile.mochi` · `packages/compiler/src/bootstrap/` | single-file railway and host compile/emit façades |
+| `packages/compiler/src/dts/dts.mochi` | `.d.ts` emit (TS backend shares printers) |
+| `packages/compiler/src/compile/compile.mochi` · `packages/compiler/src/compile/` | single-file railway and host compile/emit façades |
 | `@mochi/cli` | host CLI — composes compiler + `@mochi/dx` (`fmt`) + `@mochi/codemod` |
 | `@mochi/codemod` · `@mochi/dx` · `@mochi/lsp` · `@mochi/vite-plugin` | codemods; format + IDE queries; LSP adapter; Vite (ADR 0048) |
 
 ## Conventions
 
 - **Errors are values.** Every pass returns `Result`/`ResultAsync` (`@onrails/result`).
-  One host union `Diagnostic` (`kind: lex|parse|check|type`); bootstrap passes use
+  One host union `Diagnostic` (`kind: lex|parse|check|type`); Mochi passes use
   tagged diagnostics. Inference attaches spans to unification errors.
 - **No throws** in ordinary compiler control flow; codegen may emit an invariant failure.
-- **Core is authored only in Mochi.** Change `bootstrap/*.mochi`, extend seed-owned
+- **Core is authored only in Mochi.** Change `packages/compiler/src/**/*.mochi` (CLI: `packages/cli/src/driver.mochi`), extend seed-owned
   specs or ADR 0105 conformance, then refresh the generated `bootstrap/seed/` with
   `bun run seed:freeze`. Never hand-edit the seed or port changes to a TS twin:
   the hand-authored core is gone (ADR 0131, superseding ADR 0078's dual-write rule).
@@ -93,9 +93,9 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
   passes, DX queries, plugins). Test one module or package surface in isolation.
   Mochi specs are `*.spec.mochi` (`import { test, testEach, testTask, check, checkTask, assertEq, ok } from "@mochi/test"`,
   ADR 0086 / 0088 / 0089) — `bun test` discovers them via bunfig `[loader] ".mochi" = "js"`.
-  Bootstrap unit specs colocate as `bootstrap/*.spec.mochi`; black-box compiler
+  Compiler unit specs colocate as `packages/compiler/src/**/*.spec.mochi` and `packages/cli/src/driver.spec.mochi`; black-box compiler
   contracts live in the ADR 0105 conformance corpus.
-- **Smoke / integration** — `test/` only: bootstrap façades and north-stars,
+- **Smoke / integration** — `test/` only: compiler façades and bootstrap north-stars,
   module graphs, examples, playground, cross-package seams, and language guards that
   exercise the full pipeline.
 - **Shared harness** — `@mochi/test-support` (`compileJs`, `compileAndEval`, `pos`,

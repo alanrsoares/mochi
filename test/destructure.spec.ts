@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import { preludeJs } from "@mochi/compiler/prelude";
+import { parseProgram } from "@mochi/compiler/syntax";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
 

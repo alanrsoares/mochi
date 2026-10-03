@@ -31,6 +31,6 @@ Split from C5 (whose original ctor claim was wrong — cross-module ctor matchin
 - [x] `module.ts` merge scoping + duplicate-decl diagnostic in `check.ts`.
 - [x] Audit `examples/` + `apps/docs` + bootstrap for code accidentally relying on
       the leak.
-- [x] Bootstrap impact: `bootstrap/module.mochi` mirrors the scoping (differential
+- [x] Compiler impact: `packages/compiler/src/module/module.mochi` mirrors the scoping (differential
       parity).
 - [x] `bun run check:full` green.

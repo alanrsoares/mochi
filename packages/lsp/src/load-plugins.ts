@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
 import {
   type ComponentHost,
   capability,
@@ -45,7 +45,7 @@ export type PluginLoadOptions = {
  * A legacy `dxPlugins` export is ignored.
  */
 export type ProjectPlugins = {
-  readonly plugins: readonly BootstrapPlugin[];
+  readonly plugins: readonly CompilerPlugin[];
 };
 
 const cache = new Map<string, Promise<ProjectPlugins | undefined>>();
@@ -126,7 +126,7 @@ export const findPluginsFile = (startDir: string, stopAt?: string): string | nul
   return null;
 };
 
-/** Bootstrap hooks are plain functions; TypeScript-core `inferCall` is a `{ refs, hook }` record. */
+/** Compiler hooks are plain functions; TypeScript-core `inferCall` is a `{ refs, hook }` record. */
 const BOOTSTRAP_HOOKS = ["parse", "inferCall", "format", "dtsBinding", "completeMembers"] as const;
 
 const assertNamedList = (plugins: unknown, file: string, exportName: string): unknown[] => {
@@ -150,7 +150,7 @@ const assertNamedList = (plugins: unknown, file: string, exportName: string): un
   return plugins;
 };
 
-const assertBootstrapPlugins = (plugins: unknown, file: string): BootstrapPlugin[] => {
+const assertPlugins = (plugins: unknown, file: string): CompilerPlugin[] => {
   const list = assertNamedList(plugins, file, "default or named `plugins`");
   for (const plugin of list as Record<string, unknown>[]) {
     for (const hook of BOOTSTRAP_HOOKS) {
@@ -161,14 +161,14 @@ const assertBootstrapPlugins = (plugins: unknown, file: string): BootstrapPlugin
       }
     }
   }
-  return list as BootstrapPlugin[];
+  return list as CompilerPlugin[];
 };
 
 /** A manifest module's exports, before validation. */
 type ManifestModule = { default?: unknown; plugins?: unknown };
 
 const assertProjectPlugins = (mod: ManifestModule, file: string): ProjectPlugins => ({
-  plugins: assertBootstrapPlugins(mod.default ?? mod.plugins, file),
+  plugins: assertPlugins(mod.default ?? mod.plugins, file),
 });
 
 /** Shadow-copy path for `file` at the current cache `generation` (same dir, so relative imports inside the manifest still resolve). */

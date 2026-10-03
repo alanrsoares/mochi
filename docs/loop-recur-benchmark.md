@@ -92,7 +92,7 @@ Other fixtures retain the original finding of no substantial GC churn.
 
 Compiler/formatter comparison loads the frozen bundles from `4615aaf` and the
 new seed, uses identical current sources, warms each operation three times,
-then alternates old/new order across 12 measured calls. Bootstrap graph
+then alternates old/new order across 12 measured calls. Compiler graph
 check+infer+codegen best times are 1092 versus 1116 ms; medians are 1143 versus
 1148 ms (0.4% difference). Formatter medians are 66.9 versus 66.4 ms for the
 parser, 70.9 versus 68.6 ms for inference, and 11.0 versus 10.8 ms for the snake

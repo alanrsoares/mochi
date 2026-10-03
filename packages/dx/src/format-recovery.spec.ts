@@ -54,7 +54,7 @@ test("format is a fixed point with a comment adjacent to an error region", () =>
 // away from the hard-fail `parse` must not perturb output for files that
 // already parse cleanly (no error-node spans are ever produced for them).
 const root = repoRoot(import.meta.url);
-const cleanFiles = ["bootstrap/ast.mochi", "bootstrap/scc.mochi"];
+const cleanFiles = ["packages/compiler/src/ast/ast.mochi", "packages/compiler/src/infer/scc.mochi"];
 
 for (const rel of cleanFiles) {
   test(`clean-file output is byte-identical for ${rel}`, () => {

@@ -2,7 +2,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BOOTSTRAP_SEED } from "./repo";
 
-export const HOST_SHIMS = ["host.mjs", "prelude.gen.mjs", "plugins/jsx-schema.gen.mjs"] as const;
+export const HOST_SHIMS = [
+  "packages/compiler/src/module/host.mjs",
+  "packages/compiler/src/prelude/prelude.gen.mjs",
+  "packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs",
+] as const;
 
 export type SeedManifest = {
   readonly sourceRevision: string;

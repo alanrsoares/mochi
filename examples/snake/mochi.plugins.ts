@@ -6,15 +6,15 @@
  * for the build and every editor query (ADR 0123).
  */
 
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { preactBootstrap } from "@mochi/plugin-preact";
-import { reReducedBootstrap } from "@mochi/plugin-re-reduced";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import { preactPlugin } from "@mochi/plugin-preact";
+import { reReducedPlugin } from "@mochi/plugin-re-reduced";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 
-export const snakeVendorPlugins: BootstrapPlugin[] = [
-  styledCvaBootstrap,
-  preactBootstrap,
-  reReducedBootstrap,
+export const snakeVendorPlugins: CompilerPlugin[] = [
+  styledCvaPlugin,
+  preactPlugin,
+  reReducedPlugin,
 ];
 
 /** LSP contract: `default` or named `plugins`. */

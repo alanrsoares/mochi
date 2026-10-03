@@ -44,7 +44,7 @@ jobs:
           path: |
             .cache/bootstrap-build
             .cache/bootstrap-ts-emit
-          key: bootstrap-graph-${{ matrix.gate }}-${{ hashFiles('bootstrap/**/*.mochi', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/bootstrap/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
+          key: bootstrap-graph-${{ matrix.gate }}-${{ hashFiles('packages/compiler/src/**/*.mochi', 'packages/cli/src/**/*.mochi', 'packages/compiler/src/**/*.mjs', 'bootstrap/seed/**/*.ts', 'bootstrap/seed/**/*.cjs', 'bootstrap/seed/**/*.mjs', 'bootstrap/seed/**/*.d.mts', 'packages/compiler/src/**/*.ts', 'packages/test-support/src/bootstrap.ts') }}
 
       # `check`: biome + tsc --noEmit + workspace checks (docs vite build included
       # via @mochi/docs) + formatter dogfood + the parallel test suite.

@@ -8,11 +8,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { BootstrapModuleOutput } from "@mochi/compiler/bootstrap";
-import {
-  buildModulesTsBootstrapWith,
-  defaultBootstrapOptions,
-} from "@mochi/compiler/bootstrap/module";
+import type { CompilerModuleOutput } from "@mochi/compiler/graph";
+import { buildModulesTsWith, defaultOptions } from "@mochi/compiler/module";
 
 const DIR = new URL("./.tsgen-graph/", import.meta.url).pathname;
 // From test/.tsgen-graph/<file>.ts back to src/runtime.
@@ -49,16 +46,12 @@ let flat = tag("a", "b")
 let curried = prefix("a")("b")`,
 };
 
-let outputs: BootstrapModuleOutput[] = [];
+let outputs: CompilerModuleOutput[] = [];
 
 beforeAll(() => {
   mkdirSync(DIR, { recursive: true });
   for (const [name, src] of Object.entries(MODULES)) writeFileSync(join(DIR, name), src);
-  const built = buildModulesTsBootstrapWith(
-    join(DIR, "main.mochi"),
-    RUNTIME,
-    defaultBootstrapOptions,
-  );
+  const built = buildModulesTsWith(join(DIR, "main.mochi"), RUNTIME, defaultOptions);
   if (built._tag === "Err") throw new Error(`build --emit=ts failed: ${built.error[0]!.message}`);
   outputs = built.value;
   for (const { path, js } of outputs)

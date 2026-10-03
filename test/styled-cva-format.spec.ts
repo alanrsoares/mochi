@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from "bun:test";
 import { format } from "@mochi/dx/format";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 import { unwrapOk } from "@onrails/result";
 
-const fmt = (src: string): string => unwrapOk(format(src, { plugins: [styledCvaBootstrap] }));
+const fmt = (src: string): string => unwrapOk(format(src, { plugins: [styledCvaPlugin] }));
 
 const LONG =
   "rounded-full border-2 border-line bg-foam px-3 py-1 font-mono text-2xs text-mute transition-colors hover:border-fur hover:text-ink focus-visible:outline-2 focus-visible:outline-bao focus-visible:outline-offset-2";

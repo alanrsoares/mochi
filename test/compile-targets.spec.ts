@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { codegenTs, compile, compileTargets, emitDts } from "@mochi/compiler";
-import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
-import { compileTsBootstrapSync, emitDtsBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { compileTsSync, emitDtsSyncWith } from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { isErr, unwrapOk } from "@onrails/result";
 
 const src = `
@@ -32,8 +32,8 @@ describe("compileTargets", () => {
   // #102: the barrel's typed emit is the self-hosted core's, not the TS core's.
   test("typed TS and .d.ts come from the bootstrap seed", () => {
     const multi = unwrapOk(compileTargets(src));
-    expect(compileTsBootstrapSync(src, "@mochi/runtime")).toEqual({ _tag: "Ok", value: multi.ts });
-    expect(emitDtsBootstrapSyncWith(src, "@mochi/runtime", defaultBootstrapOptions)).toEqual({
+    expect(compileTsSync(src, "@mochi/runtime")).toEqual({ _tag: "Ok", value: multi.ts });
+    expect(emitDtsSyncWith(src, "@mochi/runtime", defaultOptions)).toEqual({
       _tag: "Ok",
       value: multi.dts,
     });

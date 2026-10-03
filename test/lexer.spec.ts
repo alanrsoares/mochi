@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
-import { lex as seedLex } from "@mochi/compiler/bootstrap/syntax";
-import type { LocTok, Tok } from "@mochi/compiler/bootstrap/types";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import type { LocTok, Tok } from "@mochi/compiler/infer/types";
+import { lex as seedLex } from "@mochi/compiler/syntax";
+import type { Result } from "@onrails/result";
 import { unwrapOk } from "@onrails/result";
 
-const lex = (src: string) => seedLex(src) as BootstrapResult<LocTok<Tok>[], BootstrapDiagnostic>;
+const lex = (src: string) => seedLex(src) as Result<LocTok<Tok>[], CompilerDiagnostic>;
 
 // Keyword lookup must not reach `Object.prototype`.
 test.each(["valueOf", "toString", "constructor", "hasOwnProperty", "__proto__"])(

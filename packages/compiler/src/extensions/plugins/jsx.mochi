@@ -1,0 +1,951 @@
+// packages/compiler/src/extensions/plugins/jsx.mochi — builtin JSX LanguagePlugin (Wave 8 / ADR 0011 §6).
+// Mirrors src/plugins/jsx.ts parse, inferCall, format (as `formatDoc`, ADR 0112)
+// and bindingType.
+// Parse hooks are Result/(toks, pos) + a `parseExpr` callback for `{…}` holes.
+
+import * as Ast from "../../ast/ast.mochi"
+import {
+  recordBinder,
+  zonk,
+  tPrim,
+  tRecord,
+  tLit,
+  tUnion,
+  rExtend,
+  TyFn,
+  TyVar,
+  TyCon,
+  TyRecord,
+  RowExtend,
+  RowEmpty,
+  RowVar
+} from "../../infer/types.mochi"
+import { closestName } from "../../errors/suggest.mochi"
+import * as Fmt from "../../format/format-api.mochi"
+import { cat, group, indent, line, softline, txt } from "../../doc/doc.mochi"
+import * as Lexer from "../../lexer/lexer.mochi"
+import {
+  TLet,
+  TType,
+  TExtern,
+  TSwitch,
+  TLoop,
+  TRecur,
+  TDo,
+  TImport,
+  TExport,
+  TEq,
+  TLbrace,
+  TRbrace,
+  TSpread,
+  TSlash,
+  TMinus,
+  TLt,
+  TGt,
+  TNum,
+  TBool,
+  TStr,
+  TId,
+  TEof
+} from "../../lexer/lexer.mochi"
+
+type LocTok = {
+  tok: Lexer.Tok,
+  start: number,
+  end: number,
+  doc: Option<string>
+}
+
+let jxTokName = t => switch t {
+  | TEq => "eq"
+  | TLbrace => "lbrace"
+  | TRbrace => "rbrace"
+  | TSpread => "spread"
+  | TSlash => "slash"
+  | TLt => "lt"
+  | TGt => "gt"
+  | TId(_) => "id"
+  | TStr(_) => "str"
+  | TNum(_, _) => "num"
+  | TBool(_) => "bool"
+  | TEof => "eof"
+  | _ => "tok"
+}
+
+let jxEofTok = { tok: TEof, start: 0, end: 0, doc: None }
+let jxTokAt = (toks, i) => Array.get(i, toks) |> Option.unwrapOr(jxEofTok)
+let jxSpanOf = lt => { start: lt.start, end: lt.end }
+let jxToEnd = (start, toks, pos) =>
+  { start: start.start, end: jxTokAt(toks, pos - 1).end }
+let jxErrAt = (message, lt) => Err({ message, start: lt.start, end: lt.end })
+
+let jxExpectTok = (t, toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    lt.tok == t
+      ? Ok(pos + 1)
+      : jxErrAt("expected ${jxTokName(t)}, got ${jxTokName(lt.tok)}", lt)
+
+let jxExpectId = (toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    switch lt.tok {
+      | TId(name) => Ok(({ name, span: jxSpanOf(lt) }, pos + 1))
+      | t => jxErrAt("expected id, got ${jxTokName(t)}", lt)
+    }
+
+/// Keyword spelling, mirroring `parser.mochi`'s `keywordText` (ADR 0077). The
+/// plugin carries its own copy for the same reason it carries `jxTokName`: it
+/// sees the token stream, not the parser's internals.
+let jxKeywordText = t => switch t {
+  | TLet => Some("let")
+  | TType => Some("type")
+  | TExtern => Some("extern")
+  | TSwitch => Some("switch")
+  | TLoop => Some("loop")
+  | TRecur => Some("recur")
+  | TDo => Some("do")
+  | TImport => Some("import")
+  | TExport => Some("export")
+  | _ => None
+}
+
+/// Attribute name. A keyword is legal here (ADR 0077) — `type="button"` is the
+/// case that forced it. A valueless attr lowers to `true`, not a reference, so
+/// there is no pun to reject.
+let jxExpectLabel = (toks, pos) =>
+  let lt = jxTokAt(toks, pos) in
+    switch jxKeywordText(lt.tok) {
+      | Some(name) => Ok(({ name, span: jxSpanOf(lt) }, pos + 1))
+      | None => jxExpectId(toks, pos)
+    }
+
+/// Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
+/// splits those into label/minus/label, so glue the parts back together — but
+/// only while the tokens are ADJACENT, or `<div id - x="1">` would silently
+/// become `id-x`.
+let jxAttrNameFrom = (toks, pos, acc) =>
+  let minusTok = jxTokAt(toks, pos) in
+  let partTok = jxTokAt(toks, pos + 1) in
+    minusTok.tok == TMinus && minusTok.start == acc.span.end && partTok.start == minusTok.end
+      ? switch jxExpectLabel(toks, pos + 1) {
+        | Ok((part, p1)) => jxAttrNameFrom(
+            toks,
+            p1,
+            {
+              name: "${acc.name}-${part.name}",
+              span: { start: acc.span.start, end: part.span.end }
+            }
+          )
+        | Err(_) => (acc, pos)
+      }
+      : (acc, pos)
+
+/// `jxExpectLabel` plus any adjacent `-part` continuations.
+let jxExpectAttrName = (toks, pos) =>
+  jxExpectLabel(toks, pos)
+    |> Result.map(((head, p1)) => jxAttrNameFrom(toks, p1, head))
+
+let jxIsUpper = s => Str.codeAt(0, s) |> Option.exists(n => n >= 65 && n <= 90)
+
+let jxExprSpan = e => switch e {
+  | Ast.ENum(_, _, sp) => sp
+  | Ast.EUnit(sp) => sp
+  | Ast.EBool(_, sp) => sp
+  | Ast.EStr(_, sp) => sp
+  | Ast.ERef(_, sp) => sp
+  | Ast.ECall(_, _, _, sp) => sp
+  | Ast.ELambda(_, _, sp) => sp
+  | Ast.ELetIn(_, _, _, _, _, sp) => sp
+  | Ast.ELetBind(_, _, _, _, _, sp) => sp
+  | Ast.EPipe(_, _, _, sp) => sp
+  | Ast.EDo(_, sp) => sp
+  | Ast.ETernary(_, _, _, sp) => sp
+  | Ast.EMatch(_, _, sp) => sp
+  | Ast.ELoop(_, _, sp) => sp
+  | Ast.ERecur(_, sp) => sp
+  | Ast.ERecord(_, _, sp) => sp
+  | Ast.EField(_, _, _, sp) => sp
+  | Ast.ETuple(_, sp) => sp
+  | Ast.EArr(_, sp) => sp
+  | Ast.EList(_, sp) => sp
+  | Ast.ESet(_, sp) => sp
+  | Ast.EMap(_, sp) => sp
+  | Ast.EInterp(_, sp) => sp
+}
+
+// ---------------------------------------------------------------- parse
+
+let makeJsxCall = (tagExpr, fields, spreadOpt, children, startTok, toks, endPos) =>
+  let fullSpan = jxToEnd(jxSpanOf(startTok), toks, endPos) in
+  let pragmaRef = Ast.ERef("h", jxSpanOf(startTok)) in
+  let propsRecord = Ast.ERecord(fields, spreadOpt, fullSpan) in
+  let childrenArr = Ast.EArr(children, fullSpan) in
+    Ast.ECall(
+      pragmaRef,
+      [tagExpr, propsRecord, childrenArr],
+      Some("jsx"),
+      fullSpan
+    )
+
+let parseJsxAttributes = (toks, pos, fieldsAcc, spreadAcc, parseExpr) =>
+  let tk = jxTokAt(toks, pos).tok in
+  let nxt = jxTokAt(toks, pos + 1).tok in
+    tk == TGt || (tk == TSlash && nxt == TGt)
+      ? Ok((fieldsAcc, spreadAcc, pos))
+      : tk == TLbrace
+      ? let? p1 = jxExpectTok(TSpread, toks, pos + 1) in
+        parseExpr(toks, p1)
+          |> Result.flatMap(((spExpr, p2)) =>
+            let? p3 = jxExpectTok(TRbrace, toks, p2) in
+              parseJsxAttributes(toks, p3, fieldsAcc, Some(spExpr), parseExpr))
+      : let? (attrId, p1) = jxExpectAttrName(toks, pos) in
+      let (valExpr, p2) = jxTokAt(toks, p1).tok == TEq
+        ? let pEq = p1 + 1 in
+          switch jxTokAt(toks, pEq).tok {
+            | TStr(v) => (Ast.EStr(v, jxSpanOf(jxTokAt(toks, pEq))), pEq + 1)
+            | TLbrace => switch parseExpr(toks, pEq + 1) {
+                | Ok((e, pR)) => (e, pR + 1)
+                | Err(_) => (Ast.EBool(true, attrId.span), pEq)
+              }
+            | _ => (Ast.EBool(true, attrId.span), pEq)
+          }
+        : (Ast.EBool(true, attrId.span), p1) in
+      let field = {
+        name: attrId.name,
+        nameSpan: attrId.span,
+        value: valExpr
+      } in
+        parseJsxAttributes(
+          toks,
+          p2,
+          Array.append(field, fieldsAcc),
+          spreadAcc,
+          parseExpr
+        )
+
+let parseJsxChildren = (expectedTag, toks, pos, acc, parseExpr) =>
+  let lt = jxTokAt(toks, pos) in
+  let nxt = jxTokAt(toks, pos + 1) in
+    lt.tok == TEof
+      ? jxErrAt(
+        expectedTag == "" ? "unclosed JSX fragment" : "unclosed JSX tag",
+        lt
+      )
+      : lt.tok == TLt && nxt.tok == TSlash
+      ? expectedTag == ""
+        ? let? p1 = jxExpectTok(TGt, toks, pos + 2) in Ok((acc, p1))
+        : let? (closingId, p1) = jxExpectId(toks, pos + 2) in
+        let? p2 = jxExpectTok(TGt, toks, p1) in
+          closingId.name == expectedTag
+            ? Ok((acc, p2))
+            : jxErrAt("mismatched JSX closing tag", lt)
+      : lt.tok == TLt
+      ? parseJsx(toks, pos, parseExpr)
+        |> Result.flatMap(((childJsx, p1)) =>
+          parseJsxChildren(
+            expectedTag,
+            toks,
+            p1,
+            Array.append(Ast.SEExpr(childJsx), acc),
+            parseExpr
+          ))
+      : lt.tok == TLbrace
+      ? nxt.tok == TSpread
+        ? parseExpr(toks, pos + 2)
+          |> Result.flatMap(((spChild, p1)) =>
+            let? p2 = jxExpectTok(TRbrace, toks, p1) in
+              parseJsxChildren(
+                expectedTag,
+                toks,
+                p2,
+                Array.append(Ast.SESpread(spChild), acc),
+                parseExpr
+              ))
+        : parseExpr(toks, pos + 1)
+          |> Result.flatMap(((childExpr, p1)) =>
+            let? p2 = jxExpectTok(TRbrace, toks, p1) in
+              parseJsxChildren(
+                expectedTag,
+                toks,
+                p2,
+                Array.append(Ast.SEExpr(childExpr), acc),
+                parseExpr
+              ))
+      : switch lt.tok {
+        | TStr(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | TNum(v, raw) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.ENum(v, raw, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | TBool(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EBool(v, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | TId(v) => parseJsxChildren(
+            expectedTag,
+            toks,
+            pos + 1,
+            Array.append(Ast.SEExpr(Ast.EStr(v, jxSpanOf(lt))), acc),
+            parseExpr
+          )
+        | _ => jxErrAt("unexpected token in JSX children", lt)
+      }
+
+let parseJsx = (toks, pos, parseExpr) =>
+  let startTok = jxTokAt(toks, pos) in
+  let nxt = jxTokAt(toks, pos + 1) in
+    nxt.tok == TGt
+      ? parseJsxChildren("", toks, pos + 2, [], parseExpr)
+        |> Result.flatMap(((children, p1)) =>
+          Ok((
+            makeJsxCall(
+              Ast.EStr("Fragment", jxSpanOf(startTok)),
+              [],
+              None,
+              children,
+              startTok,
+              toks,
+              p1
+            ),
+            p1
+          )))
+      : let? (firstId, p1) = jxExpectId(toks, pos + 1) in
+      let tagRef = jxIsUpper(firstId.name)
+        ? Ast.ERef(firstId.name, firstId.span)
+        : Ast.EStr(firstId.name, firstId.span) in
+      let tagNameStr = firstId.name in
+        parseJsxAttributes(toks, p1, [], None, parseExpr)
+          |> Result.flatMap(((fields, spreadOpt, p2)) =>
+            let isSelfClosing = jxTokAt(toks, p2).tok == TSlash in
+            let? p3 = isSelfClosing
+              ? jxExpectTok(TGt, toks, p2 + 1)
+              : jxExpectTok(TGt, toks, p2) in
+              isSelfClosing
+                ? Ok((
+                  makeJsxCall(
+                    tagRef,
+                    fields,
+                    spreadOpt,
+                    [],
+                    startTok,
+                    toks,
+                    p3
+                  ),
+                  p3
+                ))
+                : parseJsxChildren(tagNameStr, toks, p3, [], parseExpr)
+                  |> Result.flatMap(((children, p4)) =>
+                    Ok((
+                      makeJsxCall(
+                        tagRef,
+                        fields,
+                        spreadOpt,
+                        children,
+                        startTok,
+                        toks,
+                        p4
+                      ),
+                      p4
+                    ))))
+
+/// Parse hook: claim a leading `<…>`; otherwise Ok(None) fall-through.
+export let parseJsxAtom = (toks, pos, parseExpr) =>
+  jxTokAt(toks, pos).tok == TLt
+    ? parseJsx(toks, pos, parseExpr) |> Result.map(claim => Some(claim))
+    : Ok(None)
+
+// ---------------------------------------------------------------- infer
+
+let seqElemExpr = el => switch el {
+  | Ast.SEExpr(e) => e
+  | Ast.SESpread(e) => e
+}
+
+let inferJsxArrElems = (elements, st, inferExpr) => switch elements {
+  | [] => Ok(st)
+  | [el, ...rest] => inferExpr(seqElemExpr(el), st)
+      |> Result.flatMap(((_, st1)) => inferJsxArrElems(rest, st1, inferExpr))
+}
+
+let inferJsxChildren = (children, st, inferExpr) => switch children {
+  | [] => Ok(st)
+  | [Ast.EArr(elements, _), ...rest] => inferJsxArrElems(
+      elements,
+      st,
+      inferExpr
+    )
+      |> Result.flatMap(st1 => inferJsxChildren(rest, st1, inferExpr))
+  | [child, ...rest] => inferExpr(child, st)
+      |> Result.flatMap(((_, st1)) => inferJsxChildren(rest, st1, inferExpr))
+}
+
+/// Walk a row for `label`; open tails / missing labels → None.
+let rowField = (row, label) => switch row {
+  | RowExtend(l, fieldType, _, rest) => l == label
+      ? Some(fieldType)
+      : rowField(rest, label)
+  | RowEmpty => None
+  | RowVar(_) => None
+}
+
+let fieldNamed = (label, fields) => switch fields {
+  | [] => false
+  | [f, ...rest] => f.name == label || fieldNamed(label, rest)
+}
+
+let recordHasAttr = (expr, label) => switch expr {
+  | Ast.ERecord(fields, _, _) => fieldNamed(label, fields)
+  | _ => false
+}
+
+let jsxChildCount = restArgs => switch restArgs {
+  | [Ast.EArr(elements, _), ..._] => Array.length(elements)
+  | _ => 0
+}
+
+/// Runtime hosts fold h's 3rd arg into props.children. When the component
+/// expects that field and the JSX body supplied kids, synthesize it onto the
+/// attrs type before unify (mirrors TS `jsxPropsWithSynthesizedChildren`).
+let jsxPropsWithSynthesizedChildren = (propsT, propsExpr, expectedRow, restArgs) => switch rowField(expectedRow, "children") {
+  | None => propsT
+  | Some(expectedChildren) => switch propsT {
+      | TyRecord(prow) => recordHasAttr(
+          propsExpr,
+          "children"
+        ) || jsxChildCount(restArgs) == 0
+          ? propsT
+          : tRecord(rExtend("children", expectedChildren, prow))
+      | _ => propsT
+    }
+}
+
+// The intrinsic element schema crosses the host seam as DATA, generated from
+// `packages/compiler/src/extensions/plugins/jsx-schema.ts` (ADR 0097) — the same
+// arrangement `prelude.gen.mjs` uses for the prelude tables (ADR 0075). The
+// plugin only looks attributes up, never matches over the schema's shape, so a
+// flat `Map` per element is enough and the graph stays free of 600 lines of table.
+extern jsxIntrinsicElements : Map<string, Map<string, string>> = "./jsx-schema.gen.mjs" "intrinsicElements"
+
+/// A kind string from the generated schema as an HM type. `event` and `any` are
+/// SHAPE checks rather than unifications, so they carry no expected type here.
+let attrKindType = kind =>
+  kind == "string"
+    ? Some(tPrim("string"))
+    : kind == "number"
+    ? Some(tPrim("number"))
+    : kind == "bool"
+    ? Some(tPrim("bool"))
+    : kind == "string|number"
+    ? Some(tUnion([tPrim("string"), tPrim("number")]))
+    : kind == "string|bool"
+    ? Some(tUnion([tPrim("string"), tPrim("bool")]))
+    : Str.startsWith("enum:", kind)
+    ? Some(
+      tUnion(Str.split(",", Str.slice(5, Str.length(kind), kind)) |> map(tLit))
+    )
+    : None
+
+let mismatchHint = name => switch name {
+  | "class" => Some("In JSX, use 'className' instead of 'class'.")
+  | "for" => Some("In JSX, use 'htmlFor' instead of 'for'.")
+  | "tabindex" => Some("In JSX, use 'tabIndex' instead of 'tabindex'.")
+  | "autofocus" => Some("In JSX, use 'autoFocus' instead of 'autofocus'.")
+  | "autocomplete" => Some(
+      "In JSX, use 'autoComplete' instead of 'autocomplete'."
+    )
+  | "readonly" => Some("In JSX, use 'readOnly' instead of 'readonly'.")
+  | "maxlength" => Some("In JSX, use 'maxLength' instead of 'maxlength'.")
+  | "minlength" => Some("In JSX, use 'minLength' instead of 'minlength'.")
+  | "spellcheck" => Some("In JSX, use 'spellCheck' instead of 'spellcheck'.")
+  | "contenteditable" => Some(
+      "In JSX, use 'contentEditable' instead of 'contenteditable'."
+    )
+  | "viewbox" => Some("In JSX, use 'viewBox' instead of 'viewbox'.")
+  | "strokewidth" => Some("In JSX, use 'strokeWidth' instead of 'strokewidth'.")
+  | "strokelinecap" => Some(
+      "In JSX, use 'strokeLinecap' instead of 'strokelinecap'."
+    )
+  | "strokelinejoin" => Some(
+      "In JSX, use 'strokeLinejoin' instead of 'strokelinejoin'."
+    )
+  | "onclick" => Some(
+      "In JSX, event handlers are camelCase: use 'onClick' instead of 'onclick'."
+    )
+  | "onchange" => Some(
+      "In JSX, event handlers are camelCase: use 'onChange' instead of 'onchange'."
+    )
+  | "oninput" => Some(
+      "In JSX, event handlers are camelCase: use 'onInput' instead of 'oninput'."
+    )
+  | "onkeydown" => Some(
+      "In JSX, event handlers are camelCase: use 'onKeyDown' instead of 'onkeydown'."
+    )
+  | "onkeyup" => Some(
+      "In JSX, event handlers are camelCase: use 'onKeyUp' instead of 'onkeyup'."
+    )
+  | "onsubmit" => Some(
+      "In JSX, event handlers are camelCase: use 'onSubmit' instead of 'onsubmit'."
+    )
+  | "onfocus" => Some(
+      "In JSX, event handlers are camelCase: use 'onFocus' instead of 'onfocus'."
+    )
+  | "onblur" => Some(
+      "In JSX, event handlers are camelCase: use 'onBlur' instead of 'onblur'."
+    )
+  | _ => None
+}
+
+type Hint = { title: string, start: number, end: number, replaceWith: string }
+// Named `BoundErr` so it sorts before infer's `IErr`. The TS emitter folds one
+// row shape to one alias, last sorted name wins, and compile's error must
+// stay `IErr`.
+type BoundErr = {
+  message: string,
+  start: number,
+  end: number,
+  help: Option<string>,
+  suggestions: [Hint]
+}
+let noJxSuggestions : [Hint] = []
+let jxTypeErr : string -> Ast.Span -> Result<b, BoundErr> = (message, sp) =>
+  Err(
+    {
+      message,
+      start: sp.start,
+      end: sp.end,
+      help: None,
+      suggestions: noJxSuggestions
+    }
+  )
+
+let isHandlerName = name =>
+  Str.startsWith(
+    "on",
+    name
+  ) && Str.length(name) > 2 && jxIsUpper(Str.slice(2, 3, name))
+
+let isFnOrOpen = t => switch t {
+  | TyFn(_, _) => true
+  | TyVar(_) => true
+  | TyCon(name, _) => name == "any"
+  | _ => false
+}
+
+let checkHandler = (name, value, st, api, cont) =>
+  let? (valT, st1) = api.inferExpr(value, st) in
+    isFnOrOpen(zonk(valT, st1))
+      ? cont(st1)
+      : jxTypeErr(
+        "Expected function for event handler '${name}'",
+        jxExprSpan(value)
+      )
+
+let unknownProp = (tag, name, value, schema) =>
+  let hint = closestName(name, Map.keys(schema)) in
+  let did = switch hint { | Some(s) => " Did you mean '${s}'?" | None => "" } in
+    jxTypeErr(
+      "Property '${name}' does not exist on '<${tag}>'.${did}",
+      jxExprSpan(value)
+    )
+
+/// The prop type an attribute's name hovers with, as `(property) name: T`.
+let noteProp = (f: Ast.Field, t, st) =>
+  recordBinder(f.nameSpan, t, "property", f.name, None, st)
+
+let handlerType = TyFn(tPrim("Event"), tPrim("unit"))
+
+let inferIntrinsicFields = (tag, fields, st, api, schema) => switch fields {
+  | [] => Ok(st)
+  | [f, ...rest] => let cont = st1 =>
+      inferIntrinsicFields(tag, rest, st1, api, schema) in
+      switch mismatchHint(f.name) {
+        | Some(msg) => jxTypeErr(msg, jxExprSpan(f.value))
+        | None => Str.startsWith(
+            "data-",
+            f.name
+          ) || Str.startsWith("aria-", f.name)
+            ? let? (valT, st1) = api.inferExpr(f.value, st) in
+              cont(noteProp(f, valT, st1))
+            : switch schema {
+              | None => let? (valT, st1) = api.inferExpr(f.value, st) in
+                  cont(noteProp(f, valT, st1))
+              | Some(m) => let expected = switch Map.get(f.name, m) {
+                  | Some(k) => Some(k)
+                  | None => isHandlerName(f.name) ? Some("event") : None
+                } in
+                  switch expected {
+                    | None => unknownProp(tag, f.name, f.value, m)
+                    | Some(kind) => kind == "event"
+                        ? checkHandler(f.name, f.value, st, api, st1 =>
+                          cont(noteProp(f, handlerType, st1)))
+                        : kind == "any"
+                        ? let? (_, st1) = api.inferExpr(f.value, st) in
+                          cont(noteProp(f, tPrim("any"), st1))
+                        : switch attrKindType(kind) {
+                          | Some(expectedT) => let? (valT, st1) = api.inferExpr(
+                              f.value,
+                              st
+                            ) in
+                            let? st2 = api.unify(
+                              valT,
+                              expectedT,
+                              st1,
+                              jxExprSpan(f.value)
+                            ) in
+                              cont(noteProp(f, expectedT, st2))
+                          | None => let? (_, st1) = api.inferExpr(
+                              f.value,
+                              st
+                            ) in
+                              cont(st1)
+                        }
+                  }
+            }
+      }
+}
+
+let inferFragmentFields = (fields, st, api) => switch fields {
+  | [] => Ok(st)
+  | [f, ...rest] => f.name == "key"
+      ? let? (_, st1) = api.inferExpr(f.value, st) in
+        inferFragmentFields(rest, st1, api)
+      : jxTypeErr(
+        "JSX fragments only accept the 'key' prop, got '${f.name}'",
+        jxExprSpan(f.value)
+      )
+}
+
+let unknownTagErr = (tagName, sp) =>
+  let hint = closestName(tagName, Map.keys(jsxIntrinsicElements)) in
+  let did = switch hint {
+    | Some(s) => " Did you mean '<${s}>'?"
+    | None => ""
+  } in
+    jxTypeErr("Unknown JSX element '<${tagName}>'.${did}", sp)
+
+let inferStringTag = (tagName, tagExpr, fields, st, api) =>
+  tagName == "Fragment"
+    ? inferFragmentFields(fields, st, api)
+    : switch Map.get(tagName, jsxIntrinsicElements) {
+      | Some(schema) => inferIntrinsicFields(
+          tagName,
+          fields,
+          st,
+          api,
+          Some(schema)
+        )
+      | None => Str.contains("-", tagName)
+          ? inferIntrinsicFields(tagName, fields, st, api, None)
+          : unknownTagErr(tagName, jxExprSpan(tagExpr))
+    }
+
+/// Each attribute of a component tag hovers with the prop type it fills.
+let noteComponentProps = (propsExpr, expectedRow, st) => switch propsExpr {
+  | Ast.ERecord(fields, _, _) => Array.reduce(
+      (acc, f) => switch rowField(expectedRow, f.name) {
+        | Some(t) => noteProp(f, zonk(t, acc), acc)
+        | None => acc
+      },
+      st,
+      fields
+    )
+  | _ => st
+}
+
+let inferJsxCall = (tagExpr, propsExpr, restArgs, st, api) =>
+  api.inferExpr(tagExpr, st)
+    |> Result.flatMap(((tagT, st1)) =>
+      api.inferExpr(propsExpr, st1)
+        |> Result.flatMap(((propsT, st2)) =>
+          inferJsxChildren(restArgs, st2, api.inferExpr)
+            |> Result.flatMap(st3 =>
+              let zonkedTag = zonk(tagT, st3) in
+                switch zonkedTag {
+                  | TyFn(from, to) => switch from {
+                      | TyRecord(expectedRow) => let propsForCheck = jsxPropsWithSynthesizedChildren(
+                          propsT,
+                          propsExpr,
+                          expectedRow,
+                          restArgs
+                        ) in
+                          api.unify(
+                            propsForCheck,
+                            from,
+                            st3,
+                            jxExprSpan(propsExpr)
+                          )
+                            |> Result.map(st4 =>
+                              (
+                                zonk(to, st4),
+                                noteComponentProps(propsExpr, expectedRow, st4)
+                              ))
+                      | _ => Ok((tPrim("VNode"), st3))
+                    }
+                  | _ => switch tagExpr {
+                      | Ast.EStr(tagName, _) => switch propsExpr {
+                          | Ast.ERecord(fields, _, _) => inferStringTag(
+                              tagName,
+                              tagExpr,
+                              fields,
+                              st3,
+                              api
+                            )
+                              |> Result.map(st4 => (tPrim("VNode"), st4))
+                          | _ => Ok((tPrim("VNode"), st3))
+                        }
+                      | _ => Ok((tPrim("VNode"), st3))
+                    }
+                })))
+
+/// Infer-call hook: claim `origin == Some("jsx")`; otherwise Ok(None).
+/// `api.inferExpr` is `(expr, st) -> Result` — closes over Ctx so hooks stay
+/// free of a recursive Ctx type (occurs-check).
+export let inferJsxCallHook = (_fn, args, origin, st, api) => switch origin {
+  | Some(o) => o == "jsx"
+      ? switch args {
+        | [tagExpr, propsExpr, ...rest] => inferJsxCall(
+            tagExpr,
+            propsExpr,
+            rest,
+            st,
+            api
+          )
+            |> Result.map(r => Some(r))
+        | _ => Ok(None)
+      }
+      : Ok(None)
+  | None => Ok(None)
+}
+
+// --- binding type (ADR 0055) -------------------------------------------------
+// `VNode` is this plugin's vocabulary, declared nowhere, so it must never reach
+// TS output. A component binding declares as `(props: P) => any` in both the
+// `.d.ts` writer and the TS backend: free prop fields print `unknown` (event
+// handlers `() => void`), and the return is `any`, not a host `FC`.
+
+/// The final return of an arrow is `VNode`.
+let returnsVNode = t => switch t {
+  | TyFn(_, toT) => returnsVNode(toT)
+  | TyCon("VNode", _) => true
+  | _ => false
+}
+
+let isComponentType = t => switch t {
+  | TyFn(_, toT) => returnsVNode(toT)
+  | _ => false
+}
+
+/// A lambda whose body is parser-synthesized JSX (ADR 0011 §5), for a binding
+/// whose return has not pinned to `VNode` yet.
+let jsxBodied = body => switch body {
+  | Ast.ELambda(_, inner, _) => jsxBodied(inner)
+  | Ast.ECall(_, _, Some("jsx"), _) => true
+  | _ => false
+}
+
+let isJsxComponentLambda = value => switch value {
+  | Ast.ELambda(_, body, _) => jsxBodied(body)
+  | _ => false
+}
+
+let isHandlerLabel = label =>
+  let third = Str.codeAt(2, label) |> Option.exists(n => n >= 65 && n <= 90) in
+    Str.startsWith("on", label) && third
+
+let componentPropFieldTs = (label, t, api) => switch t {
+  | TyVar(_) => isHandlerLabel(label) ? "() => void" : "unknown"
+  | TyCon("VNode", _) => "unknown"
+  | _ => api.tsType(t)
+}
+
+let propFieldsFrom = (row, api, acc) => switch row {
+  | RowExtend(label, fieldType, _, rest) => propFieldsFrom(
+      rest,
+      api,
+      Array.append(
+        "${label}: ${componentPropFieldTs(label, fieldType, api)}",
+        acc
+      )
+    )
+  | RowVar(_) => (acc, true)
+  | _ => (acc, false)
+}
+
+let hasField = (fields, name) =>
+  Array.find(f => Str.startsWith("${name}:", f), fields) |> Option.isSome
+
+/// An open prop row takes the conventional host extras rather than an index
+/// signature, which would fight `onX: () => void` under `--strict`.
+let componentPropsTs = (row, api) =>
+  let (fields0, open) = propFieldsFrom(row, api, []) in
+  let fields1 = open && !hasField(fields0, "children")
+    ? Array.append("children?: any", fields0)
+    : fields0 in
+  let fields = open && !hasField(fields1, "className")
+    ? Array.append("className?: string", fields1)
+    : fields1 in
+    Array.length(fields) == 0 ? "{}" : "{ ${Str.join("; ", fields)} }"
+
+let componentPropsParamTs = (t, api) => switch t {
+  | TyRecord(row) => switch api.aliasOf(row) {
+      | Some(name) => name
+      | None => componentPropsTs(row, api)
+    }
+  | TyVar(_) => "Record<string, unknown>"
+  | _ => api.tsType(t)
+}
+
+let extraParamTs = (t, api) => switch t {
+  | TyVar(_) => "unknown"
+  | TyCon("VNode", _) => "any"
+  | _ => api.tsType(t)
+}
+
+/// Params after `props`, for a component that takes more than one.
+let extraParamsFrom = (t, api, i, acc) => switch t {
+  | TyFn(fromT, toT) => extraParamsFrom(
+      toT,
+      api,
+      i + 1,
+      Array.append("_${show(i)}: ${extraParamTs(fromT, api)}", acc)
+    )
+  | _ => acc
+}
+
+/// A multi-param component is `_curry`'d like any other function, so it takes
+/// the core's `_Curry` form (ADR 0093) with `any` standing in for `VNode`.
+let componentSig = (t, api) => switch t {
+  | TyFn(fromT, toT) => let props = "props: ${componentPropsParamTs(fromT, api)}" in
+    let extras = extraParamsFrom(toT, api, 1, []) in
+      Array.length(extras) == 0
+        ? "(${props}) => any"
+        : "_Curry<[${Str.join(", ", Array.concat([props], extras))}], any>"
+  | _ => "(props: Record<string, unknown>) => any"
+}
+
+export let componentBindingTs = (value, t, api) => switch t {
+  | TyCon("VNode", []) => Some("any")
+  | _ => isComponentType(t) || isJsxComponentLambda(value)
+      ? Some(componentSig(t, api))
+      : None
+}
+
+// ---------------------------------------------------------------- format
+
+type JsxShape = {
+  tag: Ast.Expr,
+  fields: [Ast.Field],
+  spread: Option<Ast.Expr>,
+  children: [Ast.SeqElem]
+}
+
+/// The exact call shape the parser emits; anything else prints as a plain call.
+let jsxShape = e => switch e {
+  | Ast.ECall(Ast.ERef("h", _), [tag, Ast.ERecord(fields, spread, _), Ast.EArr(children, _)], Some("jsx"), _) => Some(
+      { tag, fields, spread, children }
+    )
+  | _ => None
+}
+
+let isFragment = tag => switch tag {
+  | Ast.EStr("Fragment", _) => true
+  | _ => false
+}
+
+let jsxTag = (tag, api: Fmt.FormatApi) => switch tag {
+  | Ast.EStr(value, _) => value
+  | _ => api.flat(api.memberD(tag))
+}
+
+let jsxHoleD = (open, e, api: Fmt.FormatApi) =>
+  cat([txt(open), api.exprD(e), txt("}")])
+
+/// A valueless attribute parses to `true` spanning its own name, so the name
+/// still reads back from the source; an explicit `={true}` does not.
+let jsxAttrD = (name, value, api: Fmt.FormatApi) => switch value {
+  | Ast.EBool(true, sp) => api.sourceText(sp.start, sp.end) == name
+      ? txt(name)
+      : jsxHoleD("${name}={", value, api)
+  | Ast.EStr(v, _) => txt("${name}=${api.strLit(v)}")
+  | _ => jsxHoleD("${name}={", value, api)
+}
+
+let jsxOpenD = (tag, attrs, selfClosing) =>
+  Array.length(attrs) == 0
+    ? txt(selfClosing ? "<${tag} />" : "<${tag}>")
+    : group(
+      cat(
+        [
+          txt("<${tag}"),
+          indent(cat(attrs |> map(attr => cat([line, attr])))),
+          selfClosing ? line : softline,
+          txt(selfClosing ? "/>" : ">")
+        ]
+      )
+    )
+
+let jsxChildD = (child, api: Fmt.FormatApi) => switch child {
+  | Ast.SEExpr(e) => Option.isSome(jsxShape(e))
+      ? api.exprD(e)
+      : jsxHoleD("{", e, api)
+  | Ast.SESpread(e) => jsxHoleD("{...", e, api)
+}
+
+let jsxAttrsD = (shape: JsxShape, api: Fmt.FormatApi) =>
+  let spreadD = switch shape.spread {
+    | Some(sp) => [jsxHoleD("{...", sp, api)]
+    | None => []
+  } in
+    Array.concat(
+      spreadD,
+      shape.fields |> map(f => jsxAttrD(f.name, f.value, api))
+    )
+
+/// Re-fold a parser-produced `h(tag, props, children)` into a tag; a
+/// hand-written `h(...)` has no `jsx` origin and keeps call formatting.
+export let formatJsx = (e, api: Fmt.FormatApi) => switch jsxShape(e) {
+  | None => None
+  | Some(shape) => let fragment = isFragment(shape.tag) in
+    let tag = fragment ? "" : jsxTag(shape.tag, api) in
+    let attrs = jsxAttrsD(shape, api) in
+      Array.length(shape.children) == 0 && !fragment
+        ? Some(jsxOpenD(tag, attrs, true))
+        : Some(
+          group(
+            cat(
+              [
+                fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
+                indent(
+                  cat(
+                    shape.children
+                      |> map(child => cat([softline, jsxChildD(child, api)]))
+                  )
+                ),
+                softline,
+                txt(fragment ? "</>" : "</${tag}>")
+              ]
+            )
+          )
+        )
+}
+
+export let jsxPlugin = {
+  name: "jsx",
+  parse: Some(parseJsxAtom),
+  inferCall: Some(inferJsxCallHook),
+  format: None,
+  formatDoc: Some(formatJsx),
+  dtsBinding: None,
+  bindingType: Some(componentBindingTs)
+}

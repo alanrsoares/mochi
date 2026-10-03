@@ -1,4 +1,4 @@
-// Ticket 0013 (part a) — bootstrap/module.mochi's graph loader. We compile the
+// Ticket 0013 (part a) — packages/compiler/src/module/module.mochi's graph loader. We compile the
 // loader (open-world, like every bootstrap module) plus its dep graph to JS,
 // then drive the emitted `loadGraph` in-process: it must order modules by
 // dependency, detect cycles, and report an unreadable file. Scheme/registry
@@ -23,9 +23,9 @@ let dir: string;
 const names = (r: Res): string[] => (r._tag === "Ok" ? r.value.map((m) => basename(m.path)) : []);
 
 beforeAll(async () => {
-  // Shared cache → bootstrap/module.js (+ deps). Import the shipped loader.
+  // Shared cache → packages/compiler/src/module/module.js (+ deps). Import the shipped loader.
   ensureInTreeBootstrapBuild();
-  ({ loadGraph } = (await import(join(root, "bootstrap/module.js"))) as {
+  ({ loadGraph } = (await import(join(root, "packages/compiler/src/module/module.js"))) as {
     loadGraph: typeof loadGraph;
   });
   dir = mkdtempSync(join(tmpdir(), "mochi-mod-"));
@@ -33,13 +33,13 @@ beforeAll(async () => {
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 test("orders a real graph so every dependency precedes its dependent", () => {
-  const r = loadGraph("bootstrap/cli.mochi");
+  const r = loadGraph("packages/cli/src/driver.mochi");
   expect(r._tag).toBe("Ok");
   const order = names(r);
-  expect(order.at(-1)).toBe("cli.mochi"); // entry compiles last
+  expect(order.at(-1)).toBe("driver.mochi"); // entry compiles last
   const before = (a: string, b: string) => order.indexOf(a) < order.indexOf(b);
   expect(before("lexer.mochi", "parser.mochi")).toBe(true);
-  expect(before("compile.mochi", "cli.mochi")).toBe(true);
+  expect(before("compile.mochi", "driver.mochi")).toBe(true);
   expect(before("infer.mochi", "compile.mochi")).toBe(true);
 }, 30_000);
 

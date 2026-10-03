@@ -11,7 +11,7 @@ import { compile } from "@mochi/compiler";
 import { repoRoot } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
-import * as host from "../bootstrap/host.mjs";
+import * as host from "../packages/compiler/src/module/host.mjs";
 
 const root = repoRoot(import.meta.url);
 

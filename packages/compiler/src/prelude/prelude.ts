@@ -2,7 +2,7 @@
  * The prelude: builtin signatures the inferencer starts with, plus the JS
  * runtime that backs them.
  */
-import type { Ctor, TypeExpr } from "../ast/ast";
+import type { Ctor, TypeExpr } from "../ast/dto";
 import { type Type, tArrow, tBool, tCon, tNumber, tString, tUnit, tVar } from "../ast/types";
 // Imported as well as re-exported below: `preludeJs` and `runtimeArity` are
 // derived from the same generated table.

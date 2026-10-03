@@ -1,10 +1,10 @@
 // Ticket 0007 / 0013 — self-hosting fixpoint driven through the SHIPPED binary
-// (bootstrap/cli.mochi), not the TS test harness. Real disk IO, real CLI.
+// (packages/cli/src/driver.mochi), not the TS test harness. Real disk IO, real CLI.
 //
 // Ceremony (PATH_TO_BOOTSTRAP §4, lifted to disk; ADR 0090):
 //   seed  : the reviewed bootstrap/seed TypeScript graph -> a runnable mochic
 //           (stage 1, executed by Bun).
-//   stage2: the seed binary rebuilds the whole graph (`mochic build cli.mochi`).
+//   stage2: the seed binary rebuilds the whole graph (`mochic build driver.mochi`).
 //   stage3: a binary assembled from the stage-2 outputs rebuilds it again.
 // Self-hosting is proved when stage2 ≡ stage3 byte-for-byte for every module.
 // Behavioural regression evidence is the reviewed bootstrap conformance corpus
@@ -20,7 +20,6 @@ import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
-  BOOTSTRAP_DIR,
   BOOTSTRAP_SEED,
   fileSha256,
   HOST_SHIMS,
@@ -31,42 +30,42 @@ import {
 
 const root = REPO_ROOT;
 const work = repoPath(".fixpoint-work");
-const bootstrap = BOOTSTRAP_DIR;
+const bootstrap = REPO_ROOT;
 const seedRoot = BOOTSTRAP_SEED;
 
-// Every bootstrap module reachable from cli.mochi, in dependency order. `build`
+// Every bootstrap module reachable from driver.mochi, in dependency order. `build`
 // discovers the graph itself; this list is what we read back and diff.
 const MODULES = [
-  "ast",
-  "doc",
-  "format-api",
-  "usefulness",
-  "types",
-  "ctors",
-  "schemes",
-  "scc",
-  "plugins/jsx",
-  "plugins/preact",
-  "extensions",
-  "str-scan",
-  "lexer",
-  "parser",
-  "check",
-  "suggest",
-  "local-names",
-  "infer",
-  "codegen-literals",
-  "codegen-pattern",
-  "codegen",
-  "ts-types",
-  "codegen-ts",
-  "symbols",
-  "show-type-expr",
-  "format",
-  "dts",
-  "module",
-  "compile",
-  "cli",
+  "packages/compiler/src/ast/ast",
+  "packages/compiler/src/doc/doc",
+  "packages/compiler/src/format/format-api",
+  "packages/compiler/src/check/usefulness",
+  "packages/compiler/src/infer/types",
+  "packages/compiler/src/ast/ctors",
+  "packages/compiler/src/infer/schemes",
+  "packages/compiler/src/infer/scc",
+  "packages/compiler/src/extensions/plugins/jsx",
+  "packages/compiler/src/extensions/plugins/preact",
+  "packages/compiler/src/extensions/extensions",
+  "packages/compiler/src/lexer/str-scan",
+  "packages/compiler/src/lexer/lexer",
+  "packages/compiler/src/parser/parser",
+  "packages/compiler/src/check/check",
+  "packages/compiler/src/errors/suggest",
+  "packages/compiler/src/infer/local-names",
+  "packages/compiler/src/infer/infer",
+  "packages/compiler/src/codegen/literals",
+  "packages/compiler/src/codegen/pattern",
+  "packages/compiler/src/codegen/codegen",
+  "packages/compiler/src/dts/ts-types",
+  "packages/compiler/src/codegen/typescript",
+  "packages/compiler/src/check/symbols",
+  "packages/compiler/src/ast/show-type-expr",
+  "packages/compiler/src/format/format",
+  "packages/compiler/src/dts/dts",
+  "packages/compiler/src/module/module",
+  "packages/compiler/src/compile/compile",
+  "packages/cli/src/driver",
 ];
 // Runtime deps the emitted compiler imports (hand-written + generated shim).
 const RUNTIME_DEPS = HOST_SHIMS;
@@ -83,9 +82,9 @@ const seedFiles = (): string[] => Object.keys(seedManifest().files);
 
 const seedEntry = (): string => {
   const files = seedFiles();
-  if (files.includes("cli.ts")) return "cli.ts";
-  if (files.includes("cli.js")) return "cli.js";
-  throw new Error("bootstrap seed missing cli.ts");
+  if (files.includes("packages/cli/src/driver.ts")) return "packages/cli/src/driver.ts";
+  if (files.includes("packages/cli/src/driver.js")) return "packages/cli/src/driver.js";
+  throw new Error("bootstrap seed missing packages/cli/src/driver.ts");
 };
 
 const bun = (args: string[], cwd = root) => execFileSync("bun", args, { cwd, encoding: "utf8" });
@@ -125,9 +124,9 @@ const copySeed = (toRoot: string): void => {
 };
 
 // Rebuild the whole module graph with the mochic in `binDir`: copy every .mochi
-// into `outDir`, then `mochic build cli.mochi` there (closed-world — one command
+// into `outDir`, then `mochic build driver.mochi` there (closed-world — one command
 // walks the import graph and emits a .js beside each .mochi). Returns module -> JS.
-const copyBootstrapSources = (outDir: string) => {
+const copySources = (outDir: string) => {
   mkdirSync(outDir, { recursive: true });
   for (const m of MODULES) copyModule(bootstrap, outDir, m, ".mochi");
 };
@@ -139,8 +138,8 @@ const readModules = (dir: string): Record<string, string> => {
 };
 
 const compileAllWith = (binDir: string, outDir: string, entry: string): Record<string, string> => {
-  copyBootstrapSources(outDir);
-  bun([join(binDir, entry), "build", join(outDir, "cli.mochi")]);
+  copySources(outDir);
+  bun([join(binDir, entry), "build", join(outDir, "packages/cli/src/driver.mochi")]);
   return readModules(outDir);
 };
 
@@ -164,7 +163,7 @@ export const runFixpoint = (): FixpointResult => {
   placeRuntimeDeps(bootstrap, s2dir); // s2 is now itself a runnable binary
 
   // --- stage 3: stage-2 binary rebuilds it again ---
-  const stage3 = compileAllWith(s2dir, join(work, "s3"), "cli.js");
+  const stage3 = compileAllWith(s2dir, join(work, "s3"), "packages/cli/src/driver.js");
 
   return { stage2, stage3 };
 };

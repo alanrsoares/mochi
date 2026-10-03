@@ -3,8 +3,8 @@
 // consumer (errors, LSP ranges) relies on: a child node's span is always
 // contained within its parent's, and every span lies within the source.
 import { expect, test } from "bun:test";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
-import type { Expr } from "@mochi/compiler/bootstrap/types";
+import type { Expr } from "@mochi/compiler/infer/types";
+import { parseProgram } from "@mochi/compiler/syntax";
 import { unwrapOk } from "@onrails/result";
 import fc from "fast-check";
 

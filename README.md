@@ -188,7 +188,7 @@ real programs — a CLI, Game of Life, Snake, async, multi-file module graphs.
 
 ## Is it real?
 
-mochi compiles itself. The self-hosted compiler in [`bootstrap/`](bootstrap/) emits
+mochi compiles itself. The self-hosted compiler in [`packages/compiler/src/`](packages/compiler/src/) emits
 TypeScript with **0 `tsc --strict` errors** — verified in CI on every commit, alongside a
 fixpoint check that the compiler reproduces itself byte-for-byte. The compiler core
 is authored in Mochi; its generated seed and TypeScript host tooling run on

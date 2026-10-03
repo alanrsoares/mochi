@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
-import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import { lex, parse } from "@mochi/compiler/syntax";
 import { hoverAt } from "@mochi/dx/hover";
+import type { Result } from "@onrails/result";
 
-type Front<A> = BootstrapResult<A, BootstrapDiagnostic>;
+type Front<A> = Result<A, CompilerDiagnostic>;
 
 const src = `/// A successful or failed computation.
 export type Result<A, E> = | Ok(A) | Err(E)`;

@@ -12,7 +12,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { bootstrapSeedId, buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
+import { buildModulesWith, compilerSeedId } from "@mochi/compiler/module";
 import { isErr } from "@onrails/result";
 import type { BunPlugin } from "bun";
 
@@ -45,7 +45,7 @@ const cacheDir = (): string | null =>
 
 let seedId: string | undefined;
 const cacheFile = (dir: string, abs: string): string => {
-  seedId ??= bootstrapSeedId();
+  seedId ??= compilerSeedId();
   return join(dir, `${sha256(`${CACHE_VERSION}\0${seedId}\0${abs}`)}.json`);
 };
 
@@ -125,7 +125,7 @@ export const compileMochiGraph = async (entry: string): Promise<MochiJsByPath> =
 };
 
 const compileGraph = (abs: string): MochiJsByPath => {
-  const result = buildModulesBootstrapWith(abs, {
+  const result = buildModulesWith(abs, {
     open: false,
     runtime: true,
     docs: true,

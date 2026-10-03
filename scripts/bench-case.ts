@@ -8,13 +8,9 @@
 import { dlopen, FFIType } from "bun:ffi";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { loadBootstrapGraph } from "@mochi/compiler/bootstrap";
-import { compileGraphBootstrap } from "@mochi/compiler/bootstrap/module";
-import {
-  compileBootstrapSync,
-  compileTsBootstrapSync,
-  inferTypesBootstrapSync,
-} from "@mochi/compiler/bootstrap/sync";
+import { compileSync, compileTsSync, inferTypesSync } from "@mochi/compiler/compile/sync";
+import { loadGraph } from "@mochi/compiler/graph";
+import { compileGraph } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { vendorPluginsFor } from "./lib/plugins";
 import { repoPath } from "./lib/repo";
@@ -32,30 +28,26 @@ const fmt = (rel: string) => () => ok(rel, format(read(rel), { plugins: vendorPl
 
 const graph = (rel: string, compile: boolean) => async () => {
   const entry = repoPath(rel);
-  const loaded = await loadBootstrapGraph(entry, read(rel), (p) => readFile(p, "utf8"));
+  const loaded = await loadGraph(entry, read(rel), (p) => readFile(p, "utf8"));
   ok(`load ${rel}`, loaded);
-  if (compile && loaded._tag === "Ok") ok(`compile ${rel}`, compileGraphBootstrap(loaded.value));
+  if (compile && loaded._tag === "Ok") ok(`compile ${rel}`, compileGraph(loaded.value));
 };
 
 const CASES: Record<string, () => void | Promise<void>> = {
   // Baseline: Bun start-up plus loading the seed bundles every other case pays.
   startup: () => {},
-  "compile-js:pipelines": () =>
-    ok("pipelines", compileBootstrapSync(read("examples/pipelines.mochi"))),
-  "compile-js:example": () => ok("example", compileBootstrapSync(read("examples/example.mochi"))),
+  "compile-js:pipelines": () => ok("pipelines", compileSync(read("examples/pipelines.mochi"))),
+  "compile-js:example": () => ok("example", compileSync(read("examples/example.mochi"))),
   "compile-ts:example": () =>
-    ok(
-      "example",
-      compileTsBootstrapSync(read("examples/example.mochi"), "@mochi/compiler/runtime"),
-    ),
-  "infer:example": () => ok("example", inferTypesBootstrapSync(read("examples/example.mochi"))),
+    ok("example", compileTsSync(read("examples/example.mochi"), "@mochi/compiler/runtime")),
+  "infer:example": () => ok("example", inferTypesSync(read("examples/example.mochi"))),
   "graph-compile:modules": graph("examples/modules/main.mochi", true),
-  "graph-load:bootstrap-lexer": graph("bootstrap/lexer.mochi", false),
-  "graph-compile:bootstrap-lexer": graph("bootstrap/lexer.mochi", true),
+  "graph-load:bootstrap-lexer": graph("packages/compiler/src/lexer/lexer.mochi", false),
+  "graph-compile:bootstrap-lexer": graph("packages/compiler/src/lexer/lexer.mochi", true),
   "fmt:example": fmt("examples/example.mochi"),
   "fmt:snake-app": fmt("examples/snake/src/App.mochi"),
-  "fmt:bootstrap-lexer": fmt("bootstrap/lexer.mochi"),
-  "fmt:bootstrap-parser": fmt("bootstrap/parser.mochi"),
+  "fmt:bootstrap-lexer": fmt("packages/compiler/src/lexer/lexer.mochi"),
+  "fmt:bootstrap-parser": fmt("packages/compiler/src/parser/parser.mochi"),
 };
 
 const name = process.argv[2];

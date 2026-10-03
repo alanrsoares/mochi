@@ -16,7 +16,7 @@ blocked-by: [C5, C10]
 **Problem (fact-checked — worse than first stated):** `src/infer.ts:231-232` returns a
 fresh var for any unknown name when `ctx.open`; `InferOptions.open` defaults to `false`
 (`infer.ts:790`) but **all 9 real entry points hardcode `open: true`** (`compile.ts:25,
-61,87`, `compile-targets.ts:27`, `codegen-ts.ts:307`, `hover.ts:89`, `dts.ts:829`,
+61,87`, `compile-targets.ts:27`, `typescript.ts:307`, `hover.ts:89`, `dts.ts:829`,
 `complete.ts:222`, `nav.ts:137`). No CLI flag or pragma exists — strict mode is
 unreachable from any user-facing surface. `let x = lenght("hi")` compiles clean.
 Did-you-mean suggestions only fire in strict (per `docs/tooling.md`), so the default
@@ -43,5 +43,5 @@ opt-in (per-file pragma and/or CLI/LSP flag) for genuinely host-global-heavy fil
 - [ ] Migrate `examples/` (incl. `example.mochi`'s 7 pseudo-literals), `apps/docs`,
       bootstrap — real deps become `extern`, rest gets the opt-in.
 - [ ] Docs: `language.md` + `tooling.md` describe the new default + escape hatch.
-- [ ] Bootstrap impact: bootstrap infer mirror gains the same default (parity tests).
+- [ ] Compiler impact: bootstrap infer mirror gains the same default (parity tests).
 - [ ] `bun run check:full` green.

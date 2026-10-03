@@ -48,4 +48,4 @@ is unwritable** (Set form requires ≥1 element or spread, `parser.ts:657+`), fo
 - [x] `docs/language.md`: empty-`#{}` = Map, the unqualified-=-Array rule, and the
       namespace principle, each stated in one paragraph.
 - [x] Targeted wrong-collection diagnostic with test.
-- [x] Bootstrap impact: none unless a sigil changes (then parser mirror + parity).
+- [x] Compiler impact: none unless a sigil changes (then parser mirror + parity).

@@ -1,4 +1,4 @@
-// Generate `bootstrap/plugins/jsx-schema.gen.mjs` — the self-hosted plugin's view
+// Generate `packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs` — the self-hosted plugin's view
 // of the intrinsic JSX element schema (ADR 0097). The SOURCE OF TRUTH is
 // `packages/compiler/src/extensions/plugins/jsx-schema.ts`, which `@mochi/dx`
 // reads directly and the self-hosted plugin consumes through the generated shim.
@@ -24,7 +24,7 @@ import {
 import { repoPath, syncGeneratedFile } from "./lib";
 
 export const SCHEMA_PATH = "packages/compiler/src/extensions/plugins/jsx-schema.ts";
-export const GEN_PATH = "bootstrap/plugins/jsx-schema.gen.mjs";
+export const GEN_PATH = "packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs";
 
 /** One attribute's kind as the seam spells it. */
 const kindOf = (attr: IntrinsicAttrType): string =>

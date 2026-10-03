@@ -1,0 +1,31 @@
+import { ok, test } from "@mochi/test"
+import { lex } from "../../lexer/lexer.mochi"
+import { parse } from "../../parser/parser.mochi"
+import { inferProgramWith } from "../../infer/infer.mochi"
+import { styledCvaPlugin } from "./styled-cva.mochi"
+
+let typecheck = src =>
+  let? toks = lex(src) in
+  let? stmts = parse(toks) in
+    inferProgramWith(stmts, #{}, #{}, true, Some([styledCvaPlugin]))
+      |> // Inference collects every type error (ADR 0004); these cases read the
+      // first.
+      Result.mapErr(es => switch Array.get(0, es) {
+        | Some(e) => { message: e.message, start: e.start, end: e.end }
+        | None => { message: "<none>", start: 0, end: 0 }
+      })
+
+test("tw variants constrain component props", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Badge = tw.div(\"base\", { variants: { $tone: { rose: \"a\", amber: \"b\" } } })\nlet bad = Badge({ $tone: \"taupe\" })\n") {
+  | Err(_) => true |> ok
+  | Ok(_) => false |> ok
+})
+
+test("tw rejects an unknown intrinsic tag", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Bad = tw.divv(\"base\")\n") {
+  | Err(e) => Str.contains("unknown HTML element 'divv'", e.message) |> ok
+  | Ok(_) => false |> ok
+})
+
+test("a single tw variant rejects an unknown literal after generalization", () => switch typecheck("extern tw : a = \"@styled-cva/react\" \"default\"\nlet Badge = tw.span(\"base\", { variants: { $tone: { rose: \"a\" } } })\nlet Copy = Badge\nlet bad = Copy({ $tone: \"blue\" })\n") {
+  | Err(e) => Str.contains("cannot unify", e.message) |> ok
+  | Ok(_) => false |> ok
+})

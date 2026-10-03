@@ -10,10 +10,9 @@
  * `moduleHoverAt` is Node-only and lives in `bootstrap-hover.ts`.
  */
 import { resolve } from "node:path";
-import type { BootstrapHelp, BootstrapScheme, BootstrapTypeAt } from "@mochi/compiler/bootstrap";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { inferTypesRecoveringBootstrapSync } from "@mochi/compiler/bootstrap/sync";
-import { lex, parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import { inferTypesRecoveringSync } from "@mochi/compiler/compile/sync";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import type { CompilerHelp, CompilerScheme, CompilerTypeAt } from "@mochi/compiler/graph";
 import {
   type AliasInfo,
   foldAliases,
@@ -24,11 +23,12 @@ import {
   type Ty,
   type TypeExpr,
   widenLits,
-} from "@mochi/compiler/bootstrap/types";
+} from "@mochi/compiler/infer/types";
 import { preludeDocForBinding } from "@mochi/compiler/prelude-virtual";
 import { spanContains, spanContainsClosed, tightestHit } from "@mochi/compiler/span";
+import { lex, parseProgram } from "@mochi/compiler/syntax";
 import { type Maybe, none, some } from "@onrails/maybe";
-import { indexSource } from "./bootstrap-index";
+import { indexSource } from "./file-index";
 import {
   renderHoverCtorScheme,
   renderHoverType,
@@ -98,7 +98,7 @@ export const lexTokens = (src: string): readonly Located[] | null => {
 /** The recovering parse's statements, or null when `src` does not lex. */
 export const hoverStmts = (
   src: string,
-  plugins?: readonly BootstrapPlugin[],
+  plugins?: readonly CompilerPlugin[],
 ): readonly Stmt[] | null => {
   const parsed = parseProgram(src, plugins);
   return parsed._tag === "Ok" ? parsed.value.stmts : null;
@@ -150,7 +150,7 @@ const collectTypeSyntax = (type: TypeExpr, out: SyntaxHover[]): void => {
   }
 };
 
-const docOf = (doc: BootstrapHelp): string | undefined =>
+const docOf = (doc: CompilerHelp): string | undefined =>
   doc._tag === "Some" ? doc.value : undefined;
 
 const tightestInfo = (candidates: SyntaxHover[], offset: number): HoverInfo | null => {
@@ -203,7 +203,7 @@ export const syntaxHoverAt = (stmts: readonly Stmt[], offset: number): HoverInfo
 export const importHoverAt = (
   stmts: readonly Stmt[],
   offset: number,
-  imports: ReadonlyMap<string, BootstrapScheme>,
+  imports: ReadonlyMap<string, CompilerScheme>,
 ): HoverInfo | null => {
   const candidates: SyntaxHover[] = [];
   for (const stmt of stmts) {
@@ -227,7 +227,7 @@ export const importHoverAt = (
   return tightestInfo(candidates, offset);
 };
 
-type HoverSym = Extract<BootstrapTypeAt["sym"], { _tag: "Some" }>["value"];
+type HoverSym = Extract<CompilerTypeAt["sym"], { _tag: "Some" }>["value"];
 
 /** TS-style lead: `kind name: ` for a named binder, nothing for a bare type. */
 const prefixOf = (symbol: HoverSym | undefined): string => {
@@ -296,7 +296,7 @@ const qualifyTy = (ty: Ty, qualify: ReadonlyMap<string, string>): Ty => {
  * `(parameter) x: T` / `(property) x: T`.
  */
 export const hoverFrom = (
-  types: readonly BootstrapTypeAt[],
+  types: readonly CompilerTypeAt[],
   aliases: ReadonlyMap<string, unknown>,
   offset: number,
   src: string,
@@ -322,7 +322,7 @@ export const hoverAt = (
   src: string,
   offset: number,
   path = "<buffer>",
-  plugins?: readonly BootstrapPlugin[],
+  plugins?: readonly CompilerPlugin[],
 ): HoverInfo | null => {
   const tokens = lexTokens(src);
   if (!tokens) return null;
@@ -330,7 +330,7 @@ export const hoverAt = (
   const syntax = stmts && syntaxHoverAt(stmts, offset);
   if (syntax) return syntax;
   const fallback = tokenHoverAt(tokens, offset);
-  const inferred = inferTypesRecoveringBootstrapSync(src, plugins);
+  const inferred = inferTypesRecoveringSync(src, plugins);
   return inferred._tag === "Ok"
     ? (hoverFrom(inferred.value.types, inferred.value.aliases, offset, src, path) ?? fallback)
     : fallback;

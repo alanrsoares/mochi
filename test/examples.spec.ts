@@ -3,12 +3,9 @@
 
 import { expect, test } from "bun:test";
 import { compile, compileTargets, emitDts } from "@mochi/compiler";
-import type { BootstrapModuleOutput } from "@mochi/compiler/bootstrap";
-import {
-  buildModulesBootstrapWith,
-  defaultBootstrapOptions,
-} from "@mochi/compiler/bootstrap/module";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
+import type { CompilerModuleOutput } from "@mochi/compiler/graph";
+import { buildModulesWith, defaultOptions } from "@mochi/compiler/module";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 import { compileAndEval, compileJs, readRepo, repoPath, typesOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
@@ -284,7 +281,7 @@ let Copy = Badge`;
   for (const name of ["Badge", "Copy"]) {
     const valid = `${component}\nexport let good = <${name} $tone="rose" />`;
     const invalid = `${component}\nexport let bad = <${name} $tone="blue" />`;
-    const opts = { plugins: [styledCvaBootstrap] };
+    const opts = { plugins: [styledCvaPlugin] };
     expect(isErr(compile(invalid, opts))).toBe(true);
     const targets = unwrapOk(compileTargets(valid, opts));
     expect(targets.dts).toContain('$tone?: "rose"');
@@ -308,8 +305,8 @@ test("typed targets suppress docs on every declaration kind", () => {
 type Tagged = { _tag?: string };
 
 /** Build the graph at repo path `entry` through the self-hosted core; throws on a diagnostic. */
-const build = (entry: string): BootstrapModuleOutput[] => {
-  const r = buildModulesBootstrapWith(path(entry), defaultBootstrapOptions);
+const build = (entry: string): CompilerModuleOutput[] => {
+  const r = buildModulesWith(path(entry), defaultOptions);
   if (r._tag === "Err") throw new Error(`${entry}: ${r.error.map((d) => d.message).join("; ")}`);
   return r.value;
 };

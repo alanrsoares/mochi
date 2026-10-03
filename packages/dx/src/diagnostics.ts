@@ -6,18 +6,18 @@
  * wire-shaped DTO only (ADR 0003).
  */
 import { resolve } from "node:path";
-import {
-  type BootstrapDiagnostic,
-  type BootstrapRecoveryGraphCache,
-  checkBootstrapSync,
-  checkGraphBootstrapRecovering,
-  resolveImportBootstrap,
-} from "@mochi/compiler/bootstrap";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import { type Diagnostic, diagnosticFromSeed } from "@mochi/compiler/errors";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import {
+  type CompilerDiagnostic,
+  type CompilerRecoveryGraphCache,
+  checkGraphRecovering,
+  checkSync,
+  resolveImport,
+} from "@mochi/compiler/graph";
 import { lineCol } from "@mochi/compiler/span";
-import { unusedBindings } from "./bootstrap-unused";
+import { parseProgram } from "@mochi/compiler/syntax";
+import { unusedBindings } from "./unused-query";
 
 /** 0-based line/character — matches the LSP `Position` shape. */
 export type Position = { line: number; character: number };
@@ -105,13 +105,13 @@ export function toPublish(
  * for the one `plugins` list it was filled under.
  */
 export type ModuleDiagnosticsOptions = {
-  plugins?: readonly BootstrapPlugin[];
-  cache?: BootstrapRecoveryGraphCache;
+  plugins?: readonly CompilerPlugin[];
+  cache?: CompilerRecoveryGraphCache;
 };
 
 type Span = { start: number; end: number };
 
-const helpOf = (error: BootstrapDiagnostic, messageBody: string): string | undefined =>
+const helpOf = (error: CompilerDiagnostic, messageBody: string): string | undefined =>
   (error.help?._tag === "Some" ? error.help.value : undefined) ??
   error.suggestions?.[0]?.title.toLowerCase() ??
   (/^unbound variable /.test(messageBody)
@@ -119,8 +119,8 @@ const helpOf = (error: BootstrapDiagnostic, messageBody: string): string | undef
     : undefined);
 
 /** A seed diagnostic as a compiler `Diagnostic` located in `path`. */
-const fromBootstrap = (
-  error: BootstrapDiagnostic,
+const from = (
+  error: CompilerDiagnostic,
   path: string,
   span: Span = { start: error.start, end: error.end },
   message = error.message,
@@ -141,9 +141,7 @@ const fromBootstrap = (
  * globals still lower; the editor must flag typos.
  */
 export function diagnostics(src: string, opts: ModuleDiagnosticsOptions = {}): PublishDiagnostic[] {
-  return checkBootstrapSync(src, opts.plugins).map((e) =>
-    toPublish(src, fromBootstrap(e, "<buffer>")),
-  );
+  return checkSync(src, opts.plugins).map((e) => toPublish(src, from(e, "<buffer>")));
 }
 
 /**
@@ -163,7 +161,7 @@ export async function moduleDiagnostics(
   readFile: (p: string) => Promise<string>,
   opts: ModuleDiagnosticsOptions = {},
 ): Promise<PublishDiagnostic[]> {
-  const errors = await checkGraphBootstrapRecovering(path, src, readFile, opts.cache, opts.plugins);
+  const errors = await checkGraphRecovering(path, src, readFile, opts.cache, opts.plugins);
   const out: PublishDiagnostic[] = [];
   for (const error of errors) out.push(toPublish(src, await locate(error, path, src), path));
   return out;
@@ -177,7 +175,7 @@ const lineAround = (src: string, start: number, end: number): Span => {
 
 /** Anchor a dependency's failure at the entry's import line that pulls it in. */
 const locate = async (
-  error: BootstrapDiagnostic,
+  error: CompilerDiagnostic,
   path: string,
   src: string,
 ): Promise<Diagnostic> => {
@@ -186,15 +184,15 @@ const locate = async (
   const messageBody = tagged?.[2] ?? error.message;
   if (errorPath !== undefined && resolve(errorPath) !== resolve(path)) {
     for (const candidate of src.matchAll(/from\s+["']([^"']+)["']/g)) {
-      if ((await resolveImportBootstrap(path, candidate[1]!)) !== resolve(errorPath)) continue;
-      return fromBootstrap(
+      if ((await resolveImport(path, candidate[1]!)) !== resolve(errorPath)) continue;
+      return from(
         error,
         path,
         lineAround(src, candidate.index!, candidate.index!),
         `module '${candidate[1]}' failed to compile: ${messageBody}`,
       );
     }
-    return fromBootstrap(
+    return from(
       error,
       path,
       { start: error.start, end: error.end },
@@ -206,13 +204,8 @@ const locate = async (
     src.slice(line.start, line.end),
   );
   return importAtError
-    ? fromBootstrap(
-        error,
-        path,
-        line,
-        `module '${importAtError[1]}' failed to compile: ${messageBody}`,
-      )
-    : fromBootstrap(error, path, { start: error.start, end: error.end }, messageBody);
+    ? from(error, path, line, `module '${importAtError[1]}' failed to compile: ${messageBody}`)
+    : from(error, path, { start: error.start, end: error.end }, messageBody);
 };
 
 /**
@@ -232,7 +225,7 @@ export async function documentDiagnostics(
 
 /**
  * Warning-only liveness diagnostics, from lexical binding identity
- * (`bootstrap/symbols.mochi`). Nothing when the buffer does not lex or parse.
+ * (`packages/compiler/src/check/symbols.mochi`). Nothing when the buffer does not lex or parse.
  */
 export function unusedBindingDiagnostics(
   src: string,

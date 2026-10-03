@@ -3,8 +3,8 @@
 // formatter round-trip.
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
-import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { inferTypesSyncWith } from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { format } from "@mochi/dx/format";
 import { compileJs, typeOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
@@ -12,7 +12,7 @@ import { isErr, unwrapOk } from "@onrails/result";
 
 // Closed-world: every name must resolve (the prelude supplies add/sub/eq).
 const typechecks = (src: string): boolean =>
-  !isErr(inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: false }));
+  !isErr(inferTypesSyncWith(src, { ...defaultOptions, open: false }));
 const run = (src: string): unknown => {
   const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `${js}\nreturn r;`)(match);
