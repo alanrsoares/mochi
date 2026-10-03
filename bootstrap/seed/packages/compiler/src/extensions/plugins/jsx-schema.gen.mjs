@@ -1593,7 +1593,10 @@ const _t11 = new Map([
   ["tabIndex", "number"],
   ["title", "string"],
   ["translate", "enum:yes,no"],
-  ["type", "enum:text,password,checkbox,radio,number,email,file,hidden,image,range,reset,search,submit,tel,url,date,datetime-local,month,time,week,color"],
+  [
+    "type",
+    "enum:text,password,checkbox,radio,number,email,file,hidden,image,range,reset,search,submit,tel,url,date,datetime-local,month,time,week,color",
+  ],
   ["value", "string|number"],
   ["width", "string|number"],
 ]);

@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "acc4dbb5f222e3d2a07900dc484b7a8bd3d842d9",
+  "sourceRevision": "04390d3b627ce89d0b42748690da0aae178dac61",
   "emitted": {
     "compile-host-types.d.ts": "3a3cdcab4321ce83414c1b144907123a4b1c8977aeca8e223e054f8efed284a6",
     "compile.bundle.cjs": "e13c9d692ac011581c7cd566c463b7de1906cee0b4879d9ddea0467426a370f2",
@@ -49,12 +49,12 @@
   },
   "files": {
     "compile-host-types.d.ts": "f703cc46830d26d536e04dd1dd1cf2ecbb9db539aff90155500c0e3e42bfbb9a",
-    "compile.bundle.cjs": "e13c9d692ac011581c7cd566c463b7de1906cee0b4879d9ddea0467426a370f2",
+    "compile.bundle.cjs": "ff7e5f22d056e2dc7018b75304bcd2069249b7ecccbaf0ade425989de74cd8fe",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "2af184bb5f14077ac2553908865ddbaa9e1f3206a21d303c02fbe3c50a16f3ce",
+    "compile.bundle.mjs": "b4a95cdf3c661e6319aa8ca35d6cec03b569e7df94fcfd1ef770fc5e36a0d3ba",
     "host-types.d.ts": "128a718cbfe8086231fd3c8492a6cbcc1459165b7e23a9e8d8c6898e28b5a18c",
     "module-host-types.d.ts": "58fcfea8e3e4e7621c7f6bea055250988a0744518619b812413d8e79157a26c9",
-    "module.bundle.cjs": "81c1fa77f28d1129b16f9c7633bee9ee824e5765792bcd6491edc567076755a3",
+    "module.bundle.cjs": "f2270f0a72b5cfcb263e9fcf3343c11d1e043afe7bdfb6caf04409f61462d7e8",
     "packages/cli/src/driver.ts": "50126d7cb3ebb1a0f8376885cf13bd4678ecb8b6ee66199f7ad486b9e31e4c66",
     "packages/compiler/src/ast/ast.ts": "14654273b6e03dd2f42348f5f99736cea28642444c20b442a8d3806062096dd1",
     "packages/compiler/src/ast/ctors.ts": "5f8dee74781be7d2736eb6cf09ebb4d5818002e8c8bcb18e8065adc9873acd69",
@@ -73,7 +73,7 @@
     "packages/compiler/src/errors/suggest.ts": "f611c6a96ba79a47633377b1eea2d40f3fd3ac4fa223a34f1cef455e5eed071a",
     "packages/compiler/src/extensions/extensions.ts": "6de79158ae84e9a3bb84d36e2d2b1448464891158f7a561b755ade1c1d9a1e34",
     "packages/compiler/src/extensions/plugins/jsx-schema.gen.d.mts": "16fd25cd96bf1e2ae11f17e711f91dcbb9f30e1f347737cdd144bf319046d5ef",
-    "packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs": "94cb1f3512dcd8244cadba7ab74ed0db943bd2df02b907d105eaae26a96e6482",
+    "packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs": "566b927278f1ee14e38e52f16b91846ac7751f0252c77464aa1643abe8ef2831",
     "packages/compiler/src/extensions/plugins/jsx.ts": "b7169448433295fb1dc160acdbe580b2dd01e9becac2c7aae18b8b195c3433c9",
     "packages/compiler/src/extensions/plugins/preact.ts": "99e4246c1066690e168d7c7172cdc014b8372a63cb938a1315fdaf15e69d0ccf",
     "packages/compiler/src/format/format-api.ts": "cb0b43a0e6fd8c9999eecac0bf298a67535bc8bb10446d1dde529ea7b4d56a27",
@@ -85,13 +85,13 @@
     "packages/compiler/src/infer/types.ts": "722523a5b6dbf94874414b545573c715d4a5710bd2a481fd1a1c7b8f5b4b745d",
     "packages/compiler/src/lexer/lexer.ts": "4d9f126b1b380e8f82eabea28edaef87de54efbcb2aeff557cecb8318a3ff406",
     "packages/compiler/src/lexer/str-scan.ts": "cc6815d251a1fa7f10271d5bc59c04c0025975665618bc990e9651ab5baf9a45",
-    "packages/compiler/src/module/host.d.mts": "6f27fc7b7e685aee0f421e35324b376e74c73b85a64b966a1674abbdd090067d",
+    "packages/compiler/src/module/host.d.mts": "29630e71b730d3d2b683efd7e25d861d91050674d0f609cf85220eeb27b7a35c",
     "packages/compiler/src/module/host.mjs": "cd6f14314ea91daf6dcd6eac9f024fee7cccc56f54cab58f8cbe9ec821fcef67",
     "packages/compiler/src/module/module.ts": "a387b2ea27bb4cfc694d773bcde39c2786fa1691dadf4eab117dd2b08085c17e",
     "packages/compiler/src/parser/parser.ts": "5eb1ad8bd261582270d13e4c9dd75e9e97cee620b3ca05bebcb8c8e40fef32be",
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
-    "packages/compiler/src/prelude/prelude.gen.mjs": "a57a093a2e13d8e31121dba8d0799a17bf422eca666122aa4e8ef07bc4293827",
+    "packages/compiler/src/prelude/prelude.gen.mjs": "0bbcfd2f52f4d699af29aaad1bf75e044dc0bdf5cfbb4e78742dfd0018aef79e",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "32538f91b2f5acdef436d8ee2ce5f166ca68421b7d9b6c675ae7cf184ff54f53"
+    "syntax.bundle.mjs": "e84850d451282c708f65bebf5b14bef3d2034bae3ce4c1f716ec325686cf2a28"
   }
 }

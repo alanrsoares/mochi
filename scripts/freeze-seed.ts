@@ -4,8 +4,8 @@
 //
 //   bun scripts/freeze-seed.ts
 //
-// After emit, `biome format --write bootstrap/seed` (twice: first wrap of huge
-// generic arrows is not idempotent). `bun run lint` covers the snapshot; generated
+// After emit, format all seed JS/TS artifacts, including bundles (twice: first
+// wrap of huge generic arrows is not idempotent). `bun run lint` covers the TS snapshot; generated
 // `_g: any`, unused bindings, and inline struct types are path-exempt in biome.json.
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -341,10 +341,8 @@ const hashesOf = (dir: string): Record<string, string> => {
   return out;
 };
 
-// Hashed BEFORE biome runs. The formatter only covers `bootstrap/seed/**/*.ts`
-// (biome.json `files.includes`), so a temp directory cannot be formatted the
-// same way — and the raw emit is the more sensitive comparison anyway, since
-// formatting normalises differences away.
+// Hashed BEFORE biome runs. Compare raw emit so formatting cannot normalise
+// differences away. The final manifest separately hashes formatted artifacts.
 const emitted = hashesOf(tmp);
 
 if (CHECK) {
@@ -380,15 +378,29 @@ if (CHECK) {
 emptyDir(BOOTSTRAP_SEED);
 cpSync(tmp, BOOTSTRAP_SEED, { recursive: true });
 rmSync(tmp, { recursive: true, force: true });
-execFileSync(BIOME_BIN, ["format", "--write", "bootstrap/seed"], {
-  cwd: REPO_ROOT,
-  stdio: "inherit",
-});
+const formatSeed = (): void => {
+  for (const rel of walkFiles(BOOTSTRAP_SEED)) {
+    if (!/\.(?:[cm]?[jt]s|tsx)$/.test(rel)) continue;
+    const path = join(BOOTSTRAP_SEED, rel);
+    // Bun's CJS bundles retain import declarations. Parse them as JS modules
+    // for formatting while preserving the actual artifact name and contents.
+    const language = /\.(?:[cm]?ts|tsx)$/.test(rel) ? "ts" : "js";
+    const formatted = execFileSync(
+      BIOME_BIN,
+      ["format", "--config-path=scripts/seed-format.json", `--stdin-file-path=seed.${language}`],
+      {
+        cwd: REPO_ROOT,
+        input: readFileSync(path, "utf8"),
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
+    writeFileSync(path, formatted);
+  }
+};
+formatSeed();
 // Second pass: biome's first wrap of huge generic arrows is not idempotent.
-execFileSync(BIOME_BIN, ["format", "--write", "bootstrap/seed"], {
-  cwd: REPO_ROOT,
-  stdio: "inherit",
-});
+formatSeed();
 
 const files = hashesOf(BOOTSTRAP_SEED);
 const manifest = { sourceRevision: sourceRevision(), emitted, files };

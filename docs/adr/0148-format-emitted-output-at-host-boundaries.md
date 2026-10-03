@@ -30,9 +30,13 @@ the worker-less fallback too, including calls after a worker failure. Compiler
 timing excludes formatting on both paths. Browser formatting remains cosmetic:
 the existing formatter returns raw code if formatting fails.
 
-Core codegen, compiler APIs, bootstrap emission and runtime loaders retain their
-raw string contract. Formatting belongs to presentation and file output, not
-language semantics. No seed refresh is required for this host-only change.
+Core codegen, compiler APIs and runtime loaders retain their raw string contract.
+Formatting belongs to presentation and file output, not language semantics.
+`seed:freeze` formats every JS/TS artifact, including bundled `.mjs` / `.cjs`
+and declaration files, using a dedicated config at the repository's width of
+100. Preserve the existing two formatter passes for large generic arrows.
+Record raw emitted hashes before formatting and artifact hashes afterward;
+regenerate the seed through this script rather than editing generated files.
 
 ## Validation and costs
 
