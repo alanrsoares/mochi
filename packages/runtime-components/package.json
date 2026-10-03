@@ -7,6 +7,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@onrails/result": "^0.4.0"
+    "@onrails/result": "^0.4.2"
   }
 }

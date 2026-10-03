@@ -12,6 +12,6 @@
     "@mochi/compiler": "workspace:*"
   },
   "peerDependencies": {
-    "preact": "^10.0.0"
+    "preact": "^10.0.0 || ^11.0.0"
   }
 }

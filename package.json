@@ -60,11 +60,11 @@
     ],
     "catalog": {
       "typescript": "^7.0.2",
-      "vite": "^8.2.2"
+      "vite": "^8.3.2"
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.10",
+    "@biomejs/biome": "^2.5.15",
     "@codspeed/tinybench-plugin": "^5.7.1",
     "@mochi/bun": "workspace:*",
     "@mochi/cli": "workspace:*",
@@ -80,8 +80,8 @@
     "@mochi/vite-plugin": "workspace:*",
     "@types/bun": "latest",
     "esbuild": "^0.28.2",
-    "fast-check": "^4.9.0",
-    "lefthook": "^2.1.10",
+    "fast-check": "^4.10.2",
+    "lefthook": "^2.1.16",
     "tinybench": "^6"
   },
   "engines": {
@@ -91,8 +91,8 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@onrails/maybe": "^0.2.3",
-    "@onrails/pattern": "^0.3.3",
-    "@onrails/result": "^0.4.0"
+    "@onrails/maybe": "^0.2.5",
+    "@onrails/pattern": "^0.3.5",
+    "@onrails/result": "^0.4.2"
   }
 }

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Saved playground drafts and share links can still contain the retired JSX card preset. */
+@source inline("w-full max-w-md p-5 bg-paper border-2 border-line rounded-panel space-y-3 shadow-soft flex items-center justify-between gap-3 text-base font-bold text-ink font-display px-2.5 py-0.5 text-3xs font-mono tracking-wider rounded uppercase bg-fur-subtle text-fur-deep border border-fur-border text-xs text-mute leading-relaxed");
+
 /*
   Tokens from illustrations/AESTHETICS.md.
   Light (default): cozy cream / peach mascot theme.

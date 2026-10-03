@@ -25,9 +25,9 @@
     "./types": "./src/ast/types.ts"
   },
   "dependencies": {
-    "@onrails/maybe": "^0.2.3",
-    "@onrails/pattern": "^0.3.3",
-    "@onrails/result": "^0.4.0"
+    "@onrails/maybe": "^0.2.5",
+    "@onrails/pattern": "^0.3.5",
+    "@onrails/result": "^0.4.2"
   },
   "devDependencies": {
     "@mochi/test-support": "workspace:*"

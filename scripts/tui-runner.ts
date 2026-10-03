@@ -108,7 +108,7 @@ const readOptions = (argv: readonly string[]): Options => {
     (error) => (error instanceof Error ? error.message : String(error)),
   );
 
-  const { values, positionals } = matchResult(parse(), (parsed) => parsed, usageExit);
+  const { values, positionals } = matchResult(parse, (parsed) => parsed, usageExit);
   const timeout = Number(values.timeout ?? DEFAULT_TIMEOUT_MS);
   const tail = Number(values.tail ?? DEFAULT_TAIL_LINES);
   const jobs = Number(values.jobs ?? DEFAULT_JOBS);
