@@ -112,7 +112,7 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -148,7 +148,7 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
     (
       a: Expr,
       b: Ty,
-      c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+      c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
     ) => Option<string>
   >;
 }[] = <B, C, D, E, F>(
@@ -184,7 +184,7 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -427,7 +427,7 @@ export const formatHooksFor: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -465,7 +465,7 @@ export const formatHooksFor: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -525,7 +525,7 @@ export const dtsHooksFor: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -563,7 +563,7 @@ export const dtsHooksFor: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -721,7 +721,7 @@ export const bindingHooksFor: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -729,7 +729,7 @@ export const bindingHooksFor: <B, C, D, E, F>(
 ) => ((
   a: Expr,
   b: Ty,
-  c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+  c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
 ) => Option<string>)[] = <B, C, D, E, F>(
   pluginsOpt: Option<
     {
@@ -763,7 +763,7 @@ export const bindingHooksFor: <B, C, D, E, F>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
         ) => Option<string>
       >;
     }[]
@@ -775,7 +775,7 @@ export const bindingHooksFor: <B, C, D, E, F>(
     [] as ((
       a: Expr,
       b: Ty,
-      c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & F,
+      c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & F,
     ) => Option<string>)[],
   );
 /**

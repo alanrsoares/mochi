@@ -17,6 +17,18 @@ import { preactPlugin } from "@mochi/plugin-preact";
 Vite: alias `@mochi/plugin-preact/hooks` → the package `hooks.mochi` (or rely on
 package `exports`).
 
+For declarations, pass the host's type spellings to the compiler:
+
+```ts
+import { compileTargets } from "@mochi/compiler";
+import { preactDtsTypeNames } from "@mochi/plugin-preact";
+
+compileTargets(source, { dtsTypeNames: preactDtsTypeNames });
+```
+
+Component returns, VNode props, and JSX values then name `import("preact").VNode`
+in declarations. JS and typed TypeScript emit are unchanged (ADR 0144).
+
 ## Honest types
 
 | Binding | Seam (`hooks.mochi`) | With `preactPlugin.inferCall` |

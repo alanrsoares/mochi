@@ -1384,6 +1384,12 @@ export const inferJsxCallHook: <A, B>(
               throw new Error("non-exhaustive match");
             })())(origin),
 );
+const vnodeTs: <A>(api: { tsType: (a: Ty) => string } & A) => string = <A>(
+  api: { tsType: (a: Ty) => string } & A,
+) => {
+  const printed: string = api.tsType(TyCon("VNode", [] as Ty[]));
+  return printed === "VNode" ? "any" : printed;
+};
 /**
  * The final return of an arrow is `VNode`.
  */
@@ -1427,7 +1433,7 @@ const componentPropFieldTs: <A>(
         ? "() => void"
         : "unknown"
       : _v._tag === "TyCon" && _v.name === "VNode"
-        ? "unknown"
+        ? ((printed: string) => (printed === "any" ? "unknown" : printed))(vnodeTs(api))
         : api.tsType(t))(t),
 );
 const propFieldsFrom: <A>(
@@ -1499,7 +1505,7 @@ const extraParamTs: <A>(t: Ty, api: { tsType: (a: Ty) => string } & A) => string
       _v._tag === "TyVar"
         ? "unknown"
         : _v._tag === "TyCon" && _v.name === "VNode"
-          ? "any"
+          ? vnodeTs(api)
           : api.tsType(t))(t),
 );
 /**
@@ -1526,7 +1532,7 @@ const extraParamsFrom: <A>(
 );
 /**
  * A multi-param component is `_curry`'d like any other function, so it takes
- * the core's `_Curry` form (ADR 0093) with `any` standing in for `VNode`.
+ * the core's `_Curry` form (ADR 0093), with the host's VNode spelling when set.
  */
 const componentSig: <A>(
   t: Ty,
@@ -1540,26 +1546,26 @@ const componentSig: <A>(
             ((props: string) =>
               ((extras: string[]) =>
                 length(extras) === 0
-                  ? `(${props}) => any`
-                  : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], any>`)(
+                  ? `(${props}) => ${vnodeTs(api)}`
+                  : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], ${vnodeTs(api)}>`)(
                 extraParamsFrom(toT, api, 1, [] as string[]),
               ))(`props: ${componentPropsParamTs(fromT, api)}`))(_v)
-        : "(props: Record<string, unknown>) => any")(t),
+        : `(props: Record<string, unknown>) => ${vnodeTs(api)}`)(t),
 );
 export const componentBindingTs: <A>(
   value: Expr,
   t: Ty,
-  api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
+  api: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & A,
 ) => Option<string> = _curry(
   3,
   <A>(
     value: Expr,
     t: Ty,
-    api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
+    api: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & A,
   ) =>
     ((_v) =>
       _v._tag === "TyCon" && _v.name === "VNode" && _v.args.length === 0
-        ? (Some("any") as Option<string>)
+        ? (Some(vnodeTs(api)) as Option<string>)
         : or(isComponentType(t), isJsxComponentLambda(value))
           ? (Some(componentSig(t, api)) as Option<string>)
           : (None as Option<string>))(t),

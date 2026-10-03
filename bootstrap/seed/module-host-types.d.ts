@@ -8,6 +8,7 @@ export type Opts = {
   moduleExt: string;
   strictEntry: boolean;
   plugins: Option<HostPlugin[]>;
+  dtsTypeNames: Map<string, string>;
 };
 export type HostPlugin = {
   name: string;

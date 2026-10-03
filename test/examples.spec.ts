@@ -13,6 +13,27 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("hosts preserve JSX declaration results without changing JS or typed TS", () => {
+  const source = `
+type Props = { label: string, disabled: bool }
+let Button : Props -> VNode = props =>
+  <button disabled={props.disabled}>{props.label}</button>
+let app = <Button label="Save changes" disabled={false} />
+`;
+  const plain = unwrapOk(compileTargets(source));
+  const mapped = unwrapOk(
+    compileTargets(source, {
+      dtsTypeNames: { VNode: 'import("preact").VNode' },
+    }),
+  );
+  expect(mapped.dts).toContain('(props: Props) => import("preact").VNode');
+  expect(mapped.dts).toContain('const app: import("preact").VNode;');
+  expect(mapped.dts).not.toContain("any");
+  expect(mapped.js).toBe(plain.js);
+  expect(mapped.ts).toBe(plain.ts);
+  expect(plain.dts).toContain("const app: any;");
+});
+
 type DedupeRow = { id: number };
 
 test("dedupeBy keeps first projected representatives and evaluates projections in order", () => {

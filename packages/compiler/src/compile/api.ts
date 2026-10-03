@@ -27,6 +27,8 @@ export type CompileOptions = {
   plugins?: readonly CompilerPlugin[];
   /** Permit unbound host globals for this invocation; `"use open"` is per-file. */
   open?: boolean;
+  /** Declaration-only host type spellings, e.g. VNode → import("preact").VNode. */
+  dtsTypeNames?: Readonly<Record<string, string>>;
 };
 
 /** Typed-emit options: `runtimeImport` is the module helpers are imported from. */
@@ -43,6 +45,7 @@ const toOptions = (opts: CompileOptions): CompilerOptions => ({
   moduleExt: opts.moduleExt ?? ".js",
   strictEntry: false,
   plugins: opts.plugins,
+  dtsTypeNames: opts.dtsTypeNames,
 });
 
 const fromSeed = <T>(r: Result<T, CompilerDiagnostic[]>): Result<T, Diagnostic[]> =>

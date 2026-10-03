@@ -69,7 +69,8 @@ type Opts = {
   docs: bool,
   moduleExt: string,
   strictEntry: bool,
-  plugins: Option<[Infer.HostPlugin]>
+  plugins: Option<[Infer.HostPlugin]>,
+  dtsTypeNames: Map<string, string>
 }
 
 let defaultOpts : Opts = {
@@ -78,7 +79,8 @@ let defaultOpts : Opts = {
   docs: true,
   moduleExt: ".js",
   strictEntry: false,
-  plugins: None
+  plugins: None,
+  dtsTypeNames: #{}
 }
 
 // One loaded module: its canonical path, source, and parsed statements. The
@@ -1228,7 +1230,8 @@ let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.
                     ctx.runtimeImport,
                     opts.docs,
                     dtsHooksFor(opts.plugins),
-                    bindingHooksFor(opts.plugins)
+                    bindingHooksFor(opts.plugins),
+                    opts.dtsTypeNames
                   )
                   : ctx.dts
               }

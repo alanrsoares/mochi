@@ -730,9 +730,13 @@ export let inferJsxCallHook = (_fn, args, origin, st, api) => switch origin {
 
 // --- binding type (ADR 0055) -------------------------------------------------
 // `VNode` is this plugin's vocabulary, declared nowhere, so it must never reach
-// TS output. A component binding declares as `(props: P) => any` in both the
-// `.d.ts` writer and the TS backend: free prop fields print `unknown` (event
-// handlers `() => void`), and the return is `any`, not a host `FC`.
+// TS output without a host spelling. The declaration writer can supply one
+// through its type-name index; the default and typed TS backend retain `any`.
+// Free prop fields print `unknown` (event handlers `() => void`).
+
+let vnodeTs = api =>
+  let printed = api.tsType(TyCon("VNode", [])) in
+    printed == "VNode" ? "any" : printed
 
 /// The final return of an arrow is `VNode`.
 let returnsVNode = t => switch t {
@@ -765,7 +769,8 @@ let isHandlerLabel = label =>
 
 let componentPropFieldTs = (label, t, api) => switch t {
   | TyVar(_) => isHandlerLabel(label) ? "() => void" : "unknown"
-  | TyCon("VNode", _) => "unknown"
+  | TyCon("VNode", _) => let printed = vnodeTs(api) in
+      printed == "any" ? "unknown" : printed
   | _ => api.tsType(t)
 }
 
@@ -808,7 +813,7 @@ let componentPropsParamTs = (t, api) => switch t {
 
 let extraParamTs = (t, api) => switch t {
   | TyVar(_) => "unknown"
-  | TyCon("VNode", _) => "any"
+  | TyCon("VNode", _) => vnodeTs(api)
   | _ => api.tsType(t)
 }
 
@@ -824,18 +829,18 @@ let extraParamsFrom = (t, api, i, acc) => switch t {
 }
 
 /// A multi-param component is `_curry`'d like any other function, so it takes
-/// the core's `_Curry` form (ADR 0093) with `any` standing in for `VNode`.
+/// the core's `_Curry` form (ADR 0093), with the host's VNode spelling when set.
 let componentSig = (t, api) => switch t {
   | TyFn(fromT, toT) => let props = "props: ${componentPropsParamTs(fromT, api)}" in
     let extras = extraParamsFrom(toT, api, 1, []) in
       Array.length(extras) == 0
-        ? "(${props}) => any"
-        : "_Curry<[${Str.join(", ", Array.concat([props], extras))}], any>"
-  | _ => "(props: Record<string, unknown>) => any"
+        ? "(${props}) => ${vnodeTs(api)}"
+        : "_Curry<[${Str.join(", ", Array.concat([props], extras))}], ${vnodeTs(api)}>"
+  | _ => "(props: Record<string, unknown>) => ${vnodeTs(api)}"
 }
 
 export let componentBindingTs = (value, t, api) => switch t {
-  | TyCon("VNode", []) => Some("any")
+  | TyCon("VNode", []) => Some(vnodeTs(api))
   | _ => isComponentType(t) || isJsxComponentLambda(value)
       ? Some(componentSig(t, api))
       : None

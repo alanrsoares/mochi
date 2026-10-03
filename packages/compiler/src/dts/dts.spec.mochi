@@ -1,7 +1,24 @@
 import { assertEq, test } from "@mochi/test"
 import * as Ast from "../ast/ast.mochi"
 import { recordAliasIndex } from "../codegen/typescript.mochi"
-import { declarationRecs } from "./dts.mochi"
+import { declarationRecs, emitDtsTextWith } from "./dts.mochi"
+import { defaultOpts } from "../compile/compile.mochi"
+
+test("host declaration spellings preserve JSX values", () =>
+  assertEq(
+    Ok("export declare const app: import(\"host\").Node;\n"),
+    emitDtsTextWith(
+      "let app = <div />",
+      "@mochi/runtime",
+      { ...defaultOpts, dtsTypeNames: #{ "VNode": "import(\"host\").Node" } }
+    )
+  ))
+
+test("unconfigured JSX declarations retain their host-independent fallback", () =>
+  assertEq(
+    Ok("export declare const app: any;\n"),
+    emitDtsTextWith("let app = <div />", "@mochi/runtime", defaultOpts)
+  ))
 
 let sp = { start: 0, end: 0 }
 let spanFields = [

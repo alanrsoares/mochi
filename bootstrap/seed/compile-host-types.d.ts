@@ -44,6 +44,7 @@ export type Opts = {
   moduleExt: string;
   strictEntry: boolean;
   plugins: Option<HostPlugin[]>;
+  dtsTypeNames: Map<string, string>;
 };
 export type HostPlugin = {
   name: string;
@@ -379,6 +380,7 @@ export type SeedCompile = {
             bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
           }[]
         >;
+        dtsTypeNames: Map<string, string>;
         open: boolean;
         runtime: boolean;
         moduleExt: string;
@@ -421,6 +423,7 @@ export type SeedCompile = {
             bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
           }[]
         >;
+        dtsTypeNames: Map<string, string>;
         open: boolean;
         runtime: boolean;
         moduleExt: string;

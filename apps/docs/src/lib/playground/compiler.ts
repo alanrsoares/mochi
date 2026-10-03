@@ -7,6 +7,7 @@
  * `compile(src)()` (same as `Task.run`).
  */
 import { type CompileTargets, compileTargets, type Diagnostic } from "@mochi/compiler";
+import { preactDtsTypeNames } from "@mochi/plugin-preact";
 import { isErr } from "@onrails/result";
 import { err, ok, type Result, type Task } from "../task";
 import type { CompileWorkerRequest, CompileWorkerResponse } from "./compile.worker";
@@ -30,7 +31,10 @@ export type PlaygroundCompiler = {
 const syncCompile = (source: string): Result<PlaygroundCompileOk, PlaygroundCompileErr> => {
   const start = performance.now();
   try {
-    const result = compileTargets(source, { runtimeImport: "@mochi/compiler/runtime" });
+    const result = compileTargets(source, {
+      runtimeImport: "@mochi/compiler/runtime",
+      dtsTypeNames: preactDtsTypeNames,
+    });
     const ms = performance.now() - start;
     if (isErr(result)) return err({ diagnostics: result.error, ms });
     return ok({ ...result.value, ms });

@@ -4403,7 +4403,7 @@ export const parseRecovering: <A, B, C, D, E>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & E,
         ) => Option<string>
       >;
     }[]
@@ -4441,7 +4441,7 @@ export const parseRecovering: <A, B, C, D, E>(
           (
             a: Expr,
             b: Ty,
-            c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+            c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & E,
           ) => Option<string>
         >;
       }[]
@@ -4502,7 +4502,7 @@ export const parseWith: <A, B, C, D, E>(
         (
           a: Expr,
           b: Ty,
-          c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+          c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & E,
         ) => Option<string>
       >;
     }[]
@@ -4540,7 +4540,7 @@ export const parseWith: <A, B, C, D, E>(
           (
             a: Expr,
             b: Ty,
-            c: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & E,
+            c: { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> } & E,
           ) => Option<string>
         >;
       }[]

@@ -12,6 +12,7 @@ export type Opts = {
   moduleExt: string;
   strictEntry: boolean;
   plugins: Option<HostPlugin[]>;
+  dtsTypeNames: Map<string, string>;
 };
 export type Loaded = { path: string; src: string; stmts: Stmt[] };
 export type ModuleOutput = { path: string; js: string };
@@ -151,6 +152,7 @@ const defaultOpts: Opts = {
   moduleExt: ".js",
   strictEntry: false,
   plugins: None as Option<HostPlugin[]>,
+  dtsTypeNames: new Map<string, string>(),
 };
 
 import { readFile } from "./host.mjs";
@@ -2734,6 +2736,7 @@ const dtsOne: <A, B>(
                                         opts.docs,
                                         dtsHooksFor(opts.plugins),
                                         bindingHooksFor(opts.plugins),
+                                        opts.dtsTypeNames,
                                       )
                                     : ctx.dts,
                                 }) as Result<

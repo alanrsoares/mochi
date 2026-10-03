@@ -119,7 +119,9 @@ test("gen-mochi-dts keeps builtin JSX in a tree with no vendor plugins", () => {
     const run = Bun.spawnSync(["bun", repoPath("scripts/gen-mochi-dts.ts"), dir]);
     expect(run.stderr.toString()).not.toContain("dts error");
     expect(run.exitCode).toBe(0);
-    expect(readFileSync(join(dir, "view.d.mochi.ts"), "utf8")).toContain("export declare const v:");
+    expect(readFileSync(join(dir, "view.d.mochi.ts"), "utf8")).toContain(
+      'export declare const v: import("preact").VNode;',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

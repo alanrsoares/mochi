@@ -68,7 +68,8 @@ type Opts = {
   docs: bool,
   moduleExt: string,
   strictEntry: bool,
-  plugins: Option<[Infer.HostPlugin]>
+  plugins: Option<[Infer.HostPlugin]>,
+  dtsTypeNames: Map<string, string>
 }
 
 /// The default every arity-preserving entrypoint below passes: strict
@@ -79,7 +80,8 @@ export let defaultOpts : Opts = {
   docs: true,
   moduleExt: ".js",
   strictEntry: false,
-  plugins: None
+  plugins: None,
+  dtsTypeNames: #{}
 }
 
 // First non-space, non-tab character at or after `i`.
