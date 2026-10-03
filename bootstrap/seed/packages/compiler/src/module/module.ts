@@ -226,13 +226,22 @@ const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[
     _Option_match(
       _Array_get(i, stmts),
       () => acc,
-      (s) =>
-        ((_v) =>
-          _v._tag === "SImport"
-            ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
-            : _v._tag === "SImportNs"
-              ? (({ from }) => importFromsFrom(stmts, i + 1, _Array_append(from, acc)))(_v)
-              : importFromsFrom(stmts, i + 1, acc))(s),
+      (s) => {
+        const $match = s;
+        switch ($match._tag) {
+          case "SImport": {
+            const { from } = $match;
+            return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
+          }
+          case "SImportNs": {
+            const { from } = $match;
+            return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
+          }
+          default: {
+            return importFromsFrom(stmts, i + 1, acc);
+          }
+        }
+      },
     ),
 );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
@@ -1841,23 +1850,24 @@ const ownTypesInto: <A>(
     acc: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] },
   ) =>
     reduce(
-      _curry(2, (a: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] }, s: Stmt) =>
-        ((_v) =>
-          _v._tag === "SType"
-            ? (({ name }) =>
-                _Map_has(name, a.owner)
-                  ? {
-                      owner: _Map_set(name, path, a.owner),
-                      dups: _Set_add(name, a.dups),
-                      dupNames: _Set_has(name, a.dups)
-                        ? a.dupNames
-                        : _Array_append(name, a.dupNames),
-                    }
-                  : { owner: _Map_set(name, path, a.owner), dups: a.dups, dupNames: a.dupNames })(
-                _v,
-              )
-            : a)(s),
-      ),
+      _curry(2, (a: { owner: Map<string, A>; dups: Set<string>; dupNames: string[] }, s: Stmt) => {
+        const $match = s;
+        switch ($match._tag) {
+          case "SType": {
+            const { name } = $match;
+            return _Map_has(name, a.owner)
+              ? {
+                  owner: _Map_set(name, path, a.owner),
+                  dups: _Set_add(name, a.dups),
+                  dupNames: _Set_has(name, a.dups) ? a.dupNames : _Array_append(name, a.dupNames),
+                }
+              : { owner: _Map_set(name, path, a.owner), dups: a.dups, dupNames: a.dupNames };
+          }
+          default: {
+            return a;
+          }
+        }
+      }),
       acc,
       stmts,
     ),
@@ -1953,11 +1963,18 @@ const aliasesForTs: <C, D, E>(
 );
 const localTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   _Set_fromArray(
-    _Array_flatMap(
-      (s: Stmt) =>
-        ((_v) => (_v._tag === "SType" ? (({ name }) => [name])(_v) : ([] as string[])))(s),
-      stmts,
-    ),
+    _Array_flatMap((s: Stmt) => {
+      const $match = s;
+      switch ($match._tag) {
+        case "SType": {
+          const { name } = $match;
+          return [name];
+        }
+        default: {
+          return [] as string[];
+        }
+      }
+    }, stmts),
   );
 const groupByOwner: <A>(
   names: string[],
@@ -2039,33 +2056,38 @@ const externBindingsInto: <A>(
     acc: Map<string, { imported: string; scheme: A; curried: boolean }[]>,
   ) =>
     reduce(
-      _curry(2, (a: Map<string, { imported: string; scheme: A; curried: boolean }[]>, s: Stmt) =>
-        ((_v) =>
-          _v._tag === "SExtern"
-            ? (({ name, module: hostModule, imported, curried }) =>
-                _Str_startsWith("mochi:", hostModule)
-                  ? a
-                  : _Option_match(
-                      _Map_get(name, env),
-                      () => a,
-                      (sc) => {
-                        const dp: string = externDtsPath(path, hostModule);
-                        return _Map_set(
+      _curry(2, (a: Map<string, { imported: string; scheme: A; curried: boolean }[]>, s: Stmt) => {
+        const $match = s;
+        switch ($match._tag) {
+          case "SExtern": {
+            const { name, module: hostModule, imported, curried } = $match;
+            return _Str_startsWith("mochi:", hostModule)
+              ? a
+              : _Option_match(
+                  _Map_get(name, env),
+                  () => a,
+                  (sc) => {
+                    const dp: string = externDtsPath(path, hostModule);
+                    return _Map_set(
+                      dp,
+                      _Array_append(
+                        { imported: imported, scheme: sc, curried: curried },
+                        _Map_getOr(
+                          [] as { imported: string; scheme: A; curried: boolean }[],
                           dp,
-                          _Array_append(
-                            { imported: imported, scheme: sc, curried: curried },
-                            _Map_getOr(
-                              [] as { imported: string; scheme: A; curried: boolean }[],
-                              dp,
-                              a,
-                            ),
-                          ),
                           a,
-                        );
-                      },
-                    ))(_v)
-            : a)(s),
-      ),
+                        ),
+                      ),
+                      a,
+                    );
+                  },
+                );
+          }
+          default: {
+            return a;
+          }
+        }
+      }),
       acc,
       stmts,
     ),

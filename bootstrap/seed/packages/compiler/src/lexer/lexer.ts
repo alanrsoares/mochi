@@ -495,42 +495,37 @@ const lexParts: _Curry<
     _Option_match(
       _Array_head(parts),
       () => Ok(toks) as Result<LocTok[][], { end: number; start: number; message: string }>,
-      (part) =>
-        ((_v) =>
-          _v._tag === "PLit"
-            ? (({ value }) =>
-                ((t: LocTok) =>
-                  lexParts(
-                    src,
-                    _Array_tail(parts),
-                    idx + 1,
-                    total,
-                    wholeStart,
-                    wholeEnd,
-                    [] as string[],
-                    pushTok(t, toks),
-                  ))(mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc)))(_v)
-            : _v._tag === "PHole"
-              ? (({ start: hs, end: he }) =>
-                  _Result_match(
-                    spliceHole(src, hs, he, toks),
-                    (e) =>
-                      Err(e) as Result<LocTok[][], { message: string; start: number; end: number }>,
-                    (toks2) =>
-                      lexParts(
-                        src,
-                        _Array_tail(parts),
-                        idx + 1,
-                        total,
-                        wholeStart,
-                        wholeEnd,
-                        doc,
-                        toks2,
-                      ),
-                  ))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(part),
+      (part) => {
+        const $match = part;
+        switch ($match._tag) {
+          case "PLit": {
+            const { value } = $match;
+            const t: LocTok = mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc);
+            return lexParts(
+              src,
+              _Array_tail(parts),
+              idx + 1,
+              total,
+              wholeStart,
+              wholeEnd,
+              [] as string[],
+              pushTok(t, toks),
+            );
+          }
+          case "PHole": {
+            const { start: hs, end: he } = $match;
+            return _Result_match(
+              spliceHole(src, hs, he, toks),
+              (e) => Err(e) as Result<LocTok[][], { message: string; start: number; end: number }>,
+              (toks2) =>
+                lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2),
+            );
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      },
     ),
 );
 const emit: _Curry<

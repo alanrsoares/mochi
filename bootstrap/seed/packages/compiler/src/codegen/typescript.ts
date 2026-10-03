@@ -421,25 +421,37 @@ export const unionGenericNames: <A, B>(
  */
 const allVarsIn: <A>(t: Ty, names: Map<number, A>) => boolean = _curry(
   2,
-  <A>(t: Ty, names: Map<number, A>) =>
-    ((_v) =>
-      _v._tag === "TyVar"
-        ? (({ id }) => _Option_isSome(_Map_get(id, names)))(_v)
-        : _v._tag === "TyCon"
-          ? (({ args }) => allVarsInAll(args, names, 0))(_v)
-          : _v._tag === "TyFn"
-            ? (({ from: fromT, to: toT }) => and(allVarsIn(fromT, names), allVarsIn(toT, names)))(
-                _v,
-              )
-            : _v._tag === "TyRecord"
-              ? (({ row }) => allVarsInRow(row, names))(_v)
-              : _v._tag === "TySingleton"
-                ? true
-                : _v._tag === "TyOneOf"
-                  ? (({ members }) => allVarsInAll(members, names, 0))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(t),
+  <A>(t: Ty, names: Map<number, A>) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyVar": {
+        const { id } = $match;
+        return _Option_isSome(_Map_get(id, names));
+      }
+      case "TyCon": {
+        const { args } = $match;
+        return allVarsInAll(args, names, 0);
+      }
+      case "TyFn": {
+        const { from: fromT, to: toT } = $match;
+        return and(allVarsIn(fromT, names), allVarsIn(toT, names));
+      }
+      case "TyRecord": {
+        const { row } = $match;
+        return allVarsInRow(row, names);
+      }
+      case "TySingleton": {
+        return true;
+      }
+      case "TyOneOf": {
+        const { members } = $match;
+        return allVarsInAll(members, names, 0);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const allVarsInAll: <A>(ts: Ty[], names: Map<number, A>, i: number) => boolean = _curry(
   3,
@@ -452,18 +464,25 @@ const allVarsInAll: <A>(ts: Ty[], names: Map<number, A>, i: number) => boolean =
 );
 const allVarsInRow: <A>(row: Row, names: Map<number, A>) => boolean = _curry(
   2,
-  <A>(row: Row, names: Map<number, A>) =>
-    ((_v) =>
-      _v._tag === "RowEmpty"
-        ? true
-        : _v._tag === "RowVar"
-          ? (({ id }) => _Option_isSome(_Map_get(id, names)))(_v)
-          : _v._tag === "RowExtend"
-            ? (({ fieldType, rest }) =>
-                and(allVarsIn(fieldType, names), allVarsInRow(rest, names)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(row),
+  <A>(row: Row, names: Map<number, A>) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowEmpty": {
+        return true;
+      }
+      case "RowVar": {
+        const { id } = $match;
+        return _Option_isSome(_Map_get(id, names));
+      }
+      case "RowExtend": {
+        const { fieldType, rest } = $match;
+        return and(allVarsIn(fieldType, names), allVarsInRow(rest, names));
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 /**
  * No `names` in scope, so this is true exactly when the type is fully concrete.
@@ -492,14 +511,20 @@ export const emptyCollTs: _Curry<[t: Ty, env: TsEnv], Option<string>> = _curry(
  */
 export const ctorCallTs: _Curry<[t: Ty, recs: Map<string, string>], Option<string>> = _curry(
   2,
-  (t: Ty, recs: Map<string, string>) =>
-    ((_v) =>
-      _v._tag === "TyCon"
-        ? (({ args }) =>
-            or(length(args) === 0, !isConcrete(t))
-              ? (None as Option<string>)
-              : (Some(tsOf(t, recsEnv(recs))) as Option<string>))(_v)
-        : (None as Option<string>))(t),
+  (t: Ty, recs: Map<string, string>) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyCon": {
+        const { args } = $match;
+        return or(length(args) === 0, !isConcrete(t))
+          ? (None as Option<string>)
+          : (Some(tsOf(t, recsEnv(recs))) as Option<string>);
+      }
+      default: {
+        return None as Option<string>;
+      }
+    }
+  },
 );
 /**
  * A match scrutinee's concrete TS type — the base a guard-form arm's predicate
@@ -655,16 +680,25 @@ export const ctorFactoryTs: _Curry<
  * A lambda param's declared NAME (destructuring params take a positional
  * placeholder — the type is what matters here, not the binder shape).
  */
-const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamParam, i: A) =>
-  ((_v) =>
-    _v._tag === "LPSpanned"
-      ? (({ param: inner }) => paramDeclName(inner, i))(_v)
-      : _v._tag === "LPName"
-        ? (({ name }) => name)(_v)
-        : _v._tag === "LPLabeled"
-          ? "$lab"
-          : `_${show(i)}`)(p),
-);
+const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamParam, i: A) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return paramDeclName(inner, i);
+    }
+    case "LPName": {
+      const { name } = $match;
+      return name;
+    }
+    case "LPLabeled": {
+      return "$lab";
+    }
+    default: {
+      return `_${show(i)}`;
+    }
+  }
+});
 /**
  * Every ordered composition of `n` — `3` gives [1,1,1], [1,2], [2,1], [3].
  * Longest first, so the flat all-at-once signature is emitted LAST.
@@ -758,22 +792,27 @@ export const curriedFnType: _Curry<[params: string[], ret: string], string> = _c
 const flatParamsFrom: _Curry<
   [t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]],
   [string[], string]
-> = _curry(5, (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]) =>
-  ((_v) =>
-    _v._tag === "ELambda"
-      ? (({ params, body }) =>
-          length(params) === 0
-            ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
-                ((_v) =>
-                  _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
-                    ? (({ from: fromT, to: toT }) => toT)(_v)
-                    : t)(t),
-              )
-            : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
-                takeParams(t, params, env, 0, n, acc),
-              ))(_v)
-      : _tuple(acc, tsOf(t, env)))(value),
-);
+> = _curry(5, (t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]) => {
+  const $match = value;
+  switch ($match._tag) {
+    case "ELambda": {
+      const { params, body } = $match;
+      return length(params) === 0
+        ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
+            ((_v) =>
+              _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
+                ? (({ from: fromT, to: toT }) => toT)(_v)
+                : t)(t),
+          )
+        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
+            takeParams(t, params, env, 0, n, acc),
+          );
+    }
+    default: {
+      return _tuple(acc, tsOf(t, env));
+    }
+  }
+});
 const takeParams: _Curry<
   [t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]],
   [Ty, number, string[]]
@@ -781,19 +820,25 @@ const takeParams: _Curry<
   _Option_match(
     _Array_get(i, params),
     () => _tuple(t, n, acc),
-    (p) =>
-      ((_v) =>
-        _v._tag === "TyFn"
-          ? (({ from: fromT, to: toT }) =>
-              takeParams(
-                toT,
-                params,
-                env,
-                i + 1,
-                n + 1,
-                _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
-              ))(_v)
-          : _tuple(t, n, acc))(t),
+    (p) => {
+      const $match = t;
+      switch ($match._tag) {
+        case "TyFn": {
+          const { from: fromT, to: toT } = $match;
+          return takeParams(
+            toT,
+            params,
+            env,
+            i + 1,
+            n + 1,
+            _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
+          );
+        }
+        default: {
+          return _tuple(t, n, acc);
+        }
+      }
+    },
   ),
 );
 /**
@@ -802,22 +847,28 @@ const takeParams: _Curry<
  */
 const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(
   3,
-  (t: Ty, value: Expr, env: TsEnv) =>
-    ((_v) =>
-      _v._tag === "ELambda"
-        ? (({ params, body }) =>
-            length(params) === 0
-              ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
-                  ((_v) =>
-                    _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
-                      ? (({ from: fromT, to: toT }) => toT)(_v)
-                      : t)(t),
-                )
-              : (([t1, _n, ps]: [Ty, number, string[]]) =>
-                  `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
-                  takeParams(t, params, env, 0, 0, [] as string[]),
-                ))(_v)
-        : tsOf(t, env))(value),
+  (t: Ty, value: Expr, env: TsEnv) => {
+    const $match = value;
+    switch ($match._tag) {
+      case "ELambda": {
+        const { params, body } = $match;
+        return length(params) === 0
+          ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
+              ((_v) =>
+                _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
+                  ? (({ from: fromT, to: toT }) => toT)(_v)
+                  : t)(t),
+            )
+          : (([t1, _n, ps]: [Ty, number, string[]]) =>
+              `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
+              takeParams(t, params, env, 0, 0, [] as string[]),
+            );
+      }
+      default: {
+        return tsOf(t, env);
+      }
+    }
+  },
 );
 /**
  * What a `bindingType` or `dtsBinding` hook renders with (ADR 0055, 0109).
@@ -874,14 +925,19 @@ const coreBindingTsType: <A>(
       sc,
       recs,
     );
-    return ((_v) =>
-      _v._tag === "ELambda"
-        ? rendered.head === ""
+    const $match = value;
+    switch ($match._tag) {
+      case "ELambda": {
+        return rendered.head === ""
           ? (([params, ret]: [string[], string]) => curriedFnType(params, ret))(
               flatParamsFrom(sc.ty, value, rendered.env, 0, [] as string[]),
             )
-          : `${rendered.head}${declType(sc.ty, value, rendered.env)}`
-        : tsOf(sc.ty, tsEnv(rendered.pins, recs)))(value);
+          : `${rendered.head}${declType(sc.ty, value, rendered.env)}`;
+      }
+      default: {
+        return tsOf(sc.ty, tsEnv(rendered.pins, recs));
+      }
+    }
   },
 );
 /**
@@ -949,11 +1005,18 @@ const consInAll: _Curry<[ts: Ty[], acc: Set<string>, i: number], Set<string>> = 
 );
 const consInRow: _Curry<[row: Row, acc: Set<string>], Set<string>> = _curry(
   2,
-  (row: Row, acc: Set<string>) =>
-    ((_v) =>
-      _v._tag === "RowExtend"
-        ? (({ fieldType, rest }) => consInRow(rest, consInTy(fieldType, acc)))(_v)
-        : acc)(row),
+  (row: Row, acc: Set<string>) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowExtend": {
+        const { fieldType, rest } = $match;
+        return consInRow(rest, consInTy(fieldType, acc));
+      }
+      default: {
+        return acc;
+      }
+    }
+  },
 );
 export const declaredTypeNames: _Curry<
   [stmts: Stmt[], i: number, acc: Set<string>],
@@ -1480,72 +1543,109 @@ const genericLambdasFrom: <A, B, C>(
  * span is collected too, but `annotateParams` resolves that one through
  * `genericLams` first, so the extra entry is harmless.
  */
-const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ELambda"
-      ? (({ body, span: sp }) => _Array_prepend(sp, scopedSpans(body)))(_v)
-      : _v._tag === "ECall"
-        ? (({ fn, args }) => _Array_concat(scopedSpans(fn), scopedSpansAt(args, 0)))(_v)
-        : _v._tag === "ELetIn"
-          ? (({ value, body }) => _Array_concat(scopedSpans(value), scopedSpans(body)))(_v)
-          : _v._tag === "ELetBind"
-            ? (({ value, body }) => _Array_concat(scopedSpans(value), scopedSpans(body)))(_v)
-            : _v._tag === "EPipe"
-              ? (({ left, right }) => _Array_concat(scopedSpans(left), scopedSpans(right)))(_v)
-              : _v._tag === "EDo"
-                ? (({ exprs }) => scopedSpansAt(exprs, 0))(_v)
-                : _v._tag === "ETernary"
-                  ? (({ cond, thenE, elseE }) =>
-                      _Array_concat(
-                        scopedSpans(cond),
-                        _Array_concat(scopedSpans(thenE), scopedSpans(elseE)),
-                      ))(_v)
-                  : _v._tag === "EMatch"
-                    ? (({ scrutinee, arms }) =>
-                        _Array_concat(scopedSpans(scrutinee), scopedSpansInArms(arms, 0)))(_v)
-                    : _v._tag === "ERecord"
-                      ? (({ fields, spread }) =>
-                          _Array_concat(
-                            scopedSpansInFields(fields, 0),
-                            _Option_match(
-                              spread,
-                              () => [] as SpanAt[],
-                              (s) => scopedSpans(s),
-                            ),
-                          ))(_v)
-                      : _v._tag === "EField"
-                        ? (({ target, name, span: sp }) =>
-                            ((rest: SpanAt[]) =>
-                              and(name === "empty", isRefExpr(target))
-                                ? _Array_prepend(sp, rest)
-                                : rest)(scopedSpans(target)))(_v)
-                        : _v._tag === "ETuple"
-                          ? (({ elements }) => scopedSpansAt(elements, 0))(_v)
-                          : _v._tag === "EArr"
-                            ? (({ elements, span: sp }) => scopedSpansInSeq(elements, sp))(_v)
-                            : _v._tag === "EList"
-                              ? (({ elements, span: sp }) => scopedSpansInSeq(elements, sp))(_v)
-                              : _v._tag === "ESet"
-                                ? (({ elements, span: sp }) => scopedSpansInSeq(elements, sp))(_v)
-                                : _v._tag === "EMap"
-                                  ? (({ entries, span: sp }) =>
-                                      ((inner: SpanAt[]) =>
-                                        length(entries) === 0 ? _Array_prepend(sp, inner) : inner)(
-                                        scopedSpansInEntries(entries, 0),
-                                      ))(_v)
-                                  : _v._tag === "ELoop"
-                                    ? (({ params, body }) =>
-                                        _Array_concat(
-                                          scopedSpansInLoop(params, 0),
-                                          scopedSpans(body),
-                                        ))(_v)
-                                    : _v._tag === "ERecur"
-                                      ? (({ args }) => scopedSpansAt(args, 0))(_v)
-                                      : _v._tag === "EInterp"
-                                        ? (({ parts }) => scopedSpansInParts(parts, 0))(_v)
-                                        : ([] as SpanAt[]))(e);
-const isRefExpr: (e: Expr) => boolean = (e: Expr) =>
-  ((_v) => (_v._tag === "ERef" ? true : false))(e);
+const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ELambda": {
+      const { body, span: sp } = $match;
+      return _Array_prepend(sp, scopedSpans(body));
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return _Array_concat(scopedSpans(fn), scopedSpansAt(args, 0));
+    }
+    case "ELetIn": {
+      const { value, body } = $match;
+      return _Array_concat(scopedSpans(value), scopedSpans(body));
+    }
+    case "ELetBind": {
+      const { value, body } = $match;
+      return _Array_concat(scopedSpans(value), scopedSpans(body));
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return _Array_concat(scopedSpans(left), scopedSpans(right));
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return scopedSpansAt(exprs, 0);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return _Array_concat(
+        scopedSpans(cond),
+        _Array_concat(scopedSpans(thenE), scopedSpans(elseE)),
+      );
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return _Array_concat(scopedSpans(scrutinee), scopedSpansInArms(arms, 0));
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return _Array_concat(
+        scopedSpansInFields(fields, 0),
+        _Option_match(
+          spread,
+          () => [] as SpanAt[],
+          (s) => scopedSpans(s),
+        ),
+      );
+    }
+    case "EField": {
+      const { target, name, span: sp } = $match;
+      const rest: SpanAt[] = scopedSpans(target);
+      return and(name === "empty", isRefExpr(target)) ? _Array_prepend(sp, rest) : rest;
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return scopedSpansAt(elements, 0);
+    }
+    case "EArr": {
+      const { elements, span: sp } = $match;
+      return scopedSpansInSeq(elements, sp);
+    }
+    case "EList": {
+      const { elements, span: sp } = $match;
+      return scopedSpansInSeq(elements, sp);
+    }
+    case "ESet": {
+      const { elements, span: sp } = $match;
+      return scopedSpansInSeq(elements, sp);
+    }
+    case "EMap": {
+      const { entries, span: sp } = $match;
+      const inner: SpanAt[] = scopedSpansInEntries(entries, 0);
+      return length(entries) === 0 ? _Array_prepend(sp, inner) : inner;
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return _Array_concat(scopedSpansInLoop(params, 0), scopedSpans(body));
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return scopedSpansAt(args, 0);
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return scopedSpansInParts(parts, 0);
+    }
+    default: {
+      return [] as SpanAt[];
+    }
+  }
+};
+const isRefExpr: (e: Expr) => boolean = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const scopedSpansAt: _Curry<[exprs: Expr[], i: number], SpanAt[]> = _curry(
   2,
   (exprs: Expr[], i: number) =>
@@ -1813,13 +1913,18 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
         ),
       ) as Option<(a: string, b: Expr) => Option<string>>,
       annotateCtor: Some(
-        _curry(2, (s: Stmt, c: Ctor) =>
-          ((_v) =>
-            _v._tag === "SType"
-              ? (({ name, params }) =>
-                  Some(ctorFactoryTs(name, params, c, aliases, recs)) as Option<CtorFactoryTs>)(_v)
-              : (None as Option<CtorFactoryTs>))(s),
-        ),
+        _curry(2, (s: Stmt, c: Ctor) => {
+          const $match = s;
+          switch ($match._tag) {
+            case "SType": {
+              const { name, params } = $match;
+              return Some(ctorFactoryTs(name, params, c, aliases, recs)) as Option<CtorFactoryTs>;
+            }
+            default: {
+              return None as Option<CtorFactoryTs>;
+            }
+          }
+        }),
       ) as Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>,
       annotateParams: Some(
         _curry(2, (sp: SpanAt, arity: number) =>
@@ -1926,46 +2031,58 @@ const hasJsxExpr: (e: Expr) => boolean = (e: Expr) =>
                             ? (({ elements }) => anyOf(hasJsxExpr, elements))(_v)
                             : _v._tag === "EArr"
                               ? (({ elements }) =>
-                                  anyOf(
-                                    (el: SeqElem) =>
-                                      ((_v) =>
-                                        _v._tag === "SEExpr"
-                                          ? (({ expr: value }) => hasJsxExpr(value))(_v)
-                                          : _v._tag === "SESpread"
-                                            ? (({ expr: value }) => hasJsxExpr(value))(_v)
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(el),
-                                    elements,
-                                  ))(_v)
+                                  anyOf((el: SeqElem) => {
+                                    const $match = el;
+                                    switch ($match._tag) {
+                                      case "SEExpr": {
+                                        const { expr: value } = $match;
+                                        return hasJsxExpr(value);
+                                      }
+                                      case "SESpread": {
+                                        const { expr: value } = $match;
+                                        return hasJsxExpr(value);
+                                      }
+                                      default: {
+                                        throw new Error("non-exhaustive match");
+                                      }
+                                    }
+                                  }, elements))(_v)
                               : _v._tag === "EList"
                                 ? (({ elements }) =>
-                                    anyOf(
-                                      (el: SeqElem) =>
-                                        ((_v) =>
-                                          _v._tag === "SEExpr"
-                                            ? (({ expr: value }) => hasJsxExpr(value))(_v)
-                                            : _v._tag === "SESpread"
-                                              ? (({ expr: value }) => hasJsxExpr(value))(_v)
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(el),
-                                      elements,
-                                    ))(_v)
+                                    anyOf((el: SeqElem) => {
+                                      const $match = el;
+                                      switch ($match._tag) {
+                                        case "SEExpr": {
+                                          const { expr: value } = $match;
+                                          return hasJsxExpr(value);
+                                        }
+                                        case "SESpread": {
+                                          const { expr: value } = $match;
+                                          return hasJsxExpr(value);
+                                        }
+                                        default: {
+                                          throw new Error("non-exhaustive match");
+                                        }
+                                      }
+                                    }, elements))(_v)
                                 : _v._tag === "ESet"
                                   ? (({ elements }) =>
-                                      anyOf(
-                                        (el: SeqElem) =>
-                                          ((_v) =>
-                                            _v._tag === "SEExpr"
-                                              ? (({ expr: value }) => hasJsxExpr(value))(_v)
-                                              : _v._tag === "SESpread"
-                                                ? (({ expr: value }) => hasJsxExpr(value))(_v)
-                                                : (() => {
-                                                    throw new Error("non-exhaustive match");
-                                                  })())(el),
-                                        elements,
-                                      ))(_v)
+                                      anyOf((el: SeqElem) => {
+                                        const $match = el;
+                                        switch ($match._tag) {
+                                          case "SEExpr": {
+                                            const { expr: value } = $match;
+                                            return hasJsxExpr(value);
+                                          }
+                                          case "SESpread": {
+                                            const { expr: value } = $match;
+                                            return hasJsxExpr(value);
+                                          }
+                                          default: {
+                                            throw new Error("non-exhaustive match");
+                                          }
+                                        }
+                                      }, elements))(_v)
                                   : _v._tag === "EMap"
                                     ? (({ entries }) =>
                                         anyOf(
@@ -1983,32 +2100,39 @@ const hasJsxExpr: (e: Expr) => boolean = (e: Expr) =>
                                         ? (({ args }) => anyOf(hasJsxExpr, args))(_v)
                                         : _v._tag === "EInterp"
                                           ? (({ parts }) =>
-                                              anyOf(
-                                                (part: InterpPart) =>
-                                                  ((_v) =>
-                                                    _v._tag === "IPLit"
-                                                      ? false
-                                                      : _v._tag === "IPExpr"
-                                                        ? (({ expr: value }) => hasJsxExpr(value))(
-                                                            _v,
-                                                          )
-                                                        : (() => {
-                                                            throw new Error("non-exhaustive match");
-                                                          })())(part),
-                                                parts,
-                                              ))(_v)
+                                              anyOf((part: InterpPart) => {
+                                                const $match = part;
+                                                switch ($match._tag) {
+                                                  case "IPLit": {
+                                                    return false;
+                                                  }
+                                                  case "IPExpr": {
+                                                    const { expr: value } = $match;
+                                                    return hasJsxExpr(value);
+                                                  }
+                                                  default: {
+                                                    throw new Error("non-exhaustive match");
+                                                  }
+                                                }
+                                              }, parts))(_v)
                                           : false)(e);
 const hasJsxStmts: (stmts: Stmt[]) => boolean = (stmts: Stmt[]) =>
-  anyOf(
-    (stmt: Stmt) =>
-      ((_v) =>
-        _v._tag === "SLet"
-          ? (({ value }) => hasJsxExpr(value))(_v)
-          : _v._tag === "SExpr"
-            ? (({ value }) => hasJsxExpr(value))(_v)
-            : false)(stmt),
-    stmts,
-  );
+  anyOf((stmt: Stmt) => {
+    const $match = stmt;
+    switch ($match._tag) {
+      case "SLet": {
+        const { value } = $match;
+        return hasJsxExpr(value);
+      }
+      case "SExpr": {
+        const { value } = $match;
+        return hasJsxExpr(value);
+      }
+      default: {
+        return false;
+      }
+    }
+  }, stmts);
 /**
  * Emit one module's typed TS: type header, then any cross-module imports, then
  * the runtime import, then the codegen body with per-binding / per-ctor
@@ -2186,24 +2310,37 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
  * type has no head to bind — a record's trailing row var is skipped here and
  * the declaration prints the closed body.
  */
-const freeIdsIn: _Curry<[t: Ty, acc: number[]], number[]> = _curry(2, (t: Ty, acc: number[]) =>
-  ((_v) =>
-    _v._tag === "TyVar"
-      ? (({ id }) => (_Array_contains(id, acc) ? acc : _Array_append(id, acc)))(_v)
-      : _v._tag === "TyCon"
-        ? (({ args }) => freeIdsInAll(args, acc))(_v)
-        : _v._tag === "TyFn"
-          ? (({ from: fromT, to: toT }) => freeIdsIn(toT, freeIdsIn(fromT, acc)))(_v)
-          : _v._tag === "TyRecord"
-            ? (({ row }) => freeIdsInRow(row, acc))(_v)
-            : _v._tag === "TySingleton"
-              ? acc
-              : _v._tag === "TyOneOf"
-                ? (({ members }) => freeIdsInAll(members, acc))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(t),
-);
+const freeIdsIn: _Curry<[t: Ty, acc: number[]], number[]> = _curry(2, (t: Ty, acc: number[]) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return _Array_contains(id, acc) ? acc : _Array_append(id, acc);
+    }
+    case "TyCon": {
+      const { args } = $match;
+      return freeIdsInAll(args, acc);
+    }
+    case "TyFn": {
+      const { from: fromT, to: toT } = $match;
+      return freeIdsIn(toT, freeIdsIn(fromT, acc));
+    }
+    case "TyRecord": {
+      const { row } = $match;
+      return freeIdsInRow(row, acc);
+    }
+    case "TySingleton": {
+      return acc;
+    }
+    case "TyOneOf": {
+      const { members } = $match;
+      return freeIdsInAll(members, acc);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const freeIdsInAll: _Curry<[ts: Ty[], acc: number[]], number[]> = _curry(
   2,
   (ts: Ty[], acc: number[]) =>
@@ -2215,11 +2352,18 @@ const freeIdsInAll: _Curry<[ts: Ty[], acc: number[]], number[]> = _curry(
 );
 const freeIdsInRow: _Curry<[row: Row, acc: number[]], number[]> = _curry(
   2,
-  (row: Row, acc: number[]) =>
-    ((_v) =>
-      _v._tag === "RowExtend"
-        ? (({ fieldType, rest }) => freeIdsInRow(rest, freeIdsIn(fieldType, acc)))(_v)
-        : acc)(row),
+  (row: Row, acc: number[]) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowExtend": {
+        const { fieldType, rest } = $match;
+        return freeIdsInRow(rest, freeIdsIn(fieldType, acc));
+      }
+      default: {
+        return acc;
+      }
+    }
+  },
 );
 /**
  * id -> letter, positionally. Accumulator-first so `Map.values` comes back in
@@ -2252,8 +2396,18 @@ const genericHeadOf: <A, B>(ids: A[], names: Map<B, string>) => string = _curry(
 /**
  * Arrows on the spine — the extern's declared arity.
  */
-const arrowCount: (t: Ty) => number = (t: Ty) =>
-  ((_v) => (_v._tag === "TyFn" ? (({ to: toT }) => 1 + arrowCount(toT))(_v) : 0))(t);
+const arrowCount: (t: Ty) => number = (t: Ty) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyFn": {
+      const { to: toT } = $match;
+      return 1 + arrowCount(toT);
+    }
+    default: {
+      return 0;
+    }
+  }
+};
 /**
  * Peel `arity` arrows into `a: T`, `b: T`, … — the same positional naming
  * `tsArrow` uses, so a declaration and a call site read alike.

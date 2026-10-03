@@ -280,113 +280,210 @@ import { stronglyConnected } from "./scc";
 /**
  * Exported for the TS backend: hooks look node types up by span.
  */
-export const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "EUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "EBool"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "EStr"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "ERef"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "ECall"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "ELambda"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "EDo"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ span: sp }) => sp)(_v)
-                              : _v._tag === "ELoop"
-                                ? (({ span: sp }) => sp)(_v)
-                                : _v._tag === "ERecur"
-                                  ? (({ span: sp }) => sp)(_v)
-                                  : _v._tag === "ERecord"
-                                    ? (({ span: sp }) => sp)(_v)
-                                    : _v._tag === "EField"
-                                      ? (({ span: sp }) => sp)(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ span: sp }) => sp)(_v)
-                                        : _v._tag === "EArr"
-                                          ? (({ span: sp }) => sp)(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ span: sp }) => sp)(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ span: sp }) => sp)(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ span: sp }) => sp)(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ span: sp }) => sp)(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e);
-export const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PWild"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "PUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "PBind"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "PAs"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "PLit"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "PBool"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "PStr"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "PTuple"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "PRecord"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "PCtor"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "PArr"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "PList"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "POr"
-                              ? (({ span: sp }) => sp)(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(p);
+export const exprSpan: (e: Expr) => SpanAt = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERef": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ECall": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELambda": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetIn": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EPipe": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EDo": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETernary": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMatch": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELoop": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecur": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EField": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ESet": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMap": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EInterp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+export const patSpan: (p: Pattern) => SpanAt = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PWild": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PAs": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PLit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PTuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PRecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PCtor": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "POr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
 const noErrs: IErr[] = [] as IErr[];
-const annotSpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) =>
-  ((_v) =>
-    _v._tag === "TyName"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "TyArrow"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "TyApp"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "TyTuple"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "TyList"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "TyQual"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "TyLit"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "TyUnion"
-                    ? (({ span: sp }) => sp)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(t);
+const annotSpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyName": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyArrow": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyApp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyTuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyQual": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyLit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyUnion": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const typeErr: _Curry<[msg: string, sp: SpanAt], IErr> = _curry(2, (msg: string, sp: SpanAt) => ({
   message: msg,
   start: sp.start,
@@ -729,53 +826,59 @@ const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _cu
 const bindParam: _Curry<
   [p: LamParam, env: Map<string, Scheme>, st: St],
   [Ty, Map<string, Scheme>, St]
-> = _curry(3, (p: LamParam, env: Map<string, Scheme>, st: St) =>
-  ((_v) =>
-    _v._tag === "LPSpanned"
-      ? (({ param: inner, nameSpans: spans }) =>
-          (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
-            ((_v) =>
-              _v._tag === "LPTuple"
-                ? (({ names }) =>
-                    ((elems: Ty[]) =>
-                      _tuple(t, env1, recordParamNamesFrom(names, spans, elems, 0, st1)))(
-                      ((_v) => (_v._tag === "TyCon" ? (({ args: ts }) => ts)(_v) : ([] as Ty[])))(
-                        t,
-                      ),
-                    ))(_v)
-                : _v._tag === "LPRecord"
-                  ? (({ fields }) =>
-                      _tuple(
-                        t,
-                        env1,
-                        recordParamNamesFrom(fields, spans, envTypesOf(fields, env1), 0, st1),
-                      ))(_v)
-                  : _tuple(t, env1, st1))(inner))(bindParam(inner, env, st)))(_v)
-      : _v._tag === "LPName"
-        ? (({ name }) =>
-            (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st)))(
-            _v,
-          )
-        : _v._tag === "LPTuple"
-          ? (({ names }) =>
-              (([elems, env1, st1]: [Ty[], Map<string, Scheme>, St]) =>
-                _tuple(tTuple(elems), env1, st1))(bindParamNamesFrom(names, env, st)))(_v)
-          : _v._tag === "LPRecord"
-            ? (({ fields }) =>
-                (([rowBase, st1]: [Row, St]) =>
-                  (([row, env1, st2]: [Row, Map<string, Scheme>, St]) =>
-                    _tuple(tRecord(row), env1, st2))(
-                    bindParamFieldsFrom(fields, env, rowBase, st1),
-                  ))(freshRowVar(st)))(_v)
-            : _v._tag === "LPLabeled"
-              ? (({ name }) =>
-                  (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(
-                    freshVar(st),
-                  ))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(p),
-);
+> = _curry(3, (p: LamParam, env: Map<string, Scheme>, st: St) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPSpanned": {
+      const { param: inner, nameSpans: spans } = $match;
+      return (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) => {
+        const $match$ = inner;
+        switch ($match$._tag) {
+          case "LPTuple": {
+            const { names } = $match$;
+            const elems: Ty[] = ((_v) =>
+              _v._tag === "TyCon" ? (({ args: ts }) => ts)(_v) : ([] as Ty[]))(t);
+            return _tuple(t, env1, recordParamNamesFrom(names, spans, elems, 0, st1));
+          }
+          case "LPRecord": {
+            const { fields } = $match$;
+            return _tuple(
+              t,
+              env1,
+              recordParamNamesFrom(fields, spans, envTypesOf(fields, env1), 0, st1),
+            );
+          }
+          default: {
+            return _tuple(t, env1, st1);
+          }
+        }
+      })(bindParam(inner, env, st));
+    }
+    case "LPName": {
+      const { name } = $match;
+      return (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st));
+    }
+    case "LPTuple": {
+      const { names } = $match;
+      return (([elems, env1, st1]: [Ty[], Map<string, Scheme>, St]) =>
+        _tuple(tTuple(elems), env1, st1))(bindParamNamesFrom(names, env, st));
+    }
+    case "LPRecord": {
+      const { fields } = $match;
+      return (([rowBase, st1]: [Row, St]) =>
+        (([row, env1, st2]: [Row, Map<string, Scheme>, St]) => _tuple(tRecord(row), env1, st2))(
+          bindParamFieldsFrom(fields, env, rowBase, st1),
+        ))(freshRowVar(st));
+    }
+    case "LPLabeled": {
+      const { name } = $match;
+      return (([t, st1]: [Ty, St]) => _tuple(t, _Map_set(name, mono(t), env), st1))(freshVar(st));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const bindParamsFrom: _Curry<
   [params: LamParam[], env: Map<string, Scheme>, st: St],
   [Ty[], Map<string, Scheme>, St]
@@ -1288,33 +1391,73 @@ const inferRecur: _Curry<
               throw new Error("non-exhaustive match");
             })())(ctx.loopStack),
 );
-const rowHasOptional: (row: Row) => boolean = (row: Row) =>
-  ((_v) =>
-    _v._tag === "RowExtend"
-      ? (({ optional, rest }) => or(optional, rowHasOptional(rest)))(_v)
-      : false)(row);
-const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) =>
-  ((_v) => (_v._tag === "TyRecord" ? (({ row }) => rowHasOptional(row))(_v) : false))(zonk(t, st)),
-);
+const rowHasOptional: (row: Row) => boolean = (row: Row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { optional, rest } = $match;
+      return or(optional, rowHasOptional(rest));
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) => {
+  const $match = zonk(t, st);
+  switch ($match._tag) {
+    case "TyRecord": {
+      const { row } = $match;
+      return rowHasOptional(row);
+    }
+    default: {
+      return false;
+    }
+  }
+});
 /**
  * True when every known field is optional. This is what makes `f()` legal:
  * the nullary call applies `{}`, which only `fits` an all-optional domain.
  */
-const rowAllOptional: (row: Row) => boolean = (row: Row) =>
-  ((_v) =>
-    _v._tag === "RowExtend"
-      ? (({ optional, rest }) => and(optional, rowAllOptional(rest)))(_v)
-      : true)(row);
-const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) =>
-  ((_v) => (_v._tag === "TyRecord" ? (({ row }) => rowAllOptional(row))(_v) : false))(zonk(t, st)),
-);
-const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
-  ((_v) =>
-    _v._tag === "LPLabeled"
-      ? true
-      : _v._tag === "LPSpanned"
-        ? (({ param: inner }) => isLabeledParam(inner))(_v)
-        : false)(p);
+const rowAllOptional: (row: Row) => boolean = (row: Row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { optional, rest } = $match;
+      return and(optional, rowAllOptional(rest));
+    }
+    default: {
+      return true;
+    }
+  }
+};
+const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) => {
+  const $match = zonk(t, st);
+  switch ($match._tag) {
+    case "TyRecord": {
+      const { row } = $match;
+      return rowAllOptional(row);
+    }
+    default: {
+      return false;
+    }
+  }
+});
+const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPLabeled": {
+      return true;
+    }
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return isLabeledParam(inner);
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const splitLamParams: _Curry<
   [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
   [LamParam[], LamParam[]]
@@ -1674,13 +1817,21 @@ const inferCallArgs: _Curry<
               throw new Error("non-exhaustive match");
             })())(args),
 );
-const isTupleParam: (p: LamParam) => boolean = (p: LamParam) =>
-  ((_v) =>
-    _v._tag === "LPSpanned"
-      ? (({ param: inner }) => isTupleParam(inner))(_v)
-      : _v._tag === "LPTuple"
-        ? true
-        : false)(p);
+const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return isTupleParam(inner);
+    }
+    case "LPTuple": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const inferTupleLet: _Curry<
   [
     ctx: {
@@ -1913,13 +2064,22 @@ const inferTernary: _Curry<
       inferExpr(ctx, cond, st),
     ),
 );
-const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) =>
-  ((_v) =>
-    _v._tag === "LPSpanned"
-      ? (({ param: inner }) => bindNameOf(inner))(_v)
-      : _v._tag === "LPName"
-        ? (({ name }) => Some(name) as Option<string>)(_v)
-        : (None as Option<string>))(p);
+const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return bindNameOf(inner);
+    }
+    case "LPName": {
+      const { name } = $match;
+      return Some(name) as Option<string>;
+    }
+    default: {
+      return None as Option<string>;
+    }
+  }
+};
 const inferBindBody: _Curry<
   [
     ctx: {
@@ -2089,47 +2249,53 @@ const inferQuestionBind: _Curry<
     body: Expr,
     valT: Ty,
     st: St,
-  ) =>
-    ((_v) =>
-      _v._tag === "TyVar"
-        ? (($written) => inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
-            setLetBindMonad(bind, "Result"),
-          )
-        : _v._tag === "TyCon"
-          ? (({ name }) =>
-              name === "Option"
-                ? (($written) =>
-                    (([payloadT, st1]: [Ty, St]) =>
-                      _Result_flatMap(
-                        (st2) =>
-                          inferBindBody(
-                            ctx,
-                            param,
-                            paramSpan,
-                            body,
-                            payloadT,
-                            (resT: Ty) => tCon("Option", [resT]),
-                            st2,
-                          ),
-                        u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
-                      ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
-                : name === "Result"
-                  ? (($written) =>
-                      inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
-                      setLetBindMonad(bind, "Result"),
-                    )
-                  : (Err(
-                      typeErr(
-                        `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-                        exprSpan(value),
-                      ),
-                    ) as Result<[Ty, St], IErr>))(_v)
-          : (Err(
-              typeErr(
-                `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-                exprSpan(value),
-              ),
-            ) as Result<[Ty, St], IErr>))(resolve(valT, st)),
+  ) => {
+    const $match = resolve(valT, st);
+    switch ($match._tag) {
+      case "TyVar": {
+        const $written = setLetBindMonad(bind, "Result");
+        return inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st);
+      }
+      case "TyCon": {
+        const { name } = $match;
+        return name === "Option"
+          ? (($written) =>
+              (([payloadT, st1]: [Ty, St]) =>
+                _Result_flatMap(
+                  (st2) =>
+                    inferBindBody(
+                      ctx,
+                      param,
+                      paramSpan,
+                      body,
+                      payloadT,
+                      (resT: Ty) => tCon("Option", [resT]),
+                      st2,
+                    ),
+                  u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
+                ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
+          : name === "Result"
+            ? (($written) =>
+                inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
+                setLetBindMonad(bind, "Result"),
+              )
+            : (Err(
+                typeErr(
+                  `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+                  exprSpan(value),
+                ),
+              ) as Result<[Ty, St], IErr>);
+      }
+      default: {
+        return Err(
+          typeErr(
+            `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+            exprSpan(value),
+          ),
+        ) as Result<[Ty, St], IErr>;
+      }
+    }
+  },
 );
 const inferLetBind: _Curry<
   [
@@ -2235,41 +2401,60 @@ const inferRecordRow: _Curry<
               throw new Error("non-exhaustive match");
             })())(fields),
 );
-const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, (row: Row, tail: Row) =>
-  ((_v) =>
-    _v._tag === "RowEmpty"
-      ? tail
-      : _v._tag === "RowVar"
-        ? (({ id }) => rVar(id))(_v)
-        : _v._tag === "RowExtend"
-          ? (({ label, fieldType, optional, rest }) =>
-              rField(label, fieldType, rWithTail(rest, tail), optional))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(row),
-);
+const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, (row: Row, tail: Row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowEmpty": {
+      return tail;
+    }
+    case "RowVar": {
+      const { id } = $match;
+      return rVar(id);
+    }
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return rField(label, fieldType, rWithTail(rest, tail), optional);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const lookupField: _Curry<[row: Row, name: string], Option<[Ty, boolean]>> = _curry(
   2,
-  (row: Row, name: string) =>
-    ((_v) =>
-      _v._tag === "RowExtend"
-        ? (({ label, fieldType, optional, rest }) =>
-            eq(label, name)
-              ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
-              : lookupField(rest, name))(_v)
-        : (None as Option<[Ty, boolean]>))(row),
+  (row: Row, name: string) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowExtend": {
+        const { label, fieldType, optional, rest } = $match;
+        return eq(label, name)
+          ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
+          : lookupField(rest, name);
+      }
+      default: {
+        return None as Option<[Ty, boolean]>;
+      }
+    }
+  },
 );
-const rowEndsEmpty: (row: Row) => boolean = (row: Row) =>
-  ((_v) =>
-    _v._tag === "RowEmpty"
-      ? true
-      : _v._tag === "RowExtend"
-        ? (({ rest }) => rowEndsEmpty(rest))(_v)
-        : _v._tag === "RowVar"
-          ? false
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(row);
+const rowEndsEmpty: (row: Row) => boolean = (row: Row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowEmpty": {
+      return true;
+    }
+    case "RowExtend": {
+      const { rest } = $match;
+      return rowEndsEmpty(rest);
+    }
+    case "RowVar": {
+      return false;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const inferFieldAccess: _Curry<
   [
     ctx: {
@@ -2538,15 +2723,22 @@ const inferTupleElems: _Curry<
               throw new Error("non-exhaustive match");
             })())(elements),
 );
-const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
-  ((_v) =>
-    _v._tag === "SEExpr"
-      ? (({ expr: e }) => e)(_v)
-      : _v._tag === "SESpread"
-        ? (({ expr: e }) => e)(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(el);
+const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
+  const $match = el;
+  switch ($match._tag) {
+    case "SEExpr": {
+      const { expr: e } = $match;
+      return e;
+    }
+    case "SESpread": {
+      const { expr: e } = $match;
+      return e;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const inferSeqSlotsElems: _Curry<
   [
     ctx: {
@@ -3937,114 +4129,121 @@ const inferPatRaw: _Curry<
     },
     p: Pattern,
     st: St,
-  ) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat, name, nameSpan }) =>
-            _Result_flatMap(
-              ([t, bindings, st1]) =>
-                Ok(
-                  _tuple(
-                    t,
-                    _Map_set(name, t, bindings),
-                    recordBinder(nameSpan, t, "parameter", name, None as Option<string>, st1),
-                  ),
-                ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-              inferPat(ctx, pat, st),
-            ))(_v)
-        : _v._tag === "PWild"
-          ? (([t, st1]: [Ty, St]) =>
-              Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
-              freshVar(st),
-            )
-          : _v._tag === "PUnit"
-            ? (Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<
-                [Ty, Map<string, Ty>, St],
-                IErr
-              >)
-            : _v._tag === "PLit"
-              ? (Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<
+  ) => {
+    const $match = p;
+    switch ($match._tag) {
+      case "PAs": {
+        const { pat, name, nameSpan } = $match;
+        return _Result_flatMap(
+          ([t, bindings, st1]) =>
+            Ok(
+              _tuple(
+                t,
+                _Map_set(name, t, bindings),
+                recordBinder(nameSpan, t, "parameter", name, None as Option<string>, st1),
+              ),
+            ) as Result<[Ty, Map<string, Ty>, St], IErr>,
+          inferPat(ctx, pat, st),
+        );
+      }
+      case "PWild": {
+        return (([t, st1]: [Ty, St]) =>
+          Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
+          freshVar(st),
+        );
+      }
+      case "PUnit": {
+        return Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >;
+      }
+      case "PLit": {
+        return Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >;
+      }
+      case "PBool": {
+        return Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >;
+      }
+      case "PStr": {
+        const { value } = $match;
+        return Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >;
+      }
+      case "PBind": {
+        const { name } = $match;
+        return (([t, st1]: [Ty, St]) =>
+          Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
+            [Ty, Map<string, Ty>, St],
+            IErr
+          >)(freshVar(st));
+      }
+      case "PRecord": {
+        const { fields } = $match;
+        return inferPatRecord(ctx, fields, st);
+      }
+      case "PCtor": {
+        const { ctor, args, ns, span: sp } = $match;
+        return _Option_match(
+          ns,
+          () =>
+            _Option_match(
+              _Map_get(ctor, ctx.env),
+              () =>
+                Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
                   [Ty, Map<string, Ty>, St],
                   IErr
-                >)
-              : _v._tag === "PBool"
-                ? (Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<
-                    [Ty, Map<string, Ty>, St],
-                    IErr
-                  >)
-                : _v._tag === "PStr"
-                  ? (({ value }) =>
-                      Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
-                        [Ty, Map<string, Ty>, St],
-                        IErr
-                      >)(_v)
-                  : _v._tag === "PBind"
-                    ? (({ name }) =>
-                        (([t, st1]: [Ty, St]) =>
-                          Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
-                            [Ty, Map<string, Ty>, St],
-                            IErr
-                          >)(freshVar(st)))(_v)
-                    : _v._tag === "PRecord"
-                      ? (({ fields }) => inferPatRecord(ctx, fields, st))(_v)
-                      : _v._tag === "PCtor"
-                        ? (({ ctor, args, ns, span: sp }) =>
-                            _Option_match(
-                              ns,
-                              () =>
-                                _Option_match(
-                                  _Map_get(ctor, ctx.env),
-                                  () =>
-                                    Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
-                                      [Ty, Map<string, Ty>, St],
-                                      IErr
-                                    >,
-                                  (sc) =>
-                                    (([curT, st1]: [Ty, St]) =>
-                                      inferPatCtorArgs(
-                                        ctx,
-                                        ctor,
-                                        curT,
-                                        args,
-                                        st1,
-                                        new Map<string, Ty>(),
-                                        sp,
-                                      ))(instantiate(sc, st)),
-                                ),
-                              (alias) =>
-                                _Option_match(
-                                  _Map_get(
-                                    ctor,
-                                    _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns),
-                                  ),
-                                  () =>
-                                    Err(
-                                      typeErr(`'${alias}' has no member '${ctor}'`, sp),
-                                    ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-                                  (sc) =>
-                                    (([curT, st1]: [Ty, St]) =>
-                                      inferPatCtorArgs(
-                                        ctx,
-                                        ctor,
-                                        curT,
-                                        args,
-                                        st1,
-                                        new Map<string, Ty>(),
-                                        sp,
-                                      ))(instantiate(sc, st)),
-                                ),
-                            ))(_v)
-                        : _v._tag === "PTuple"
-                          ? (({ elems }) => inferPatTuple(ctx, elems, st))(_v)
-                          : _v._tag === "PArr"
-                            ? (({ elems, rest }) => inferSeqPat(ctx, "Array", elems, rest, st))(_v)
-                            : _v._tag === "PList"
-                              ? (({ elems, rest }) => inferSeqPat(ctx, "List", elems, rest, st))(_v)
-                              : _v._tag === "POr"
-                                ? (({ alts, span: sp }) => inferOrPat(ctx, alts, sp, st))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(p),
+                >,
+              (sc) =>
+                (([curT, st1]: [Ty, St]) =>
+                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                  instantiate(sc, st),
+                ),
+            ),
+          (alias) =>
+            _Option_match(
+              _Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)),
+              () =>
+                Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
+                  [Ty, Map<string, Ty>, St],
+                  IErr
+                >,
+              (sc) =>
+                (([curT, st1]: [Ty, St]) =>
+                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                  instantiate(sc, st),
+                ),
+            ),
+        );
+      }
+      case "PTuple": {
+        const { elems } = $match;
+        return inferPatTuple(ctx, elems, st);
+      }
+      case "PArr": {
+        const { elems, rest } = $match;
+        return inferSeqPat(ctx, "Array", elems, rest, st);
+      }
+      case "PList": {
+        const { elems, rest } = $match;
+        return inferSeqPat(ctx, "List", elems, rest, st);
+      }
+      case "POr": {
+        const { alts, span: sp } = $match;
+        return inferOrPat(ctx, alts, sp, st);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const unifyOrPatBinding: <B>(
   ctx: {
@@ -4276,32 +4475,50 @@ const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Patte
     () => [] as string[],
     (r) => patternBinds(r),
   );
-const patternBinds: (p: Pattern) => string[] = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PAs"
-      ? (({ pat, name }) => _Array_append(name, patternBinds(pat)))(_v)
-      : _v._tag === "PBind"
-        ? (({ name }) => [name])(_v)
-        : _v._tag === "PRecord"
-          ? (({ fields }) => _Array_flatMap((f: PatField) => patternBinds(f.pat), fields))(_v)
-          : _v._tag === "PCtor"
-            ? (({ args }) => _Array_flatMap(patternBinds, args))(_v)
-            : _v._tag === "PTuple"
-              ? (({ elems }) => _Array_flatMap(patternBinds, elems))(_v)
-              : _v._tag === "PArr"
-                ? (({ elems, rest }) =>
-                    _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)))(_v)
-                : _v._tag === "PList"
-                  ? (({ elems, rest }) =>
-                      _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)))(_v)
-                  : _v._tag === "POr"
-                    ? (({ alts }) =>
-                        _Option_match(
-                          _Array_head(alts),
-                          () => [] as string[],
-                          (first) => patternBinds(first),
-                        ))(_v)
-                    : ([] as string[]))(p);
+const patternBinds: (p: Pattern) => string[] = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PAs": {
+      const { pat, name } = $match;
+      return _Array_append(name, patternBinds(pat));
+    }
+    case "PBind": {
+      const { name } = $match;
+      return [name];
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      return _Array_flatMap((f: PatField) => patternBinds(f.pat), fields);
+    }
+    case "PCtor": {
+      const { args } = $match;
+      return _Array_flatMap(patternBinds, args);
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return _Array_flatMap(patternBinds, elems);
+    }
+    case "PArr": {
+      const { elems, rest } = $match;
+      return _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest));
+    }
+    case "PList": {
+      const { elems, rest } = $match;
+      return _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest));
+    }
+    case "POr": {
+      const { alts } = $match;
+      return _Option_match(
+        _Array_head(alts),
+        () => [] as string[],
+        (first) => patternBinds(first),
+      );
+    }
+    default: {
+      return [] as string[];
+    }
+  }
+};
 const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: A[], set: Set<A>) =>
   match(names)
     .with(
@@ -4318,21 +4535,34 @@ const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: 
 );
 const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curry(
   2,
-  (p: LamParam, bound: Set<string>) =>
-    ((_v) =>
-      _v._tag === "LPSpanned"
-        ? (({ param: inner }) => paramBound(inner, bound))(_v)
-        : _v._tag === "LPName"
-          ? (({ name }) => _Set_add(name, bound))(_v)
-          : _v._tag === "LPTuple"
-            ? (({ names }) => addAllFrom(names, bound))(_v)
-            : _v._tag === "LPRecord"
-              ? (({ fields }) => addAllFrom(fields, bound))(_v)
-              : _v._tag === "LPLabeled"
-                ? (({ name }) => _Set_add(name, bound))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(p),
+  (p: LamParam, bound: Set<string>) => {
+    const $match = p;
+    switch ($match._tag) {
+      case "LPSpanned": {
+        const { param: inner } = $match;
+        return paramBound(inner, bound);
+      }
+      case "LPName": {
+        const { name } = $match;
+        return _Set_add(name, bound);
+      }
+      case "LPTuple": {
+        const { names } = $match;
+        return addAllFrom(names, bound);
+      }
+      case "LPRecord": {
+        const { fields } = $match;
+        return addAllFrom(fields, bound);
+      }
+      case "LPLabeled": {
+        const { name } = $match;
+        return _Set_add(name, bound);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const lambdaBound: _Curry<[params: LamParam[], bound: Set<string>], Set<string>> = _curry(
   2,
@@ -4484,113 +4714,114 @@ const freeRefsArms: _Curry<
 );
 const freeRefs: _Curry<[e: Expr, bound: Set<string>, acc: Set<string>], Set<string>> = _curry(
   3,
-  (e: Expr, bound: Set<string>, acc: Set<string>) =>
-    ((_v) =>
-      _v._tag === "ENum"
-        ? acc
-        : _v._tag === "EUnit"
-          ? acc
-          : _v._tag === "EBool"
-            ? acc
-            : _v._tag === "EStr"
-              ? acc
-              : _v._tag === "ERef"
-                ? (({ name }) => (_Set_has(name, bound) ? acc : _Set_add(name, acc)))(_v)
-                : _v._tag === "ECall"
-                  ? (({ fn, args }) => freeRefsList(args, bound, freeRefs(fn, bound, acc)))(_v)
-                  : _v._tag === "ELambda"
-                    ? (({ params, body }) =>
-                        freeRefs(
-                          body,
-                          lambdaBound(params, bound),
-                          labeledDefaultRefs(params, bound, acc),
-                        ))(_v)
-                    : _v._tag === "ELetIn"
-                      ? (({ name, value, body }) =>
-                          ((valueBound: Set<string>) =>
-                            ((acc1: Set<string>) => freeRefs(body, _Set_add(name, bound), acc1))(
-                              freeRefs(value, valueBound, acc),
-                            ))(
-                            ((_v) => (_v._tag === "ELambda" ? _Set_add(name, bound) : bound))(
-                              value,
-                            ),
-                          ))(_v)
-                      : _v._tag === "ELetBind"
-                        ? (({ param, value, body }) =>
-                            ((acc1: Set<string>) => freeRefs(body, paramBound(param, bound), acc1))(
-                              freeRefs(value, bound, acc),
-                            ))(_v)
-                        : _v._tag === "EPipe"
-                          ? (({ left, right }) =>
-                              freeRefs(right, bound, freeRefs(left, bound, acc)))(_v)
-                          : _v._tag === "EDo"
-                            ? (({ exprs }) => freeRefsList(exprs, bound, acc))(_v)
-                            : _v._tag === "ETernary"
-                              ? (({ cond, thenE, elseE }) =>
-                                  freeRefs(
-                                    elseE,
-                                    bound,
-                                    freeRefs(thenE, bound, freeRefs(cond, bound, acc)),
-                                  ))(_v)
-                              : _v._tag === "EMatch"
-                                ? (({ scrutinee, arms }) =>
-                                    freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc)))(_v)
-                                : _v._tag === "ELoop"
-                                  ? (({ params, body }) =>
-                                      freeRefs(
-                                        body,
-                                        loopBound(params, bound),
-                                        loopInitRefsFrom(params, 0, bound, acc),
-                                      ))(_v)
-                                  : _v._tag === "ERecur"
-                                    ? (({ args }) => freeRefsList(args, bound, acc))(_v)
-                                    : _v._tag === "ERecord"
-                                      ? (({ fields, spread }) =>
-                                          freeRefsFields(
-                                            fields,
-                                            bound,
-                                            _Option_match(
-                                              spread,
-                                              () => acc,
-                                              (s) => freeRefs(s, bound, acc),
-                                            ),
-                                          ))(_v)
-                                      : _v._tag === "EField"
-                                        ? (({ target }) => freeRefs(target, bound, acc))(_v)
-                                        : _v._tag === "ETuple"
-                                          ? (({ elements }) => freeRefsList(elements, bound, acc))(
-                                              _v,
-                                            )
-                                          : _v._tag === "EArr"
-                                            ? (({ elements }) =>
-                                                freeRefsList(
-                                                  map(seqElemExpr, elements),
-                                                  bound,
-                                                  acc,
-                                                ))(_v)
-                                            : _v._tag === "EList"
-                                              ? (({ elements }) =>
-                                                  freeRefsList(
-                                                    map(seqElemExpr, elements),
-                                                    bound,
-                                                    acc,
-                                                  ))(_v)
-                                              : _v._tag === "ESet"
-                                                ? (({ elements }) =>
-                                                    freeRefsList(
-                                                      map(seqElemExpr, elements),
-                                                      bound,
-                                                      acc,
-                                                    ))(_v)
-                                                : _v._tag === "EMap"
-                                                  ? (({ entries }) =>
-                                                      freeRefsEntries(entries, bound, acc))(_v)
-                                                  : _v._tag === "EInterp"
-                                                    ? (({ parts }) =>
-                                                        freeRefsInterpParts(parts, bound, acc))(_v)
-                                                    : (() => {
-                                                        throw new Error("non-exhaustive match");
-                                                      })())(e),
+  (e: Expr, bound: Set<string>, acc: Set<string>) => {
+    const $match = e;
+    switch ($match._tag) {
+      case "ENum": {
+        return acc;
+      }
+      case "EUnit": {
+        return acc;
+      }
+      case "EBool": {
+        return acc;
+      }
+      case "EStr": {
+        return acc;
+      }
+      case "ERef": {
+        const { name } = $match;
+        return _Set_has(name, bound) ? acc : _Set_add(name, acc);
+      }
+      case "ECall": {
+        const { fn, args } = $match;
+        return freeRefsList(args, bound, freeRefs(fn, bound, acc));
+      }
+      case "ELambda": {
+        const { params, body } = $match;
+        return freeRefs(body, lambdaBound(params, bound), labeledDefaultRefs(params, bound, acc));
+      }
+      case "ELetIn": {
+        const { name, value, body } = $match;
+        const valueBound: Set<string> = ((_v) =>
+          _v._tag === "ELambda" ? _Set_add(name, bound) : bound)(value);
+        const acc1: Set<string> = freeRefs(value, valueBound, acc);
+        return freeRefs(body, _Set_add(name, bound), acc1);
+      }
+      case "ELetBind": {
+        const { param, value, body } = $match;
+        const acc1: Set<string> = freeRefs(value, bound, acc);
+        return freeRefs(body, paramBound(param, bound), acc1);
+      }
+      case "EPipe": {
+        const { left, right } = $match;
+        return freeRefs(right, bound, freeRefs(left, bound, acc));
+      }
+      case "EDo": {
+        const { exprs } = $match;
+        return freeRefsList(exprs, bound, acc);
+      }
+      case "ETernary": {
+        const { cond, thenE, elseE } = $match;
+        return freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc)));
+      }
+      case "EMatch": {
+        const { scrutinee, arms } = $match;
+        return freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc));
+      }
+      case "ELoop": {
+        const { params, body } = $match;
+        return freeRefs(body, loopBound(params, bound), loopInitRefsFrom(params, 0, bound, acc));
+      }
+      case "ERecur": {
+        const { args } = $match;
+        return freeRefsList(args, bound, acc);
+      }
+      case "ERecord": {
+        const { fields, spread } = $match;
+        return freeRefsFields(
+          fields,
+          bound,
+          _Option_match(
+            spread,
+            () => acc,
+            (s) => freeRefs(s, bound, acc),
+          ),
+        );
+      }
+      case "EField": {
+        const { target } = $match;
+        return freeRefs(target, bound, acc);
+      }
+      case "ETuple": {
+        const { elements } = $match;
+        return freeRefsList(elements, bound, acc);
+      }
+      case "EArr": {
+        const { elements } = $match;
+        return freeRefsList(map(seqElemExpr, elements), bound, acc);
+      }
+      case "EList": {
+        const { elements } = $match;
+        return freeRefsList(map(seqElemExpr, elements), bound, acc);
+      }
+      case "ESet": {
+        const { elements } = $match;
+        return freeRefsList(map(seqElemExpr, elements), bound, acc);
+      }
+      case "EMap": {
+        const { entries } = $match;
+        return freeRefsEntries(entries, bound, acc);
+      }
+      case "EInterp": {
+        const { parts } = $match;
+        return freeRefsInterpParts(parts, bound, acc);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const seedBuiltinsFrom: <A>(
   keys: A[],
@@ -4988,22 +5219,32 @@ const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
             throw new Error("non-exhaustive match");
           })())(stmts);
 const localLetsFrom: (e: Expr) => Stmt[] = (e: Expr) => {
-  const collect: (a: Expr, b: Stmt[]) => Stmt[] = _curry(2, (current: Expr, acc: Stmt[]) =>
-    ((_v) =>
-      _v._tag === "ELetIn"
-        ? (({ name, nameSpan, annot, value, body, span }) =>
-            ((_v) =>
-              _v._tag === "ELambda"
-                ? collect(
-                    body,
-                    _Array_append(
-                      Ast.SLet(name, nameSpan, annot, value, false, None as Option<string>, span),
-                      acc,
-                    ),
-                  )
-                : acc)(value))(_v)
-        : acc)(current),
-  );
+  const collect: (a: Expr, b: Stmt[]) => Stmt[] = _curry(2, (current: Expr, acc: Stmt[]) => {
+    const $match = current;
+    switch ($match._tag) {
+      case "ELetIn": {
+        const { name, nameSpan, annot, value, body, span } = $match;
+        const $match$ = value;
+        switch ($match$._tag) {
+          case "ELambda": {
+            return collect(
+              body,
+              _Array_append(
+                Ast.SLet(name, nameSpan, annot, value, false, None as Option<string>, span),
+                acc,
+              ),
+            );
+          }
+          default: {
+            return acc;
+          }
+        }
+      }
+      default: {
+        return acc;
+      }
+    }
+  });
   return collect(e, [] as Stmt[]);
 };
 const localTail: (e: Expr) => Expr = (e: Expr) =>
@@ -5047,22 +5288,28 @@ const idxOfMap: (lets: Stmt[]) => Map<string, number> = (lets: Stmt[]) =>
   idxOfFrom(lets, 0, new Map<string, number>());
 const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
   2,
-  <A>(letStmt: Stmt, idxOf: Map<string, A>) =>
-    ((_v) =>
-      _v._tag === "SLet"
-        ? (({ value }) =>
-            _Array_flatMap(
-              (r: string) =>
-                _Option_match(
-                  _Map_get(r, idxOf),
-                  () => [] as A[],
-                  (j) => [j],
-                ),
-              _Set_toArray(
-                freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
-              ),
-            ))(_v)
-        : ([] as A[]))(letStmt),
+  <A>(letStmt: Stmt, idxOf: Map<string, A>) => {
+    const $match = letStmt;
+    switch ($match._tag) {
+      case "SLet": {
+        const { value } = $match;
+        return _Array_flatMap(
+          (r: string) =>
+            _Option_match(
+              _Map_get(r, idxOf),
+              () => [] as A[],
+              (j) => [j],
+            ),
+          _Set_toArray(
+            freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
+          ),
+        );
+      }
+      default: {
+        return [] as A[];
+      }
+    }
+  },
 );
 const adjOf: <A>(lets: Stmt[], idxOf: Map<string, A>) => A[][] = _curry(
   2,
@@ -5554,45 +5801,54 @@ const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => 
  */
 const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeExpr = _curry(
   3,
-  <A>(te: TypeExpr, alias: string, from: Map<string, A>) =>
-    ((_v) =>
-      _v._tag === "TyName"
-        ? (({ name, span: sp }) =>
-            _Map_has(name, from) ? Ast.TyQual(alias, name, sp, [] as TypeExpr[], sp) : te)(_v)
-        : _v._tag === "TyApp"
-          ? (({ ctor, args, span: sp }) =>
-              ((args1: TypeExpr[]) =>
-                _Map_has(ctor, from)
-                  ? Ast.TyQual(alias, ctor, sp, args1, sp)
-                  : Ast.TyApp(ctor, args1, sp))(
-                map((a: TypeExpr) => qualifyTe(a, alias, from), args),
-              ))(_v)
-          : _v._tag === "TyArrow"
-            ? (({ from: fromTe, to: toTe, span: sp }) =>
-                Ast.TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp))(_v)
-            : _v._tag === "TyTuple"
-              ? (({ elems, span: sp }) =>
-                  Ast.TyTuple(
-                    map((e: TypeExpr) => qualifyTe(e, alias, from), elems),
-                    sp,
-                  ))(_v)
-              : _v._tag === "TyList"
-                ? (({ elem, span: sp }) => Ast.TyList(qualifyTe(elem, alias, from), sp))(_v)
-                : _v._tag === "TyUnion"
-                  ? (({ members, span: sp }) =>
-                      Ast.TyUnion(
-                        map((m: TypeExpr) => qualifyTe(m, alias, from), members),
-                        sp,
-                      ))(_v)
-                  : _v._tag === "TyQual"
-                    ? (({ alias: inner, name, nameSpan: nsp, args, span: sp }) =>
-                        ((args1: TypeExpr[]) =>
-                          _Map_has(`${inner}.${name}`, from)
-                            ? Ast.TyQual(alias, `${inner}.${name}`, nsp, args1, sp)
-                            : Ast.TyQual(inner, name, nsp, args1, sp))(
-                          map((a: TypeExpr) => qualifyTe(a, alias, from), args),
-                        ))(_v)
-                    : te)(te),
+  <A>(te: TypeExpr, alias: string, from: Map<string, A>) => {
+    const $match = te;
+    switch ($match._tag) {
+      case "TyName": {
+        const { name, span: sp } = $match;
+        return _Map_has(name, from) ? Ast.TyQual(alias, name, sp, [] as TypeExpr[], sp) : te;
+      }
+      case "TyApp": {
+        const { ctor, args, span: sp } = $match;
+        const args1: TypeExpr[] = map((a: TypeExpr) => qualifyTe(a, alias, from), args);
+        return _Map_has(ctor, from)
+          ? Ast.TyQual(alias, ctor, sp, args1, sp)
+          : Ast.TyApp(ctor, args1, sp);
+      }
+      case "TyArrow": {
+        const { from: fromTe, to: toTe, span: sp } = $match;
+        return Ast.TyArrow(qualifyTe(fromTe, alias, from), qualifyTe(toTe, alias, from), sp);
+      }
+      case "TyTuple": {
+        const { elems, span: sp } = $match;
+        return Ast.TyTuple(
+          map((e: TypeExpr) => qualifyTe(e, alias, from), elems),
+          sp,
+        );
+      }
+      case "TyList": {
+        const { elem, span: sp } = $match;
+        return Ast.TyList(qualifyTe(elem, alias, from), sp);
+      }
+      case "TyUnion": {
+        const { members, span: sp } = $match;
+        return Ast.TyUnion(
+          map((m: TypeExpr) => qualifyTe(m, alias, from), members),
+          sp,
+        );
+      }
+      case "TyQual": {
+        const { alias: inner, name, nameSpan: nsp, args, span: sp } = $match;
+        const args1: TypeExpr[] = map((a: TypeExpr) => qualifyTe(a, alias, from), args);
+        return _Map_has(`${inner}.${name}`, from)
+          ? Ast.TyQual(alias, `${inner}.${name}`, nsp, args1, sp)
+          : Ast.TyQual(inner, name, nsp, args1, sp);
+      }
+      default: {
+        return te;
+      }
+    }
+  },
 );
 const qualifyField: <D, E>(
   fld: {

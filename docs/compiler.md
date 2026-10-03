@@ -88,11 +88,20 @@ commands, `gen-mochi-dts`, and the `@mochi/compiler` barrel's `compile`,
 [ADR 0127](adr/0127-barrel-takes-bootstrap-plugins.md)). There are no
 hand-authored TypeScript emitters or differential oracle (ADR 0131).
 
+CLI stdout and file output are formatted with Biome at the host boundary;
+the playground uses its browser formatter. Core codegen and compiler APIs retain
+their raw, pure emission contract
+([ADR 0148](adr/0148-format-emitted-output-at-host-boundaries.md)).
+`seed:freeze` also formats seed JS/TS modules and declarations before recording
+their artifact hashes. `.bundle.*` artifacts retain Bun's emitted bytes.
+
 Core Mochi uses exhaustive `switch`; TypeScript host tooling uses
 `@onrails/pattern`'s `.exhaustive()`. Ordinary emitted code does not use it: a `switch`
-normally lowers to a ternary chain over its scrutinee. Simple exhaustive builtin
+in expression position normally lowers to a ternary chain over its scrutinee.
+Flat, unguarded constructor matches at function tails emit native switch cases
+with direct returns ([ADR 0147](adr/0147-function-tail-match-statements.md)), except eligible builtin pairs. Simple exhaustive builtin
 Result and Option matches use flat `_Result_match` / `_Option_match` runtime
-dispatch ([ADR 0146](adr/0146-builtin-match-dispatch.md)). Only the TS backend falls back to a
+dispatch in both expression and function-tail positions ([ADR 0146](adr/0146-builtin-match-dispatch.md)). Only the TS backend falls back to a
 `match()` chain for a nested arm on a scrutinee type it cannot name
 ([ADR 0113](adr/0113-switch-lowers-to-ternaries.md)).
 

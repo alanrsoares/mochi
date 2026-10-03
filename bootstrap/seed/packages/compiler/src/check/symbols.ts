@@ -391,33 +391,48 @@ const walkTypes: _Curry<[env: SymEnv, types: TypeExpr[], i: number], SymOccurren
 );
 const walkType: _Curry<[env: SymEnv, t: TypeExpr], SymOccurrence[]> = _curry(
   2,
-  (env: SymEnv, t: TypeExpr) =>
-    ((_v) =>
-      _v._tag === "TyName"
-        ? (({ name, span }) =>
-            upperStart(name) ? use(env, "type", name, span) : ([] as SymOccurrence[]))(_v)
-        : _v._tag === "TyArrow"
-          ? (({ from, to }) => _Array_concat(walkType(env, from), walkType(env, to)))(_v)
-          : _v._tag === "TyApp"
-            ? (({ ctor, args, span }) =>
-                _Array_concat(use(env, "type", ctor, span), walkTypes(env, args, 0)))(_v)
-            : _v._tag === "TyTuple"
-              ? (({ elems }) => walkTypes(env, elems, 0))(_v)
-              : _v._tag === "TyList"
-                ? (({ elem }) => walkType(env, elem))(_v)
-                : _v._tag === "TyQual"
-                  ? (({ alias, name, nameSpan, args }) =>
-                      _Array_concat(
-                        use(env, "type", `${alias}.${name}`, nameSpan),
-                        walkTypes(env, args, 0),
-                      ))(_v)
-                  : _v._tag === "TyLit"
-                    ? ([] as SymOccurrence[])
-                    : _v._tag === "TyUnion"
-                      ? (({ members }) => walkTypes(env, members, 0))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(t),
+  (env: SymEnv, t: TypeExpr) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyName": {
+        const { name, span } = $match;
+        return upperStart(name) ? use(env, "type", name, span) : ([] as SymOccurrence[]);
+      }
+      case "TyArrow": {
+        const { from, to } = $match;
+        return _Array_concat(walkType(env, from), walkType(env, to));
+      }
+      case "TyApp": {
+        const { ctor, args, span } = $match;
+        return _Array_concat(use(env, "type", ctor, span), walkTypes(env, args, 0));
+      }
+      case "TyTuple": {
+        const { elems } = $match;
+        return walkTypes(env, elems, 0);
+      }
+      case "TyList": {
+        const { elem } = $match;
+        return walkType(env, elem);
+      }
+      case "TyQual": {
+        const { alias, name, nameSpan, args } = $match;
+        return _Array_concat(
+          use(env, "type", `${alias}.${name}`, nameSpan),
+          walkTypes(env, args, 0),
+        );
+      }
+      case "TyLit": {
+        return [] as SymOccurrence[];
+      }
+      case "TyUnion": {
+        const { members } = $match;
+        return walkTypes(env, members, 0);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const walkAnnot: _Curry<[env: SymEnv, annot: Option<TypeExpr>], SymOccurrence[]> = _curry(
   2,
@@ -560,59 +575,74 @@ const walkPatFields: _Curry<
 );
 const walkPat: _Curry<[env: SymEnv, pat: Pattern, fields: Map<string, Loc>], BoundScope> = _curry(
   3,
-  (env: SymEnv, pat: Pattern, fields: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat: inner, name, nameSpan }) =>
-            boundThen(
-              walkPat(env, inner, fields),
-              _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindName(e, name, nameSpan, fs)),
-            ))(_v)
-        : _v._tag === "PBind"
-          ? (({ name, span }) =>
-              name === "_"
-                ? bound(env, [] as SymOccurrence[], fields)
-                : bindName(env, name, span, fields))(_v)
-          : _v._tag === "PCtor"
-            ? (({ ctor, args, span }) =>
+  (env: SymEnv, pat: Pattern, fields: Map<string, Loc>) => {
+    const $match = pat;
+    switch ($match._tag) {
+      case "PAs": {
+        const { pat: inner, name, nameSpan } = $match;
+        return boundThen(
+          walkPat(env, inner, fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindName(e, name, nameSpan, fs)),
+        );
+      }
+      case "PBind": {
+        const { name, span } = $match;
+        return name === "_"
+          ? bound(env, [] as SymOccurrence[], fields)
+          : bindName(env, name, span, fields);
+      }
+      case "PCtor": {
+        const { ctor, args, span } = $match;
+        return boundThen(
+          bound(env, use(env, "ctor", ctor, span), fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats(e, args, 0, fs)),
+        );
+      }
+      case "PRecord": {
+        const { fields: pfs } = $match;
+        return walkPatFields(env, pfs, 0, fields);
+      }
+      case "PTuple": {
+        const { elems } = $match;
+        return walkPats(env, elems, 0, fields);
+      }
+      case "PArr": {
+        const { elems, rest } = $match;
+        return boundThen(
+          walkPats(env, elems, 0, fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt(e, rest, fs)),
+        );
+      }
+      case "PList": {
+        const { elems, rest } = $match;
+        return boundThen(
+          walkPats(env, elems, 0, fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt(e, rest, fs)),
+        );
+      }
+      case "POr": {
+        const { alts } = $match;
+        return ((_v) =>
+          _v.length >= 1
+            ? (([first, ...rest]) =>
                 boundThen(
-                  bound(env, use(env, "ctor", ctor, span), fields),
-                  _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats(e, args, 0, fs)),
+                  walkPat(env, first, fields),
+                  _curry(2, (e: SymEnv, fs: Map<string, Loc>) => {
+                    const uses: Walked = walkPatUsesList(e, rest, 0, fs);
+                    return bound(e, uses.occs, uses.fields);
+                  }),
                 ))(_v)
-            : _v._tag === "PRecord"
-              ? (({ fields: pfs }) => walkPatFields(env, pfs, 0, fields))(_v)
-              : _v._tag === "PTuple"
-                ? (({ elems }) => walkPats(env, elems, 0, fields))(_v)
-                : _v._tag === "PArr"
-                  ? (({ elems, rest }) =>
-                      boundThen(
-                        walkPats(env, elems, 0, fields),
-                        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt(e, rest, fs)),
-                      ))(_v)
-                  : _v._tag === "PList"
-                    ? (({ elems, rest }) =>
-                        boundThen(
-                          walkPats(env, elems, 0, fields),
-                          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt(e, rest, fs)),
-                        ))(_v)
-                    : _v._tag === "POr"
-                      ? (({ alts }) =>
-                          ((_v) =>
-                            _v.length >= 1
-                              ? (([first, ...rest]) =>
-                                  boundThen(
-                                    walkPat(env, first, fields),
-                                    _curry(2, (e: SymEnv, fs: Map<string, Loc>) => {
-                                      const uses: Walked = walkPatUsesList(e, rest, 0, fs);
-                                      return bound(e, uses.occs, uses.fields);
-                                    }),
-                                  ))(_v)
-                              : _v.length === 0
-                                ? bound(env, [] as SymOccurrence[], fields)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(alts))(_v)
-                      : bound(env, [] as SymOccurrence[], fields))(pat),
+            : _v.length === 0
+              ? bound(env, [] as SymOccurrence[], fields)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(alts);
+      }
+      default: {
+        return bound(env, [] as SymOccurrence[], fields);
+      }
+    }
+  },
 );
 const walkPatUsesList: _Curry<
   [env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>],
@@ -658,30 +688,46 @@ const walkPatFieldUses: _Curry<
  */
 const walkPatUses: _Curry<[env: SymEnv, pat: Pattern, fields: Map<string, Loc>], Walked> = _curry(
   3,
-  (env: SymEnv, pat: Pattern, fields: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat: inner }) => walkPatUses(env, inner, fields))(_v)
-        : _v._tag === "PCtor"
-          ? (({ ctor, args, span }) =>
-              prefixed(use(env, "ctor", ctor, span), walkPatUsesList(env, args, 0, fields)))(_v)
-          : _v._tag === "PRecord"
-            ? (({ fields: pfs }) => walkPatFieldUses(env, pfs, 0, fields))(_v)
-            : _v._tag === "PTuple"
-              ? (({ elems }) => walkPatUsesList(env, elems, 0, fields))(_v)
-              : _v._tag === "PArr"
-                ? (({ elems, rest }) =>
-                    andThen(walkPatUsesList(env, elems, 0, fields), (fs: Map<string, Loc>) =>
-                      walkPatUsesOpt(env, rest, fs),
-                    ))(_v)
-                : _v._tag === "PList"
-                  ? (({ elems, rest }) =>
-                      andThen(walkPatUsesList(env, elems, 0, fields), (fs: Map<string, Loc>) =>
-                        walkPatUsesOpt(env, rest, fs),
-                      ))(_v)
-                  : _v._tag === "POr"
-                    ? (({ alts }) => walkPatUsesList(env, alts, 0, fields))(_v)
-                    : none(fields))(pat),
+  (env: SymEnv, pat: Pattern, fields: Map<string, Loc>) => {
+    const $match = pat;
+    switch ($match._tag) {
+      case "PAs": {
+        const { pat: inner } = $match;
+        return walkPatUses(env, inner, fields);
+      }
+      case "PCtor": {
+        const { ctor, args, span } = $match;
+        return prefixed(use(env, "ctor", ctor, span), walkPatUsesList(env, args, 0, fields));
+      }
+      case "PRecord": {
+        const { fields: pfs } = $match;
+        return walkPatFieldUses(env, pfs, 0, fields);
+      }
+      case "PTuple": {
+        const { elems } = $match;
+        return walkPatUsesList(env, elems, 0, fields);
+      }
+      case "PArr": {
+        const { elems, rest } = $match;
+        return andThen(walkPatUsesList(env, elems, 0, fields), (fs: Map<string, Loc>) =>
+          walkPatUsesOpt(env, rest, fs),
+        );
+      }
+      case "PList": {
+        const { elems, rest } = $match;
+        return andThen(walkPatUsesList(env, elems, 0, fields), (fs: Map<string, Loc>) =>
+          walkPatUsesOpt(env, rest, fs),
+        );
+      }
+      case "POr": {
+        const { alts } = $match;
+        return walkPatUsesList(env, alts, 0, fields);
+      }
+      default: {
+        return none(fields);
+      }
+    }
+  },
 );
 const walkExprs: _Curry<[env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>], Walked> =
   _curry(4, (env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>) =>
@@ -849,15 +895,26 @@ const bindLoopParams: <A>(
 
 const letRun: _Curry<[e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]], LetRun> = _curry(
   2,
-  (e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]) =>
-    ((_v) =>
-      _v._tag === "ELetIn"
-        ? (({ name, nameSpan, annot, value, body }) =>
-            ((_v) =>
-              _v._tag === "ELambda"
-                ? letRun(body, _Array_append(_tuple(name, nameSpan, annot, value), acc))
-                : { binders: acc, tail: e })(value))(_v)
-        : { binders: acc, tail: e })(e),
+  (e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]) => {
+    const $match = e;
+    switch ($match._tag) {
+      case "ELetIn": {
+        const { name, nameSpan, annot, value, body } = $match;
+        const $match$ = value;
+        switch ($match$._tag) {
+          case "ELambda": {
+            return letRun(body, _Array_append(_tuple(name, nameSpan, annot, value), acc));
+          }
+          default: {
+            return { binders: acc, tail: e };
+          }
+        }
+      }
+      default: {
+        return { binders: acc, tail: e };
+      }
+    }
+  },
 );
 const bindRun: <A, B>(
   env: SymEnv,
@@ -948,151 +1005,164 @@ const walkFieldAccess: _Curry<
 });
 const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walked> = _curry(
   3,
-  (env: SymEnv, expr: Expr, fields: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "ERef"
-        ? (({ name, span }) =>
-            parked(name)
-              ? none(fields)
-              : and(upperStart(name), lookup(env, "ctor", name)._tag !== "None")
-                ? walked(use(env, "ctor", name, span), fields)
-                : walked(use(env, "value", name, span), fields))(_v)
-        : _v._tag === "EInterp"
-          ? (({ parts }) => walkInterp(env, parts, 0, fields))(_v)
-          : _v._tag === "ECall"
-            ? (({ fn, args }) =>
-                andThen(walkExpr(env, fn, fields), (fs: Map<string, Loc>) =>
-                  walkExprs(env, args, 0, fs),
-                ))(_v)
-            : _v._tag === "ELambda"
-              ? (({ params, body, span: sp }) =>
-                  ((scope: BoundScope) =>
-                    ((inner: Walked) =>
-                      framed(env, scope.env, sp, {
-                        occs: _Array_concat(scope.occs, inner.occs),
-                        fields: inner.fields,
-                        frames: _Array_concat(scope.frames, inner.frames),
-                      }))(walkExpr(scope.env, body, scope.fields)))(
-                    bindParams(env, params, 0, fields),
-                  ))(_v)
-              : _v._tag === "ELetIn"
-                ? (({ name, nameSpan, annot, value, body }) =>
-                    ((_v) =>
-                      _v._tag === "ELambda"
-                        ? walkLetRun(
-                            env,
-                            letRun(expr, [] as [string, SpanAt, Option<TypeExpr>, Expr][]),
-                            fields,
-                          )
-                        : ((v: Walked) =>
-                            ((scope: BoundScope) =>
-                              ((inner: Walked) => ({
-                                occs: _Array_concat(
-                                  _Array_concat(
-                                    v.occs,
-                                    _Array_concat(walkAnnot(env, annot), scope.occs),
-                                  ),
-                                  inner.occs,
-                                ),
-                                fields: inner.fields,
-                                frames: _Array_concat(v.frames, inner.frames),
-                              }))(
-                                framed(
-                                  env,
-                                  scope.env,
-                                  exprSpan(body),
-                                  walkExpr(scope.env, body, scope.fields),
-                                ),
-                              ))(bindName(env, name, nameSpan, v.fields)))(
-                            walkExpr(env, value, fields),
-                          ))(value))(_v)
-                : _v._tag === "ELetBind"
-                  ? (({ param, value, body }) =>
-                      ((v: Walked) =>
-                        ((scope: BoundScope) =>
-                          ((inner: Walked) => ({
-                            occs: _Array_concat(_Array_concat(v.occs, scope.occs), inner.occs),
-                            fields: inner.fields,
-                            frames: _Array_concat(
-                              _Array_concat(v.frames, scope.frames),
-                              inner.frames,
-                            ),
-                          }))(
-                            framed(
-                              env,
-                              scope.env,
-                              exprSpan(body),
-                              walkExpr(scope.env, body, scope.fields),
-                            ),
-                          ))(bindParam(env, param, v.fields)))(walkExpr(env, value, fields)))(_v)
-                  : _v._tag === "ELoop"
-                    ? (({ params, body }) =>
-                        ((inits: Walked) =>
-                          ((scope: BoundScope) =>
-                            ((inner: Walked) => ({
-                              occs: _Array_concat(
-                                _Array_concat(inits.occs, scope.occs),
-                                inner.occs,
-                              ),
-                              fields: inner.fields,
-                              frames: _Array_concat(inits.frames, inner.frames),
-                            }))(
-                              framed(
-                                env,
-                                scope.env,
-                                exprSpan(body),
-                                walkExpr(scope.env, body, scope.fields),
-                              ),
-                            ))(bindLoopParams(env, params, 0, inits.fields)))(
-                          walkLoopInits(env, params, 0, fields),
-                        ))(_v)
-                    : _v._tag === "ERecur"
-                      ? (({ args }) => walkExprs(env, args, 0, fields))(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ left, right }) =>
-                            andThen(walkExpr(env, left, fields), (fs: Map<string, Loc>) =>
-                              walkExpr(env, right, fs),
-                            ))(_v)
-                        : _v._tag === "EDo"
-                          ? (({ exprs }) => walkExprs(env, exprs, 0, fields))(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ cond, thenE, elseE }) =>
-                                walkExprs(env, [cond, thenE, elseE], 0, fields))(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ scrutinee, arms }) =>
-                                  andThen(
-                                    walkExpr(env, scrutinee, fields),
-                                    (fs: Map<string, Loc>) => walkArms(env, arms, 0, fs),
-                                  ))(_v)
-                              : _v._tag === "ERecord"
-                                ? (({ fields: rfs, spread }) =>
-                                    _Option_match(
-                                      spread,
-                                      () => walkRecordFields(env, rfs, 0, fields),
-                                      (base) =>
-                                        andThen(
-                                          walkExpr(env, base, fields),
-                                          (fs: Map<string, Loc>) =>
-                                            walkRecordFields(env, rfs, 0, fs),
-                                        ),
-                                    ))(_v)
-                                : _v._tag === "EField"
-                                  ? (({ target, name, span }) =>
-                                      walkFieldAccess(env, target, name, span, fields))(_v)
-                                  : _v._tag === "ETuple"
-                                    ? (({ elements }) => walkExprs(env, elements, 0, fields))(_v)
-                                    : _v._tag === "EArr"
-                                      ? (({ elements }) => walkSeqs(env, elements, 0, fields))(_v)
-                                      : _v._tag === "EList"
-                                        ? (({ elements }) => walkSeqs(env, elements, 0, fields))(_v)
-                                        : _v._tag === "ESet"
-                                          ? (({ elements }) => walkSeqs(env, elements, 0, fields))(
-                                              _v,
-                                            )
-                                          : _v._tag === "EMap"
-                                            ? (({ entries }) =>
-                                                walkEntries(env, entries, 0, fields))(_v)
-                                            : none(fields))(expr),
+  (env: SymEnv, expr: Expr, fields: Map<string, Loc>) => {
+    const $match = expr;
+    switch ($match._tag) {
+      case "ERef": {
+        const { name, span } = $match;
+        return parked(name)
+          ? none(fields)
+          : and(upperStart(name), lookup(env, "ctor", name)._tag !== "None")
+            ? walked(use(env, "ctor", name, span), fields)
+            : walked(use(env, "value", name, span), fields);
+      }
+      case "EInterp": {
+        const { parts } = $match;
+        return walkInterp(env, parts, 0, fields);
+      }
+      case "ECall": {
+        const { fn, args } = $match;
+        return andThen(walkExpr(env, fn, fields), (fs: Map<string, Loc>) =>
+          walkExprs(env, args, 0, fs),
+        );
+      }
+      case "ELambda": {
+        const { params, body, span: sp } = $match;
+        const scope: BoundScope = bindParams(env, params, 0, fields);
+        const inner: Walked = walkExpr(scope.env, body, scope.fields);
+        return framed(env, scope.env, sp, {
+          occs: _Array_concat(scope.occs, inner.occs),
+          fields: inner.fields,
+          frames: _Array_concat(scope.frames, inner.frames),
+        });
+      }
+      case "ELetIn": {
+        const { name, nameSpan, annot, value, body } = $match;
+        const $match$ = value;
+        switch ($match$._tag) {
+          case "ELambda": {
+            return walkLetRun(
+              env,
+              letRun(expr, [] as [string, SpanAt, Option<TypeExpr>, Expr][]),
+              fields,
+            );
+          }
+          default: {
+            const v: Walked = walkExpr(env, value, fields);
+            const scope: BoundScope = bindName(env, name, nameSpan, v.fields);
+            const inner: Walked = framed(
+              env,
+              scope.env,
+              exprSpan(body),
+              walkExpr(scope.env, body, scope.fields),
+            );
+            return {
+              occs: _Array_concat(
+                _Array_concat(v.occs, _Array_concat(walkAnnot(env, annot), scope.occs)),
+                inner.occs,
+              ),
+              fields: inner.fields,
+              frames: _Array_concat(v.frames, inner.frames),
+            };
+          }
+        }
+      }
+      case "ELetBind": {
+        const { param, value, body } = $match;
+        const v: Walked = walkExpr(env, value, fields);
+        const scope: BoundScope = bindParam(env, param, v.fields);
+        const inner: Walked = framed(
+          env,
+          scope.env,
+          exprSpan(body),
+          walkExpr(scope.env, body, scope.fields),
+        );
+        return {
+          occs: _Array_concat(_Array_concat(v.occs, scope.occs), inner.occs),
+          fields: inner.fields,
+          frames: _Array_concat(_Array_concat(v.frames, scope.frames), inner.frames),
+        };
+      }
+      case "ELoop": {
+        const { params, body } = $match;
+        const inits: Walked = walkLoopInits(env, params, 0, fields);
+        const scope: BoundScope = bindLoopParams(env, params, 0, inits.fields);
+        const inner: Walked = framed(
+          env,
+          scope.env,
+          exprSpan(body),
+          walkExpr(scope.env, body, scope.fields),
+        );
+        return {
+          occs: _Array_concat(_Array_concat(inits.occs, scope.occs), inner.occs),
+          fields: inner.fields,
+          frames: _Array_concat(inits.frames, inner.frames),
+        };
+      }
+      case "ERecur": {
+        const { args } = $match;
+        return walkExprs(env, args, 0, fields);
+      }
+      case "EPipe": {
+        const { left, right } = $match;
+        return andThen(walkExpr(env, left, fields), (fs: Map<string, Loc>) =>
+          walkExpr(env, right, fs),
+        );
+      }
+      case "EDo": {
+        const { exprs } = $match;
+        return walkExprs(env, exprs, 0, fields);
+      }
+      case "ETernary": {
+        const { cond, thenE, elseE } = $match;
+        return walkExprs(env, [cond, thenE, elseE], 0, fields);
+      }
+      case "EMatch": {
+        const { scrutinee, arms } = $match;
+        return andThen(walkExpr(env, scrutinee, fields), (fs: Map<string, Loc>) =>
+          walkArms(env, arms, 0, fs),
+        );
+      }
+      case "ERecord": {
+        const { fields: rfs, spread } = $match;
+        return _Option_match(
+          spread,
+          () => walkRecordFields(env, rfs, 0, fields),
+          (base) =>
+            andThen(walkExpr(env, base, fields), (fs: Map<string, Loc>) =>
+              walkRecordFields(env, rfs, 0, fs),
+            ),
+        );
+      }
+      case "EField": {
+        const { target, name, span } = $match;
+        return walkFieldAccess(env, target, name, span, fields);
+      }
+      case "ETuple": {
+        const { elements } = $match;
+        return walkExprs(env, elements, 0, fields);
+      }
+      case "EArr": {
+        const { elements } = $match;
+        return walkSeqs(env, elements, 0, fields);
+      }
+      case "EList": {
+        const { elements } = $match;
+        return walkSeqs(env, elements, 0, fields);
+      }
+      case "ESet": {
+        const { elements } = $match;
+        return walkSeqs(env, elements, 0, fields);
+      }
+      case "EMap": {
+        const { entries } = $match;
+        return walkEntries(env, entries, 0, fields);
+      }
+      default: {
+        return none(fields);
+      }
+    }
+  },
 );
 
 const withValue: _Curry<[o: Origins, name: string, def: Loc], Origins> = _curry(
@@ -1311,31 +1381,41 @@ const ctorFieldTypes: (ctors: Ctor[]) => TypeExpr[] = (ctors: Ctor[]) =>
   _Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors);
 const walkStmt: _Curry<[env: SymEnv, stmt: Stmt, fields: Map<string, Loc>], Walked> = _curry(
   3,
-  (env: SymEnv, stmt: Stmt, fields: Map<string, Loc>) =>
-    ((_v) =>
-      _v._tag === "SLet"
-        ? (({ annot, value }) => prefixed(walkAnnot(env, annot), walkExpr(env, value, fields)))(_v)
-        : _v._tag === "SExpr"
-          ? (({ value }) => walkExpr(env, value, fields))(_v)
-          : _v._tag === "SExtern"
-            ? (({ typeExpr }) => walked(walkType(env, typeExpr), fields))(_v)
-            : _v._tag === "SType"
-              ? (({ ctors, alias, aliasType }) =>
-                  ((aliasTypes: TypeExpr[]) =>
-                    walked(
-                      _Array_concat(
-                        walkTypes(env, _Array_concat(ctorFieldTypes(ctors), aliasTypes), 0),
-                        walkAnnot(env, aliasType),
-                      ),
-                      fields,
-                    ))(
-                    _Option_match(
-                      alias,
-                      () => [] as TypeExpr[],
-                      (afs) => map((f: AliasField) => f.fieldType, afs),
-                    ),
-                  ))(_v)
-              : none(fields))(stmt),
+  (env: SymEnv, stmt: Stmt, fields: Map<string, Loc>) => {
+    const $match = stmt;
+    switch ($match._tag) {
+      case "SLet": {
+        const { annot, value } = $match;
+        return prefixed(walkAnnot(env, annot), walkExpr(env, value, fields));
+      }
+      case "SExpr": {
+        const { value } = $match;
+        return walkExpr(env, value, fields);
+      }
+      case "SExtern": {
+        const { typeExpr } = $match;
+        return walked(walkType(env, typeExpr), fields);
+      }
+      case "SType": {
+        const { ctors, alias, aliasType } = $match;
+        const aliasTypes: TypeExpr[] = _Option_match(
+          alias,
+          () => [] as TypeExpr[],
+          (afs) => map((f: AliasField) => f.fieldType, afs),
+        );
+        return walked(
+          _Array_concat(
+            walkTypes(env, _Array_concat(ctorFieldTypes(ctors), aliasTypes), 0),
+            walkAnnot(env, aliasType),
+          ),
+          fields,
+        );
+      }
+      default: {
+        return none(fields);
+      }
+    }
+  },
 );
 const walkStmts: _Curry<[env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>], Walked> =
   _curry(4, (env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>) =>
@@ -1445,16 +1525,22 @@ export const originsOf: _Curry<[path: string, stmts: Stmt[]], Origins> = _curry(
   (path: string, stmts: Stmt[]) => originsFrom(path, stmts, 0, emptyOrigins),
 );
 const importSpans: (stmts: Stmt[]) => number[] = (stmts: Stmt[]) =>
-  _Array_flatMap(
-    (s: Stmt) =>
-      ((_v) =>
-        _v._tag === "SImport"
-          ? (({ names }) => map((n: Name) => n.span.start, names))(_v)
-          : _v._tag === "SImportNs"
-            ? (({ alias }) => [alias.span.start])(_v)
-            : ([] as number[]))(s),
-    stmts,
-  );
+  _Array_flatMap((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SImport": {
+        const { names } = $match;
+        return map((n: Name) => n.span.start, names);
+      }
+      case "SImportNs": {
+        const { alias } = $match;
+        return [alias.span.start];
+      }
+      default: {
+        return [] as number[];
+      }
+    }
+  }, stmts);
 /**
  * index : [Stmt] -> [Occurrence]
  * This file's value bindings only: no imports, prelude, types, ctors or

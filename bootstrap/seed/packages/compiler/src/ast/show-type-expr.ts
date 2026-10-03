@@ -16,30 +16,55 @@ const joinWith: <A>(f: (a: A) => string, sep: string, tes: A[]) => string = _cur
  * The left side of an arrow is parenthesised when it is itself an arrow
  * (`(a -> b) -> c`), and so is an arrow member of a union.
  */
-export const showTypeExpr: (te: TypeExpr) => string = (te: TypeExpr) =>
-  ((_v) =>
-    _v._tag === "TyName"
-      ? (({ name }) => (name === "unit" ? "()" : name))(_v)
-      : _v._tag === "TyApp"
-        ? (({ ctor, args }) => `${ctor}<${joinWith(showTypeExpr, ", ", args)}>`)(_v)
-        : _v._tag === "TyTuple"
-          ? (({ elems }) => `(${joinWith(showTypeExpr, ", ", elems)})`)(_v)
-          : _v._tag === "TyList"
-            ? (({ elem }) => `[${showTypeExpr(elem)}]`)(_v)
-            : _v._tag === "TyQual"
-              ? (({ alias, name, args }) =>
-                  ((head: string) =>
-                    length(args) === 0 ? head : `${head}<${joinWith(showTypeExpr, ", ", args)}>`)(
-                    `${alias}.${name}`,
-                  ))(_v)
-              : _v._tag === "TyLit"
-                ? (({ value }) => strLit(value))(_v)
-                : _v._tag === "TyUnion"
-                  ? (({ members }) => joinWith(parenArrow, " | ", members))(_v)
-                  : _v._tag === "TyArrow"
-                    ? (({ from, to }) => `${parenArrow(from)} -> ${showTypeExpr(to)}`)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(te);
-const parenArrow: (te: TypeExpr) => string = (te: TypeExpr) =>
-  ((_v) => (_v._tag === "TyArrow" ? `(${showTypeExpr(te)})` : showTypeExpr(te)))(te);
+export const showTypeExpr: (te: TypeExpr) => string = (te: TypeExpr) => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyName": {
+      const { name } = $match;
+      return name === "unit" ? "()" : name;
+    }
+    case "TyApp": {
+      const { ctor, args } = $match;
+      return `${ctor}<${joinWith(showTypeExpr, ", ", args)}>`;
+    }
+    case "TyTuple": {
+      const { elems } = $match;
+      return `(${joinWith(showTypeExpr, ", ", elems)})`;
+    }
+    case "TyList": {
+      const { elem } = $match;
+      return `[${showTypeExpr(elem)}]`;
+    }
+    case "TyQual": {
+      const { alias, name, args } = $match;
+      const head: string = `${alias}.${name}`;
+      return length(args) === 0 ? head : `${head}<${joinWith(showTypeExpr, ", ", args)}>`;
+    }
+    case "TyLit": {
+      const { value } = $match;
+      return strLit(value);
+    }
+    case "TyUnion": {
+      const { members } = $match;
+      return joinWith(parenArrow, " | ", members);
+    }
+    case "TyArrow": {
+      const { from, to } = $match;
+      return `${parenArrow(from)} -> ${showTypeExpr(to)}`;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const parenArrow: (te: TypeExpr) => string = (te: TypeExpr) => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyArrow": {
+      return `(${showTypeExpr(te)})`;
+    }
+    default: {
+      return showTypeExpr(te);
+    }
+  }
+};

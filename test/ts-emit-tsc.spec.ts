@@ -14,6 +14,18 @@ const RUNTIME_IMPORT = "../../packages/compiler/src/prelude/runtime";
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).
 const PROGRAMS: Record<string, string> = {
+  functionTailMatches: `
+type Shape a = | Dot | Box(value: a) | Pair(a, a)
+let $match = 3
+let pick = (shape: Shape<a>, fallback: a) => let offset = $match in switch shape {
+  | Dot => fallback
+  | Box(fallback) => let fallback = fallback in fallback
+  | Pair(a, _) => a
+}
+let remaining = (shape: Shape<number>) => switch shape { | Dot => 0 | rest => switch rest { | Box(n) => n | _ => 9 } }
+let captured = (shape: Shape<a>) => switch shape { | Box(n) => () => Some(n) | _ => () => None }
+let guarded = shape => switch shape { | Box(n) when n > 0 => n | Box(_) => 0 | _ => 1 }
+let values = (pick(Box(2), 0), remaining(Pair(1, 2)), captured(Box("x"))())`,
   builtinMatchDispatch: `
 let result = (r: Result<number, string>) => switch r { | Err(e) => e | Ok(n) => show(n) }
 let option = (o: Option<number>) => switch o { | None => 0 | Some(n) => n }

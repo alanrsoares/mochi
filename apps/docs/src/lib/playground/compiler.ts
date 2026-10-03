@@ -9,6 +9,7 @@
 import { type CompileTargets, compileTargets, type Diagnostic } from "@mochi/compiler";
 import { preactDtsTypeNames } from "@mochi/plugin-preact";
 import { isErr } from "@onrails/result";
+import { pretty } from "../pretty";
 import { err, ok, type Result, type Task } from "../task";
 import type { CompileWorkerRequest, CompileWorkerResponse } from "./compile.worker";
 
@@ -52,8 +53,16 @@ const syncCompile = (source: string): Result<PlaygroundCompileOk, PlaygroundComp
  */
 export const compileSyncTask =
   (source: string): Task<PlaygroundCompileOk, PlaygroundCompileErr> =>
-  () =>
-    Promise.resolve(syncCompile(source));
+  async () => {
+    const result = syncCompile(source);
+    if (result._tag === "Err") return result;
+    const [js, ts, dts] = await Promise.all([
+      pretty(result.value.js),
+      pretty(result.value.ts),
+      pretty(result.value.dts),
+    ]);
+    return ok({ js, ts, dts, ms: result.value.ms });
+  };
 
 export const createPlaygroundCompiler = (): PlaygroundCompiler => {
   if (typeof Worker === "undefined") {
@@ -106,7 +115,7 @@ export const createPlaygroundCompiler = (): PlaygroundCompiler => {
 
   return {
     compile: (source) => () => {
-      if (!worker) return Promise.resolve(syncCompile(source));
+      if (!worker) return compileSyncTask(source)();
       seq += 1;
       const id = seq;
       return new Promise((resolve) => {

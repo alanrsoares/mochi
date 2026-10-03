@@ -18,14 +18,14 @@ test("a labelled field lowers to that runtime key", () => {
 
 test("a pattern destructures by the labelled key", () => {
   const out = js(`${RESULT}let f = r => switch r { | Ok(v) => v | Err(e) => e }`);
-  expect(out).toContain("? (({ value: v }) => (v))(_v)");
-  expect(out).toContain("? (({ error: e }) => (e))(_v)");
+  expect(out).toContain("const { value: v } = $match;");
+  expect(out).toContain("const { error: e } = $match;");
 });
 
 test("a positional field keeps its `_0` key (back-compat)", () => {
   const out = js("type Box a = | Box(a)\nlet mk = Box\nlet f = b => switch b { | Box(x) => x }");
   expect(out).toContain('const Box = (_0) => ({ _tag: "Box", _0 });');
-  expect(out).toContain("? (({ _0: x }) => (x))(_v)");
+  expect(out).toContain("const { _0: x } = $match;");
 });
 
 test("the .d.ts declares the labelled field name", () => {

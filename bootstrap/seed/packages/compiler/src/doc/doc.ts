@@ -34,6 +34,7 @@ import {
   _recur,
   and,
   length,
+  lt,
   or,
   sub,
 } from "@mochi/compiler/runtime";
@@ -192,27 +193,42 @@ const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(
  * newline. Comments introduce hardlines, so a commented node breaks its parents.
  * A nested group already knows its own answer, so the walk stops there.
  */
-const forcesBreak: (d: Doc) => boolean = (d: Doc) =>
-  ((_v) =>
-    _v._tag === "DBreakParent"
-      ? true
-      : _v._tag === "DVerbatim"
-        ? true
-        : _v._tag === "DLine"
-          ? (({ hard }) => hard)(_v)
-          : _v._tag === "DCat"
-            ? (({ parts }) => anyForcesBreak(parts, 0))(_v)
-            : _v._tag === "DIndent"
-              ? (({ doc: inner }) => forcesBreak(inner))(_v)
-              : _v._tag === "DGroup"
-                ? (({ breaks }) => breaks)(_v)
-                : _v._tag === "DLineSuffix"
-                  ? false
-                  : _v._tag === "DText"
-                    ? false
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(d);
+const forcesBreak: (d: Doc) => boolean = (d: Doc) => {
+  const $match = d;
+  switch ($match._tag) {
+    case "DBreakParent": {
+      return true;
+    }
+    case "DVerbatim": {
+      return true;
+    }
+    case "DLine": {
+      const { hard } = $match;
+      return hard;
+    }
+    case "DCat": {
+      const { parts } = $match;
+      return anyForcesBreak(parts, 0);
+    }
+    case "DIndent": {
+      const { doc: inner } = $match;
+      return forcesBreak(inner);
+    }
+    case "DGroup": {
+      const { breaks } = $match;
+      return breaks;
+    }
+    case "DLineSuffix": {
+      return false;
+    }
+    case "DText": {
+      return false;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const spaces: (n: number) => string = (n: number) => {
   let k: number = n;
   let acc: string = "";

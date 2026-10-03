@@ -94,33 +94,47 @@ import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensi
 const writtenQualsIn: _Curry<
   [te: TypeExpr, local: Set<string>, acc: Map<string, string>],
   Map<string, string>
-> = _curry(3, (te: TypeExpr, local: Set<string>, acc: Map<string, string>) =>
-  ((_v) =>
-    _v._tag === "TyName"
-      ? acc
-      : _v._tag === "TyLit"
+> = _curry(3, (te: TypeExpr, local: Set<string>, acc: Map<string, string>) => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyName": {
+      return acc;
+    }
+    case "TyLit": {
+      return acc;
+    }
+    case "TyArrow": {
+      const { from, to } = $match;
+      return writtenQualsIn(to, local, writtenQualsIn(from, local, acc));
+    }
+    case "TyApp": {
+      const { args } = $match;
+      return writtenQualsInAll(args, local, acc, 0);
+    }
+    case "TyTuple": {
+      const { elems } = $match;
+      return writtenQualsInAll(elems, local, acc, 0);
+    }
+    case "TyList": {
+      const { elem } = $match;
+      return writtenQualsIn(elem, local, acc);
+    }
+    case "TyUnion": {
+      const { members } = $match;
+      return writtenQualsInAll(members, local, acc, 0);
+    }
+    case "TyQual": {
+      const { alias, name, args } = $match;
+      const acc1: Map<string, string> = or(_Set_has(name, local), _Map_has(name, acc))
         ? acc
-        : _v._tag === "TyArrow"
-          ? (({ from, to }) => writtenQualsIn(to, local, writtenQualsIn(from, local, acc)))(_v)
-          : _v._tag === "TyApp"
-            ? (({ args }) => writtenQualsInAll(args, local, acc, 0))(_v)
-            : _v._tag === "TyTuple"
-              ? (({ elems }) => writtenQualsInAll(elems, local, acc, 0))(_v)
-              : _v._tag === "TyList"
-                ? (({ elem }) => writtenQualsIn(elem, local, acc))(_v)
-                : _v._tag === "TyUnion"
-                  ? (({ members }) => writtenQualsInAll(members, local, acc, 0))(_v)
-                  : _v._tag === "TyQual"
-                    ? (({ alias, name, args }) =>
-                        ((acc1: Map<string, string>) => writtenQualsInAll(args, local, acc1, 0))(
-                          or(_Set_has(name, local), _Map_has(name, acc))
-                            ? acc
-                            : _Map_set(name, `${alias}.${name}`, acc),
-                        ))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(te),
-);
+        : _Map_set(name, `${alias}.${name}`, acc);
+      return writtenQualsInAll(args, local, acc1, 0);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const writtenQualsInAll: _Curry<
   [tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number],
   Map<string, string>
@@ -225,47 +239,63 @@ const writtenQualsFrom: _Curry<
  */
 const qualifyRow: _Curry<[row: Row, qualify: Map<string, string>], Row> = _curry(
   2,
-  (row: Row, qualify: Map<string, string>) =>
-    ((_v) =>
-      _v._tag === "RowEmpty"
-        ? (RowEmpty as Row)
-        : _v._tag === "RowVar"
-          ? (({ id }) => RowVar(id))(_v)
-          : _v._tag === "RowExtend"
-            ? (({ label, fieldType, optional, rest }) =>
-                RowExtend(
-                  label,
-                  qualifyTy(fieldType, qualify),
-                  optional,
-                  qualifyRow(rest, qualify),
-                ))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(row),
+  (row: Row, qualify: Map<string, string>) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowEmpty": {
+        return RowEmpty as Row;
+      }
+      case "RowVar": {
+        const { id } = $match;
+        return RowVar(id);
+      }
+      case "RowExtend": {
+        const { label, fieldType, optional, rest } = $match;
+        return RowExtend(label, qualifyTy(fieldType, qualify), optional, qualifyRow(rest, qualify));
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const qualifyTy: _Curry<[t: Ty, qualify: Map<string, string>], Ty> = _curry(
   2,
-  (t: Ty, qualify: Map<string, string>) =>
-    ((_v) =>
-      _v._tag === "TyVar"
-        ? (({ id }) => TyVar(id))(_v)
-        : _v._tag === "TyCon"
-          ? (({ name, args }) =>
-              TyCon(
-                _Map_getOr(name, name, qualify),
-                map((a: Ty) => qualifyTy(a, qualify), args),
-              ))(_v)
-          : _v._tag === "TyFn"
-            ? (({ from, to }) => TyFn(qualifyTy(from, qualify), qualifyTy(to, qualify)))(_v)
-            : _v._tag === "TyRecord"
-              ? (({ row }) => TyRecord(qualifyRow(row, qualify)))(_v)
-              : _v._tag === "TySingleton"
-                ? (({ base, value }) => TySingleton(base, value))(_v)
-                : _v._tag === "TyOneOf"
-                  ? (({ members }) => TyOneOf(map((m: Ty) => qualifyTy(m, qualify), members)))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(t),
+  (t: Ty, qualify: Map<string, string>) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyVar": {
+        const { id } = $match;
+        return TyVar(id);
+      }
+      case "TyCon": {
+        const { name, args } = $match;
+        return TyCon(
+          _Map_getOr(name, name, qualify),
+          map((a: Ty) => qualifyTy(a, qualify), args),
+        );
+      }
+      case "TyFn": {
+        const { from, to } = $match;
+        return TyFn(qualifyTy(from, qualify), qualifyTy(to, qualify));
+      }
+      case "TyRecord": {
+        const { row } = $match;
+        return TyRecord(qualifyRow(row, qualify));
+      }
+      case "TySingleton": {
+        const { base, value } = $match;
+        return TySingleton(base, value);
+      }
+      case "TyOneOf": {
+        const { members } = $match;
+        return TyOneOf(map((m: Ty) => qualifyTy(m, qualify), members));
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 /**
  * The same rename on a written `TypeExpr` — ctor and alias field types print
@@ -273,48 +303,62 @@ const qualifyTy: _Curry<[t: Ty, qualify: Map<string, string>], Ty> = _curry(
  */
 const qualifyTe: _Curry<[te: TypeExpr, qualify: Map<string, string>], TypeExpr> = _curry(
   2,
-  (te: TypeExpr, qualify: Map<string, string>) =>
-    ((_v) =>
-      _v._tag === "TyName"
-        ? (({ name, span }) => Ast.TyName(_Map_getOr(name, name, qualify), span))(_v)
-        : _v._tag === "TyArrow"
-          ? (({ from, to, span }) =>
-              Ast.TyArrow(qualifyTe(from, qualify), qualifyTe(to, qualify), span))(_v)
-          : _v._tag === "TyApp"
-            ? (({ ctor, args, span }) =>
-                Ast.TyApp(
-                  _Map_getOr(ctor, ctor, qualify),
-                  map((a: TypeExpr) => qualifyTe(a, qualify), args),
-                  span,
-                ))(_v)
-            : _v._tag === "TyTuple"
-              ? (({ elems, span }) =>
-                  Ast.TyTuple(
-                    map((e: TypeExpr) => qualifyTe(e, qualify), elems),
-                    span,
-                  ))(_v)
-              : _v._tag === "TyList"
-                ? (({ elem, span }) => Ast.TyList(qualifyTe(elem, qualify), span))(_v)
-                : _v._tag === "TyQual"
-                  ? (({ alias, name, nameSpan, args, span }) =>
-                      Ast.TyQual(
-                        alias,
-                        name,
-                        nameSpan,
-                        map((a: TypeExpr) => qualifyTe(a, qualify), args),
-                        span,
-                      ))(_v)
-                  : _v._tag === "TyLit"
-                    ? (({ value, span }) => Ast.TyLit(value, span))(_v)
-                    : _v._tag === "TyUnion"
-                      ? (({ members, span }) =>
-                          Ast.TyUnion(
-                            map((m: TypeExpr) => qualifyTe(m, qualify), members),
-                            span,
-                          ))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(te),
+  (te: TypeExpr, qualify: Map<string, string>) => {
+    const $match = te;
+    switch ($match._tag) {
+      case "TyName": {
+        const { name, span } = $match;
+        return Ast.TyName(_Map_getOr(name, name, qualify), span);
+      }
+      case "TyArrow": {
+        const { from, to, span } = $match;
+        return Ast.TyArrow(qualifyTe(from, qualify), qualifyTe(to, qualify), span);
+      }
+      case "TyApp": {
+        const { ctor, args, span } = $match;
+        return Ast.TyApp(
+          _Map_getOr(ctor, ctor, qualify),
+          map((a: TypeExpr) => qualifyTe(a, qualify), args),
+          span,
+        );
+      }
+      case "TyTuple": {
+        const { elems, span } = $match;
+        return Ast.TyTuple(
+          map((e: TypeExpr) => qualifyTe(e, qualify), elems),
+          span,
+        );
+      }
+      case "TyList": {
+        const { elem, span } = $match;
+        return Ast.TyList(qualifyTe(elem, qualify), span);
+      }
+      case "TyQual": {
+        const { alias, name, nameSpan, args, span } = $match;
+        return Ast.TyQual(
+          alias,
+          name,
+          nameSpan,
+          map((a: TypeExpr) => qualifyTe(a, qualify), args),
+          span,
+        );
+      }
+      case "TyLit": {
+        const { value, span } = $match;
+        return Ast.TyLit(value, span);
+      }
+      case "TyUnion": {
+        const { members, span } = $match;
+        return Ast.TyUnion(
+          map((m: TypeExpr) => qualifyTe(m, qualify), members),
+          span,
+        );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const qualifyField: _Curry<[f: CtorField, qualify: Map<string, string>], CtorField> = _curry(
   2,

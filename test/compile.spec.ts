@@ -101,7 +101,7 @@ test("pattern-only local ctors omit factories", () => {
   );
   expect(out).not.toContain("const Red");
   expect(out).not.toContain("const Green");
-  expect(out).toContain(`((_v) => _v._tag === "Red"`);
+  expect(out).toContain(`switch ($match._tag) { case "Red":`);
 });
 
 test("exported variant keeps unused ctor factories", () => {
@@ -119,24 +119,25 @@ test("unused payload ctors do not seed _curry", () => {
   expect(out).not.toContain("_curry");
 });
 
-test("exhaustive switch → a ternary chain over the scrutinee (ADR 0113)", () => {
+test("exhaustive function-tail switch → scoped cases and returns (ADR 0147)", () => {
   const out = js(
     "type Shape = | Circle(float) | Rect(float, float)\n" +
       "let area = shape => switch shape { | Circle(r) => square(r) | Rect(w, h) => mul(w, h) }",
   );
   expect(out).not.toContain("@onrails/pattern");
-  expect(out).toContain(`const area = (shape) => ((_v) => _v._tag === "Circle"`);
-  expect(out).toContain(`? (({ _0: r }) => (square(r)))(_v)`);
-  expect(out).toContain(`? (({ _0: w, _1: h }) => (mul(w, h)))(_v)`);
-  expect(out).toContain(`(() => { throw new Error("non-exhaustive match"); })())(shape)`);
+  expect(out).toContain(`const area = (shape) => { const $match = shape; switch ($match._tag)`);
+  expect(out).toContain(`case "Circle": { const { _0: r } = $match;  return square(r); }`);
+  expect(out).toContain(`case "Rect": { const { _0: w, _1: h } = $match;  return mul(w, h); }`);
+  expect(out).toContain(`default: { throw new Error("non-exhaustive match"); }`);
 });
 
-test("wildcard arm → the chain's last branch", () => {
+test("wildcard function-tail arm → the switch default", () => {
   const out = js(
     "type Shape = | Circle(float) | Rect(float, float)\n" +
       "let name = shape => switch shape { | Circle(r) => circle | _ => other }",
   );
-  expect(out).toContain(`? (({ _0: r }) => (circle))(_v)\n    : (other))(shape)`);
+  expect(out).toContain(`case "Circle": { const { _0: r } = $match;  return circle; }`);
+  expect(out).toContain(`default: {  return other; }`);
 });
 
 test("non-exhaustive switch is a compile error naming the missing ctor", () => {

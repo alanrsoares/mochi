@@ -83,78 +83,80 @@ const precordEntries: _Curry<
 );
 export const patSlot: _Curry<[ctorKeys: Map<string, string[]>, p: Pattern], string> = _curry(
   2,
-  (ctorKeys: Map<string, string[]>, p: Pattern) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat, name }) =>
-            ((inner: string) => (inner === "" ? name : `${inner}, ${name}`))(
-              patSlot(ctorKeys, pat),
-            ))(_v)
-        : _v._tag === "PBind"
-          ? (({ name }) => name)(_v)
-          : _v._tag === "PWild"
-            ? ""
-            : _v._tag === "PUnit"
-              ? ""
-              : _v._tag === "PLit"
-                ? ""
-                : _v._tag === "PBool"
-                  ? ""
-                  : _v._tag === "PStr"
-                    ? ""
-                    : _v._tag === "PList"
-                      ? ""
-                      : _v._tag === "PCtor"
-                        ? (({ ctor, args }) =>
-                            ((entries: string[]) =>
-                              length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`)(
-                              pctorEntries(ctorKeys, ctor, args, 0),
-                            ))(_v)
-                        : _v._tag === "PRecord"
-                          ? (({ fields }) =>
-                              ((entries: string[]) =>
-                                length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`)(
-                                precordEntries(ctorKeys, fields, 0),
-                              ))(_v)
-                          : _v._tag === "PTuple"
-                            ? (({ elems }) =>
-                                ((slots: string[]) =>
-                                  someOf((s: string) => s !== "", slots)
-                                    ? `[${_Str_join(", ", slots)}]`
-                                    : "")(map((el: Pattern) => patSlot(ctorKeys, el), elems)))(_v)
-                            : _v._tag === "PArr"
-                              ? (({ elems, rest }) =>
-                                  ((slots: string[]) =>
-                                    ((slots2: string[]) =>
-                                      someOf((s: string) => s !== "", slots2)
-                                        ? `[${_Str_join(", ", slots2)}]`
-                                        : "")(
-                                      ((_v) =>
-                                        _v._tag === "Some" && _v.value._tag === "PBind"
-                                          ? (({ value: { name } }) =>
-                                              _Array_append(`...${name}`, slots))(
-                                              _v as Extract<Option<Pattern>, { _tag: "Some" }> & {
-                                                value: Extract<
-                                                  Extract<
-                                                    Option<Pattern>,
-                                                    { _tag: "Some" }
-                                                  >["value"],
-                                                  { _tag: "PBind" }
-                                                >;
-                                              },
-                                            )
-                                          : slots)(rest),
-                                    ))(map((el: Pattern) => patSlot(ctorKeys, el), elems)))(_v)
-                              : _v._tag === "POr"
-                                ? (({ alts }) =>
-                                    _Option_match(
-                                      _Array_head(alts),
-                                      () => "",
-                                      (first) => patSlot(ctorKeys, first),
-                                    ))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(p),
+  (ctorKeys: Map<string, string[]>, p: Pattern) => {
+    const $match = p;
+    switch ($match._tag) {
+      case "PAs": {
+        const { pat, name } = $match;
+        const inner: string = patSlot(ctorKeys, pat);
+        return inner === "" ? name : `${inner}, ${name}`;
+      }
+      case "PBind": {
+        const { name } = $match;
+        return name;
+      }
+      case "PWild": {
+        return "";
+      }
+      case "PUnit": {
+        return "";
+      }
+      case "PLit": {
+        return "";
+      }
+      case "PBool": {
+        return "";
+      }
+      case "PStr": {
+        return "";
+      }
+      case "PList": {
+        return "";
+      }
+      case "PCtor": {
+        const { ctor, args } = $match;
+        const entries: string[] = pctorEntries(ctorKeys, ctor, args, 0);
+        return length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`;
+      }
+      case "PRecord": {
+        const { fields } = $match;
+        const entries: string[] = precordEntries(ctorKeys, fields, 0);
+        return length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`;
+      }
+      case "PTuple": {
+        const { elems } = $match;
+        const slots: string[] = map((el: Pattern) => patSlot(ctorKeys, el), elems);
+        return someOf((s: string) => s !== "", slots) ? `[${_Str_join(", ", slots)}]` : "";
+      }
+      case "PArr": {
+        const { elems, rest } = $match;
+        const slots: string[] = map((el: Pattern) => patSlot(ctorKeys, el), elems);
+        const slots2: string[] = ((_v) =>
+          _v._tag === "Some" && _v.value._tag === "PBind"
+            ? (({ value: { name } }) => _Array_append(`...${name}`, slots))(
+                _v as Extract<Option<Pattern>, { _tag: "Some" }> & {
+                  value: Extract<
+                    Extract<Option<Pattern>, { _tag: "Some" }>["value"],
+                    { _tag: "PBind" }
+                  >;
+                },
+              )
+            : slots)(rest);
+        return someOf((s: string) => s !== "", slots2) ? `[${_Str_join(", ", slots2)}]` : "";
+      }
+      case "POr": {
+        const { alts } = $match;
+        return _Option_match(
+          _Array_head(alts),
+          () => "",
+          (first) => patSlot(ctorKeys, first),
+        );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const pctorConds: _Curry<
   [ctorKeys: Map<string, string[]>, ctor: string, args: Pattern[], i: number, path: string],
@@ -217,60 +219,79 @@ const parrConds: _Curry<
 export const patConds: _Curry<
   [ctorKeys: Map<string, string[]>, p: Pattern, path: string],
   string[]
-> = _curry(3, (ctorKeys: Map<string, string[]>, p: Pattern, path: string) =>
-  ((_v) =>
-    _v._tag === "PAs"
-      ? (({ pat }) => patConds(ctorKeys, pat, path))(_v)
-      : _v._tag === "PWild"
-        ? ([] as string[])
-        : _v._tag === "PUnit"
-          ? ([] as string[])
-          : _v._tag === "PBind"
-            ? ([] as string[])
-            : _v._tag === "PList"
-              ? ([] as string[])
-              : _v._tag === "PLit"
-                ? [`${path} === ${litValue(p)}`]
-                : _v._tag === "PBool"
-                  ? [`${path} === ${litValue(p)}`]
-                  : _v._tag === "PStr"
-                    ? [`${path} === ${litValue(p)}`]
-                    : _v._tag === "PCtor"
-                      ? (({ ctor, args }) =>
-                          _Array_prepend(
-                            `${path}._tag === ${jsStringLit(ctor)}`,
-                            pctorConds(ctorKeys, ctor, args, 0, path),
-                          ))(_v)
-                      : _v._tag === "PRecord"
-                        ? (({ fields }) => precordConds(ctorKeys, fields, 0, path))(_v)
-                        : _v._tag === "PTuple"
-                          ? (({ elems }) => ptupleConds(ctorKeys, elems, 0, path))(_v)
-                          : _v._tag === "PArr"
-                            ? (({ elems, rest }) =>
-                                _Array_prepend(
-                                  `${path}.length ${_Option_isSome(rest) ? ">=" : "==="} ${show(length(elems))}`,
-                                  parrConds(ctorKeys, elems, 0, path),
-                                ))(_v)
-                            : _v._tag === "POr"
-                              ? (({ alts }) =>
-                                  ((altCond: (a: Pattern) => string) => [
-                                    _Str_join(
-                                      " || ",
-                                      map((alt: Pattern) => `(${altCond(alt)})`, alts),
-                                    ),
-                                  ])((alt: Pattern) => {
-                                    const conds: string[] = patConds(ctorKeys, alt, path);
-                                    return length(conds) === 0
-                                      ? "true"
-                                      : _Str_join(
-                                          " && ",
-                                          map((c: string) => `(${c})`, conds),
-                                        );
-                                  }))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(p),
-);
+> = _curry(3, (ctorKeys: Map<string, string[]>, p: Pattern, path: string) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PAs": {
+      const { pat } = $match;
+      return patConds(ctorKeys, pat, path);
+    }
+    case "PWild": {
+      return [] as string[];
+    }
+    case "PUnit": {
+      return [] as string[];
+    }
+    case "PBind": {
+      return [] as string[];
+    }
+    case "PList": {
+      return [] as string[];
+    }
+    case "PLit": {
+      return [`${path} === ${litValue(p)}`];
+    }
+    case "PBool": {
+      return [`${path} === ${litValue(p)}`];
+    }
+    case "PStr": {
+      return [`${path} === ${litValue(p)}`];
+    }
+    case "PCtor": {
+      const { ctor, args } = $match;
+      return _Array_prepend(
+        `${path}._tag === ${jsStringLit(ctor)}`,
+        pctorConds(ctorKeys, ctor, args, 0, path),
+      );
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      return precordConds(ctorKeys, fields, 0, path);
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return ptupleConds(ctorKeys, elems, 0, path);
+    }
+    case "PArr": {
+      const { elems, rest } = $match;
+      return _Array_prepend(
+        `${path}.length ${_Option_isSome(rest) ? ">=" : "==="} ${show(length(elems))}`,
+        parrConds(ctorKeys, elems, 0, path),
+      );
+    }
+    case "POr": {
+      const { alts } = $match;
+      const altCond: (a: Pattern) => string = (alt: Pattern) => {
+        const conds: string[] = patConds(ctorKeys, alt, path);
+        return length(conds) === 0
+          ? "true"
+          : _Str_join(
+              " && ",
+              map((c: string) => `(${c})`, conds),
+            );
+      };
+      return [
+        _Str_join(
+          " || ",
+          map((alt: Pattern) => `(${altCond(alt)})`, alts),
+        ),
+      ];
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 /**
  * A field's refined type when its sub-pattern narrows it, else `None` — a
  * bind/wildcard/literal needs no narrowing and keeps its declared type.
@@ -281,27 +302,29 @@ export const patConds: _Curry<
 const fieldRefine: _Curry<
   [ctorKeys: Map<string, string[]>, p: Pattern, fieldBase: string],
   Option<string>
-> = _curry(3, (ctorKeys: Map<string, string[]>, p: Pattern, fieldBase: string) =>
-  ((_v) =>
-    _v._tag === "PCtor"
-      ? (Some(patTarget(ctorKeys, p, fieldBase)) as Option<string>)
-      : _v._tag === "PRecord"
-        ? ((t: string) =>
-            eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
-            patTarget(ctorKeys, p, fieldBase),
-          )
-        : _v._tag === "PTuple"
-          ? ((t: string) =>
-              eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
-              patTarget(ctorKeys, p, fieldBase),
-            )
-          : _v._tag === "PArr"
-            ? ((t: string) =>
-                eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>))(
-                patTarget(ctorKeys, p, fieldBase),
-              )
-            : (None as Option<string>))(p),
-);
+> = _curry(3, (ctorKeys: Map<string, string[]>, p: Pattern, fieldBase: string) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PCtor": {
+      return Some(patTarget(ctorKeys, p, fieldBase)) as Option<string>;
+    }
+    case "PRecord": {
+      const t: string = patTarget(ctorKeys, p, fieldBase);
+      return eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>);
+    }
+    case "PTuple": {
+      const t: string = patTarget(ctorKeys, p, fieldBase);
+      return eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>);
+    }
+    case "PArr": {
+      const t: string = patTarget(ctorKeys, p, fieldBase);
+      return eq(t, fieldBase) ? (None as Option<string>) : (Some(t) as Option<string>);
+    }
+    default: {
+      return None as Option<string>;
+    }
+  }
+});
 const ctorRefines: _Curry<
   [ctorKeys: Map<string, string[]>, args: Pattern[], keys: string[], member: string, i: number],
   string[]
@@ -414,43 +437,45 @@ const arrRefines: _Curry<
 export const patTarget: _Curry<
   [ctorKeys: Map<string, string[]>, p: Pattern, base: string],
   string
-> = _curry(3, (ctorKeys: Map<string, string[]>, p: Pattern, base: string) =>
-  ((_v) =>
-    _v._tag === "PAs"
-      ? (({ pat }) => patTarget(ctorKeys, pat, base))(_v)
-      : _v._tag === "PCtor"
-        ? (({ ctor, args }) =>
-            ((member: string) =>
-              ((keys: string[]) =>
-                ((refines: string[]) =>
-                  length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`)(
-                  ctorRefines(ctorKeys, args, keys, member, 0),
-                ))(_Option_unwrapOr([] as string[], _Map_get(ctor, ctorKeys))))(
-              `Extract<${base}, { _tag: ${jsStringLit(ctor)} }>`,
-            ))(_v)
-        : _v._tag === "PRecord"
-          ? (({ fields }) =>
-              ((refines: string[]) =>
-                length(refines) === 0 ? base : `${base} & { ${_Str_join("; ", refines)} }`)(
-                recordRefines(ctorKeys, fields, base, 0),
-              ))(_v)
-          : _v._tag === "PTuple"
-            ? (({ elems }) =>
-                !tupleRefines(ctorKeys, elems, base, 0)
-                  ? base
-                  : `[${_Str_join(", ", tupleTargets(ctorKeys, elems, base, 0))}]`)(_v)
-            : _v._tag === "PArr"
-              ? (({ elems, rest: restOpt }) =>
-                  ((elemBase: string) =>
-                    !arrRefines(ctorKeys, elems, elemBase, 0)
-                      ? base
-                      : ((heads: string) =>
-                          _Option_match(
-                            restOpt,
-                            () => `[${heads}]`,
-                            () => `[${heads}, ...${base}]`,
-                          ))(_Str_join(", ", arrTargets(ctorKeys, elems, elemBase, 0))))(
-                    `(${base})[number]`,
-                  ))(_v)
-              : base)(p),
-);
+> = _curry(3, (ctorKeys: Map<string, string[]>, p: Pattern, base: string) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PAs": {
+      const { pat } = $match;
+      return patTarget(ctorKeys, pat, base);
+    }
+    case "PCtor": {
+      const { ctor, args } = $match;
+      const member: string = `Extract<${base}, { _tag: ${jsStringLit(ctor)} }>`;
+      const keys: string[] = _Option_unwrapOr([] as string[], _Map_get(ctor, ctorKeys));
+      const refines: string[] = ctorRefines(ctorKeys, args, keys, member, 0);
+      return length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`;
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      const refines: string[] = recordRefines(ctorKeys, fields, base, 0);
+      return length(refines) === 0 ? base : `${base} & { ${_Str_join("; ", refines)} }`;
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return !tupleRefines(ctorKeys, elems, base, 0)
+        ? base
+        : `[${_Str_join(", ", tupleTargets(ctorKeys, elems, base, 0))}]`;
+    }
+    case "PArr": {
+      const { elems, rest: restOpt } = $match;
+      const elemBase: string = `(${base})[number]`;
+      return !arrRefines(ctorKeys, elems, elemBase, 0)
+        ? base
+        : ((heads: string) =>
+            _Option_match(
+              restOpt,
+              () => `[${heads}]`,
+              () => `[${heads}, ...${base}]`,
+            ))(_Str_join(", ", arrTargets(ctorKeys, elems, elemBase, 0)));
+    }
+    default: {
+      return base;
+    }
+  }
+});

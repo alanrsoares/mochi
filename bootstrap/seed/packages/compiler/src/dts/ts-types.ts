@@ -165,25 +165,29 @@ const nominal: _Curry<[name: string, args: Ty[], env: TsEnv], string> = _curry(
 );
 const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = _curry(
   2,
-  (row: Row, env: TsEnv) =>
-    ((_v) =>
-      _v._tag === "RowEmpty"
-        ? _tuple([] as string[], None as Option<number>)
-        : _v._tag === "RowVar"
-          ? (({ id }) => _tuple([] as string[], Some(id) as Option<number>))(_v)
-          : _v._tag === "RowExtend"
-            ? (({ label, fieldType, optional, rest }) =>
-                (([fields, tail]: [string[], Option<number>]) =>
-                  _tuple(
-                    _Array_prepend(
-                      `${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`,
-                      fields,
-                    ),
-                    tail,
-                  ))(tsRowFields(rest, env)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(row),
+  (row: Row, env: TsEnv) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowEmpty": {
+        return _tuple([] as string[], None as Option<number>);
+      }
+      case "RowVar": {
+        const { id } = $match;
+        return _tuple([] as string[], Some(id) as Option<number>);
+      }
+      case "RowExtend": {
+        const { label, fieldType, optional, rest } = $match;
+        return (([fields, tail]: [string[], Option<number>]) =>
+          _tuple(
+            _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields),
+            tail,
+          ))(tsRowFields(rest, env));
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 /**
  * Fields of a CLOSED row, each rendered with NO index. `None` for an open row:
@@ -194,25 +198,28 @@ const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = 
  */
 const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<string[]>> = _curry(
   2,
-  (row: Row, vars: Map<number, string>) =>
-    ((_v) =>
-      _v._tag === "RowEmpty"
-        ? (Some([] as string[]) as Option<string[]>)
-        : _v._tag === "RowVar"
-          ? (None as Option<string[]>)
-          : _v._tag === "RowExtend"
-            ? (({ label, fieldType, optional, rest }) =>
-                _Option_map(
-                  (fs: string[]) =>
-                    _Array_prepend(
-                      `${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`,
-                      fs,
-                    ),
-                  shapeFieldsFrom(rest, vars),
-                ))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(row),
+  (row: Row, vars: Map<number, string>) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowEmpty": {
+        return Some([] as string[]) as Option<string[]>;
+      }
+      case "RowVar": {
+        return None as Option<string[]>;
+      }
+      case "RowExtend": {
+        const { label, fieldType, optional, rest } = $match;
+        return _Option_map(
+          (fs: string[]) =>
+            _Array_prepend(`${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`, fs),
+          shapeFieldsFrom(rest, vars),
+        );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const shapeJoined: _Curry<[ts: Ty[], vars: Map<number, string>], string> = _curry(
   2,
@@ -870,11 +877,18 @@ const pinInRow: <A, B>(
     row: Row,
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
-  ) =>
-    ((_v) =>
-      _v._tag === "RowExtend"
-        ? (({ fieldType: ft, rest }) => pinInRow(rest, env, pinInTy(ft, env, st)))(_v)
-        : st)(row),
+  ) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowExtend": {
+        const { fieldType: ft, rest } = $match;
+        return pinInRow(rest, env, pinInTy(ft, env, st));
+      }
+      default: {
+        return st;
+      }
+    }
+  },
 );
 const pinInTy: <A, B>(
   t: Ty,
@@ -886,17 +900,30 @@ const pinInTy: <A, B>(
     t: Ty,
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
-  ) =>
-    ((_v) =>
-      _v._tag === "TyRecord"
-        ? (({ row }) => pinInRow(row, env, considerClosed(row, env, st)))(_v)
-        : _v._tag === "TyFn"
-          ? (({ from: a, to: b }) => pinInTy(b, env, pinInTy(a, env, st)))(_v)
-          : _v._tag === "TyCon"
-            ? (({ args }) => pinInTys(args, env, st, 0))(_v)
-            : _v._tag === "TyOneOf"
-              ? (({ members: ms }) => pinInTys(ms, env, st, 0))(_v)
-              : st)(t),
+  ) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyRecord": {
+        const { row } = $match;
+        return pinInRow(row, env, considerClosed(row, env, st));
+      }
+      case "TyFn": {
+        const { from: a, to: b } = $match;
+        return pinInTy(b, env, pinInTy(a, env, st));
+      }
+      case "TyCon": {
+        const { args } = $match;
+        return pinInTys(args, env, st, 0);
+      }
+      case "TyOneOf": {
+        const { members: ms } = $match;
+        return pinInTys(ms, env, st, 0);
+      }
+      default: {
+        return st;
+      }
+    }
+  },
 );
 /**
  * Variables a unique in-scope record alias explains, as concrete type text.
