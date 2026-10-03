@@ -10,6 +10,7 @@
     ".": "./src/cli.ts"
   },
   "dependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@mochi/codemod": "workspace:*",
     "@mochi/compiler": "workspace:*",
     "@mochi/dx": "workspace:*",

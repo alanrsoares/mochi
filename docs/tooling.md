@@ -31,6 +31,13 @@ bun run mochi build [--open] <entry.mochi> # compile a module graph, writing a .
 codegen emits that specifier verbatim, so host runtimes are plain `.mjs` files Bun
 resolves at runtime, and the TS backend emits a matching `.d.mts` for them.
 
+The CLI formats emitted JS, TS/TSX and declarations with Biome before writing
+stdout or files (two spaces, width 88). This runs the formatter only, with a
+dedicated config independent of the current project. Formatting failures are
+reported before any graph output is written. Compiler APIs retain their raw
+output; the playground uses its browser formatter on both worker and fallback
+paths ([ADR 0148](adr/0148-format-emitted-output-at-host-boundaries.md)).
+
 A codemod transform module exports `(prog, ctx) => prog`, where `prog` is the bootstrap
 parser's `readonly Stmt[]` ([ADR 0109](adr/0109-bootstrap-ast-is-the-public-ast.md)).
 `mapProgramExprs` from `@mochi/codemod` maps every expression. Output goes through the

@@ -88,6 +88,11 @@ commands, `gen-mochi-dts`, and the `@mochi/compiler` barrel's `compile`,
 [ADR 0127](adr/0127-barrel-takes-bootstrap-plugins.md)). There are no
 hand-authored TypeScript emitters or differential oracle (ADR 0131).
 
+CLI stdout and file output are formatted with Biome at the host boundary;
+the playground uses its browser formatter. Core codegen and compiler APIs retain
+their raw, pure emission contract
+([ADR 0148](adr/0148-format-emitted-output-at-host-boundaries.md)).
+
 Core Mochi uses exhaustive `switch`; TypeScript host tooling uses
 `@onrails/pattern`'s `.exhaustive()`. Ordinary emitted code does not use it: a `switch`
 in expression position normally lowers to a ternary chain over its scrutinee.
