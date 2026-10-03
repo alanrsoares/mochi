@@ -4,6 +4,7 @@ import {
   None,
   Some,
   _Option_contains,
+  _Option_match,
   _Str_get,
   _curry,
   _done,
@@ -21,25 +22,19 @@ const skipStrLoop: _Curry<[src: string, j0: number], Option<number>> = _curry(
           : _v._tag === "Some" && _v.value === '"'
             ? _done(Some(j + 1) as Option<number>)
             : _v._tag === "Some" && _v.value === "\\"
-              ? ((_v) =>
-                  _v._tag === "Some"
-                    ? _recur(j + 2)
-                    : _v._tag === "None"
-                      ? _recur(j + 1)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Str_get(j + 1, src))
+              ? _Option_match(
+                  _Str_get(j + 1, src),
+                  () => _recur(j + 1),
+                  () => _recur(j + 2),
+                )
               : _v._tag === "Some" &&
                   _v.value === "$" &&
                   _Option_contains("{", _Str_get(j + 1, src))
-                ? ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: hEnd }) => _recur(hEnd))(_v)
-                      : _v._tag === "None"
-                        ? _done(None as Option<number>)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(findHoleEnd(src, j + 2))
+                ? _Option_match(
+                    findHoleEnd(src, j + 2),
+                    () => _done(None as Option<number>),
+                    (hEnd) => _recur(hEnd),
+                  )
                 : _v._tag === "Some"
                   ? _recur(j + 1)
                   : (() => {
@@ -81,14 +76,11 @@ const findHoleLoop: _Curry<[src: string, j0: number, depth0: number], Option<num
         _v._tag === "None"
           ? _done(None as Option<number>)
           : _v._tag === "Some" && _v.value === '"'
-            ? ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: stop }) => _recur(stop, depth))(_v)
-                  : _v._tag === "None"
-                    ? _done(None as Option<number>)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(skipStringLiteral(src, j))
+            ? _Option_match(
+                skipStringLiteral(src, j),
+                () => _done(None as Option<number>),
+                (stop) => _recur(stop, depth),
+              )
             : _v._tag === "Some" && _v.value === "/" && _Option_contains("/", _Str_get(j + 1, src))
               ? _recur(skipLineCommentTo(src, j), depth)
               : _v._tag === "Some" && _v.value === "{"

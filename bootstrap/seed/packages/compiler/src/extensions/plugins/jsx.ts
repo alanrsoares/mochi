@@ -31,6 +31,7 @@ import {
   _Map_keys,
   _Option_exists,
   _Option_isSome,
+  _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
@@ -213,18 +214,15 @@ const jxExpectLabel: _Curry<
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = jxTokAt(toks, pos);
-  return ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
-            [Name, number],
-            { message: string; start: number; end: number }
-          >)(_v)
-      : _v._tag === "None"
-        ? jxExpectId(toks, pos)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(jxKeywordText(lt.tok));
+  return _Option_match(
+    jxKeywordText(lt.tok),
+    () => jxExpectId(toks, pos),
+    (name) =>
+      Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+        [Name, number],
+        { message: string; start: number; end: number }
+      >,
+  );
 });
 /**
  * Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
@@ -837,21 +835,18 @@ const jsxPropsWithSynthesizedChildren: _Curry<
   [propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]],
   Ty
 > = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? propsT
-      : _v._tag === "Some"
-        ? (({ value: expectedChildren }) =>
-            ((_v) =>
-              _v._tag === "TyRecord"
-                ? (({ row: prow }) =>
-                    or(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0)
-                      ? propsT
-                      : tRecord(rExtend("children", expectedChildren, prow)))(_v)
-                : propsT)(propsT))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(rowField(expectedRow, "children")),
+  _Option_match(
+    rowField(expectedRow, "children"),
+    () => propsT,
+    (expectedChildren) =>
+      ((_v) =>
+        _v._tag === "TyRecord"
+          ? (({ row: prow }) =>
+              or(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0)
+                ? propsT
+                : tRecord(rExtend("children", expectedChildren, prow)))(_v)
+          : propsT)(propsT),
+  ),
 );
 import { intrinsicElements as jsxIntrinsicElements } from "./jsx-schema.gen.mjs";
 /**
@@ -1003,14 +998,11 @@ const unknownProp: <A, B>(
   4,
   <A, B>(tag: string, name: string, value: Expr, schema: Map<string, A>) => {
     const hint: Option<string> = closestName(name, _Map_keys(schema));
-    const did: string = ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: s }) => ` Did you mean '${s}'?`)(_v)
-        : _v._tag === "None"
-          ? ""
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(hint);
+    const did: string = _Option_match(
+      hint,
+      () => "",
+      (s) => ` Did you mean '${s}'?`,
+    );
     return jxTypeErr(`Property '${name}' does not exist on '<${tag}>'.${did}`, jxExprSpan(value));
   },
 );
@@ -1048,95 +1040,70 @@ const inferIntrinsicFields: <A>(
         : _v.length >= 1
           ? (([f, ...rest]) =>
               ((cont: (a: St) => Result<St, BoundErr>) =>
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: msg }) => jxTypeErr(msg, jxExprSpan(f.value)))(_v)
-                    : _v._tag === "None"
-                      ? or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
-                        ? _Result_flatMap(
-                            ([valT, st1]) => cont(noteProp(f, valT, st1)),
-                            api.inferExpr(f.value, st),
-                          )
-                        : ((_v) =>
-                            _v._tag === "None"
-                              ? _Result_flatMap(
-                                  ([valT, st1]) => cont(noteProp(f, valT, st1)),
-                                  api.inferExpr(f.value, st),
-                                )
-                              : _v._tag === "Some"
-                                ? (({ value: m }) =>
-                                    ((expected: Option<string>) =>
-                                      ((_v) =>
-                                        _v._tag === "None"
-                                          ? unknownProp(tag, f.name, f.value, m)
-                                          : _v._tag === "Some"
-                                            ? (({ value: kind }) =>
-                                                kind === "event"
-                                                  ? checkHandler(
-                                                      f.name,
-                                                      f.value,
-                                                      st,
-                                                      api,
-                                                      (st1: St) =>
-                                                        cont(noteProp(f, handlerType, st1)),
-                                                    )
-                                                  : kind === "any"
-                                                    ? _Result_flatMap(
-                                                        ([, st1]) =>
-                                                          cont(noteProp(f, tPrim("any"), st1)),
-                                                        api.inferExpr(f.value, st),
-                                                      )
-                                                    : ((_v) =>
-                                                        _v._tag === "Some"
-                                                          ? (({ value: expectedT }) =>
-                                                              _Result_flatMap(
-                                                                ([valT, st1]) =>
-                                                                  _Result_flatMap(
-                                                                    (st2) =>
-                                                                      cont(
-                                                                        noteProp(f, expectedT, st2),
-                                                                      ),
-                                                                    api.unify(
-                                                                      valT,
-                                                                      expectedT,
-                                                                      st1,
-                                                                      jxExprSpan(f.value),
-                                                                    ),
-                                                                  ),
-                                                                api.inferExpr(f.value, st),
-                                                              ))(_v)
-                                                          : _v._tag === "None"
-                                                            ? _Result_flatMap(
-                                                                ([, st1]) => cont(st1),
-                                                                api.inferExpr(f.value, st),
-                                                              )
-                                                            : (() => {
-                                                                throw new Error(
-                                                                  "non-exhaustive match",
-                                                                );
-                                                              })())(attrKindType(kind)))(_v)
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(expected))(
-                                      ((_v) =>
-                                        _v._tag === "Some"
-                                          ? (({ value: k }) => Some(k) as Option<string>)(_v)
-                                          : _v._tag === "None"
-                                            ? isHandlerName(f.name)
-                                              ? (Some("event") as Option<string>)
-                                              : (None as Option<string>)
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(_Map_get(f.name, m)),
-                                    ))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(schema)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(mismatchHint(f.name)))((st1: St) =>
-                inferIntrinsicFields(tag, rest, st1, api, schema),
-              ))(_v)
+                _Option_match(
+                  mismatchHint(f.name),
+                  () =>
+                    or(_Str_startsWith("data-", f.name), _Str_startsWith("aria-", f.name))
+                      ? _Result_flatMap(
+                          ([valT, st1]) => cont(noteProp(f, valT, st1)),
+                          api.inferExpr(f.value, st),
+                        )
+                      : _Option_match(
+                          schema,
+                          () =>
+                            _Result_flatMap(
+                              ([valT, st1]) => cont(noteProp(f, valT, st1)),
+                              api.inferExpr(f.value, st),
+                            ),
+                          (m) => {
+                            const expected: Option<string> = _Option_match(
+                              _Map_get(f.name, m),
+                              () =>
+                                isHandlerName(f.name)
+                                  ? (Some("event") as Option<string>)
+                                  : (None as Option<string>),
+                              (k) => Some(k) as Option<string>,
+                            );
+                            return _Option_match(
+                              expected,
+                              () => unknownProp(tag, f.name, f.value, m),
+                              (kind) =>
+                                kind === "event"
+                                  ? checkHandler(f.name, f.value, st, api, (st1: St) =>
+                                      cont(noteProp(f, handlerType, st1)),
+                                    )
+                                  : kind === "any"
+                                    ? _Result_flatMap(
+                                        ([, st1]) => cont(noteProp(f, tPrim("any"), st1)),
+                                        api.inferExpr(f.value, st),
+                                      )
+                                    : _Option_match(
+                                        attrKindType(kind),
+                                        () =>
+                                          _Result_flatMap(
+                                            ([, st1]) => cont(st1),
+                                            api.inferExpr(f.value, st),
+                                          ),
+                                        (expectedT) =>
+                                          _Result_flatMap(
+                                            ([valT, st1]) =>
+                                              _Result_flatMap(
+                                                (st2) => cont(noteProp(f, expectedT, st2)),
+                                                api.unify(
+                                                  valT,
+                                                  expectedT,
+                                                  st1,
+                                                  jxExprSpan(f.value),
+                                                ),
+                                              ),
+                                            api.inferExpr(f.value, st),
+                                          ),
+                                      ),
+                            );
+                          },
+                        ),
+                  (msg) => jxTypeErr(msg, jxExprSpan(f.value)),
+                ))((st1: St) => inferIntrinsicFields(tag, rest, st1, api, schema)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(fields),
@@ -1178,14 +1145,11 @@ const unknownTagErr: <A>(tagName: string, sp: SpanAt) => Result<A, BoundErr> = _
   2,
   <A>(tagName: string, sp: SpanAt) => {
     const hint: Option<string> = closestName(tagName, _Map_keys(jsxIntrinsicElements));
-    const did: string = ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: s }) => ` Did you mean '<${s}>'?`)(_v)
-        : _v._tag === "None"
-          ? ""
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(hint);
+    const did: string = _Option_match(
+      hint,
+      () => "",
+      (s) => ` Did you mean '<${s}>'?`,
+    );
     return jxTypeErr(`Unknown JSX element '<${tagName}>'.${did}`, sp);
   },
 );
@@ -1212,29 +1176,21 @@ const inferStringTag: <A>(
   ) =>
     tagName === "Fragment"
       ? inferFragmentFields(fields, st, api)
-      : ((_v) =>
-          _v._tag === "Some"
-            ? (({ value: schema }) =>
-                inferIntrinsicFields(
-                  tagName,
-                  fields,
-                  st,
-                  api,
-                  Some(schema) as Option<Map<string, string>>,
-                ))(_v)
-            : _v._tag === "None"
-              ? _Str_contains("-", tagName)
-                ? inferIntrinsicFields(
-                    tagName,
-                    fields,
-                    st,
-                    api,
-                    None as Option<Map<string, string>>,
-                  )
-                : unknownTagErr(tagName, jxExprSpan(tagExpr))
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Map_get(tagName, jsxIntrinsicElements)),
+      : _Option_match(
+          _Map_get(tagName, jsxIntrinsicElements),
+          () =>
+            _Str_contains("-", tagName)
+              ? inferIntrinsicFields(tagName, fields, st, api, None as Option<Map<string, string>>)
+              : unknownTagErr(tagName, jxExprSpan(tagExpr)),
+          (schema) =>
+            inferIntrinsicFields(
+              tagName,
+              fields,
+              st,
+              api,
+              Some(schema) as Option<Map<string, string>>,
+            ),
+        ),
 );
 /**
  * Each attribute of a component tag hovers with the prop type it fills.
@@ -1247,14 +1203,11 @@ const noteComponentProps: _Curry<[propsExpr: Expr, expectedRow: Row, st: St], St
         ? (({ fields }) =>
             reduce(
               _curry(2, (acc: St, f: Field) =>
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: t }) => noteProp(f, zonk(t, acc), acc))(_v)
-                    : _v._tag === "None"
-                      ? acc
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(rowField(expectedRow, f.name)),
+                _Option_match(
+                  rowField(expectedRow, f.name),
+                  () => acc,
+                  (t) => noteProp(f, zonk(t, acc), acc),
+                ),
               ),
               st,
               fields,
@@ -1365,24 +1318,21 @@ export const inferJsxCallHook: <A, B>(
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     } & B,
   ) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: o }) =>
-            o === "jsx"
-              ? ((_v) =>
-                  _v.length >= 2
-                    ? (([tagExpr, propsExpr, ...rest]) =>
-                        _Result_map(
-                          (r: [Ty, St]) => Some(r) as Option<[Ty, St]>,
-                          inferJsxCall(tagExpr, propsExpr, rest, st, api),
-                        ))(_v)
-                    : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(args)
-              : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(_v)
-        : _v._tag === "None"
-          ? (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(origin),
+    _Option_match(
+      origin,
+      () => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>,
+      (o) =>
+        o === "jsx"
+          ? ((_v) =>
+              _v.length >= 2
+                ? (([tagExpr, propsExpr, ...rest]) =>
+                    _Result_map(
+                      (r: [Ty, St]) => Some(r) as Option<[Ty, St]>,
+                      inferJsxCall(tagExpr, propsExpr, rest, st, api),
+                    ))(_v)
+                : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(args)
+          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>),
+    ),
 );
 const vnodeTs: <A>(api: { tsType: (a: Ty) => string } & A) => string = <A>(
   api: { tsType: (a: Ty) => string } & A,
@@ -1486,14 +1436,11 @@ const componentPropsParamTs: <A>(
     ((_v) =>
       _v._tag === "TyRecord"
         ? (({ row }) =>
-            ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: name }) => name)(_v)
-                : _v._tag === "None"
-                  ? componentPropsTs(row, api)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(api.aliasOf(row)))(_v)
+            _Option_match(
+              api.aliasOf(row),
+              () => componentPropsTs(row, api),
+              (name) => name,
+            ))(_v)
         : _v._tag === "TyVar"
           ? "Record<string, unknown>"
           : api.tsType(t))(t),
@@ -1659,14 +1606,11 @@ const jsxChildD: _Curry<[child: SeqElem, api: FormatApi], Doc> = _curry(
 const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
   2,
   (shape: JsxShape, api: FormatApi) => {
-    const spreadD: Doc[] = ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: sp }) => [jsxHoleD("{...", sp, api)])(_v)
-        : _v._tag === "None"
-          ? ([] as Doc[])
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(shape.spread);
+    const spreadD: Doc[] = _Option_match(
+      shape.spread,
+      () => [] as Doc[],
+      (sp) => [jsxHoleD("{...", sp, api)],
+    );
     return _Array_concat(
       spreadD,
       map((f: Field) => jsxAttrD(f.name, f.value, api), shape.fields),
@@ -1680,38 +1624,34 @@ const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
 export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
   2,
   (e: Expr, api: FormatApi) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (None as Option<Doc>)
-        : _v._tag === "Some"
-          ? (({ value: shape }) =>
-              ((fragment: boolean) =>
-                ((tag: string) =>
-                  ((attrs: Doc[]) =>
-                    and(length(shape.children) === 0, !fragment)
-                      ? (Some(jsxOpenD(tag, attrs, true)) as Option<Doc>)
-                      : (Some(
-                          group(
-                            cat([
-                              fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
-                              indent(
-                                cat(
-                                  map(
-                                    (child: SeqElem) => cat([softline, jsxChildD(child, api)]),
-                                    shape.children,
-                                  ),
-                                ),
-                              ),
-                              softline,
-                              txt(fragment ? "</>" : `</${tag}>`),
-                            ]),
-                          ),
-                        ) as Option<Doc>))(jsxAttrsD(shape, api)))(
-                  fragment ? "" : jsxTag(shape.tag, api),
-                ))(isFragment(shape.tag)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(jsxShape(e)),
+    _Option_match(
+      jsxShape(e),
+      () => None as Option<Doc>,
+      (shape) => {
+        const fragment: boolean = isFragment(shape.tag);
+        const tag: string = fragment ? "" : jsxTag(shape.tag, api);
+        const attrs: Doc[] = jsxAttrsD(shape, api);
+        return and(length(shape.children) === 0, !fragment)
+          ? (Some(jsxOpenD(tag, attrs, true)) as Option<Doc>)
+          : (Some(
+              group(
+                cat([
+                  fragment ? txt("<>") : jsxOpenD(tag, attrs, false),
+                  indent(
+                    cat(
+                      map(
+                        (child: SeqElem) => cat([softline, jsxChildD(child, api)]),
+                        shape.children,
+                      ),
+                    ),
+                  ),
+                  softline,
+                  txt(fragment ? "</>" : `</${tag}>`),
+                ]),
+              ),
+            ) as Option<Doc>);
+      },
+    ),
 );
 export const jsxPlugin = {
   name: "jsx",

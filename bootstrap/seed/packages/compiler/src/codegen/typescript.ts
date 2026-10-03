@@ -53,6 +53,7 @@ import {
   _Option_flatMap,
   _Option_isSome,
   _Option_map,
+  _Option_match,
   _Option_unwrapOr,
   _Set_add,
   _Set_fromArray,
@@ -62,6 +63,11 @@ import {
   _Str_join,
   _Str_split,
   _Str_startsWith,
+  _compare,
+  _compareFieldNames,
+  _compareFirstKey,
+  _compareRecords,
+  _compareSortedKeys,
   _curry,
   _list,
   _tuple,
@@ -124,26 +130,20 @@ import {
 const paramVarsFrom: <A>(params: A[], i: number) => Map<A, Ty> = _curry(
   2,
   <A>(params: A[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? new Map<A, Ty>()
-        : _v._tag === "Some"
-          ? (({ value: p }) => _Map_set(p, tVar(i), paramVarsFrom(params, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () => new Map<A, Ty>(),
+      (p) => _Map_set(p, tVar(i), paramVarsFrom(params, i + 1)),
+    ),
 );
 const paramNamesFrom: <A>(params: A[], i: number) => Map<number, string> = _curry(
   2,
   <A>(params: A[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? new Map<number, string>()
-        : _v._tag === "Some"
-          ? _Map_set(i, letterAt(i), paramNamesFrom(params, i + 1))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () => new Map<number, string>(),
+      () => _Map_set(i, letterAt(i), paramNamesFrom(params, i + 1)),
+    ),
 );
 /**
  * `<A, B>` for a parameterised decl, `""` for a nullary one.
@@ -151,16 +151,11 @@ const paramNamesFrom: <A>(params: A[], i: number) => Map<number, string> = _curr
 const genericHead: <A>(params: A[], i: number, acc: string[]) => string = _curry(
   3,
   <A>(params: A[], i: number, acc: string[]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? length(acc) === 0
-          ? ""
-          : `<${_Str_join(", ", acc)}>`
-        : _v._tag === "Some"
-          ? genericHead(params, i + 1, _Array_append(letterAt(i), acc))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () => (length(acc) === 0 ? "" : `<${_Str_join(", ", acc)}>`),
+      () => genericHead(params, i + 1, _Array_append(letterAt(i), acc)),
+    ),
 );
 /**
  * A ctor field's type is a full TypeExpr (ADR 0015). Lower it to a Ty first —
@@ -205,18 +200,15 @@ const ctorFieldsFrom: _Curry<
     recs: Map<string, string>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: fld }) =>
-              _Array_prepend(
-                `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}`,
-                ctorFieldsFrom(fields, keys, params, aliases, recs, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => [] as string[],
+      (fld) =>
+        _Array_prepend(
+          `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}`,
+          ctorFieldsFrom(fields, keys, params, aliases, recs, i + 1),
+        ),
+    ),
 );
 /**
  * One ctor's runtime shape: the `_tag` discriminant plus its fields.
@@ -251,18 +243,15 @@ const ctorVariantsFrom: _Curry<
     recs: Map<string, string>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: c }) =>
-              _Array_prepend(
-                `  | ${ctorVariant(c, params, aliases, recs)}`,
-                ctorVariantsFrom(ctors, params, aliases, recs, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ctors)),
+    _Option_match(
+      _Array_get(i, ctors),
+      () => [] as string[],
+      (c) =>
+        _Array_prepend(
+          `  | ${ctorVariant(c, params, aliases, recs)}`,
+          ctorVariantsFrom(ctors, params, aliases, recs, i + 1),
+        ),
+    ),
 );
 /**
  * A `type` decl -> an exported tagged union matching the runtime shape.
@@ -308,18 +297,15 @@ const aliasFieldsFrom: _Curry<
     recs: Map<string, string>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              _Array_prepend(
-                `${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}`,
-                aliasFieldsFrom(fields, params, aliases, recs, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => [] as string[],
+      (f) =>
+        _Array_prepend(
+          `${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}`,
+          aliasFieldsFrom(fields, params, aliases, recs, i + 1),
+        ),
+    ),
 );
 /**
  * A record alias (`type Point = { x: number, y: number }`) -> an exported
@@ -390,27 +376,21 @@ export type ${name} = { readonly [${name}]: never };`;
 const mergeInto: <A, B>(keys: A[], src: Map<A, B>, acc: Map<A, B>, i: number) => Map<A, B> = _curry(
   4,
   <A, B>(keys: A[], src: Map<A, B>, acc: Map<A, B>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: k }) =>
-              mergeInto(
-                keys,
-                src,
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: v }) => _Map_set(k, v, acc))(_v)
-                    : _v._tag === "None"
-                      ? acc
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(k, src)),
-                i + 1,
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => acc,
+      (k) =>
+        mergeInto(
+          keys,
+          src,
+          _Option_match(
+            _Map_get(k, src),
+            () => acc,
+            (v) => _Map_set(k, v, acc),
+          ),
+          i + 1,
+        ),
+    ),
 );
 const unionNamesFrom: <A, B>(
   schemes: ({ vars: A[]; rvars: A[] } & B)[],
@@ -419,18 +399,14 @@ const unionNamesFrom: <A, B>(
 ) => Map<A, string> = _curry(
   3,
   <A, B>(schemes: ({ vars: A[]; rvars: A[] } & B)[], i: number, acc: Map<A, string>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: sc }) =>
-              ((names) =>
-                unionNamesFrom(schemes, i + 1, mergeInto(_Map_keys(names), names, acc, 0)))(
-                genericNames(sc),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, schemes)),
+    _Option_match(
+      _Array_get(i, schemes),
+      () => acc,
+      (sc) => {
+        const names = genericNames(sc);
+        return unionNamesFrom(schemes, i + 1, mergeInto(_Map_keys(names), names, acc, 0));
+      },
+    ),
 );
 export const unionGenericNames: <A, B>(
   schemes: ({ vars: A[]; rvars: A[] } & B)[],
@@ -468,14 +444,11 @@ const allVarsIn: <A>(t: Ty, names: Map<number, A>) => boolean = _curry(
 const allVarsInAll: <A>(ts: Ty[], names: Map<number, A>, i: number) => boolean = _curry(
   3,
   <A>(ts: Ty[], names: Map<number, A>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? true
-        : _v._tag === "Some"
-          ? (({ value: t }) => and(allVarsIn(t, names), allVarsInAll(ts, names, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ts)),
+    _Option_match(
+      _Array_get(i, ts),
+      () => true,
+      (t) => and(allVarsIn(t, names), allVarsInAll(ts, names, i + 1)),
+    ),
 );
 const allVarsInRow: <A>(row: Row, names: Map<number, A>) => boolean = _curry(
   2,
@@ -616,14 +589,11 @@ export const genericLambdaParams: <A>(
 const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry(
   3,
   <A>(params: A[], i: number, acc: string[]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? neverArgs(params, i + 1, _Array_append("never", acc))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () => acc,
+      () => neverArgs(params, i + 1, _Array_append("never", acc)),
+    ),
 );
 const ctorParamTypes: _Curry<
   [
@@ -643,18 +613,15 @@ const ctorParamTypes: _Curry<
     recs: Map<string, string>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: fld }) =>
-              _Array_prepend(
-                fieldTs(fld.fieldType, params, aliases, recs),
-                ctorParamTypes(fields, params, aliases, recs, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => [] as string[],
+      (fld) =>
+        _Array_prepend(
+          fieldTs(fld.fieldType, params, aliases, recs),
+          ctorParamTypes(fields, params, aliases, recs, i + 1),
+        ),
+    ),
 );
 export const ctorFactoryTs: _Curry<
   [
@@ -717,18 +684,15 @@ const compositionsFrom: _Curry<[n: number, k: number], number[][]> = _curry(
 const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => A[][] = _curry(
   4,
   <A>(params: A[], groups: number[], i: number, at: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as A[][])
-        : _v._tag === "Some"
-          ? (({ value: g }) =>
-              _Array_prepend(
-                _Array_take(g, _Array_drop(at, params)),
-                sliceGroups(params, groups, i + 1, at + g),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, groups)),
+    _Option_match(
+      _Array_get(i, groups),
+      () => [] as A[][],
+      (g) =>
+        _Array_prepend(
+          _Array_take(g, _Array_drop(at, params)),
+          sliceGroups(params, groups, i + 1, at + g),
+        ),
+    ),
 );
 /**
  * Fold the trailing groups into a curried tail: `(c) => (d) => R`.
@@ -814,26 +778,23 @@ const takeParams: _Curry<
   [t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]],
   [Ty, number, string[]]
 > = _curry(6, (t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? _tuple(t, n, acc)
-      : _v._tag === "Some"
-        ? (({ value: p }) =>
-            ((_v) =>
-              _v._tag === "TyFn"
-                ? (({ from: fromT, to: toT }) =>
-                    takeParams(
-                      toT,
-                      params,
-                      env,
-                      i + 1,
-                      n + 1,
-                      _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
-                    ))(_v)
-                : _tuple(t, n, acc))(t))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, params)),
+  _Option_match(
+    _Array_get(i, params),
+    () => _tuple(t, n, acc),
+    (p) =>
+      ((_v) =>
+        _v._tag === "TyFn"
+          ? (({ from: fromT, to: toT }) =>
+              takeParams(
+                toT,
+                params,
+                env,
+                i + 1,
+                n + 1,
+                _Array_append(`${paramDeclName(p, n)}: ${tsOf(fromT, env)}`, acc),
+              ))(_v)
+          : _tuple(t, n, acc))(t),
+  ),
 );
 /**
  * Arity-aware nested form: one arrow peeled per param, recursing into the body
@@ -892,14 +853,11 @@ export const bindingTsType: <A>(
     recs: Map<string, string>,
     bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
   ) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: ts }) => ts)(_v)
-        : _v._tag === "None"
-          ? coreBindingTsType(sc, value, recs)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(runBindingHooks(bindingHooks, value, sc.ty, tsApiFor(recs))),
+    _Option_match(
+      runBindingHooks(bindingHooks, value, sc.ty, tsApiFor(recs)),
+      () => coreBindingTsType(sc, value, recs),
+      (ts) => ts,
+    ),
 );
 const coreBindingTsType: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
@@ -943,14 +901,11 @@ const typeAtFrom: <A, B, C, D, E>(
     i: number,
     acc: Map<string, C>,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: r }) => typeAtFrom(types, i + 1, _Map_set(spanKey(r.span), r.ty, acc)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, types)),
+    _Option_match(
+      _Array_get(i, types),
+      () => acc,
+      (r) => typeAtFrom(types, i + 1, _Map_set(spanKey(r.span), r.ty, acc)),
+    ),
 );
 /**
  * Later records win when two nodes share a span — `zonkRecorded` already put
@@ -986,14 +941,11 @@ const consInTy: _Curry<[t: Ty, acc: Set<string>], Set<string>> = _curry(
 const consInAll: _Curry<[ts: Ty[], acc: Set<string>, i: number], Set<string>> = _curry(
   3,
   (ts: Ty[], acc: Set<string>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: t }) => consInAll(ts, consInTy(t, acc), i + 1))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ts)),
+    _Option_match(
+      _Array_get(i, ts),
+      () => acc,
+      (t) => consInAll(ts, consInTy(t, acc), i + 1),
+    ),
 );
 const consInRow: _Curry<[row: Row, acc: Set<string>], Set<string>> = _curry(
   2,
@@ -1088,14 +1040,11 @@ export const referencedCons: <A>(
                 i + 1,
                 _Str_startsWith("$", name)
                   ? acc
-                  : ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: sc }) => consInTy(sc.ty, acc))(_v)
-                        : _v._tag === "None"
-                          ? acc
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(_Map_get(name, env)),
+                  : _Option_match(
+                      _Map_get(name, env),
+                      () => acc,
+                      (sc) => consInTy(sc.ty, acc),
+                    ),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                 value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
@@ -1122,21 +1071,19 @@ export const builtinTypeNamesFor: _Curry<
   [declared: Set<string>, wanted: Set<string>, body: string, i: number],
   string[]
 > = _curry(4, (declared: Set<string>, wanted: Set<string>, body: string, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: bt }) =>
-            ((rest: string[]) =>
-              and(
-                !_Set_has(bt.name, declared),
-                or(_Set_has(bt.name, wanted), _Str_contains(bt.name, body)),
-              )
-                ? _Array_prepend(bt.name, rest)
-                : rest)(builtinTypeNamesFor(declared, wanted, body, i + 1)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, builtinTypeDecls)),
+  _Option_match(
+    _Array_get(i, builtinTypeDecls),
+    () => [] as string[],
+    (bt) => {
+      const rest: string[] = builtinTypeNamesFor(declared, wanted, body, i + 1);
+      return and(
+        !_Set_has(bt.name, declared),
+        or(_Set_has(bt.name, wanted), _Str_contains(bt.name, body)),
+      )
+        ? _Array_prepend(bt.name, rest)
+        : rest;
+    },
+  ),
 );
 /**
  * A declared record alias lowered back to the row its USES carry. ADR 0005
@@ -1145,24 +1092,21 @@ export const builtinTypeNamesFor: _Curry<
  */
 const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
   _curry(3, (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (RowEmpty as Row)
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-                RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
-                typeExprToType(
-                  f.fieldType,
-                  new Map<string, Ty>(),
-                  mkSt(0),
-                  aliases,
-                  _Set_fromArray([] as string[]),
-                ),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => RowEmpty as Row,
+      (f) =>
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+          RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1)))(
+          typeExprToType(
+            f.fieldType,
+            new Map<string, Ty>(),
+            mkSt(0),
+            aliases,
+            _Set_fromArray([] as string[]),
+          ),
+        ),
+    ),
   );
 const aliasShapeKey: _Curry<
   [fields: AliasField[], aliases: Map<string, AliasInfo>],
@@ -1197,31 +1141,23 @@ const indexAlias: <A>(
 ) => Map<string, A> = _curry(
   4,
   <A>(key: string, name: A, aliases: Map<string, AliasInfo>, acc: Map<string, A>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: info }) =>
-              ((_v) =>
-                _v._tag === "Some"
-                  ? acc
-                  : _v._tag === "None"
-                    ? or(length(info.params) !== 0, length(info.fields) === 0)
-                      ? acc
-                      : ((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: k }) => _Map_set(k, name, acc))(_v)
-                            : _v._tag === "None"
-                              ? acc
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(aliasShapeKey(info.fields, aliases))
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(info.expr))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(key, aliases)),
+    _Option_match(
+      _Map_get(key, aliases),
+      () => acc,
+      (info) =>
+        _Option_match(
+          info.expr,
+          () =>
+            or(length(info.params) !== 0, length(info.fields) === 0)
+              ? acc
+              : _Option_match(
+                  aliasShapeKey(info.fields, aliases),
+                  () => acc,
+                  (k) => _Map_set(k, name, acc),
+                ),
+          () => acc,
+        ),
+    ),
 );
 const recordAliasIndexFrom: _Curry<
   [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Map<string, string>],
@@ -1229,20 +1165,12 @@ const recordAliasIndexFrom: _Curry<
 > = _curry(
   4,
   (keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Map<string, string>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: key }) =>
-              recordAliasIndexFrom(
-                keys,
-                aliases,
-                i + 1,
-                indexAlias(key, bareName(key), aliases, acc),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => acc,
+      (key) =>
+        recordAliasIndexFrom(keys, aliases, i + 1, indexAlias(key, bareName(key), aliases, acc)),
+    ),
 );
 export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, string> = (
   aliases: Map<string, AliasInfo>,
@@ -1255,28 +1183,22 @@ const parameterizedBares: _Curry<
   [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Set<string>],
   Set<string>
 > = _curry(4, (keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Set<string>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: key }) =>
-            ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: info }) =>
-                    parameterizedBares(
-                      keys,
-                      aliases,
-                      i + 1,
-                      length(info.params) > 0 ? _Set_add(bareName(key), acc) : acc,
-                    ))(_v)
-                : _v._tag === "None"
-                  ? parameterizedBares(keys, aliases, i + 1, acc)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(_Map_get(key, aliases)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, keys)),
+  _Option_match(
+    _Array_get(i, keys),
+    () => acc,
+    (key) =>
+      _Option_match(
+        _Map_get(key, aliases),
+        () => parameterizedBares(keys, aliases, i + 1, acc),
+        (info) =>
+          parameterizedBares(
+            keys,
+            aliases,
+            i + 1,
+            length(info.params) > 0 ? _Set_add(bareName(key), acc) : acc,
+          ),
+      ),
+  ),
 );
 /**
  * Last nullary alias of `shape` whose bare name is safe to print, or `""`
@@ -1303,50 +1225,37 @@ const printableName: _Curry<
     acc: string,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: key }) =>
-              ((bare: string) =>
-                ((_v) =>
-                  _v._tag === "None"
-                    ? printableName(keys, shape, aliases, bad, acc, i + 1)
-                    : _v._tag === "Some"
-                      ? (({ value: info }) =>
-                          printableName(
-                            keys,
-                            shape,
-                            aliases,
-                            bad,
-                            ((_v) =>
-                              _v._tag === "Some"
-                                ? acc
-                                : _v._tag === "None"
-                                  ? or(
-                                      or(_Set_has(bare, bad), length(info.params) !== 0),
-                                      length(info.fields) === 0,
-                                    )
-                                    ? acc
-                                    : ((_v) =>
-                                        _v._tag === "Some"
-                                          ? (({ value: k }) => (eq(k, shape) ? bare : acc))(_v)
-                                          : _v._tag === "None"
-                                            ? acc
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(aliasShapeKey(info.fields, aliases))
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(info.expr),
-                            i + 1,
-                          ))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(key, aliases)))(bareName(key)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => acc,
+      (key) => {
+        const bare: string = bareName(key);
+        return _Option_match(
+          _Map_get(key, aliases),
+          () => printableName(keys, shape, aliases, bad, acc, i + 1),
+          (info) =>
+            printableName(
+              keys,
+              shape,
+              aliases,
+              bad,
+              _Option_match(
+                info.expr,
+                () =>
+                  or(or(_Set_has(bare, bad), length(info.params) !== 0), length(info.fields) === 0)
+                    ? acc
+                    : _Option_match(
+                        aliasShapeKey(info.fields, aliases),
+                        () => acc,
+                        (k) => (eq(k, shape) ? bare : acc),
+                      ),
+                () => acc,
+              ),
+              i + 1,
+            ),
+        );
+      },
+    ),
 );
 const dropAmbiguous: _Curry<
   [
@@ -1370,33 +1279,27 @@ const dropAmbiguous: _Curry<
     aliasKeys: string[],
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? recs
-        : _v._tag === "Some"
-          ? (({ value: k }) =>
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: name }) =>
-                      dropAmbiguous(
-                        keys,
-                        and(_Set_has(name, bad), !_Set_has(name, localNames))
-                          ? _Map_set(k, printableName(aliasKeys, k, aliases, bad, "", 0), recs)
-                          : recs,
-                        aliases,
-                        bad,
-                        localNames,
-                        aliasKeys,
-                        i + 1,
-                      ))(_v)
-                  : _v._tag === "None"
-                    ? dropAmbiguous(keys, recs, aliases, bad, localNames, aliasKeys, i + 1)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(k, recs)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => recs,
+      (k) =>
+        _Option_match(
+          _Map_get(k, recs),
+          () => dropAmbiguous(keys, recs, aliases, bad, localNames, aliasKeys, i + 1),
+          (name) =>
+            dropAmbiguous(
+              keys,
+              and(_Set_has(name, bad), !_Set_has(name, localNames))
+                ? _Map_set(k, printableName(aliasKeys, k, aliases, bad, "", 0), recs)
+                : recs,
+              aliases,
+              bad,
+              localNames,
+              aliasKeys,
+              i + 1,
+            ),
+        ),
+    ),
 );
 /**
  * A shape whose bare name is also a parameterised alias keeps its key, so a
@@ -1440,21 +1343,16 @@ export const withoutOwnShape: <A, B>(
     aliases: Map<string, AliasInfo>,
     recs: Map<string, B>,
   ) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? recs
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: k }) => _Map_delete(k, recs))(_v)
-                : _v._tag === "None"
-                  ? recs
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(aliasShapeKey(fields, aliases))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(0, params)),
+    _Option_match(
+      _Array_get(0, params),
+      () =>
+        _Option_match(
+          aliasShapeKey(fields, aliases),
+          () => recs,
+          (k) => _Map_delete(k, recs),
+        ),
+      () => recs,
+    ),
 );
 const typeHeaderFrom: _Curry<
   [
@@ -1481,40 +1379,34 @@ const typeHeaderFrom: _Curry<
           ? (({ value: { name, params, ctors, alias, aliasType, doc } }) =>
               ((rest: string[]) =>
                 ((docComment: string) =>
-                  ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: fields }) =>
-                          _Array_prepend(
-                            `${docComment}${recordAliasDecl(name, params, fields, aliases, withoutOwnShape(fields, params, aliases, recs))}`,
-                            rest,
-                          ))(_v)
-                      : _v._tag === "None"
-                        ? ((_v) =>
-                            _v._tag === "Some"
-                              ? (({ value: te }) =>
-                                  _Array_prepend(
-                                    `${docComment}${aliasTsDecl(name, params, te, aliases, recs)}`,
-                                    rest,
-                                  ))(_v)
-                              : _v._tag === "None"
-                                ? length(ctors) === 0
-                                  ? _Array_prepend(
-                                      `declare const ${name}: unique symbol;
+                  _Option_match(
+                    alias,
+                    () =>
+                      _Option_match(
+                        aliasType,
+                        () =>
+                          length(ctors) === 0
+                            ? _Array_prepend(
+                                `declare const ${name}: unique symbol;
 ${docComment}type ${name} = { readonly [${name}]: never };`,
-                                      rest,
-                                    )
-                                  : _Array_prepend(
-                                      `${docComment}${typeDecl(name, params, ctors, aliases, recs)}`,
-                                      rest,
-                                    )
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(aliasType)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(alias))(docs ? jsDoc(doc) : ""))(
-                typeHeaderFrom(stmts, aliases, recs, docs, i + 1),
-              ))(
+                                rest,
+                              )
+                            : _Array_prepend(
+                                `${docComment}${typeDecl(name, params, ctors, aliases, recs)}`,
+                                rest,
+                              ),
+                        (te) =>
+                          _Array_prepend(
+                            `${docComment}${aliasTsDecl(name, params, te, aliases, recs)}`,
+                            rest,
+                          ),
+                      ),
+                    (fields) =>
+                      _Array_prepend(
+                        `${docComment}${recordAliasDecl(name, params, fields, aliases, withoutOwnShape(fields, params, aliases, recs))}`,
+                        rest,
+                      ),
+                  ))(docs ? jsDoc(doc) : ""))(typeHeaderFrom(stmts, aliases, recs, docs, i + 1)))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                 value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
               },
@@ -1558,17 +1450,14 @@ const genericLambdasFrom: <A, B, C>(
                 ((_v) =>
                   _v._tag === "ELambda" && (({ span: sp }) => !_Str_startsWith("$", name))(_v)
                     ? (({ span: sp }) =>
-                        ((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: sc }) =>
-                                or(length(sc.vars) > 0, length(sc.rvars) > 0)
-                                  ? _Map_set(spanKey(sp), sc, acc)
-                                  : acc)(_v)
-                            : _v._tag === "None"
-                              ? acc
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(_Map_get(name, env)))(_v)
+                        _Option_match(
+                          _Map_get(name, env),
+                          () => acc,
+                          (sc) =>
+                            or(length(sc.vars) > 0, length(sc.rvars) > 0)
+                              ? _Map_set(spanKey(sp), sc, acc)
+                              : acc,
+                        ))(_v)
                     : acc)(value),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
@@ -1618,14 +1507,11 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) =>
                       ? (({ fields, spread }) =>
                           _Array_concat(
                             scopedSpansInFields(fields, 0),
-                            ((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: s }) => scopedSpans(s))(_v)
-                                : _v._tag === "None"
-                                  ? ([] as SpanAt[])
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(spread),
+                            _Option_match(
+                              spread,
+                              () => [] as SpanAt[],
+                              (s) => scopedSpans(s),
+                            ),
                           ))(_v)
                       : _v._tag === "EField"
                         ? (({ target, name, span: sp }) =>
@@ -1663,66 +1549,50 @@ const isRefExpr: (e: Expr) => boolean = (e: Expr) =>
 const scopedSpansAt: _Curry<[exprs: Expr[], i: number], SpanAt[]> = _curry(
   2,
   (exprs: Expr[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as SpanAt[])
-        : _v._tag === "Some"
-          ? (({ value: e }) => _Array_concat(scopedSpans(e), scopedSpansAt(exprs, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, exprs)),
+    _Option_match(
+      _Array_get(i, exprs),
+      () => [] as SpanAt[],
+      (e) => _Array_concat(scopedSpans(e), scopedSpansAt(exprs, i + 1)),
+    ),
 );
 const scopedSpansInArms: _Curry<[arms: MatchArm[], i: number], SpanAt[]> = _curry(
   2,
   (arms: MatchArm[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as SpanAt[])
-        : _v._tag === "Some"
-          ? (({ value: a }) =>
-              _Array_concat(
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: g }) => scopedSpans(g))(_v)
-                    : _v._tag === "None"
-                      ? ([] as SpanAt[])
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(a.guard),
-                _Array_concat(scopedSpans(a.body), scopedSpansInArms(arms, i + 1)),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, arms)),
+    _Option_match(
+      _Array_get(i, arms),
+      () => [] as SpanAt[],
+      (a) =>
+        _Array_concat(
+          _Option_match(
+            a.guard,
+            () => [] as SpanAt[],
+            (g) => scopedSpans(g),
+          ),
+          _Array_concat(scopedSpans(a.body), scopedSpansInArms(arms, i + 1)),
+        ),
+    ),
 );
 const scopedSpansInFields: _Curry<[fields: Field[], i: number], SpanAt[]> = _curry(
   2,
   (fields: Field[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as SpanAt[])
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              _Array_concat(scopedSpans(f.value), scopedSpansInFields(fields, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => [] as SpanAt[],
+      (f) => _Array_concat(scopedSpans(f.value), scopedSpansInFields(fields, i + 1)),
+    ),
 );
 const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], SpanAt[]> = _curry(
   2,
   (entries: MapEntry[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as SpanAt[])
-        : _v._tag === "Some"
-          ? (({ value: en }) =>
-              _Array_concat(
-                scopedSpans(en.key),
-                _Array_concat(scopedSpans(en.value), scopedSpansInEntries(entries, i + 1)),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, entries)),
+    _Option_match(
+      _Array_get(i, entries),
+      () => [] as SpanAt[],
+      (en) =>
+        _Array_concat(
+          scopedSpans(en.key),
+          _Array_concat(scopedSpans(en.value), scopedSpansInEntries(entries, i + 1)),
+        ),
+    ),
 );
 const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], SpanAt[]> = _curry(
   2,
@@ -1768,15 +1638,11 @@ const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: SpanAt], SpanAt[]> = _c
 const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], SpanAt[]> = _curry(
   2,
   (params: LoopParam[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as SpanAt[])
-        : _v._tag === "Some"
-          ? (({ value: p }) =>
-              _Array_concat(scopedSpans(p.init), scopedSpansInLoop(params, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () => [] as SpanAt[],
+      (p) => _Array_concat(scopedSpans(p.init), scopedSpansInLoop(params, i + 1)),
+    ),
 );
 const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], SpanAt[]> = _curry(
   2,
@@ -1808,15 +1674,11 @@ const scopedNamesAt: <A, B, C, D>(
 ) => Map<string, C> = _curry(
   4,
   <A, B, C, D>(spans: ({ start: A; end: B } & D)[], i: number, names: C, acc: Map<string, C>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: sp }) =>
-              scopedNamesAt(spans, i + 1, names, _Map_set(spanKey(sp), names, acc)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, spans)),
+    _Option_match(
+      _Array_get(i, spans),
+      () => acc,
+      (sp) => scopedNamesAt(spans, i + 1, names, _Map_set(spanKey(sp), names, acc)),
+    ),
 );
 /**
  * Each annotatable node nested in a GENERIC binding's value body -> that
@@ -1854,22 +1716,19 @@ const scopedNamesFrom: <A>(
                 i + 1,
                 ((_v) =>
                   _v._tag === "ELambda" && !_Str_startsWith("$", name)
-                    ? ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: sc }) =>
-                              or(length(sc.vars) > 0, length(sc.rvars) > 0)
-                                ? scopedNamesAt(
-                                    scopedSpans(value),
-                                    0,
-                                    schemeRender(sc, recs).env.vars,
-                                    acc,
-                                  )
-                                : acc)(_v)
-                          : _v._tag === "None"
-                            ? acc
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(_Map_get(name, env))
+                    ? _Option_match(
+                        _Map_get(name, env),
+                        () => acc,
+                        (sc) =>
+                          or(length(sc.vars) > 0, length(sc.rvars) > 0)
+                            ? scopedNamesAt(
+                                scopedSpans(value),
+                                0,
+                                schemeRender(sc, recs).env.vars,
+                                acc,
+                              )
+                            : acc,
+                      )
                     : acc)(value),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
@@ -1925,14 +1784,11 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
     );
     const typeOf: (a: Expr) => Option<Ty> = (e: Expr) => _Map_get(spanKey(exprSpan(e)), typeAt);
     const envAt: (a: string) => TsEnv = (key: string) =>
-      ((_v) =>
-        _v._tag === "Some"
-          ? (({ value: vars }) => tsEnv(vars, recs))(_v)
-          : _v._tag === "None"
-            ? recsEnv(recs)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(_Map_get(key, scopedNames));
+      _Option_match(
+        _Map_get(key, scopedNames),
+        () => recsEnv(recs),
+        (vars) => tsEnv(vars, recs),
+      );
     return {
       ...jsGenOpts,
       annotateLet: Some(
@@ -1941,17 +1797,12 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
             ? (None as Option<string>)
             : ((_v) =>
                 _v._tag === "ELambda"
-                  ? ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: sc }) =>
-                            Some(
-                              `: ${bindingTsType(sc, value, recs, bindingHooks)}`,
-                            ) as Option<string>)(_v)
-                        : _v._tag === "None"
-                          ? (None as Option<string>)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(_Map_get(name, env))
+                  ? _Option_match(
+                      _Map_get(name, env),
+                      () => None as Option<string>,
+                      (sc) =>
+                        Some(`: ${bindingTsType(sc, value, recs, bindingHooks)}`) as Option<string>,
+                    )
                   : _Option_map(
                       (ts: string) => `: ${ts}`,
                       _Option_flatMap(
@@ -1972,28 +1823,22 @@ export const tsGenOpts: <A, B, C, D, E, F, G, H, I>(
       ) as Option<(a: Stmt, b: Ctor) => Option<CtorFactoryTs>>,
       annotateParams: Some(
         _curry(2, (sp: SpanAt, arity: number) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: sc }) =>
-                  _Option_unwrapOr(
-                    { generics: "", params: [] as Option<string>[] },
-                    genericLambdaParams(sc, arity, recs),
-                  ))(_v)
-              : _v._tag === "None"
-                ? {
-                    generics: "",
-                    params: ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: t }) => lambdaParamTypesTs(t, arity, envAt(spanKey(sp))))(_v)
-                        : _v._tag === "None"
-                          ? ([] as Option<string>[])
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(_Map_get(spanKey(sp), typeAt)),
-                  }
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(spanKey(sp), genericLams)),
+          _Option_match(
+            _Map_get(spanKey(sp), genericLams),
+            () => ({
+              generics: "",
+              params: _Option_match(
+                _Map_get(spanKey(sp), typeAt),
+                () => [] as Option<string>[],
+                (t) => lambdaParamTypesTs(t, arity, envAt(spanKey(sp))),
+              ),
+            }),
+            (sc) =>
+              _Option_unwrapOr(
+                { generics: "", params: [] as Option<string>[] },
+                genericLambdaParams(sc, arity, recs),
+              ),
+          ),
         ),
       ) as Option<(a: SpanAt, b: number) => ParamAnnots>,
       annotateEmpty: Some((e: Expr) => {
@@ -2055,14 +1900,11 @@ const hasJsxExpr: (e: Expr) => boolean = (e: Expr) =>
                             anyOf(
                               (a: MatchArm) =>
                                 or(
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: g }) => hasJsxExpr(g))(_v)
-                                      : _v._tag === "None"
-                                        ? false
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(a.guard),
+                                  _Option_match(
+                                    a.guard,
+                                    () => false,
+                                    (g) => hasJsxExpr(g),
+                                  ),
                                   hasJsxExpr(a.body),
                                 ),
                               arms,
@@ -2072,14 +1914,11 @@ const hasJsxExpr: (e: Expr) => boolean = (e: Expr) =>
                         ? (({ fields, spread }) =>
                             or(
                               anyOf((f: Field) => hasJsxExpr(f.value), fields),
-                              ((_v) =>
-                                _v._tag === "Some"
-                                  ? (({ value }) => hasJsxExpr(value))(_v)
-                                  : _v._tag === "None"
-                                    ? false
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(spread),
+                              _Option_match(
+                                spread,
+                                () => false,
+                                (value) => hasJsxExpr(value),
+                              ),
                             ))(_v)
                         : _v._tag === "EField"
                           ? (({ target }) => hasJsxExpr(target))(_v)
@@ -2389,14 +2228,11 @@ const freeIdsInRow: _Curry<[row: Row, acc: number[]], number[]> = _curry(
 const lettersFor: <A>(ids: A[], i: number, acc: Map<A, string>) => Map<A, string> = _curry(
   3,
   <A>(ids: A[], i: number, acc: Map<A, string>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: id }) => lettersFor(ids, i + 1, _Map_set(id, letterAt(i), acc)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ids)),
+    _Option_match(
+      _Array_get(i, ids),
+      () => acc,
+      (id) => lettersFor(ids, i + 1, _Map_set(id, letterAt(i), acc)),
+    ),
 );
 /**
  * id -> `any`. A VALUE extern is a const: it has no generic head to bind its

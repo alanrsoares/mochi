@@ -30,6 +30,7 @@ import {
   _Map_keys,
   _Map_set,
   _Option_isSome,
+  _Option_match,
   _Option_unwrapOr,
   _Result_map,
   _Set_add,
@@ -124,40 +125,32 @@ const writtenQualsInAll: _Curry<
   [tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number],
   Map<string, string>
 > = _curry(4, (tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: te }) => writtenQualsInAll(tes, local, writtenQualsIn(te, local, acc), i + 1))(
-            _v,
-          )
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, tes)),
+  _Option_match(
+    _Array_get(i, tes),
+    () => acc,
+    (te) => writtenQualsInAll(tes, local, writtenQualsIn(te, local, acc), i + 1),
+  ),
 );
 const ctorQualsFrom: _Curry<
   [ctors: Ctor[], local: Set<string>, acc: Map<string, string>, i: number],
   Map<string, string>
 > = _curry(4, (ctors: Ctor[], local: Set<string>, acc: Map<string, string>, i: number) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: c }) =>
-            ctorQualsFrom(
-              ctors,
-              local,
-              writtenQualsInAll(
-                map((f: CtorField) => f.fieldType, c.fields),
-                local,
-                acc,
-                0,
-              ),
-              i + 1,
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, ctors)),
+  _Option_match(
+    _Array_get(i, ctors),
+    () => acc,
+    (c) =>
+      ctorQualsFrom(
+        ctors,
+        local,
+        writtenQualsInAll(
+          map((f: CtorField) => f.fieldType, c.fields),
+          local,
+          acc,
+          0,
+        ),
+        i + 1,
+      ),
+  ),
 );
 const writtenQualsFrom: _Curry<
   [stmts: Stmt[], local: Set<string>, acc: Map<string, string>, i: number],
@@ -178,14 +171,11 @@ const writtenQualsFrom: _Curry<
               writtenQualsFrom(
                 stmts,
                 local,
-                ((_v) =>
-                  _v._tag === "None"
-                    ? acc
-                    : _v._tag === "Some"
-                      ? (({ value: te }) => writtenQualsIn(te, local, acc))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(annot),
+                _Option_match(
+                  annot,
+                  () => acc,
+                  (te) => writtenQualsIn(te, local, acc),
+                ),
                 i + 1,
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
@@ -197,29 +187,23 @@ const writtenQualsFrom: _Curry<
                 ((acc1: Map<string, string>) =>
                   ((acc2: Map<string, string>) =>
                     ((acc3: Map<string, string>) => writtenQualsFrom(stmts, local, acc3, i + 1))(
-                      ((_v) =>
-                        _v._tag === "None"
-                          ? acc2
-                          : _v._tag === "Some"
-                            ? (({ value: te }) => writtenQualsIn(te, local, acc2))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(aliasType),
+                      _Option_match(
+                        aliasType,
+                        () => acc2,
+                        (te) => writtenQualsIn(te, local, acc2),
+                      ),
                     ))(
-                    ((_v) =>
-                      _v._tag === "None"
-                        ? acc1
-                        : _v._tag === "Some"
-                          ? (({ value: fields }) =>
-                              writtenQualsInAll(
-                                map((f: AliasField) => f.fieldType, fields),
-                                local,
-                                acc1,
-                                0,
-                              ))(_v)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(alias),
+                    _Option_match(
+                      alias,
+                      () => acc1,
+                      (fields) =>
+                        writtenQualsInAll(
+                          map((f: AliasField) => f.fieldType, fields),
+                          local,
+                          acc1,
+                          0,
+                        ),
+                    ),
                   ))(ctorQualsFrom(ctors, local, acc, 0)))(
                 _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                   value: Extract<
@@ -388,46 +372,42 @@ const typeDeclsFrom: _Curry<
           ? (({ value: { name, params, ctors, alias, aliasType, doc } }) =>
               ((rest: string[]) =>
                 ((docComment: string) =>
-                  ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: fields }) =>
+                  _Option_match(
+                    alias,
+                    () =>
+                      _Option_match(
+                        aliasType,
+                        () =>
+                          length(ctors) === 0
+                            ? _Array_prepend(`${docComment}${opaqueTypeDecl(name)}`, rest)
+                            : _Array_prepend(
+                                `${docComment}${typeDecl(
+                                  name,
+                                  params,
+                                  map((c: Ctor) => qualifyCtor(c, qualify), ctors),
+                                  aliases,
+                                  recs,
+                                )}`,
+                                rest,
+                              ),
+                        (te) =>
                           _Array_prepend(
-                            `${docComment}${recordAliasDecl(
-                              name,
-                              params,
-                              map((f: AliasField) => qualifyAliasField(f, qualify), fields),
-                              aliases,
-                              withoutOwnShape(fields, params, aliases, recs),
-                            )}`,
+                            `${docComment}${aliasTsDecl(name, params, qualifyTe(te, qualify), aliases, recs)}`,
                             rest,
-                          ))(_v)
-                      : _v._tag === "None"
-                        ? ((_v) =>
-                            _v._tag === "Some"
-                              ? (({ value: te }) =>
-                                  _Array_prepend(
-                                    `${docComment}${aliasTsDecl(name, params, qualifyTe(te, qualify), aliases, recs)}`,
-                                    rest,
-                                  ))(_v)
-                              : _v._tag === "None"
-                                ? length(ctors) === 0
-                                  ? _Array_prepend(`${docComment}${opaqueTypeDecl(name)}`, rest)
-                                  : _Array_prepend(
-                                      `${docComment}${typeDecl(
-                                        name,
-                                        params,
-                                        map((c: Ctor) => qualifyCtor(c, qualify), ctors),
-                                        aliases,
-                                        recs,
-                                      )}`,
-                                      rest,
-                                    )
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(aliasType)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(alias))(docs ? jsDoc(doc) : ""))(
+                          ),
+                      ),
+                    (fields) =>
+                      _Array_prepend(
+                        `${docComment}${recordAliasDecl(
+                          name,
+                          params,
+                          map((f: AliasField) => qualifyAliasField(f, qualify), fields),
+                          aliases,
+                          withoutOwnShape(fields, params, aliases, recs),
+                        )}`,
+                        rest,
+                      ),
+                  ))(docs ? jsDoc(doc) : ""))(
                 typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
@@ -512,33 +492,31 @@ const bindingDeclsFrom: <A>(
                 ((decl: (a: string) => string) =>
                   _Str_startsWith("$", name)
                     ? rest
-                    : ((_v) =>
-                        _v._tag === "None"
-                          ? rest
-                          : _v._tag === "Some"
-                            ? (({ value: sc }) =>
-                                ((ty: Ty) =>
-                                  _Array_prepend(
-                                    decl(
-                                      _Option_unwrapOr(
-                                        bindingTsType(
-                                          {
-                                            vars: sc.vars,
-                                            rvars: sc.rvars,
-                                            ty: foldAliasesAt(ty, keys, aliases),
-                                          },
-                                          value,
-                                          recs,
-                                          bindingHooks,
-                                        ),
-                                        runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs)),
-                                      ),
-                                    ),
-                                    rest,
-                                  ))(qualifyTy(sc.ty, qualify)))(_v)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(_Map_get(name, env)))(
+                    : _Option_match(
+                        _Map_get(name, env),
+                        () => rest,
+                        (sc) => {
+                          const ty: Ty = qualifyTy(sc.ty, qualify);
+                          return _Array_prepend(
+                            decl(
+                              _Option_unwrapOr(
+                                bindingTsType(
+                                  {
+                                    vars: sc.vars,
+                                    rvars: sc.rvars,
+                                    ty: foldAliasesAt(ty, keys, aliases),
+                                  },
+                                  value,
+                                  recs,
+                                  bindingHooks,
+                                ),
+                                runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs)),
+                              ),
+                            ),
+                            rest,
+                          );
+                        },
+                      ))(
                   (ts: string) => `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`,
                 ))(
                 bindingDeclsFrom(
@@ -586,18 +564,16 @@ const builtinDeclsFor: _Curry<
 > = _curry(
   4,
   (names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as string[])
-        : _v._tag === "Some"
-          ? (({ value: bt }) =>
-              ((rest: string[]) =>
-                _Array_contains(bt.name, names)
-                  ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
-                  : rest)(builtinDeclsFor(names, aliases, recs, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, builtinTypeDecls)),
+    _Option_match(
+      _Array_get(i, builtinTypeDecls),
+      () => [] as string[],
+      (bt) => {
+        const rest: string[] = builtinDeclsFor(names, aliases, recs, i + 1);
+        return _Array_contains(bt.name, names)
+          ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
+          : rest;
+      },
+    ),
 );
 /**
  * Sidecar imports keep the `.mochi` specifier so `allowArbitraryExtensions`
@@ -655,28 +631,22 @@ const blankNonLocal: <A>(
 ) => Map<A, string> = _curry(
   4,
   <A>(keys: A[], recs: Map<A, string>, locals: Set<string>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? recs
-        : _v._tag === "Some"
-          ? (({ value: k }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? blankNonLocal(keys, recs, locals, i + 1)
-                  : _v._tag === "Some"
-                    ? (({ value: name }) =>
-                        blankNonLocal(
-                          keys,
-                          and(name !== "", !_Set_has(name, locals)) ? _Map_set(k, "", recs) : recs,
-                          locals,
-                          i + 1,
-                        ))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(k, recs)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => recs,
+      (k) =>
+        _Option_match(
+          _Map_get(k, recs),
+          () => blankNonLocal(keys, recs, locals, i + 1),
+          (name) =>
+            blankNonLocal(
+              keys,
+              and(name !== "", !_Set_has(name, locals)) ? _Map_set(k, "", recs) : recs,
+              locals,
+              i + 1,
+            ),
+        ),
+    ),
 );
 export const declarationRecs: _Curry<
   [stmts: Stmt[], aliases: Map<string, AliasInfo>],
@@ -713,46 +683,35 @@ const qualConRecs: <A, B, C, D, E>(
     recs: Map<A, B>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? recs
-        : _v._tag === "Some"
-          ? (({ value: name }) =>
-              qualConRecs(
-                keys,
-                qualify,
-                aliases,
-                ((_v) =>
-                  _v._tag === "None"
-                    ? recs
-                    : _v._tag === "Some"
-                      ? (({ value: qual }) =>
-                          ((_v) =>
-                            _v._tag === "None"
-                              ? recs
-                              : _v._tag === "Some"
-                                ? (({ value: info }) =>
-                                    ((_v) =>
-                                      _v._tag === "Some"
-                                        ? recs
-                                        : _v._tag === "None"
-                                          ? and(length(info.fields) > 0, !_Map_has(name, recs))
-                                            ? _Map_set(name, qual, recs)
-                                            : recs
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(info.expr))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(_Map_get(qual, aliases)))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(name, qualify)),
-                i + 1,
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => recs,
+      (name) =>
+        qualConRecs(
+          keys,
+          qualify,
+          aliases,
+          _Option_match(
+            _Map_get(name, qualify),
+            () => recs,
+            (qual) =>
+              _Option_match(
+                _Map_get(qual, aliases),
+                () => recs,
+                (info) =>
+                  _Option_match(
+                    info.expr,
+                    () =>
+                      and(length(info.fields) > 0, !_Map_has(name, recs))
+                        ? _Map_set(name, qual, recs)
+                        : recs,
+                    () => recs,
+                  ),
+              ),
+          ),
+          i + 1,
+        ),
+    ),
 );
 /**
  * Host spellings use the same nominal-name index as namespace qualifications.
@@ -849,23 +808,20 @@ const addQuals: _Curry<
 > = _curry(
   5,
   (alias: string, names: string[], local: Set<string>, acc: Map<string, string>, i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: name }) =>
-              addQuals(
-                alias,
-                names,
-                local,
-                or(_Set_has(name, local), _Map_has(name, acc))
-                  ? acc
-                  : _Map_set(name, `${alias}.${name}`, acc),
-                i + 1,
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, names)),
+    _Option_match(
+      _Array_get(i, names),
+      () => acc,
+      (name) =>
+        addQuals(
+          alias,
+          names,
+          local,
+          or(_Set_has(name, local), _Map_has(name, acc))
+            ? acc
+            : _Map_set(name, `${alias}.${name}`, acc),
+          i + 1,
+        ),
+    ),
 );
 const qualsFromAliases: <A>(
   aliases: string[],
@@ -882,29 +838,23 @@ const qualsFromAliases: <A>(
     acc: Map<string, string>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: alias }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? qualsFromAliases(aliases, quals, local, acc, i + 1)
-                  : _v._tag === "Some"
-                    ? (({ value: scope }) =>
-                        qualsFromAliases(
-                          aliases,
-                          quals,
-                          local,
-                          addQuals(alias, _Set_toArray(scope.types), local, acc, 0),
-                          i + 1,
-                        ))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(alias, quals)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, aliases)),
+    _Option_match(
+      _Array_get(i, aliases),
+      () => acc,
+      (alias) =>
+        _Option_match(
+          _Map_get(alias, quals),
+          () => qualsFromAliases(aliases, quals, local, acc, i + 1),
+          (scope) =>
+            qualsFromAliases(
+              aliases,
+              quals,
+              local,
+              addQuals(alias, _Set_toArray(scope.types), local, acc, 0),
+              i + 1,
+            ),
+        ),
+    ),
 );
 /**
  * The graph's contribution to the qualify map: what each namespace alias

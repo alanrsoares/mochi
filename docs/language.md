@@ -271,9 +271,14 @@ enclosing loop. For iteration purely for effect, use
   warning. `eq`/`compare` on a lazy List throw (`List.toArray` first); `show` prints
   `<List>` without pulling. Map/Set **keys** use host identity, not deep `eq`.
   `eq` can reach Lists nested in records, variants, arrays and Map values.
-  `compare` can reach Lists in arrays, Map keys and values, and Set elements; it
-  uses `JSON.stringify` for ordinary objects rather than recursively comparing
-  record or variant fields. Convert known finite Lists with `List.toArray`
+  `compare` recursively visits record and variant fields, arrays, Map keys and
+  values, and Set elements. Records use sorted own enumerable string keys;
+  variants compare constructor tags before payloads (positional fields in index
+  order, named fields in lexical order). Missing fields differ from present
+  undefined fields; undefined sorts before null before populated values.
+  NaN retains the primitive comparison behavior and does not define a total
+  order. Opaque host values should use a safe projection
+  ([ADR 0145](adr/0145-structural-ordering.md)). Convert known finite Lists with `List.toArray`
   before comparing when traversal reaches them, or compare a safe projection.
   Identity shortcuts or earlier mismatches can avoid reaching a List; a
   successful comparison does not establish that every input is safe.

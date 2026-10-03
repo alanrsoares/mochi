@@ -250,4 +250,5 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 - A `switch` is checked for exhaustiveness (including over imported variants) before codegen.
 - Generated `switch` normally uses ternaries (`_tag` discriminant); typed output
   may use `@onrails/pattern` for nested generic arms (ADR 0113). Lazy-`List` matches
-  lower to a self-contained pull IIFE instead.
+  lower to a self-contained pull IIFE instead. Simple exhaustive builtin Result
+  and Option matches use flat runtime dispatch (ADR 0146).

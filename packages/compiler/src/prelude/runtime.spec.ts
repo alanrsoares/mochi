@@ -3,7 +3,18 @@
 // preamble, since both are meant to be the same prelude. Spot-check the shapes
 // that matter: currying, structural eq, collection ops, Option ctors.
 import { expect, test } from "bun:test";
-import { _Array_dedupeBy, _curry, add, eq, map, None, Some } from "@mochi/compiler/runtime";
+import {
+  _Array_dedupeBy,
+  _curry,
+  _Option_match,
+  _Result_match,
+  add,
+  compare,
+  eq,
+  map,
+  None,
+  Some,
+} from "@mochi/compiler/runtime";
 import fc from "fast-check";
 
 test("_curry supports grouped and one-at-a-time application", () => {
@@ -46,9 +57,136 @@ test("map is curried and immutable", () => {
   expect(map((x: number) => x * 2, [1, 2, 3])).toEqual([2, 4, 6]);
 });
 
+test("record ordering is numeric, recursive, and independent of field insertion", () => {
+  expect(compare({ a: 10 }, { a: 2 })).toBe(1);
+  expect(compare({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(0);
+  expect(compare({ child: { value: -10 } }, { child: { value: -2 } })).toBe(-1);
+  expect(compare({ a: undefined }, { b: undefined })).toBe(-1);
+  expect(compare({}, { a: undefined })).toBe(-1);
+  expect(compare({ value: undefined }, { value: null })).toBe(-1);
+  expect(compare({ value: null }, { value: 0 })).toBe(-1);
+  expect(compare({ value: 0 }, { value: undefined })).toBe(1);
+  expect(compare({ value: 0 }, { value: null })).toBe(1);
+  expect(compare({ value: NaN }, { value: 2 })).toBe(0);
+  expect(compare({ value: -0 }, { value: 0 })).toBe(0);
+  expect(compare({ "2": 1, "10": 9 }, { "10": 0, "2": 2 })).toBe(1);
+});
+
+test("record ordering ignores inherited and hidden fields and does not call toJSON", () => {
+  const plain = { a: 1, b: 2 };
+  expect(compare(plain, Object.assign(Object.create(null), { b: 2, a: 1 }))).toBe(0);
+  expect(compare(plain, Object.assign(Object.create({ inherited: 3 }), plain))).toBe(0);
+  expect(compare(plain, Object.defineProperty({ ...plain }, "hidden", { value: 3 }))).toBe(0);
+  expect(compare({ a: 1 }, Object.assign(Object.create({ a: 1 }), { b: 2 }))).toBe(-1);
+  const withJSON = Object.defineProperty({ ...plain }, "toJSON", {
+    value: () => {
+      throw new Error("must not serialize");
+    },
+  });
+  expect(compare(plain, withJSON)).toBe(0);
+  expect(compare(plain, Object.assign(Object.create({ _tag: "A" }), plain))).toBe(0);
+  expect(compare(plain, Object.defineProperty({ ...plain }, "_tag", { value: "A" }))).toBe(0);
+});
+
+test("variant ordering compares tags first, then positional and named payloads", () => {
+  expect(compare({ z: 0, _tag: "A" }, { a: 0, _tag: "B" })).toBe(-1);
+  expect(compare({ _tag: "N", _0: 10 }, { _0: 2, _tag: "N" })).toBe(1);
+  expect(compare({ _tag: "N", _2: 1, _10: 9 }, { _tag: "N", _10: 0, _2: 2 })).toBe(-1);
+  expect(compare({ _tag: "N", z: 9, a: 1 }, { a: 2, z: 0, _tag: "N" })).toBe(-1);
+  expect(compare({ _tag: "N" }, {})).toBe(-1);
+  expect(compare({}, { _tag: "N" })).toBe(1);
+  expect(compare({ _tag: "N", value: { n: 10 } }, { _tag: "N", value: { n: 2 } })).toBe(1);
+  expect(compare({ _tag: "N", _2: 1 }, { _tag: "N", _10: 1 })).toBe(-1);
+  expect(compare({ _tag: "N", _0: 1 }, { _tag: "N", a: 1 })).toBe(-1);
+  expect(
+    compare({ named: 1, _tag: "N", _10: 2, _2: 3 }, { _2: 3, _10: 2, _tag: "N", named: 1 }),
+  ).toBe(0);
+});
+
+test("structural comparison refuses reached lazy Lists without pulling them", () => {
+  let pulls = 0;
+  const list = () => ({
+    *[Symbol.iterator]() {
+      pulls += 1;
+      yield 1;
+    },
+  });
+  const a = list(),
+    b = list();
+  expect(() => compare({ values: a }, { values: b })).toThrow("compare on List");
+  expect(() => compare({ _tag: "Box", value: a }, { _tag: "Box", value: b })).toThrow(
+    "compare on List",
+  );
+  expect(() => compare({ values: {} }, { values: b })).toThrow("compare on List");
+  expect(compare({ a: 1, values: a }, { a: 2, values: b })).toBe(-1);
+  expect(compare({ values: a }, { values: a })).toBe(0);
+  expect(pulls).toBe(0);
+});
+
+test("variant ordering reads tags once and only reaches selected payload fields", () => {
+  const events: string[] = [];
+  const item = (side: string, tag: string) => ({
+    get _tag() {
+      events.push(`${side}:tag`);
+      return tag;
+    },
+    get value() {
+      events.push(`${side}:value`);
+      return 1;
+    },
+  });
+  expect(compare(item("left", "A"), item("right", "B"))).toBe(-1);
+  expect(events).toEqual(["left:tag", "right:tag"]);
+  events.length = 0;
+  expect(compare(item("left", "A"), item("right", "A"))).toBe(0);
+  expect(events).toEqual(["left:tag", "right:tag", "left:value", "right:value"]);
+});
+
+test("record ordering reads the first field once when later fields decide", () => {
+  const events: string[] = [];
+  const item = (side: string, later: number) => ({
+    get z() {
+      events.push(`${side}:z`);
+      return later;
+    },
+    get a() {
+      events.push(`${side}:a`);
+      return 1;
+    },
+  });
+  expect(compare(item("left", 10), item("right", 2))).toBe(1);
+  expect(events).toEqual(["left:a", "right:a", "left:z", "right:z"]);
+});
+
 test("Option ctors match the runtime tag shape", () => {
   expect(Some(1)).toEqual({ _tag: "Some", value: 1 });
   expect(None).toEqual({ _tag: "None" });
+});
+
+test("builtin match helpers dispatch only the selected callback and payload", () => {
+  const events: string[] = [];
+  const failure = (e: string) => {
+    events.push(`error:${e}`);
+    return 1;
+  };
+  const success = (n: number) => {
+    events.push(`value:${n}`);
+    return "success";
+  };
+  expect(_Result_match({ _tag: "Err", error: "oops" }, failure, success)).toBe(1);
+  expect(_Result_match({ _tag: "Ok", value: 2 }, failure, success)).toBe("success");
+  expect(
+    _Option_match(
+      None,
+      () => {
+        events.push("none");
+        return 0;
+      },
+      success,
+    ),
+  ).toBe(0);
+  expect(_Option_match(Some(3), () => 0, success)).toBe("success");
+  expect(events).toEqual(["error:oops", "value:2", "none", "value:3"]);
 });
 
 test("dedupeBy preserves the previous equality model for mixed keys", () => {

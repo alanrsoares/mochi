@@ -48,10 +48,12 @@ import {
   _Map_keys,
   _Option_flatMap,
   _Option_map,
+  _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
   _Result_mapErr,
+  _Result_match,
   _Str_get,
   _Str_startsWith,
   _Str_trim,
@@ -87,32 +89,30 @@ import { runtimeDeps } from "../prelude/prelude.gen.mjs";
 export const runtimeAnnotation: _Curry<[name: string, arity: number], Option<string>> = _curry(
   2,
   (name: string, arity: number) => {
-    const ty: Option<Ty> = ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: t }) => Some(t))(_v)
-        : _v._tag === "None"
-          ? reduce(
-              _curry(2, (found, ns: string) => {
-                const members: Map<string, string> = _Option_unwrapOr(
-                  new Map<string, string>(),
-                  _Map_get(ns, namespaceRuntime),
-                );
-                return reduce(
-                  _curry(2, (acc, key: string) =>
-                    eq(_Map_get(key, members), Some(name) as Option<string>)
-                      ? _Option_flatMap(_Map_get(key), _Map_get(ns, namespaces))
-                      : acc,
-                  ),
-                  found,
-                  _Map_keys(members),
-                );
-              }),
-              None,
-              _Map_keys(namespaceRuntime),
-            )
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(name, builtins));
+    const ty: Option<Ty> = _Option_match(
+      _Map_get(name, builtins),
+      () =>
+        reduce(
+          _curry(2, (found, ns: string) => {
+            const members: Map<string, string> = _Option_unwrapOr(
+              new Map<string, string>(),
+              _Map_get(ns, namespaceRuntime),
+            );
+            return reduce(
+              _curry(2, (acc, key: string) =>
+                eq(_Map_get(key, members), Some(name) as Option<string>)
+                  ? _Option_flatMap(_Map_get(key), _Map_get(ns, namespaces))
+                  : acc,
+              ),
+              found,
+              _Map_keys(members),
+            );
+          }),
+          None,
+          _Map_keys(namespaceRuntime),
+        ),
+      (t) => Some(t),
+    );
     return _Option_map((t: Ty) => flatHostType(t, arity), ty);
   },
 );
@@ -220,26 +220,23 @@ const frontend: _Curry<
   [src: string, plugins: Option<HostPlugin[]>],
   Result<Stmt[], Stamped[]>
 > = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
-  ((_v) =>
-    _v._tag === "Err"
-      ? (({ error: e }) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>)(_v)
-      : _v._tag === "Ok"
-        ? (({ value: tokens }) =>
-            ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
-              ((_v) =>
-                _v.length === 0
-                  ? _Result_mapErr(
-                      (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
-                      checkAll(parsed.stmts),
-                    )
-                  : ((ds) =>
-                      Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<
-                        Stmt[],
-                        Stamped[]
-                      >)(_v))(parsed.diagnostics))(parseRecovering(tokens, plugins)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(lex(src)),
+  _Result_match(
+    lex(src),
+    (e) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
+    (tokens) => {
+      const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(tokens, plugins);
+      return ((_v) =>
+        _v.length === 0
+          ? _Result_mapErr(
+              (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+              checkAll(parsed.stmts),
+            )
+          : ((ds) =>
+              Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>)(
+              _v,
+            ))(parsed.diagnostics);
+    },
+  ),
 );
 const pipelineWith: _Curry<
   [src: string, open: boolean, plugins: Option<HostPlugin[]>],
@@ -376,31 +373,32 @@ export const inferTypesRecoveringWith: _Curry<
     Stamped[]
   >
 > = _curry(2, (src: string, opts: Opts) =>
-  ((_v) =>
-    _v._tag === "Err"
-      ? (({ error: e }) =>
-          Err([stampStage("lex", e)]) as Result<
-            {
-              env: Map<string, Scheme>;
-              types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-              aliases: Map<string, QualAliasInfo>;
-              letParams: TypeAt[];
-            },
-            Stamped[]
-          >)(_v)
-      : _v._tag === "Ok"
-        ? (({ value: tokens }) =>
-            ((parsed: { stmts: Stmt[]; diagnostics: StageErr[] }) =>
-              _Result_flatMap(
-                (stmts: Stmt[]) => typedQuery(src, stmts, opts),
-                _Result_mapErr(
-                  (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
-                  checkAll(parsed.stmts),
-                ),
-              ))(parseRecovering(tokens, opts.plugins)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(lex(src)),
+  _Result_match(
+    lex(src),
+    (e) =>
+      Err([stampStage("lex", e)]) as Result<
+        {
+          env: Map<string, Scheme>;
+          types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+          aliases: Map<string, QualAliasInfo>;
+          letParams: TypeAt[];
+        },
+        Stamped[]
+      >,
+    (tokens) => {
+      const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(
+        tokens,
+        opts.plugins,
+      );
+      return _Result_flatMap(
+        (stmts: Stmt[]) => typedQuery(src, stmts, opts),
+        _Result_mapErr(
+          (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+          checkAll(parsed.stmts),
+        ),
+      );
+    },
+  ),
 );
 export const inferTypes: (src: string) => Result<
   {

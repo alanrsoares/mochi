@@ -12,6 +12,27 @@ export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Task<A, E> = () => Promise<Result<A, E>>;
 
+// Flat dispatch for compiler-generated, exhaustive builtin matches. Separate
+// callback result types preserve mixed loop-step and generic return branches.
+export const _Result_match: <A, E, L, R>(
+  result: Result<A, E>,
+  onErr: (error: E) => L,
+  onOk: (value: A) => R,
+) => L | R = (result, onErr, onOk) => {
+  if (result._tag === "Err") return onErr(result.error);
+  if (result._tag === "Ok") return onOk(result.value);
+  throw new Error("non-exhaustive match");
+};
+export const _Option_match: <A, L, R>(
+  option: Option<A>,
+  onNone: () => L,
+  onSome: (value: A) => R,
+) => L | R = (option, onNone, onSome) => {
+  if (option._tag === "None") return onNone();
+  if (option._tag === "Some") return onSome(option.value);
+  throw new Error("non-exhaustive match");
+};
+
 /**
  * The curry-compatible function type (ADR 0093). `_curry` makes an arity-n
  * binding callable in ANY partial-application grouping — `f(a, b)`, `f(a)(b)`,
@@ -156,53 +177,156 @@ export const eq: { <A>(a: A): (b: A) => boolean; <A>(a: A, b: A): boolean } = _c
     return true;
   },
 );
+// Variant positional fields follow their numeric index; named fields follow
+// in lexical order. Length avoids rounding very large host-supplied indices.
+export const _compareFieldNames: (a: string, b: string) => number = (a, b) => {
+  const ax = /^_(0|[1-9]\d*)$/.test(a),
+    bx = /^_(0|[1-9]\d*)$/.test(b);
+  if (ax !== bx) return ax ? -1 : 1;
+  if (ax && a.length !== b.length) return a.length < b.length ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+};
+// Records may already be constructed in key order. Scan first so
+// deterministic ordering does not pay for sorting an already sorted key list.
+export const _compareSortedKeys: (keys: readonly string[], tagged: boolean) => readonly string[] = (
+  keys,
+  tagged,
+) => {
+  for (let i = 1; i < keys.length; i++) {
+    const order = tagged
+      ? _compareFieldNames(keys[i - 1]!, keys[i]!)
+      : keys[i - 1]! < keys[i]!
+        ? -1
+        : 1;
+    if (order > 0) {
+      // Native sort dominates small key lists on Bun. A private insertion-sort
+      // buffer bounds that work; larger shapes retain O(k log k) native sorting.
+      if (keys.length > 16) return keys.slice().sort(tagged ? _compareFieldNames : undefined);
+      const sorted = keys.slice();
+      for (let at = i; at < sorted.length; at++) {
+        const key = sorted[at]!;
+        let before = at - 1;
+        while (
+          before >= 0 &&
+          (tagged ? _compareFieldNames(sorted[before]!, key) > 0 : sorted[before]! > key)
+        ) {
+          sorted[before + 1] = sorted[before]!;
+          before -= 1;
+        }
+        sorted[before + 1] = key;
+      }
+      return sorted;
+    }
+  }
+  return keys;
+};
+// An early field difference needs only the minimum key, not a full key sort.
+export const _compareFirstKey: (keys: readonly string[], tagged: boolean) => string = (
+  keys,
+  tagged,
+) => {
+  let first = keys[0]!;
+  for (let i = 1; i < keys.length; i++) {
+    const key = keys[i]!;
+    if (tagged ? _compareFieldNames(key, first) < 0 : key < first) first = key;
+  }
+  return first;
+};
+export const _compareRecords: (a: object, b: object) => number = (x: any, y: any) => {
+  const keysX = Object.keys(x),
+    keysY = Object.keys(y);
+  const tx = keysX.includes("_tag") ? x._tag : undefined,
+    ty = keysY.includes("_tag") ? y._tag : undefined;
+  const tagged = typeof tx === "string",
+    otherTagged = typeof ty === "string";
+  if (tagged !== otherTagged) return tagged ? -1 : 1;
+  if (tagged) {
+    const tag = _compare(tx, ty);
+    if (tag !== 0) return tag;
+  }
+  const fieldsX = tagged ? keysX.filter((k) => k !== "_tag") : keysX,
+    fieldsY = tagged ? keysY.filter((k) => k !== "_tag") : keysY;
+  if (fieldsX.length === 0 || fieldsY.length === 0) return _compare(fieldsX.length, fieldsY.length);
+  let sameKeys = fieldsX.length === fieldsY.length;
+  for (let i = 0; sameKeys && i < fieldsX.length; i++) {
+    if (fieldsX[i] !== fieldsY[i]) sameKeys = false;
+  }
+  const firstX = _compareFirstKey(fieldsX, tagged),
+    firstY = sameKeys ? firstX : _compareFirstKey(fieldsY, tagged);
+  if (firstX !== firstY)
+    return tagged ? _compareFieldNames(firstX, firstY) : _compare(firstX, firstY);
+  const firstLeft = x[firstX],
+    firstRight = y[firstY];
+  if (firstLeft !== firstRight) {
+    const firstValue = _compare(firstLeft, firstRight);
+    if (firstValue !== 0) return firstValue;
+  }
+  const kx = _compareSortedKeys(fieldsX, tagged),
+    ky = sameKeys ? kx : _compareSortedKeys(fieldsY, tagged);
+  const n = Math.min(kx.length, ky.length);
+  for (let i = 1; i < n; i++) {
+    if (kx[i] !== ky[i])
+      return tagged ? _compareFieldNames(kx[i]!, ky[i]!) : _compare(kx[i], ky[i]);
+    const left = x[kx[i]!],
+      right = y[ky[i]!];
+    if (left !== right) {
+      const value = _compare(left, right);
+      if (value !== 0) return value;
+    }
+  }
+  return _compare(kx.length, ky.length);
+};
+export const _compare: (a: unknown, b: unknown) => number = (x: any, y: any) => {
+  if (x === y) return 0;
+  // Optional host fields can be explicitly undefined or null. Keep these
+  // distinct from each other and from populated values (ADR 0145).
+  if (x === undefined || y === undefined) return x === undefined ? -1 : 1;
+  if (x === null || y === null) return x === null ? -1 : 1;
+  const t = typeof x;
+  if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0;
+  if (Array.isArray(x) && Array.isArray(y)) {
+    const n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) {
+      const c = _compare(x[i], y[i]);
+      if (c !== 0) return c;
+    }
+    return _compare(x.length, y.length);
+  }
+  if (x instanceof Map && y instanceof Map) {
+    const kx = [...x.keys()].sort(_compare),
+      ky = [...y.keys()].sort(_compare);
+    const n = Math.min(kx.length, ky.length);
+    for (let i = 0; i < n; i++) {
+      const kc = _compare(kx[i], ky[i]);
+      if (kc !== 0) return kc;
+      const vc = _compare(x.get(kx[i]), y.get(ky[i]));
+      if (vc !== 0) return vc;
+    }
+    return _compare(kx.length, ky.length);
+  }
+  if (x instanceof Set && y instanceof Set) {
+    const ex = [...x].sort(_compare),
+      ey = [...y].sort(_compare);
+    const n = Math.min(ex.length, ey.length);
+    for (let i = 0; i < n; i++) {
+      const c = _compare(ex[i], ey[i]);
+      if (c !== 0) return c;
+    }
+    return _compare(ex.length, ey.length);
+  }
+  if (
+    typeof x === "object" &&
+    x !== null &&
+    ((!Array.isArray(x) && typeof x[Symbol.iterator] === "function") ||
+      (typeof y === "object" && !Array.isArray(y) && typeof y[Symbol.iterator] === "function"))
+  )
+    throw new TypeError("compare on List: force it first with List.toArray");
+  if (typeof x !== "object" || typeof y !== "object") return 0;
+  return _compareRecords(x, y);
+};
 export const compare: { <A>(a: A): (b: A) => number; <A>(a: A, b: A): number } = _curry(
   2,
-  (x: any, y: any) => {
-    if (x === y) return 0;
-    const t = typeof x;
-    if (t === "number" || t === "string" || t === "boolean") return x < y ? -1 : x > y ? 1 : 0;
-    if (Array.isArray(x) && Array.isArray(y)) {
-      const n = Math.min(x.length, y.length);
-      for (let i = 0; i < n; i++) {
-        const c = compare(x[i], y[i]);
-        if (c !== 0) return c;
-      }
-      return compare(x.length, y.length);
-    }
-    if (x instanceof Map && y instanceof Map) {
-      const kx = [...x.keys()].sort(compare),
-        ky = [...y.keys()].sort(compare);
-      const n = Math.min(kx.length, ky.length);
-      for (let i = 0; i < n; i++) {
-        const kc = compare(kx[i], ky[i]);
-        if (kc !== 0) return kc;
-        const vc = compare(x.get(kx[i]), y.get(ky[i]));
-        if (vc !== 0) return vc;
-      }
-      return compare(kx.length, ky.length);
-    }
-    if (x instanceof Set && y instanceof Set) {
-      const ex = [...x].sort(compare),
-        ey = [...y].sort(compare);
-      const n = Math.min(ex.length, ey.length);
-      for (let i = 0; i < n; i++) {
-        const c = compare(ex[i], ey[i]);
-        if (c !== 0) return c;
-      }
-      return compare(ex.length, ey.length);
-    }
-    if (
-      typeof x === "object" &&
-      x !== null &&
-      !Array.isArray(x) &&
-      typeof x[Symbol.iterator] === "function"
-    )
-      throw new TypeError("compare on List: force it first with List.toArray");
-    const sx = JSON.stringify(x),
-      sy = JSON.stringify(y);
-    return sx < sy ? -1 : sx > sy ? 1 : 0;
-  },
+  _compare,
 );
 export const show: <A>(a: A) => string = (x: any) => {
   const t = typeof x;

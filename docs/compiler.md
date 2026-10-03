@@ -90,7 +90,9 @@ hand-authored TypeScript emitters or differential oracle (ADR 0131).
 
 Core Mochi uses exhaustive `switch`; TypeScript host tooling uses
 `@onrails/pattern`'s `.exhaustive()`. Ordinary emitted code does not use it: a `switch`
-lowers to a ternary chain over its scrutinee, and only the TS backend falls back to a
+normally lowers to a ternary chain over its scrutinee. Simple exhaustive builtin
+Result and Option matches use flat `_Result_match` / `_Option_match` runtime
+dispatch ([ADR 0146](adr/0146-builtin-match-dispatch.md)). Only the TS backend falls back to a
 `match()` chain for a nested arm on a scrutinee type it cannot name
 ([ADR 0113](adr/0113-switch-lowers-to-ternaries.md)).
 

@@ -8,10 +8,10 @@
 ## Context
 
 `eq : a -> a -> bool` accepts records containing lazy Lists, then throws if its
-structural walk reaches distinct List values. `compare` reaches Lists through
-arrays, Map keys/values and Set elements; ordinary records and variants instead
-use its `JSON.stringify` fallback. Equality and ordering thus need different
-eligibility rules. Identity shortcuts and earlier mismatches can avoid the
+structural walk reaches distinct List values. Following ADR 0145, `compare`
+also reaches Lists through records and variants, as well as arrays, Map keys/values
+and Set elements. Equality and ordering still need different eligibility rules
+because collection keys have different traversal semantics. Identity shortcuts and earlier mismatches can avoid the
 exception. An apparently harmless change from Array to List can therefore break
 a generic consumer at runtime.
 

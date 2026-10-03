@@ -10,6 +10,7 @@ import {
   Ok,
   Some,
   _Array_get,
+  _Option_match,
   _Result_flatMap,
   _Result_map,
   _curry,
@@ -126,23 +127,20 @@ const inferUseState: <A, B, C, D>(
     api: { inferExpr: (a: A, b: B) => Result<[Ty, St], C> } & D,
   ) =>
     and(isRef(fn, "useState"), length(args) === 1)
-      ? ((_v) =>
-          _v._tag === "None"
-            ? Ok(None as Option<[Ty, St]>)
-            : _v._tag === "Some"
-              ? (({ value: init }) =>
-                  _Result_map(
-                    ([state, st1]: [Ty, St]) => {
-                      const value: Ty = widenLits(zonk(state, st1));
-                      return Some(
-                        _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st1),
-                      ) as Option<[Ty, St]>;
-                    },
-                    api.inferExpr(init, st),
-                  ))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(0, args))
+      ? _Option_match(
+          _Array_get(0, args),
+          () => Ok(None as Option<[Ty, St]>),
+          (init) =>
+            _Result_map(
+              ([state, st1]: [Ty, St]) => {
+                const value: Ty = widenLits(zonk(state, st1));
+                return Some(
+                  _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st1),
+                ) as Option<[Ty, St]>;
+              },
+              api.inferExpr(init, st),
+            ),
+        )
       : Ok(None as Option<[Ty, St]>),
 );
 const inferUseLazyState: <A, B, C, D, E>(
@@ -165,28 +163,25 @@ const inferUseLazyState: <A, B, C, D, E>(
     } & E,
   ) =>
     and(isRef(fn, "useLazyState"), length(args) === 1)
-      ? ((_v) =>
-          _v._tag === "None"
-            ? Ok(None as Option<[Ty, St]>)
-            : _v._tag === "Some"
-              ? (({ value: thunk }) =>
-                  (([state, st1]: [Ty, { next: number } & D]) =>
-                    _Result_flatMap(
-                      ([thunkT, st2]: [A, B]) =>
-                        _Result_map(
-                          (st3: St) => {
-                            const value: Ty = widenLits(zonk(state, st3));
-                            return Some(
-                              _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3),
-                            ) as Option<[Ty, St]>;
-                          },
-                          api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk)),
-                        ),
-                      api.inferExpr(thunk, st1),
-                    ))(freshVar(st)))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(0, args))
+      ? _Option_match(
+          _Array_get(0, args),
+          () => Ok(None as Option<[Ty, St]>),
+          (thunk) =>
+            (([state, st1]: [Ty, { next: number } & D]) =>
+              _Result_flatMap(
+                ([thunkT, st2]: [A, B]) =>
+                  _Result_map(
+                    (st3: St) => {
+                      const value: Ty = widenLits(zonk(state, st3));
+                      return Some(
+                        _tuple(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3),
+                      ) as Option<[Ty, St]>;
+                    },
+                    api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk)),
+                  ),
+                api.inferExpr(thunk, st1),
+              ))(freshVar(st)),
+        )
       : Ok(None as Option<[Ty, St]>),
 );
 const inferUseRef: <A, B, C, D>(
@@ -203,21 +198,18 @@ const inferUseRef: <A, B, C, D>(
     api: { inferExpr: (a: A, b: B) => Result<[Ty, St], C> } & D,
   ) =>
     and(isRef(fn, "useRef"), length(args) === 1)
-      ? ((_v) =>
-          _v._tag === "None"
-            ? Ok(None as Option<[Ty, St]>)
-            : _v._tag === "Some"
-              ? (({ value: init }) =>
-                  _Result_map(
-                    ([state, st1]: [Ty, St]) =>
-                      Some(
-                        _tuple(tRecord(rExtend("current", zonk(state, st1), RowEmpty as Row)), st1),
-                      ) as Option<[Ty, St]>,
-                    api.inferExpr(init, st),
-                  ))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(0, args))
+      ? _Option_match(
+          _Array_get(0, args),
+          () => Ok(None as Option<[Ty, St]>),
+          (init) =>
+            _Result_map(
+              ([state, st1]: [Ty, St]) =>
+                Some(
+                  _tuple(tRecord(rExtend("current", zonk(state, st1), RowEmpty as Row)), st1),
+                ) as Option<[Ty, St]>,
+              api.inferExpr(init, st),
+            ),
+        )
       : Ok(None as Option<[Ty, St]>),
 );
 const inferDeps: <A, B, E, F>(
@@ -239,40 +231,31 @@ const inferDeps: <A, B, E, F>(
     } & F,
     name: string,
   ) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: surplus }) =>
-            ((sp: SpanAt) =>
-              Err({
-                message: `${name} takes one dependency array after its callback`,
-                start: sp.start,
-                end: sp.end,
-                help: None,
-                suggestions: [] as {
-                  end: number;
-                  replaceWith: string;
-                  start: number;
-                  title: string;
-                }[],
-              }))(preactSpan(surplus)))(_v)
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "None"
-                ? Ok(st)
-                : _v._tag === "Some"
-                  ? (({ value: deps }) =>
-                      _Result_flatMap(
-                        ([depsT, st1]: [B, { next: number } & E]) =>
-                          (([elem, st2]: [Ty, { next: number } & E]) =>
-                            api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
-                        api.inferExpr(deps, st),
-                      ))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(_Array_get(1, args))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(2, args)),
+    _Option_match(
+      _Array_get(2, args),
+      () =>
+        _Option_match(
+          _Array_get(1, args),
+          () => Ok(st),
+          (deps) =>
+            _Result_flatMap(
+              ([depsT, st1]: [B, { next: number } & E]) =>
+                (([elem, st2]: [Ty, { next: number } & E]) =>
+                  api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
+              api.inferExpr(deps, st),
+            ),
+        ),
+      (surplus) => {
+        const sp: SpanAt = preactSpan(surplus);
+        return Err({
+          message: `${name} takes one dependency array after its callback`,
+          start: sp.start,
+          end: sp.end,
+          help: None,
+          suggestions: [] as { end: number; replaceWith: string; start: number; title: string }[],
+        });
+      },
+    ),
 );
 const inferEffectLike: <A, D, E, F>(
   fn: Expr,
@@ -306,30 +289,27 @@ const inferEffectLike: <A, D, E, F>(
     name: string,
   ) =>
     and(isRef(fn, name), length(args) >= 1)
-      ? ((_v) =>
-          _v._tag === "None"
-            ? Ok(None)
-            : _v._tag === "Some"
-              ? (({ value: effect }) =>
-                  (([cleanup, st1]: [Ty, { next: number } & D]) =>
-                    _Result_flatMap(
-                      ([effectT, st2]: [A, { next: number } & E]) =>
-                        _Result_flatMap(
-                          (st3: { next: number } & D) =>
-                            length(args) === 1
-                              ? (([dep, st4]: [Ty, { next: number } & D]) =>
-                                  Ok(Some(_tuple(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3))
-                              : _Result_map(
-                                  (st4: { next: number } & D) => Some(_tuple(tUnit, st4)),
-                                  inferDeps(args, st3, api, name),
-                                ),
-                          api.unify(effectT, tArrow(tUnit, cleanup), st2, preactSpan(effect)),
-                        ),
-                      api.inferExpr(effect, st1),
-                    ))(freshVar(st)))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(0, args))
+      ? _Option_match(
+          _Array_get(0, args),
+          () => Ok(None),
+          (effect) =>
+            (([cleanup, st1]: [Ty, { next: number } & D]) =>
+              _Result_flatMap(
+                ([effectT, st2]: [A, { next: number } & E]) =>
+                  _Result_flatMap(
+                    (st3: { next: number } & D) =>
+                      length(args) === 1
+                        ? (([dep, st4]: [Ty, { next: number } & D]) =>
+                            Ok(Some(_tuple(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3))
+                        : _Result_map(
+                            (st4: { next: number } & D) => Some(_tuple(tUnit, st4)),
+                            inferDeps(args, st3, api, name),
+                          ),
+                    api.unify(effectT, tArrow(tUnit, cleanup), st2, preactSpan(effect)),
+                  ),
+                api.inferExpr(effect, st1),
+              ))(freshVar(st)),
+        )
       : Ok(None),
 );
 const inferUseCallback: <C>(
@@ -352,30 +332,26 @@ const inferUseCallback: <C>(
     } & C,
   ) =>
     and(isRef(fn, "useCallback"), length(args) >= 1)
-      ? ((_v) =>
-          _v._tag === "None"
-            ? Ok(None as Option<[Ty, St]>)
-            : _v._tag === "Some"
-              ? (({ value: callback }) =>
-                  _Result_flatMap(
-                    ([callbackT, st1]: [Ty, St]) =>
-                      length(args) === 1
-                        ? (([dep, st2]: [Ty, St]) =>
-                            Ok(
-                              Some(_tuple(tArrow(arrOf(dep), zonk(callbackT, st2)), st2)) as Option<
-                                [Ty, St]
-                              >,
-                            ))(freshVar(st1))
-                        : _Result_map(
-                            (st2: St) =>
-                              Some(_tuple(zonk(callbackT, st2), st2)) as Option<[Ty, St]>,
-                            inferDeps(args, st1, api, "useCallback"),
-                          ),
-                    api.inferExpr(callback, st),
-                  ))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(0, args))
+      ? _Option_match(
+          _Array_get(0, args),
+          () => Ok(None as Option<[Ty, St]>),
+          (callback) =>
+            _Result_flatMap(
+              ([callbackT, st1]: [Ty, St]) =>
+                length(args) === 1
+                  ? (([dep, st2]: [Ty, St]) =>
+                      Ok(
+                        Some(_tuple(tArrow(arrOf(dep), zonk(callbackT, st2)), st2)) as Option<
+                          [Ty, St]
+                        >,
+                      ))(freshVar(st1))
+                  : _Result_map(
+                      (st2: St) => Some(_tuple(zonk(callbackT, st2), st2)) as Option<[Ty, St]>,
+                      inferDeps(args, st1, api, "useCallback"),
+                    ),
+              api.inferExpr(callback, st),
+            ),
+        )
       : Ok(None as Option<[Ty, St]>),
 );
 const inferUseMemo: <A, D, E>(
@@ -398,35 +374,31 @@ const inferUseMemo: <A, D, E>(
     } & E,
   ) =>
     and(isRef(fn, "useMemo"), length(args) >= 1)
-      ? ((_v) =>
-          _v._tag === "None"
-            ? Ok(None as Option<[Ty, St]>)
-            : _v._tag === "Some"
-              ? (({ value: thunk }) =>
-                  (([value, st1]: [Ty, St]) =>
-                    _Result_flatMap(
-                      ([thunkT, st2]: [A, { next: number } & D]) =>
-                        _Result_flatMap(
-                          (st3: St) =>
-                            length(args) === 1
-                              ? (([dep, st4]: [Ty, St]) =>
-                                  Ok(
-                                    Some(
-                                      _tuple(tArrow(arrOf(dep), zonk(value, st4)), st4),
-                                    ) as Option<[Ty, St]>,
-                                  ))(freshVar(st3))
-                              : _Result_map(
-                                  (st4: St) =>
-                                    Some(_tuple(zonk(value, st4), st4)) as Option<[Ty, St]>,
-                                  inferDeps(args, st3, api, "useMemo"),
-                                ),
-                          api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk)),
-                        ),
-                      api.inferExpr(thunk, st1),
-                    ))(freshVar(st)))(_v)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Array_get(0, args))
+      ? _Option_match(
+          _Array_get(0, args),
+          () => Ok(None as Option<[Ty, St]>),
+          (thunk) =>
+            (([value, st1]: [Ty, St]) =>
+              _Result_flatMap(
+                ([thunkT, st2]: [A, { next: number } & D]) =>
+                  _Result_flatMap(
+                    (st3: St) =>
+                      length(args) === 1
+                        ? (([dep, st4]: [Ty, St]) =>
+                            Ok(
+                              Some(_tuple(tArrow(arrOf(dep), zonk(value, st4)), st4)) as Option<
+                                [Ty, St]
+                              >,
+                            ))(freshVar(st3))
+                        : _Result_map(
+                            (st4: St) => Some(_tuple(zonk(value, st4), st4)) as Option<[Ty, St]>,
+                            inferDeps(args, st3, api, "useMemo"),
+                          ),
+                    api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk)),
+                  ),
+                api.inferExpr(thunk, st1),
+              ))(freshVar(st)),
+        )
       : Ok(None as Option<[Ty, St]>),
 );
 const inferHookDeps: <A, B, C, D, E>(
@@ -451,23 +423,20 @@ const inferHookDeps: <A, B, C, D, E>(
           : isRef(fn, "hookDeps")
             ? (Some(3) as Option<number>)
             : (None as Option<number>);
-    return ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: n }) =>
-            eq(length(args), n)
-              ? _Result_map(
-                  (st1: { next: number } & D) =>
-                    (([elem, st2]: [Ty, { next: number } & D]) => Some(_tuple(arrOf(elem), st2)))(
-                      freshVar(st1),
-                    ),
-                  inferArgs(args, st, api.inferExpr),
-                )
-              : Ok(None))(_v)
-        : _v._tag === "None"
-          ? Ok(None)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(expected);
+    return _Option_match(
+      expected,
+      () => Ok(None),
+      (n) =>
+        eq(length(args), n)
+          ? _Result_map(
+              (st1: { next: number } & D) =>
+                (([elem, st2]: [Ty, { next: number } & D]) => Some(_tuple(arrOf(elem), st2)))(
+                  freshVar(st1),
+                ),
+              inferArgs(args, st, api.inferExpr),
+            )
+          : Ok(None),
+    );
   },
 );
 export const inferPreactCall: <A, D>(
@@ -493,108 +462,65 @@ export const inferPreactCall: <A, D>(
   ) =>
     _Result_flatMap(
       (first) =>
-        ((_v) =>
-          _v._tag === "Some"
-            ? Ok(first)
-            : _v._tag === "None"
-              ? _Result_flatMap(
-                  (lazy) =>
-                    ((_v) =>
-                      _v._tag === "Some"
-                        ? Ok(lazy)
-                        : _v._tag === "None"
-                          ? _Result_flatMap(
-                              (ref) =>
-                                ((_v) =>
-                                  _v._tag === "Some"
-                                    ? Ok(ref)
-                                    : _v._tag === "None"
-                                      ? _Result_flatMap(
-                                          (effect) =>
-                                            ((_v) =>
-                                              _v._tag === "Some"
-                                                ? Ok(effect)
-                                                : _v._tag === "None"
-                                                  ? _Result_flatMap(
-                                                      (layout) =>
-                                                        ((_v) =>
-                                                          _v._tag === "Some"
-                                                            ? Ok(layout)
-                                                            : _v._tag === "None"
-                                                              ? _Result_flatMap(
-                                                                  (callback) =>
-                                                                    ((_v) =>
-                                                                      _v._tag === "Some"
-                                                                        ? Ok(callback)
-                                                                        : _v._tag === "None"
-                                                                          ? _Result_flatMap(
-                                                                              (memo) =>
-                                                                                ((_v) =>
-                                                                                  _v._tag === "Some"
-                                                                                    ? Ok(memo)
-                                                                                    : _v._tag ===
-                                                                                        "None"
-                                                                                      ? inferHookDeps(
-                                                                                          fn,
-                                                                                          args,
-                                                                                          st,
-                                                                                          api,
-                                                                                        )
-                                                                                      : (() => {
-                                                                                          throw new Error(
-                                                                                            "non-exhaustive match",
-                                                                                          );
-                                                                                        })())(memo),
-                                                                              inferUseMemo(
-                                                                                fn,
-                                                                                args,
-                                                                                st,
-                                                                                api,
-                                                                              ),
-                                                                            )
-                                                                          : (() => {
-                                                                              throw new Error(
-                                                                                "non-exhaustive match",
-                                                                              );
-                                                                            })())(callback),
-                                                                  inferUseCallback(
-                                                                    fn,
-                                                                    args,
-                                                                    st,
-                                                                    api,
-                                                                  ),
-                                                                )
-                                                              : (() => {
-                                                                  throw new Error(
-                                                                    "non-exhaustive match",
-                                                                  );
-                                                                })())(layout),
-                                                      inferEffectLike(
-                                                        fn,
-                                                        args,
-                                                        st,
-                                                        api,
-                                                        "useLayoutEffect",
-                                                      ),
-                                                    )
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(effect),
-                                          inferEffectLike(fn, args, st, api, "useEffect"),
-                                        )
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(ref),
-                              inferUseRef(fn, args, st, api),
-                            )
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(lazy),
-                  inferUseLazyState(fn, args, st, api),
-                )
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(first),
+        _Option_match(
+          first,
+          () =>
+            _Result_flatMap(
+              (lazy) =>
+                _Option_match(
+                  lazy,
+                  () =>
+                    _Result_flatMap(
+                      (ref) =>
+                        _Option_match(
+                          ref,
+                          () =>
+                            _Result_flatMap(
+                              (effect) =>
+                                _Option_match(
+                                  effect,
+                                  () =>
+                                    _Result_flatMap(
+                                      (layout) =>
+                                        _Option_match(
+                                          layout,
+                                          () =>
+                                            _Result_flatMap(
+                                              (callback) =>
+                                                _Option_match(
+                                                  callback,
+                                                  () =>
+                                                    _Result_flatMap(
+                                                      (memo) =>
+                                                        _Option_match(
+                                                          memo,
+                                                          () => inferHookDeps(fn, args, st, api),
+                                                          () => Ok(memo),
+                                                        ),
+                                                      inferUseMemo(fn, args, st, api),
+                                                    ),
+                                                  () => Ok(callback),
+                                                ),
+                                              inferUseCallback(fn, args, st, api),
+                                            ),
+                                          () => Ok(layout),
+                                        ),
+                                      inferEffectLike(fn, args, st, api, "useLayoutEffect"),
+                                    ),
+                                  () => Ok(effect),
+                                ),
+                              inferEffectLike(fn, args, st, api, "useEffect"),
+                            ),
+                          () => Ok(ref),
+                        ),
+                      inferUseRef(fn, args, st, api),
+                    ),
+                  () => Ok(lazy),
+                ),
+              inferUseLazyState(fn, args, st, api),
+            ),
+          () => Ok(first),
+        ),
       inferUseState(fn, args, st, api),
     ),
 );

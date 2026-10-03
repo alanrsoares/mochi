@@ -14,6 +14,23 @@ const RUNTIME_IMPORT = "../../packages/compiler/src/prelude/runtime";
 // Each program is closed-world: it references only prelude builtins and its own
 // bindings (no open-world globals that would emit as dangling TS names).
 const PROGRAMS: Record<string, string> = {
+  builtinMatchDispatch: `
+let result = (r: Result<number, string>) => switch r { | Err(e) => e | Ok(n) => show(n) }
+let option = (o: Option<number>) => switch o { | None => 0 | Some(n) => n }
+let generic = (r: Result<a, e>) => switch r { | Ok(n) => Some(n) | Err(_) => None }
+let genericOption = (o: Option<a>) => switch o { | Some(n) => Some(n) | None => None }
+let steps = (values: [Result<number, string>]) => loop (remaining = values) { switch remaining {
+  | [] => Ok(0)
+  | [r, ...rest] => switch r { | Err(e) => Err(e) | Ok(n) => let used = n + 1 in recur(rest) }
+} }
+let chosen = (result(Ok(2)), option(Some(3)), generic(Ok(4)), genericOption(Some(5)))`,
+  structuralOrdering: `
+type Entry = | Box(number) | Named(value: number)
+type Row = { value?: number }
+let rows = Array.sort([{value: 10}, {value: 2}])
+let entries = Array.sort([Named(1), Box(10), Box(2)])
+let order = (a: Row, b: Row) => compare(a, b)
+let nested = compare({item: {value: 10}}, {item: {value: 2}})`,
   optionalMatchFusion: `
 type Row a = { value?: a }
 let $optional = 5
@@ -337,6 +354,6 @@ afterAll(() => rmSync(DIR, { recursive: true, force: true }));
 test("emitted .ts type-checks under tsc --strict", () => {
   const proc = Bun.spawnSync(["bunx", "tsc", "-p", `${DIR}tsconfig.json`], { cwd: DIR });
   const out = `${proc.stdout.toString()}${proc.stderr.toString()}`.trim();
-  expect(proc.exitCode).toBe(0);
   expect(out).toBe("");
+  expect(proc.exitCode).toBe(0);
 });

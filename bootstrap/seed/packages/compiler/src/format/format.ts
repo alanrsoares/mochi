@@ -78,6 +78,7 @@ import {
   _Option_contains,
   _Option_isNone,
   _Option_isSome,
+  _Option_match,
   _Option_unwrapOr,
   _Set_fromArray,
   _Set_has,
@@ -93,6 +94,11 @@ import {
   _Str_startsWith,
   _Str_toNumber,
   _Str_trim,
+  _compare,
+  _compareFieldNames,
+  _compareFirstKey,
+  _compareRecords,
+  _compareSortedKeys,
   _curry,
   _list,
   _tuple,
@@ -177,14 +183,11 @@ const patField: (f: PatField) => string = (f: PatField) =>
       ? (({ name }) => f.label)(_v)
       : `${f.label}: ${pattern(f.pat)}`)(f.pat);
 const restOf: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? ([] as string[])
-      : _v._tag === "Some"
-        ? (({ value: p }) => [`...${pattern(p)}`])(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(rest);
+  _Option_match(
+    rest,
+    () => [] as string[],
+    (p) => [`...${pattern(p)}`],
+  );
 export const pattern: (p: Pattern) => string = (p: Pattern) =>
   ((_v) =>
     _v._tag === "PAs"
@@ -209,14 +212,11 @@ export const pattern: (p: Pattern) => string = (p: Pattern) =>
                         ? (({ ctor: ctorName, args, ns }) =>
                             ((head: string) =>
                               length(args) === 0 ? head : `${head}(${commaJoin(pattern, args)})`)(
-                              ((_v) =>
-                                _v._tag === "None"
-                                  ? ctorName
-                                  : _v._tag === "Some"
-                                    ? (({ value: alias }) => `${alias}.${ctorName}`)(_v)
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(ns),
+                              _Option_match(
+                                ns,
+                                () => ctorName,
+                                (alias) => `${alias}.${ctorName}`,
+                              ),
                             ))(_v)
                         : _v._tag === "PArr"
                           ? (({ elems, rest }) =>
@@ -234,14 +234,11 @@ export const pattern: (p: Pattern) => string = (p: Pattern) =>
                                   throw new Error("non-exhaustive match");
                                 })())(p);
 const ctorField: (f: CtorField) => string = (f: CtorField) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? showTypeExpr(f.fieldType)
-      : _v._tag === "Some"
-        ? (({ value: name }) => `${name}: ${showTypeExpr(f.fieldType)}`)(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(f.name);
+  _Option_match(
+    f.name,
+    () => showTypeExpr(f.fieldType),
+    (name) => `${name}: ${showTypeExpr(f.fieldType)}`,
+  );
 export const ctorText: (c: Ctor) => string = (c: Ctor) =>
   length(c.fields) === 0 ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
 const generics: (params: string[]) => string = (params: string[]) =>
@@ -279,20 +276,19 @@ export const externStmt: _Curry<
     curried: boolean,
   ) => {
     const head: string = `extern ${name}${generics(params)} : ${showTypeExpr(typeExpr)} = `;
-    return ((_v) =>
-      _v._tag === "None"
-        ? `${head}${curried ? "curried " : ""}${strLit(module)} ${strLit(imported)}`
-        : _v._tag === "Some"
-          ? (({ value: convention }) =>
-              ((first: string) =>
-                ((second: string) => `${head}${convention} ${strLit(first)}${second}`)(
-                  imported === "" ? "" : ` ${strLit(imported)}`,
-                ))(_Str_slice(_Str_length(`mochi:${convention}:`), _Str_length(module), module)))(
-              _v,
-            )
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(conventionOf(module));
+    return _Option_match(
+      conventionOf(module),
+      () => `${head}${curried ? "curried " : ""}${strLit(module)} ${strLit(imported)}`,
+      (convention) => {
+        const first: string = _Str_slice(
+          _Str_length(`mochi:${convention}:`),
+          _Str_length(module),
+          module,
+        );
+        const second: string = imported === "" ? "" : ` ${strLit(imported)}`;
+        return `${head}${convention} ${strLit(first)}${second}`;
+      },
+    );
   },
 );
 const sepLine: Doc = cat([txt(","), line]);
@@ -415,14 +411,11 @@ const CTOR: string = "c";
 const atKey: <A, B>(table: Map<A, B[]>, key: A) => B[] = _curry(
   2,
   <A, B>(table: Map<A, B[]>, key: A) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: cs }) => cs)(_v)
-        : _v._tag === "None"
-          ? ([] as B[])
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(key, table)),
+    _Option_match(
+      _Map_get(key, table),
+      () => [] as B[],
+      (cs) => cs,
+    ),
 );
 const pushAt: <A, B>(key: A, c: B, table: Map<A, B[]>) => Map<A, B[]> = _curry(
   3,
@@ -495,14 +488,11 @@ const scanComments: _Curry<
             : _v._tag === "Some" && eq(_Str_codeAt(i, src), Some(13) as Option<number>)
               ? scanComments(src, i + 1, lineHasToken, acc)
               : _v._tag === "Some" && _v.value === '"'
-                ? ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: end }) => scanComments(src, end, true, acc))(_v)
-                      : _v._tag === "None"
-                        ? scanComments(src, i + 1, true, acc)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(skipStringLiteral(src, i))
+                ? _Option_match(
+                    skipStringLiteral(src, i),
+                    () => scanComments(src, i + 1, true, acc),
+                    (end) => scanComments(src, end, true, acc),
+                  )
                 : _v._tag === "Some" && _v.value === "/"
                   ? eq(_Str_get(i + 1, src), Some("/") as Option<string>)
                     ? ((end: number) =>
@@ -584,14 +574,11 @@ const exprAnchors: (e: Expr) => Anchor[] = (e: Expr) =>
                             _Array_flatMap(
                               (a: MatchArm) =>
                                 _Array_concat(
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: g }) => exprAnchors(g))(_v)
-                                      : _v._tag === "None"
-                                        ? ([] as Anchor[])
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(a.guard),
+                                  _Option_match(
+                                    a.guard,
+                                    () => [] as Anchor[],
+                                    (g) => exprAnchors(g),
+                                  ),
                                   exprAnchors(a.body),
                                 ),
                               arms,
@@ -600,14 +587,11 @@ const exprAnchors: (e: Expr) => Anchor[] = (e: Expr) =>
                       : _v._tag === "ERecord"
                         ? (({ fields, spread }) =>
                             _Array_concat(
-                              ((_v) =>
-                                _v._tag === "Some"
-                                  ? (({ value: sp }) => exprAnchors(sp))(_v)
-                                  : _v._tag === "None"
-                                    ? ([] as Anchor[])
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(spread),
+                              _Option_match(
+                                spread,
+                                () => [] as Anchor[],
+                                (sp) => exprAnchors(sp),
+                              ),
                               _Array_flatMap((f: Field) => exprAnchors(f.value), fields),
                             ))(_v)
                         : _v._tag === "EField"
@@ -754,56 +738,39 @@ const attachOne: _Curry<
   Option<Ctx>
 > = _curry(4, (idx: AnchorIndex, src: string, c: Comment, tbl: Ctx) => {
   const trailed: Option<Anchor> = c.trailing ? trailedBy(idx, c, src) : (None as Option<Anchor>);
-  return ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: a }) =>
-          Some({
-            ...tbl,
-            trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing),
-          }) as Option<Ctx>)(_v)
-      : _v._tag === "None"
-        ? ((_v) =>
-            _v._tag === "None"
-              ? (None as Option<Ctx>)
-              : _v._tag === "Some"
-                ? (({ value: a }) =>
-                    Some({
-                      ...tbl,
-                      leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading),
-                    }) as Option<Ctx>)(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(leadTarget(idx, c))
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(trailed);
+  return _Option_match(
+    trailed,
+    () =>
+      _Option_match(
+        leadTarget(idx, c),
+        () => None as Option<Ctx>,
+        (a) =>
+          Some({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) }) as Option<Ctx>,
+      ),
+    (a) =>
+      Some({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) }) as Option<Ctx>,
+  );
 });
 const attachFrom: _Curry<
   [comments: Comment[], i: number, idx: AnchorIndex, src: string, acc: Attached],
   Attached
 > = _curry(5, (comments: Comment[], i: number, idx: AnchorIndex, src: string, acc: Attached) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: c }) =>
-            attachFrom(
-              comments,
-              i + 1,
-              idx,
-              src,
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: table }) => ({ table: table, tail: acc.tail }))(_v)
-                  : _v._tag === "None"
-                    ? { table: acc.table, tail: _Array_append(c, acc.tail) }
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(attachOne(idx, src, c, acc.table)),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, comments)),
+  _Option_match(
+    _Array_get(i, comments),
+    () => acc,
+    (c) =>
+      attachFrom(
+        comments,
+        i + 1,
+        idx,
+        src,
+        _Option_match(
+          attachOne(idx, src, c, acc.table),
+          () => ({ table: acc.table, tail: _Array_append(c, acc.tail) }),
+          (table) => ({ table: table, tail: acc.tail }),
+        ),
+      ),
+  ),
 );
 /**
  * Build the table for one expression: scan the source, anchor every node.
@@ -861,17 +828,14 @@ import { preludeJsDefs } from "../prelude/prelude.gen.mjs";
 const curryArityFrom: _Curry<[def: string, i: number, acc: string], string> = _curry(
   3,
   (def: string, i: number, acc: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: code }) =>
-              and(code >= 48, code <= 57)
-                ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode(code)}`)
-                : acc)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Str_codeAt(i, def)),
+    _Option_match(
+      _Str_codeAt(i, def),
+      () => acc,
+      (code) =>
+        and(code >= 48, code <= 57)
+          ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode(code)}`)
+          : acc,
+    ),
 );
 /**
  * Count the parameters of a bare `const name = (a, b) => …` definition.
@@ -923,17 +887,14 @@ const arityOfDef: (def: string) => number = (def: string) => {
                   ))(indexOfFrom(") =>", def, open)))(indexOfFrom("= (", def, 0));
 };
 const runtimeArityOf: (jsId: string) => Option<number> = (jsId: string) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? (None as Option<number>)
-      : _v._tag === "Some"
-        ? (({ value: def }) =>
-            ((n: number) => (n >= 2 ? (Some(n) as Option<number>) : (None as Option<number>)))(
-              arityOfDef(def),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Map_get(jsId, preludeJsDefs));
+  _Option_match(
+    _Map_get(jsId, preludeJsDefs),
+    () => None as Option<number>,
+    (def) => {
+      const n: number = arityOfDef(def);
+      return n >= 2 ? (Some(n) as Option<number>) : (None as Option<number>);
+    },
+  );
 /**
  * `Array.map` -> its runtime's flat arity, or None when the namespace is
  * shadowed by a local binding or the member is unknown.
@@ -947,22 +908,16 @@ const namespaceArity: _Curry<
       ? (({ name: nsName }) =>
           _Set_has(nsName, shadowed)
             ? (None as Option<number>)
-            : ((_v) =>
-                _v._tag === "None"
-                  ? (None as Option<number>)
-                  : _v._tag === "Some"
-                    ? (({ value: members }) =>
-                        ((_v) =>
-                          _v._tag === "None"
-                            ? (None as Option<number>)
-                            : _v._tag === "Some"
-                              ? (({ value: jsId }) => runtimeArityOf(jsId))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(_Map_get(member, members)))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(nsName, namespaceRuntime)))(_v)
+            : _Option_match(
+                _Map_get(nsName, namespaceRuntime),
+                () => None as Option<number>,
+                (members) =>
+                  _Option_match(
+                    _Map_get(member, members),
+                    () => None as Option<number>,
+                    (jsId) => runtimeArityOf(jsId),
+                  ),
+              ))(_v)
       : (None as Option<number>))(target),
 );
 /**
@@ -1004,27 +959,21 @@ const patNames: (p: Pattern) => string[] = (p: Pattern) =>
                 ? (({ elems, rest }) =>
                     _Array_concat(
                       _Array_flatMap(patNames, elems),
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: r }) => patNames(r))(_v)
-                          : _v._tag === "None"
-                            ? ([] as string[])
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(rest),
+                      _Option_match(
+                        rest,
+                        () => [] as string[],
+                        (r) => patNames(r),
+                      ),
                     ))(_v)
                 : _v._tag === "PList"
                   ? (({ elems, rest }) =>
                       _Array_concat(
                         _Array_flatMap(patNames, elems),
-                        ((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: r }) => patNames(r))(_v)
-                            : _v._tag === "None"
-                              ? ([] as string[])
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(rest),
+                        _Option_match(
+                          rest,
+                          () => [] as string[],
+                          (r) => patNames(r),
+                        ),
                       ))(_v)
                   : _v._tag === "POr"
                     ? (({ alts }) => _Array_flatMap(patNames, alts))(_v)
@@ -1086,14 +1035,11 @@ const innerNames: (e: Expr) => string[] = (e: Expr) =>
                       _Array_concat(
                         patNames(a.pattern),
                         _Array_concat(
-                          ((_v) =>
-                            _v._tag === "Some"
-                              ? (({ value: g }) => innerNames(g))(_v)
-                              : _v._tag === "None"
-                                ? ([] as string[])
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(a.guard),
+                          _Option_match(
+                            a.guard,
+                            () => [] as string[],
+                            (g) => innerNames(g),
+                          ),
                           innerNames(a.body),
                         ),
                       ),
@@ -1125,14 +1071,11 @@ const innerNames: (e: Expr) => string[] = (e: Expr) =>
                       : _v._tag === "ERecord"
                         ? (({ fields, spread }) =>
                             _Array_concat(
-                              ((_v) =>
-                                _v._tag === "Some"
-                                  ? (({ value: s }) => innerNames(s))(_v)
-                                  : _v._tag === "None"
-                                    ? ([] as string[])
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(spread),
+                              _Option_match(
+                                spread,
+                                () => [] as string[],
+                                (s) => innerNames(s),
+                              ),
                               _Array_flatMap((f: Field) => innerNames(f.value), fields),
                             ))(_v)
                         : _v._tag === "EField"
@@ -1214,14 +1157,11 @@ const preludeArity: (innerBound: Set<string>) => Map<string, number> = (innerBou
     _curry(2, (acc: Map<string, number>, name: string) =>
       _Set_has(name, innerBound)
         ? acc
-        : ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: n }) => _Map_set(name, n, acc))(_v)
-              : _v._tag === "None"
-                ? acc
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(runtimeArityOf(name)),
+        : _Option_match(
+            runtimeArityOf(name),
+            () => acc,
+            (n) => _Map_set(name, n, acc),
+          ),
     ),
     new Map<string, number>(),
     _Map_keys(preludeJsDefs),
@@ -1448,28 +1388,21 @@ const neqOperands: (e: Expr) => Option<[Expr, Expr]> = (e: Expr) =>
       ? (({ fn, args }) => neqFor(fn, args))(_v)
       : (None as Option<[Expr, Expr]>))(e);
 const infixPrec: (e: Expr) => Option<number> = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: p }) => Some(p) as Option<number>)(_v)
-      : _v._tag === "None"
-        ? ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: info }) => Some(info.prec) as Option<number>)(_v)
-              : _v._tag === "None"
-                ? ((_v) =>
-                    _v._tag === "Some"
-                      ? (Some(NEQ_PREC) as Option<number>)
-                      : _v._tag === "None"
-                        ? (None as Option<number>)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(neqOperands(e))
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(binOpOf(e))
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(pipePrecOf(e));
+  _Option_match(
+    pipePrecOf(e),
+    () =>
+      _Option_match(
+        binOpOf(e),
+        () =>
+          _Option_match(
+            neqOperands(e),
+            () => None as Option<number>,
+            () => Some(NEQ_PREC) as Option<number>,
+          ),
+        (info) => Some(info.prec) as Option<number>,
+      ),
+    (p) => Some(p) as Option<number>,
+  );
 /**
  * An operand of an infix operator. A lambda or ternary always parenthesizes;
  * otherwise precedence decides, with the right operand also parenthesizing at
@@ -1480,15 +1413,11 @@ const binOperandD: _Curry<[cts: Ctx, e: Expr, parentPrec: number, isRight: boole
   (cts: Ctx, e: Expr, parentPrec: number, isRight: boolean) =>
     isLambdaOrTernary(cts, e)
       ? cat([txt("("), exprD(cts, e), txt(")")])
-      : ((_v) =>
-          _v._tag === "Some"
-            ? (({ value: prec }) =>
-                parenIf(isRight ? prec <= parentPrec : prec < parentPrec, exprD(cts, e)))(_v)
-            : _v._tag === "None"
-              ? exprD(cts, e)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(infixPrec(e)),
+      : _Option_match(
+          infixPrec(e),
+          () => exprD(cts, e),
+          (prec) => parenIf(isRight ? prec <= parentPrec : prec < parentPrec, exprD(cts, e)),
+        ),
 );
 /**
  * A pipe's left operand parenthesizes when dropping the parens would reparse:
@@ -1499,14 +1428,11 @@ const pipeLeftD: _Curry<[cts: Ctx, e: Expr, parentPrec: number], Doc> = _curry(
   (cts: Ctx, e: Expr, parentPrec: number) =>
     isLambdaOrTernary(cts, e)
       ? cat([txt("("), exprD(cts, e), txt(")")])
-      : ((_v) =>
-          _v._tag === "Some"
-            ? (({ value: prec }) => parenIf(prec < parentPrec, exprD(cts, e)))(_v)
-            : _v._tag === "None"
-              ? exprD(cts, e)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(infixPrec(e)),
+      : _Option_match(
+          infixPrec(e),
+          () => exprD(cts, e),
+          (prec) => parenIf(prec < parentPrec, exprD(cts, e)),
+        ),
 );
 /**
  * `++` is left-associative (`concat(concat(a, b), c)`); flatten it like `|>` so
@@ -1566,29 +1492,26 @@ const binaryD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(
               ),
             ) as Option<Doc>)(_v as Extract<Option<[Expr, Expr]>, { _tag: "Some" }>)
         : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "None"
-                ? (None as Option<Doc>)
-                : _v._tag === "Some"
-                  ? (({ value: info }) =>
-                      ((_v) =>
-                        _v.length === 2
-                          ? (([l, r]) =>
-                              info.symbol === "++"
-                                ? (Some(concatD(cts, l, r)) as Option<Doc>)
-                                : (Some(
-                                    group(
-                                      cat([
-                                        binOperandD(cts, l, info.prec, false),
-                                        txt(` ${info.symbol} `),
-                                        binOperandD(cts, r, info.prec, true),
-                                      ]),
-                                    ),
-                                  ) as Option<Doc>))(_v)
-                          : (None as Option<Doc>))(args))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(binOpFor(fn, args))
+          ? _Option_match(
+              binOpFor(fn, args),
+              () => None as Option<Doc>,
+              (info) =>
+                ((_v) =>
+                  _v.length === 2
+                    ? (([l, r]) =>
+                        info.symbol === "++"
+                          ? (Some(concatD(cts, l, r)) as Option<Doc>)
+                          : (Some(
+                              group(
+                                cat([
+                                  binOperandD(cts, l, info.prec, false),
+                                  txt(` ${info.symbol} `),
+                                  binOperandD(cts, r, info.prec, true),
+                                ]),
+                              ),
+                            ) as Option<Doc>))(_v)
+                    : (None as Option<Doc>))(args),
+            )
           : (() => {
               throw new Error("non-exhaustive match");
             })())(neqFor(fn, args)),
@@ -1604,25 +1527,19 @@ const unaryD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(
     ((_v) =>
       _v[0]._tag === "ERef" && _v[1].length === 1
         ? (([{ name }, [operand]]) =>
-            ((_v) =>
-              _v._tag === "None"
-                ? (None as Option<Doc>)
-                : _v._tag === "Some"
-                  ? (({ value: symbol }) =>
-                      ((forced: boolean) =>
-                        Some(
-                          cat([txt(symbol), parenIf(forced, exprD(cts, operand))]),
-                        ) as Option<Doc>)(
-                        or(
-                          or(loosePrefix(cts, operand), _Option_isSome(binOpOf(operand))),
-                          _Option_isSome(neqOperands(operand)),
-                        ),
-                      ))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(unaryOpOf(name)))(
-            _v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]],
-          )
+            _Option_match(
+              unaryOpOf(name),
+              () => None as Option<Doc>,
+              (symbol) => {
+                const forced: boolean = or(
+                  or(loosePrefix(cts, operand), _Option_isSome(binOpOf(operand))),
+                  _Option_isSome(neqOperands(operand)),
+                );
+                return Some(
+                  cat([txt(symbol), parenIf(forced, exprD(cts, operand))]),
+                ) as Option<Doc>;
+              },
+            ))(_v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]])
         : (None as Option<Doc>))(_tuple(fn, args)),
 );
 /**
@@ -1665,29 +1582,20 @@ const etaPartial: _Curry<[ctx: Ctx, params: LamParam[], body: Expr], Option<Expr
                                                               ),
                                                               !anyMentions(prefix, name),
                                                             )
-                                                              ? ((_v) =>
-                                                                  _v._tag === "Some"
-                                                                    ? (({ value: arity }) =>
-                                                                        eq(n, arity)
-                                                                          ? (Some(
-                                                                              Ast.ECall(
-                                                                                fn,
-                                                                                prefix,
-                                                                                None as Option<string>,
-                                                                                sp,
-                                                                              ),
-                                                                            ) as Option<Expr>)
-                                                                          : (None as Option<Expr>))(
-                                                                        _v,
-                                                                      )
-                                                                    : _v._tag === "None"
-                                                                      ? (None as Option<Expr>)
-                                                                      : (() => {
-                                                                          throw new Error(
-                                                                            "non-exhaustive match",
-                                                                          );
-                                                                        })())(
+                                                              ? _Option_match(
                                                                   etaCalleeArity(ctx, fn),
+                                                                  () => None as Option<Expr>,
+                                                                  (arity) =>
+                                                                    eq(n, arity)
+                                                                      ? (Some(
+                                                                          Ast.ECall(
+                                                                            fn,
+                                                                            prefix,
+                                                                            None as Option<string>,
+                                                                            sp,
+                                                                          ),
+                                                                        ) as Option<Expr>)
+                                                                      : (None as Option<Expr>),
                                                                 )
                                                               : (None as Option<Expr>))(
                                                             _Array_take(n - 1, args),
@@ -1716,14 +1624,11 @@ const etaPartial: _Curry<[ctx: Ctx, params: LamParam[], body: Expr], Option<Expr
                                         },
                                       )
                                     : (None as Option<Expr>))(flat))(
-                                ((_v) =>
-                                  _v._tag === "Some"
-                                    ? (({ value: f }) => f)(_v)
-                                    : _v._tag === "None"
-                                      ? body
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(flattenCallSpine(ctx, body)),
+                                _Option_match(
+                                  flattenCallSpine(ctx, body),
+                                  () => body,
+                                  (f) => f,
+                                ),
                               )
                             : (None as Option<Expr>))(body))(
                     _v as Extract<LamParam, { _tag: "LPName" }> & {
@@ -1774,22 +1679,18 @@ const flattenCallSpine: _Curry<[ctx: Ctx, e: Expr], Option<Expr>> = _curry(2, (c
             (([callee, allGroups]: [Expr, Expr[][]]) =>
               or(length(allGroups) < 2, anyEmptyGroup(allGroups))
                 ? (None as Option<Expr>)
-                : ((_v) =>
-                    _v._tag === "None"
-                      ? (None as Option<Expr>)
-                      : _v._tag === "Some"
-                        ? (({ value: arity }) =>
-                            ((args: Expr[]) =>
-                              or(length(args) > arity, anyUnit(args))
-                                ? (None as Option<Expr>)
-                                : (Some(
-                                    Ast.ECall(callee, args, None as Option<string>, exprSpan(e)),
-                                  ) as Option<Expr>))(_Array_flatMap((g: Expr[]) => g, allGroups)))(
-                            _v,
-                          )
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(calleeArity(ctx, callee)))(
+                : _Option_match(
+                    calleeArity(ctx, callee),
+                    () => None as Option<Expr>,
+                    (arity) => {
+                      const args: Expr[] = _Array_flatMap((g: Expr[]) => g, allGroups);
+                      return or(length(args) > arity, anyUnit(args))
+                        ? (None as Option<Expr>)
+                        : (Some(
+                            Ast.ECall(callee, args, None as Option<string>, exprSpan(e)),
+                          ) as Option<Expr>);
+                    },
+                  ))(
               ((_v) =>
                 _v._tag === "ELambda"
                   ? (({ params, body: lbody }) =>
@@ -1834,23 +1735,18 @@ const sectionParts: (body: Expr) => Option<[{ symbol: string; prec: number }, Ex
             [{ symbol: string; prec: number }, Expr, Expr]
           >)(_v as Extract<Option<[Expr, Expr]>, { _tag: "Some" }>)
       : _v._tag === "None"
-        ? ((_v) =>
-            _v._tag === "None"
-              ? (None as Option<[{ symbol: string; prec: number }, Expr, Expr]>)
-              : _v._tag === "Some"
-                ? (({ value: info }) =>
-                    ((_v) =>
-                      _v._tag === "ECall" && _v.args.length === 2
-                        ? (({ args: [l, r] }) =>
-                            Some(_tuple(info, l, r)) as Option<
-                              [{ symbol: string; prec: number }, Expr, Expr]
-                            >)(_v as Extract<Expr, { _tag: "ECall" }>)
-                        : (None as Option<[{ symbol: string; prec: number }, Expr, Expr]>))(body))(
-                    _v,
-                  )
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(binOpOf(body))
+        ? _Option_match(
+            binOpOf(body),
+            () => None as Option<[{ symbol: string; prec: number }, Expr, Expr]>,
+            (info) =>
+              ((_v) =>
+                _v._tag === "ECall" && _v.args.length === 2
+                  ? (({ args: [l, r] }) =>
+                      Some(_tuple(info, l, r)) as Option<
+                        [{ symbol: string; prec: number }, Expr, Expr]
+                      >)(_v as Extract<Expr, { _tag: "ECall" }>)
+                  : (None as Option<[{ symbol: string; prec: number }, Expr, Expr]>))(body),
+          )
         : (() => {
             throw new Error("non-exhaustive match");
           })())(neqOperands(body));
@@ -1989,21 +1885,16 @@ const destructureLetD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> =
 const refoldCall: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(
   3,
   (cts: Ctx, fn: Expr, args: Expr[]) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: d }) => Some(d) as Option<Doc>)(_v)
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: d }) => Some(d) as Option<Doc>)(_v)
-                : _v._tag === "None"
-                  ? unaryD(cts, fn, args)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(binaryD(cts, fn, args))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(destructureLetD(cts, fn, args)),
+    _Option_match(
+      destructureLetD(cts, fn, args),
+      () =>
+        _Option_match(
+          binaryD(cts, fn, args),
+          () => unaryD(cts, fn, args),
+          (d) => Some(d) as Option<Doc>,
+        ),
+      (d) => Some(d) as Option<Doc>,
+    ),
 );
 /**
  * `f(~tone="amber")` — a labeled call is lowered to a record argument tagged
@@ -2057,22 +1948,16 @@ const labeledParamText: _Curry<
     optional: boolean,
     defaultValue: Option<Expr>,
   ) => {
-    const ann: string = ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: te }) => `: ${showTypeExpr(te)}`)(_v)
-        : _v._tag === "None"
-          ? ""
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(annot);
-    const def: string = ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: d }) => ` = ${flat(exprD(cts, d))}`)(_v)
-        : _v._tag === "None"
-          ? ""
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(defaultValue);
+    const ann: string = _Option_match(
+      annot,
+      () => "",
+      (te) => `: ${showTypeExpr(te)}`,
+    );
+    const def: string = _Option_match(
+      defaultValue,
+      () => "",
+      (d) => ` = ${flat(exprD(cts, d))}`,
+    );
     return `~${name}${optional ? "?" : ""}${ann}${def}`;
   },
 );
@@ -2080,14 +1965,11 @@ const paramText: _Curry<[cts: Ctx, p: LamParam], string> = _curry(2, (cts: Ctx, 
   ((_v) =>
     _v._tag === "LPName"
       ? (({ name, annot }) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: te }) => `${name}: ${showTypeExpr(te)}`)(_v)
-              : _v._tag === "None"
-                ? name
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(annot))(_v)
+          _Option_match(
+            annot,
+            () => name,
+            (te) => `${name}: ${showTypeExpr(te)}`,
+          ))(_v)
       : _v._tag === "LPTuple"
         ? (({ names }) => `(${_Str_join(", ", names)})`)(_v)
         : _v._tag === "LPRecord"
@@ -2190,54 +2072,44 @@ const doD: _Curry<[cts: Ctx, exprs: Expr[]], Doc> = _curry(2, (cts: Ctx, exprs: 
 const lambdaD: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Doc> = _curry(
   3,
   (cts: Ctx, params: LamParam[], body: Expr) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: section }) => section)(_v)
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: eta }) => exprD(cts, eta))(_v)
-                : _v._tag === "None"
-                  ? ((_v) =>
-                      _v._tag === "Some"
-                        ? ((_v) =>
-                            _v.length === 0
-                              ? txt("")
-                              : _v.length >= 1
-                                ? (([head, ...rest]) =>
-                                    group(
-                                      cat([
-                                        operandD(cts, head),
-                                        indent(
-                                          cat(
-                                            map(
-                                              (s: Expr) =>
-                                                cat([line, txt(">> "), operandD(cts, s)]),
-                                              rest,
-                                            ),
-                                          ),
-                                        ),
-                                      ]),
-                                    ))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(
-                            composeSegmentsFrom(
-                              Ast.ELambda(params, body, { start: 0, end: 0 }),
-                              [] as Expr[],
-                            ),
-                          )
-                        : _v._tag === "None"
-                          ? plainLambdaD({ ...cts, etaSkip: isLambdaExpr(body) }, params, body)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(composeParts(params, body))
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(cts.etaSkip ? (None as Option<Expr>) : etaPartial(cts, params, body))
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(sectionOf(cts, params, body)),
+    _Option_match(
+      sectionOf(cts, params, body),
+      () =>
+        _Option_match(
+          cts.etaSkip ? (None as Option<Expr>) : etaPartial(cts, params, body),
+          () =>
+            _Option_match(
+              composeParts(params, body),
+              () => plainLambdaD({ ...cts, etaSkip: isLambdaExpr(body) }, params, body),
+              () =>
+                ((_v) =>
+                  _v.length === 0
+                    ? txt("")
+                    : _v.length >= 1
+                      ? (([head, ...rest]) =>
+                          group(
+                            cat([
+                              operandD(cts, head),
+                              indent(
+                                cat(
+                                  map((s: Expr) => cat([line, txt(">> "), operandD(cts, s)]), rest),
+                                ),
+                              ),
+                            ]),
+                          ))(_v)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(
+                  composeSegmentsFrom(
+                    Ast.ELambda(params, body, { start: 0, end: 0 }),
+                    [] as Expr[],
+                  ),
+                ),
+            ),
+          (eta) => exprD(cts, eta),
+        ),
+      (section) => section,
+    ),
 );
 const plainLambdaD: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Doc> = _curry(
   3,
@@ -2246,17 +2118,15 @@ const plainLambdaD: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Doc> = _c
     return ((_v) =>
       _v._tag === "EDo"
         ? (({ exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)]))(_v)
-        : ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: exprs }) => cat([head, txt(" "), doBlockD(cts, exprs)]))(_v)
-              : _v._tag === "None"
-                ? ((_v) =>
-                    _v._tag === "EMatch" && !hasLead(cts, EXPR, exprSpan(body))
-                      ? cat([head, txt(" "), exprD(cts, body)])
-                      : group(cat([head, indent(cat([line, exprD(cts, body)]))])))(body)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(discardedLetExprs(body)))(body);
+        : _Option_match(
+            discardedLetExprs(body),
+            () =>
+              ((_v) =>
+                _v._tag === "EMatch" && !hasLead(cts, EXPR, exprSpan(body))
+                  ? cat([head, txt(" "), exprD(cts, body)])
+                  : group(cat([head, indent(cat([line, exprD(cts, body)]))])))(body),
+            (exprs) => cat([head, txt(" "), doBlockD(cts, exprs)]),
+          ))(body);
   },
 );
 const condD: _Curry<[cts: Ctx, c: Expr], Doc> = _curry(2, (cts: Ctx, c: Expr) =>
@@ -2289,22 +2159,19 @@ const ternaryArmsFrom: _Curry<
 );
 const ternaryRestParts: _Curry<[cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i: number], Doc[]> =
   _curry(3, (cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as Doc[])
-        : _v._tag === "Some"
-          ? (({ value: a }) => [
-              line,
-              hasLead(cts, EXPR, exprSpan(a.cond))
-                ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))])
-                : cat([txt(": "), condD(cts, a.cond)]),
-              line,
-              branchD(cts, "?", a.thenE),
-              ...ternaryRestParts(cts, arms, i + 1),
-            ])(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, arms)),
+    _Option_match(
+      _Array_get(i, arms),
+      () => [] as Doc[],
+      (a) => [
+        line,
+        hasLead(cts, EXPR, exprSpan(a.cond))
+          ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))])
+          : cat([txt(": "), condD(cts, a.cond)]),
+        line,
+        branchD(cts, "?", a.thenE),
+        ...ternaryRestParts(cts, arms, i + 1),
+      ],
+    ),
   );
 /**
  * Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
@@ -2312,28 +2179,25 @@ const ternaryRestParts: _Curry<[cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i
  */
 const ternaryD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
   (([arms, elseE]: [{ cond: Expr; thenE: Expr }[], Expr]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? txt("")
-        : _v._tag === "Some"
-          ? (({ value: first }) =>
-              group(
-                cat([
-                  condD(cts, first.cond),
-                  indent(
-                    cat([
-                      line,
-                      branchD(cts, "?", first.thenE),
-                      ...ternaryRestParts(cts, arms, 1),
-                      line,
-                      branchD(cts, ":", elseE),
-                    ]),
-                  ),
-                ]),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(0, arms)))(ternaryArmsFrom(e, [] as { cond: Expr; thenE: Expr }[])),
+    _Option_match(
+      _Array_get(0, arms),
+      () => txt(""),
+      (first) =>
+        group(
+          cat([
+            condD(cts, first.cond),
+            indent(
+              cat([
+                line,
+                branchD(cts, "?", first.thenE),
+                ...ternaryRestParts(cts, arms, 1),
+                line,
+                branchD(cts, ":", elseE),
+              ]),
+            ),
+          ]),
+        ),
+    ))(ternaryArmsFrom(e, [] as { cond: Expr; thenE: Expr }[])),
 );
 /**
  * Does this expression PRINT as `let … in …`? A destructuring
@@ -2400,14 +2264,11 @@ const recordD: _Curry<[cts: Ctx, fields: Field[], spread: Option<Expr>], Doc> = 
     return braced(
       "{",
       "}",
-      ((_v) =>
-        _v._tag === "Some"
-          ? (({ value: s }) => _Array_prepend(cat([txt("..."), exprD(cts, s)]), fieldDocs))(_v)
-          : _v._tag === "None"
-            ? fieldDocs
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(spread),
+      _Option_match(
+        spread,
+        () => fieldDocs,
+        (s) => _Array_prepend(cat([txt("..."), exprD(cts, s)]), fieldDocs),
+      ),
     );
   },
 );
@@ -2434,14 +2295,11 @@ const pipeSegmentsFrom: _Curry<[e: Expr, acc: Expr[]], Expr[]> = _curry(2, (e: E
       : _Array_prepend(e, acc))(e),
 );
 const matchArmD: _Curry<[cts: Ctx, a: MatchArm], Doc> = _curry(2, (cts: Ctx, a: MatchArm) => {
-  const guard: string = ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: g }) => ` when ${flat(exprD(cts, g))}`)(_v)
-      : _v._tag === "None"
-        ? ""
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(a.guard);
+  const guard: string = _Option_match(
+    a.guard,
+    () => "",
+    (g) => ` when ${flat(exprD(cts, g))}`,
+  );
   const head: Doc = txt(`| ${pattern(a.pattern)}${guard} =>`);
   return hasLead(cts, EXPR, exprSpan(a.body))
     ? cat([head, indent(cat([hardline, exprD(cts, a.body)]))])
@@ -2502,27 +2360,22 @@ const callArgsD: _Curry<
   [cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>, asCallee: boolean],
   Doc
 > = _curry(5, (cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>, asCallee: boolean) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: d }) => d)(_v)
-      : _v._tag === "None"
-        ? ((_v) =>
-            _v._tag === "Some" && _v.value._tag === "ECall"
-              ? (({ value: { fn: ffn, args: fargs, origin: forigin } }) =>
-                  callArgsD(cts, ffn, fargs, forigin, asCallee))(
-                  _v as Extract<Option<Expr>, { _tag: "Some" }> & {
-                    value: Extract<
-                      Extract<Option<Expr>, { _tag: "Some" }>["value"],
-                      { _tag: "ECall" }
-                    >;
-                  },
-                )
-              : plainCallD(cts, fn, args, origin, asCallee))(
-            flattenCallSpine(cts, Ast.ECall(fn, args, origin, { start: 0, end: 0 })),
-          )
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(refoldCall(cts, fn, args)),
+  _Option_match(
+    refoldCall(cts, fn, args),
+    () =>
+      ((_v) =>
+        _v._tag === "Some" && _v.value._tag === "ECall"
+          ? (({ value: { fn: ffn, args: fargs, origin: forigin } }) =>
+              callArgsD(cts, ffn, fargs, forigin, asCallee))(
+              _v as Extract<Option<Expr>, { _tag: "Some" }> & {
+                value: Extract<Extract<Option<Expr>, { _tag: "Some" }>["value"], { _tag: "ECall" }>;
+              },
+            )
+          : plainCallD(cts, fn, args, origin, asCallee))(
+        flattenCallSpine(cts, Ast.ECall(fn, args, origin, { start: 0, end: 0 })),
+      ),
+    (d) => d,
+  ),
 );
 const plainCallD: _Curry<
   [cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>, asCallee: boolean],
@@ -2657,14 +2510,11 @@ const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) 
   const node: Expr = hooked(cts, e);
   return length(cts.formatDocHooks) === 0
     ? exprRawOf(cts, node)
-    : ((_v) =>
-        _v._tag === "Some"
-          ? (({ value: doc }) => doc)(_v)
-          : _v._tag === "None"
-            ? exprRawOf(cts, node)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(runFormatDocHooks(cts.formatDocHooks, node, formatApi(cts)));
+    : _Option_match(
+        runFormatDocHooks(cts.formatDocHooks, node, formatApi(cts)),
+        () => exprRawOf(cts, node),
+        (doc) => doc,
+      );
 });
 const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr) =>
   ((_v) =>
@@ -2699,26 +2549,18 @@ const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, (cts: Ctx, e: Expr
                                 ? (({ scrutinee, arms }) => matchD(cts, scrutinee, arms))(_v)
                                 : _v._tag === "ELetIn"
                                   ? (({ name, annot, value, body }) =>
-                                      ((_v) =>
-                                        _v._tag === "Some"
-                                          ? (({ value: exprs }) => doD(cts, exprs))(_v)
-                                          : _v._tag === "None"
-                                            ? ((ann: string) =>
-                                                letLikeD(cts, `let ${name}${ann}`, value, body))(
-                                                ((_v) =>
-                                                  _v._tag === "Some"
-                                                    ? (({ value: te }) => ` : ${showTypeExpr(te)}`)(
-                                                        _v,
-                                                      )
-                                                    : _v._tag === "None"
-                                                      ? ""
-                                                      : (() => {
-                                                          throw new Error("non-exhaustive match");
-                                                        })())(annot),
-                                              )
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(discardedLetExprs(e)))(_v)
+                                      _Option_match(
+                                        discardedLetExprs(e),
+                                        () => {
+                                          const ann: string = _Option_match(
+                                            annot,
+                                            () => "",
+                                            (te) => ` : ${showTypeExpr(te)}`,
+                                          );
+                                          return letLikeD(cts, `let ${name}${ann}`, value, body);
+                                        },
+                                        (exprs) => doD(cts, exprs),
+                                      ))(_v)
                                   : _v._tag === "ELetBind"
                                     ? (({ param, monad, value, body }) =>
                                         letLikeD(cts, letBindHead(cts, monad, param), value, body))(
@@ -2794,18 +2636,15 @@ const aliasFieldText: (f: AliasField) => string = (f: AliasField) =>
 const ctorArms: _Curry<[cts: Ctx, ctors: Ctor[], i: number], Doc[]> = _curry(
   3,
   (cts: Ctx, ctors: Ctor[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as Doc[])
-        : _v._tag === "Some"
-          ? (({ value: c }) =>
-              _Array_prepend(
-                cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]),
-                ctorArms(cts, ctors, i + 1),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ctors)),
+    _Option_match(
+      _Array_get(i, ctors),
+      () => [] as Doc[],
+      (c) =>
+        _Array_prepend(
+          cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]),
+          ctorArms(cts, ctors, i + 1),
+        ),
+    ),
 );
 /**
  * A Doc rather than a flat string: a record alias with many or long fields must
@@ -2833,31 +2672,27 @@ export const typeStmtD: _Curry<
     aliasType: Option<TypeExpr>,
   ) => {
     const head: string = `type ${name}${generics(params)}`;
-    return ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: fields }) =>
-            cat([
-              txt(`${head} = `),
-              braced(
-                "{",
-                "}",
-                map((f: AliasField) => txt(aliasFieldText(f)), fields),
-              ),
-            ]))(_v)
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: te }) => txt(`${head} = ${showTypeExpr(te)}`))(_v)
-                : _v._tag === "None"
-                  ? length(ctors) === 0
-                    ? txt(`extern ${head}`)
-                    : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))])
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(aliasType)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(alias);
+    return _Option_match(
+      alias,
+      () =>
+        _Option_match(
+          aliasType,
+          () =>
+            length(ctors) === 0
+              ? txt(`extern ${head}`)
+              : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))]),
+          (te) => txt(`${head} = ${showTypeExpr(te)}`),
+        ),
+      (fields) =>
+        cat([
+          txt(`${head} = `),
+          braced(
+            "{",
+            "}",
+            map((f: AliasField) => txt(aliasFieldText(f)), fields),
+          ),
+        ]),
+    );
   },
 );
 export const importStmtD: <A>(names: ({ name: string } & A)[], from: string) => Doc = _curry(
@@ -2912,17 +2747,12 @@ const destructureFieldsFrom: _Curry<
   ((_v) =>
     _v._tag === "Some" && _v.value._tag === "SLet"
       ? (({ value: { name, value } }) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: f }) =>
-                  eq(f, name)
-                    ? destructureFieldsFrom(stmts, j + 1, tmp, _Array_append(f, acc))
-                    : acc)(_v)
-              : _v._tag === "None"
-                ? acc
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(fieldOf(value, tmp)))(
+          _Option_match(
+            fieldOf(value, tmp),
+            () => acc,
+            (f) =>
+              eq(f, name) ? destructureFieldsFrom(stmts, j + 1, tmp, _Array_append(f, acc)) : acc,
+          ))(
           _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
             value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
           },
@@ -2938,83 +2768,66 @@ const destructureFieldsFrom: _Curry<
 const stmtDoc: _Curry<[cts: Ctx, stmts: Stmt[], i: number, src: string], StmtDoc> = _curry(
   4,
   (cts: Ctx, stmts: Stmt[], i: number, src: string) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? { doc: txt(""), consumed: 1 }
-        : _v._tag === "Some"
-          ? (({ value: s }) =>
-              ((_v) =>
-                _v._tag === "SImport"
-                  ? (({ names, from }) => ({ doc: importStmtD(names, from), consumed: 1 }))(_v)
-                  : _v._tag === "SImportNs"
-                    ? (({ alias, from }) => ({
-                        doc: importNsStmtD(alias.name, from),
+    _Option_match(
+      _Array_get(i, stmts),
+      () => ({ doc: txt(""), consumed: 1 }),
+      (s) =>
+        ((_v) =>
+          _v._tag === "SImport"
+            ? (({ names, from }) => ({ doc: importStmtD(names, from), consumed: 1 }))(_v)
+            : _v._tag === "SImportNs"
+              ? (({ alias, from }) => ({ doc: importNsStmtD(alias.name, from), consumed: 1 }))(_v)
+              : _v._tag === "SType"
+                ? (({ name, params, ctors, alias, aliasType, exported }) => ({
+                    doc: cat([
+                      txt(expPrefix(exported)),
+                      typeStmtD(cts, name, params, ctors, alias, aliasType),
+                    ]),
+                    consumed: 1,
+                  }))(_v)
+                : _v._tag === "SExtern"
+                  ? (({ name, params, typeExpr: te, module, imported, curried, exported }) => ({
+                      doc: txt(
+                        `${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`,
+                      ),
+                      consumed: 1,
+                    }))(_v)
+                  : _v._tag === "SError"
+                    ? (({ span: sp }) => ({
+                        doc: verbatim(_Str_slice(sp.start, sp.end, src)),
                         consumed: 1,
                       }))(_v)
-                    : _v._tag === "SType"
-                      ? (({ name, params, ctors, alias, aliasType, exported }) => ({
-                          doc: cat([
-                            txt(expPrefix(exported)),
-                            typeStmtD(cts, name, params, ctors, alias, aliasType),
-                          ]),
-                          consumed: 1,
-                        }))(_v)
-                      : _v._tag === "SExtern"
-                        ? (({
-                            name,
-                            params,
-                            typeExpr: te,
-                            module,
-                            imported,
-                            curried,
-                            exported,
-                          }) => ({
-                            doc: txt(
-                              `${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`,
-                            ),
-                            consumed: 1,
-                          }))(_v)
-                        : _v._tag === "SError"
-                          ? (({ span: sp }) => ({
-                              doc: verbatim(_Str_slice(sp.start, sp.end, src)),
-                              consumed: 1,
-                            }))(_v)
-                          : _v._tag === "SExpr"
-                            ? (({ value }) => ({ doc: exprD(cts, value), consumed: 1 }))(_v)
-                            : _v._tag === "SLet"
-                              ? (({ name, annot, value, exported }) =>
-                                  _Str_startsWith("$", name)
-                                    ? ((fields: string[]) => ({
-                                        doc: cat([
-                                          txt(
-                                            `${expPrefix(exported)}let { ${_Str_join(", ", fields)} } = `,
-                                          ),
-                                          exprD(cts, value),
-                                        ]),
-                                        consumed: length(fields) + 1,
-                                      }))(destructureFieldsFrom(stmts, i + 1, name, [] as string[]))
-                                    : ((ann: string) => ({
-                                        doc: cat([
-                                          txt(`${expPrefix(exported)}let ${name}${ann} = `),
-                                          exprD(cts, value),
-                                        ]),
-                                        consumed: 1,
-                                      }))(
-                                        ((_v) =>
-                                          _v._tag === "Some"
-                                            ? (({ value: te }) => ` : ${showTypeExpr(te)}`)(_v)
-                                            : _v._tag === "None"
-                                              ? ""
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(annot),
-                                      ))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, stmts)),
+                    : _v._tag === "SExpr"
+                      ? (({ value }) => ({ doc: exprD(cts, value), consumed: 1 }))(_v)
+                      : _v._tag === "SLet"
+                        ? (({ name, annot, value, exported }) =>
+                            _Str_startsWith("$", name)
+                              ? ((fields: string[]) => ({
+                                  doc: cat([
+                                    txt(
+                                      `${expPrefix(exported)}let { ${_Str_join(", ", fields)} } = `,
+                                    ),
+                                    exprD(cts, value),
+                                  ]),
+                                  consumed: length(fields) + 1,
+                                }))(destructureFieldsFrom(stmts, i + 1, name, [] as string[]))
+                              : ((ann: string) => ({
+                                  doc: cat([
+                                    txt(`${expPrefix(exported)}let ${name}${ann} = `),
+                                    exprD(cts, value),
+                                  ]),
+                                  consumed: 1,
+                                }))(
+                                  _Option_match(
+                                    annot,
+                                    () => "",
+                                    (te) => ` : ${showTypeExpr(te)}`,
+                                  ),
+                                ))(_v)
+                        : (() => {
+                            throw new Error("non-exhaustive match");
+                          })())(s),
+    ),
 );
 const stmtSpan: (s: Stmt) => SpanAt = (s: Stmt) =>
   ((_v) =>
@@ -3069,14 +2882,11 @@ const blankBetween: (gap: string) => boolean = (gap: string) => blankBetweenFrom
  */
 const anchorStart: _Curry<[cts: Ctx, s: Stmt], number> = _curry(2, (cts: Ctx, s: Stmt) => {
   const sp: SpanAt = stmtSpan(s);
-  return ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: c }) => c.start)(_v)
-      : _v._tag === "None"
-        ? sp.start
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(0, atKey(cts.leading, spanKey(STMT, sp))));
+  return _Option_match(
+    _Array_get(0, atKey(cts.leading, spanKey(STMT, sp))),
+    () => sp.start,
+    (c) => c.start,
+  );
 });
 const stmtParts: _Curry<
   [cts: Ctx, stmts: Stmt[], i: number, src: string, prevEnd: Option<number>, acc: Doc[]],
@@ -3084,50 +2894,38 @@ const stmtParts: _Curry<
 > = _curry(
   6,
   (cts: Ctx, stmts: Stmt[], i: number, src: string, prevEnd: Option<number>, acc: Doc[]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? _tuple(acc, prevEnd)
-        : _v._tag === "Some"
-          ? (({ value: cur }) =>
-              ((sep: Doc[]) =>
-                ((printed: StmtDoc) =>
-                  ((lastIdx: number) =>
-                    ((end: number) =>
-                      stmtParts(
-                        cts,
-                        stmts,
-                        i + printed.consumed,
-                        src,
-                        Some(end) as Option<number>,
-                        _Array_concat(
-                          acc,
-                          _Array_append(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep),
-                        ),
-                      ))(
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: last }) => stmtSpan(last).end)(_v)
-                          : _v._tag === "None"
-                            ? 0
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(_Array_get(lastIdx, stmts)),
-                    ))(i + printed.consumed - 1))(stmtDoc(cts, stmts, i, src)))(
-                ((_v) =>
-                  _v._tag === "None"
-                    ? ([] as Doc[])
-                    : _v._tag === "Some"
-                      ? (({ value: pe }) =>
-                          blankBetween(_Str_slice(pe, anchorStart(cts, cur), src))
-                            ? [hardline, hardline]
-                            : [hardline])(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(prevEnd),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, stmts)),
+    _Option_match(
+      _Array_get(i, stmts),
+      () => _tuple(acc, prevEnd),
+      (cur) => {
+        const sep: Doc[] = _Option_match(
+          prevEnd,
+          () => [] as Doc[],
+          (pe) =>
+            blankBetween(_Str_slice(pe, anchorStart(cts, cur), src))
+              ? [hardline, hardline]
+              : [hardline],
+        );
+        const printed: StmtDoc = stmtDoc(cts, stmts, i, src);
+        const lastIdx: number = i + printed.consumed - 1;
+        const end: number = _Option_match(
+          _Array_get(lastIdx, stmts),
+          () => 0,
+          (last) => stmtSpan(last).end,
+        );
+        return stmtParts(
+          cts,
+          stmts,
+          i + printed.consumed,
+          src,
+          Some(end) as Option<number>,
+          _Array_concat(
+            acc,
+            _Array_append(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep),
+          ),
+        );
+      },
+    ),
 );
 /**
  * Comments after the last statement have no node to attach to; they print
@@ -3136,34 +2934,25 @@ const stmtParts: _Curry<
 const tailParts: _Curry<[tail: Comment[], src: string, prevEnd: Option<number>], Doc[]> = _curry(
   3,
   (tail: Comment[], src: string, prevEnd: Option<number>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? ([] as Doc[])
-        : _v._tag === "Some"
-          ? (({ value: first }) =>
-              ((sep: Doc[]) =>
-                _Array_append(
-                  join(
-                    hardline,
-                    map((c: Comment) => txt(c.text), tail),
-                  ),
-                  sep,
-                ))(
-                ((_v) =>
-                  _v._tag === "None"
-                    ? ([] as Doc[])
-                    : _v._tag === "Some"
-                      ? (({ value: pe }) =>
-                          blankBetween(_Str_slice(pe, first.start, src))
-                            ? [hardline, hardline]
-                            : [hardline])(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(prevEnd),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(0, tail)),
+    _Option_match(
+      _Array_get(0, tail),
+      () => [] as Doc[],
+      (first) => {
+        const sep: Doc[] = _Option_match(
+          prevEnd,
+          () => [] as Doc[],
+          (pe) =>
+            blankBetween(_Str_slice(pe, first.start, src)) ? [hardline, hardline] : [hardline],
+        );
+        return _Array_append(
+          join(
+            hardline,
+            map((c: Comment) => txt(c.text), tail),
+          ),
+          sep,
+        );
+      },
+    ),
 );
 const programDoc: _Curry<[cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]], Doc> = _curry(
   4,
@@ -3224,14 +3013,11 @@ const inErrorSpan: _Curry<[stmts: Stmt[], c: Comment], boolean> = _curry(
  * printer restores it verbatim.
  */
 const hasOpenDirective: (src: string) => boolean = (src: string) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: first }) => _Str_trim(first) === '"use open"')(_v)
-      : _v._tag === "None"
-        ? false
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(0, _Str_split("\n", _Str_trim(src))));
+  _Option_match(
+    _Array_get(0, _Str_split("\n", _Str_trim(src))),
+    () => false,
+    (first) => _Str_trim(first) === '"use open"',
+  );
 /**
  * Print an already-parsed program with comment and blank-line fidelity to `src`.
  */

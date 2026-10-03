@@ -13,6 +13,125 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("builtin Result and Option matches use flat dispatch with one scrutinee evaluation", () => {
+  const source = `
+let result = (read: () -> Result<number, string>, log: number -> unit) => switch read() {
+  | Ok(n) => let printed = log(n) in n + 1
+  | Err(e) => Str.length(e)
+}
+let option = (read: () -> Option<number>, log: number -> unit) => switch read() {
+  | Some(n) => let printed = log(n) in n + 1
+  | None => 0
+}
+`;
+  const emitted = unwrapOk(compileTargets(source, { runtime: false }));
+  expect(emitted.js).toContain("_Result_match(");
+  expect(emitted.js).toContain("_Option_match(");
+  expect(emitted.ts).toContain("_Result_match(");
+  expect(emitted.ts).toContain("_Option_match(");
+  expect(emitted.js).not.toContain('._tag === "Ok"');
+  expect(emitted.js).not.toContain('._tag === "Some"');
+  const result = compileAndEval(source, "result") as (
+    read: () => unknown,
+    log: (n: number) => void,
+  ) => number;
+  const option = compileAndEval(source, "option") as (
+    read: () => unknown,
+    log: (n: number) => void,
+  ) => number;
+  const visits: number[] = [];
+  let reads = 0;
+  expect(
+    result(
+      () => {
+        reads += 1;
+        return { _tag: "Ok", value: 2 };
+      },
+      (n) => visits.push(n),
+    ),
+  ).toBe(3);
+  expect(
+    result(
+      () => {
+        reads += 1;
+        return { _tag: "Err", error: "oops" };
+      },
+      (n) => visits.push(n),
+    ),
+  ).toBe(4);
+  expect(
+    option(
+      () => {
+        reads += 1;
+        return { _tag: "Some", value: 5 };
+      },
+      (n) => visits.push(n),
+    ),
+  ).toBe(6);
+  expect(
+    option(
+      () => {
+        reads += 1;
+        return { _tag: "None" };
+      },
+      (n) => visits.push(n),
+    ),
+  ).toBe(0);
+  expect(reads).toBe(4);
+  expect(visits).toEqual([2, 5]);
+});
+
+test("builtin match dispatch preserves guarded, nested and user-constructor fallbacks", () => {
+  for (const source of [
+    "type Result a e = | Ok(value: a) | Err(error: e)\nlet f = x => switch x { | Ok(n) => n | Err(_) => 0 }",
+    "type Option a = | Some(value: a) | None\nlet f = x => switch x { | Some(n) => n | None => 0 }",
+    "let f = x => switch x { | Some(n) when n > 0 => n | Some(_) => 0 | None => 0 }",
+    "let f = x => switch x { | Ok(Some(n)) => n | Ok(None) => 0 | Err(_) => 0 }",
+  ]) {
+    const output = unwrapOk(compileTargets(source, { runtime: false }));
+    expect(output.js).not.toContain("_Result_match(");
+    expect(output.js).not.toContain("_Option_match(");
+  }
+});
+
+test("builtin match helpers cannot capture user bindings with their names", () => {
+  const option =
+    "let _Option_match = x => 99\nlet f = x => switch x { | Some(n) => n | None => 0 }";
+  const result = "let f = (_Result_match, x) => switch x { | Ok(n) => n | Err(_) => 0 }";
+  const runOption = compileAndEval(option, "f") as (value: unknown) => number;
+  const runResult = compileAndEval(result, "f") as (unused: unknown, value: unknown) => number;
+  expect(runOption({ _tag: "Some", value: 7 })).toBe(7);
+  expect(runResult(() => 99, { _tag: "Ok", value: 8 })).toBe(8);
+  expect(unwrapOk(compileTargets(result, { runtime: false })).js).not.toContain("_Result_match(");
+});
+
+test("compiled sorting compares record and variant payloads structurally", () => {
+  const source = `
+type Entry = | Box(number) | Named(value: number)
+let rows = Array.sort([{value: 10}, {value: 2}, {value: -2}])
+let entries = Array.sort([Named(1), Box(10), Box(2)])
+let nested = compare({item: {value: 10}}, {item: {value: 2}})
+let same = compare({a: 1, b: 2}, {b: 2, a: 1})
+let result = (rows, entries, nested, same)
+`;
+  expect(compileAndEval(source, "result")).toEqual([
+    [{ value: -2 }, { value: 2 }, { value: 10 }],
+    [
+      { _tag: "Box", _0: 2 },
+      { _tag: "Box", _0: 10 },
+      { _tag: "Named", value: 1 },
+    ],
+    1,
+    0,
+  ]);
+  const order = compileAndEval(
+    "type Row = { value?: number }\nlet order = (a: Row, b: Row) => compare(a, b)",
+    "order",
+  ) as (a: Record<string, unknown>, b: Record<string, unknown>) => number;
+  expect(order({}, { value: undefined })).toBe(-1);
+  expect(order({ value: undefined }, { value: 2 })).toBe(-1);
+});
+
 test("hosts preserve JSX declaration results without changing JS or typed TS", () => {
   const source = `
 type Props = { label: string, disabled: bool }
