@@ -181,269 +181,463 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
   <A>(f: (a: A) => boolean, xs: A[]) => someOfFrom(f, xs, 0),
 );
-const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "EUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "EBool"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "EStr"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "ERef"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "ECall"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "ELambda"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "EDo"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ span: sp }) => sp)(_v)
-                              : _v._tag === "ELoop"
-                                ? (({ span: sp }) => sp)(_v)
-                                : _v._tag === "ERecur"
-                                  ? (({ span: sp }) => sp)(_v)
-                                  : _v._tag === "ERecord"
-                                    ? (({ span: sp }) => sp)(_v)
-                                    : _v._tag === "EField"
-                                      ? (({ span: sp }) => sp)(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ span: sp }) => sp)(_v)
-                                        : _v._tag === "EArr"
-                                          ? (({ span: sp }) => sp)(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ span: sp }) => sp)(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ span: sp }) => sp)(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ span: sp }) => sp)(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ span: sp }) => sp)(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e);
-const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PWild"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "PUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "PBind"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "PAs"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "PLit"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "PBool"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "PStr"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "PTuple"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "PRecord"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "PCtor"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "PArr"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "PList"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "POr"
-                              ? (({ span: sp }) => sp)(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(p);
-const isCatchAll: (p: Pattern) => boolean = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PWild"
-      ? true
-      : _v._tag === "PUnit"
-        ? true
-        : _v._tag === "PBind"
-          ? true
-          : _v._tag === "PAs"
-            ? (({ pat }) => isCatchAll(pat))(_v)
-            : _v._tag === "PRecord"
-              ? (({ fields }) => allOf((f: PatField) => isCatchAll(f.pat), fields))(_v)
-              : _v._tag === "PTuple"
-                ? (({ elems }) => allOf(isCatchAll, elems))(_v)
-                : _v._tag === "PArr"
-                  ? (({ elems, rest }) => and(length(elems) === 0, _Option_isSome(rest)))(_v)
-                  : _v._tag === "PList"
-                    ? (({ elems, rest }) => and(length(elems) === 0, _Option_isSome(rest)))(_v)
-                    : false)(p);
-const isPList: (p: Pattern) => boolean = (p: Pattern) =>
-  ((_v) => (_v._tag === "PList" ? true : false))(p);
-const isPCtor: (p: Pattern) => boolean = (p: Pattern) =>
-  ((_v) => (_v._tag === "PCtor" ? true : false))(p);
-const ctorNameOf: (p: Pattern) => string = (p: Pattern) =>
-  ((_v) => (_v._tag === "PCtor" ? (({ ctor: name }) => name)(_v) : ""))(p);
+const exprSpan: (e: Expr) => SpanAt = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERef": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ECall": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELambda": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetIn": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EPipe": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EDo": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETernary": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMatch": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELoop": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecur": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EField": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ESet": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMap": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EInterp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const patSpan: (p: Pattern) => SpanAt = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PWild": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PAs": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PLit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PTuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PRecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PCtor": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "POr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const isCatchAll: (p: Pattern) => boolean = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PWild": {
+      return true;
+    }
+    case "PUnit": {
+      return true;
+    }
+    case "PBind": {
+      return true;
+    }
+    case "PAs": {
+      const { pat } = $match;
+      return isCatchAll(pat);
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      return allOf((f: PatField) => isCatchAll(f.pat), fields);
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return allOf(isCatchAll, elems);
+    }
+    case "PArr": {
+      const { elems, rest } = $match;
+      return and(length(elems) === 0, _Option_isSome(rest));
+    }
+    case "PList": {
+      const { elems, rest } = $match;
+      return and(length(elems) === 0, _Option_isSome(rest));
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const isPList: (p: Pattern) => boolean = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PList": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const isPCtor: (p: Pattern) => boolean = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PCtor": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const ctorNameOf: (p: Pattern) => string = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PCtor": {
+      const { ctor: name } = $match;
+      return name;
+    }
+    default: {
+      return "";
+    }
+  }
+};
 const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(
   2,
-  (ctor: string, ns: Option<string>) =>
-    _Option_match(
-      ns,
-      () => ctor,
-      (alias) => `${alias}.${ctor}`,
-    ),
+  (ctor: string, ns: Option<string>) => {
+    const $match = ns;
+    switch ($match._tag) {
+      case "Some": {
+        const { value: alias } = $match;
+        return `${alias}.${ctor}`;
+      }
+      case "None": {
+        return ctor;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
-const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PArr"
-      ? (({ elems, rest }) => Some(_tuple(elems, rest)) as Option<[Pattern[], Option<Pattern>]>)(_v)
-      : _v._tag === "PList"
-        ? (({ elems, rest }) => Some(_tuple(elems, rest)) as Option<[Pattern[], Option<Pattern>]>)(
-            _v,
-          )
-        : (None as Option<[Pattern[], Option<Pattern>]>))(p);
+const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PArr": {
+      const { elems, rest } = $match;
+      return Some(_tuple(elems, rest)) as Option<[Pattern[], Option<Pattern>]>;
+    }
+    case "PList": {
+      const { elems, rest } = $match;
+      return Some(_tuple(elems, rest)) as Option<[Pattern[], Option<Pattern>]>;
+    }
+    default: {
+      return None as Option<[Pattern[], Option<Pattern>]>;
+    }
+  }
+};
 const checkPattern: <A, B>(
   p: Pattern,
   reg: { ctors: Map<string, { arity: number } & A> } & B,
   top: boolean,
 ) => Option<PErr> = _curry(
   3,
-  <A, B>(p: Pattern, reg: { ctors: Map<string, { arity: number } & A> } & B, top: boolean) =>
-    ((_v) =>
-      _v._tag === "PAs"
-        ? (({ pat }) => checkPattern(pat, reg, top))(_v)
-        : _v._tag === "PCtor"
-          ? (({ ctor, args, ns, span: sp }) =>
-              ((key: string) =>
-                _Option_match(
-                  _Map_get(key, reg.ctors),
-                  () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>,
-                  (info) =>
-                    eq(length(args), info.arity)
-                      ? firstSome((a: Pattern) => checkPattern(a, reg, false), args)
-                      : (Some(
-                          checkErr(
-                            `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
-                            sp,
-                          ),
-                        ) as Option<PErr>),
-                ))(patCtorKey(ctor, ns)))(_v)
-          : _v._tag === "PRecord"
-            ? (({ fields }) => firstSome((f: PatField) => checkPattern(f.pat, reg, false), fields))(
-                _v,
-              )
-            : _v._tag === "PTuple"
-              ? (({ elems }) => firstSome((el: Pattern) => checkPattern(el, reg, false), elems))(_v)
-              : _v._tag === "PArr"
-                ? (({ elems, rest }) =>
-                    _Option_orElse(
-                      _Option_match(
-                        rest,
-                        () => None as Option<PErr>,
-                        (r) => checkPattern(r, reg, false),
-                      ),
-                      firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
-                    ))(_v)
-                : _v._tag === "PList"
-                  ? (({ elems, rest, span: sp }) =>
-                      top
-                        ? _Option_orElse(
-                            _Option_match(
-                              rest,
-                              () => None as Option<PErr>,
-                              (r) => checkPattern(r, reg, false),
-                            ),
-                            firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
-                          )
-                        : (Some(
-                            checkErr(
-                              "lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)",
-                              sp,
-                            ),
-                          ) as Option<PErr>))(_v)
-                  : _v._tag === "POr"
-                    ? (({ alts, span: sp }) => checkOrPattern(alts, sp, reg))(_v)
-                    : (None as Option<PErr>))(p),
+  <A, B>(p: Pattern, reg: { ctors: Map<string, { arity: number } & A> } & B, top: boolean) => {
+    const $match = p;
+    switch ($match._tag) {
+      case "PAs": {
+        const { pat } = $match;
+        return checkPattern(pat, reg, top);
+      }
+      case "PCtor": {
+        const { ctor, args, ns, span: sp } = $match;
+        const key: string = patCtorKey(ctor, ns);
+        const $match$ = _Map_get(key, reg.ctors);
+        switch ($match$._tag) {
+          case "None": {
+            return Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>;
+          }
+          case "Some": {
+            const { value: info } = $match$;
+            return eq(length(args), info.arity)
+              ? firstSome((a: Pattern) => checkPattern(a, reg, false), args)
+              : (Some(
+                  checkErr(
+                    `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
+                    sp,
+                  ),
+                ) as Option<PErr>);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      case "PRecord": {
+        const { fields } = $match;
+        return firstSome((f: PatField) => checkPattern(f.pat, reg, false), fields);
+      }
+      case "PTuple": {
+        const { elems } = $match;
+        return firstSome((el: Pattern) => checkPattern(el, reg, false), elems);
+      }
+      case "PArr": {
+        const { elems, rest } = $match;
+        return _Option_orElse(
+          _Option_match(
+            rest,
+            () => None as Option<PErr>,
+            (r) => checkPattern(r, reg, false),
+          ),
+          firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
+        );
+      }
+      case "PList": {
+        const { elems, rest, span: sp } = $match;
+        return top
+          ? _Option_orElse(
+              _Option_match(
+                rest,
+                () => None as Option<PErr>,
+                (r) => checkPattern(r, reg, false),
+              ),
+              firstSome((el: Pattern) => checkPattern(el, reg, false), elems),
+            )
+          : (Some(
+              checkErr(
+                "lazy-List pattern cannot nest inside another pattern (matching pulls from the sequence)",
+                sp,
+              ),
+            ) as Option<PErr>);
+      }
+      case "POr": {
+        const { alts, span: sp } = $match;
+        return checkOrPattern(alts, sp, reg);
+      }
+      default: {
+        return None as Option<PErr>;
+      }
+    }
+  },
 );
 const binderPathsArgs: _Curry<
   [args: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
-  _Option_match(
-    _Array_get(i, args),
-    () => Ok(acc) as Result<Map<string, string>, PErr>,
-    (a) =>
-      _Result_flatMap(
+> = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) => {
+  const $match = _Array_get(i, args);
+  switch ($match._tag) {
+    case "None": {
+      return Ok(acc) as Result<Map<string, string>, PErr>;
+    }
+    case "Some": {
+      const { value: a } = $match;
+      return _Result_flatMap(
         (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
         binderPaths(a, `${at}.a${show(i)}`, acc),
-      ),
-  ),
-);
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const binderPathsFields: _Curry<
   [fields: PatField[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
-  _Option_match(
-    _Array_get(i, fields),
-    () => Ok(acc) as Result<Map<string, string>, PErr>,
-    (f) =>
-      _Result_flatMap(
+> = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) => {
+  const $match = _Array_get(i, fields);
+  switch ($match._tag) {
+    case "None": {
+      return Ok(acc) as Result<Map<string, string>, PErr>;
+    }
+    case "Some": {
+      const { value: f } = $match;
+      return _Result_flatMap(
         (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
         binderPaths(f.pat, `${at}.${f.label}`, acc),
-      ),
-  ),
-);
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const binderPathsElems: _Curry<
   [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
-  _Option_match(
-    _Array_get(i, elems),
-    () => Ok(acc) as Result<Map<string, string>, PErr>,
-    (e) =>
-      _Result_flatMap(
+> = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) => {
+  const $match = _Array_get(i, elems);
+  switch ($match._tag) {
+    case "None": {
+      return Ok(acc) as Result<Map<string, string>, PErr>;
+    }
+    case "Some": {
+      const { value: e } = $match;
+      return _Result_flatMap(
         (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
         binderPaths(e, `${at}.t${show(i)}`, acc),
-      ),
-  ),
-);
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const binderPaths: _Curry<
   [p: Pattern, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(3, (p: Pattern, at: string, acc: Map<string, string>) =>
-  ((_v) =>
-    _v._tag === "PAs"
-      ? (({ pat, name, nameSpan: nameSp }) =>
-          _Result_flatMap(
-            (acc1: Map<string, string>) =>
-              _Map_has(name, acc1)
-                ? (Err(checkErr(`pattern binds '${name}' more than once`, nameSp)) as Result<
-                    Map<string, string>,
-                    PErr
-                  >)
-                : (Ok(_Map_set(name, at, acc1)) as Result<Map<string, string>, PErr>),
-            binderPaths(pat, at, acc),
-          ))(_v)
-      : _v._tag === "PBind"
-        ? (({ name, span: sp }) =>
-            _Map_has(name, acc)
-              ? (Err(checkErr(`pattern binds '${name}' more than once`, sp)) as Result<
-                  Map<string, string>,
-                  PErr
-                >)
-              : (Ok(_Map_set(name, at, acc)) as Result<Map<string, string>, PErr>))(_v)
-        : _v._tag === "PCtor"
-          ? (({ args }) => binderPathsArgs(args, 0, at, acc))(_v)
-          : _v._tag === "PRecord"
-            ? (({ fields }) => binderPathsFields(fields, 0, at, acc))(_v)
-            : _v._tag === "PTuple"
-              ? (({ elems }) => binderPathsElems(elems, 0, at, acc))(_v)
-              : (Ok(acc) as Result<Map<string, string>, PErr>))(p),
-);
+> = _curry(3, (p: Pattern, at: string, acc: Map<string, string>) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PAs": {
+      const { pat, name, nameSpan: nameSp } = $match;
+      return _Result_flatMap(
+        (acc1: Map<string, string>) =>
+          _Map_has(name, acc1)
+            ? (Err(checkErr(`pattern binds '${name}' more than once`, nameSp)) as Result<
+                Map<string, string>,
+                PErr
+              >)
+            : (Ok(_Map_set(name, at, acc1)) as Result<Map<string, string>, PErr>),
+        binderPaths(pat, at, acc),
+      );
+    }
+    case "PBind": {
+      const { name, span: sp } = $match;
+      return _Map_has(name, acc)
+        ? (Err(checkErr(`pattern binds '${name}' more than once`, sp)) as Result<
+            Map<string, string>,
+            PErr
+          >)
+        : (Ok(_Map_set(name, at, acc)) as Result<Map<string, string>, PErr>);
+    }
+    case "PCtor": {
+      const { args } = $match;
+      return binderPathsArgs(args, 0, at, acc);
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      return binderPathsFields(fields, 0, at, acc);
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return binderPathsElems(elems, 0, at, acc);
+    }
+    default: {
+      return Ok(acc) as Result<Map<string, string>, PErr>;
+    }
+  }
+});
 const altMapsFrom: <A, B>(
   alts: Pattern[],
   i: number,
@@ -456,12 +650,15 @@ const altMapsFrom: <A, B>(
     i: number,
     reg: { ctors: Map<string, { arity: number } & A> } & B,
     acc: Map<string, string>[],
-  ) =>
-    _Option_match(
-      _Array_get(i, alts),
-      () => Ok(acc) as Result<Map<string, string>[], PErr>,
-      (alt) =>
-        isCatchAll(alt)
+  ) => {
+    const $match = _Array_get(i, alts);
+    switch ($match._tag) {
+      case "None": {
+        return Ok(acc) as Result<Map<string, string>[], PErr>;
+      }
+      case "Some": {
+        const { value: alt } = $match;
+        return isCatchAll(alt)
           ? (Err(
               checkErr(
                 "an or-pattern alternative can't be a catch-all (`_` or a bare binding)",
@@ -483,8 +680,13 @@ const altMapsFrom: <A, B>(
                     binderPaths(alt, "", new Map<string, string>()),
                   ),
                 (e) => Err(e) as Result<Map<string, string>[], PErr>,
-              ),
-    ),
+              );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const missingNameErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
   2,
@@ -506,12 +708,15 @@ const consistentBindsFrom: <C>(
     i: number,
     ref: Map<string, string>,
     sp: { end: number; start: number } & C,
-  ) =>
-    _Option_match(
-      _Array_get(i, maps),
-      () => None,
-      (m) =>
-        _Option_orElse(
+  ) => {
+    const $match = _Array_get(i, maps);
+    switch ($match._tag) {
+      case "None": {
+        return None;
+      }
+      case "Some": {
+        const { value: m } = $match;
+        return _Option_orElse(
           consistentBindsFrom(maps, i + 1, ref, sp),
           _Option_orElse(
             firstSome(
@@ -533,8 +738,13 @@ const consistentBindsFrom: <C>(
               _Map_keys(ref),
             ),
           ),
-        ),
-    ),
+        );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const checkOrPattern: <A, B>(
   alts: Pattern[],
@@ -542,17 +752,34 @@ const checkOrPattern: <A, B>(
   reg: { ctors: Map<string, { arity: number } & A> } & B,
 ) => Option<PErr> = _curry(
   3,
-  <A, B>(alts: Pattern[], sp: SpanAt, reg: { ctors: Map<string, { arity: number } & A> } & B) =>
-    _Result_match(
-      altMapsFrom(alts, 0, reg, [] as Map<string, string>[]),
-      (e) => Some(e) as Option<PErr>,
-      (maps) =>
-        _Option_match(
-          _Array_head(maps),
-          () => None as Option<PErr>,
-          (ref) => consistentBindsFrom(maps, 1, ref, sp),
-        ),
-    ),
+  <A, B>(alts: Pattern[], sp: SpanAt, reg: { ctors: Map<string, { arity: number } & A> } & B) => {
+    const $match = altMapsFrom(alts, 0, reg, [] as Map<string, string>[]);
+    switch ($match._tag) {
+      case "Err": {
+        const { error: e } = $match;
+        return Some(e) as Option<PErr>;
+      }
+      case "Ok": {
+        const { value: maps } = $match;
+        const $match$ = _Array_head(maps);
+        switch ($match$._tag) {
+          case "None": {
+            return None as Option<PErr>;
+          }
+          case "Some": {
+            const { value: ref } = $match$;
+            return consistentBindsFrom(maps, 1, ref, sp);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B) => boolean = <
   A,
@@ -563,23 +790,28 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<PErr>> = _curry(
   2,
   (arms: MatchArm[], listSwitch: boolean) =>
-    firstSome(
-      (a: MatchArm) =>
-        _Option_match(
-          a.guard,
-          () => None as Option<PErr>,
-          (g) =>
-            or(isPList(a.pattern), listSwitch)
-              ? (Some(
-                  checkErr(
-                    "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
-                    exprSpan(g),
-                  ),
-                ) as Option<PErr>)
-              : (None as Option<PErr>),
-        ),
-      arms,
-    ),
+    firstSome((a: MatchArm) => {
+      const $match = a.guard;
+      switch ($match._tag) {
+        case "None": {
+          return None as Option<PErr>;
+        }
+        case "Some": {
+          const { value: g } = $match;
+          return or(isPList(a.pattern), listSwitch)
+            ? (Some(
+                checkErr(
+                  "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+                  exprSpan(g),
+                ),
+              ) as Option<PErr>)
+            : (None as Option<PErr>);
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    }, arms),
 );
 const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _curry(
   2,
@@ -605,20 +837,35 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
     }
   },
 );
-const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
-  _Option_match(
-    firstCatchIdx(arms, 0),
-    () => None as Option<PErr>,
-    (i) =>
-      _Option_match(
-        _Array_get(i + 1, arms),
-        () => None as Option<PErr>,
-        (a) =>
-          Some(
+const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) => {
+  const $match = firstCatchIdx(arms, 0);
+  switch ($match._tag) {
+    case "None": {
+      return None as Option<PErr>;
+    }
+    case "Some": {
+      const { value: i } = $match;
+      const $match$ = _Array_get(i + 1, arms);
+      switch ($match$._tag) {
+        case "None": {
+          return None as Option<PErr>;
+        }
+        case "Some": {
+          const { value: a } = $match$;
+          return Some(
             checkErr("unreachable arm: a catch-all arm above it matches first", patSpan(a.pattern)),
-          ) as Option<PErr>,
-      ),
-  );
+          ) as Option<PErr>;
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const SeqNotSeq: SeqCheck = { _tag: "SeqNotSeq" };
 const SeqTotal: SeqCheck = { _tag: "SeqTotal" };
 const SeqFail = (e: PErr): SeqCheck => ({ _tag: "SeqFail", e });
@@ -690,68 +937,90 @@ const ctorLoop: <A, B, C, D>(
     reg: { ctors: Map<string, { arity: number; owner: string } & C> } & D,
     owner: Option<string>,
     covered: Set<string>,
-  ) =>
-    _Option_match(
-      _Array_get(i, arms),
-      () => Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>,
-      (a) =>
-        ((_v) =>
-          _v._tag === "PCtor"
-            ? (({ ctor, args, ns, span: sp }) =>
-                ((key: string) =>
-                  _Option_match(
-                    _Map_get(key, reg.ctors),
-                    () =>
-                      Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
-                        [Option<string>, Set<string>],
-                        PErr
-                      >,
-                    (info) =>
-                      !eq(length(args), info.arity)
-                        ? (Err(
-                            checkErr(
-                              `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
-                              sp,
-                            ),
-                          ) as Result<[Option<string>, Set<string>], PErr>)
-                        : ((_v) =>
-                            _v._tag === "Some" && (({ value: own }) => !eq(own, info.owner))(_v)
-                              ? (({ value: own }) =>
-                                  Err(
-                                    checkErr(
-                                      `switch mixes variants of '${own}' and '${info.owner}'`,
-                                      sp,
-                                    ),
-                                  ) as Result<[Option<string>, Set<string>], PErr>)(_v)
-                              : ((covered2: Set<string>) =>
-                                  ctorLoop(
-                                    arms,
-                                    i + 1,
-                                    reg,
-                                    Some(info.owner) as Option<string>,
-                                    covered2,
-                                  ))(
-                                  and(allOf(isCatchAll, args), _Option_isNone(a.guard))
-                                    ? _Set_add(ctor, covered)
-                                    : covered,
-                                ))(owner),
-                  ))(patCtorKey(ctor, ns)))(_v)
-            : ctorLoop(arms, i + 1, reg, owner, covered))(a.pattern),
-    ),
+  ) => {
+    const $match = _Array_get(i, arms);
+    switch ($match._tag) {
+      case "None": {
+        return Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>;
+      }
+      case "Some": {
+        const { value: a } = $match;
+        const $match$ = a.pattern;
+        switch ($match$._tag) {
+          case "PCtor": {
+            const { ctor, args, ns, span: sp } = $match$;
+            const key: string = patCtorKey(ctor, ns);
+            const $match$$ = _Map_get(key, reg.ctors);
+            switch ($match$$._tag) {
+              case "None": {
+                return Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
+                  [Option<string>, Set<string>],
+                  PErr
+                >;
+              }
+              case "Some": {
+                const { value: info } = $match$$;
+                return !eq(length(args), info.arity)
+                  ? (Err(
+                      checkErr(
+                        `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
+                        sp,
+                      ),
+                    ) as Result<[Option<string>, Set<string>], PErr>)
+                  : ((_v) =>
+                      _v._tag === "Some" && (({ value: own }) => !eq(own, info.owner))(_v)
+                        ? (({ value: own }) =>
+                            Err(
+                              checkErr(`switch mixes variants of '${own}' and '${info.owner}'`, sp),
+                            ) as Result<[Option<string>, Set<string>], PErr>)(_v)
+                        : ((covered2: Set<string>) =>
+                            ctorLoop(
+                              arms,
+                              i + 1,
+                              reg,
+                              Some(info.owner) as Option<string>,
+                              covered2,
+                            ))(
+                            and(allOf(isCatchAll, args), _Option_isNone(a.guard))
+                              ? _Set_add(ctor, covered)
+                              : covered,
+                          ))(owner);
+              }
+              default: {
+                throw new Error("non-exhaustive match");
+              }
+            }
+          }
+          default: {
+            return ctorLoop(arms, i + 1, reg, owner, covered);
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const seqVerdict: <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => Option<PErr> =
-  _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) =>
-    ((_v) =>
-      _v._tag === "SeqTotal"
-        ? (None as Option<PErr>)
-        : _v._tag === "SeqFail"
-          ? (({ e }) => Some(e) as Option<PErr>)(_v)
-          : _v._tag === "SeqNotSeq"
-            ? (None as Option<PErr>)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(checkSeqExhaustive(arms, mSpan)),
-  );
+  _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => {
+    const $match = checkSeqExhaustive(arms, mSpan);
+    switch ($match._tag) {
+      case "SeqTotal": {
+        return None as Option<PErr>;
+      }
+      case "SeqFail": {
+        const { e } = $match;
+        return Some(e) as Option<PErr>;
+      }
+      case "SeqNotSeq": {
+        return None as Option<PErr>;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  });
 const unguardedPatterns: <A, B, C>(arms: ({ guard: Option<A>; pattern: B } & C)[]) => B[] = <
   A,
   B,
@@ -790,68 +1059,86 @@ const matrixVerdict: <A, D, E>(
     ownerOpt: Option<string>,
     mSpan: { end: number; start: number } & E,
     reg: Registry,
-  ) =>
-    ((_v) =>
-      _v._tag === "ExOk"
-        ? None
-        : _v._tag === "ExFuel"
+  ) => {
+    const $match = checkExhaustiveM(unguardedPatterns(arms), reg);
+    switch ($match._tag) {
+      case "ExOk": {
+        return None;
+      }
+      case "ExFuel": {
+        return Some(
+          checkErr("switch too complex to prove exhaustive — add a `_` catch-all arm", mSpan),
+        );
+      }
+      case "ExWitness": {
+        const { witness: w } = $match;
+        const own: string = _Option_unwrapOr("", ownerOpt);
+        const named: Set<string> = namedUnguarded(leaves);
+        const absent: string[] = filter(
+          (c: string) => !_Set_has(c, named),
+          _Map_getOr([] as string[], own, reg.types),
+        );
+        return and(and(isWideWitnessM(w), own !== ""), length(absent) > 0)
           ? Some(
-              checkErr("switch too complex to prove exhaustive — add a `_` catch-all arm", mSpan),
+              checkErr(
+                `non-exhaustive switch on '${own}': missing ${_Str_join(", ", absent)}`,
+                mSpan,
+              ),
             )
-          : _v._tag === "ExWitness"
-            ? (({ witness: w }) =>
-                ((own: string) =>
-                  ((named: Set<string>) =>
-                    ((absent: string[]) =>
-                      and(and(isWideWitnessM(w), own !== ""), length(absent) > 0)
-                        ? Some(
-                            checkErr(
-                              `non-exhaustive switch on '${own}': missing ${_Str_join(", ", absent)}`,
-                              mSpan,
-                            ),
-                          )
-                        : Some(
-                            checkErr(
-                              `non-exhaustive switch: '${showWitness(w)}' is not matched`,
-                              mSpan,
-                            ),
-                          ))(
-                      filter(
-                        (c: string) => !_Set_has(c, named),
-                        _Map_getOr([] as string[], own, reg.types),
-                      ),
-                    ))(namedUnguarded(leaves)))(_Option_unwrapOr("", ownerOpt)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(checkExhaustiveM(unguardedPatterns(arms), reg)),
+          : Some(checkErr(`non-exhaustive switch: '${showWitness(w)}' is not matched`, mSpan));
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const leavesOfArm: <A, B>(
   a: { pattern: Pattern; guard: A } & B,
-) => { pattern: Pattern; guard: A }[] = <A, B>(a: { pattern: Pattern; guard: A } & B) =>
-  ((_v) =>
-    _v._tag === "POr"
-      ? (({ alts }) => map((alt: Pattern) => ({ pattern: alt, guard: a.guard }), alts))(_v)
-      : [{ pattern: a.pattern, guard: a.guard }])(a.pattern);
+) => { pattern: Pattern; guard: A }[] = <A, B>(a: { pattern: Pattern; guard: A } & B) => {
+  const $match = a.pattern;
+  switch ($match._tag) {
+    case "POr": {
+      const { alts } = $match;
+      return map((alt: Pattern) => ({ pattern: alt, guard: a.guard }), alts);
+    }
+    default: {
+      return [{ pattern: a.pattern, guard: a.guard }];
+    }
+  }
+};
 const checkMatch: <A>(
   arms: MatchArm[],
   mSpan: { end: number; start: number } & A,
   reg: Registry,
 ) => Option<PErr> = _curry(
   3,
-  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
-    _Option_match(
-      firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms),
-      () => {
+  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) => {
+    const $match = firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms);
+    switch ($match._tag) {
+      case "Some": {
+        const { value: e } = $match;
+        return Some(e) as Option<PErr>;
+      }
+      case "None": {
         const listSwitch: boolean = someOf(
           (a: MatchArm) => and(isPList(a.pattern), !isCatchAll(a.pattern)),
           arms,
         );
-        return _Option_match(
-          guardErrs(arms, listSwitch),
-          () =>
-            _Option_match(
-              unreachableAfterCatch(arms),
-              () => {
+        const $match$ = guardErrs(arms, listSwitch);
+        switch ($match$._tag) {
+          case "Some": {
+            const { value: e } = $match$;
+            return Some(e) as Option<PErr>;
+          }
+          case "None": {
+            const $match$$ = unreachableAfterCatch(arms);
+            switch ($match$$._tag) {
+              case "Some": {
+                const { value: e } = $match$$;
+                return Some(e) as Option<PErr>;
+              }
+              case "None": {
                 const hasCatchAll: boolean = someOf(armUnguardedCatchAll, arms);
                 const leaves: { pattern: Pattern; guard: Option<Expr> }[] = _Array_flatMap(
                   leavesOfArm,
@@ -887,368 +1174,398 @@ const checkMatch: <A>(
                         _Set_fromArray([] as string[]),
                       ),
                     );
-              },
-              (e) => Some(e) as Option<PErr>,
-            ),
-          (e) => Some(e) as Option<PErr>,
-        );
-      },
-      (e) => Some(e) as Option<PErr>,
-    ),
+              }
+              default: {
+                throw new Error("non-exhaustive match");
+              }
+            }
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(
   2,
-  (e: Expr, reg: Registry) =>
-    ((_v) =>
-      _v._tag === "ENum"
-        ? (None as Option<PErr>)
-        : _v._tag === "EUnit"
-          ? (None as Option<PErr>)
-          : _v._tag === "EBool"
-            ? (None as Option<PErr>)
-            : _v._tag === "EStr"
-              ? (None as Option<PErr>)
-              : _v._tag === "ERef"
-                ? (None as Option<PErr>)
-                : _v._tag === "ECall"
-                  ? (({ fn, args }) =>
-                      _Option_orElse(
-                        firstSome((a: Expr) => checkExpr(a, reg), args),
-                        checkExpr(fn, reg),
-                      ))(_v)
-                  : _v._tag === "ELambda"
-                    ? (({ body }) => checkExpr(body, reg))(_v)
-                    : _v._tag === "ELetIn"
-                      ? (({ value, body }) =>
-                          _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)))(_v)
-                      : _v._tag === "ELetBind"
-                        ? (({ value, body }) =>
-                            _Option_orElse(checkExpr(body, reg), checkExpr(value, reg)))(_v)
-                        : _v._tag === "EPipe"
-                          ? (({ left, right }) =>
-                              _Option_orElse(checkExpr(right, reg), checkExpr(left, reg)))(_v)
-                          : _v._tag === "EDo"
-                            ? (({ exprs }) => firstSome((x: Expr) => checkExpr(x, reg), exprs))(_v)
-                            : _v._tag === "ETernary"
-                              ? (({ cond, thenE, elseE }) =>
-                                  _Option_orElse(
-                                    checkExpr(elseE, reg),
-                                    _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
-                                  ))(_v)
-                              : _v._tag === "EMatch"
-                                ? (({ scrutinee, arms, span: sp }) =>
-                                    _Option_orElse(
-                                      checkMatch(arms, sp, reg),
-                                      _Option_orElse(
-                                        firstSome(
-                                          (a: MatchArm) =>
-                                            _Option_orElse(
-                                              checkExpr(a.body, reg),
-                                              _Option_match(
-                                                a.guard,
-                                                () => None as Option<PErr>,
-                                                (g) => checkExpr(g, reg),
-                                              ),
-                                            ),
-                                          arms,
-                                        ),
-                                        checkExpr(scrutinee, reg),
-                                      ),
-                                    ))(_v)
-                                : _v._tag === "ERecord"
-                                  ? (({ fields, spread }) =>
-                                      _Option_orElse(
-                                        firstSome((f: Field) => checkExpr(f.value, reg), fields),
-                                        _Option_match(
-                                          spread,
-                                          () => None as Option<PErr>,
-                                          (s) => checkExpr(s, reg),
-                                        ),
-                                      ))(_v)
-                                  : _v._tag === "EField"
-                                    ? (({ target }) => checkExpr(target, reg))(_v)
-                                    : _v._tag === "ELoop"
-                                      ? (({ params, body }) =>
-                                          _Option_orElse(
-                                            checkExpr(body, reg),
-                                            firstSome(
-                                              (p: LoopParam) => checkExpr(p.init, reg),
-                                              params,
-                                            ),
-                                          ))(_v)
-                                      : _v._tag === "ERecur"
-                                        ? (({ args }) =>
-                                            firstSome((a: Expr) => checkExpr(a, reg), args))(_v)
-                                        : _v._tag === "ETuple"
-                                          ? (({ elements }) =>
-                                              firstSome(
-                                                (el: Expr) => checkExpr(el, reg),
-                                                elements,
-                                              ))(_v)
-                                          : _v._tag === "EArr"
-                                            ? (({ elements }) =>
-                                                firstSome(
-                                                  (el: SeqElem) =>
-                                                    checkExpr(
-                                                      ((_v) =>
-                                                        _v._tag === "SEExpr"
-                                                          ? (({ expr: e }) => e)(_v)
-                                                          : _v._tag === "SESpread"
-                                                            ? (({ expr: e }) => e)(_v)
-                                                            : (() => {
-                                                                throw new Error(
-                                                                  "non-exhaustive match",
-                                                                );
-                                                              })())(el),
-                                                      reg,
-                                                    ),
-                                                  elements,
-                                                ))(_v)
-                                            : _v._tag === "EList"
-                                              ? (({ elements }) =>
-                                                  firstSome(
-                                                    (el: SeqElem) =>
-                                                      checkExpr(
-                                                        ((_v) =>
-                                                          _v._tag === "SEExpr"
-                                                            ? (({ expr: e }) => e)(_v)
-                                                            : _v._tag === "SESpread"
-                                                              ? (({ expr: e }) => e)(_v)
-                                                              : (() => {
-                                                                  throw new Error(
-                                                                    "non-exhaustive match",
-                                                                  );
-                                                                })())(el),
-                                                        reg,
-                                                      ),
-                                                    elements,
-                                                  ))(_v)
-                                              : _v._tag === "ESet"
-                                                ? (({ elements }) =>
-                                                    firstSome(
-                                                      (el: SeqElem) =>
-                                                        checkExpr(
-                                                          ((_v) =>
-                                                            _v._tag === "SEExpr"
-                                                              ? (({ expr: e }) => e)(_v)
-                                                              : _v._tag === "SESpread"
-                                                                ? (({ expr: e }) => e)(_v)
-                                                                : (() => {
-                                                                    throw new Error(
-                                                                      "non-exhaustive match",
-                                                                    );
-                                                                  })())(el),
-                                                          reg,
-                                                        ),
-                                                      elements,
-                                                    ))(_v)
-                                                : _v._tag === "EMap"
-                                                  ? (({ entries }) =>
-                                                      firstSome(
-                                                        (en: MapEntry) =>
-                                                          _Option_orElse(
-                                                            checkExpr(en.value, reg),
-                                                            checkExpr(en.key, reg),
-                                                          ),
-                                                        entries,
-                                                      ))(_v)
-                                                  : _v._tag === "EInterp"
-                                                    ? (({ parts }) =>
-                                                        firstSome(
-                                                          (p: InterpPart) =>
-                                                            ((_v) =>
-                                                              _v._tag === "IPLit"
-                                                                ? (None as Option<PErr>)
-                                                                : _v._tag === "IPExpr"
-                                                                  ? (({ expr: ex }) =>
-                                                                      checkExpr(ex, reg))(_v)
-                                                                  : (() => {
-                                                                      throw new Error(
-                                                                        "non-exhaustive match",
-                                                                      );
-                                                                    })())(p),
-                                                          parts,
-                                                        ))(_v)
-                                                    : (() => {
-                                                        throw new Error("non-exhaustive match");
-                                                      })())(e),
+  (e: Expr, reg: Registry) => {
+    const $match = e;
+    switch ($match._tag) {
+      case "ENum": {
+        return None as Option<PErr>;
+      }
+      case "EUnit": {
+        return None as Option<PErr>;
+      }
+      case "EBool": {
+        return None as Option<PErr>;
+      }
+      case "EStr": {
+        return None as Option<PErr>;
+      }
+      case "ERef": {
+        return None as Option<PErr>;
+      }
+      case "ECall": {
+        const { fn, args } = $match;
+        return _Option_orElse(
+          firstSome((a: Expr) => checkExpr(a, reg), args),
+          checkExpr(fn, reg),
+        );
+      }
+      case "ELambda": {
+        const { body } = $match;
+        return checkExpr(body, reg);
+      }
+      case "ELetIn": {
+        const { value, body } = $match;
+        return _Option_orElse(checkExpr(body, reg), checkExpr(value, reg));
+      }
+      case "ELetBind": {
+        const { value, body } = $match;
+        return _Option_orElse(checkExpr(body, reg), checkExpr(value, reg));
+      }
+      case "EPipe": {
+        const { left, right } = $match;
+        return _Option_orElse(checkExpr(right, reg), checkExpr(left, reg));
+      }
+      case "EDo": {
+        const { exprs } = $match;
+        return firstSome((x: Expr) => checkExpr(x, reg), exprs);
+      }
+      case "ETernary": {
+        const { cond, thenE, elseE } = $match;
+        return _Option_orElse(
+          checkExpr(elseE, reg),
+          _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
+        );
+      }
+      case "EMatch": {
+        const { scrutinee, arms, span: sp } = $match;
+        return _Option_orElse(
+          checkMatch(arms, sp, reg),
+          _Option_orElse(
+            firstSome(
+              (a: MatchArm) =>
+                _Option_orElse(
+                  checkExpr(a.body, reg),
+                  _Option_match(
+                    a.guard,
+                    () => None as Option<PErr>,
+                    (g) => checkExpr(g, reg),
+                  ),
+                ),
+              arms,
+            ),
+            checkExpr(scrutinee, reg),
+          ),
+        );
+      }
+      case "ERecord": {
+        const { fields, spread } = $match;
+        return _Option_orElse(
+          firstSome((f: Field) => checkExpr(f.value, reg), fields),
+          _Option_match(
+            spread,
+            () => None as Option<PErr>,
+            (s) => checkExpr(s, reg),
+          ),
+        );
+      }
+      case "EField": {
+        const { target } = $match;
+        return checkExpr(target, reg);
+      }
+      case "ELoop": {
+        const { params, body } = $match;
+        return _Option_orElse(
+          checkExpr(body, reg),
+          firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
+        );
+      }
+      case "ERecur": {
+        const { args } = $match;
+        return firstSome((a: Expr) => checkExpr(a, reg), args);
+      }
+      case "ETuple": {
+        const { elements } = $match;
+        return firstSome((el: Expr) => checkExpr(el, reg), elements);
+      }
+      case "EArr": {
+        const { elements } = $match;
+        return firstSome(
+          (el: SeqElem) =>
+            checkExpr(
+              ((_v) =>
+                _v._tag === "SEExpr"
+                  ? (({ expr: e }) => e)(_v)
+                  : _v._tag === "SESpread"
+                    ? (({ expr: e }) => e)(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(el),
+              reg,
+            ),
+          elements,
+        );
+      }
+      case "EList": {
+        const { elements } = $match;
+        return firstSome(
+          (el: SeqElem) =>
+            checkExpr(
+              ((_v) =>
+                _v._tag === "SEExpr"
+                  ? (({ expr: e }) => e)(_v)
+                  : _v._tag === "SESpread"
+                    ? (({ expr: e }) => e)(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(el),
+              reg,
+            ),
+          elements,
+        );
+      }
+      case "ESet": {
+        const { elements } = $match;
+        return firstSome(
+          (el: SeqElem) =>
+            checkExpr(
+              ((_v) =>
+                _v._tag === "SEExpr"
+                  ? (({ expr: e }) => e)(_v)
+                  : _v._tag === "SESpread"
+                    ? (({ expr: e }) => e)(_v)
+                    : (() => {
+                        throw new Error("non-exhaustive match");
+                      })())(el),
+              reg,
+            ),
+          elements,
+        );
+      }
+      case "EMap": {
+        const { entries } = $match;
+        return firstSome(
+          (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
+          entries,
+        );
+      }
+      case "EInterp": {
+        const { parts } = $match;
+        return firstSome((p: InterpPart) => {
+          const $match$ = p;
+          switch ($match$._tag) {
+            case "IPLit": {
+              return None as Option<PErr>;
+            }
+            case "IPExpr": {
+              const { expr: ex } = $match$;
+              return checkExpr(ex, reg);
+            }
+            default: {
+              throw new Error("non-exhaustive match");
+            }
+          }
+        }, parts);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
-const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr, reg: Registry) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? ([] as PErr[])
-      : _v._tag === "EUnit"
-        ? ([] as PErr[])
-        : _v._tag === "EBool"
-          ? ([] as PErr[])
-          : _v._tag === "EStr"
-            ? ([] as PErr[])
-            : _v._tag === "ERef"
-              ? ([] as PErr[])
-              : _v._tag === "ECall"
-                ? (({ fn, args }) => [
-                    ...checkExprs(fn, reg),
-                    ..._Array_flatMap((a: Expr) => checkExprs(a, reg), args),
-                  ])(_v)
-                : _v._tag === "ELambda"
-                  ? (({ body }) => checkExprs(body, reg))(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ value, body }) => [...checkExprs(value, reg), ...checkExprs(body, reg)])(
-                        _v,
-                      )
-                    : _v._tag === "ELetBind"
-                      ? (({ value, body }) => [
-                          ...checkExprs(value, reg),
-                          ...checkExprs(body, reg),
-                        ])(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ left, right }) => [
-                            ...checkExprs(left, reg),
-                            ...checkExprs(right, reg),
-                          ])(_v)
-                        : _v._tag === "EDo"
-                          ? (({ exprs }) => _Array_flatMap((x: Expr) => checkExprs(x, reg), exprs))(
-                              _v,
-                            )
-                          : _v._tag === "ETernary"
-                            ? (({ cond, thenE, elseE }) => [
-                                ...checkExprs(cond, reg),
-                                ...checkExprs(thenE, reg),
-                                ...checkExprs(elseE, reg),
-                              ])(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ scrutinee, arms, span: sp }) => [
-                                  ...checkExprs(scrutinee, reg),
-                                  ..._Array_flatMap(
-                                    (a: MatchArm) => [
-                                      ..._Option_match(
-                                        a.guard,
-                                        () => [] as PErr[],
-                                        (g) => checkExprs(g, reg),
-                                      ),
-                                      ...checkExprs(a.body, reg),
-                                    ],
-                                    arms,
-                                  ),
-                                  ..._Option_match(
-                                    checkMatch(arms, sp, reg),
-                                    () => [] as PErr[],
-                                    (e) => [e],
-                                  ),
-                                ])(_v)
-                              : _v._tag === "ERecord"
-                                ? (({ fields, spread }) => [
-                                    ..._Option_match(
-                                      spread,
-                                      () => [] as PErr[],
-                                      (s) => checkExprs(s, reg),
-                                    ),
-                                    ..._Array_flatMap(
-                                      (f: Field) => checkExprs(f.value, reg),
-                                      fields,
-                                    ),
-                                  ])(_v)
-                                : _v._tag === "EField"
-                                  ? (({ target }) => checkExprs(target, reg))(_v)
-                                  : _v._tag === "ELoop"
-                                    ? (({ params, body }) => [
-                                        ..._Array_flatMap(
-                                          (p: LoopParam) => checkExprs(p.init, reg),
-                                          params,
-                                        ),
-                                        ...checkExprs(body, reg),
-                                      ])(_v)
-                                    : _v._tag === "ERecur"
-                                      ? (({ args }) =>
-                                          _Array_flatMap((a: Expr) => checkExprs(a, reg), args))(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ elements }) =>
-                                            _Array_flatMap(
-                                              (el: Expr) => checkExprs(el, reg),
-                                              elements,
-                                            ))(_v)
-                                        : _v._tag === "EArr"
-                                          ? (({ elements }) =>
-                                              _Array_flatMap(
-                                                (el: SeqElem) =>
-                                                  ((_v) =>
-                                                    _v._tag === "SEExpr"
-                                                      ? (({ expr: value }) =>
-                                                          checkExprs(value, reg))(_v)
-                                                      : _v._tag === "SESpread"
-                                                        ? (({ expr: value }) =>
-                                                            checkExprs(value, reg))(_v)
-                                                        : (() => {
-                                                            throw new Error("non-exhaustive match");
-                                                          })())(el),
-                                                elements,
-                                              ))(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ elements }) =>
-                                                _Array_flatMap(
-                                                  (el: SeqElem) =>
-                                                    ((_v) =>
-                                                      _v._tag === "SEExpr"
-                                                        ? (({ expr: value }) =>
-                                                            checkExprs(value, reg))(_v)
-                                                        : _v._tag === "SESpread"
-                                                          ? (({ expr: value }) =>
-                                                              checkExprs(value, reg))(_v)
-                                                          : (() => {
-                                                              throw new Error(
-                                                                "non-exhaustive match",
-                                                              );
-                                                            })())(el),
-                                                  elements,
-                                                ))(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ elements }) =>
-                                                  _Array_flatMap(
-                                                    (el: SeqElem) =>
-                                                      ((_v) =>
-                                                        _v._tag === "SEExpr"
-                                                          ? (({ expr: value }) =>
-                                                              checkExprs(value, reg))(_v)
-                                                          : _v._tag === "SESpread"
-                                                            ? (({ expr: value }) =>
-                                                                checkExprs(value, reg))(_v)
-                                                            : (() => {
-                                                                throw new Error(
-                                                                  "non-exhaustive match",
-                                                                );
-                                                              })())(el),
-                                                    elements,
-                                                  ))(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ entries }) =>
-                                                    _Array_flatMap(
-                                                      (entry: MapEntry) => [
-                                                        ...checkExprs(entry.key, reg),
-                                                        ...checkExprs(entry.value, reg),
-                                                      ],
-                                                      entries,
-                                                    ))(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ parts }) =>
-                                                      _Array_flatMap(
-                                                        (part: InterpPart) =>
-                                                          ((_v) =>
-                                                            _v._tag === "IPLit"
-                                                              ? ([] as PErr[])
-                                                              : _v._tag === "IPExpr"
-                                                                ? (({ expr: value }) =>
-                                                                    checkExprs(value, reg))(_v)
-                                                                : (() => {
-                                                                    throw new Error(
-                                                                      "non-exhaustive match",
-                                                                    );
-                                                                  })())(part),
-                                                        parts,
-                                                      ))(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e),
-);
+const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr, reg: Registry) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return [] as PErr[];
+    }
+    case "EUnit": {
+      return [] as PErr[];
+    }
+    case "EBool": {
+      return [] as PErr[];
+    }
+    case "EStr": {
+      return [] as PErr[];
+    }
+    case "ERef": {
+      return [] as PErr[];
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return [...checkExprs(fn, reg), ..._Array_flatMap((a: Expr) => checkExprs(a, reg), args)];
+    }
+    case "ELambda": {
+      const { body } = $match;
+      return checkExprs(body, reg);
+    }
+    case "ELetIn": {
+      const { value, body } = $match;
+      return [...checkExprs(value, reg), ...checkExprs(body, reg)];
+    }
+    case "ELetBind": {
+      const { value, body } = $match;
+      return [...checkExprs(value, reg), ...checkExprs(body, reg)];
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return [...checkExprs(left, reg), ...checkExprs(right, reg)];
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return _Array_flatMap((x: Expr) => checkExprs(x, reg), exprs);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return [...checkExprs(cond, reg), ...checkExprs(thenE, reg), ...checkExprs(elseE, reg)];
+    }
+    case "EMatch": {
+      const { scrutinee, arms, span: sp } = $match;
+      return [
+        ...checkExprs(scrutinee, reg),
+        ..._Array_flatMap(
+          (a: MatchArm) => [
+            ..._Option_match(
+              a.guard,
+              () => [] as PErr[],
+              (g) => checkExprs(g, reg),
+            ),
+            ...checkExprs(a.body, reg),
+          ],
+          arms,
+        ),
+        ..._Option_match(
+          checkMatch(arms, sp, reg),
+          () => [] as PErr[],
+          (e) => [e],
+        ),
+      ];
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return [
+        ..._Option_match(
+          spread,
+          () => [] as PErr[],
+          (s) => checkExprs(s, reg),
+        ),
+        ..._Array_flatMap((f: Field) => checkExprs(f.value, reg), fields),
+      ];
+    }
+    case "EField": {
+      const { target } = $match;
+      return checkExprs(target, reg);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return [
+        ..._Array_flatMap((p: LoopParam) => checkExprs(p.init, reg), params),
+        ...checkExprs(body, reg),
+      ];
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return _Array_flatMap((a: Expr) => checkExprs(a, reg), args);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Array_flatMap((el: Expr) => checkExprs(el, reg), elements);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return _Array_flatMap((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return _Array_flatMap((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return _Array_flatMap((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return _Array_flatMap(
+        (entry: MapEntry) => [...checkExprs(entry.key, reg), ...checkExprs(entry.value, reg)],
+        entries,
+      );
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Array_flatMap((part: InterpPart) => {
+        const $match$ = part;
+        switch ($match$._tag) {
+          case "IPLit": {
+            return [] as PErr[];
+          }
+          case "IPExpr": {
+            const { expr: value } = $match$;
+            return checkExprs(value, reg);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, parts);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Task", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
 const reservedErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
@@ -1257,105 +1574,117 @@ const reservedErr: <C>(name: string, sp: { end: number; start: number } & C) => 
     checkErr(`'${name}' is a reserved collection namespace and cannot be bound`, sp),
 );
 const checkReservedNames: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
-  firstSome(
-    (s: Stmt) =>
-      ((_v) =>
-        _v._tag === "SType"
-          ? (({ name, span: sp }) =>
-              _Array_contains(name, redeclarableTypes)
-                ? (None as Option<PErr>)
-                : _Array_contains(name, reservedNames)
-                  ? (Some(reservedErr(name, sp)) as Option<PErr>)
-                  : (None as Option<PErr>))(_v)
-          : _v._tag === "SLet"
-            ? (({ name, span: sp }) =>
-                _Array_contains(name, reservedNames)
-                  ? (Some(reservedErr(name, sp)) as Option<PErr>)
-                  : (None as Option<PErr>))(_v)
-            : _v._tag === "SExtern"
-              ? (({ name, span: sp }) =>
-                  _Array_contains(name, reservedNames)
-                    ? (Some(reservedErr(name, sp)) as Option<PErr>)
-                    : (None as Option<PErr>))(_v)
-              : _v._tag === "SImport"
-                ? (({ names }) =>
-                    firstSome(
-                      (n: Name) =>
-                        _Array_contains(n.name, reservedNames)
-                          ? (Some(
-                              checkErr(
-                                `'${n.name}' is a reserved collection namespace and cannot be imported`,
-                                n.span,
-                              ),
-                            ) as Option<PErr>)
-                          : (None as Option<PErr>),
-                      names,
-                    ))(_v)
-                : _v._tag === "SImportNs"
-                  ? (({ alias }) =>
-                      _Array_contains(alias.name, reservedNames)
-                        ? (Some(
-                            checkErr(
-                              `'${alias.name}' is a reserved collection namespace and cannot be imported`,
-                              alias.span,
-                            ),
-                          ) as Option<PErr>)
-                        : (None as Option<PErr>))(_v)
-                  : _v._tag === "SError"
-                    ? (None as Option<PErr>)
-                    : _v._tag === "SExpr"
-                      ? (None as Option<PErr>)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(s),
-    stmts,
-  );
+  firstSome((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SType": {
+        const { name, span: sp } = $match;
+        return _Array_contains(name, redeclarableTypes)
+          ? (None as Option<PErr>)
+          : _Array_contains(name, reservedNames)
+            ? (Some(reservedErr(name, sp)) as Option<PErr>)
+            : (None as Option<PErr>);
+      }
+      case "SLet": {
+        const { name, span: sp } = $match;
+        return _Array_contains(name, reservedNames)
+          ? (Some(reservedErr(name, sp)) as Option<PErr>)
+          : (None as Option<PErr>);
+      }
+      case "SExtern": {
+        const { name, span: sp } = $match;
+        return _Array_contains(name, reservedNames)
+          ? (Some(reservedErr(name, sp)) as Option<PErr>)
+          : (None as Option<PErr>);
+      }
+      case "SImport": {
+        const { names } = $match;
+        return firstSome(
+          (n: Name) =>
+            _Array_contains(n.name, reservedNames)
+              ? (Some(
+                  checkErr(
+                    `'${n.name}' is a reserved collection namespace and cannot be imported`,
+                    n.span,
+                  ),
+                ) as Option<PErr>)
+              : (None as Option<PErr>),
+          names,
+        );
+      }
+      case "SImportNs": {
+        const { alias } = $match;
+        return _Array_contains(alias.name, reservedNames)
+          ? (Some(
+              checkErr(
+                `'${alias.name}' is a reserved collection namespace and cannot be imported`,
+                alias.span,
+              ),
+            ) as Option<PErr>)
+          : (None as Option<PErr>);
+      }
+      case "SError": {
+        return None as Option<PErr>;
+      }
+      case "SExpr": {
+        return None as Option<PErr>;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  }, stmts);
 const checkReservedNamesAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
-  _Array_flatMap(
-    (s: Stmt) =>
-      ((_v) =>
-        _v._tag === "SType"
-          ? (({ name, span: sp }) =>
-              _Array_contains(name, redeclarableTypes)
-                ? ([] as PErr[])
-                : _Array_contains(name, reservedNames)
-                  ? [reservedErr(name, sp)]
-                  : ([] as PErr[]))(_v)
-          : _v._tag === "SLet"
-            ? (({ name, span: sp }) =>
-                _Array_contains(name, reservedNames) ? [reservedErr(name, sp)] : ([] as PErr[]))(_v)
-            : _v._tag === "SExtern"
-              ? (({ name, span: sp }) =>
-                  _Array_contains(name, reservedNames) ? [reservedErr(name, sp)] : ([] as PErr[]))(
-                  _v,
-                )
-              : _v._tag === "SImport"
-                ? (({ names }) =>
-                    _Array_flatMap(
-                      (n: Name) =>
-                        _Array_contains(n.name, reservedNames)
-                          ? [
-                              checkErr(
-                                `'${n.name}' is a reserved collection namespace and cannot be imported`,
-                                n.span,
-                              ),
-                            ]
-                          : ([] as PErr[]),
-                      names,
-                    ))(_v)
-                : _v._tag === "SImportNs"
-                  ? (({ alias }) =>
-                      _Array_contains(alias.name, reservedNames)
-                        ? [
-                            checkErr(
-                              `'${alias.name}' is a reserved collection namespace and cannot be imported`,
-                              alias.span,
-                            ),
-                          ]
-                        : ([] as PErr[]))(_v)
-                  : ([] as PErr[]))(s),
-    stmts,
-  );
+  _Array_flatMap((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SType": {
+        const { name, span: sp } = $match;
+        return _Array_contains(name, redeclarableTypes)
+          ? ([] as PErr[])
+          : _Array_contains(name, reservedNames)
+            ? [reservedErr(name, sp)]
+            : ([] as PErr[]);
+      }
+      case "SLet": {
+        const { name, span: sp } = $match;
+        return _Array_contains(name, reservedNames) ? [reservedErr(name, sp)] : ([] as PErr[]);
+      }
+      case "SExtern": {
+        const { name, span: sp } = $match;
+        return _Array_contains(name, reservedNames) ? [reservedErr(name, sp)] : ([] as PErr[]);
+      }
+      case "SImport": {
+        const { names } = $match;
+        return _Array_flatMap(
+          (n: Name) =>
+            _Array_contains(n.name, reservedNames)
+              ? [
+                  checkErr(
+                    `'${n.name}' is a reserved collection namespace and cannot be imported`,
+                    n.span,
+                  ),
+                ]
+              : ([] as PErr[]),
+          names,
+        );
+      }
+      case "SImportNs": {
+        const { alias } = $match;
+        return _Array_contains(alias.name, reservedNames)
+          ? [
+              checkErr(
+                `'${alias.name}' is a reserved collection namespace and cannot be imported`,
+                alias.span,
+              ),
+            ]
+          : ([] as PErr[]);
+      }
+      default: {
+        return [] as PErr[];
+      }
+    }
+  }, stmts);
 const jsReserved: string[] = [
   "break",
   "case",
@@ -1416,572 +1745,749 @@ const reservedWord: <C>(name: string, sp: { end: number; start: number } & C) =>
         ]
       : ([] as PErr[]),
 );
-const typeExprSpan: (te: TypeExpr) => SpanAt = (te: TypeExpr) =>
-  ((_v) =>
-    _v._tag === "TyName"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "TyArrow"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "TyApp"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "TyTuple"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "TyList"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "TyQual"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "TyLit"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "TyUnion"
-                    ? (({ span: sp }) => sp)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(te);
+const typeExprSpan: (te: TypeExpr) => SpanAt = (te: TypeExpr) => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyName": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyArrow": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyApp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyTuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyQual": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyLit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyUnion": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const checkReservedParam: _Curry<[param: LamParam, sp: SpanAt], PErr[]> = _curry(
   2,
-  (param: LamParam, sp: SpanAt) =>
-    ((_v) =>
-      _v._tag === "LPName"
-        ? (({ name }) => reservedWord(name, sp))(_v)
-        : _v._tag === "LPRecord"
-          ? (({ fields }) => _Array_flatMap((name: string) => reservedWord(name, sp), fields))(_v)
-          : _v._tag === "LPTuple"
-            ? (({ names }) => _Array_flatMap((name: string) => reservedWord(name, sp), names))(_v)
-            : _v._tag === "LPLabeled"
-              ? (({ name, defaultValue }) => [
-                  ...reservedWord(name, sp),
-                  ..._Option_match(
-                    defaultValue,
-                    () => [] as PErr[],
-                    (value) => checkReservedExpr(value),
-                  ),
-                ])(_v)
-              : _v._tag === "LPSpanned"
-                ? (({ param: inner }) => checkReservedParam(inner, sp))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(param),
+  (param: LamParam, sp: SpanAt) => {
+    const $match = param;
+    switch ($match._tag) {
+      case "LPName": {
+        const { name } = $match;
+        return reservedWord(name, sp);
+      }
+      case "LPRecord": {
+        const { fields } = $match;
+        return _Array_flatMap((name: string) => reservedWord(name, sp), fields);
+      }
+      case "LPTuple": {
+        const { names } = $match;
+        return _Array_flatMap((name: string) => reservedWord(name, sp), names);
+      }
+      case "LPLabeled": {
+        const { name, defaultValue } = $match;
+        return [
+          ...reservedWord(name, sp),
+          ..._Option_match(
+            defaultValue,
+            () => [] as PErr[],
+            (value) => checkReservedExpr(value),
+          ),
+        ];
+      }
+      case "LPSpanned": {
+        const { param: inner } = $match;
+        return checkReservedParam(inner, sp);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
-const checkReservedPattern: (pat: Pattern) => PErr[] = (pat: Pattern) =>
-  ((_v) =>
-    _v._tag === "PAs"
-      ? (({ pat: inner, name, nameSpan: nameSp }) => [
-          ...checkReservedPattern(inner),
-          ...reservedWord(name, nameSp),
-        ])(_v)
-      : _v._tag === "PBind"
-        ? (({ name, span: sp }) => reservedWord(name, sp))(_v)
-        : _v._tag === "PTuple"
-          ? (({ elems }) => _Array_flatMap(checkReservedPattern, elems))(_v)
-          : _v._tag === "PRecord"
-            ? (({ fields }) =>
-                _Array_flatMap((field: PatField) => checkReservedPattern(field.pat), fields))(_v)
-            : _v._tag === "PCtor"
-              ? (({ args }) => _Array_flatMap(checkReservedPattern, args))(_v)
-              : _v._tag === "PArr"
-                ? (({ elems, rest }) => [
-                    ..._Array_flatMap(checkReservedPattern, elems),
-                    ..._Option_match(
-                      rest,
-                      () => [] as PErr[],
-                      (value) => checkReservedPattern(value),
-                    ),
-                  ])(_v)
-                : _v._tag === "PList"
-                  ? (({ elems, rest }) => [
-                      ..._Array_flatMap(checkReservedPattern, elems),
-                      ..._Option_match(
-                        rest,
-                        () => [] as PErr[],
-                        (value) => checkReservedPattern(value),
-                      ),
-                    ])(_v)
-                  : _v._tag === "POr"
-                    ? (({ alts }) => _Array_flatMap(checkReservedPattern, alts))(_v)
-                    : ([] as PErr[]))(pat);
-const checkReservedSeqElem: (el: SeqElem) => PErr[] = (el: SeqElem) =>
-  ((_v) =>
-    _v._tag === "SEExpr"
-      ? (({ expr: value }) => checkReservedExpr(value))(_v)
-      : _v._tag === "SESpread"
-        ? (({ expr: value }) => checkReservedExpr(value))(_v)
-        : (() => {
+const checkReservedPattern: (pat: Pattern) => PErr[] = (pat: Pattern) => {
+  const $match = pat;
+  switch ($match._tag) {
+    case "PAs": {
+      const { pat: inner, name, nameSpan: nameSp } = $match;
+      return [...checkReservedPattern(inner), ...reservedWord(name, nameSp)];
+    }
+    case "PBind": {
+      const { name, span: sp } = $match;
+      return reservedWord(name, sp);
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return _Array_flatMap(checkReservedPattern, elems);
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      return _Array_flatMap((field: PatField) => checkReservedPattern(field.pat), fields);
+    }
+    case "PCtor": {
+      const { args } = $match;
+      return _Array_flatMap(checkReservedPattern, args);
+    }
+    case "PArr": {
+      const { elems, rest } = $match;
+      return [
+        ..._Array_flatMap(checkReservedPattern, elems),
+        ..._Option_match(
+          rest,
+          () => [] as PErr[],
+          (value) => checkReservedPattern(value),
+        ),
+      ];
+    }
+    case "PList": {
+      const { elems, rest } = $match;
+      return [
+        ..._Array_flatMap(checkReservedPattern, elems),
+        ..._Option_match(
+          rest,
+          () => [] as PErr[],
+          (value) => checkReservedPattern(value),
+        ),
+      ];
+    }
+    case "POr": {
+      const { alts } = $match;
+      return _Array_flatMap(checkReservedPattern, alts);
+    }
+    default: {
+      return [] as PErr[];
+    }
+  }
+};
+const checkReservedSeqElem: (el: SeqElem) => PErr[] = (el: SeqElem) => {
+  const $match = el;
+  switch ($match._tag) {
+    case "SEExpr": {
+      const { expr: value } = $match;
+      return checkReservedExpr(value);
+    }
+    case "SESpread": {
+      const { expr: value } = $match;
+      return checkReservedExpr(value);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) => {
+  const $match = expr;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn, args } = $match;
+      return [...checkReservedExpr(fn), ..._Array_flatMap(checkReservedExpr, args)];
+    }
+    case "ELambda": {
+      const { params, body, span: sp } = $match;
+      return [
+        ..._Array_flatMap((param: LamParam) => checkReservedParam(param, sp), params),
+        ...checkReservedExpr(body),
+      ];
+    }
+    case "ELetIn": {
+      const { name, nameSpan: nameSp, value, body } = $match;
+      return [
+        ...reservedWord(name, nameSp),
+        ...checkReservedExpr(value),
+        ...checkReservedExpr(body),
+      ];
+    }
+    case "ELetBind": {
+      const { param, paramSpan: paramSp, value, body } = $match;
+      return [
+        ...checkReservedParam(param, paramSp),
+        ...checkReservedExpr(value),
+        ...checkReservedExpr(body),
+      ];
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return [...checkReservedExpr(left), ...checkReservedExpr(right)];
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return _Array_flatMap(checkReservedExpr, exprs);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return [...checkReservedExpr(cond), ...checkReservedExpr(thenE), ...checkReservedExpr(elseE)];
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return [
+        ...checkReservedExpr(scrutinee),
+        ..._Array_flatMap(
+          (arm: MatchArm) => [
+            ...checkReservedPattern(arm.pattern),
+            ..._Option_match(
+              arm.guard,
+              () => [] as PErr[],
+              (guard) => checkReservedExpr(guard),
+            ),
+            ...checkReservedExpr(arm.body),
+          ],
+          arms,
+        ),
+      ];
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return [
+        ..._Option_match(
+          spread,
+          () => [] as PErr[],
+          (value) => checkReservedExpr(value),
+        ),
+        ..._Array_flatMap((field: Field) => checkReservedExpr(field.value), fields),
+      ];
+    }
+    case "EField": {
+      const { target } = $match;
+      return checkReservedExpr(target);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return [
+        ..._Array_flatMap((param: LoopParam) => reservedWord(param.name, param.nameSpan), params),
+        ..._Array_flatMap((param: LoopParam) => checkReservedExpr(param.init), params),
+        ...checkReservedExpr(body),
+      ];
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return _Array_flatMap(checkReservedExpr, args);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Array_flatMap(checkReservedExpr, elements);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return _Array_flatMap(checkReservedSeqElem, elements);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return _Array_flatMap(checkReservedSeqElem, elements);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return _Array_flatMap(checkReservedSeqElem, elements);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return _Array_flatMap(
+        (entry: MapEntry) => [...checkReservedExpr(entry.key), ...checkReservedExpr(entry.value)],
+        entries,
+      );
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Array_flatMap((part: InterpPart) => {
+        const $match$ = part;
+        switch ($match$._tag) {
+          case "IPLit": {
+            return [] as PErr[];
+          }
+          case "IPExpr": {
+            const { expr: value } = $match$;
+            return checkReservedExpr(value);
+          }
+          default: {
             throw new Error("non-exhaustive match");
-          })())(el);
-const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) =>
-  ((_v) =>
-    _v._tag === "ECall"
-      ? (({ fn, args }) => [...checkReservedExpr(fn), ..._Array_flatMap(checkReservedExpr, args)])(
-          _v,
-        )
-      : _v._tag === "ELambda"
-        ? (({ params, body, span: sp }) => [
-            ..._Array_flatMap((param: LamParam) => checkReservedParam(param, sp), params),
-            ...checkReservedExpr(body),
-          ])(_v)
-        : _v._tag === "ELetIn"
-          ? (({ name, nameSpan: nameSp, value, body }) => [
-              ...reservedWord(name, nameSp),
-              ...checkReservedExpr(value),
-              ...checkReservedExpr(body),
-            ])(_v)
-          : _v._tag === "ELetBind"
-            ? (({ param, paramSpan: paramSp, value, body }) => [
-                ...checkReservedParam(param, paramSp),
-                ...checkReservedExpr(value),
-                ...checkReservedExpr(body),
-              ])(_v)
-            : _v._tag === "EPipe"
-              ? (({ left, right }) => [...checkReservedExpr(left), ...checkReservedExpr(right)])(_v)
-              : _v._tag === "EDo"
-                ? (({ exprs }) => _Array_flatMap(checkReservedExpr, exprs))(_v)
-                : _v._tag === "ETernary"
-                  ? (({ cond, thenE, elseE }) => [
-                      ...checkReservedExpr(cond),
-                      ...checkReservedExpr(thenE),
-                      ...checkReservedExpr(elseE),
-                    ])(_v)
-                  : _v._tag === "EMatch"
-                    ? (({ scrutinee, arms }) => [
-                        ...checkReservedExpr(scrutinee),
-                        ..._Array_flatMap(
-                          (arm: MatchArm) => [
-                            ...checkReservedPattern(arm.pattern),
-                            ..._Option_match(
-                              arm.guard,
-                              () => [] as PErr[],
-                              (guard) => checkReservedExpr(guard),
-                            ),
-                            ...checkReservedExpr(arm.body),
-                          ],
-                          arms,
-                        ),
-                      ])(_v)
-                    : _v._tag === "ERecord"
-                      ? (({ fields, spread }) => [
-                          ..._Option_match(
-                            spread,
-                            () => [] as PErr[],
-                            (value) => checkReservedExpr(value),
-                          ),
-                          ..._Array_flatMap(
-                            (field: Field) => checkReservedExpr(field.value),
-                            fields,
-                          ),
-                        ])(_v)
-                      : _v._tag === "EField"
-                        ? (({ target }) => checkReservedExpr(target))(_v)
-                        : _v._tag === "ELoop"
-                          ? (({ params, body }) => [
-                              ..._Array_flatMap(
-                                (param: LoopParam) => reservedWord(param.name, param.nameSpan),
-                                params,
-                              ),
-                              ..._Array_flatMap(
-                                (param: LoopParam) => checkReservedExpr(param.init),
-                                params,
-                              ),
-                              ...checkReservedExpr(body),
-                            ])(_v)
-                          : _v._tag === "ERecur"
-                            ? (({ args }) => _Array_flatMap(checkReservedExpr, args))(_v)
-                            : _v._tag === "ETuple"
-                              ? (({ elements }) => _Array_flatMap(checkReservedExpr, elements))(_v)
-                              : _v._tag === "EArr"
-                                ? (({ elements }) =>
-                                    _Array_flatMap(checkReservedSeqElem, elements))(_v)
-                                : _v._tag === "EList"
-                                  ? (({ elements }) =>
-                                      _Array_flatMap(checkReservedSeqElem, elements))(_v)
-                                  : _v._tag === "ESet"
-                                    ? (({ elements }) =>
-                                        _Array_flatMap(checkReservedSeqElem, elements))(_v)
-                                    : _v._tag === "EMap"
-                                      ? (({ entries }) =>
-                                          _Array_flatMap(
-                                            (entry: MapEntry) => [
-                                              ...checkReservedExpr(entry.key),
-                                              ...checkReservedExpr(entry.value),
-                                            ],
-                                            entries,
-                                          ))(_v)
-                                      : _v._tag === "EInterp"
-                                        ? (({ parts }) =>
-                                            _Array_flatMap(
-                                              (part: InterpPart) =>
-                                                ((_v) =>
-                                                  _v._tag === "IPLit"
-                                                    ? ([] as PErr[])
-                                                    : _v._tag === "IPExpr"
-                                                      ? (({ expr: value }) =>
-                                                          checkReservedExpr(value))(_v)
-                                                      : (() => {
-                                                          throw new Error("non-exhaustive match");
-                                                        })())(part),
-                                              parts,
-                                            ))(_v)
-                                        : ([] as PErr[]))(expr);
+          }
+        }
+      }, parts);
+    }
+    default: {
+      return [] as PErr[];
+    }
+  }
+};
 const checkReservedWordsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
-  _Array_flatMap(
-    (stmt: Stmt) =>
-      ((_v) =>
-        _v._tag === "SLet"
-          ? (({ name, nameSpan: nameSp, value }) => [
-              ...reservedWord(name, nameSp),
-              ...checkReservedExpr(value),
-            ])(_v)
-          : _v._tag === "SExpr"
-            ? (({ value }) => checkReservedExpr(value))(_v)
-            : _v._tag === "SExtern"
-              ? (({ name, nameSpan: nameSp }) => reservedWord(name, nameSp))(_v)
-              : _v._tag === "SType"
-                ? (({ ctors }) =>
-                    _Array_flatMap(
-                      (ctor: Ctor) =>
-                        _Array_flatMap(
-                          (field: CtorField) =>
-                            _Option_match(
-                              field.name,
-                              () => [] as PErr[],
-                              (name) => reservedWord(name, typeExprSpan(field.fieldType)),
-                            ),
-                          ctor.fields,
-                        ),
-                      ctors,
-                    ))(_v)
-                : ([] as PErr[]))(stmt),
-    stmts,
-  );
+  _Array_flatMap((stmt: Stmt) => {
+    const $match = stmt;
+    switch ($match._tag) {
+      case "SLet": {
+        const { name, nameSpan: nameSp, value } = $match;
+        return [...reservedWord(name, nameSp), ...checkReservedExpr(value)];
+      }
+      case "SExpr": {
+        const { value } = $match;
+        return checkReservedExpr(value);
+      }
+      case "SExtern": {
+        const { name, nameSpan: nameSp } = $match;
+        return reservedWord(name, nameSp);
+      }
+      case "SType": {
+        const { ctors } = $match;
+        return _Array_flatMap(
+          (ctor: Ctor) =>
+            _Array_flatMap((field: CtorField) => {
+              const $match$ = field.name;
+              switch ($match$._tag) {
+                case "Some": {
+                  const { value: name } = $match$;
+                  return reservedWord(name, typeExprSpan(field.fieldType));
+                }
+                case "None": {
+                  return [] as PErr[];
+                }
+                default: {
+                  throw new Error("non-exhaustive match");
+                }
+              }
+            }, ctor.fields),
+          ctors,
+        );
+      }
+      default: {
+        return [] as PErr[];
+      }
+    }
+  }, stmts);
 const checkReservedWords: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   _Array_head(checkReservedWordsAll(stmts));
-const isUpperStart: (s: string) => boolean = (s: string) =>
-  _Option_match(
-    _Str_codeAt(0, s),
-    () => false,
-    (c) => and(c >= 65, c <= 90),
-  );
+const isUpperStart: (s: string) => boolean = (s: string) => {
+  const $match = _Str_codeAt(0, s);
+  switch ($match._tag) {
+    case "Some": {
+      const { value: c } = $match;
+      return and(c >= 65, c <= 90);
+    }
+    case "None": {
+      return false;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, SpanAt]>> = _curry(
   2,
-  (params: string[], te: TypeExpr) =>
-    ((_v) =>
-      _v._tag === "TyName"
-        ? (({ name, span: sp }) =>
-            or(
-              isUpperStart(name),
-              or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
-            )
-              ? (None as Option<[string, SpanAt]>)
-              : (Some(_tuple(name, sp)) as Option<[string, SpanAt]>))(_v)
-        : _v._tag === "TyArrow"
-          ? (({ from, to }) =>
-              _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from)))(_v)
-          : _v._tag === "TyApp"
-            ? (({ args }) => firstSome(strayTypeVar(params), args))(_v)
-            : _v._tag === "TyTuple"
-              ? (({ elems }) => firstSome(strayTypeVar(params), elems))(_v)
-              : _v._tag === "TyList"
-                ? (({ elem }) => strayTypeVar(params, elem))(_v)
-                : _v._tag === "TyQual"
-                  ? (({ args }) => firstSome(strayTypeVar(params), args))(_v)
-                  : _v._tag === "TyLit"
-                    ? (None as Option<[string, SpanAt]>)
-                    : _v._tag === "TyUnion"
-                      ? (({ members }) => firstSome(strayTypeVar(params), members))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(te),
+  (params: string[], te: TypeExpr) => {
+    const $match = te;
+    switch ($match._tag) {
+      case "TyName": {
+        const { name, span: sp } = $match;
+        return or(
+          isUpperStart(name),
+          or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
+        )
+          ? (None as Option<[string, SpanAt]>)
+          : (Some(_tuple(name, sp)) as Option<[string, SpanAt]>);
+      }
+      case "TyArrow": {
+        const { from, to } = $match;
+        return _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from));
+      }
+      case "TyApp": {
+        const { args } = $match;
+        return firstSome(strayTypeVar(params), args);
+      }
+      case "TyTuple": {
+        const { elems } = $match;
+        return firstSome(strayTypeVar(params), elems);
+      }
+      case "TyList": {
+        const { elem } = $match;
+        return strayTypeVar(params, elem);
+      }
+      case "TyQual": {
+        const { args } = $match;
+        return firstSome(strayTypeVar(params), args);
+      }
+      case "TyLit": {
+        return None as Option<[string, SpanAt]>;
+      }
+      case "TyUnion": {
+        const { members } = $match;
+        return firstSome(strayTypeVar(params), members);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const checkCtorFieldVars: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
-  firstSome(
-    (s: Stmt) =>
-      ((_v) =>
-        _v._tag === "SType"
-          ? (({ name, params, ctors }) =>
-              firstSome(
-                (c: Ctor) =>
-                  firstSome(
-                    (f: CtorField) =>
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: [vn, vsp] }) =>
-                              Some(
-                                checkErr(
-                                  `unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${_Str_join(" ", _Array_append(vn, params))} = ...`,
-                                  vsp,
-                                ),
-                              ) as Option<PErr>)(
-                              _v as Extract<Option<[string, SpanAt]>, { _tag: "Some" }>,
-                            )
-                          : _v._tag === "None"
-                            ? (None as Option<PErr>)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(strayTypeVar(params, f.fieldType)),
-                    c.fields,
-                  ),
-                ctors,
-              ))(_v)
-          : (None as Option<PErr>))(s),
-    stmts,
-  );
+  firstSome((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SType": {
+        const { name, params, ctors } = $match;
+        return firstSome(
+          (c: Ctor) =>
+            firstSome(
+              (f: CtorField) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: [vn, vsp] }) =>
+                        Some(
+                          checkErr(
+                            `unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${_Str_join(" ", _Array_append(vn, params))} = ...`,
+                            vsp,
+                          ),
+                        ) as Option<PErr>)(
+                        _v as Extract<Option<[string, SpanAt]>, { _tag: "Some" }>,
+                      )
+                    : _v._tag === "None"
+                      ? (None as Option<PErr>)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(strayTypeVar(params, f.fieldType)),
+              c.fields,
+            ),
+          ctors,
+        );
+      }
+      default: {
+        return None as Option<PErr>;
+      }
+    }
+  }, stmts);
 const checkCtorFieldVarsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
-  _Array_flatMap(
-    (s: Stmt) =>
-      ((_v) =>
-        _v._tag === "SType"
-          ? (({ name, params, ctors }) =>
-              _Array_flatMap(
-                (c: Ctor) =>
-                  _Array_flatMap(
-                    (f: CtorField) =>
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: [vn, vsp] }) => [
-                              checkErr(
-                                `unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${_Str_join(" ", _Array_append(vn, params))} = ...`,
-                                vsp,
-                              ),
-                            ])(_v as Extract<Option<[string, SpanAt]>, { _tag: "Some" }>)
-                          : _v._tag === "None"
-                            ? ([] as PErr[])
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(strayTypeVar(params, f.fieldType)),
-                    c.fields,
-                  ),
-                ctors,
-              ))(_v)
-          : ([] as PErr[]))(s),
-    stmts,
-  );
+  _Array_flatMap((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SType": {
+        const { name, params, ctors } = $match;
+        return _Array_flatMap(
+          (c: Ctor) =>
+            _Array_flatMap(
+              (f: CtorField) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: [vn, vsp] }) => [
+                        checkErr(
+                          `unknown type parameter '${vn}' in constructor '${c.name}' — declare it: type ${name} ${_Str_join(" ", _Array_append(vn, params))} = ...`,
+                          vsp,
+                        ),
+                      ])(_v as Extract<Option<[string, SpanAt]>, { _tag: "Some" }>)
+                    : _v._tag === "None"
+                      ? ([] as PErr[])
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(strayTypeVar(params, f.fieldType)),
+              c.fields,
+            ),
+          ctors,
+        );
+      }
+      default: {
+        return [] as PErr[];
+      }
+    }
+  }, stmts);
 const qualRefsFrom: (
   te: TypeExpr,
-) => { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[] = (te: TypeExpr) =>
-  ((_v) =>
-    _v._tag === "TyName"
-      ? ([] as { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[])
-      : _v._tag === "TyArrow"
-        ? (({ from, to }) => [...qualRefsFrom(from), ...qualRefsFrom(to)])(_v)
-        : _v._tag === "TyApp"
-          ? (({ args }) => _Array_flatMap(qualRefsFrom, args))(_v)
-          : _v._tag === "TyTuple"
-            ? (({ elems }) => _Array_flatMap(qualRefsFrom, elems))(_v)
-            : _v._tag === "TyList"
-              ? (({ elem }) => qualRefsFrom(elem))(_v)
-              : _v._tag === "TyQual"
-                ? (({ alias, name, nameSpan, args, span: sp }) => [
-                    { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
-                    ..._Array_flatMap(qualRefsFrom, args),
-                  ])(_v)
-                : _v._tag === "TyLit"
-                  ? ([] as { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[])
-                  : _v._tag === "TyUnion"
-                    ? (({ members }) => _Array_flatMap(qualRefsFrom, members))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(te);
-const letInAnnots: (e: Expr) => TypeExpr[] = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? ([] as TypeExpr[])
-      : _v._tag === "EUnit"
-        ? ([] as TypeExpr[])
-        : _v._tag === "EBool"
-          ? ([] as TypeExpr[])
-          : _v._tag === "EStr"
-            ? ([] as TypeExpr[])
-            : _v._tag === "ERef"
-              ? ([] as TypeExpr[])
-              : _v._tag === "ECall"
-                ? (({ fn, args }) => [...letInAnnots(fn), ..._Array_flatMap(letInAnnots, args)])(_v)
-                : _v._tag === "ELambda"
-                  ? (({ params, body }) => [
-                      ...letInAnnots(body),
-                      ..._Array_flatMap(
-                        (p: LamParam) =>
-                          ((_v) =>
-                            _v._tag === "LPSpanned" &&
-                            _v.param._tag === "LPLabeled" &&
-                            _v.param.defaultValue._tag === "Some"
-                              ? (({
-                                  param: {
-                                    defaultValue: { value: d },
-                                  },
-                                }) => letInAnnots(d))(
-                                  _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
-                                    param: Extract<
-                                      Extract<LamParam, { _tag: "LPSpanned" }>["param"],
-                                      { _tag: "LPLabeled" }
-                                    > & {
-                                      defaultValue: Extract<
-                                        Extract<
-                                          Extract<LamParam, { _tag: "LPSpanned" }>["param"],
-                                          { _tag: "LPLabeled" }
-                                        >["defaultValue"],
-                                        { _tag: "Some" }
-                                      >;
-                                    };
-                                  },
-                                )
-                              : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some"
-                                ? (({ defaultValue: { value: d } }) => letInAnnots(d))(
-                                    _v as Extract<LamParam, { _tag: "LPLabeled" }> & {
-                                      defaultValue: Extract<
-                                        Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
-                                        { _tag: "Some" }
-                                      >;
-                                    },
-                                  )
-                                : ([] as TypeExpr[]))(p),
-                        params,
-                      ),
-                    ])(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ annot, value, body }) => [
-                        ...letInAnnots(value),
-                        ...letInAnnots(body),
-                        ..._Option_match(
-                          annot,
-                          () => [] as TypeExpr[],
-                          (te) => [te],
-                        ),
-                      ])(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ value, body }) => [...letInAnnots(value), ...letInAnnots(body)])(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ left, right }) => [...letInAnnots(left), ...letInAnnots(right)])(_v)
-                        : _v._tag === "EDo"
-                          ? (({ exprs }) => _Array_flatMap(letInAnnots, exprs))(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ cond, thenE, elseE }) => [
-                                ...letInAnnots(cond),
-                                ...letInAnnots(thenE),
-                                ...letInAnnots(elseE),
-                              ])(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ scrutinee, arms }) => [
-                                  ...letInAnnots(scrutinee),
-                                  ..._Array_flatMap(
-                                    (a: MatchArm) => [
-                                      ..._Option_match(
-                                        a.guard,
-                                        () => [] as TypeExpr[],
-                                        (g) => letInAnnots(g),
-                                      ),
-                                      ...letInAnnots(a.body),
-                                    ],
-                                    arms,
-                                  ),
-                                ])(_v)
-                              : _v._tag === "ERecord"
-                                ? (({ fields, spread }) => [
-                                    ..._Option_match(
-                                      spread,
-                                      () => [] as TypeExpr[],
-                                      (sp) => letInAnnots(sp),
-                                    ),
-                                    ..._Array_flatMap((f: Field) => letInAnnots(f.value), fields),
-                                  ])(_v)
-                                : _v._tag === "EField"
-                                  ? (({ target }) => letInAnnots(target))(_v)
-                                  : _v._tag === "ELoop"
-                                    ? (({ params, body }) => [
-                                        ..._Array_flatMap(
-                                          (prm: LoopParam) => letInAnnots(prm.init),
-                                          params,
-                                        ),
-                                        ...letInAnnots(body),
-                                      ])(_v)
-                                    : _v._tag === "ERecur"
-                                      ? (({ args }) => _Array_flatMap(letInAnnots, args))(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ elements }) => _Array_flatMap(letInAnnots, elements))(
-                                            _v,
-                                          )
-                                        : _v._tag === "EArr"
-                                          ? (({ elements }) =>
-                                              _Array_flatMap(seqElemAnnots, elements))(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ elements }) =>
-                                                _Array_flatMap(seqElemAnnots, elements))(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ elements }) =>
-                                                  _Array_flatMap(seqElemAnnots, elements))(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ entries }) =>
-                                                    _Array_flatMap(
-                                                      (en: MapEntry) => [
-                                                        ...letInAnnots(en.key),
-                                                        ...letInAnnots(en.value),
-                                                      ],
-                                                      entries,
-                                                    ))(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ parts }) =>
-                                                      _Array_flatMap(
-                                                        (prt: InterpPart) =>
-                                                          ((_v) =>
-                                                            _v._tag === "IPLit"
-                                                              ? ([] as TypeExpr[])
-                                                              : _v._tag === "IPExpr"
-                                                                ? (({ expr: ex }) =>
-                                                                    letInAnnots(ex))(_v)
-                                                                : (() => {
-                                                                    throw new Error(
-                                                                      "non-exhaustive match",
-                                                                    );
-                                                                  })())(prt),
-                                                        parts,
-                                                      ))(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e);
-const seqElemAnnots: (el: SeqElem) => TypeExpr[] = (el: SeqElem) =>
-  ((_v) =>
-    _v._tag === "SEExpr"
-      ? (({ expr: e }) => letInAnnots(e))(_v)
-      : _v._tag === "SESpread"
-        ? (({ expr: e }) => letInAnnots(e))(_v)
-        : (() => {
+) => { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[] = (te: TypeExpr) => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyName": {
+      return [] as { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[];
+    }
+    case "TyArrow": {
+      const { from, to } = $match;
+      return [...qualRefsFrom(from), ...qualRefsFrom(to)];
+    }
+    case "TyApp": {
+      const { args } = $match;
+      return _Array_flatMap(qualRefsFrom, args);
+    }
+    case "TyTuple": {
+      const { elems } = $match;
+      return _Array_flatMap(qualRefsFrom, elems);
+    }
+    case "TyList": {
+      const { elem } = $match;
+      return qualRefsFrom(elem);
+    }
+    case "TyQual": {
+      const { alias, name, nameSpan, args, span: sp } = $match;
+      return [
+        { alias: alias, name: name, nameSpan: nameSpan, qualSpan: sp },
+        ..._Array_flatMap(qualRefsFrom, args),
+      ];
+    }
+    case "TyLit": {
+      return [] as { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[];
+    }
+    case "TyUnion": {
+      const { members } = $match;
+      return _Array_flatMap(qualRefsFrom, members);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const letInAnnots: (e: Expr) => TypeExpr[] = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return [] as TypeExpr[];
+    }
+    case "EUnit": {
+      return [] as TypeExpr[];
+    }
+    case "EBool": {
+      return [] as TypeExpr[];
+    }
+    case "EStr": {
+      return [] as TypeExpr[];
+    }
+    case "ERef": {
+      return [] as TypeExpr[];
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return [...letInAnnots(fn), ..._Array_flatMap(letInAnnots, args)];
+    }
+    case "ELambda": {
+      const { params, body } = $match;
+      return [
+        ...letInAnnots(body),
+        ..._Array_flatMap(
+          (p: LamParam) =>
+            ((_v) =>
+              _v._tag === "LPSpanned" &&
+              _v.param._tag === "LPLabeled" &&
+              _v.param.defaultValue._tag === "Some"
+                ? (({
+                    param: {
+                      defaultValue: { value: d },
+                    },
+                  }) => letInAnnots(d))(
+                    _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
+                      param: Extract<
+                        Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                        { _tag: "LPLabeled" }
+                      > & {
+                        defaultValue: Extract<
+                          Extract<
+                            Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                            { _tag: "LPLabeled" }
+                          >["defaultValue"],
+                          { _tag: "Some" }
+                        >;
+                      };
+                    },
+                  )
+                : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some"
+                  ? (({ defaultValue: { value: d } }) => letInAnnots(d))(
+                      _v as Extract<LamParam, { _tag: "LPLabeled" }> & {
+                        defaultValue: Extract<
+                          Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
+                          { _tag: "Some" }
+                        >;
+                      },
+                    )
+                  : ([] as TypeExpr[]))(p),
+          params,
+        ),
+      ];
+    }
+    case "ELetIn": {
+      const { annot, value, body } = $match;
+      return [
+        ...letInAnnots(value),
+        ...letInAnnots(body),
+        ..._Option_match(
+          annot,
+          () => [] as TypeExpr[],
+          (te) => [te],
+        ),
+      ];
+    }
+    case "ELetBind": {
+      const { value, body } = $match;
+      return [...letInAnnots(value), ...letInAnnots(body)];
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return [...letInAnnots(left), ...letInAnnots(right)];
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return _Array_flatMap(letInAnnots, exprs);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return [...letInAnnots(cond), ...letInAnnots(thenE), ...letInAnnots(elseE)];
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return [
+        ...letInAnnots(scrutinee),
+        ..._Array_flatMap(
+          (a: MatchArm) => [
+            ..._Option_match(
+              a.guard,
+              () => [] as TypeExpr[],
+              (g) => letInAnnots(g),
+            ),
+            ...letInAnnots(a.body),
+          ],
+          arms,
+        ),
+      ];
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return [
+        ..._Option_match(
+          spread,
+          () => [] as TypeExpr[],
+          (sp) => letInAnnots(sp),
+        ),
+        ..._Array_flatMap((f: Field) => letInAnnots(f.value), fields),
+      ];
+    }
+    case "EField": {
+      const { target } = $match;
+      return letInAnnots(target);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return [
+        ..._Array_flatMap((prm: LoopParam) => letInAnnots(prm.init), params),
+        ...letInAnnots(body),
+      ];
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return _Array_flatMap(letInAnnots, args);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Array_flatMap(letInAnnots, elements);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return _Array_flatMap(seqElemAnnots, elements);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return _Array_flatMap(seqElemAnnots, elements);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return _Array_flatMap(seqElemAnnots, elements);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return _Array_flatMap(
+        (en: MapEntry) => [...letInAnnots(en.key), ...letInAnnots(en.value)],
+        entries,
+      );
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Array_flatMap((prt: InterpPart) => {
+        const $match$ = prt;
+        switch ($match$._tag) {
+          case "IPLit": {
+            return [] as TypeExpr[];
+          }
+          case "IPExpr": {
+            const { expr: ex } = $match$;
+            return letInAnnots(ex);
+          }
+          default: {
             throw new Error("non-exhaustive match");
-          })())(el);
+          }
+        }
+      }, parts);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const seqElemAnnots: (el: SeqElem) => TypeExpr[] = (el: SeqElem) => {
+  const $match = el;
+  switch ($match._tag) {
+    case "SEExpr": {
+      const { expr: e } = $match;
+      return letInAnnots(e);
+    }
+    case "SESpread": {
+      const { expr: e } = $match;
+      return letInAnnots(e);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const writtenTypeExprs: (stmts: Stmt[]) => TypeExpr[] = (stmts: Stmt[]) =>
-  _Array_flatMap(
-    (s: Stmt) =>
-      ((_v) =>
-        _v._tag === "SExtern"
-          ? (({ typeExpr: te }) => [te])(_v)
-          : _v._tag === "SLet"
-            ? (({ annot, value }) => [
-                ..._Option_match(
-                  annot,
-                  () => [] as TypeExpr[],
-                  (te) => [te],
-                ),
-                ...letInAnnots(value),
-              ])(_v)
-            : _v._tag === "SExpr"
-              ? (({ value }) => letInAnnots(value))(_v)
-              : _v._tag === "SType"
-                ? (({ ctors, alias, aliasType }) => [
-                    ..._Array_flatMap(
-                      (c: Ctor) => map((f: CtorField) => f.fieldType, c.fields),
-                      ctors,
-                    ),
-                    ..._Option_match(
-                      alias,
-                      () => [] as TypeExpr[],
-                      (fields) => map((f: AliasField) => f.fieldType, fields),
-                    ),
-                    ..._Option_match(
-                      aliasType,
-                      () => [] as TypeExpr[],
-                      (te) => [te],
-                    ),
-                  ])(_v)
-                : ([] as TypeExpr[]))(s),
-    stmts,
-  );
+  _Array_flatMap((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SExtern": {
+        const { typeExpr: te } = $match;
+        return [te];
+      }
+      case "SLet": {
+        const { annot, value } = $match;
+        return [
+          ..._Option_match(
+            annot,
+            () => [] as TypeExpr[],
+            (te) => [te],
+          ),
+          ...letInAnnots(value),
+        ];
+      }
+      case "SExpr": {
+        const { value } = $match;
+        return letInAnnots(value);
+      }
+      case "SType": {
+        const { ctors, alias, aliasType } = $match;
+        return [
+          ..._Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors),
+          ..._Option_match(
+            alias,
+            () => [] as TypeExpr[],
+            (fields) => map((f: AliasField) => f.fieldType, fields),
+          ),
+          ..._Option_match(
+            aliasType,
+            () => [] as TypeExpr[],
+            (te) => [te],
+          ),
+        ];
+      }
+      default: {
+        return [] as TypeExpr[];
+      }
+    }
+  }, stmts);
 
 const emptyQuals: Map<string, QualScope> = new Map<string, QualScope>();
 const checkQualifiedTypeNames: <A>(
@@ -1991,12 +2497,18 @@ const checkQualifiedTypeNames: <A>(
   2,
   <A>(stmts: Stmt[], quals: Map<string, { types: Set<string> } & A>) => {
     const nsAliases: Set<string> = _Set_fromArray(
-      _Array_flatMap(
-        (s: Stmt) =>
-          ((_v) =>
-            _v._tag === "SImportNs" ? (({ alias }) => [alias.name])(_v) : ([] as string[]))(s),
-        stmts,
-      ),
+      _Array_flatMap((s: Stmt) => {
+        const $match = s;
+        switch ($match._tag) {
+          case "SImportNs": {
+            const { alias } = $match;
+            return [alias.name];
+          }
+          default: {
+            return [] as string[];
+          }
+        }
+      }, stmts),
     );
     return firstSome(
       (q: { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }) =>
@@ -2029,13 +2541,18 @@ const checkQualifiedTypeNamesAll: <A>(
   quals: Map<string, { types: Set<string> } & A>,
 ) => PErr[] = _curry(2, <A>(stmts: Stmt[], quals: Map<string, { types: Set<string> } & A>) => {
   const nsAliases: Set<string> = _Set_fromArray(
-    _Array_flatMap(
-      (s: Stmt) =>
-        ((_v) => (_v._tag === "SImportNs" ? (({ alias }) => [alias.name])(_v) : ([] as string[])))(
-          s,
-        ),
-      stmts,
-    ),
+    _Array_flatMap((s: Stmt) => {
+      const $match = s;
+      switch ($match._tag) {
+        case "SImportNs": {
+          const { alias } = $match;
+          return [alias.name];
+        }
+        default: {
+          return [] as string[];
+        }
+      }
+    }, stmts),
   );
   return _Array_flatMap(
     (q: { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }) =>
@@ -2131,218 +2648,256 @@ const checkLoopDo: _Curry<
 const checkLoopExpr: _Curry<
   [e: Expr, frame: Option<LoopFrame>, tail: boolean],
   Option<PErr>
-> = _curry(3, (e: Expr, frame: Option<LoopFrame>, tail: boolean) =>
-  ((_v) =>
-    _v._tag === "ELoop"
-      ? (({ params, body }) =>
-          _Option_orElse(
-            checkLoopExpr(
-              body,
-              Some({
-                arity: length(params),
-                names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
-              }) as Option<LoopFrame>,
-              true,
-            ),
-            _Option_orElse(
-              firstSome((p: LoopParam) => checkLoopExpr(p.init, frame, false), params),
-              duplicateLoopParam(params),
-            ),
-          ))(_v)
-      : _v._tag === "ERecur"
-        ? (({ args, span: sp }) =>
-            _Option_match(
-              frame,
-              () => Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>,
-              (current) =>
-                !tail
-                  ? (Some(
-                      checkErr("'recur' must be in tail position of its enclosing loop", sp),
-                    ) as Option<PErr>)
-                  : !eq(length(args), current.arity)
-                    ? (Some(
-                        checkErr(
-                          `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
-                          sp,
-                        ),
-                      ) as Option<PErr>)
-                    : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
-            ))(_v)
-        : _v._tag === "ETernary"
-          ? (({ cond, thenE, elseE }) =>
-              _Option_orElse(
-                checkLoopExpr(elseE, frame, tail),
-                _Option_orElse(
-                  checkLoopExpr(thenE, frame, tail),
-                  checkLoopExpr(cond, frame, false),
-                ),
-              ))(_v)
-          : _v._tag === "EMatch"
-            ? (({ scrutinee, arms }) =>
-                _Option_orElse(
-                  firstSome(
-                    (arm: MatchArm) =>
-                      _Option_match(
-                        arm.guard,
-                        () => checkLoopExpr(arm.body, frame, tail),
-                        (guard) =>
-                          _Option_orElse(
-                            checkLoopExpr(arm.body, frame, tail),
-                            checkLoopExpr(guard, frame, false),
-                          ),
-                      ),
-                    arms,
+> = _curry(3, (e: Expr, frame: Option<LoopFrame>, tail: boolean) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ELoop": {
+      const { params, body } = $match;
+      return _Option_orElse(
+        checkLoopExpr(
+          body,
+          Some({
+            arity: length(params),
+            names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
+          }) as Option<LoopFrame>,
+          true,
+        ),
+        _Option_orElse(
+          firstSome((p: LoopParam) => checkLoopExpr(p.init, frame, false), params),
+          duplicateLoopParam(params),
+        ),
+      );
+    }
+    case "ERecur": {
+      const { args, span: sp } = $match;
+      const $match$ = frame;
+      switch ($match$._tag) {
+        case "None": {
+          return Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>;
+        }
+        case "Some": {
+          const { value: current } = $match$;
+          return !tail
+            ? (Some(
+                checkErr("'recur' must be in tail position of its enclosing loop", sp),
+              ) as Option<PErr>)
+            : !eq(length(args), current.arity)
+              ? (Some(
+                  checkErr(
+                    `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                    sp,
                   ),
-                  checkLoopExpr(scrutinee, frame, false),
-                ))(_v)
-            : _v._tag === "ELetIn"
-              ? (({ name, nameSpan: nameSp, value, body }) =>
-                  _Option_orElse(
-                    checkLoopExpr(body, frame, tail),
-                    _Option_orElse(
-                      ((_v) =>
-                        _v._tag === "Some" &&
-                        (({ value: current }) => _Set_has(name, current.names))(_v)
-                          ? (({ value: current }) =>
-                              Some(
-                                checkErr(
-                                  `'${name}' shadows a loop param inside the loop body; rename it`,
-                                  nameSp,
-                                ),
-                              ) as Option<PErr>)(_v)
-                          : (None as Option<PErr>))(frame),
-                      checkLoopExpr(value, frame, false),
+                ) as Option<PErr>)
+              : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args);
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return _Option_orElse(
+        checkLoopExpr(elseE, frame, tail),
+        _Option_orElse(checkLoopExpr(thenE, frame, tail), checkLoopExpr(cond, frame, false)),
+      );
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return _Option_orElse(
+        firstSome((arm: MatchArm) => {
+          const $match$ = arm.guard;
+          switch ($match$._tag) {
+            case "Some": {
+              const { value: guard } = $match$;
+              return _Option_orElse(
+                checkLoopExpr(arm.body, frame, tail),
+                checkLoopExpr(guard, frame, false),
+              );
+            }
+            case "None": {
+              return checkLoopExpr(arm.body, frame, tail);
+            }
+            default: {
+              throw new Error("non-exhaustive match");
+            }
+          }
+        }, arms),
+        checkLoopExpr(scrutinee, frame, false),
+      );
+    }
+    case "ELetIn": {
+      const { name, nameSpan: nameSp, value, body } = $match;
+      return _Option_orElse(
+        checkLoopExpr(body, frame, tail),
+        _Option_orElse(
+          ((_v) =>
+            _v._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_v)
+              ? (({ value: current }) =>
+                  Some(
+                    checkErr(
+                      `'${name}' shadows a loop param inside the loop body; rename it`,
+                      nameSp,
                     ),
-                  ))(_v)
-              : _v._tag === "ELetBind"
-                ? (({ value, body }) =>
-                    _Option_orElse(
-                      checkLoopExpr(body, None as Option<LoopFrame>, false),
-                      checkLoopExpr(value, frame, false),
-                    ))(_v)
-                : _v._tag === "ELambda"
-                  ? (({ body }) => checkLoopExpr(body, None as Option<LoopFrame>, false))(_v)
-                  : _v._tag === "ECall"
-                    ? (({ fn, args }) =>
-                        _Option_orElse(
-                          firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
-                          checkLoopExpr(fn, frame, false),
-                        ))(_v)
-                    : _v._tag === "EPipe"
-                      ? (({ left, right }) =>
-                          _Option_orElse(
-                            checkLoopExpr(right, frame, false),
-                            checkLoopExpr(left, frame, false),
-                          ))(_v)
-                      : _v._tag === "EDo"
-                        ? (({ exprs }) => checkLoopDo(exprs, frame, tail))(_v)
-                        : _v._tag === "ERecord"
-                          ? (({ fields, spread }) =>
-                              _Option_orElse(
-                                firstSome(
-                                  (field: Field) => checkLoopExpr(field.value, frame, false),
-                                  fields,
-                                ),
-                                _Option_match(
-                                  spread,
-                                  () => None as Option<PErr>,
-                                  (value) => checkLoopExpr(value, frame, false),
-                                ),
-                              ))(_v)
-                          : _v._tag === "EField"
-                            ? (({ target }) => checkLoopExpr(target, frame, false))(_v)
-                            : _v._tag === "ETuple"
-                              ? (({ elements }) =>
-                                  firstSome(
-                                    (el: Expr) => checkLoopExpr(el, frame, false),
-                                    elements,
-                                  ))(_v)
-                              : _v._tag === "EArr"
-                                ? (({ elements }) =>
-                                    firstSome(
-                                      (el: SeqElem) =>
-                                        ((_v) =>
-                                          _v._tag === "SEExpr"
-                                            ? (({ expr: value }) =>
-                                                checkLoopExpr(value, frame, false))(_v)
-                                            : _v._tag === "SESpread"
-                                              ? (({ expr: value }) =>
-                                                  checkLoopExpr(value, frame, false))(_v)
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(el),
-                                      elements,
-                                    ))(_v)
-                                : _v._tag === "EList"
-                                  ? (({ elements }) =>
-                                      firstSome(
-                                        (el: SeqElem) =>
-                                          ((_v) =>
-                                            _v._tag === "SEExpr"
-                                              ? (({ expr: value }) =>
-                                                  checkLoopExpr(value, frame, false))(_v)
-                                              : _v._tag === "SESpread"
-                                                ? (({ expr: value }) =>
-                                                    checkLoopExpr(value, frame, false))(_v)
-                                                : (() => {
-                                                    throw new Error("non-exhaustive match");
-                                                  })())(el),
-                                        elements,
-                                      ))(_v)
-                                  : _v._tag === "ESet"
-                                    ? (({ elements }) =>
-                                        firstSome(
-                                          (el: SeqElem) =>
-                                            ((_v) =>
-                                              _v._tag === "SEExpr"
-                                                ? (({ expr: value }) =>
-                                                    checkLoopExpr(value, frame, false))(_v)
-                                                : _v._tag === "SESpread"
-                                                  ? (({ expr: value }) =>
-                                                      checkLoopExpr(value, frame, false))(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(el),
-                                          elements,
-                                        ))(_v)
-                                    : _v._tag === "EMap"
-                                      ? (({ entries }) =>
-                                          firstSome(
-                                            (entry: MapEntry) =>
-                                              _Option_orElse(
-                                                checkLoopExpr(entry.value, frame, false),
-                                                checkLoopExpr(entry.key, frame, false),
-                                              ),
-                                            entries,
-                                          ))(_v)
-                                      : _v._tag === "EInterp"
-                                        ? (({ parts }) =>
-                                            firstSome(
-                                              (part: InterpPart) =>
-                                                ((_v) =>
-                                                  _v._tag === "IPLit"
-                                                    ? (None as Option<PErr>)
-                                                    : _v._tag === "IPExpr"
-                                                      ? (({ expr: value }) =>
-                                                          checkLoopExpr(value, frame, false))(_v)
-                                                      : (() => {
-                                                          throw new Error("non-exhaustive match");
-                                                        })())(part),
-                                              parts,
-                                            ))(_v)
-                                        : (None as Option<PErr>))(e),
-);
+                  ) as Option<PErr>)(_v)
+              : (None as Option<PErr>))(frame),
+          checkLoopExpr(value, frame, false),
+        ),
+      );
+    }
+    case "ELetBind": {
+      const { value, body } = $match;
+      return _Option_orElse(
+        checkLoopExpr(body, None as Option<LoopFrame>, false),
+        checkLoopExpr(value, frame, false),
+      );
+    }
+    case "ELambda": {
+      const { body } = $match;
+      return checkLoopExpr(body, None as Option<LoopFrame>, false);
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return _Option_orElse(
+        firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+        checkLoopExpr(fn, frame, false),
+      );
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return _Option_orElse(checkLoopExpr(right, frame, false), checkLoopExpr(left, frame, false));
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return checkLoopDo(exprs, frame, tail);
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return _Option_orElse(
+        firstSome((field: Field) => checkLoopExpr(field.value, frame, false), fields),
+        _Option_match(
+          spread,
+          () => None as Option<PErr>,
+          (value) => checkLoopExpr(value, frame, false),
+        ),
+      );
+    }
+    case "EField": {
+      const { target } = $match;
+      return checkLoopExpr(target, frame, false);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return firstSome((el: Expr) => checkLoopExpr(el, frame, false), elements);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return firstSome((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return firstSome((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return firstSome((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return firstSome(
+        (entry: MapEntry) =>
+          _Option_orElse(
+            checkLoopExpr(entry.value, frame, false),
+            checkLoopExpr(entry.key, frame, false),
+          ),
+        entries,
+      );
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return firstSome((part: InterpPart) => {
+        const $match$ = part;
+        switch ($match$._tag) {
+          case "IPLit": {
+            return None as Option<PErr>;
+          }
+          case "IPExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExpr(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, parts);
+    }
+    default: {
+      return None as Option<PErr>;
+    }
+  }
+});
 const checkLoops: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
-  firstSome(
-    (stmt: Stmt) =>
-      ((_v) =>
-        _v._tag === "SLet"
-          ? (({ value }) => checkLoopExpr(value, None as Option<LoopFrame>, false))(_v)
-          : _v._tag === "SExpr"
-            ? (({ value }) => checkLoopExpr(value, None as Option<LoopFrame>, false))(_v)
-            : (None as Option<PErr>))(stmt),
-    stmts,
-  );
+  firstSome((stmt: Stmt) => {
+    const $match = stmt;
+    switch ($match._tag) {
+      case "SLet": {
+        const { value } = $match;
+        return checkLoopExpr(value, None as Option<LoopFrame>, false);
+      }
+      case "SExpr": {
+        const { value } = $match;
+        return checkLoopExpr(value, None as Option<LoopFrame>, false);
+      }
+      default: {
+        return None as Option<PErr>;
+      }
+    }
+  }, stmts);
 const loopParamErrors: <C, D>(
   params: ({ name: string; nameSpan: { end: number; start: number } & C } & D)[],
 ) => PErr[] = <C, D>(
@@ -2407,205 +2962,242 @@ const checkLoopDoAll: _Curry<[exprs: Expr[], frame: Option<LoopFrame>, tail: boo
   });
 const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean], PErr[]> = _curry(
   3,
-  (e: Expr, frame: Option<LoopFrame>, tail: boolean) =>
-    ((_v) =>
-      _v._tag === "ELoop"
-        ? (({ params, body }) => [
-            ...loopParamErrors(params),
-            ..._Array_flatMap((p: LoopParam) => checkLoopExprs(p.init, frame, false), params),
-            ...checkLoopExprs(
-              body,
-              Some({
-                arity: length(params),
-                names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
-              }) as Option<LoopFrame>,
-              true,
-            ),
-          ])(_v)
-        : _v._tag === "ERecur"
-          ? (({ args, span: sp }) =>
-              ((siteErrors: PErr[]) => [
-                ...siteErrors,
-                ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
-              ])(
-                _Option_match(
-                  frame,
-                  () => [checkErr("'recur' is only legal inside a loop body", sp)],
-                  (current) => [
-                    ...(!tail
-                      ? [checkErr("'recur' must be in tail position of its enclosing loop", sp)]
-                      : ([] as PErr[])),
-                    ...(!eq(length(args), current.arity)
-                      ? [
-                          checkErr(
-                            `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
-                            sp,
-                          ),
-                        ]
-                      : ([] as PErr[])),
-                  ],
-                ),
-              ))(_v)
-          : _v._tag === "ETernary"
-            ? (({ cond, thenE, elseE }) => [
-                ...checkLoopExprs(cond, frame, false),
-                ...checkLoopExprs(thenE, frame, tail),
-                ...checkLoopExprs(elseE, frame, tail),
-              ])(_v)
-            : _v._tag === "EMatch"
-              ? (({ scrutinee, arms }) => [
-                  ...checkLoopExprs(scrutinee, frame, false),
-                  ..._Array_flatMap(
-                    (arm: MatchArm) => [
-                      ..._Option_match(
-                        arm.guard,
-                        () => [] as PErr[],
-                        (guard) => checkLoopExprs(guard, frame, false),
-                      ),
-                      ...checkLoopExprs(arm.body, frame, tail),
-                    ],
-                    arms,
+  (e: Expr, frame: Option<LoopFrame>, tail: boolean) => {
+    const $match = e;
+    switch ($match._tag) {
+      case "ELoop": {
+        const { params, body } = $match;
+        return [
+          ...loopParamErrors(params),
+          ..._Array_flatMap((p: LoopParam) => checkLoopExprs(p.init, frame, false), params),
+          ...checkLoopExprs(
+            body,
+            Some({
+              arity: length(params),
+              names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
+            }) as Option<LoopFrame>,
+            true,
+          ),
+        ];
+      }
+      case "ERecur": {
+        const { args, span: sp } = $match;
+        const siteErrors: PErr[] = _Option_match(
+          frame,
+          () => [checkErr("'recur' is only legal inside a loop body", sp)],
+          (current) => [
+            ...(!tail
+              ? [checkErr("'recur' must be in tail position of its enclosing loop", sp)]
+              : ([] as PErr[])),
+            ...(!eq(length(args), current.arity)
+              ? [
+                  checkErr(
+                    `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                    sp,
+                  ),
+                ]
+              : ([] as PErr[])),
+          ],
+        );
+        return [
+          ...siteErrors,
+          ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
+        ];
+      }
+      case "ETernary": {
+        const { cond, thenE, elseE } = $match;
+        return [
+          ...checkLoopExprs(cond, frame, false),
+          ...checkLoopExprs(thenE, frame, tail),
+          ...checkLoopExprs(elseE, frame, tail),
+        ];
+      }
+      case "EMatch": {
+        const { scrutinee, arms } = $match;
+        return [
+          ...checkLoopExprs(scrutinee, frame, false),
+          ..._Array_flatMap(
+            (arm: MatchArm) => [
+              ..._Option_match(
+                arm.guard,
+                () => [] as PErr[],
+                (guard) => checkLoopExprs(guard, frame, false),
+              ),
+              ...checkLoopExprs(arm.body, frame, tail),
+            ],
+            arms,
+          ),
+        ];
+      }
+      case "ELetIn": {
+        const { name, nameSpan: nameSp, value, body } = $match;
+        return [
+          ...((_v) =>
+            _v._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_v)
+              ? (({ value: current }) => [
+                  checkErr(
+                    `'${name}' shadows a loop param inside the loop body; rename it`,
+                    nameSp,
                   ),
                 ])(_v)
-              : _v._tag === "ELetIn"
-                ? (({ name, nameSpan: nameSp, value, body }) => [
-                    ...((_v) =>
-                      _v._tag === "Some" &&
-                      (({ value: current }) => _Set_has(name, current.names))(_v)
-                        ? (({ value: current }) => [
-                            checkErr(
-                              `'${name}' shadows a loop param inside the loop body; rename it`,
-                              nameSp,
-                            ),
-                          ])(_v)
-                        : ([] as PErr[]))(frame),
-                    ...checkLoopExprs(value, frame, false),
-                    ...checkLoopExprs(body, frame, tail),
-                  ])(_v)
-                : _v._tag === "ELetBind"
-                  ? (({ value, body }) => [
-                      ...checkLoopExprs(value, frame, false),
-                      ...checkLoopExprs(body, None as Option<LoopFrame>, false),
-                    ])(_v)
-                  : _v._tag === "ELambda"
-                    ? (({ body }) => checkLoopExprs(body, None as Option<LoopFrame>, false))(_v)
-                    : _v._tag === "ECall"
-                      ? (({ fn, args }) => [
-                          ...checkLoopExprs(fn, frame, false),
-                          ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
-                        ])(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ left, right }) => [
-                            ...checkLoopExprs(left, frame, false),
-                            ...checkLoopExprs(right, frame, false),
-                          ])(_v)
-                        : _v._tag === "EDo"
-                          ? (({ exprs }) => checkLoopDoAll(exprs, frame, tail))(_v)
-                          : _v._tag === "ERecord"
-                            ? (({ fields, spread }) => [
-                                ..._Option_match(
-                                  spread,
-                                  () => [] as PErr[],
-                                  (value) => checkLoopExprs(value, frame, false),
-                                ),
-                                ..._Array_flatMap(
-                                  (field: Field) => checkLoopExprs(field.value, frame, false),
-                                  fields,
-                                ),
-                              ])(_v)
-                            : _v._tag === "EField"
-                              ? (({ target }) => checkLoopExprs(target, frame, false))(_v)
-                              : _v._tag === "ETuple"
-                                ? (({ elements }) =>
-                                    _Array_flatMap(
-                                      (el: Expr) => checkLoopExprs(el, frame, false),
-                                      elements,
-                                    ))(_v)
-                                : _v._tag === "EArr"
-                                  ? (({ elements }) =>
-                                      _Array_flatMap(
-                                        (el: SeqElem) =>
-                                          ((_v) =>
-                                            _v._tag === "SEExpr"
-                                              ? (({ expr: value }) =>
-                                                  checkLoopExprs(value, frame, false))(_v)
-                                              : _v._tag === "SESpread"
-                                                ? (({ expr: value }) =>
-                                                    checkLoopExprs(value, frame, false))(_v)
-                                                : (() => {
-                                                    throw new Error("non-exhaustive match");
-                                                  })())(el),
-                                        elements,
-                                      ))(_v)
-                                  : _v._tag === "EList"
-                                    ? (({ elements }) =>
-                                        _Array_flatMap(
-                                          (el: SeqElem) =>
-                                            ((_v) =>
-                                              _v._tag === "SEExpr"
-                                                ? (({ expr: value }) =>
-                                                    checkLoopExprs(value, frame, false))(_v)
-                                                : _v._tag === "SESpread"
-                                                  ? (({ expr: value }) =>
-                                                      checkLoopExprs(value, frame, false))(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(el),
-                                          elements,
-                                        ))(_v)
-                                    : _v._tag === "ESet"
-                                      ? (({ elements }) =>
-                                          _Array_flatMap(
-                                            (el: SeqElem) =>
-                                              ((_v) =>
-                                                _v._tag === "SEExpr"
-                                                  ? (({ expr: value }) =>
-                                                      checkLoopExprs(value, frame, false))(_v)
-                                                  : _v._tag === "SESpread"
-                                                    ? (({ expr: value }) =>
-                                                        checkLoopExprs(value, frame, false))(_v)
-                                                    : (() => {
-                                                        throw new Error("non-exhaustive match");
-                                                      })())(el),
-                                            elements,
-                                          ))(_v)
-                                      : _v._tag === "EMap"
-                                        ? (({ entries }) =>
-                                            _Array_flatMap(
-                                              (entry: MapEntry) => [
-                                                ...checkLoopExprs(entry.key, frame, false),
-                                                ...checkLoopExprs(entry.value, frame, false),
-                                              ],
-                                              entries,
-                                            ))(_v)
-                                        : _v._tag === "EInterp"
-                                          ? (({ parts }) =>
-                                              _Array_flatMap(
-                                                (part: InterpPart) =>
-                                                  ((_v) =>
-                                                    _v._tag === "IPLit"
-                                                      ? ([] as PErr[])
-                                                      : _v._tag === "IPExpr"
-                                                        ? (({ expr: value }) =>
-                                                            checkLoopExprs(value, frame, false))(_v)
-                                                        : (() => {
-                                                            throw new Error("non-exhaustive match");
-                                                          })())(part),
-                                                parts,
-                                              ))(_v)
-                                          : ([] as PErr[]))(e),
+              : ([] as PErr[]))(frame),
+          ...checkLoopExprs(value, frame, false),
+          ...checkLoopExprs(body, frame, tail),
+        ];
+      }
+      case "ELetBind": {
+        const { value, body } = $match;
+        return [
+          ...checkLoopExprs(value, frame, false),
+          ...checkLoopExprs(body, None as Option<LoopFrame>, false),
+        ];
+      }
+      case "ELambda": {
+        const { body } = $match;
+        return checkLoopExprs(body, None as Option<LoopFrame>, false);
+      }
+      case "ECall": {
+        const { fn, args } = $match;
+        return [
+          ...checkLoopExprs(fn, frame, false),
+          ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
+        ];
+      }
+      case "EPipe": {
+        const { left, right } = $match;
+        return [...checkLoopExprs(left, frame, false), ...checkLoopExprs(right, frame, false)];
+      }
+      case "EDo": {
+        const { exprs } = $match;
+        return checkLoopDoAll(exprs, frame, tail);
+      }
+      case "ERecord": {
+        const { fields, spread } = $match;
+        return [
+          ..._Option_match(
+            spread,
+            () => [] as PErr[],
+            (value) => checkLoopExprs(value, frame, false),
+          ),
+          ..._Array_flatMap((field: Field) => checkLoopExprs(field.value, frame, false), fields),
+        ];
+      }
+      case "EField": {
+        const { target } = $match;
+        return checkLoopExprs(target, frame, false);
+      }
+      case "ETuple": {
+        const { elements } = $match;
+        return _Array_flatMap((el: Expr) => checkLoopExprs(el, frame, false), elements);
+      }
+      case "EArr": {
+        const { elements } = $match;
+        return _Array_flatMap((el: SeqElem) => {
+          const $match$ = el;
+          switch ($match$._tag) {
+            case "SEExpr": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            case "SESpread": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            default: {
+              throw new Error("non-exhaustive match");
+            }
+          }
+        }, elements);
+      }
+      case "EList": {
+        const { elements } = $match;
+        return _Array_flatMap((el: SeqElem) => {
+          const $match$ = el;
+          switch ($match$._tag) {
+            case "SEExpr": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            case "SESpread": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            default: {
+              throw new Error("non-exhaustive match");
+            }
+          }
+        }, elements);
+      }
+      case "ESet": {
+        const { elements } = $match;
+        return _Array_flatMap((el: SeqElem) => {
+          const $match$ = el;
+          switch ($match$._tag) {
+            case "SEExpr": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            case "SESpread": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            default: {
+              throw new Error("non-exhaustive match");
+            }
+          }
+        }, elements);
+      }
+      case "EMap": {
+        const { entries } = $match;
+        return _Array_flatMap(
+          (entry: MapEntry) => [
+            ...checkLoopExprs(entry.key, frame, false),
+            ...checkLoopExprs(entry.value, frame, false),
+          ],
+          entries,
+        );
+      }
+      case "EInterp": {
+        const { parts } = $match;
+        return _Array_flatMap((part: InterpPart) => {
+          const $match$ = part;
+          switch ($match$._tag) {
+            case "IPLit": {
+              return [] as PErr[];
+            }
+            case "IPExpr": {
+              const { expr: value } = $match$;
+              return checkLoopExprs(value, frame, false);
+            }
+            default: {
+              throw new Error("non-exhaustive match");
+            }
+          }
+        }, parts);
+      }
+      default: {
+        return [] as PErr[];
+      }
+    }
+  },
 );
 const checkLoopsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
-  _Array_flatMap(
-    (stmt: Stmt) =>
-      ((_v) =>
-        _v._tag === "SLet"
-          ? (({ value }) => checkLoopExprs(value, None as Option<LoopFrame>, false))(_v)
-          : _v._tag === "SExpr"
-            ? (({ value }) => checkLoopExprs(value, None as Option<LoopFrame>, false))(_v)
-            : ([] as PErr[]))(stmt),
-    stmts,
-  );
+  _Array_flatMap((stmt: Stmt) => {
+    const $match = stmt;
+    switch ($match._tag) {
+      case "SLet": {
+        const { value } = $match;
+        return checkLoopExprs(value, None as Option<LoopFrame>, false);
+      }
+      case "SExpr": {
+        const { value } = $match;
+        return checkLoopExprs(value, None as Option<LoopFrame>, false);
+      }
+      default: {
+        return [] as PErr[];
+      }
+    }
+  }, stmts);
 const mergeMissing: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) =>
@@ -2643,36 +3235,62 @@ export const checkWith: <A, B>(
     stmts: Stmt[],
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
-  ) =>
-    _Option_match(
-      checkReservedNames(stmts),
-      () =>
-        _Option_match(
-          checkReservedWords(stmts),
-          () =>
-            _Option_match(
-              checkCtorFieldVars(stmts),
-              () =>
-                _Option_match(
-                  checkQualifiedTypeNames(stmts, quals),
-                  () =>
-                    _Option_match(
-                      checkLoops(stmts),
-                      () =>
-                        _Result_flatMap(
+  ) => {
+    const $match = checkReservedNames(stmts);
+    switch ($match._tag) {
+      case "Some": {
+        const { value: e } = $match;
+        return Err(e) as Result<Stmt[], PErr>;
+      }
+      case "None": {
+        const $match$ = checkReservedWords(stmts);
+        switch ($match$._tag) {
+          case "Some": {
+            const { value: e } = $match$;
+            return Err(e) as Result<Stmt[], PErr>;
+          }
+          case "None": {
+            const $match$$ = checkCtorFieldVars(stmts);
+            switch ($match$$._tag) {
+              case "Some": {
+                const { value: e } = $match$$;
+                return Err(e) as Result<Stmt[], PErr>;
+              }
+              case "None": {
+                const $match$$$ = checkQualifiedTypeNames(stmts, quals);
+                switch ($match$$$._tag) {
+                  case "Some": {
+                    const { value: e } = $match$$$;
+                    return Err(e) as Result<Stmt[], PErr>;
+                  }
+                  case "None": {
+                    const $match$$$$ = checkLoops(stmts);
+                    switch ($match$$$$._tag) {
+                      case "Some": {
+                        const { value: e } = $match$$$$;
+                        return Err(e) as Result<Stmt[], PErr>;
+                      }
+                      case "None": {
+                        return _Result_flatMap(
                           (reg0) =>
                             ((reg: Registry) =>
                               _Option_match(
-                                firstSome(
-                                  (s: Stmt) =>
-                                    ((_v) =>
-                                      _v._tag === "SLet"
-                                        ? (({ value }) => checkExpr(value, reg))(_v)
-                                        : _v._tag === "SExpr"
-                                          ? (({ value }) => checkExpr(value, reg))(_v)
-                                          : (None as Option<PErr>))(s),
-                                  stmts,
-                                ),
+                                firstSome((s: Stmt) => {
+                                  const $match$$$$$ = s;
+                                  switch ($match$$$$$._tag) {
+                                    case "SLet": {
+                                      const { value } = $match$$$$$;
+                                      return checkExpr(value, reg);
+                                    }
+                                    case "SExpr": {
+                                      const { value } = $match$$$$$;
+                                      return checkExpr(value, reg);
+                                    }
+                                    default: {
+                                      return None as Option<PErr>;
+                                    }
+                                  }
+                                }, stmts),
                                 () => Ok(stmts) as Result<Stmt[], PErr>,
                                 (e) => Err(e) as Result<Stmt[], PErr>,
                               ))({
@@ -2688,17 +3306,33 @@ export const checkWith: <A, B>(
                               ),
                             }),
                           buildRegistry(stmts),
-                        ),
-                      (e) => Err(e) as Result<Stmt[], PErr>,
-                    ),
-                  (e) => Err(e) as Result<Stmt[], PErr>,
-                ),
-              (e) => Err(e) as Result<Stmt[], PErr>,
-            ),
-          (e) => Err(e) as Result<Stmt[], PErr>,
-        ),
-      (e) => Err(e) as Result<Stmt[], PErr>,
-    ),
+                        );
+                      }
+                      default: {
+                        throw new Error("non-exhaustive match");
+                      }
+                    }
+                  }
+                  default: {
+                    throw new Error("non-exhaustive match");
+                  }
+                }
+              }
+              default: {
+                throw new Error("non-exhaustive match");
+              }
+            }
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
   checkWith(
@@ -2721,10 +3355,11 @@ export const checkAllWith: <A, B>(
     stmts: Stmt[],
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
-  ) =>
-    _Result_match(
-      buildRegistry(stmts),
-      (e) => {
+  ) => {
+    const $match = buildRegistry(stmts);
+    switch ($match._tag) {
+      case "Err": {
+        const { error: e } = $match;
         const errors: PErr[] = [
           ...checkReservedNamesAll(stmts),
           ...checkReservedWordsAll(stmts),
@@ -2736,8 +3371,9 @@ export const checkAllWith: <A, B>(
         return length(errors) === 0
           ? (Ok(stmts) as Result<Stmt[], PErr[]>)
           : (Err(errors) as Result<Stmt[], PErr[]>);
-      },
-      (reg0) => {
+      }
+      case "Ok": {
+        const { value: reg0 } = $match;
         const reg: Registry = {
           ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
           types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
@@ -2748,22 +3384,32 @@ export const checkAllWith: <A, B>(
           ...checkCtorFieldVarsAll(stmts),
           ...checkQualifiedTypeNamesAll(stmts, quals),
           ...checkLoopsAll(stmts),
-          ..._Array_flatMap(
-            (stmt: Stmt) =>
-              ((_v) =>
-                _v._tag === "SLet"
-                  ? (({ value }) => checkExprs(value, reg))(_v)
-                  : _v._tag === "SExpr"
-                    ? (({ value }) => checkExprs(value, reg))(_v)
-                    : ([] as PErr[]))(stmt),
-            stmts,
-          ),
+          ..._Array_flatMap((stmt: Stmt) => {
+            const $match$ = stmt;
+            switch ($match$._tag) {
+              case "SLet": {
+                const { value } = $match$;
+                return checkExprs(value, reg);
+              }
+              case "SExpr": {
+                const { value } = $match$;
+                return checkExprs(value, reg);
+              }
+              default: {
+                return [] as PErr[];
+              }
+            }
+          }, stmts),
         ];
         return length(errors) === 0
           ? (Ok(stmts) as Result<Stmt[], PErr[]>)
           : (Err(errors) as Result<Stmt[], PErr[]>);
-      },
-    ),
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 export const checkAll: (stmts: Stmt[]) => Result<Stmt[], PErr[]> = (stmts: Stmt[]) =>
   checkAllWith(

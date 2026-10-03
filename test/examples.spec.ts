@@ -15,14 +15,14 @@ const path = (p: string): string => repoPath(import.meta.url, p);
 
 test("builtin Result and Option matches use flat dispatch with one scrutinee evaluation", () => {
   const source = `
-let result = (read: () -> Result<number, string>, log: number -> unit) => switch read() {
+let result = (read: () -> Result<number, string>, log: number -> unit) => let matched = switch read() {
   | Ok(n) => let printed = log(n) in n + 1
   | Err(e) => Str.length(e)
-}
-let option = (read: () -> Option<number>, log: number -> unit) => switch read() {
+} in matched
+let option = (read: () -> Option<number>, log: number -> unit) => let matched = switch read() {
   | Some(n) => let printed = log(n) in n + 1
   | None => 0
-}
+} in matched
 `;
   const emitted = unwrapOk(compileTargets(source, { runtime: false }));
   expect(emitted.js).toContain("_Result_match(");
@@ -81,12 +81,74 @@ let option = (read: () -> Option<number>, log: number -> unit) => switch read() 
   expect(visits).toEqual([2, 5]);
 });
 
+test("function-tail constructor matches use scoped switch cases and direct returns", () => {
+  const source = `
+type Shape = | Dot | Box(value: number) | Pair(number, number)
+let $match = 10
+let run = (read: () -> Shape, log: number -> unit) => let offset = $match in switch read() {
+  | Dot => offset
+  | Box(offset) => let captured = () => offset in let printed = log(captured()) in switch Some(offset) {
+    | Some(n) => let n = n + 1 in n
+    | None => 0
+  }
+  | Pair(a, b) => a + b
+}
+let catchAll = x => switch x { | Dot => 0 | rest => switch rest { | Box(n) => n | _ => 9 } }
+let looping = x => switch x { | Box(n) => loop (i = 0, total = n) { i >= 3 ? total : recur(i + 1, total + i) } | _ => 0 }
+let shadowLoop = x => switch x { | Box(n) => loop (n = 0) { n >= 3 ? n : recur(n + 1) } | _ => 0 }
+`;
+  const emitted = unwrapOk(compileTargets(source, { runtime: false }));
+  for (const output of [emitted.js, emitted.ts]) {
+    expect(output).toContain("switch ($match$._tag)");
+    expect(output).toContain('case "Box":');
+    expect(output).toContain('case "Pair":');
+    expect(output).toContain("default:");
+    expect(output).not.toContain('._tag === "Box"');
+  }
+  const run = compileAndEval(source, "run") as (
+    read: () => unknown,
+    log: (n: number) => void,
+  ) => number;
+  const visits: number[] = [];
+  let reads = 0;
+  for (const [value, expected] of [
+    [{ _tag: "Dot" }, 10],
+    [{ _tag: "Box", value: 3 }, 4],
+    [{ _tag: "Pair", _0: 2, _1: 5 }, 7],
+  ] as const) {
+    expect(
+      run(
+        () => {
+          reads += 1;
+          return value;
+        },
+        (n) => visits.push(n),
+      ),
+    ).toBe(expected);
+  }
+  expect(reads).toBe(3);
+  expect(visits).toEqual([3]);
+  expect(() =>
+    run(
+      () => ({ _tag: "Invalid" }),
+      () => {},
+    ),
+  ).toThrow("non-exhaustive match");
+  const catchAll = compileAndEval(source, "catchAll") as (value: unknown) => number;
+  expect(catchAll({ _tag: "Box", value: 8 })).toBe(8);
+  expect(catchAll({ _tag: "Pair", _0: 1, _1: 2 })).toBe(9);
+  const looping = compileAndEval(source, "looping") as (value: unknown) => number;
+  const shadowLoop = compileAndEval(source, "shadowLoop") as (value: unknown) => number;
+  expect(looping({ _tag: "Box", value: 5 })).toBe(8);
+  expect(shadowLoop({ _tag: "Box", value: 5 })).toBe(3);
+});
+
 test("builtin match dispatch preserves guarded, nested and user-constructor fallbacks", () => {
   for (const source of [
-    "type Result a e = | Ok(value: a) | Err(error: e)\nlet f = x => switch x { | Ok(n) => n | Err(_) => 0 }",
-    "type Option a = | Some(value: a) | None\nlet f = x => switch x { | Some(n) => n | None => 0 }",
-    "let f = x => switch x { | Some(n) when n > 0 => n | Some(_) => 0 | None => 0 }",
-    "let f = x => switch x { | Ok(Some(n)) => n | Ok(None) => 0 | Err(_) => 0 }",
+    "type Result a e = | Ok(value: a) | Err(error: e)\nlet f = x => let matched = switch x { | Ok(n) => n | Err(_) => 0 } in matched",
+    "type Option a = | Some(value: a) | None\nlet f = x => let matched = switch x { | Some(n) => n | None => 0 } in matched",
+    "let f = x => let matched = switch x { | Some(n) when n > 0 => n | Some(_) => 0 | None => 0 } in matched",
+    "let f = x => let matched = switch x { | Ok(Some(n)) => n | Ok(None) => 0 | Err(_) => 0 } in matched",
   ]) {
     const output = unwrapOk(compileTargets(source, { runtime: false }));
     expect(output.js).not.toContain("_Result_match(");
@@ -96,8 +158,9 @@ test("builtin match dispatch preserves guarded, nested and user-constructor fall
 
 test("builtin match helpers cannot capture user bindings with their names", () => {
   const option =
-    "let _Option_match = x => 99\nlet f = x => switch x { | Some(n) => n | None => 0 }";
-  const result = "let f = (_Result_match, x) => switch x { | Ok(n) => n | Err(_) => 0 }";
+    "let _Option_match = x => 99\nlet f = x => let matched = switch x { | Some(n) => n | None => 0 } in matched";
+  const result =
+    "let f = (_Result_match, x) => let matched = switch x { | Ok(n) => n | Err(_) => 0 } in matched";
   const runOption = compileAndEval(option, "f") as (value: unknown) => number;
   const runResult = compileAndEval(result, "f") as (unused: unknown, value: unknown) => number;
   expect(runOption({ _tag: "Some", value: 7 })).toBe(7);

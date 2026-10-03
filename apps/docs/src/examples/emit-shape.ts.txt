@@ -5,15 +5,22 @@ export type Shape =
 import { _curry, pi, square } from "@mochi/runtime";
 
 const Circle = (_0: number): Shape => ({ _tag: "Circle", _0 });
-const area: (shape: Shape) => number = (shape: Shape) =>
-  ((_v) =>
-    _v._tag === "Circle"
-      ? (({ _0: r }) => pi * square(r))(_v)
-      : _v._tag === "Rect"
-        ? (({ _0: w, _1: h }) => w * h)(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(shape);
+const area: (shape: Shape) => number = (shape: Shape) => {
+  const $match = shape;
+  switch ($match._tag) {
+    case "Circle": {
+      const { _0: r } = $match;
+      return pi * square(r);
+    }
+    case "Rect": {
+      const { _0: w, _1: h } = $match;
+      return w * h;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const widen: <A>(
   k: number,
   box: { w: number } & A,

@@ -105,33 +105,50 @@ import {
   TEof,
 } from "../../lexer/lexer";
 
-const jxTokName: (t: Tok) => string = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TEq"
-      ? "eq"
-      : _v._tag === "TLbrace"
-        ? "lbrace"
-        : _v._tag === "TRbrace"
-          ? "rbrace"
-          : _v._tag === "TSpread"
-            ? "spread"
-            : _v._tag === "TSlash"
-              ? "slash"
-              : _v._tag === "TLt"
-                ? "lt"
-                : _v._tag === "TGt"
-                  ? "gt"
-                  : _v._tag === "TId"
-                    ? "id"
-                    : _v._tag === "TStr"
-                      ? "str"
-                      : _v._tag === "TNum"
-                        ? "num"
-                        : _v._tag === "TBool"
-                          ? "bool"
-                          : _v._tag === "TEof"
-                            ? "eof"
-                            : "tok")(t);
+const jxTokName: (t: Tok) => string = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TEq": {
+      return "eq";
+    }
+    case "TLbrace": {
+      return "lbrace";
+    }
+    case "TRbrace": {
+      return "rbrace";
+    }
+    case "TSpread": {
+      return "spread";
+    }
+    case "TSlash": {
+      return "slash";
+    }
+    case "TLt": {
+      return "lt";
+    }
+    case "TGt": {
+      return "gt";
+    }
+    case "TId": {
+      return "id";
+    }
+    case "TStr": {
+      return "str";
+    }
+    case "TNum": {
+      return "num";
+    }
+    case "TBool": {
+      return "bool";
+    }
+    case "TEof": {
+      return "eof";
+    }
+    default: {
+      return "tok";
+    }
+  }
+};
 const jxEofTok = { tok: TEof as Tok, start: 0, end: 0, doc: None };
 const jxTokAt: _Curry<[toks: LocTok[], i: number], LocTok> = _curry(
   2,
@@ -169,41 +186,61 @@ const jxExpectId: _Curry<
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = jxTokAt(toks, pos);
-  return ((_v) =>
-    _v._tag === "TId"
-      ? (({ value: name }) =>
-          Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
-            [Name, number],
-            { message: string; start: number; end: number }
-          >)(_v)
-      : ((t) => jxErrAt(`expected id, got ${jxTokName(t)}`, lt))(_v))(lt.tok);
+  const $match = lt.tok;
+  switch ($match._tag) {
+    case "TId": {
+      const { value: name } = $match;
+      return Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+        [Name, number],
+        { message: string; start: number; end: number }
+      >;
+    }
+    default: {
+      const t = $match;
+      return jxErrAt(`expected id, got ${jxTokName(t)}`, lt);
+    }
+  }
 });
 /**
  * Keyword spelling, mirroring `parser.mochi`'s `keywordText` (ADR 0077). The
  * plugin carries its own copy for the same reason it carries `jxTokName`: it
  * sees the token stream, not the parser's internals.
  */
-const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TLet"
-      ? (Some("let") as Option<string>)
-      : _v._tag === "TType"
-        ? (Some("type") as Option<string>)
-        : _v._tag === "TExtern"
-          ? (Some("extern") as Option<string>)
-          : _v._tag === "TSwitch"
-            ? (Some("switch") as Option<string>)
-            : _v._tag === "TLoop"
-              ? (Some("loop") as Option<string>)
-              : _v._tag === "TRecur"
-                ? (Some("recur") as Option<string>)
-                : _v._tag === "TDo"
-                  ? (Some("do") as Option<string>)
-                  : _v._tag === "TImport"
-                    ? (Some("import") as Option<string>)
-                    : _v._tag === "TExport"
-                      ? (Some("export") as Option<string>)
-                      : (None as Option<string>))(t);
+const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TLet": {
+      return Some("let") as Option<string>;
+    }
+    case "TType": {
+      return Some("type") as Option<string>;
+    }
+    case "TExtern": {
+      return Some("extern") as Option<string>;
+    }
+    case "TSwitch": {
+      return Some("switch") as Option<string>;
+    }
+    case "TLoop": {
+      return Some("loop") as Option<string>;
+    }
+    case "TRecur": {
+      return Some("recur") as Option<string>;
+    }
+    case "TDo": {
+      return Some("do") as Option<string>;
+    }
+    case "TImport": {
+      return Some("import") as Option<string>;
+    }
+    case "TExport": {
+      return Some("export") as Option<string>;
+    }
+    default: {
+      return None as Option<string>;
+    }
+  }
+};
 /**
  * Attribute name. A keyword is legal here (ADR 0077) — `type="button"` is the
  * case that forced it. A valueless attr lowers to `true`, not a reference, so
@@ -214,15 +251,22 @@ const jxExpectLabel: _Curry<
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = jxTokAt(toks, pos);
-  return _Option_match(
-    jxKeywordText(lt.tok),
-    () => jxExpectId(toks, pos),
-    (name) =>
-      Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+  const $match = jxKeywordText(lt.tok);
+  switch ($match._tag) {
+    case "Some": {
+      const { value: name } = $match;
+      return Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
         [Name, number],
         { message: string; start: number; end: number }
-      >,
-  );
+      >;
+    }
+    case "None": {
+      return jxExpectId(toks, pos);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
 });
 /**
  * Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
@@ -273,57 +317,106 @@ const jxExpectAttrName: _Curry<
 );
 const jxIsUpper: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(n >= 65, n <= 90), _Str_codeAt(0, s));
-const jxExprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "EUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "EBool"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "EStr"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "ERef"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "ECall"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "ELambda"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "EDo"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ span: sp }) => sp)(_v)
-                              : _v._tag === "ELoop"
-                                ? (({ span: sp }) => sp)(_v)
-                                : _v._tag === "ERecur"
-                                  ? (({ span: sp }) => sp)(_v)
-                                  : _v._tag === "ERecord"
-                                    ? (({ span: sp }) => sp)(_v)
-                                    : _v._tag === "EField"
-                                      ? (({ span: sp }) => sp)(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ span: sp }) => sp)(_v)
-                                        : _v._tag === "EArr"
-                                          ? (({ span: sp }) => sp)(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ span: sp }) => sp)(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ span: sp }) => sp)(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ span: sp }) => sp)(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ span: sp }) => sp)(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e);
+const jxExprSpan: (e: Expr) => SpanAt = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERef": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ECall": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELambda": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetIn": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EPipe": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EDo": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETernary": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMatch": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELoop": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecur": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EField": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ESet": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMap": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EInterp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const makeJsxCall: <B>(
   tagExpr: Expr,
   fields: Field[],
@@ -723,15 +816,22 @@ export const parseJsxAtom: _Curry<
           { message: string; start: number; end: number }
         >),
 );
-const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) =>
-  ((_v) =>
-    _v._tag === "SEExpr"
-      ? (({ expr: e }) => e)(_v)
-      : _v._tag === "SESpread"
-        ? (({ expr: e }) => e)(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(el);
+const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
+  const $match = el;
+  switch ($match._tag) {
+    case "SEExpr": {
+      const { expr: e } = $match;
+      return e;
+    }
+    case "SESpread": {
+      const { expr: e } = $match;
+      return e;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const inferJsxArrElems: <A, B, C>(
   elements: SeqElem[],
   st: A,
@@ -783,18 +883,24 @@ const inferJsxChildren: <A, B, C>(
  */
 const rowField: _Curry<[row: Row, label: string], Option<Ty>> = _curry(
   2,
-  (row: Row, label: string) =>
-    ((_v) =>
-      _v._tag === "RowExtend"
-        ? (({ label: l, fieldType, rest }) =>
-            eq(l, label) ? (Some(fieldType) as Option<Ty>) : rowField(rest, label))(_v)
-        : _v._tag === "RowEmpty"
-          ? (None as Option<Ty>)
-          : _v._tag === "RowVar"
-            ? (None as Option<Ty>)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(row),
+  (row: Row, label: string) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowExtend": {
+        const { label: l, fieldType, rest } = $match;
+        return eq(l, label) ? (Some(fieldType) as Option<Ty>) : rowField(rest, label);
+      }
+      case "RowEmpty": {
+        return None as Option<Ty>;
+      }
+      case "RowVar": {
+        return None as Option<Ty>;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const fieldNamed: <A, B>(label: A, fields: ({ name: A } & B)[]) => boolean = _curry(
   2,
@@ -814,10 +920,18 @@ const fieldNamed: <A, B>(label: A, fields: ({ name: A } & B)[]) => boolean = _cu
 );
 const recordHasAttr: _Curry<[expr: Expr, label: string], boolean> = _curry(
   2,
-  (expr: Expr, label: string) =>
-    ((_v) => (_v._tag === "ERecord" ? (({ fields }) => fieldNamed(label, fields))(_v) : false))(
-      expr,
-    ),
+  (expr: Expr, label: string) => {
+    const $match = expr;
+    switch ($match._tag) {
+      case "ERecord": {
+        const { fields } = $match;
+        return fieldNamed(label, fields);
+      }
+      default: {
+        return false;
+      }
+    }
+  },
 );
 const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
   ((_v) =>
@@ -834,20 +948,32 @@ const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
 const jsxPropsWithSynthesizedChildren: _Curry<
   [propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]],
   Ty
-> = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) =>
-  _Option_match(
-    rowField(expectedRow, "children"),
-    () => propsT,
-    (expectedChildren) =>
-      ((_v) =>
-        _v._tag === "TyRecord"
-          ? (({ row: prow }) =>
-              or(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0)
-                ? propsT
-                : tRecord(rExtend("children", expectedChildren, prow)))(_v)
-          : propsT)(propsT),
-  ),
-);
+> = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) => {
+  const $match = rowField(expectedRow, "children");
+  switch ($match._tag) {
+    case "None": {
+      return propsT;
+    }
+    case "Some": {
+      const { value: expectedChildren } = $match;
+      const $match$ = propsT;
+      switch ($match$._tag) {
+        case "TyRecord": {
+          const { row: prow } = $match$;
+          return or(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0)
+            ? propsT
+            : tRecord(rExtend("children", expectedChildren, prow));
+        }
+        default: {
+          return propsT;
+        }
+      }
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 import { intrinsicElements as jsxIntrinsicElements } from "./jsx-schema.gen.mjs";
 /**
  * A kind string from the generated schema as an HM type. `event` and `any` are
@@ -957,15 +1083,24 @@ const jxTypeErr: <A>(message: string, sp: SpanAt) => Result<A, BoundErr> = _curr
 );
 const isHandlerName: (name: string) => boolean = (name: string) =>
   and(and(_Str_startsWith("on", name), _Str_length(name) > 2), jxIsUpper(_Str_slice(2, 3, name)));
-const isFnOrOpen: (t: Ty) => boolean = (t: Ty) =>
-  ((_v) =>
-    _v._tag === "TyFn"
-      ? true
-      : _v._tag === "TyVar"
-        ? true
-        : _v._tag === "TyCon"
-          ? (({ name }) => name === "any")(_v)
-          : false)(t);
+const isFnOrOpen: (t: Ty) => boolean = (t: Ty) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyFn": {
+      return true;
+    }
+    case "TyVar": {
+      return true;
+    }
+    case "TyCon": {
+      const { name } = $match;
+      return name === "any";
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const checkHandler: <A, B, C>(
   name: string,
   value: Expr,
@@ -1064,11 +1199,14 @@ const inferIntrinsicFields: <A>(
                                   : (None as Option<string>),
                               (k) => Some(k) as Option<string>,
                             );
-                            return _Option_match(
-                              expected,
-                              () => unknownProp(tag, f.name, f.value, m),
-                              (kind) =>
-                                kind === "event"
+                            const $match = expected;
+                            switch ($match._tag) {
+                              case "None": {
+                                return unknownProp(tag, f.name, f.value, m);
+                              }
+                              case "Some": {
+                                const { value: kind } = $match;
+                                return kind === "event"
                                   ? checkHandler(f.name, f.value, st, api, (st1: St) =>
                                       cont(noteProp(f, handlerType, st1)),
                                     )
@@ -1098,8 +1236,12 @@ const inferIntrinsicFields: <A>(
                                               ),
                                             api.inferExpr(f.value, st),
                                           ),
-                                      ),
-                            );
+                                      );
+                              }
+                              default: {
+                                throw new Error("non-exhaustive match");
+                              }
+                            }
                           },
                         ),
                   (msg) => jxTypeErr(msg, jxExprSpan(f.value)),
@@ -1197,22 +1339,36 @@ const inferStringTag: <A>(
  */
 const noteComponentProps: _Curry<[propsExpr: Expr, expectedRow: Row, st: St], St> = _curry(
   3,
-  (propsExpr: Expr, expectedRow: Row, st: St) =>
-    ((_v) =>
-      _v._tag === "ERecord"
-        ? (({ fields }) =>
-            reduce(
-              _curry(2, (acc: St, f: Field) =>
-                _Option_match(
-                  rowField(expectedRow, f.name),
-                  () => acc,
-                  (t) => noteProp(f, zonk(t, acc), acc),
-                ),
-              ),
-              st,
-              fields,
-            ))(_v)
-        : st)(propsExpr),
+  (propsExpr: Expr, expectedRow: Row, st: St) => {
+    const $match = propsExpr;
+    switch ($match._tag) {
+      case "ERecord": {
+        const { fields } = $match;
+        return reduce(
+          _curry(2, (acc: St, f: Field) => {
+            const $match$ = rowField(expectedRow, f.name);
+            switch ($match$._tag) {
+              case "Some": {
+                const { value: t } = $match$;
+                return noteProp(f, zonk(t, acc), acc);
+              }
+              case "None": {
+                return acc;
+              }
+              default: {
+                throw new Error("non-exhaustive match");
+              }
+            }
+          }),
+          st,
+          fields,
+        );
+      }
+      default: {
+        return st;
+      }
+    }
+  },
 );
 const inferJsxCall: <A>(
   tagExpr: Expr,
@@ -1242,48 +1398,56 @@ const inferJsxCall: <A>(
             _Result_flatMap(
               (st3: St) => {
                 const zonkedTag: Ty = zonk(tagT, st3);
-                return ((_v) =>
-                  _v._tag === "TyFn"
-                    ? (({ from, to }) =>
-                        ((_v) =>
-                          _v._tag === "TyRecord"
-                            ? (({ row: expectedRow }) =>
-                                ((propsForCheck: Ty) =>
-                                  _Result_map(
-                                    (st4: St) =>
-                                      _tuple(
-                                        zonk(to, st4),
-                                        noteComponentProps(propsExpr, expectedRow, st4),
-                                      ),
-                                    api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
-                                  ))(
-                                  jsxPropsWithSynthesizedChildren(
-                                    propsT,
-                                    propsExpr,
-                                    expectedRow,
-                                    restArgs,
-                                  ),
-                                ))(_v)
-                            : (Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>))(
-                          from,
-                        ))(_v)
-                    : ((_v) =>
-                        _v._tag === "EStr"
-                          ? (({ value: tagName }) =>
-                              ((_v) =>
-                                _v._tag === "ERecord"
-                                  ? (({ fields }) =>
-                                      _Result_map(
-                                        (st4: St) => _tuple(tPrim("VNode"), st4),
-                                        inferStringTag(tagName, tagExpr, fields, st3, api),
-                                      ))(_v)
-                                  : (Ok(_tuple(tPrim("VNode"), st3)) as Result<
-                                      [Ty, St],
-                                      BoundErr
-                                    >))(propsExpr))(_v)
-                          : (Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>))(
-                        tagExpr,
-                      ))(zonkedTag);
+                const $match = zonkedTag;
+                switch ($match._tag) {
+                  case "TyFn": {
+                    const { from, to } = $match;
+                    const $match$ = from;
+                    switch ($match$._tag) {
+                      case "TyRecord": {
+                        const { row: expectedRow } = $match$;
+                        const propsForCheck: Ty = jsxPropsWithSynthesizedChildren(
+                          propsT,
+                          propsExpr,
+                          expectedRow,
+                          restArgs,
+                        );
+                        return _Result_map(
+                          (st4: St) =>
+                            _tuple(zonk(to, st4), noteComponentProps(propsExpr, expectedRow, st4)),
+                          api.unify(propsForCheck, from, st3, jxExprSpan(propsExpr)),
+                        );
+                      }
+                      default: {
+                        return Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>;
+                      }
+                    }
+                  }
+                  default: {
+                    const $match$ = tagExpr;
+                    switch ($match$._tag) {
+                      case "EStr": {
+                        const { value: tagName } = $match$;
+                        const $match$$ = propsExpr;
+                        switch ($match$$._tag) {
+                          case "ERecord": {
+                            const { fields } = $match$$;
+                            return _Result_map(
+                              (st4: St) => _tuple(tPrim("VNode"), st4),
+                              inferStringTag(tagName, tagExpr, fields, st3, api),
+                            );
+                          }
+                          default: {
+                            return Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>;
+                          }
+                        }
+                      }
+                      default: {
+                        return Ok(_tuple(tPrim("VNode"), st3)) as Result<[Ty, St], BoundErr>;
+                      }
+                    }
+                  }
+                }
               },
               inferJsxChildren(restArgs, st2, api.inferExpr),
             ),
@@ -1317,12 +1481,12 @@ export const inferJsxCallHook: <A, B>(
       unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     } & B,
-  ) =>
-    _Option_match(
-      origin,
-      () => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>,
-      (o) =>
-        o === "jsx"
+  ) => {
+    const $match = origin;
+    switch ($match._tag) {
+      case "Some": {
+        const { value: o } = $match;
+        return o === "jsx"
           ? ((_v) =>
               _v.length >= 2
                 ? (([tagExpr, propsExpr, ...rest]) =>
@@ -1331,8 +1495,16 @@ export const inferJsxCallHook: <A, B>(
                       inferJsxCall(tagExpr, propsExpr, rest, st, api),
                     ))(_v)
                 : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(args)
-          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>),
-    ),
+          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>);
+      }
+      case "None": {
+        return Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const vnodeTs: <A>(api: { tsType: (a: Ty) => string } & A) => string = <A>(
   api: { tsType: (a: Ty) => string } & A,
@@ -1350,8 +1522,18 @@ const returnsVNode: (t: Ty) => boolean = (t: Ty) =>
       : _v._tag === "TyCon" && _v.name === "VNode"
         ? true
         : false)(t);
-const isComponentType: (t: Ty) => boolean = (t: Ty) =>
-  ((_v) => (_v._tag === "TyFn" ? (({ to: toT }) => returnsVNode(toT))(_v) : false))(t);
+const isComponentType: (t: Ty) => boolean = (t: Ty) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyFn": {
+      const { to: toT } = $match;
+      return returnsVNode(toT);
+    }
+    default: {
+      return false;
+    }
+  }
+};
 /**
  * A lambda whose body is parser-synthesized JSX (ADR 0011 §5), for a binding
  * whose return has not pinned to `VNode` yet.
@@ -1363,8 +1545,18 @@ const jsxBodied: (body: Expr) => boolean = (body: Expr) =>
       : _v._tag === "ECall" && _v.origin._tag === "Some" && _v.origin.value === "jsx"
         ? true
         : false)(body);
-const isJsxComponentLambda: (value: Expr) => boolean = (value: Expr) =>
-  ((_v) => (_v._tag === "ELambda" ? (({ body }) => jsxBodied(body))(_v) : false))(value);
+const isJsxComponentLambda: (value: Expr) => boolean = (value: Expr) => {
+  const $match = value;
+  switch ($match._tag) {
+    case "ELambda": {
+      const { body } = $match;
+      return jsxBodied(body);
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const isHandlerLabel: (label: string) => boolean = (label: string) => {
   const third: boolean = _Option_exists(
     (n: number) => and(n >= 65, n <= 90),
@@ -1392,18 +1584,25 @@ const propFieldsFrom: <A>(
   acc: string[],
 ) => [string[], boolean] = _curry(
   3,
-  <A>(row: Row, api: { tsType: (a: Ty) => string } & A, acc: string[]) =>
-    ((_v) =>
-      _v._tag === "RowExtend"
-        ? (({ label, fieldType, rest }) =>
-            propFieldsFrom(
-              rest,
-              api,
-              _Array_append(`${label}: ${componentPropFieldTs(label, fieldType, api)}`, acc),
-            ))(_v)
-        : _v._tag === "RowVar"
-          ? _tuple(acc, true)
-          : _tuple(acc, false))(row),
+  <A>(row: Row, api: { tsType: (a: Ty) => string } & A, acc: string[]) => {
+    const $match = row;
+    switch ($match._tag) {
+      case "RowExtend": {
+        const { label, fieldType, rest } = $match;
+        return propFieldsFrom(
+          rest,
+          api,
+          _Array_append(`${label}: ${componentPropFieldTs(label, fieldType, api)}`, acc),
+        );
+      }
+      case "RowVar": {
+        return _tuple(acc, true);
+      }
+      default: {
+        return _tuple(acc, false);
+      }
+    }
+  },
 );
 const hasField: _Curry<[fields: string[], name: string], boolean> = _curry(
   2,
@@ -1432,18 +1631,33 @@ const componentPropsParamTs: <A>(
   api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
 ) => string = _curry(
   2,
-  <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
-    ((_v) =>
-      _v._tag === "TyRecord"
-        ? (({ row }) =>
-            _Option_match(
-              api.aliasOf(row),
-              () => componentPropsTs(row, api),
-              (name) => name,
-            ))(_v)
-        : _v._tag === "TyVar"
-          ? "Record<string, unknown>"
-          : api.tsType(t))(t),
+  <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyRecord": {
+        const { row } = $match;
+        const $match$ = api.aliasOf(row);
+        switch ($match$._tag) {
+          case "Some": {
+            const { value: name } = $match$;
+            return name;
+          }
+          case "None": {
+            return componentPropsTs(row, api);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      case "TyVar": {
+        return "Record<string, unknown>";
+      }
+      default: {
+        return api.tsType(t);
+      }
+    }
+  },
 );
 const extraParamTs: <A>(t: Ty, api: { tsType: (a: Ty) => string } & A) => string = _curry(
   2,
@@ -1465,17 +1679,23 @@ const extraParamsFrom: <A>(
   acc: string[],
 ) => string[] = _curry(
   4,
-  <A>(t: Ty, api: { tsType: (a: Ty) => string } & A, i: number, acc: string[]) =>
-    ((_v) =>
-      _v._tag === "TyFn"
-        ? (({ from: fromT, to: toT }) =>
-            extraParamsFrom(
-              toT,
-              api,
-              i + 1,
-              _Array_append(`_${show(i)}: ${extraParamTs(fromT, api)}`, acc),
-            ))(_v)
-        : acc)(t),
+  <A>(t: Ty, api: { tsType: (a: Ty) => string } & A, i: number, acc: string[]) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyFn": {
+        const { from: fromT, to: toT } = $match;
+        return extraParamsFrom(
+          toT,
+          api,
+          i + 1,
+          _Array_append(`_${show(i)}: ${extraParamTs(fromT, api)}`, acc),
+        );
+      }
+      default: {
+        return acc;
+      }
+    }
+  },
 );
 /**
  * A multi-param component is `_curry`'d like any other function, so it takes
@@ -1486,18 +1706,22 @@ const componentSig: <A>(
   api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A,
 ) => string = _curry(
   2,
-  <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) =>
-    ((_v) =>
-      _v._tag === "TyFn"
-        ? (({ from: fromT, to: toT }) =>
-            ((props: string) =>
-              ((extras: string[]) =>
-                length(extras) === 0
-                  ? `(${props}) => ${vnodeTs(api)}`
-                  : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], ${vnodeTs(api)}>`)(
-                extraParamsFrom(toT, api, 1, [] as string[]),
-              ))(`props: ${componentPropsParamTs(fromT, api)}`))(_v)
-        : `(props: Record<string, unknown>) => ${vnodeTs(api)}`)(t),
+  <A>(t: Ty, api: { aliasOf: (a: Row) => Option<string>; tsType: (a: Ty) => string } & A) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyFn": {
+        const { from: fromT, to: toT } = $match;
+        const props: string = `props: ${componentPropsParamTs(fromT, api)}`;
+        const extras: string[] = extraParamsFrom(toT, api, 1, [] as string[]);
+        return length(extras) === 0
+          ? `(${props}) => ${vnodeTs(api)}`
+          : `_Curry<[${_Str_join(", ", _Array_concat([props], extras))}], ${vnodeTs(api)}>`;
+      }
+      default: {
+        return `(props: Record<string, unknown>) => ${vnodeTs(api)}`;
+      }
+    }
+  },
 );
 export const componentBindingTs: <A>(
   value: Expr,
@@ -1551,8 +1775,20 @@ const jsxShape: (e: Expr) => Option<JsxShape> = (e: Expr) =>
       : (None as Option<JsxShape>))(e);
 const isFragment: (tag: Expr) => boolean = (tag: Expr) =>
   ((_v) => (_v._tag === "EStr" && _v.value === "Fragment" ? true : false))(tag);
-const jsxTag: _Curry<[tag: Expr, api: FormatApi], string> = _curry(2, (tag: Expr, api: FormatApi) =>
-  ((_v) => (_v._tag === "EStr" ? (({ value }) => value)(_v) : api.flat(api.memberD(tag))))(tag),
+const jsxTag: _Curry<[tag: Expr, api: FormatApi], string> = _curry(
+  2,
+  (tag: Expr, api: FormatApi) => {
+    const $match = tag;
+    switch ($match._tag) {
+      case "EStr": {
+        const { value } = $match;
+        return value;
+      }
+      default: {
+        return api.flat(api.memberD(tag));
+      }
+    }
+  },
 );
 const jsxHoleD: _Curry<[open: string, e: Expr, api: FormatApi], Doc> = _curry(
   3,
@@ -1591,17 +1827,22 @@ const jsxOpenD: _Curry<[tag: string, attrs: Doc[], selfClosing: boolean], Doc> =
 );
 const jsxChildD: _Curry<[child: SeqElem, api: FormatApi], Doc> = _curry(
   2,
-  (child: SeqElem, api: FormatApi) =>
-    ((_v) =>
-      _v._tag === "SEExpr"
-        ? (({ expr: e }) => (_Option_isSome(jsxShape(e)) ? api.exprD(e) : jsxHoleD("{", e, api)))(
-            _v,
-          )
-        : _v._tag === "SESpread"
-          ? (({ expr: e }) => jsxHoleD("{...", e, api))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(child),
+  (child: SeqElem, api: FormatApi) => {
+    const $match = child;
+    switch ($match._tag) {
+      case "SEExpr": {
+        const { expr: e } = $match;
+        return _Option_isSome(jsxShape(e)) ? api.exprD(e) : jsxHoleD("{", e, api);
+      }
+      case "SESpread": {
+        const { expr: e } = $match;
+        return jsxHoleD("{...", e, api);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
   2,
@@ -1623,11 +1864,14 @@ const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
  */
 export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
   2,
-  (e: Expr, api: FormatApi) =>
-    _Option_match(
-      jsxShape(e),
-      () => None as Option<Doc>,
-      (shape) => {
+  (e: Expr, api: FormatApi) => {
+    const $match = jsxShape(e);
+    switch ($match._tag) {
+      case "None": {
+        return None as Option<Doc>;
+      }
+      case "Some": {
+        const { value: shape } = $match;
         const fragment: boolean = isFragment(shape.tag);
         const tag: string = fragment ? "" : jsxTag(shape.tag, api);
         const attrs: Doc[] = jsxAttrsD(shape, api);
@@ -1650,8 +1894,12 @@ export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
                 ]),
               ),
             ) as Option<Doc>);
-      },
-    ),
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 export const jsxPlugin = {
   name: "jsx",

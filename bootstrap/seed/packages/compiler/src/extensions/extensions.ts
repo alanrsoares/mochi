@@ -41,12 +41,21 @@ export const PREACT_PLUGIN = preactPlugin;
  */
 const shadowing: <A, B>(ps: ({ name: A } & B)[], b: { name: A } & B) => { name: A } & B = _curry(
   2,
-  <A, B>(ps: ({ name: A } & B)[], b: { name: A } & B) =>
-    _Option_match(
-      _Array_find((p: { name: A } & B) => eq(p.name, b.name), ps),
-      () => b,
-      (p) => p,
-    ),
+  <A, B>(ps: ({ name: A } & B)[], b: { name: A } & B) => {
+    const $match = _Array_find((p: { name: A } & B) => eq(p.name, b.name), ps);
+    switch ($match._tag) {
+      case "Some": {
+        const { value: p } = $match;
+        return p;
+      }
+      case "None": {
+        return b;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 /**
  * `pluginsOpt` is Option [LanguagePlugin]: None = default, Some([]) = opt-out.
@@ -58,12 +67,15 @@ export const resolvePlugins: <A, B>(
   builtins: ({ name: A } & B)[],
 ) => ({ name: A } & B)[] = _curry(
   2,
-  <A, B>(pluginsOpt: Option<({ name: A } & B)[]>, builtins: ({ name: A } & B)[]) =>
-    _Option_match(
-      pluginsOpt,
-      () => builtins,
-      (ps) =>
-        length(ps) === 0
+  <A, B>(pluginsOpt: Option<({ name: A } & B)[]>, builtins: ({ name: A } & B)[]) => {
+    const $match = pluginsOpt;
+    switch ($match._tag) {
+      case "None": {
+        return builtins;
+      }
+      case "Some": {
+        const { value: ps } = $match;
+        return length(ps) === 0
           ? ([] as ({ name: A } & B)[])
           : _Array_concat(
               map((b: { name: A } & B) => shadowing(ps, b), builtins),
@@ -72,8 +84,13 @@ export const resolvePlugins: <A, B>(
                   length(filter((b: { name: A } & B) => eq(b.name, p.name), builtins)) === 0,
                 ps,
               ),
-            ),
-    ),
+            );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 export const resolvePluginsDefault: <B, C, D, E, F>(
   pluginsOpt: Option<
@@ -211,18 +228,33 @@ const inferHooksFrom: <A, B>(
   plugins: ({ inferCall: Option<A> } & B)[],
   i: number,
   acc: A[],
-) => A[] = _curry(3, <A, B>(plugins: ({ inferCall: Option<A> } & B)[], i: number, acc: A[]) =>
-  _Option_match(
-    _Array_get(i, plugins),
-    () => acc,
-    (p) =>
-      _Option_match(
-        p.inferCall,
-        () => inferHooksFrom(plugins, i + 1, acc),
-        (hook) => inferHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-      ),
-  ),
-);
+) => A[] = _curry(3, <A, B>(plugins: ({ inferCall: Option<A> } & B)[], i: number, acc: A[]) => {
+  const $match = _Array_get(i, plugins);
+  switch ($match._tag) {
+    case "None": {
+      return acc;
+    }
+    case "Some": {
+      const { value: p } = $match;
+      const $match$ = p.inferCall;
+      switch ($match$._tag) {
+        case "Some": {
+          const { value: hook } = $match$;
+          return inferHooksFrom(plugins, i + 1, _Array_append(hook, acc));
+        }
+        case "None": {
+          return inferHooksFrom(plugins, i + 1, acc);
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 export const inferCallHooksOf: <A, B>(plugins: ({ inferCall: Option<A> } & B)[]) => A[] = <A, B>(
   plugins: ({ inferCall: Option<A> } & B)[],
 ) => inferHooksFrom(plugins, 0, [] as A[]);
@@ -254,12 +286,21 @@ export const runParseHooks: <A, B, C, D, E>(
           _Result_match(
             hook(toks, pos, parseExpr),
             (e) => Err(e),
-            (v) =>
-              _Option_match(
-                v,
-                () => runParseHooks(rest, toks, pos, parseExpr),
-                (claim) => Ok(Some(claim)),
-              ),
+            (v) => {
+              const $match = v;
+              switch ($match._tag) {
+                case "None": {
+                  return runParseHooks(rest, toks, pos, parseExpr);
+                }
+                case "Some": {
+                  const { value: claim } = $match;
+                  return Ok(Some(claim));
+                }
+                default: {
+                  throw new Error("non-exhaustive match");
+                }
+              }
+            },
           ),
       )
       .otherwise(() => {
@@ -297,12 +338,21 @@ export const runInferCallHooks: <A, B, C, D, E, F, G>(
           _Result_match(
             hook(fn, args, origin, st, api),
             (e) => Err(e),
-            (v) =>
-              _Option_match(
-                v,
-                () => runInferCallHooks(rest, fn, args, origin, st, api),
-                (claim) => Ok(Some(claim)),
-              ),
+            (v) => {
+              const $match = v;
+              switch ($match._tag) {
+                case "None": {
+                  return runInferCallHooks(rest, fn, args, origin, st, api);
+                }
+                case "Some": {
+                  const { value: claim } = $match;
+                  return Ok(Some(claim));
+                }
+                default: {
+                  throw new Error("non-exhaustive match");
+                }
+              }
+            },
           ),
       )
       .otherwise(() => {
@@ -310,34 +360,64 @@ export const runInferCallHooks: <A, B, C, D, E, F, G>(
       }),
 );
 const formatHooksFrom: <A, B>(plugins: ({ format: Option<A> } & B)[], i: number, acc: A[]) => A[] =
-  _curry(3, <A, B>(plugins: ({ format: Option<A> } & B)[], i: number, acc: A[]) =>
-    _Option_match(
-      _Array_get(i, plugins),
-      () => acc,
-      (p) =>
-        _Option_match(
-          p.format,
-          () => formatHooksFrom(plugins, i + 1, acc),
-          (hook) => formatHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-        ),
-    ),
-  );
+  _curry(3, <A, B>(plugins: ({ format: Option<A> } & B)[], i: number, acc: A[]) => {
+    const $match = _Array_get(i, plugins);
+    switch ($match._tag) {
+      case "None": {
+        return acc;
+      }
+      case "Some": {
+        const { value: p } = $match;
+        const $match$ = p.format;
+        switch ($match$._tag) {
+          case "Some": {
+            const { value: hook } = $match$;
+            return formatHooksFrom(plugins, i + 1, _Array_append(hook, acc));
+          }
+          case "None": {
+            return formatHooksFrom(plugins, i + 1, acc);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  });
 const formatDocHooksFrom: <A, B>(
   plugins: ({ formatDoc: Option<A> } & B)[],
   i: number,
   acc: A[],
-) => A[] = _curry(3, <A, B>(plugins: ({ formatDoc: Option<A> } & B)[], i: number, acc: A[]) =>
-  _Option_match(
-    _Array_get(i, plugins),
-    () => acc,
-    (p) =>
-      _Option_match(
-        p.formatDoc,
-        () => formatDocHooksFrom(plugins, i + 1, acc),
-        (hook) => formatDocHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-      ),
-  ),
-);
+) => A[] = _curry(3, <A, B>(plugins: ({ formatDoc: Option<A> } & B)[], i: number, acc: A[]) => {
+  const $match = _Array_get(i, plugins);
+  switch ($match._tag) {
+    case "None": {
+      return acc;
+    }
+    case "Some": {
+      const { value: p } = $match;
+      const $match$ = p.formatDoc;
+      switch ($match$._tag) {
+        case "Some": {
+          const { value: hook } = $match$;
+          return formatDocHooksFrom(plugins, i + 1, _Array_append(hook, acc));
+        }
+        case "None": {
+          return formatDocHooksFrom(plugins, i + 1, acc);
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 /**
  * Both kinds of format hook (ADR 0112): `rewrite` swaps a node for another
  * before layout, `layout` prints a node itself.
@@ -431,18 +511,33 @@ export const formatHooksFor: <B, C, D, E, F>(
   >,
 ) => formatHooksOf(resolvePluginsDefault(pluginsOpt));
 const dtsHooksFrom: <A, B>(plugins: ({ dtsBinding: Option<A> } & B)[], i: number, acc: A[]) => A[] =
-  _curry(3, <A, B>(plugins: ({ dtsBinding: Option<A> } & B)[], i: number, acc: A[]) =>
-    _Option_match(
-      _Array_get(i, plugins),
-      () => acc,
-      (p) =>
-        _Option_match(
-          p.dtsBinding,
-          () => dtsHooksFrom(plugins, i + 1, acc),
-          (hook) => dtsHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-        ),
-    ),
-  );
+  _curry(3, <A, B>(plugins: ({ dtsBinding: Option<A> } & B)[], i: number, acc: A[]) => {
+    const $match = _Array_get(i, plugins);
+    switch ($match._tag) {
+      case "None": {
+        return acc;
+      }
+      case "Some": {
+        const { value: p } = $match;
+        const $match$ = p.dtsBinding;
+        switch ($match$._tag) {
+          case "Some": {
+            const { value: hook } = $match$;
+            return dtsHooksFrom(plugins, i + 1, _Array_append(hook, acc));
+          }
+          case "None": {
+            return dtsHooksFrom(plugins, i + 1, acc);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  });
 export const dtsHooksFor: <B, C, D, E, F>(
   pluginsOpt: Option<
     {
@@ -610,18 +705,33 @@ const bindingHooksFrom: <A, B>(
   plugins: ({ bindingType: Option<A> } & B)[],
   i: number,
   acc: A[],
-) => A[] = _curry(3, <A, B>(plugins: ({ bindingType: Option<A> } & B)[], i: number, acc: A[]) =>
-  _Option_match(
-    _Array_get(i, plugins),
-    () => acc,
-    (p) =>
-      _Option_match(
-        p.bindingType,
-        () => bindingHooksFrom(plugins, i + 1, acc),
-        (hook) => bindingHooksFrom(plugins, i + 1, _Array_append(hook, acc)),
-      ),
-  ),
-);
+) => A[] = _curry(3, <A, B>(plugins: ({ bindingType: Option<A> } & B)[], i: number, acc: A[]) => {
+  const $match = _Array_get(i, plugins);
+  switch ($match._tag) {
+    case "None": {
+      return acc;
+    }
+    case "Some": {
+      const { value: p } = $match;
+      const $match$ = p.bindingType;
+      switch ($match$._tag) {
+        case "Some": {
+          const { value: hook } = $match$;
+          return bindingHooksFrom(plugins, i + 1, _Array_append(hook, acc));
+        }
+        case "None": {
+          return bindingHooksFrom(plugins, i + 1, acc);
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 export const bindingHooksFor: <B, C, D, E, F>(
   pluginsOpt: Option<
     {

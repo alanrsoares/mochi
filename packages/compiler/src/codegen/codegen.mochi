@@ -1032,6 +1032,11 @@ let genLambdaBodyIn = (ctx: GCtx, e, bound, prefix) =>
             : prefix == ""
             ? ctx->genLambdaBody(e)
             : "{ ${prefix}return ${ctx->genLambdaBody(e)}; }"
+        | Ast.EMatch(scrutinee, arms, _) => canFunctionMatch(scrutinee, arms)
+            ? "{ ${prefix}${ctx->genFunctionMatch(scrutinee, arms)} }"
+            : prefix == ""
+            ? ctx->genLambdaBody(e)
+            : "{ ${prefix}return ${ctx->genLambdaBody(e)}; }"
         | _ => prefix == ""
             ? ctx->genLambdaBody(e)
             : "{ ${prefix}return ${ctx->genLambdaBody(e)}; }"
@@ -1041,8 +1046,88 @@ let genLambdaBodyIn = (ctx: GCtx, e, bound, prefix) =>
           | Ast.ELoop(params, body, _) => loopParamFree(params, 0, seen)
               ? "{ ${prefix}${block} ${ctx->genLoopBlock(params, body)} }"
               : "{ ${prefix}${block} return ${ctx->genExpr(rest)}; }"
+          | Ast.EMatch(scrutinee, arms, _) => canFunctionMatch(scrutinee, arms)
+              ? "{ ${prefix}${block} ${ctx->genFunctionMatch(scrutinee, arms)} }"
+              : "{ ${prefix}${block} return ${ctx->genExpr(rest)}; }"
           | _ => "{ ${prefix}${block} return ${ctx->genExpr(rest)}; }"
         }
+
+// Flat, distinct constructor arms can share one discriminant read. Guards,
+// repeated tags and nested patterns retain their ordered expression tests.
+let functionMatchArms = (arms, tags) => switch arms {
+  | [] => Set.size(tags) > 0
+  | [a, ...rest] => Option.isNone(
+      a.guard
+    ) && switch a.pattern {
+      | Ast.PCtor(name, args, _, _) => !Set.has(
+          name,
+          tags
+        ) && allOf(
+          p => switch p {
+            | Ast.PBind(_, _) => true
+            | Ast.PWild(_) => true
+            | _ => false
+          },
+          args
+        ) && functionMatchArms(rest, Set.add(name, tags))
+      | Ast.PBind(_, _) => Array.length(rest) == 0 && Set.size(tags) > 0
+      | Ast.PWild(_) => Array.length(rest) == 0 && Set.size(tags) > 0
+      | _ => false
+    }
+}
+
+let canFunctionMatch = (scrutinee, arms) => switch scrutinee {
+  | Ast.EField(_, _, true, _) =>
+    // Preserve the existing immediate optional-field fusion.
+    false
+  | _ => functionMatchArms(arms, Set.fromArray([]))
+}
+
+let functionPatternNames = pattern => switch pattern {
+  | Ast.PCtor(_, args, _, _) => args
+      |> Array.flatMap(p => switch p {
+        | Ast.PBind(name, _) => [name]
+        | _ => []
+      })
+  | Ast.PBind(name, _) => [name]
+  | _ => []
+}
+
+let genFunctionTail = (ctx: GCtx, e, bound) =>
+  let (decls, rest, seen) = ctx->letBlockLoop(e, bound, []) in
+  let prefix = Str.join(" ", decls) in
+    switch rest {
+      | Ast.EMatch(scrutinee, arms, _) => canFunctionMatch(scrutinee, arms)
+          ? "${prefix} ${ctx->genFunctionMatch(scrutinee, arms)}"
+          : "${prefix} return ${ctx->genExpr(rest)};"
+      | Ast.ELoop(params, body, _) => loopParamFree(params, 0, seen)
+          ? "${prefix} ${ctx->genLoopBlock(params, body)}"
+          : "${prefix} return ${ctx->genExpr(rest)};"
+      | _ => "${prefix} return ${ctx->genExpr(rest)};"
+    }
+
+let genFunctionCases = (ctx: GCtx, arms, root) =>
+  Str.join(
+    " ",
+    arms
+      |> map(a =>
+        let label = switch a.pattern {
+          | Ast.PCtor(name, _, _, _) => "case ${jsStringLit(name)}:"
+          | _ => "default:"
+        } in
+        let slot = ctx.keys->patSlot(a.pattern) in
+        let bind = slot == "" ? "" : "const ${slot} = ${root}; " in
+        let bound = Set.fromArray(functionPatternNames(a.pattern)) in
+          "${label} { ${bind}${ctx->genFunctionTail(a.body, bound)} }")
+  )
+
+let genFunctionMatch = (ctx: GCtx, scrutinee, arms) =>
+  let root = ctx->tempName("$match") in
+  let nestedCtx = { ...ctx, userNames: Set.add(root, ctx.userNames) } in
+  let fallback = someOf(a => isCatchAll(a.pattern), arms)
+    ? ""
+    : "default: { throw new Error(\"non-exhaustive match\"); }" in
+    "const ${root} = ${ctx->genExpr(scrutinee)}; switch (${root}._tag) { ${nestedCtx->genFunctionCases(arms, root)} ${fallback} }"
 
 // ---- match -------------------------------------------------------------------
 // A match lowers to a ternary chain over its scrutinee (ADR 0113). The TS

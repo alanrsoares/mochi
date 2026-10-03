@@ -38,60 +38,118 @@ import {
 import { widenLits } from "../../infer/schemes";
 const arrOf: (elem: Ty) => Ty = (elem: Ty) => tCon("Array", [elem]);
 const setStateDomain: (state: Ty) => Ty = (state: Ty) => tUnion([state, tArrow(state, state)]);
-const isRef: _Curry<[fn: Expr, name: string], boolean> = _curry(2, (fn: Expr, name: string) =>
-  ((_v) => (_v._tag === "ERef" ? (({ name: actual }) => eq(actual, name))(_v) : false))(fn),
-);
-const preactSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "EUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "EBool"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "EStr"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "ERef"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "ECall"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "ELambda"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "EDo"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ span: sp }) => sp)(_v)
-                              : _v._tag === "ELoop"
-                                ? (({ span: sp }) => sp)(_v)
-                                : _v._tag === "ERecur"
-                                  ? (({ span: sp }) => sp)(_v)
-                                  : _v._tag === "ERecord"
-                                    ? (({ span: sp }) => sp)(_v)
-                                    : _v._tag === "EField"
-                                      ? (({ span: sp }) => sp)(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ span: sp }) => sp)(_v)
-                                        : _v._tag === "EArr"
-                                          ? (({ span: sp }) => sp)(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ span: sp }) => sp)(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ span: sp }) => sp)(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ span: sp }) => sp)(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ span: sp }) => sp)(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e);
+const isRef: _Curry<[fn: Expr, name: string], boolean> = _curry(2, (fn: Expr, name: string) => {
+  const $match = fn;
+  switch ($match._tag) {
+    case "ERef": {
+      const { name: actual } = $match;
+      return eq(actual, name);
+    }
+    default: {
+      return false;
+    }
+  }
+});
+const preactSpan: (e: Expr) => SpanAt = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERef": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ECall": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELambda": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetIn": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EPipe": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EDo": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETernary": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMatch": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELoop": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecur": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EField": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ESet": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMap": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EInterp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const inferArgs: <A, B, C, D>(
   args: A[],
   st: B,
@@ -230,22 +288,11 @@ const inferDeps: <A, B, E, F>(
       inferExpr: (a: Expr, b: A) => Result<[B, { next: number } & E], BoundErr>;
     } & F,
     name: string,
-  ) =>
-    _Option_match(
-      _Array_get(2, args),
-      () =>
-        _Option_match(
-          _Array_get(1, args),
-          () => Ok(st),
-          (deps) =>
-            _Result_flatMap(
-              ([depsT, st1]: [B, { next: number } & E]) =>
-                (([elem, st2]: [Ty, { next: number } & E]) =>
-                  api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
-              api.inferExpr(deps, st),
-            ),
-        ),
-      (surplus) => {
+  ) => {
+    const $match = _Array_get(2, args);
+    switch ($match._tag) {
+      case "Some": {
+        const { value: surplus } = $match;
         const sp: SpanAt = preactSpan(surplus);
         return Err({
           message: `${name} takes one dependency array after its callback`,
@@ -254,8 +301,32 @@ const inferDeps: <A, B, E, F>(
           help: None,
           suggestions: [] as { end: number; replaceWith: string; start: number; title: string }[],
         });
-      },
-    ),
+      }
+      case "None": {
+        const $match$ = _Array_get(1, args);
+        switch ($match$._tag) {
+          case "None": {
+            return Ok(st);
+          }
+          case "Some": {
+            const { value: deps } = $match$;
+            return _Result_flatMap(
+              ([depsT, st1]: [B, { next: number } & E]) =>
+                (([elem, st2]: [Ty, { next: number } & E]) =>
+                  api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
+              api.inferExpr(deps, st),
+            );
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 const inferEffectLike: <A, D, E, F>(
   fn: Expr,
@@ -423,11 +494,11 @@ const inferHookDeps: <A, B, C, D, E>(
           : isRef(fn, "hookDeps")
             ? (Some(3) as Option<number>)
             : (None as Option<number>);
-    return _Option_match(
-      expected,
-      () => Ok(None),
-      (n) =>
-        eq(length(args), n)
+    const $match = expected;
+    switch ($match._tag) {
+      case "Some": {
+        const { value: n } = $match;
+        return eq(length(args), n)
           ? _Result_map(
               (st1: { next: number } & D) =>
                 (([elem, st2]: [Ty, { next: number } & D]) => Some(_tuple(arrOf(elem), st2)))(
@@ -435,8 +506,15 @@ const inferHookDeps: <A, B, C, D, E>(
                 ),
               inferArgs(args, st, api.inferExpr),
             )
-          : Ok(None),
-    );
+          : Ok(None);
+      }
+      case "None": {
+        return Ok(None);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
   },
 );
 export const inferPreactCall: <A, D>(

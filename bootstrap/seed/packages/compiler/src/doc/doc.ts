@@ -34,6 +34,7 @@ import {
   _recur,
   and,
   length,
+  lt,
   or,
   sub,
 } from "@mochi/compiler/runtime";
@@ -65,18 +66,26 @@ export const group: (doc: Doc) => Doc = (doc: Doc) => DGroup(doc, forcesBreak(do
 export const lineSuffix: (doc: Doc) => Doc = (doc: Doc) => DLineSuffix(doc);
 const joinFrom: <A>(sep: A, parts: A[], i: number, acc: A[]) => A[] = _curry(
   4,
-  <A>(sep: A, parts: A[], i: number, acc: A[]) =>
-    _Option_match(
-      _Array_get(i, parts),
-      () => acc,
-      (p) =>
-        joinFrom(
+  <A>(sep: A, parts: A[], i: number, acc: A[]) => {
+    const $match = _Array_get(i, parts);
+    switch ($match._tag) {
+      case "None": {
+        return acc;
+      }
+      case "Some": {
+        const { value: p } = $match;
+        return joinFrom(
           sep,
           parts,
           i + 1,
           i === 0 ? _Array_append(p, acc) : _Array_append(p, _Array_append(sep, acc)),
-        ),
-    ),
+        );
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 export const join: _Curry<[sep: Doc, parts: Doc[]], Doc> = _curry(2, (sep: Doc, parts: Doc[]) =>
   DCat(joinFrom(sep, parts, 0, [] as Doc[])),
@@ -179,12 +188,21 @@ const fits: _Curry<[width: number, start: Work], boolean> = _curry(
 );
 const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(
   2,
-  (parts: Doc[], i: number) =>
-    _Option_match(
-      _Array_get(i, parts),
-      () => false,
-      (p) => or(forcesBreak(p), anyForcesBreak(parts, i + 1)),
-    ),
+  (parts: Doc[], i: number) => {
+    const $match = _Array_get(i, parts);
+    switch ($match._tag) {
+      case "None": {
+        return false;
+      }
+      case "Some": {
+        const { value: p } = $match;
+        return or(forcesBreak(p), anyForcesBreak(parts, i + 1));
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
+  },
 );
 /**
  * Does this document contain a hardline anywhere in its subtree? If so every
@@ -192,27 +210,42 @@ const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(
  * newline. Comments introduce hardlines, so a commented node breaks its parents.
  * A nested group already knows its own answer, so the walk stops there.
  */
-const forcesBreak: (d: Doc) => boolean = (d: Doc) =>
-  ((_v) =>
-    _v._tag === "DBreakParent"
-      ? true
-      : _v._tag === "DVerbatim"
-        ? true
-        : _v._tag === "DLine"
-          ? (({ hard }) => hard)(_v)
-          : _v._tag === "DCat"
-            ? (({ parts }) => anyForcesBreak(parts, 0))(_v)
-            : _v._tag === "DIndent"
-              ? (({ doc: inner }) => forcesBreak(inner))(_v)
-              : _v._tag === "DGroup"
-                ? (({ breaks }) => breaks)(_v)
-                : _v._tag === "DLineSuffix"
-                  ? false
-                  : _v._tag === "DText"
-                    ? false
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(d);
+const forcesBreak: (d: Doc) => boolean = (d: Doc) => {
+  const $match = d;
+  switch ($match._tag) {
+    case "DBreakParent": {
+      return true;
+    }
+    case "DVerbatim": {
+      return true;
+    }
+    case "DLine": {
+      const { hard } = $match;
+      return hard;
+    }
+    case "DCat": {
+      const { parts } = $match;
+      return anyForcesBreak(parts, 0);
+    }
+    case "DIndent": {
+      const { doc: inner } = $match;
+      return forcesBreak(inner);
+    }
+    case "DGroup": {
+      const { breaks } = $match;
+      return breaks;
+    }
+    case "DLineSuffix": {
+      return false;
+    }
+    case "DText": {
+      return false;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const spaces: (n: number) => string = (n: number) => {
   let k: number = n;
   let acc: string = "";

@@ -131,135 +131,173 @@ import {
 /**
  * The TS `t` tag of a token — error messages must match the TS parser's.
  */
-const tokName: (t: Tok) => string = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TLet"
-      ? "let"
-      : _v._tag === "TType"
-        ? "type"
-        : _v._tag === "TExtern"
-          ? "extern"
-          : _v._tag === "TSwitch"
-            ? "switch"
-            : _v._tag === "TLoop"
-              ? "loop"
-              : _v._tag === "TRecur"
-                ? "recur"
-                : _v._tag === "TDo"
-                  ? "do"
-                  : _v._tag === "TImport"
-                    ? "import"
-                    : _v._tag === "TExport"
-                      ? "export"
-                      : _v._tag === "TEq"
-                        ? "eq"
-                        : _v._tag === "TArrow"
-                          ? "arrow"
-                          : _v._tag === "TTarrow"
-                            ? "tarrow"
-                            : _v._tag === "TPipe"
-                              ? "pipe"
-                              : _v._tag === "TConcat"
-                                ? "concat"
-                                : _v._tag === "TBar"
-                                  ? "bar"
-                                  : _v._tag === "TLparen"
-                                    ? "lparen"
-                                    : _v._tag === "TRparen"
-                                      ? "rparen"
-                                      : _v._tag === "TLbrace"
-                                        ? "lbrace"
-                                        : _v._tag === "TRbrace"
-                                          ? "rbrace"
-                                          : _v._tag === "TLbracket"
-                                            ? "lbracket"
-                                            : _v._tag === "TRbracket"
-                                              ? "rbracket"
-                                              : _v._tag === "TSpread"
-                                                ? "spread"
-                                                : _v._tag === "TPlus"
-                                                  ? "plus"
-                                                  : _v._tag === "TMinus"
-                                                    ? "minus"
-                                                    : _v._tag === "TStar"
-                                                      ? "star"
-                                                      : _v._tag === "TSlash"
-                                                        ? "slash"
-                                                        : _v._tag === "TPercent"
-                                                          ? "percent"
-                                                          : _v._tag === "TAt"
-                                                            ? "at"
-                                                            : _v._tag === "THash"
-                                                              ? "hash"
-                                                              : _v._tag === "TTilde"
-                                                                ? "tilde"
-                                                                : _v._tag === "TDot"
-                                                                  ? "dot"
-                                                                  : _v._tag === "TColon"
-                                                                    ? "colon"
-                                                                    : _v._tag === "TQuestion"
-                                                                      ? "question"
-                                                                      : _v._tag === "TEqeq"
-                                                                        ? "eqeq"
-                                                                        : _v._tag === "TNeq"
-                                                                          ? "neq"
-                                                                          : _v._tag === "TLte"
-                                                                            ? "lte"
-                                                                            : _v._tag === "TGte"
-                                                                              ? "gte"
-                                                                              : _v._tag === "TLt"
-                                                                                ? "lt"
-                                                                                : _v._tag === "TGt"
-                                                                                  ? "gt"
-                                                                                  : _v._tag ===
-                                                                                      "TAndand"
-                                                                                    ? "andand"
-                                                                                    : _v._tag ===
-                                                                                        "TOror"
-                                                                                      ? "oror"
-                                                                                      : _v._tag ===
-                                                                                          "TBang"
-                                                                                        ? "bang"
-                                                                                        : _v._tag ===
-                                                                                            "TBacktick"
-                                                                                          ? "backtick"
-                                                                                          : _v._tag ===
-                                                                                              "TComma"
-                                                                                            ? "comma"
-                                                                                            : _v._tag ===
-                                                                                                "TSemi"
-                                                                                              ? "semi"
-                                                                                              : _v._tag ===
-                                                                                                  "TNum"
-                                                                                                ? "num"
-                                                                                                : _v._tag ===
-                                                                                                    "TBool"
-                                                                                                  ? "bool"
-                                                                                                  : _v._tag ===
-                                                                                                      "TStr"
-                                                                                                    ? "str"
-                                                                                                    : _v._tag ===
-                                                                                                        "TTmplStart"
-                                                                                                      ? "tmplstart"
-                                                                                                      : _v._tag ===
-                                                                                                          "TTmplMid"
-                                                                                                        ? "tmplmid"
-                                                                                                        : _v._tag ===
-                                                                                                            "TTmplEnd"
-                                                                                                          ? "tmplend"
-                                                                                                          : _v._tag ===
-                                                                                                              "TId"
-                                                                                                            ? "id"
-                                                                                                            : _v._tag ===
-                                                                                                                "TEof"
-                                                                                                              ? "eof"
-                                                                                                              : (() => {
-                                                                                                                  throw new Error(
-                                                                                                                    "non-exhaustive match",
-                                                                                                                  );
-                                                                                                                })())(
-    t,
-  );
+const tokName: (t: Tok) => string = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TLet": {
+      return "let";
+    }
+    case "TType": {
+      return "type";
+    }
+    case "TExtern": {
+      return "extern";
+    }
+    case "TSwitch": {
+      return "switch";
+    }
+    case "TLoop": {
+      return "loop";
+    }
+    case "TRecur": {
+      return "recur";
+    }
+    case "TDo": {
+      return "do";
+    }
+    case "TImport": {
+      return "import";
+    }
+    case "TExport": {
+      return "export";
+    }
+    case "TEq": {
+      return "eq";
+    }
+    case "TArrow": {
+      return "arrow";
+    }
+    case "TTarrow": {
+      return "tarrow";
+    }
+    case "TPipe": {
+      return "pipe";
+    }
+    case "TConcat": {
+      return "concat";
+    }
+    case "TBar": {
+      return "bar";
+    }
+    case "TLparen": {
+      return "lparen";
+    }
+    case "TRparen": {
+      return "rparen";
+    }
+    case "TLbrace": {
+      return "lbrace";
+    }
+    case "TRbrace": {
+      return "rbrace";
+    }
+    case "TLbracket": {
+      return "lbracket";
+    }
+    case "TRbracket": {
+      return "rbracket";
+    }
+    case "TSpread": {
+      return "spread";
+    }
+    case "TPlus": {
+      return "plus";
+    }
+    case "TMinus": {
+      return "minus";
+    }
+    case "TStar": {
+      return "star";
+    }
+    case "TSlash": {
+      return "slash";
+    }
+    case "TPercent": {
+      return "percent";
+    }
+    case "TAt": {
+      return "at";
+    }
+    case "THash": {
+      return "hash";
+    }
+    case "TTilde": {
+      return "tilde";
+    }
+    case "TDot": {
+      return "dot";
+    }
+    case "TColon": {
+      return "colon";
+    }
+    case "TQuestion": {
+      return "question";
+    }
+    case "TEqeq": {
+      return "eqeq";
+    }
+    case "TNeq": {
+      return "neq";
+    }
+    case "TLte": {
+      return "lte";
+    }
+    case "TGte": {
+      return "gte";
+    }
+    case "TLt": {
+      return "lt";
+    }
+    case "TGt": {
+      return "gt";
+    }
+    case "TAndand": {
+      return "andand";
+    }
+    case "TOror": {
+      return "oror";
+    }
+    case "TBang": {
+      return "bang";
+    }
+    case "TBacktick": {
+      return "backtick";
+    }
+    case "TComma": {
+      return "comma";
+    }
+    case "TSemi": {
+      return "semi";
+    }
+    case "TNum": {
+      return "num";
+    }
+    case "TBool": {
+      return "bool";
+    }
+    case "TStr": {
+      return "str";
+    }
+    case "TTmplStart": {
+      return "tmplstart";
+    }
+    case "TTmplMid": {
+      return "tmplmid";
+    }
+    case "TTmplEnd": {
+      return "tmplend";
+    }
+    case "TId": {
+      return "id";
+    }
+    case "TEof": {
+      return "eof";
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 /**
  * The stream is TEof-terminated, so the fallback is unreachable in practice.
  */
@@ -301,13 +339,20 @@ const expectId: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], PEr
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return ((_v) =>
-      _v._tag === "TId"
-        ? (({ value: name }) =>
-            Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>)(
-            _v,
-          )
-        : ((t) => errAt(`expected id, got ${tokName(t)}`, lt))(_v))(lt.tok);
+    const $match = lt.tok;
+    switch ($match._tag) {
+      case "TId": {
+        const { value: name } = $match;
+        return Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<
+          [Name, number],
+          PErr
+        >;
+      }
+      default: {
+        const t = $match;
+        return errAt(`expected id, got ${tokName(t)}`, lt);
+      }
+    }
   },
 );
 /**
@@ -315,27 +360,41 @@ const expectId: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], PEr
  * Mirrors `lexer.ts`'s `keywordText` (ADR 0077). `TBool` stays out: it carries
  * a value rather than a spelling, so `true`/`false` are not labels.
  */
-const keywordText: (t: Tok) => Option<string> = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TLet"
-      ? (Some("let") as Option<string>)
-      : _v._tag === "TType"
-        ? (Some("type") as Option<string>)
-        : _v._tag === "TExtern"
-          ? (Some("extern") as Option<string>)
-          : _v._tag === "TSwitch"
-            ? (Some("switch") as Option<string>)
-            : _v._tag === "TLoop"
-              ? (Some("loop") as Option<string>)
-              : _v._tag === "TRecur"
-                ? (Some("recur") as Option<string>)
-                : _v._tag === "TDo"
-                  ? (Some("do") as Option<string>)
-                  : _v._tag === "TImport"
-                    ? (Some("import") as Option<string>)
-                    : _v._tag === "TExport"
-                      ? (Some("export") as Option<string>)
-                      : (None as Option<string>))(t);
+const keywordText: (t: Tok) => Option<string> = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TLet": {
+      return Some("let") as Option<string>;
+    }
+    case "TType": {
+      return Some("type") as Option<string>;
+    }
+    case "TExtern": {
+      return Some("extern") as Option<string>;
+    }
+    case "TSwitch": {
+      return Some("switch") as Option<string>;
+    }
+    case "TLoop": {
+      return Some("loop") as Option<string>;
+    }
+    case "TRecur": {
+      return Some("recur") as Option<string>;
+    }
+    case "TDo": {
+      return Some("do") as Option<string>;
+    }
+    case "TImport": {
+      return Some("import") as Option<string>;
+    }
+    case "TExport": {
+      return Some("export") as Option<string>;
+    }
+    default: {
+      return None as Option<string>;
+    }
+  }
+};
 /**
  * Label in JSX attrs / record fields / `.field` projection: `tone` or `$tone`
  * (styled-cva). Since ADR 0047 `$` is an ordinary identifier char, so a plain
@@ -347,22 +406,39 @@ const expectLabel: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], 
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return _Option_match(
-      keywordText(lt.tok),
-      () => expectId(toks, pos),
-      (name) =>
-        Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
-    );
+    const $match = keywordText(lt.tok);
+    switch ($match._tag) {
+      case "Some": {
+        const { value: name } = $match;
+        return Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<
+          [Name, number],
+          PErr
+        >;
+      }
+      case "None": {
+        return expectId(toks, pos);
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
   },
 );
 const expectStr: _Curry<[toks: LocTok[], pos: number], Result<[string, number], PErr>> = _curry(
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return ((_v) =>
-      _v._tag === "TStr"
-        ? (({ value }) => Ok(_tuple(value, pos + 1)) as Result<[string, number], PErr>)(_v)
-        : ((t) => errAt(`expected str, got ${tokName(t)}`, lt))(_v))(lt.tok);
+    const $match = lt.tok;
+    switch ($match._tag) {
+      case "TStr": {
+        const { value } = $match;
+        return Ok(_tuple(value, pos + 1)) as Result<[string, number], PErr>;
+      }
+      default: {
+        const t = $match;
+        return errAt(`expected str, got ${tokName(t)}`, lt);
+      }
+    }
   },
 );
 /**
@@ -481,174 +557,264 @@ const listUntilH: <B, C, D>(
  */
 const scanLambdaDepth: _Curry<[toks: LocTok[], k: number, depth: number], boolean> = _curry(
   3,
-  (toks: LocTok[], k: number, depth: number) =>
-    ((_v) =>
-      _v._tag === "TLparen"
-        ? scanLambdaDepth(toks, k + 1, depth + 1)
-        : _v._tag === "TRparen"
-          ? depth === 1
-            ? tokAt(toks, k + 1).tok._tag === "TArrow"
-            : scanLambdaDepth(toks, k + 1, depth - 1)
-          : _v._tag === "TEof"
-            ? false
-            : scanLambdaDepth(toks, k + 1, depth))(tokAt(toks, k).tok),
+  (toks: LocTok[], k: number, depth: number) => {
+    const $match = tokAt(toks, k).tok;
+    switch ($match._tag) {
+      case "TLparen": {
+        return scanLambdaDepth(toks, k + 1, depth + 1);
+      }
+      case "TRparen": {
+        return depth === 1
+          ? tokAt(toks, k + 1).tok._tag === "TArrow"
+          : scanLambdaDepth(toks, k + 1, depth - 1);
+      }
+      case "TEof": {
+        return false;
+      }
+      default: {
+        return scanLambdaDepth(toks, k + 1, depth);
+      }
+    }
+  },
 );
 const looksLikeLambda: _Curry<[toks: LocTok[], pos: number], boolean> = _curry(
   2,
-  (toks: LocTok[], pos: number) =>
-    ((_v) =>
-      _v._tag === "TId"
-        ? tokAt(toks, pos + 1).tok._tag === "TArrow"
-        : _v._tag === "TLparen"
-          ? scanLambdaDepth(toks, pos, 0)
-          : false)(tokAt(toks, pos).tok),
+  (toks: LocTok[], pos: number) => {
+    const $match = tokAt(toks, pos).tok;
+    switch ($match._tag) {
+      case "TId": {
+        return tokAt(toks, pos + 1).tok._tag === "TArrow";
+      }
+      case "TLparen": {
+        return scanLambdaDepth(toks, pos, 0);
+      }
+      default: {
+        return false;
+      }
+    }
+  },
 );
 /**
  * The span of a node, for composite spans (TS reads `.span` directly).
  */
-const exprSpan: (e: Expr) => SpanAt = (e: Expr) =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "EUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "EBool"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "EStr"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "ERef"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "ECall"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "ELambda"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "EPipe"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "EDo"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "ETernary"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "EMatch"
-                              ? (({ span: sp }) => sp)(_v)
-                              : _v._tag === "ELoop"
-                                ? (({ span: sp }) => sp)(_v)
-                                : _v._tag === "ERecur"
-                                  ? (({ span: sp }) => sp)(_v)
-                                  : _v._tag === "ERecord"
-                                    ? (({ span: sp }) => sp)(_v)
-                                    : _v._tag === "EField"
-                                      ? (({ span: sp }) => sp)(_v)
-                                      : _v._tag === "ETuple"
-                                        ? (({ span: sp }) => sp)(_v)
-                                        : _v._tag === "EArr"
-                                          ? (({ span: sp }) => sp)(_v)
-                                          : _v._tag === "EList"
-                                            ? (({ span: sp }) => sp)(_v)
-                                            : _v._tag === "ESet"
-                                              ? (({ span: sp }) => sp)(_v)
-                                              : _v._tag === "EMap"
-                                                ? (({ span: sp }) => sp)(_v)
-                                                : _v._tag === "EInterp"
-                                                  ? (({ span: sp }) => sp)(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(e);
-const tySpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) =>
-  ((_v) =>
-    _v._tag === "TyName"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "TyArrow"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "TyApp"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "TyTuple"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "TyList"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "TyQual"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "TyLit"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "TyUnion"
-                    ? (({ span: sp }) => sp)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(t);
+const exprSpan: (e: Expr) => SpanAt = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERef": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ECall": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELambda": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetIn": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELetBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EPipe": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EDo": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETernary": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMatch": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ELoop": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecur": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ERecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EField": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ETuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "ESet": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EMap": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "EInterp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const tySpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyName": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyArrow": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyApp": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyTuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyQual": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyLit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "TyUnion": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const parseParam: _Curry<[toks: LocTok[], pos: number], Result<[LamParam, number], PErr>> = _curry(
   2,
-  (toks: LocTok[], pos: number) =>
-    ((_v) =>
-      _v._tag === "TLbrace"
-        ? _Result_flatMap(
-            ([fields, p]) =>
-              _Result_flatMap(
-                (p2) =>
-                  Ok(
+  (toks: LocTok[], pos: number) => {
+    const $match = tokAt(toks, pos).tok;
+    switch ($match._tag) {
+      case "TLbrace": {
+        return _Result_flatMap(
+          ([fields, p]) =>
+            _Result_flatMap(
+              (p2) =>
+                Ok(
+                  _tuple(
+                    Ast.LPSpanned(
+                      Ast.LPRecord(map((f: Name) => f.name, fields)),
+                      map((f: Name) => f.span, fields),
+                    ),
+                    p2,
+                  ),
+                ) as Result<[LamParam, number], PErr>,
+              expectTok(TRbrace as Tok, toks, p),
+            ),
+          listUntil(TRbrace as Tok, expectId, toks, pos + 1),
+        );
+      }
+      case "TLparen": {
+        return _Result_flatMap(
+          ([names, p]) =>
+            _Result_flatMap(
+              (p2) =>
+                Ok(
+                  ((_v) =>
+                    _v.length === 1
+                      ? (([single]) =>
+                          _tuple(
+                            Ast.LPSpanned(Ast.LPName(single.name, None as Option<TypeExpr>), [
+                              single.span,
+                            ]),
+                            p2,
+                          ))(_v)
+                      : ((many) =>
+                          _tuple(
+                            Ast.LPSpanned(
+                              Ast.LPTuple(map((n: Name) => n.name, many)),
+                              map((n: Name) => n.span, many),
+                            ),
+                            p2,
+                          ))(_v))(names),
+                ) as Result<[LamParam, number], PErr>,
+              expectTok(TRparen as Tok, toks, p),
+            ),
+          sepBy(expectId, toks, pos + 1, [] as Name[]),
+        );
+      }
+      default: {
+        return _Result_flatMap(
+          ([nm, p]) =>
+            tokAt(toks, p).tok._tag === "TColon"
+              ? _Result_map(
+                  ([annot, p2]: [TypeExpr, number]) =>
                     _tuple(
-                      Ast.LPSpanned(
-                        Ast.LPRecord(map((f: Name) => f.name, fields)),
-                        map((f: Name) => f.span, fields),
-                      ),
+                      Ast.LPSpanned(Ast.LPName(nm.name, Some(annot) as Option<TypeExpr>), [
+                        nm.span,
+                      ]),
                       p2,
                     ),
-                  ) as Result<[LamParam, number], PErr>,
-                expectTok(TRbrace as Tok, toks, p),
-              ),
-            listUntil(TRbrace as Tok, expectId, toks, pos + 1),
-          )
-        : _v._tag === "TLparen"
-          ? _Result_flatMap(
-              ([names, p]) =>
-                _Result_flatMap(
-                  (p2) =>
-                    Ok(
-                      ((_v) =>
-                        _v.length === 1
-                          ? (([single]) =>
-                              _tuple(
-                                Ast.LPSpanned(Ast.LPName(single.name, None as Option<TypeExpr>), [
-                                  single.span,
-                                ]),
-                                p2,
-                              ))(_v)
-                          : ((many) =>
-                              _tuple(
-                                Ast.LPSpanned(
-                                  Ast.LPTuple(map((n: Name) => n.name, many)),
-                                  map((n: Name) => n.span, many),
-                                ),
-                                p2,
-                              ))(_v))(names),
-                    ) as Result<[LamParam, number], PErr>,
-                  expectTok(TRparen as Tok, toks, p),
-                ),
-              sepBy(expectId, toks, pos + 1, [] as Name[]),
-            )
-          : _Result_flatMap(
-              ([nm, p]) =>
-                tokAt(toks, p).tok._tag === "TColon"
-                  ? _Result_map(
-                      ([annot, p2]: [TypeExpr, number]) =>
-                        _tuple(
-                          Ast.LPSpanned(Ast.LPName(nm.name, Some(annot) as Option<TypeExpr>), [
-                            nm.span,
-                          ]),
-                          p2,
-                        ),
-                      parseTypeExpr(toks, p + 1),
-                    )
-                  : (Ok(
-                      _tuple(
-                        Ast.LPSpanned(Ast.LPName(nm.name, None as Option<TypeExpr>), [nm.span]),
-                        p,
-                      ),
-                    ) as Result<[LamParam, number], PErr>),
-              expectId(toks, pos),
-            ))(tokAt(toks, pos).tok),
+                  parseTypeExpr(toks, p + 1),
+                )
+              : (Ok(
+                  _tuple(
+                    Ast.LPSpanned(Ast.LPName(nm.name, None as Option<TypeExpr>), [nm.span]),
+                    p,
+                  ),
+                ) as Result<[LamParam, number], PErr>),
+          expectId(toks, pos),
+        );
+      }
+    }
+  },
 );
 /**
  * `~name`, `~name?`, `~name: T`, `~name = e`, `~name: T = e` (ADR 0098 §2).
@@ -747,13 +913,21 @@ const parseLamParam: _Curry<
       ? parseLabeledParam(toks, pos, hooks)
       : parseParam(toks, pos),
 );
-const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) =>
-  ((_v) =>
-    _v._tag === "LPLabeled"
-      ? true
-      : _v._tag === "LPSpanned"
-        ? (({ param: inner }) => isLabeledParam(inner))(_v)
-        : false)(p);
+const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPLabeled": {
+      return true;
+    }
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return isLabeledParam(inner);
+    }
+    default: {
+      return false;
+    }
+  }
+};
 /**
  * True when every labeled parameter (if any) sits after every positional one.
  */
@@ -795,56 +969,61 @@ const parseLambda: _Curry<
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const start: SpanAt = spanOf(tokAt(toks, pos));
-    return ((_v) =>
-      _v._tag === "TId"
-        ? (({ value: name }) =>
+    const $match = tokAt(toks, pos).tok;
+    switch ($match._tag) {
+      case "TId": {
+        const { value: name } = $match;
+        return _Result_flatMap(
+          (p) =>
             _Result_flatMap(
-              (p) =>
-                _Result_flatMap(
-                  ([body, p2]) =>
-                    Ok(
-                      _tuple(
-                        Ast.ELambda(
-                          [
-                            Ast.LPSpanned(Ast.LPName(name, None as Option<TypeExpr>), [
-                              spanOf(tokAt(toks, pos)),
-                            ]),
-                          ],
-                          body,
-                          toEnd(start, toks, p2),
-                        ),
-                        p2,
-                      ),
-                    ) as Result<[Expr, number], PErr>,
-                  parseLambdaBody(toks, p, hooks),
-                ),
-              expectTok(TArrow as Tok, toks, pos + 1),
-            ))(_v)
-        : _Result_flatMap(
-            (p) =>
-              _Result_flatMap(
-                ([params, p2]) =>
-                  _Result_flatMap(
-                    (p3) =>
-                      labeledTrailing(params, false)
-                        ? _Result_flatMap(
-                            (p4) =>
-                              _Result_flatMap(
-                                ([body, p5]) =>
-                                  Ok(
-                                    _tuple(Ast.ELambda(params, body, toEnd(start, toks, p5)), p5),
-                                  ) as Result<[Expr, number], PErr>,
-                                parseLambdaBody(toks, p4, hooks),
-                              ),
-                            expectTok(TArrow as Tok, toks, p3),
-                          )
-                        : errAt("labeled parameters must be a trailing group", tokAt(toks, p)),
-                    expectTok(TRparen as Tok, toks, p2),
+              ([body, p2]) =>
+                Ok(
+                  _tuple(
+                    Ast.ELambda(
+                      [
+                        Ast.LPSpanned(Ast.LPName(name, None as Option<TypeExpr>), [
+                          spanOf(tokAt(toks, pos)),
+                        ]),
+                      ],
+                      body,
+                      toEnd(start, toks, p2),
+                    ),
+                    p2,
                   ),
-                listUntilH(TRparen as Tok, parseLamParam, toks, p, hooks),
-              ),
-            expectTok(TLparen as Tok, toks, pos),
-          ))(tokAt(toks, pos).tok);
+                ) as Result<[Expr, number], PErr>,
+              parseLambdaBody(toks, p, hooks),
+            ),
+          expectTok(TArrow as Tok, toks, pos + 1),
+        );
+      }
+      default: {
+        return _Result_flatMap(
+          (p) =>
+            _Result_flatMap(
+              ([params, p2]) =>
+                _Result_flatMap(
+                  (p3) =>
+                    labeledTrailing(params, false)
+                      ? _Result_flatMap(
+                          (p4) =>
+                            _Result_flatMap(
+                              ([body, p5]) =>
+                                Ok(
+                                  _tuple(Ast.ELambda(params, body, toEnd(start, toks, p5)), p5),
+                                ) as Result<[Expr, number], PErr>,
+                              parseLambdaBody(toks, p4, hooks),
+                            ),
+                          expectTok(TArrow as Tok, toks, p3),
+                        )
+                      : errAt("labeled parameters must be a trailing group", tokAt(toks, p)),
+                  expectTok(TRparen as Tok, toks, p2),
+                ),
+              listUntilH(TRparen as Tok, parseLamParam, toks, p, hooks),
+            ),
+          expectTok(TLparen as Tok, toks, pos),
+        );
+      }
+    }
   },
 );
 const parseLambdaBody: _Curry<
@@ -875,19 +1054,26 @@ const parseLambdaBody: _Curry<
 );
 const arrowBodyIsDoBlock: _Curry<[toks: LocTok[], pos: number, depth: number], boolean> = _curry(
   3,
-  (toks: LocTok[], pos: number, depth: number) =>
-    ((_v) =>
-      _v._tag === "TLbrace"
-        ? arrowBodyIsDoBlock(toks, pos + 1, depth + 1)
-        : _v._tag === "TRbrace"
-          ? depth === 1
-            ? false
-            : arrowBodyIsDoBlock(toks, pos + 1, depth - 1)
-          : _v._tag === "TSemi"
-            ? or(depth === 1, arrowBodyIsDoBlock(toks, pos + 1, depth))
-            : _v._tag === "TEof"
-              ? false
-              : arrowBodyIsDoBlock(toks, pos + 1, depth))(tokAt(toks, pos).tok),
+  (toks: LocTok[], pos: number, depth: number) => {
+    const $match = tokAt(toks, pos).tok;
+    switch ($match._tag) {
+      case "TLbrace": {
+        return arrowBodyIsDoBlock(toks, pos + 1, depth + 1);
+      }
+      case "TRbrace": {
+        return depth === 1 ? false : arrowBodyIsDoBlock(toks, pos + 1, depth - 1);
+      }
+      case "TSemi": {
+        return or(depth === 1, arrowBodyIsDoBlock(toks, pos + 1, depth));
+      }
+      case "TEof": {
+        return false;
+      }
+      default: {
+        return arrowBodyIsDoBlock(toks, pos + 1, depth);
+      }
+    }
+  },
 );
 const parseLetIn: _Curry<
   [
@@ -1070,66 +1256,103 @@ const mkBinCall: _Curry<[fnName: string, opSpan: SpanAt, left: Expr, right: Expr
       spanning(exprSpan(left), exprSpan(right)),
     ),
 );
-const opFnName: (t: Tok) => string = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TPlus"
-      ? "add"
-      : _v._tag === "TMinus"
-        ? "sub"
-        : _v._tag === "TStar"
-          ? "mul"
-          : _v._tag === "TSlash"
-            ? "div"
-            : _v._tag === "TPercent"
-              ? "mod"
-              : _v._tag === "TAndand"
-                ? "and"
-                : _v._tag === "TOror"
-                  ? "or"
-                  : _v._tag === "TConcat"
-                    ? "concat"
-                    : _v._tag === "TEqeq"
-                      ? "eq"
-                      : _v._tag === "TLt"
-                        ? "lt"
-                        : _v._tag === "TLte"
-                          ? "lte"
-                          : _v._tag === "TGt"
-                            ? "gt"
-                            : _v._tag === "TGte"
-                              ? "gte"
-                              : "eq")(t);
-const isSectionOp: (t: Tok) => boolean = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TPlus"
-      ? true
-      : _v._tag === "TMinus"
-        ? true
-        : _v._tag === "TStar"
-          ? true
-          : _v._tag === "TSlash"
-            ? true
-            : _v._tag === "TPercent"
-              ? true
-              : _v._tag === "TAndand"
-                ? true
-                : _v._tag === "TOror"
-                  ? true
-                  : _v._tag === "TConcat"
-                    ? true
-                    : _v._tag === "TEqeq"
-                      ? true
-                      : _v._tag === "TNeq"
-                        ? true
-                        : _v._tag === "TLt"
-                          ? true
-                          : _v._tag === "TLte"
-                            ? true
-                            : _v._tag === "TGt"
-                              ? true
-                              : _v._tag === "TGte"
-                                ? true
-                                : false)(t);
+const opFnName: (t: Tok) => string = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TPlus": {
+      return "add";
+    }
+    case "TMinus": {
+      return "sub";
+    }
+    case "TStar": {
+      return "mul";
+    }
+    case "TSlash": {
+      return "div";
+    }
+    case "TPercent": {
+      return "mod";
+    }
+    case "TAndand": {
+      return "and";
+    }
+    case "TOror": {
+      return "or";
+    }
+    case "TConcat": {
+      return "concat";
+    }
+    case "TEqeq": {
+      return "eq";
+    }
+    case "TLt": {
+      return "lt";
+    }
+    case "TLte": {
+      return "lte";
+    }
+    case "TGt": {
+      return "gt";
+    }
+    case "TGte": {
+      return "gte";
+    }
+    default: {
+      return "eq";
+    }
+  }
+};
+const isSectionOp: (t: Tok) => boolean = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TPlus": {
+      return true;
+    }
+    case "TMinus": {
+      return true;
+    }
+    case "TStar": {
+      return true;
+    }
+    case "TSlash": {
+      return true;
+    }
+    case "TPercent": {
+      return true;
+    }
+    case "TAndand": {
+      return true;
+    }
+    case "TOror": {
+      return true;
+    }
+    case "TConcat": {
+      return true;
+    }
+    case "TEqeq": {
+      return true;
+    }
+    case "TNeq": {
+      return true;
+    }
+    case "TLt": {
+      return true;
+    }
+    case "TLte": {
+      return true;
+    }
+    case "TGt": {
+      return true;
+    }
+    case "TGte": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const sectionBody: _Curry<[opTok: Tok, x: Expr, y: Expr, opSpan: SpanAt], Expr> = _curry(
   4,
   (opTok: Tok, x: Expr, y: Expr, opSpan: SpanAt) => {
@@ -1244,32 +1467,52 @@ const binCallOrLeftSection: _Curry<
           parseExprBp(toks, bp + 1, pos + 1, hooks),
         ),
 );
-const isCmpTok: (t: Tok) => boolean = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TEqeq"
-      ? true
-      : _v._tag === "TNeq"
-        ? true
-        : _v._tag === "TLt"
-          ? true
-          : _v._tag === "TLte"
-            ? true
-            : _v._tag === "TGt"
-              ? true
-              : _v._tag === "TGte"
-                ? true
-                : false)(t);
-const cmpFnName: (t: Tok) => string = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TLt"
-      ? "lt"
-      : _v._tag === "TLte"
-        ? "lte"
-        : _v._tag === "TGt"
-          ? "gt"
-          : _v._tag === "TGte"
-            ? "gte"
-            : "eq")(t);
+const isCmpTok: (t: Tok) => boolean = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TEqeq": {
+      return true;
+    }
+    case "TNeq": {
+      return true;
+    }
+    case "TLt": {
+      return true;
+    }
+    case "TLte": {
+      return true;
+    }
+    case "TGt": {
+      return true;
+    }
+    case "TGte": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const cmpFnName: (t: Tok) => string = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TLt": {
+      return "lt";
+    }
+    case "TLte": {
+      return "lte";
+    }
+    case "TGt": {
+      return "gt";
+    }
+    case "TGte": {
+      return "gte";
+    }
+    default: {
+      return "eq";
+    }
+  }
+};
 const parseInfix: _Curry<
   [
     toks: LocTok[],
@@ -1541,11 +1784,14 @@ const parseExprBp: _Curry<
       b: number,
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) =>
-    ((_v) =>
-      _v._tag === "TLet"
-        ? parseLetIn(toks, pos, hooks)
-        : and(minBp === 0, looksLikeLambda(toks, pos))
+  ) => {
+    const $match = tokAt(toks, pos).tok;
+    switch ($match._tag) {
+      case "TLet": {
+        return parseLetIn(toks, pos, hooks);
+      }
+      default: {
+        return and(minBp === 0, looksLikeLambda(toks, pos))
           ? parseLambda(toks, pos, hooks)
           : _Result_flatMap(
               ([left, p]) =>
@@ -1557,7 +1803,10 @@ const parseExprBp: _Curry<
                   infixLoop(toks, minBp, left, p, hooks),
                 ),
               parseAtomOrCall(toks, pos, hooks),
-            ))(tokAt(toks, pos).tok),
+            );
+      }
+    }
+  },
 );
 const parseExpr: _Curry<
   [
@@ -1630,15 +1879,22 @@ const parseCallPart: _Curry<
         )
       : _Result_map(([v, k]: [Expr, number]) => _tuple(CPPos(v), k), parseExpr(toks, pos, hooks)),
 );
-const callPartSpan: (p: CallPart) => SpanAt = (p: CallPart) =>
-  ((_v) =>
-    _v._tag === "CPPos"
-      ? (({ value }) => exprSpan(value))(_v)
-      : _v._tag === "CPLab"
-        ? (({ value, labelSpan }) => spanning(labelSpan, exprSpan(value)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(p);
+const callPartSpan: (p: CallPart) => SpanAt = (p: CallPart) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "CPPos": {
+      const { value } = $match;
+      return exprSpan(value);
+    }
+    case "CPLab": {
+      const { value, labelSpan } = $match;
+      return spanning(labelSpan, exprSpan(value));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 /**
  * Positionals first, then a single trailing labeled group; a positional after
  * a label is an error, so the record argument is always last.
@@ -1670,15 +1926,22 @@ const splitCallParts: _Curry<
             throw new Error("non-exhaustive match");
           })())(parts),
 );
-const labeledField: (p: CallPart) => Field = (p: CallPart) =>
-  ((_v) =>
-    _v._tag === "CPLab"
-      ? (({ name, value, labelSpan }) => ({ name: name, nameSpan: labelSpan, value: value }))(_v)
-      : _v._tag === "CPPos"
-        ? (({ value }) => ({ name: "", nameSpan: exprSpan(value), value: value }))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(p);
+const labeledField: (p: CallPart) => Field = (p: CallPart) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "CPLab": {
+      const { name, value, labelSpan } = $match;
+      return { name: name, nameSpan: labelSpan, value: value };
+    }
+    case "CPPos": {
+      const { value } = $match;
+      return { name: "", nameSpan: exprSpan(value), value: value };
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const unionSpans: _Curry<[parts: CallPart[], acc: SpanAt], SpanAt> = _curry(
   2,
   (parts: CallPart[], acc: SpanAt) =>
@@ -1744,39 +2007,46 @@ const postfixLoop: _Curry<
       b: number,
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[],
-  ) =>
-    ((_v) =>
-      _v._tag === "TLparen"
-        ? _Result_flatMap(
-            ([parts, p]) =>
-              _Result_flatMap(
-                (p2) =>
-                  _Result_flatMap(
-                    ([args, origin]) =>
-                      postfixLoop(
-                        toks,
-                        Ast.ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)),
-                        p2,
-                        hooks,
-                      ),
-                    callArgsOf(parts),
-                  ),
-                expectTok(TRparen as Tok, toks, p),
-              ),
-            listUntilH(TRparen as Tok, parseCallPart, toks, pos + 1, hooks),
-          )
-        : _v._tag === "TDot"
-          ? _Result_flatMap(
-              ([id, p]) =>
-                postfixLoop(
-                  toks,
-                  Ast.EField(e, id.name, false, spanning(exprSpan(e), id.span)),
-                  p,
-                  hooks,
+  ) => {
+    const $match = tokAt(toks, pos).tok;
+    switch ($match._tag) {
+      case "TLparen": {
+        return _Result_flatMap(
+          ([parts, p]) =>
+            _Result_flatMap(
+              (p2) =>
+                _Result_flatMap(
+                  ([args, origin]) =>
+                    postfixLoop(
+                      toks,
+                      Ast.ECall(e, args, origin, toEnd(exprSpan(e), toks, p2)),
+                      p2,
+                      hooks,
+                    ),
+                  callArgsOf(parts),
                 ),
-              expectLabel(toks, pos + 1),
-            )
-          : (Ok(_tuple(e, pos)) as Result<[Expr, number], PErr>))(tokAt(toks, pos).tok),
+              expectTok(TRparen as Tok, toks, p),
+            ),
+          listUntilH(TRparen as Tok, parseCallPart, toks, pos + 1, hooks),
+        );
+      }
+      case "TDot": {
+        return _Result_flatMap(
+          ([id, p]) =>
+            postfixLoop(
+              toks,
+              Ast.EField(e, id.name, false, spanning(exprSpan(e), id.span)),
+              p,
+              hooks,
+            ),
+          expectLabel(toks, pos + 1),
+        );
+      }
+      default: {
+        return Ok(_tuple(e, pos)) as Result<[Expr, number], PErr>;
+      }
+    }
+  },
 );
 const parseAtomOrCall: _Curry<
   [
@@ -1845,137 +2115,116 @@ const parseAtom: _Curry<
   ) => {
     const lt = tokAt(toks, pos);
     const sp: SpanAt = spanOf(lt);
-    return ((_v) =>
-      _v._tag === "TSwitch"
-        ? parseMatch(toks, pos, hooks)
-        : _v._tag === "TDo"
-          ? parseDo(toks, pos, hooks)
-          : _v._tag === "TLoop"
-            ? parseLoop(toks, pos, hooks)
-            : _v._tag === "TRecur"
-              ? parseRecur(toks, pos, hooks)
-              : _v._tag === "TLbrace"
-                ? parseRecord(toks, pos, hooks)
-                : _v._tag === "TLbracket"
-                  ? parseArr(toks, pos, hooks)
-                  : _v._tag === "TAt"
-                    ? parseList(toks, pos, hooks)
-                    : _v._tag === "THash"
-                      ? parseHash(toks, pos, hooks)
-                      : _v._tag === "TTmplStart"
-                        ? parseInterp(toks, pos, hooks)
-                        : _Result_flatMap(
-                            (claimed) =>
-                              ((_v) =>
-                                _v._tag === "Some"
-                                  ? (({ value: [e, p] }) =>
-                                      Ok(_tuple(e, p)) as Result<[Expr, number], PErr>)(
-                                      _v as Extract<Option<[Expr, number]>, { _tag: "Some" }>,
-                                    )
-                                  : _v._tag === "None"
-                                    ? ((_v) =>
-                                        _v._tag === "TNum"
-                                          ? (({ value, raw }) =>
-                                              Ok(
-                                                _tuple(Ast.ENum(value, raw, sp), pos + 1),
-                                              ) as Result<[Expr, number], PErr>)(_v)
-                                          : _v._tag === "TBool"
-                                            ? (({ value }) =>
-                                                Ok(_tuple(Ast.EBool(value, sp), pos + 1)) as Result<
-                                                  [Expr, number],
-                                                  PErr
-                                                >)(_v)
-                                            : _v._tag === "TStr"
-                                              ? (({ value }) =>
-                                                  Ok(
-                                                    _tuple(Ast.EStr(value, sp), pos + 1),
-                                                  ) as Result<[Expr, number], PErr>)(_v)
-                                              : _v._tag === "TId"
-                                                ? (({ value: name }) =>
-                                                    Ok(
-                                                      _tuple(Ast.ERef(name, sp), pos + 1),
-                                                    ) as Result<[Expr, number], PErr>)(_v)
-                                                : _v._tag === "TLparen"
-                                                  ? ((nxt) =>
-                                                      nxt.tok._tag === "TRparen"
-                                                        ? (Ok(
+    const $match = lt.tok;
+    switch ($match._tag) {
+      case "TSwitch": {
+        return parseMatch(toks, pos, hooks);
+      }
+      case "TDo": {
+        return parseDo(toks, pos, hooks);
+      }
+      case "TLoop": {
+        return parseLoop(toks, pos, hooks);
+      }
+      case "TRecur": {
+        return parseRecur(toks, pos, hooks);
+      }
+      case "TLbrace": {
+        return parseRecord(toks, pos, hooks);
+      }
+      case "TLbracket": {
+        return parseArr(toks, pos, hooks);
+      }
+      case "TAt": {
+        return parseList(toks, pos, hooks);
+      }
+      case "THash": {
+        return parseHash(toks, pos, hooks);
+      }
+      case "TTmplStart": {
+        return parseInterp(toks, pos, hooks);
+      }
+      default: {
+        return _Result_flatMap(
+          (claimed) =>
+            ((_v) =>
+              _v._tag === "Some"
+                ? (({ value: [e, p] }) => Ok(_tuple(e, p)) as Result<[Expr, number], PErr>)(
+                    _v as Extract<Option<[Expr, number]>, { _tag: "Some" }>,
+                  )
+                : _v._tag === "None"
+                  ? ((_v) =>
+                      _v._tag === "TNum"
+                        ? (({ value, raw }) =>
+                            Ok(_tuple(Ast.ENum(value, raw, sp), pos + 1)) as Result<
+                              [Expr, number],
+                              PErr
+                            >)(_v)
+                        : _v._tag === "TBool"
+                          ? (({ value }) =>
+                              Ok(_tuple(Ast.EBool(value, sp), pos + 1)) as Result<
+                                [Expr, number],
+                                PErr
+                              >)(_v)
+                          : _v._tag === "TStr"
+                            ? (({ value }) =>
+                                Ok(_tuple(Ast.EStr(value, sp), pos + 1)) as Result<
+                                  [Expr, number],
+                                  PErr
+                                >)(_v)
+                            : _v._tag === "TId"
+                              ? (({ value: name }) =>
+                                  Ok(_tuple(Ast.ERef(name, sp), pos + 1)) as Result<
+                                    [Expr, number],
+                                    PErr
+                                  >)(_v)
+                              : _v._tag === "TLparen"
+                                ? ((nxt) =>
+                                    nxt.tok._tag === "TRparen"
+                                      ? (Ok(
+                                          _tuple(Ast.EUnit(toEnd(sp, toks, pos + 2)), pos + 2),
+                                        ) as Result<[Expr, number], PErr>)
+                                      : and(isSectionOp(nxt.tok), nxt.tok._tag !== "TMinus")
+                                        ? parseRightSection(toks, sp, pos + 1, hooks)
+                                        : _Result_flatMap(
+                                            ([first, p]) =>
+                                              tokAt(toks, p).tok._tag === "TComma"
+                                                ? _Result_flatMap(
+                                                    ([elements, p2]) =>
+                                                      _Result_flatMap(
+                                                        (p3) =>
+                                                          Ok(
                                                             _tuple(
-                                                              Ast.EUnit(toEnd(sp, toks, pos + 2)),
-                                                              pos + 2,
+                                                              Ast.ETuple(
+                                                                elements,
+                                                                toEnd(sp, toks, p3),
+                                                              ),
+                                                              p3,
                                                             ),
-                                                          ) as Result<[Expr, number], PErr>)
-                                                        : and(
-                                                              isSectionOp(nxt.tok),
-                                                              nxt.tok._tag !== "TMinus",
-                                                            )
-                                                          ? parseRightSection(
-                                                              toks,
-                                                              sp,
-                                                              pos + 1,
-                                                              hooks,
-                                                            )
-                                                          : _Result_flatMap(
-                                                              ([first, p]) =>
-                                                                tokAt(toks, p).tok._tag === "TComma"
-                                                                  ? _Result_flatMap(
-                                                                      ([elements, p2]) =>
-                                                                        _Result_flatMap(
-                                                                          (p3) =>
-                                                                            Ok(
-                                                                              _tuple(
-                                                                                Ast.ETuple(
-                                                                                  elements,
-                                                                                  toEnd(
-                                                                                    sp,
-                                                                                    toks,
-                                                                                    p3,
-                                                                                  ),
-                                                                                ),
-                                                                                p3,
-                                                                              ),
-                                                                            ) as Result<
-                                                                              [Expr, number],
-                                                                              PErr
-                                                                            >,
-                                                                          expectTok(
-                                                                            TRparen as Tok,
-                                                                            toks,
-                                                                            p2,
-                                                                          ),
-                                                                        ),
-                                                                      sepByH(
-                                                                        parseExpr,
-                                                                        toks,
-                                                                        p + 1,
-                                                                        [first],
-                                                                        hooks,
-                                                                      ),
-                                                                    )
-                                                                  : _Result_map(
-                                                                      (p2: number) =>
-                                                                        _tuple(first, p2),
-                                                                      expectTok(
-                                                                        TRparen as Tok,
-                                                                        toks,
-                                                                        p,
-                                                                      ),
-                                                                    ),
-                                                              parseExpr(toks, pos + 1, hooks),
-                                                            ))(tokAt(toks, pos + 1))
-                                                  : ((t) =>
-                                                      errAt(`unexpected token ${tokName(t)}`, lt))(
-                                                      _v,
-                                                    ))(lt.tok)
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(claimed),
-                            runParseHooks(
-                              hooks,
-                              toks,
-                              pos,
-                              _curry(2, (t: LocTok[], p: number) => parseExpr(t, p, hooks)),
-                            ),
-                          ))(lt.tok);
+                                                          ) as Result<[Expr, number], PErr>,
+                                                        expectTok(TRparen as Tok, toks, p2),
+                                                      ),
+                                                    sepByH(parseExpr, toks, p + 1, [first], hooks),
+                                                  )
+                                                : _Result_map(
+                                                    (p2: number) => _tuple(first, p2),
+                                                    expectTok(TRparen as Tok, toks, p),
+                                                  ),
+                                            parseExpr(toks, pos + 1, hooks),
+                                          ))(tokAt(toks, pos + 1))
+                                : ((t) => errAt(`unexpected token ${tokName(t)}`, lt))(_v))(lt.tok)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(claimed),
+          runParseHooks(
+            hooks,
+            toks,
+            pos,
+            _curry(2, (t: LocTok[], p: number) => parseExpr(t, p, hooks)),
+          ),
+        );
+      }
+    }
   },
 );
 const parseInterpLoop: _Curry<
@@ -2058,10 +2307,17 @@ const parseInterp: _Curry<
     ) => Result<Option<[Expr, number]>, PErr>)[],
   ) => {
     const lt = tokAt(toks, pos);
-    return ((_v) =>
-      _v._tag === "TTmplStart"
-        ? (({ value }) => parseInterpLoop(toks, pos + 1, spanOf(lt), [Ast.IPLit(value)], hooks))(_v)
-        : ((t) => errAt(`expected tmplstart, got ${tokName(t)}`, lt))(_v))(lt.tok);
+    const $match = lt.tok;
+    switch ($match._tag) {
+      case "TTmplStart": {
+        const { value } = $match;
+        return parseInterpLoop(toks, pos + 1, spanOf(lt), [Ast.IPLit(value)], hooks);
+      }
+      default: {
+        const t = $match;
+        return errAt(`expected tmplstart, got ${tokName(t)}`, lt);
+      }
+    }
   },
 );
 const parseField: _Curry<
@@ -2480,37 +2736,66 @@ const parseGuard: _Curry<
       tokAt(toks, pos).tok,
     ),
 );
-const patSpan: (p: Pattern) => SpanAt = (p: Pattern) =>
-  ((_v) =>
-    _v._tag === "PWild"
-      ? (({ span: sp }) => sp)(_v)
-      : _v._tag === "PUnit"
-        ? (({ span: sp }) => sp)(_v)
-        : _v._tag === "PBind"
-          ? (({ span: sp }) => sp)(_v)
-          : _v._tag === "PAs"
-            ? (({ span: sp }) => sp)(_v)
-            : _v._tag === "PLit"
-              ? (({ span: sp }) => sp)(_v)
-              : _v._tag === "PBool"
-                ? (({ span: sp }) => sp)(_v)
-                : _v._tag === "PStr"
-                  ? (({ span: sp }) => sp)(_v)
-                  : _v._tag === "PTuple"
-                    ? (({ span: sp }) => sp)(_v)
-                    : _v._tag === "PRecord"
-                      ? (({ span: sp }) => sp)(_v)
-                      : _v._tag === "PCtor"
-                        ? (({ span: sp }) => sp)(_v)
-                        : _v._tag === "PArr"
-                          ? (({ span: sp }) => sp)(_v)
-                          : _v._tag === "PList"
-                            ? (({ span: sp }) => sp)(_v)
-                            : _v._tag === "POr"
-                              ? (({ span: sp }) => sp)(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(p);
+const patSpan: (p: Pattern) => SpanAt = (p: Pattern) => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PWild": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PUnit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PBind": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PAs": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PLit": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PBool": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PStr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PTuple": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PRecord": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PCtor": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PArr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "PList": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "POr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const altsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: Pattern[], lastSpan: SpanAt],
   Result<[Pattern[], number, SpanAt], PErr>
@@ -3043,29 +3328,34 @@ const restOk: (rest: Option<Pattern>) => boolean = (rest: Option<Pattern>) =>
 const patElemsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: Pattern[]],
   Result<[Pattern[], Option<Pattern>, number], PErr>
-> = _curry(3, (toks: LocTok[], pos: number, acc: Pattern[]) =>
-  ((_v) =>
-    _v._tag === "TSpread"
-      ? _Result_flatMap(
-          ([rest, p]) =>
-            Ok(_tuple(acc, Some(rest) as Option<Pattern>, p)) as Result<
-              [Pattern[], Option<Pattern>, number],
-              PErr
-            >,
-          parsePattern(toks, pos + 1),
-        )
-      : _Result_flatMap(
-          ([pat, p]) =>
-            ((elems: Pattern[]) =>
-              tokAt(toks, p).tok._tag === "TComma"
-                ? patElemsLoop(toks, p + 1, elems)
-                : (Ok(_tuple(elems, None as Option<Pattern>, p)) as Result<
-                    [Pattern[], Option<Pattern>, number],
-                    PErr
-                  >))(_Array_append(pat, acc)),
-          parsePattern(toks, pos),
-        ))(tokAt(toks, pos).tok),
-);
+> = _curry(3, (toks: LocTok[], pos: number, acc: Pattern[]) => {
+  const $match = tokAt(toks, pos).tok;
+  switch ($match._tag) {
+    case "TSpread": {
+      return _Result_flatMap(
+        ([rest, p]) =>
+          Ok(_tuple(acc, Some(rest) as Option<Pattern>, p)) as Result<
+            [Pattern[], Option<Pattern>, number],
+            PErr
+          >,
+        parsePattern(toks, pos + 1),
+      );
+    }
+    default: {
+      return _Result_flatMap(
+        ([pat, p]) =>
+          ((elems: Pattern[]) =>
+            tokAt(toks, p).tok._tag === "TComma"
+              ? patElemsLoop(toks, p + 1, elems)
+              : (Ok(_tuple(elems, None as Option<Pattern>, p)) as Result<
+                  [Pattern[], Option<Pattern>, number],
+                  PErr
+                >))(_Array_append(pat, acc)),
+        parsePattern(toks, pos),
+      );
+    }
+  }
+});
 const parseArrPattern: _Curry<
   [toks: LocTok[], pos: number],
   Result<[Pattern, number], PErr>
@@ -3154,9 +3444,10 @@ const parseTypeAtom: _Curry<
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = tokAt(toks, pos);
   const sp: SpanAt = spanOf(lt);
-  return ((_v) =>
-    _v._tag === "TLparen"
-      ? tokAt(toks, pos + 1).tok._tag === "TRparen"
+  const $match = lt.tok;
+  switch ($match._tag) {
+    case "TLparen": {
+      return tokAt(toks, pos + 1).tok._tag === "TRparen"
         ? (Ok(_tuple(Ast.TyName("unit", toEnd(sp, toks, pos + 2)), pos + 2)) as Result<
             [TypeExpr, number],
             PErr
@@ -3181,65 +3472,77 @@ const parseTypeAtom: _Curry<
                     expectTok(TRparen as Tok, toks, p),
                   ),
             parseTypeExpr(toks, pos + 1),
-          )
-      : _v._tag === "TLbracket"
-        ? _Result_flatMap(
-            ([elem, p]) =>
-              _Result_flatMap(
-                (p2) =>
-                  Ok(_tuple(Ast.TyList(elem, toEnd(sp, toks, p2)), p2)) as Result<
-                    [TypeExpr, number],
-                    PErr
-                  >,
-                expectTok(TRbracket as Tok, toks, p),
-              ),
-            parseTypeExpr(toks, pos + 1),
-          )
-        : _v._tag === "TStr"
-          ? (({ value }) =>
-              Ok(_tuple(Ast.TyLit(value, sp), pos + 1)) as Result<[TypeExpr, number], PErr>)(_v)
-          : _Result_flatMap(
-              ([nm, p]) =>
-                and(isUpper(nm.name), tokAt(toks, p).tok._tag === "TDot")
-                  ? _Result_flatMap(
-                      ([q, p2]) =>
-                        isUpper(q.name)
-                          ? (Ok(
-                              _tuple(
-                                Ast.TyQual(
-                                  nm.name,
-                                  q.name,
-                                  q.span,
-                                  [] as TypeExpr[],
-                                  spanning(nm.span, q.span),
-                                ),
-                                p2,
-                              ),
-                            ) as Result<[TypeExpr, number], PErr>)
-                          : errAt(
-                              `a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'`,
-                              tokAt(toks, p2),
-                            ),
-                      expectId(toks, p + 1),
-                    )
-                  : (Ok(_tuple(Ast.TyName(nm.name, nm.span), p)) as Result<
-                      [TypeExpr, number],
-                      PErr
-                    >),
-              expectId(toks, pos),
-            ))(lt.tok);
+          );
+    }
+    case "TLbracket": {
+      return _Result_flatMap(
+        ([elem, p]) =>
+          _Result_flatMap(
+            (p2) =>
+              Ok(_tuple(Ast.TyList(elem, toEnd(sp, toks, p2)), p2)) as Result<
+                [TypeExpr, number],
+                PErr
+              >,
+            expectTok(TRbracket as Tok, toks, p),
+          ),
+        parseTypeExpr(toks, pos + 1),
+      );
+    }
+    case "TStr": {
+      const { value } = $match;
+      return Ok(_tuple(Ast.TyLit(value, sp), pos + 1)) as Result<[TypeExpr, number], PErr>;
+    }
+    default: {
+      return _Result_flatMap(
+        ([nm, p]) =>
+          and(isUpper(nm.name), tokAt(toks, p).tok._tag === "TDot")
+            ? _Result_flatMap(
+                ([q, p2]) =>
+                  isUpper(q.name)
+                    ? (Ok(
+                        _tuple(
+                          Ast.TyQual(
+                            nm.name,
+                            q.name,
+                            q.span,
+                            [] as TypeExpr[],
+                            spanning(nm.span, q.span),
+                          ),
+                          p2,
+                        ),
+                      ) as Result<[TypeExpr, number], PErr>)
+                    : errAt(
+                        `a type variable cannot be qualified; expected a constructor after '${nm.name}.', got '${q.name}'`,
+                        tokAt(toks, p2),
+                      ),
+                expectId(toks, p + 1),
+              )
+            : (Ok(_tuple(Ast.TyName(nm.name, nm.span), p)) as Result<[TypeExpr, number], PErr>),
+        expectId(toks, pos),
+      );
+    }
+  }
 });
-const startsTypeAtom: (t: Tok) => boolean = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TId"
-      ? true
-      : _v._tag === "TLparen"
-        ? true
-        : _v._tag === "TLbracket"
-          ? true
-          : _v._tag === "TStr"
-            ? true
-            : false)(t);
+const startsTypeAtom: (t: Tok) => boolean = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TId": {
+      return true;
+    }
+    case "TLparen": {
+      return true;
+    }
+    case "TLbracket": {
+      return true;
+    }
+    case "TStr": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const legacyTypeArgsLoop: _Curry<
   [toks: LocTok[], pos: number, acc: TypeExpr[], lastSp: Option<SpanAt>],
   Result<[TypeExpr[], Option<SpanAt>, number], PErr>
@@ -3474,12 +3777,18 @@ const typeParamsLoop: <B>(
   toks: LocTok[],
   pos: number,
   acc: string[],
-) => Result<[string[], number], B> = _curry(3, <B>(toks: LocTok[], pos: number, acc: string[]) =>
-  ((_v) =>
-    _v._tag === "TId"
-      ? (({ value: name }) => typeParamsLoop(toks, pos + 1, _Array_append(name, acc)))(_v)
-      : Ok(_tuple(acc, pos)))(tokAt(toks, pos).tok),
-);
+) => Result<[string[], number], B> = _curry(3, <B>(toks: LocTok[], pos: number, acc: string[]) => {
+  const $match = tokAt(toks, pos).tok;
+  switch ($match._tag) {
+    case "TId": {
+      const { value: name } = $match;
+      return typeParamsLoop(toks, pos + 1, _Array_append(name, acc));
+    }
+    default: {
+      return Ok(_tuple(acc, pos));
+    }
+  }
+});
 const parseTypeParams: _Curry<
   [toks: LocTok[], pos: number],
   Result<[string[], number], PErr>
@@ -3499,15 +3808,23 @@ const parseTypeParams: _Curry<
       )
     : typeParamsLoop(toks, pos, [] as string[]),
 );
-const startsTypeSynonym: (t: Tok) => boolean = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TStr"
-      ? true
-      : _v._tag === "TLparen"
-        ? true
-        : _v._tag === "TLbracket"
-          ? true
-          : false)(t);
+const startsTypeSynonym: (t: Tok) => boolean = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TStr": {
+      return true;
+    }
+    case "TLparen": {
+      return true;
+    }
+    case "TLbracket": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const parseType: _Curry<[toks: LocTok[], pos: number], Result<[Stmt, number], PErr>> = _curry(
   2,
   (toks: LocTok[], pos: number) => {
@@ -3977,33 +4294,64 @@ const parseLet: _Curry<
 );
 const setLetMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
   3,
-  (exported: boolean, doc: Option<string>, s: Stmt) =>
-    ((_v) =>
-      _v._tag === "SLet"
-        ? (({ name, nameSpan, annot, value, span }) =>
-            Ast.SLet(name, nameSpan, annot, value, exported, doc, span))(_v)
-        : ((other) => other)(_v))(s),
+  (exported: boolean, doc: Option<string>, s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SLet": {
+        const { name, nameSpan, annot, value, span } = $match;
+        return Ast.SLet(name, nameSpan, annot, value, exported, doc, span);
+      }
+      default: {
+        const other = $match;
+        return other;
+      }
+    }
+  },
 );
 const setTypeMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
   3,
-  (exported: boolean, doc: Option<string>, s: Stmt) =>
-    ((_v) =>
-      _v._tag === "SType"
-        ? (({ name, nameSpan, params, ctors, alias, aliasType, span }) =>
-            Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span))(_v)
-        : ((other) => other)(_v))(s),
+  (exported: boolean, doc: Option<string>, s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SType": {
+        const { name, nameSpan, params, ctors, alias, aliasType, span } = $match;
+        return Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span);
+      }
+      default: {
+        const other = $match;
+        return other;
+      }
+    }
+  },
 );
 const setExternMeta: _Curry<[exported: boolean, doc: Option<string>, s: Stmt], Stmt> = _curry(
   3,
-  (exported: boolean, doc: Option<string>, s: Stmt) =>
-    ((_v) =>
-      _v._tag === "SExtern"
-        ? (({ name, nameSpan, params, typeExpr: t, module: m, imported: i, curried, span }) =>
-            Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span))(_v)
-        : _v._tag === "SType"
-          ? (({ name, nameSpan, params, ctors, alias, aliasType, span }) =>
-              Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span))(_v)
-          : ((other) => other)(_v))(s),
+  (exported: boolean, doc: Option<string>, s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SExtern": {
+        const {
+          name,
+          nameSpan,
+          params,
+          typeExpr: t,
+          module: m,
+          imported: i,
+          curried,
+          span,
+        } = $match;
+        return Ast.SExtern(name, nameSpan, params, t, m, i, curried, exported, doc, span);
+      }
+      case "SType": {
+        const { name, nameSpan, params, ctors, alias, aliasType, span } = $match;
+        return Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, doc, span);
+      }
+      default: {
+        const other = $match;
+        return other;
+      }
+    }
+  },
 );
 const parseExprStmt: <B>(
   toks: LocTok[],
@@ -4062,54 +4410,64 @@ const parseStmt: _Curry<
   ) => {
     const lt: LocTok = tokAt(toks, pos);
     const doc: Option<string> = lt.doc;
-    return ((_v) =>
-      _v._tag === "TImport"
-        ? _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport(toks, pos))
-        : _v._tag === "TExport"
-          ? ((exportSp: SpanAt) =>
-              ((_v) =>
-                _v._tag === "TType"
-                  ? _Result_map(
-                      ([s, p]: [Stmt, number]) =>
-                        _tuple([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp),
-                      parseType(toks, pos + 1),
-                    )
-                  : _v._tag === "TExtern"
-                    ? _Result_map(
-                        ([s, p]: [Stmt, number]) =>
-                          _tuple([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp),
-                        parseExtern(toks, pos + 1),
-                      )
-                    : _v._tag === "TLet"
-                      ? _Result_map(
-                          ([stmts, p, tmp2]: [Stmt[], number, number]) =>
-                            _tuple(
-                              widenHeadToExport(exportSp, map(setLetMeta(true, doc), stmts)),
-                              p,
-                              tmp2,
-                            ),
-                          parseLet(toks, pos + 1, tmp, hooks),
-                        )
-                      : errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1)))(
-                tokAt(toks, pos + 1).tok,
-              ))(spanOf(lt))
-          : _v._tag === "TType"
-            ? _Result_map(
-                ([s, p]: [Stmt, number]) => _tuple([setTypeMeta(false, doc, s)], p, tmp),
-                parseType(toks, pos),
-              )
-            : _v._tag === "TExtern"
-              ? _Result_map(
-                  ([s, p]: [Stmt, number]) => _tuple([setExternMeta(false, doc, s)], p, tmp),
-                  parseExtern(toks, pos),
-                )
-              : _v._tag === "TLet"
-                ? _Result_map(
-                    ([stmts, p, tmp2]: [Stmt[], number, number]) =>
-                      _tuple(map(setLetMeta(false, doc), stmts), p, tmp2),
-                    parseLet(toks, pos, tmp, hooks),
-                  )
-                : parseExprStmt(toks, pos, tmp, hooks))(lt.tok);
+    const $match = lt.tok;
+    switch ($match._tag) {
+      case "TImport": {
+        return _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport(toks, pos));
+      }
+      case "TExport": {
+        const exportSp: SpanAt = spanOf(lt);
+        const $match$ = tokAt(toks, pos + 1).tok;
+        switch ($match$._tag) {
+          case "TType": {
+            return _Result_map(
+              ([s, p]: [Stmt, number]) =>
+                _tuple([widenToExport(exportSp, setTypeMeta(true, doc, s))], p, tmp),
+              parseType(toks, pos + 1),
+            );
+          }
+          case "TExtern": {
+            return _Result_map(
+              ([s, p]: [Stmt, number]) =>
+                _tuple([widenToExport(exportSp, setExternMeta(true, doc, s))], p, tmp),
+              parseExtern(toks, pos + 1),
+            );
+          }
+          case "TLet": {
+            return _Result_map(
+              ([stmts, p, tmp2]: [Stmt[], number, number]) =>
+                _tuple(widenHeadToExport(exportSp, map(setLetMeta(true, doc), stmts)), p, tmp2),
+              parseLet(toks, pos + 1, tmp, hooks),
+            );
+          }
+          default: {
+            return errAt("`export` must precede let, type, or extern", tokAt(toks, pos + 1));
+          }
+        }
+      }
+      case "TType": {
+        return _Result_map(
+          ([s, p]: [Stmt, number]) => _tuple([setTypeMeta(false, doc, s)], p, tmp),
+          parseType(toks, pos),
+        );
+      }
+      case "TExtern": {
+        return _Result_map(
+          ([s, p]: [Stmt, number]) => _tuple([setExternMeta(false, doc, s)], p, tmp),
+          parseExtern(toks, pos),
+        );
+      }
+      case "TLet": {
+        return _Result_map(
+          ([stmts, p, tmp2]: [Stmt[], number, number]) =>
+            _tuple(map(setLetMeta(false, doc), stmts), p, tmp2),
+          parseLet(toks, pos, tmp, hooks),
+        );
+      }
+      default: {
+        return parseExprStmt(toks, pos, tmp, hooks);
+      }
+    }
   },
 );
 /**
@@ -4120,50 +4478,49 @@ const parseStmt: _Curry<
  */
 const widenToExport: <A>(start: { start: number } & A, s: Stmt) => Stmt = _curry(
   2,
-  <A>(start: { start: number } & A, s: Stmt) =>
-    ((_v) =>
-      _v._tag === "SLet"
-        ? (({ name, nameSpan, annot, value, exported, doc, span }) =>
-            Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span)))(_v)
-        : _v._tag === "SType"
-          ? (({ name, nameSpan, params, ctors, alias, aliasType, exported, doc, span }) =>
-              Ast.SType(
-                name,
-                nameSpan,
-                params,
-                ctors,
-                alias,
-                aliasType,
-                exported,
-                doc,
-                spanning(start, span),
-              ))(_v)
-          : _v._tag === "SExtern"
-            ? (({
-                name,
-                nameSpan,
-                params,
-                typeExpr,
-                module,
-                imported,
-                curried,
-                exported,
-                doc,
-                span,
-              }) =>
-                Ast.SExtern(
-                  name,
-                  nameSpan,
-                  params,
-                  typeExpr,
-                  module,
-                  imported,
-                  curried,
-                  exported,
-                  doc,
-                  spanning(start, span),
-                ))(_v)
-            : ((other) => other)(_v))(s),
+  <A>(start: { start: number } & A, s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SLet": {
+        const { name, nameSpan, annot, value, exported, doc, span } = $match;
+        return Ast.SLet(name, nameSpan, annot, value, exported, doc, spanning(start, span));
+      }
+      case "SType": {
+        const { name, nameSpan, params, ctors, alias, aliasType, exported, doc, span } = $match;
+        return Ast.SType(
+          name,
+          nameSpan,
+          params,
+          ctors,
+          alias,
+          aliasType,
+          exported,
+          doc,
+          spanning(start, span),
+        );
+      }
+      case "SExtern": {
+        const { name, nameSpan, params, typeExpr, module, imported, curried, exported, doc, span } =
+          $match;
+        return Ast.SExtern(
+          name,
+          nameSpan,
+          params,
+          typeExpr,
+          module,
+          imported,
+          curried,
+          exported,
+          doc,
+          spanning(start, span),
+        );
+      }
+      default: {
+        const other = $match;
+        return other;
+      }
+    }
+  },
 );
 const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stmt[] = _curry(
   2,
@@ -4178,19 +4535,29 @@ const widenHeadToExport: <A>(start: { start: number } & A, stmts: Stmt[]) => Stm
  * TEof always terminates. Plugin recovery anchors retired in ADR 0130;
  * the shipped parser carries the core set only.
  */
-const isSyncTok: (t: Tok) => boolean = (t: Tok) =>
-  ((_v) =>
-    _v._tag === "TLet"
-      ? true
-      : _v._tag === "TType"
-        ? true
-        : _v._tag === "TExtern"
-          ? true
-          : _v._tag === "TImport"
-            ? true
-            : _v._tag === "TExport"
-              ? true
-              : false)(t);
+const isSyncTok: (t: Tok) => boolean = (t: Tok) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TLet": {
+      return true;
+    }
+    case "TType": {
+      return true;
+    }
+    case "TExtern": {
+      return true;
+    }
+    case "TImport": {
+      return true;
+    }
+    case "TExport": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const isOpener: (t: Tok) => boolean = (t: Tok) =>
   or(or(t._tag === "TLparen", t._tag === "TLbrace"), t._tag === "TLbracket");
 const isCloser: (t: Tok) => boolean = (t: Tok) =>
@@ -4533,10 +4900,18 @@ export const parseWith: <A, B, C, D, E>(
     >,
   ) => {
     const r: { stmts: Stmt[]; diagnostics: PErr[] } = parseRecovering(toks, pluginsOpt);
-    return _Option_match(
-      _Array_get(0, r.diagnostics),
-      () => Ok(r.stmts) as Result<Stmt[], PErr>,
-      (d) => Err(d) as Result<Stmt[], PErr>,
-    );
+    const $match = _Array_get(0, r.diagnostics);
+    switch ($match._tag) {
+      case "Some": {
+        const { value: d } = $match;
+        return Err(d) as Result<Stmt[], PErr>;
+      }
+      case "None": {
+        return Ok(r.stmts) as Result<Stmt[], PErr>;
+      }
+      default: {
+        throw new Error("non-exhaustive match");
+      }
+    }
   },
 );

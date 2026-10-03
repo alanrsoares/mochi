@@ -1,14 +1,21 @@
 // Runtime helper definitions omitted.
 const Circle = (_0) => ({ _tag: "Circle", _0 });
-const area = (shape) =>
-  ((_v) =>
-    _v._tag === "Circle"
-      ? (({ _0: r }) => mul(pi, square(r)))(_v)
-      : _v._tag === "Rect"
-        ? (({ _0: w, _1: h }) => mul(w, h))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(shape);
+const area = (shape) => {
+  const $match = shape;
+  switch ($match._tag) {
+    case "Circle": {
+      const { _0: r } = $match;
+      return mul(pi, square(r));
+    }
+    case "Rect": {
+      const { _0: w, _1: h } = $match;
+      return mul(w, h);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const widen = _curry(2, (k, box) => ({ ...box, w: mul(box.w, k) }));
 const circleArea = area(Circle(2));
 const wider = widen(3, { w: 2, label: "box" });

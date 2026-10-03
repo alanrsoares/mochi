@@ -219,11 +219,15 @@ const typecheckWith: _Curry<
 const frontend: _Curry<
   [src: string, plugins: Option<HostPlugin[]>],
   Result<Stmt[], Stamped[]>
-> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
-  _Result_match(
-    lex(src),
-    (e) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
-    (tokens) => {
+> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) => {
+  const $match = lex(src);
+  switch ($match._tag) {
+    case "Err": {
+      const { error: e } = $match;
+      return Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>;
+    }
+    case "Ok": {
+      const { value: tokens } = $match;
       const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(tokens, plugins);
       return ((_v) =>
         _v.length === 0
@@ -235,9 +239,12 @@ const frontend: _Curry<
               Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>)(
               _v,
             ))(parsed.diagnostics);
-    },
-  ),
-);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 const pipelineWith: _Curry<
   [src: string, open: boolean, plugins: Option<HostPlugin[]>],
   Result<Stmt[], Stamped[]>
@@ -372,11 +379,12 @@ export const inferTypesRecoveringWith: _Curry<
     },
     Stamped[]
   >
-> = _curry(2, (src: string, opts: Opts) =>
-  _Result_match(
-    lex(src),
-    (e) =>
-      Err([stampStage("lex", e)]) as Result<
+> = _curry(2, (src: string, opts: Opts) => {
+  const $match = lex(src);
+  switch ($match._tag) {
+    case "Err": {
+      const { error: e } = $match;
+      return Err([stampStage("lex", e)]) as Result<
         {
           env: Map<string, Scheme>;
           types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
@@ -384,8 +392,10 @@ export const inferTypesRecoveringWith: _Curry<
           letParams: TypeAt[];
         },
         Stamped[]
-      >,
-    (tokens) => {
+      >;
+    }
+    case "Ok": {
+      const { value: tokens } = $match;
       const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(
         tokens,
         opts.plugins,
@@ -397,9 +407,12 @@ export const inferTypesRecoveringWith: _Curry<
           checkAll(parsed.stmts),
         ),
       );
-    },
-  ),
-);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+});
 export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;

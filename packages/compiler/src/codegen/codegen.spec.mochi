@@ -28,12 +28,42 @@ let genSrc = src =>
       codegen(stmts, #{}, true, namespaceRuntime, preludeJsDefs, runtimeDeps))
 
 testEach("builtin matches select their flat runtime dispatch", [
-  ("let f = x => switch x { | Ok(n) => n | Err(_) => 0 }", "_Result_match("),
-  ("let f = x => switch x { | Err(_) => 0 | Ok(n) => n }", "_Result_match("),
-  ("let f = x => switch x { | Some(n) => n | None => 0 }", "_Option_match("),
-  ("let f = x => switch x { | None => 0 | Some(n) => n }", "_Option_match(")
+  (
+    "let f = x => let matched = switch x { | Ok(n) => n | Err(_) => 0 } in matched",
+    "_Result_match("
+  ),
+  (
+    "let f = x => let matched = switch x { | Err(_) => 0 | Ok(n) => n } in matched",
+    "_Result_match("
+  ),
+  (
+    "let f = x => let matched = switch x { | Some(n) => n | None => 0 } in matched",
+    "_Option_match("
+  ),
+  (
+    "let f = x => let matched = switch x { | None => 0 | Some(n) => n } in matched",
+    "_Option_match("
+  )
 ], ((source, helper)) => switch genSrc(source) {
   | Ok(js) => js |> Str.contains(helper) |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("function-tail matches emit flat constructor cases", [
+  "let f = x => switch x { | Ok(n) => n | Err(_) => 0 }",
+  "let f = x => let fallback = 0 in switch x { | None => fallback | Some(n) => n }",
+  "type Shape = Dot | Box(number)\nlet f = x => switch x { | Box(n) => n | rest => 0 }"
+], source => switch genSrc(source) {
+  | Ok(js) => js |> Str.contains("switch ($match._tag)") |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("function-tail statement eligibility preserves ordered pattern tests", [
+  "let f = x => switch x { | Some(n) when n > 0 => n | Some(_) => 0 | None => 0 }",
+  "let f = x => switch x { | Ok(Some(n)) => n | Ok(None) => 0 | Err(_) => 0 }",
+  "let f = x => switch x { | true => 1 | false => 0 }"
+], source => switch genSrc(source) {
+  | Ok(js) => !(js |> Str.contains("switch ($match._tag)")) |> ok
   | Err(_) => false |> ok
 })
 
@@ -213,7 +243,7 @@ testEach("the JS backend lowers every match without @onrails/pattern", [
   {
     label: "variant switch",
     src: "type Light = Red | Green\nlet show = light => switch light { | Red => 1 | Green => 2 }",
-    want: "((_v) => _v._tag === \"Red\"\n    ? (1)\n    : _v._tag === \"Green\"\n    ? (2)"
+    want: "switch ($match._tag) { case \"Red\":"
   },
   {
     label: "nested pattern",
@@ -407,7 +437,7 @@ testEach("guardBaseType casts an arm its own tests do not narrow", [
   {
     label: "a discriminant test narrows on its own",
     src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(x) => x | Dot => Dot }",
-    want: "? (({ value: x }) => (x))(_v)"
+    want: "case \"Wrap\": { const { value: x } = $match;"
   },
   {
     label: "a guard runs under the same view as the body",
@@ -431,9 +461,9 @@ testEach("a nested arm on an unnamed scrutinee type keeps the match() chain", [
     want: "import { match } from \"@onrails/pattern\";"
   },
   {
-    label: "shallow arms stay ternaries",
+    label: "shallow tail arms use statements",
     src: "type Shape = Wrap(value: Shape) | Dot\nlet f = s => switch s { | Wrap(x) => x | Dot => Dot }",
-    want: "((_v) => _v._tag === \"Wrap\""
+    want: "switch ($match._tag)"
   }
 ], row => emitted(genericOpts, row.src) |> Str.contains(row.want) |> ok)
 

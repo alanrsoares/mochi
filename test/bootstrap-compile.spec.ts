@@ -83,7 +83,7 @@ test("well-typed source emits JavaScript", () => {
   expect(r._tag).toBe("Ok");
   if (r._tag === "Ok") {
     expect(r.value).toContain("const twice");
-    expect(r.value).toContain('._tag === "A"');
+    expect(r.value).toContain('case "A":');
   }
 });
 

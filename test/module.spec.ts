@@ -109,7 +109,7 @@ test("a switch on an imported variant is exhaustiveness-checked and destructures
   };
   const outs = unwrapOk(build(files, "/p/main.mochi"));
   // Pattern must destructure the imported ctor's KEY (`value`), not positional `_0`.
-  expect(jsFor(outs, "main.mochi")).toContain("? (({ value: v }) => (v))(_v)");
+  expect(jsFor(outs, "main.mochi")).toContain("const { value: v } = $match;");
 });
 
 test("a non-exhaustive switch on an imported variant is rejected", async () => {
@@ -143,7 +143,7 @@ test("a switch on a namespace-imported variant uses qualified patterns", async (
   };
   const outs = unwrapOk(build(files, "/p/main.mochi"));
   expect(jsFor(outs, "main.mochi")).toContain('import * as Opt from "./opt.js";');
-  expect(jsFor(outs, "main.mochi")).toContain("? (({ value: v }) => (v))(_v)");
+  expect(jsFor(outs, "main.mochi")).toContain("const { value: v } = $match;");
   expect(jsFor(outs, "main.mochi")).toContain("Opt.Some(1)");
 });
 

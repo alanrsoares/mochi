@@ -90,7 +90,9 @@ hand-authored TypeScript emitters or differential oracle (ADR 0131).
 
 Core Mochi uses exhaustive `switch`; TypeScript host tooling uses
 `@onrails/pattern`'s `.exhaustive()`. Ordinary emitted code does not use it: a `switch`
-normally lowers to a ternary chain over its scrutinee. Simple exhaustive builtin
+in expression position normally lowers to a ternary chain over its scrutinee.
+Flat, unguarded constructor matches at function tails emit native switch cases
+with direct returns ([ADR 0147](adr/0147-function-tail-match-statements.md)). Simple exhaustive builtin
 Result and Option matches use flat `_Result_match` / `_Option_match` runtime
 dispatch ([ADR 0146](adr/0146-builtin-match-dispatch.md)). Only the TS backend falls back to a
 `match()` chain for a nested arm on a scrutinee type it cannot name
