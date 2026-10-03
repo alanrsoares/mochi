@@ -4,6 +4,7 @@ import { preactDtsTypeNames } from "@mochi/plugin-preact";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
+import { pretty } from "../pretty";
 import { compileSyncTask } from "./compiler";
 
 const read = (p: string): string => readRepo(import.meta.url, p);
@@ -19,7 +20,11 @@ describe("playground compile Task (ADR 0006)", () => {
     expect(expected._tag).toBe("Ok");
     expect(result._tag).toBe("Ok");
     if (expected._tag !== "Ok" || result._tag !== "Ok") return;
-    expect(result.value).toMatchObject(expected.value);
+    expect(result.value).toMatchObject({
+      js: await pretty(expected.value.js),
+      ts: await pretty(expected.value.ts),
+      dts: await pretty(expected.value.dts),
+    });
     expect(result.value.ts).toContain('from "@mochi/compiler/runtime"');
   });
   test("playground declarations preserve checked props and Preact results", async () => {

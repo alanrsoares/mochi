@@ -21,11 +21,21 @@ import { buildModulesTsWith, buildModulesWith, emitDtsForFileWith } from "@mochi
 import { format } from "@mochi/dx/format";
 import { match } from "@onrails/pattern";
 import { isErr } from "@onrails/result";
+import { formatOutput, type OutputLanguage } from "./format-output";
 
 const USAGE =
   "usage: mochi [--open] [--no-docs] <file.mochi>  |  mochi fmt [--write] <file.mochi>  |  mochi codemod <transform.ts> [--write|--check] [--strict] <globs…>  |  mochi build [--emit=ts] [--open] [--no-docs] <entry.mochi>  |  mochi dts [--write] [--open] [--no-docs] <file.mochi|dir>  |  mochi ts [--open] [--no-docs] <file.mochi>";
 
 const [cmd, ...rest] = process.argv.slice(2);
+
+function formatted(source: string, language: OutputLanguage): string {
+  const result = formatOutput(source, { language });
+  if (isErr(result)) {
+    console.error(result.error.message);
+    process.exit(1);
+  }
+  return result.value;
+}
 
 function printDiags(es: Diagnostic | Diagnostic[], src?: string): void {
   const list = Array.isArray(es) ? es : [es];
@@ -131,14 +141,15 @@ await match(cmd)
         strictEntry: false,
       });
       if (result._tag === "Err") dieCompiler(file, readFileSync(file, "utf8"), [result.error]);
-      return result.value;
+      return formatted(result.value, "ts");
     };
     if (!write) {
       process.stdout.write(emit(path));
       return;
     }
-    for (const file of dtsTargets(path)) {
-      await Bun.write(sidecarPath(file), emit(file));
+    const outputs = dtsTargets(path).map((file) => ({ file, code: emit(file) }));
+    for (const { file, code } of outputs) {
+      await Bun.write(sidecarPath(file), code);
       console.error(`  ${sidecarPath(file)}`);
     }
   })
@@ -158,7 +169,9 @@ await match(cmd)
       strictEntry: false,
     });
     if (result._tag === "Err") dieCompiler(path, src, result.error);
-    process.stdout.write(result.value);
+    process.stdout.write(
+      formatted(result.value, result.value.startsWith("/** @jsx h */") ? "tsx" : "ts"),
+    );
   })
   .with("build", async () => {
     const emitTs = rest.includes("--emit=ts");
@@ -189,10 +202,13 @@ await match(cmd)
     }
     const outputs = result.value;
     const ext = emitTs ? ".ts" : ".js";
-    for (const { path, js } of outputs) {
+    const formattedOutputs = outputs.map(({ path, js }) => {
       const typedExt = js.startsWith("/** @jsx h */") ? ".tsx" : ext;
       const out = path.endsWith(".ts") ? path : path.replace(/\.mochi$/, typedExt);
-      await Bun.write(out, js);
+      return { out, code: formatted(js, typedExt === ".tsx" ? "tsx" : emitTs ? "ts" : "js") };
+    });
+    for (const { out, code } of formattedOutputs) {
+      await Bun.write(out, code);
       console.error(`  ${out}`);
     }
   })
@@ -212,5 +228,5 @@ await match(cmd)
       strictEntry: false,
     });
     if (result._tag === "Err") dieCompiler(file, src, result.error);
-    process.stdout.write(result.value);
+    process.stdout.write(formatted(result.value, "js"));
   });

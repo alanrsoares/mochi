@@ -2,4476 +2,4270 @@
 // Regenerate with `bun run gen:prelude`. Guarded by test/prelude-shim.spec.ts.
 // The standalone prelude-table shim for the self-hosted compiler (ticket 0004).
 const _builtins = {
-  "add": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+  add: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "sub": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "mul": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+  },
+  sub: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "div": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "square": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
   },
-  "sqrt": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+  mul: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
-  },
-  "hypot": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "pi": {
-    "_tag": "TyCon",
-    "name": "number",
-    "args": []
-  },
-  "concat": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyVar",
-        "id": 0
-      }
-    }
-  },
-  "eq": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+  },
+  div: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "compare": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "show": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "string",
-      "args": []
-    }
   },
-  "ignore": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
+  square: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "unit",
-      "args": []
-    }
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
   },
-  "lt": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+  sqrt: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  hypot: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "gt": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "gte": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+  },
+  pi: {
+    _tag: "TyCon",
+    name: "number",
+    args: [],
+  },
+  concat: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "lte": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+      to: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "not": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "bool",
-      "args": []
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "bool",
-      "args": []
-    }
   },
-  "and": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "bool",
-      "args": []
+  eq: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "or": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "bool",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
-  },
-  "min": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+  },
+  compare: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "max": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "pow": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+  },
+  show: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyCon",
+      name: "string",
+      args: [],
+    },
+  },
+  ignore: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyCon",
+      name: "unit",
+      args: [],
+    },
+  },
+  lt: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "mod": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    }
-  },
-  "abs": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
   },
-  "floor": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+  gt: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
-  },
-  "ceil": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
   },
-  "round": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+  gte: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
-  },
-  "sign": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
   },
-  "negate": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+  lte: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
   },
-  "length": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "Array",
-      "args": [
+  not: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "bool",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "bool",
+      args: [],
+    },
+  },
+  and: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "bool",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
+  },
+  or: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "bool",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
+  },
+  min: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+    },
+  },
+  max: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+    },
+  },
+  pow: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+    },
+  },
+  mod: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+    },
+  },
+  abs: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  floor: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  ceil: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  round: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  sign: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  negate: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  length: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "Array",
+      args: [
         {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
-    },
-    "to": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    }
-  },
-  "map": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
-      },
-      "to": {
-        "_tag": "TyVar",
-        "id": 1
-      }
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        ]
-      }
-    }
-  },
-  "filter": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    }
-  },
-  "reduce": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 1
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
-      }
+      ],
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 1
+    to: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+  },
+  map: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyVar",
+        id: 1,
+      },
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 1,
+          },
+        ],
+      },
+    },
+  },
+  filter: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+    },
+  },
+  reduce: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
+      },
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
-      }
-    }
-  },
-  "identity": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
-    },
-    "to": {
-      "_tag": "TyVar",
-      "id": 0
-    }
-  },
-  "always": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 1
-      },
-      "to": {
-        "_tag": "TyVar",
-        "id": 0
-      }
-    }
-  },
-  "compose": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 1
-      },
-      "to": {
-        "_tag": "TyVar",
-        "id": 2
-      }
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+        to: {
+          _tag: "TyVar",
+          id: 1,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+    },
+  },
+  identity: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyVar",
+      id: 0,
+    },
+  },
+  always: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1,
+      },
+      to: {
+        _tag: "TyVar",
+        id: 0,
+      },
+    },
+  },
+  compose: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1,
+      },
+      to: {
+        _tag: "TyVar",
+        id: 2,
+      },
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 2
-        }
-      }
-    }
-  },
-  "capitalize": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "string",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyCon",
-      "name": "string",
-      "args": []
-    }
-  },
-  "range": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyVar",
+          id: 2,
+        },
+      },
+    },
+  },
+  capitalize: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "string",
+      args: [],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "string",
+      args: [],
+    },
+  },
+  range: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyCon",
-            "name": "number",
-            "args": []
-          }
-        ]
-      }
-    }
-  },
-  "iterate": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+            _tag: "TyCon",
+            name: "number",
+            args: [],
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyVar",
-        "id": 0
-      }
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+  },
+  iterate: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+      to: {
+        _tag: "TyVar",
+        id: 0,
+      },
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    }
-  },
-  "repeat": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyVar",
-      "id": 0
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "List",
-      "args": [
+  },
+  repeat: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyVar",
+      id: 0,
+    },
+    to: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
         {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
-    }
-  },
-  "take": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
+          _tag: "TyVar",
+          id: 0,
+        },
+      ],
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+  },
+  take: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    }
-  },
-  "takeWhile": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
     },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+  },
+  takeWhile: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    }
-  },
-  "drop": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "number",
-      "args": []
-    },
-    "to": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+    },
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    }
-  },
-  "fromArray": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "Array",
-      "args": [
-        {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "List",
-      "args": [
-        {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
-    }
   },
-  "toArray": {
-    "_tag": "TyFn",
-    "from": {
-      "_tag": "TyCon",
-      "name": "List",
-      "args": [
-        {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
+  drop: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "number",
+      args: [],
     },
-    "to": {
-      "_tag": "TyCon",
-      "name": "Array",
-      "args": [
+    to: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+    },
+  },
+  fromArray: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "Array",
+      args: [
         {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
-    }
-  }
+          _tag: "TyVar",
+          id: 0,
+        },
+      ],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0,
+        },
+      ],
+    },
+  },
+  toArray: {
+    _tag: "TyFn",
+    from: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0,
+        },
+      ],
+    },
+    to: {
+      _tag: "TyCon",
+      name: "Array",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0,
+        },
+      ],
+    },
+  },
 };
 const _namespaces = {
-  "Array": {
-    "map": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+  Array: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
-    },
-    "filter": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "reduce": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 1
+    filter: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyVar",
-            "id": 0
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    reduce: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 1,
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyVar",
+            id: 0,
           },
-          "to": {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        }
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 1
+          to: {
+            _tag: "TyVar",
+            id: 1,
+          },
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "Array",
-            "args": [
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 1,
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Array",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 0
-              }
-            ]
+                _tag: "TyVar",
+                id: 0,
+              },
+            ],
           },
-          "to": {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        }
-      }
+          to: {
+            _tag: "TyVar",
+            id: 1,
+          },
+        },
+      },
     },
-    "length": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    length: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
     },
-    "head": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    head: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "get": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "forEach": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "unit",
-          "args": []
-        }
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "unit",
-          "args": []
-        }
-      }
-    },
-    "find": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "reverse": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    forEach: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "unit",
+          args: [],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "unit",
+          args: [],
+        },
+      },
+    },
+    find: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    reverse: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
     },
-    "concat": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    concat: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "append": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "prepend": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+    append: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "flatMap": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
     },
-    "take": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+    prepend: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "drop": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "tail": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+    },
+    take: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    drop: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    tail: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "contains": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
     },
-    "sort": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    contains: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
+    },
+    sort: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "sortBy": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
-        },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "dedupe": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    sortBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    dedupe: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "dedupeBy": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
-        },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "max": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    dedupeBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    max: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
     },
-    "min": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+    min: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "maxBy": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
-        },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "minBy": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+    maxBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    }
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    minBy: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
   },
-  "List": {
-    "map": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+  List: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
-    },
-    "filter": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
     },
-    "concat": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+    filter: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    concat: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "flatMap": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "List",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
     },
-    "head": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "List",
-        "args": [
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "List",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+    },
+    head: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "List",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
     },
-    "empty": {
-      "_tag": "TyCon",
-      "name": "List",
-      "args": [
+    empty: {
+      _tag: "TyCon",
+      name: "List",
+      args: [
         {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
-    }
+          _tag: "TyVar",
+          id: 0,
+        },
+      ],
+    },
   },
-  "Set": {
-    "has": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+  Set: {
+    has: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
-    },
-    "add": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "delete": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+    },
+    add: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "size": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Set",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
     },
-    "toArray": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Set",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+    delete: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "fromArray": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Set",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
     },
-    "empty": {
-      "_tag": "TyCon",
-      "name": "Set",
-      "args": [
+    size: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+    },
+    toArray: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+    },
+    fromArray: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+    },
+    empty: {
+      _tag: "TyCon",
+      name: "Set",
+      args: [
         {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      ]
-    },
-    "union": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Set",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
+      ],
     },
-    "intersect": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Set",
-        "args": [
+    union: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
     },
-    "diff": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Set",
-        "args": [
+    intersect: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Set",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    }
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
+    diff: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Set",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Set",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+      },
+    },
   },
-  "Map": {
-    "has": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+  Map: {
+    has: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Map",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
-    },
-    "getOr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 1
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+    },
+    getOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "Map",
-            "args": [
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Map",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 0
+                _tag: "TyVar",
+                id: 0,
               },
               {
-                "_tag": "TyVar",
-                "id": 1
-              }
-            ]
+                _tag: "TyVar",
+                id: 1,
+              },
+            ],
           },
-          "to": {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        }
-      }
-    },
-    "set": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 1
+          to: {
+            _tag: "TyVar",
+            id: 1,
+          },
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "Map",
-            "args": [
+      },
+    },
+    set: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 1,
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Map",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 0
+                _tag: "TyVar",
+                id: 0,
               },
               {
-                "_tag": "TyVar",
-                "id": 1
-              }
-            ]
+                _tag: "TyVar",
+                id: 1,
+              },
+            ],
           },
-          "to": {
-            "_tag": "TyCon",
-            "name": "Map",
-            "args": [
+          to: {
+            _tag: "TyCon",
+            name: "Map",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 0
+                _tag: "TyVar",
+                id: 0,
               },
               {
-                "_tag": "TyVar",
-                "id": 1
-              }
-            ]
-          }
-        }
-      }
-    },
-    "delete": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Map",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            },
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
+                _tag: "TyVar",
+                id: 1,
+              },
+            ],
+          },
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Map",
-          "args": [
+      },
+    },
+    delete: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
-    },
-    "size": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Map",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          },
-          {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
-    },
-    "keys": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Map",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          },
-          {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
-      }
-    },
-    "values": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Map",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          },
-          {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        ]
-      }
-    },
-    "get": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Map",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 1,
             },
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
     },
-    "empty": {
-      "_tag": "TyCon",
-      "name": "Map",
-      "args": [
+    size: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+          {
+            _tag: "TyVar",
+            id: 1,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+    },
+    keys: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+          {
+            _tag: "TyVar",
+            id: 1,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+    },
+    values: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+          {
+            _tag: "TyVar",
+            id: 1,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 1,
+          },
+        ],
+      },
+    },
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Map",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+    },
+    empty: {
+      _tag: "TyCon",
+      name: "Map",
+      args: [
         {
-          "_tag": "TyVar",
-          "id": 0
+          _tag: "TyVar",
+          id: 0,
         },
         {
-          "_tag": "TyVar",
-          "id": 1
-        }
-      ]
-    }
+          _tag: "TyVar",
+          id: 1,
+        },
+      ],
+    },
   },
-  "Option": {
-    "map": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+  Option: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
     },
-    "flatMap": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
     },
-    "mapOr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 1
+    mapOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 1,
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyVar",
-            "id": 0
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyVar",
+            id: 0,
           },
-          "to": {
-            "_tag": "TyVar",
-            "id": 1
-          }
+          to: {
+            _tag: "TyVar",
+            id: 1,
+          },
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "Option",
-            "args": [
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Option",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 0
-              }
-            ]
+                _tag: "TyVar",
+                id: 0,
+              },
+            ],
           },
-          "to": {
-            "_tag": "TyVar",
-            "id": 1
-          }
-        }
-      }
-    },
-    "exists": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+          to: {
+            _tag: "TyVar",
+            id: 1,
+          },
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
     },
-    "contains": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+    exists: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
-    },
-    "unwrapOr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      }
     },
-    "orElse": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+    contains: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
+    },
+    unwrapOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyVar",
+          id: 0,
+        },
+      },
+    },
+    orElse: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
-        }
-      }
-    },
-    "isSome": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
     },
-    "isNone": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+    isSome: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
-          }
-        ]
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
+    isNone: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
   },
-  "Result": {
-    "map": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+  Result: {
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
+              _tag: "TyVar",
+              id: 1,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      }
-    },
-    "mapErr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 2
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            },
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
     },
-    "flatMap": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+    mapErr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 2,
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      }
-    },
-    "unwrapOr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Result",
-          "args": [
+    },
+    flatMap: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 1,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 0
-        }
-      }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+      },
     },
-    "isOk": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Result",
-        "args": [
+    unwrapOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Result",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyVar",
+          id: 0,
+        },
+      },
+    },
+    isOk: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Result",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
+            _tag: "TyVar",
+            id: 0,
           },
           {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
     },
-    "isErr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Result",
-        "args": [
+    isErr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Result",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
+            _tag: "TyVar",
+            id: 0,
           },
           {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "bool",
-        "args": []
-      }
-    }
+      to: {
+        _tag: "TyCon",
+        name: "bool",
+        args: [],
+      },
+    },
   },
-  "Task": {
-    "of": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 0
+  Task: {
+    of: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0,
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Task",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
+            _tag: "TyVar",
+            id: 0,
           },
           {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
-      }
-    },
-    "fail": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyVar",
-        "id": 2
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Task",
-        "args": [
+    },
+    fail: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 2,
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
+            _tag: "TyVar",
+            id: 0,
           },
           {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
-      }
-    },
-    "map": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
-        },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      }
     },
-    "mapErr": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 2
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 1,
             },
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
-    },
-    "andThen": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 1
-            },
-            {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      }
     },
-    "recover": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 2
+    mapErr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 2,
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            },
-            {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 1
-            }
-          ]
-        }
-      }
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
     },
-    "fromResult": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Result",
-        "args": [
+    andThen: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+      },
+    },
+    recover: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 2,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0,
+            },
+            {
+              _tag: "TyVar",
+              id: 1,
+            },
+          ],
+        },
+      },
+    },
+    fromResult: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Result",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
+            _tag: "TyVar",
+            id: 0,
           },
           {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Task",
-        "args": [
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
           {
-            "_tag": "TyVar",
-            "id": 0
+            _tag: "TyVar",
+            id: 0,
           },
           {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
-      }
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
+      },
     },
-    "match": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+    match: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
         },
-        "to": {
-          "_tag": "TyVar",
-          "id": 1
-        }
+        to: {
+          _tag: "TyVar",
+          id: 1,
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyVar",
-            "id": 2
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyVar",
+            id: 2,
           },
-          "to": {
-            "_tag": "TyVar",
-            "id": 1
-          }
+          to: {
+            _tag: "TyVar",
+            id: 1,
+          },
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "Task",
-            "args": [
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 0
+                _tag: "TyVar",
+                id: 0,
               },
               {
-                "_tag": "TyVar",
-                "id": 2
-              }
-            ]
+                _tag: "TyVar",
+                id: 2,
+              },
+            ],
           },
-          "to": {
-            "_tag": "TyCon",
-            "name": "Task",
-            "args": [
+          to: {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
               {
-                "_tag": "TyVar",
-                "id": 1
+                _tag: "TyVar",
+                id: 1,
               },
               {
-                "_tag": "TyVar",
-                "id": 3
-              }
-            ]
-          }
-        }
-      }
-    },
-    "delay": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+                _tag: "TyVar",
+                id: 3,
+              },
+            ],
+          },
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+      },
+    },
+    delay: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 0
+              _tag: "TyVar",
+              id: 0,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      }
-    },
-    "run": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Task",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          },
-          {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Promise",
-        "args": [
-          {
-            "_tag": "TyCon",
-            "name": "Result",
-            "args": [
-              {
-                "_tag": "TyVar",
-                "id": 0
-              },
-              {
-                "_tag": "TyVar",
-                "id": 2
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "all": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyCon",
-            "name": "Task",
-            "args": [
-              {
-                "_tag": "TyVar",
-                "id": 0
-              },
-              {
-                "_tag": "TyVar",
-                "id": 2
-              }
-            ]
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Task",
-        "args": [
-          {
-            "_tag": "TyCon",
-            "name": "Array",
-            "args": [
-              {
-                "_tag": "TyVar",
-                "id": 0
-              }
-            ]
-          },
-          {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
-      }
-    },
-    "race": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
-          {
-            "_tag": "TyCon",
-            "name": "Task",
-            "args": [
-              {
-                "_tag": "TyVar",
-                "id": 0
-              },
-              {
-                "_tag": "TyVar",
-                "id": 2
-              }
-            ]
-          }
-        ]
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Task",
-        "args": [
-          {
-            "_tag": "TyVar",
-            "id": 0
-          },
-          {
-            "_tag": "TyVar",
-            "id": 2
-          }
-        ]
-      }
-    },
-    "traverse": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyVar",
-          "id": 0
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+      },
+    },
+    run: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+          {
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Promise",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Result",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0,
+              },
+              {
+                _tag: "TyVar",
+                id: 2,
+              },
+            ],
+          },
+        ],
+      },
+    },
+    all: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0,
+              },
+              {
+                _tag: "TyVar",
+                id: 2,
+              },
+            ],
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Array",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0,
+              },
+            ],
+          },
+          {
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
+      },
+    },
+    race: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "Task",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0,
+              },
+              {
+                _tag: "TyVar",
+                id: 2,
+              },
+            ],
+          },
+        ],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Task",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0,
+          },
+          {
+            _tag: "TyVar",
+            id: 2,
+          },
+        ],
+      },
+    },
+    traverse: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0,
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
             {
-              "_tag": "TyVar",
-              "id": 1
+              _tag: "TyVar",
+              id: 1,
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
-            {
-              "_tag": "TyVar",
-              "id": 0
-            }
-          ]
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Task",
-          "args": [
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyCon",
-              "name": "Array",
-              "args": [
+              _tag: "TyVar",
+              id: 0,
+            },
+          ],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "Array",
+              args: [
                 {
-                  "_tag": "TyVar",
-                  "id": 1
-                }
-              ]
+                  _tag: "TyVar",
+                  id: 1,
+                },
+              ],
             },
             {
-              "_tag": "TyVar",
-              "id": 2
-            }
-          ]
-        }
-      }
-    }
+              _tag: "TyVar",
+              id: 2,
+            },
+          ],
+        },
+      },
+    },
   },
-  "Str": {
-    "length": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+  Str: {
+    length: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      }
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
     },
-    "concat": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+    concat: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
-        }
-      }
-    },
-    "toUpper": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      }
-    },
-    "toLower": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      }
-    },
-    "trim": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      }
-    },
-    "split": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
+        to: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+      },
+    },
+    toUpper: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+    },
+    toLower: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+    },
+    trim: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+    },
+    split: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyCon",
-              "name": "string",
-              "args": []
-            }
-          ]
-        }
-      }
-    },
-    "join": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+              _tag: "TyCon",
+              name: "string",
+              args: [],
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "Array",
-          "args": [
+    },
+    join: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Array",
+          args: [
             {
-              "_tag": "TyCon",
-              "name": "string",
-              "args": []
-            }
-          ]
+              _tag: "TyCon",
+              name: "string",
+              args: [],
+            },
+          ],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
-        }
-      }
-    },
-    "contains": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+        to: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
+        },
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
-        },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
     },
-    "startsWith": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+    contains: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
     },
-    "endsWith": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+    startsWith: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "bool",
-          "args": []
-        }
-      }
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
     },
-    "slice": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+    endsWith: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "number",
-          "args": []
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
         },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "string",
-            "args": []
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: [],
+        },
+      },
+    },
+    slice: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "number",
+          args: [],
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "string",
+            args: [],
           },
-          "to": {
-            "_tag": "TyCon",
-            "name": "string",
-            "args": []
-          }
-        }
-      }
-    },
-    "replace": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
-        },
-        "to": {
-          "_tag": "TyFn",
-          "from": {
-            "_tag": "TyCon",
-            "name": "string",
-            "args": []
+          to: {
+            _tag: "TyCon",
+            name: "string",
+            args: [],
           },
-          "to": {
-            "_tag": "TyCon",
-            "name": "string",
-            "args": []
-          }
-        }
-      }
-    },
-    "get": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
-      },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
-            {
-              "_tag": "TyCon",
-              "name": "string",
-              "args": []
-            }
-          ]
-        }
-      }
-    },
-    "codeAt": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
       },
-      "to": {
-        "_tag": "TyFn",
-        "from": {
-          "_tag": "TyCon",
-          "name": "string",
-          "args": []
+    },
+    replace: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
         },
-        "to": {
-          "_tag": "TyCon",
-          "name": "Option",
-          "args": [
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "string",
+            args: [],
+          },
+          to: {
+            _tag: "TyCon",
+            name: "string",
+            args: [],
+          },
+        },
+      },
+    },
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
             {
-              "_tag": "TyCon",
-              "name": "number",
-              "args": []
-            }
-          ]
-        }
-      }
-    },
-    "fromCode": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "number",
-        "args": []
+              _tag: "TyCon",
+              name: "string",
+              args: [],
+            },
+          ],
+        },
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
-      }
     },
-    "chars": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+    codeAt: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Array",
-        "args": [
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: [],
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "number",
+              args: [],
+            },
+          ],
+        },
+      },
+    },
+    fromCode: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "number",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+    },
+    chars: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
           {
-            "_tag": "TyCon",
-            "name": "string",
-            "args": []
-          }
-        ]
-      }
-    },
-    "toNumber": {
-      "_tag": "TyFn",
-      "from": {
-        "_tag": "TyCon",
-        "name": "string",
-        "args": []
+            _tag: "TyCon",
+            name: "string",
+            args: [],
+          },
+        ],
       },
-      "to": {
-        "_tag": "TyCon",
-        "name": "Option",
-        "args": [
+    },
+    toNumber: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: [],
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Option",
+        args: [
           {
-            "_tag": "TyCon",
-            "name": "number",
-            "args": []
-          }
-        ]
-      }
-    }
-  }
+            _tag: "TyCon",
+            name: "number",
+            args: [],
+          },
+        ],
+      },
+    },
+  },
 };
 const _namespaceRuntime = {
-  "Array": {
-    "map": "map",
-    "filter": "filter",
-    "reduce": "reduce",
-    "length": "length",
-    "head": "_Array_head",
-    "get": "_Array_get",
-    "forEach": "_Array_forEach",
-    "find": "_Array_find",
-    "reverse": "_Array_reverse",
-    "concat": "_Array_concat",
-    "append": "_Array_append",
-    "prepend": "_Array_prepend",
-    "flatMap": "_Array_flatMap",
-    "take": "_Array_take",
-    "drop": "_Array_drop",
-    "tail": "_Array_tail",
-    "contains": "_Array_contains",
-    "sort": "_Array_sort",
-    "sortBy": "_Array_sortBy",
-    "dedupe": "_Array_dedupe",
-    "dedupeBy": "_Array_dedupeBy",
-    "max": "_Array_max",
-    "min": "_Array_min",
-    "maxBy": "_Array_maxBy",
-    "minBy": "_Array_minBy"
+  Array: {
+    map: "map",
+    filter: "filter",
+    reduce: "reduce",
+    length: "length",
+    head: "_Array_head",
+    get: "_Array_get",
+    forEach: "_Array_forEach",
+    find: "_Array_find",
+    reverse: "_Array_reverse",
+    concat: "_Array_concat",
+    append: "_Array_append",
+    prepend: "_Array_prepend",
+    flatMap: "_Array_flatMap",
+    take: "_Array_take",
+    drop: "_Array_drop",
+    tail: "_Array_tail",
+    contains: "_Array_contains",
+    sort: "_Array_sort",
+    sortBy: "_Array_sortBy",
+    dedupe: "_Array_dedupe",
+    dedupeBy: "_Array_dedupeBy",
+    max: "_Array_max",
+    min: "_Array_min",
+    maxBy: "_Array_maxBy",
+    minBy: "_Array_minBy",
   },
-  "List": {
-    "map": "_List_map",
-    "filter": "_List_filter",
-    "concat": "_List_concat",
-    "flatMap": "_List_flatMap",
-    "head": "_List_head"
+  List: {
+    map: "_List_map",
+    filter: "_List_filter",
+    concat: "_List_concat",
+    flatMap: "_List_flatMap",
+    head: "_List_head",
   },
-  "Set": {
-    "has": "_Set_has",
-    "add": "_Set_add",
-    "delete": "_Set_delete",
-    "size": "_Set_size",
-    "toArray": "_Set_toArray",
-    "fromArray": "_Set_fromArray",
-    "union": "_Set_union",
-    "intersect": "_Set_intersect",
-    "diff": "_Set_diff"
+  Set: {
+    has: "_Set_has",
+    add: "_Set_add",
+    delete: "_Set_delete",
+    size: "_Set_size",
+    toArray: "_Set_toArray",
+    fromArray: "_Set_fromArray",
+    union: "_Set_union",
+    intersect: "_Set_intersect",
+    diff: "_Set_diff",
   },
-  "Map": {
-    "has": "_Map_has",
-    "getOr": "_Map_getOr",
-    "set": "_Map_set",
-    "delete": "_Map_delete",
-    "size": "_Map_size",
-    "keys": "_Map_keys",
-    "values": "_Map_values",
-    "get": "_Map_get"
+  Map: {
+    has: "_Map_has",
+    getOr: "_Map_getOr",
+    set: "_Map_set",
+    delete: "_Map_delete",
+    size: "_Map_size",
+    keys: "_Map_keys",
+    values: "_Map_values",
+    get: "_Map_get",
   },
-  "Option": {
-    "map": "_Option_map",
-    "flatMap": "_Option_flatMap",
-    "mapOr": "_Option_mapOr",
-    "exists": "_Option_exists",
-    "contains": "_Option_contains",
-    "unwrapOr": "_Option_unwrapOr",
-    "orElse": "_Option_orElse",
-    "isSome": "_Option_isSome",
-    "isNone": "_Option_isNone"
+  Option: {
+    map: "_Option_map",
+    flatMap: "_Option_flatMap",
+    mapOr: "_Option_mapOr",
+    exists: "_Option_exists",
+    contains: "_Option_contains",
+    unwrapOr: "_Option_unwrapOr",
+    orElse: "_Option_orElse",
+    isSome: "_Option_isSome",
+    isNone: "_Option_isNone",
   },
-  "Result": {
-    "map": "_Result_map",
-    "mapErr": "_Result_mapErr",
-    "flatMap": "_Result_flatMap",
-    "unwrapOr": "_Result_unwrapOr",
-    "isOk": "_Result_isOk",
-    "isErr": "_Result_isErr"
+  Result: {
+    map: "_Result_map",
+    mapErr: "_Result_mapErr",
+    flatMap: "_Result_flatMap",
+    unwrapOr: "_Result_unwrapOr",
+    isOk: "_Result_isOk",
+    isErr: "_Result_isErr",
   },
-  "Task": {
-    "of": "_Task_of",
-    "fail": "_Task_fail",
-    "map": "_Task_map",
-    "mapErr": "_Task_mapErr",
-    "andThen": "_Task_andThen",
-    "recover": "_Task_recover",
-    "fromResult": "_Task_fromResult",
-    "match": "_Task_match",
-    "delay": "_Task_delay",
-    "run": "_Task_run",
-    "all": "_Task_all",
-    "race": "_Task_race",
-    "traverse": "_Task_traverse"
+  Task: {
+    of: "_Task_of",
+    fail: "_Task_fail",
+    map: "_Task_map",
+    mapErr: "_Task_mapErr",
+    andThen: "_Task_andThen",
+    recover: "_Task_recover",
+    fromResult: "_Task_fromResult",
+    match: "_Task_match",
+    delay: "_Task_delay",
+    run: "_Task_run",
+    all: "_Task_all",
+    race: "_Task_race",
+    traverse: "_Task_traverse",
   },
-  "Str": {
-    "length": "_Str_length",
-    "concat": "_Str_concat",
-    "toUpper": "_Str_toUpper",
-    "toLower": "_Str_toLower",
-    "trim": "_Str_trim",
-    "split": "_Str_split",
-    "join": "_Str_join",
-    "contains": "_Str_contains",
-    "startsWith": "_Str_startsWith",
-    "endsWith": "_Str_endsWith",
-    "slice": "_Str_slice",
-    "replace": "_Str_replace",
-    "get": "_Str_get",
-    "codeAt": "_Str_codeAt",
-    "fromCode": "_Str_fromCode",
-    "chars": "_Str_chars",
-    "toNumber": "_Str_toNumber"
-  }
+  Str: {
+    length: "_Str_length",
+    concat: "_Str_concat",
+    toUpper: "_Str_toUpper",
+    toLower: "_Str_toLower",
+    trim: "_Str_trim",
+    split: "_Str_split",
+    join: "_Str_join",
+    contains: "_Str_contains",
+    startsWith: "_Str_startsWith",
+    endsWith: "_Str_endsWith",
+    slice: "_Str_slice",
+    replace: "_Str_replace",
+    get: "_Str_get",
+    codeAt: "_Str_codeAt",
+    fromCode: "_Str_fromCode",
+    chars: "_Str_chars",
+    toNumber: "_Str_toNumber",
+  },
 };
 const _preludeJsDefs = {
-  "_Result_match": "const _Result_match = (result, onErr, onOk) => {\n  if (result._tag === \"Err\")\n    return onErr(result.error);\n  if (result._tag === \"Ok\")\n    return onOk(result.value);\n  throw new Error(\"non-exhaustive match\");\n};",
-  "_Option_match": "const _Option_match = (option, onNone, onSome) => {\n  if (option._tag === \"None\")\n    return onNone();\n  if (option._tag === \"Some\")\n    return onSome(option.value);\n  throw new Error(\"non-exhaustive match\");\n};",
-  "_list": "const _list = (g) => ({ [Symbol.iterator]: g });",
-  "_curry": "const _curry = (n, f) => {\n  const apply = (a) => {\n    switch (a.length) {\n      case 2:\n        return f(a[0], a[1]);\n      case 3:\n        return f(a[0], a[1], a[2]);\n      case 4:\n        return f(a[0], a[1], a[2], a[3]);\n      case 5:\n        return f(a[0], a[1], a[2], a[3], a[4]);\n      case 6:\n        return f(a[0], a[1], a[2], a[3], a[4], a[5]);\n      default:\n        return f(...a);\n    }\n  };\n  function c(...a) {\n    if (a.length === n)\n      return apply(a);\n    if (a.length < n)\n      return (...b) => c(...a, ...b);\n    return a.slice(n).reduce((g, x) => g(x), apply(a.slice(0, n)));\n  }\n  if (n === 2)\n    return (...a) => {\n      if (a.length === 2)\n        return f(a[0], a[1]);\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return (...b) => b.length === 1 ? f(x, b[0]) : c(x, ...b);\n    };\n  if (n === 3)\n    return (...a) => {\n      if (a.length === 3)\n        return f(a[0], a[1], a[2]);\n      if (a.length === 2) {\n        const [x, y] = a;\n        return (...b) => b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b);\n      }\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return _curry(2, (y, z) => f(x, y, z));\n    };\n  return c;\n};",
-  "_tuple": "const _tuple = (...xs) => xs;",
-  "_recur": "const _recur = (...args) => ({\n  _tag: \"recur\",\n  args\n});",
-  "_done": "const _done = (value) => ({ _tag: \"done\", value });",
-  "Some": "const Some = (value) => ({ _tag: \"Some\", value });",
-  "None": "const None = { _tag: \"None\" };",
-  "Ok": "const Ok = (value) => ({ _tag: \"Ok\", value });",
-  "Err": "const Err = (error) => ({ _tag: \"Err\", error });",
-  "add": "const add = _curry(2, (a, b) => a + b);",
-  "sub": "const sub = _curry(2, (a, b) => a - b);",
-  "mul": "const mul = _curry(2, (a, b) => a * b);",
-  "div": "const div = _curry(2, (a, b) => a / b);",
-  "square": "const square = (x) => x * x;",
-  "sqrt": "const sqrt = (x) => Math.sqrt(x);",
-  "hypot": "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
-  "pi": "const pi = Math.PI;",
-  "concat": "const concat = _curry(2, (a, b) => typeof a === \"string\" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b));",
-  "eq": "const eq = _curry(2, (x, y) => {\n  if (x === y)\n    return true;\n  if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null)\n    return false;\n  const ax = Array.isArray(x);\n  if (ax !== Array.isArray(y))\n    return false;\n  if (ax) {\n    if (x.length !== y.length)\n      return false;\n    for (let i = 0;i < x.length; i++)\n      if (!eq(x[i], y[i]))\n        return false;\n    return true;\n  }\n  if (x instanceof Map || y instanceof Map) {\n    if (!(x instanceof Map) || !(y instanceof Map))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const [k, v] of x) {\n      if (!y.has(k) || !eq(v, y.get(k)))\n        return false;\n    }\n    return true;\n  }\n  if (x instanceof Set || y instanceof Set) {\n    if (!(x instanceof Set) || !(y instanceof Set))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const v of x)\n      if (!y.has(v))\n        return false;\n    return true;\n  }\n  if (typeof x[Symbol.iterator] === \"function\" || typeof y[Symbol.iterator] === \"function\")\n    throw new TypeError(\"eq on List: force it first with List.toArray\");\n  const kx = Object.keys(x), ky = Object.keys(y);\n  if (kx.length !== ky.length)\n    return false;\n  for (const k of kx)\n    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))\n      return false;\n  return true;\n});",
-  "_compareFieldNames": "const _compareFieldNames = (a, b) => {\n  const ax = /^_(0|[1-9]\\d*)$/.test(a), bx = /^_(0|[1-9]\\d*)$/.test(b);\n  if (ax !== bx)\n    return ax ? -1 : 1;\n  if (ax && a.length !== b.length)\n    return a.length < b.length ? -1 : 1;\n  return a < b ? -1 : a > b ? 1 : 0;\n};",
-  "_compareSortedKeys": "const _compareSortedKeys = (keys, tagged) => {\n  for (let i = 1;i < keys.length; i++) {\n    const order = tagged ? _compareFieldNames(keys[i - 1], keys[i]) : keys[i - 1] < keys[i] ? -1 : 1;\n    if (order > 0) {\n      if (keys.length > 16)\n        return keys.slice().sort(tagged ? _compareFieldNames : undefined);\n      const sorted = keys.slice();\n      for (let at = i;at < sorted.length; at++) {\n        const key = sorted[at];\n        let before = at - 1;\n        while (before >= 0 && (tagged ? _compareFieldNames(sorted[before], key) > 0 : sorted[before] > key)) {\n          sorted[before + 1] = sorted[before];\n          before -= 1;\n        }\n        sorted[before + 1] = key;\n      }\n      return sorted;\n    }\n  }\n  return keys;\n};",
-  "_compareFirstKey": "const _compareFirstKey = (keys, tagged) => {\n  let first = keys[0];\n  for (let i = 1;i < keys.length; i++) {\n    const key = keys[i];\n    if (tagged ? _compareFieldNames(key, first) < 0 : key < first)\n      first = key;\n  }\n  return first;\n};",
-  "_compareRecords": "const _compareRecords = (x, y) => {\n  const keysX = Object.keys(x), keysY = Object.keys(y);\n  const tx = keysX.includes(\"_tag\") ? x._tag : undefined, ty = keysY.includes(\"_tag\") ? y._tag : undefined;\n  const tagged = typeof tx === \"string\", otherTagged = typeof ty === \"string\";\n  if (tagged !== otherTagged)\n    return tagged ? -1 : 1;\n  if (tagged) {\n    const tag = _compare(tx, ty);\n    if (tag !== 0)\n      return tag;\n  }\n  const fieldsX = tagged ? keysX.filter((k) => k !== \"_tag\") : keysX, fieldsY = tagged ? keysY.filter((k) => k !== \"_tag\") : keysY;\n  if (fieldsX.length === 0 || fieldsY.length === 0)\n    return _compare(fieldsX.length, fieldsY.length);\n  let sameKeys = fieldsX.length === fieldsY.length;\n  for (let i = 0;sameKeys && i < fieldsX.length; i++) {\n    if (fieldsX[i] !== fieldsY[i])\n      sameKeys = false;\n  }\n  const firstX = _compareFirstKey(fieldsX, tagged), firstY = sameKeys ? firstX : _compareFirstKey(fieldsY, tagged);\n  if (firstX !== firstY)\n    return tagged ? _compareFieldNames(firstX, firstY) : _compare(firstX, firstY);\n  const firstLeft = x[firstX], firstRight = y[firstY];\n  if (firstLeft !== firstRight) {\n    const firstValue = _compare(firstLeft, firstRight);\n    if (firstValue !== 0)\n      return firstValue;\n  }\n  const kx = _compareSortedKeys(fieldsX, tagged), ky = sameKeys ? kx : _compareSortedKeys(fieldsY, tagged);\n  const n = Math.min(kx.length, ky.length);\n  for (let i = 1;i < n; i++) {\n    if (kx[i] !== ky[i])\n      return tagged ? _compareFieldNames(kx[i], ky[i]) : _compare(kx[i], ky[i]);\n    const left = x[kx[i]], right = y[ky[i]];\n    if (left !== right) {\n      const value = _compare(left, right);\n      if (value !== 0)\n        return value;\n    }\n  }\n  return _compare(kx.length, ky.length);\n};",
-  "_compare": "const _compare = (x, y) => {\n  if (x === y)\n    return 0;\n  if (x === undefined || y === undefined)\n    return x === undefined ? -1 : 1;\n  if (x === null || y === null)\n    return x === null ? -1 : 1;\n  const t = typeof x;\n  if (t === \"number\" || t === \"string\" || t === \"boolean\")\n    return x < y ? -1 : x > y ? 1 : 0;\n  if (Array.isArray(x) && Array.isArray(y)) {\n    const n = Math.min(x.length, y.length);\n    for (let i = 0;i < n; i++) {\n      const c = _compare(x[i], y[i]);\n      if (c !== 0)\n        return c;\n    }\n    return _compare(x.length, y.length);\n  }\n  if (x instanceof Map && y instanceof Map) {\n    const kx = [...x.keys()].sort(_compare), ky = [...y.keys()].sort(_compare);\n    const n = Math.min(kx.length, ky.length);\n    for (let i = 0;i < n; i++) {\n      const kc = _compare(kx[i], ky[i]);\n      if (kc !== 0)\n        return kc;\n      const vc = _compare(x.get(kx[i]), y.get(ky[i]));\n      if (vc !== 0)\n        return vc;\n    }\n    return _compare(kx.length, ky.length);\n  }\n  if (x instanceof Set && y instanceof Set) {\n    const ex = [...x].sort(_compare), ey = [...y].sort(_compare);\n    const n = Math.min(ex.length, ey.length);\n    for (let i = 0;i < n; i++) {\n      const c = _compare(ex[i], ey[i]);\n      if (c !== 0)\n        return c;\n    }\n    return _compare(ex.length, ey.length);\n  }\n  if (typeof x === \"object\" && x !== null && (!Array.isArray(x) && typeof x[Symbol.iterator] === \"function\" || typeof y === \"object\" && !Array.isArray(y) && typeof y[Symbol.iterator] === \"function\"))\n    throw new TypeError(\"compare on List: force it first with List.toArray\");\n  if (typeof x !== \"object\" || typeof y !== \"object\")\n    return 0;\n  return _compareRecords(x, y);\n};",
-  "compare": "const compare = _curry(2, _compare);",
-  "show": "const show = (x) => {\n  const t = typeof x;\n  if (t === \"string\")\n    return JSON.stringify(x);\n  if (t !== \"object\" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(\", \")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(\", \")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(\", \")}}`;\n  if (typeof x[Symbol.iterator] === \"function\")\n    return \"<List>\";\n  if (typeof x._tag === \"string\") {\n    const ks = Object.keys(x).filter((k) => k !== \"_tag\");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(\", \")})`;\n  }\n  const ks = Object.keys(x);\n  return ks.length === 0 ? String(x) : `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(\", \")} }`;\n};",
-  "ignore": "const ignore = (_x) => {\n  return;\n};",
-  "lt": "const lt = _curry(2, (a, b) => a < b);",
-  "gt": "const gt = _curry(2, (a, b) => a > b);",
-  "gte": "const gte = _curry(2, (a, b) => a >= b);",
-  "lte": "const lte = _curry(2, (a, b) => a <= b);",
-  "not": "const not = (b) => !b;",
-  "and": "const and = _curry(2, (a, b) => a && b);",
-  "or": "const or = _curry(2, (a, b) => a || b);",
-  "min": "const min = _curry(2, (a, b) => Math.min(a, b));",
-  "max": "const max = _curry(2, (a, b) => Math.max(a, b));",
-  "pow": "const pow = _curry(2, (a, b) => a ** b);",
-  "mod": "const mod = _curry(2, (a, b) => (a % b + b) % b);",
-  "abs": "const abs = (x) => Math.abs(x);",
-  "floor": "const floor = (x) => Math.floor(x);",
-  "ceil": "const ceil = (x) => Math.ceil(x);",
-  "round": "const round = (x) => Math.round(x);",
-  "sign": "const sign = (x) => Math.sign(x);",
-  "negate": "const negate = (x) => -x;",
-  "length": "const length = (xs) => xs.length;",
-  "map": "const map = _curry(2, (f, xs) => xs.map((x) => f(x)));",
-  "filter": "const filter = _curry(2, (f, xs) => xs.filter((x) => f(x)));",
-  "reduce": "const reduce = _curry(3, (f, init, xs) => xs.reduce((acc, x) => f(acc)(x), init));",
-  "identity": "const identity = (x) => x;",
-  "always": "const always = _curry(2, (x, _y) => x);",
-  "compose": "const compose = _curry(3, (f, g, x) => f(g(x)));",
-  "capitalize": "const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);",
-  "range": "const range = _curry(2, (lo, hi) => _list(function* () {\n  for (let i = lo;i < hi; i++)\n    yield i;\n}));",
-  "iterate": "const iterate = _curry(2, (f, x) => _list(function* () {\n  let v = x;\n  for (;; ) {\n    yield v;\n    v = f(v);\n  }\n}));",
-  "repeat": "const repeat = (x) => _list(function* () {\n  for (;; )\n    yield x;\n});",
-  "take": "const take = _curry(2, (n, xs) => _list(function* () {\n  let i = 0;\n  for (const x of xs) {\n    if (i >= n)\n      break;\n    yield x;\n    i++;\n  }\n}));",
-  "takeWhile": "const takeWhile = _curry(2, (p, xs) => _list(function* () {\n  for (const x of xs) {\n    if (!p(x))\n      break;\n    yield x;\n  }\n}));",
-  "drop": "const drop = _curry(2, (n, xs) => _list(function* () {\n  let i = 0;\n  for (const x of xs) {\n    if (i < n) {\n      i++;\n      continue;\n    }\n    yield x;\n  }\n}));",
-  "fromArray": "const fromArray = (xs) => _list(function* () {\n  yield* xs;\n});",
-  "toArray": "const toArray = (xs) => [...xs];",
-  "_List_map": "const _List_map = _curry(2, (f, xs) => _list(function* () {\n  for (const x of xs)\n    yield f(x);\n}));",
-  "_List_filter": "const _List_filter = _curry(2, (p, xs) => _list(function* () {\n  for (const x of xs)\n    if (p(x))\n      yield x;\n}));",
-  "_List_concat": "const _List_concat = _curry(2, (xs, ys) => _list(function* () {\n  yield* xs;\n  yield* ys;\n}));",
-  "_List_flatMap": "const _List_flatMap = _curry(2, (f, xs) => _list(function* () {\n  for (const x of xs)\n    yield* f(x);\n}));",
-  "_Set_has": "const _Set_has = _curry(2, (x, s) => s.has(x));",
-  "_Set_add": "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
-  "_Set_delete": "const _Set_delete = _curry(2, (x, s) => {\n  const n = new Set(s);\n  n.delete(x);\n  return n;\n});",
-  "_Set_size": "const _Set_size = (s) => s.size;",
-  "_Set_toArray": "const _Set_toArray = (s) => [...s];",
-  "_Set_fromArray": "const _Set_fromArray = (xs) => new Set(xs);",
-  "_Set_union": "const _Set_union = _curry(2, (a, b) => new Set([...a, ...b]));",
-  "_Set_intersect": "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
-  "_Set_diff": "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
-  "_Map_has": "const _Map_has = _curry(2, (k, m) => m.has(k));",
-  "_Map_getOr": "const _Map_getOr = _curry(3, (d, k, m) => m.has(k) ? m.get(k) : d);",
-  "_Map_set": "const _Map_set = _curry(3, (k, v, m) => {\n  const n = new Map(m);\n  n.set(k, v);\n  return n;\n});",
-  "_Map_delete": "const _Map_delete = _curry(2, (k, m) => {\n  const n = new Map(m);\n  n.delete(k);\n  return n;\n});",
-  "_Map_size": "const _Map_size = (m) => m.size;",
-  "_Map_keys": "const _Map_keys = (m) => [...m.keys()];",
-  "_Map_values": "const _Map_values = (m) => [...m.values()];",
-  "_Map_get": "const _Map_get = _curry(2, (k, m) => m.has(k) ? Some(m.get(k)) : None);",
-  "_Option_map": "const _Option_map = _curry(2, (f, o) => o._tag === \"Some\" ? Some(f(o.value)) : None);",
-  "_Option_flatMap": "const _Option_flatMap = _curry(2, (f, o) => o._tag === \"Some\" ? f(o.value) : None);",
-  "_Option_mapOr": "const _Option_mapOr = _curry(3, (d, f, o) => o._tag === \"Some\" ? f(o.value) : d);",
-  "_Option_exists": "const _Option_exists = _curry(2, (p, o) => o._tag === \"Some\" && p(o.value));",
-  "_Option_contains": "const _Option_contains = _curry(2, (x, o) => o._tag === \"Some\" && eq(x, o.value));",
-  "_Option_unwrapOr": "const _Option_unwrapOr = _curry(2, (d, o) => o._tag === \"Some\" ? o.value : d);",
-  "_Option_orElse": "const _Option_orElse = _curry(2, (fb, o) => o._tag === \"Some\" ? o : fb);",
-  "_Option_isSome": "const _Option_isSome = (o) => o._tag === \"Some\";",
-  "_Option_isNone": "const _Option_isNone = (o) => o._tag === \"None\";",
-  "_Result_map": "const _Result_map = _curry(2, (f, r) => r._tag === \"Ok\" ? Ok(f(r.value)) : r);",
-  "_Result_mapErr": "const _Result_mapErr = _curry(2, (f, r) => r._tag === \"Err\" ? Err(f(r.error)) : r);",
-  "_Result_flatMap": "const _Result_flatMap = _curry(2, (f, r) => r._tag === \"Ok\" ? f(r.value) : r);",
-  "_Result_unwrapOr": "const _Result_unwrapOr = _curry(2, (d, r) => r._tag === \"Ok\" ? r.value : d);",
-  "_Result_isOk": "const _Result_isOk = (r) => r._tag === \"Ok\";",
-  "_Result_isErr": "const _Result_isErr = (r) => r._tag === \"Err\";",
-  "_List_head": "const _List_head = (xs) => {\n  for (const x of xs)\n    return Some(x);\n  return None;\n};",
-  "_Array_head": "const _Array_head = (xs) => xs.length > 0 ? Some(xs[0]) : None;",
-  "_Array_forEach": "const _Array_forEach = _curry(2, (f, xs) => {\n  for (const x of xs)\n    f(x);\n});",
-  "_Array_get": "const _Array_get = _curry(2, (i, xs) => i >= 0 && i < xs.length ? Some(xs[i]) : None);",
-  "_Array_find": "const _Array_find = _curry(2, (p, xs) => {\n  for (const x of xs)\n    if (p(x))\n      return Some(x);\n  return None;\n});",
-  "_Array_reverse": "const _Array_reverse = (xs) => [...xs].reverse();",
-  "_Array_concat": "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
-  "_Array_append": "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
-  "_Array_prepend": "const _Array_prepend = _curry(2, (x, xs) => [x, ...xs]);",
-  "_Array_flatMap": "const _Array_flatMap = _curry(2, (f, xs) => xs.flatMap((x) => f(x)));",
-  "_Array_take": "const _Array_take = _curry(2, (n, xs) => xs.slice(0, n));",
-  "_Array_drop": "const _Array_drop = _curry(2, (n, xs) => xs.slice(n));",
-  "_Array_tail": "const _Array_tail = (xs) => xs.slice(1);",
-  "_Array_contains": "const _Array_contains = _curry(2, (x, xs) => xs.some((y) => eq(x, y)));",
-  "_Array_sort": "const _Array_sort = (xs) => [...xs].sort(compare);",
-  "_Array_sortBy": "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
-  "_Array_dedupe": "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
-  "_Array_dedupeBy": "const _Array_dedupeBy = _curry(2, (f, xs) => {\n  const primitive = new Set;\n  const structural = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (k !== null && typeof k === \"object\") {\n      if (structural.some((s) => eq(s, k)))\n        return false;\n      structural.push(k);\n      return true;\n    }\n    if (Number.isNaN(k))\n      return true;\n    if (primitive.has(k))\n      return false;\n    primitive.add(k);\n    return true;\n  });\n});",
-  "_Array_max": "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
-  "_Array_min": "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
-  "_Array_maxBy": "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
-  "_Array_minBy": "const _Array_minBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None);",
-  "_Str_length": "const _Str_length = (s) => s.length;",
-  "_Str_concat": "const _Str_concat = _curry(2, (a, b) => a + b);",
-  "_Str_toUpper": "const _Str_toUpper = (s) => s.toUpperCase();",
-  "_Str_toLower": "const _Str_toLower = (s) => s.toLowerCase();",
-  "_Str_trim": "const _Str_trim = (s) => s.trim();",
-  "_Str_split": "const _Str_split = _curry(2, (sep, s) => s.split(sep));",
-  "_Str_join": "const _Str_join = _curry(2, (sep, xs) => xs.join(sep));",
-  "_Str_contains": "const _Str_contains = _curry(2, (needle, s) => s.includes(needle));",
-  "_Str_startsWith": "const _Str_startsWith = _curry(2, (p, s) => s.startsWith(p));",
-  "_Str_endsWith": "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
-  "_Str_slice": "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
-  "_Str_replace": "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
-  "_Str_get": "const _Str_get = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s[i]) : None);",
-  "_Str_codeAt": "const _Str_codeAt = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None);",
-  "_Str_fromCode": "const _Str_fromCode = (n) => String.fromCharCode(n);",
-  "_Str_chars": "const _Str_chars = (s) => [...s];",
-  "_Str_toNumber": "const _Str_toNumber = (s) => {\n  const n = Number(s);\n  return Number.isNaN(n) ? None : Some(n);\n};",
-  "_Task_of": "const _Task_of = (x) => () => Promise.resolve(Ok(x));",
-  "_Task_fail": "const _Task_fail = (e) => () => Promise.resolve(Err(e));",
-  "_Task_map": "const _Task_map = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Ok\" ? Ok(f(r.value)) : r));",
-  "_Task_mapErr": "const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Err\" ? Err(f(r.error)) : r));",
-  "_Task_andThen": "const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Ok\" ? f(r.value)() : r));",
-  "_Task_recover": "const _Task_recover = _curry(2, (f, t) => () => t().then((r) => r._tag === \"Err\" ? f(r.error)() : r));",
-  "_Task_fromResult": "const _Task_fromResult = (r) => () => Promise.resolve(r);",
-  "_Task_match": "const _Task_match = _curry(3, (onOk, onErr, t) => () => t().then((r) => Ok(r._tag === \"Ok\" ? onOk(r.value) : onErr(r.error))));",
-  "_Task_delay": "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(Ok(x)), ms)));",
-  "_Task_run": "const _Task_run = (t) => t();",
-  "_Task_all": "const _Task_all = (ts) => () => new Promise((res) => {\n  const out = new Array(ts.length);\n  let left = ts.length;\n  let settled = false;\n  if (left === 0) {\n    res(Ok(out));\n    return;\n  }\n  ts.forEach((t, i) => {\n    t().then((r) => {\n      if (settled)\n        return;\n      if (r._tag === \"Err\") {\n        settled = true;\n        res(r);\n        return;\n      }\n      out[i] = r.value;\n      left -= 1;\n      if (left === 0) {\n        settled = true;\n        res(Ok(out));\n      }\n    });\n  });\n});",
-  "_Task_race": "const _Task_race = (ts) => () => new Promise((res) => {\n  let settled = false;\n  ts.forEach((t) => {\n    t().then((r) => {\n      if (settled)\n        return;\n      settled = true;\n      res(r);\n    });\n  });\n});",
-  "_Task_traverse": "const _Task_traverse = _curry(2, (f, xs) => _Task_all(xs.map(f)));"
+  _Result_match:
+    'const _Result_match = (result, onErr, onOk) => {\n  if (result._tag === "Err")\n    return onErr(result.error);\n  if (result._tag === "Ok")\n    return onOk(result.value);\n  throw new Error("non-exhaustive match");\n};',
+  _Option_match:
+    'const _Option_match = (option, onNone, onSome) => {\n  if (option._tag === "None")\n    return onNone();\n  if (option._tag === "Some")\n    return onSome(option.value);\n  throw new Error("non-exhaustive match");\n};',
+  _list: "const _list = (g) => ({ [Symbol.iterator]: g });",
+  _curry:
+    "const _curry = (n, f) => {\n  const apply = (a) => {\n    switch (a.length) {\n      case 2:\n        return f(a[0], a[1]);\n      case 3:\n        return f(a[0], a[1], a[2]);\n      case 4:\n        return f(a[0], a[1], a[2], a[3]);\n      case 5:\n        return f(a[0], a[1], a[2], a[3], a[4]);\n      case 6:\n        return f(a[0], a[1], a[2], a[3], a[4], a[5]);\n      default:\n        return f(...a);\n    }\n  };\n  function c(...a) {\n    if (a.length === n)\n      return apply(a);\n    if (a.length < n)\n      return (...b) => c(...a, ...b);\n    return a.slice(n).reduce((g, x) => g(x), apply(a.slice(0, n)));\n  }\n  if (n === 2)\n    return (...a) => {\n      if (a.length === 2)\n        return f(a[0], a[1]);\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return (...b) => b.length === 1 ? f(x, b[0]) : c(x, ...b);\n    };\n  if (n === 3)\n    return (...a) => {\n      if (a.length === 3)\n        return f(a[0], a[1], a[2]);\n      if (a.length === 2) {\n        const [x, y] = a;\n        return (...b) => b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b);\n      }\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return _curry(2, (y, z) => f(x, y, z));\n    };\n  return c;\n};",
+  _tuple: "const _tuple = (...xs) => xs;",
+  _recur: 'const _recur = (...args) => ({\n  _tag: "recur",\n  args\n});',
+  _done: 'const _done = (value) => ({ _tag: "done", value });',
+  Some: 'const Some = (value) => ({ _tag: "Some", value });',
+  None: 'const None = { _tag: "None" };',
+  Ok: 'const Ok = (value) => ({ _tag: "Ok", value });',
+  Err: 'const Err = (error) => ({ _tag: "Err", error });',
+  add: "const add = _curry(2, (a, b) => a + b);",
+  sub: "const sub = _curry(2, (a, b) => a - b);",
+  mul: "const mul = _curry(2, (a, b) => a * b);",
+  div: "const div = _curry(2, (a, b) => a / b);",
+  square: "const square = (x) => x * x;",
+  sqrt: "const sqrt = (x) => Math.sqrt(x);",
+  hypot: "const hypot = _curry(2, (a, b) => Math.hypot(a, b));",
+  pi: "const pi = Math.PI;",
+  concat:
+    'const concat = _curry(2, (a, b) => typeof a === "string" ? a + b : Array.isArray(a) ? a.concat(b) : _List_concat(a, b));',
+  eq: 'const eq = _curry(2, (x, y) => {\n  if (x === y)\n    return true;\n  if (typeof x !== "object" || x === null || typeof y !== "object" || y === null)\n    return false;\n  const ax = Array.isArray(x);\n  if (ax !== Array.isArray(y))\n    return false;\n  if (ax) {\n    if (x.length !== y.length)\n      return false;\n    for (let i = 0;i < x.length; i++)\n      if (!eq(x[i], y[i]))\n        return false;\n    return true;\n  }\n  if (x instanceof Map || y instanceof Map) {\n    if (!(x instanceof Map) || !(y instanceof Map))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const [k, v] of x) {\n      if (!y.has(k) || !eq(v, y.get(k)))\n        return false;\n    }\n    return true;\n  }\n  if (x instanceof Set || y instanceof Set) {\n    if (!(x instanceof Set) || !(y instanceof Set))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const v of x)\n      if (!y.has(v))\n        return false;\n    return true;\n  }\n  if (typeof x[Symbol.iterator] === "function" || typeof y[Symbol.iterator] === "function")\n    throw new TypeError("eq on List: force it first with List.toArray");\n  const kx = Object.keys(x), ky = Object.keys(y);\n  if (kx.length !== ky.length)\n    return false;\n  for (const k of kx)\n    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))\n      return false;\n  return true;\n});',
+  _compareFieldNames:
+    "const _compareFieldNames = (a, b) => {\n  const ax = /^_(0|[1-9]\\d*)$/.test(a), bx = /^_(0|[1-9]\\d*)$/.test(b);\n  if (ax !== bx)\n    return ax ? -1 : 1;\n  if (ax && a.length !== b.length)\n    return a.length < b.length ? -1 : 1;\n  return a < b ? -1 : a > b ? 1 : 0;\n};",
+  _compareSortedKeys:
+    "const _compareSortedKeys = (keys, tagged) => {\n  for (let i = 1;i < keys.length; i++) {\n    const order = tagged ? _compareFieldNames(keys[i - 1], keys[i]) : keys[i - 1] < keys[i] ? -1 : 1;\n    if (order > 0) {\n      if (keys.length > 16)\n        return keys.slice().sort(tagged ? _compareFieldNames : undefined);\n      const sorted = keys.slice();\n      for (let at = i;at < sorted.length; at++) {\n        const key = sorted[at];\n        let before = at - 1;\n        while (before >= 0 && (tagged ? _compareFieldNames(sorted[before], key) > 0 : sorted[before] > key)) {\n          sorted[before + 1] = sorted[before];\n          before -= 1;\n        }\n        sorted[before + 1] = key;\n      }\n      return sorted;\n    }\n  }\n  return keys;\n};",
+  _compareFirstKey:
+    "const _compareFirstKey = (keys, tagged) => {\n  let first = keys[0];\n  for (let i = 1;i < keys.length; i++) {\n    const key = keys[i];\n    if (tagged ? _compareFieldNames(key, first) < 0 : key < first)\n      first = key;\n  }\n  return first;\n};",
+  _compareRecords:
+    'const _compareRecords = (x, y) => {\n  const keysX = Object.keys(x), keysY = Object.keys(y);\n  const tx = keysX.includes("_tag") ? x._tag : undefined, ty = keysY.includes("_tag") ? y._tag : undefined;\n  const tagged = typeof tx === "string", otherTagged = typeof ty === "string";\n  if (tagged !== otherTagged)\n    return tagged ? -1 : 1;\n  if (tagged) {\n    const tag = _compare(tx, ty);\n    if (tag !== 0)\n      return tag;\n  }\n  const fieldsX = tagged ? keysX.filter((k) => k !== "_tag") : keysX, fieldsY = tagged ? keysY.filter((k) => k !== "_tag") : keysY;\n  if (fieldsX.length === 0 || fieldsY.length === 0)\n    return _compare(fieldsX.length, fieldsY.length);\n  let sameKeys = fieldsX.length === fieldsY.length;\n  for (let i = 0;sameKeys && i < fieldsX.length; i++) {\n    if (fieldsX[i] !== fieldsY[i])\n      sameKeys = false;\n  }\n  const firstX = _compareFirstKey(fieldsX, tagged), firstY = sameKeys ? firstX : _compareFirstKey(fieldsY, tagged);\n  if (firstX !== firstY)\n    return tagged ? _compareFieldNames(firstX, firstY) : _compare(firstX, firstY);\n  const firstLeft = x[firstX], firstRight = y[firstY];\n  if (firstLeft !== firstRight) {\n    const firstValue = _compare(firstLeft, firstRight);\n    if (firstValue !== 0)\n      return firstValue;\n  }\n  const kx = _compareSortedKeys(fieldsX, tagged), ky = sameKeys ? kx : _compareSortedKeys(fieldsY, tagged);\n  const n = Math.min(kx.length, ky.length);\n  for (let i = 1;i < n; i++) {\n    if (kx[i] !== ky[i])\n      return tagged ? _compareFieldNames(kx[i], ky[i]) : _compare(kx[i], ky[i]);\n    const left = x[kx[i]], right = y[ky[i]];\n    if (left !== right) {\n      const value = _compare(left, right);\n      if (value !== 0)\n        return value;\n    }\n  }\n  return _compare(kx.length, ky.length);\n};',
+  _compare:
+    'const _compare = (x, y) => {\n  if (x === y)\n    return 0;\n  if (x === undefined || y === undefined)\n    return x === undefined ? -1 : 1;\n  if (x === null || y === null)\n    return x === null ? -1 : 1;\n  const t = typeof x;\n  if (t === "number" || t === "string" || t === "boolean")\n    return x < y ? -1 : x > y ? 1 : 0;\n  if (Array.isArray(x) && Array.isArray(y)) {\n    const n = Math.min(x.length, y.length);\n    for (let i = 0;i < n; i++) {\n      const c = _compare(x[i], y[i]);\n      if (c !== 0)\n        return c;\n    }\n    return _compare(x.length, y.length);\n  }\n  if (x instanceof Map && y instanceof Map) {\n    const kx = [...x.keys()].sort(_compare), ky = [...y.keys()].sort(_compare);\n    const n = Math.min(kx.length, ky.length);\n    for (let i = 0;i < n; i++) {\n      const kc = _compare(kx[i], ky[i]);\n      if (kc !== 0)\n        return kc;\n      const vc = _compare(x.get(kx[i]), y.get(ky[i]));\n      if (vc !== 0)\n        return vc;\n    }\n    return _compare(kx.length, ky.length);\n  }\n  if (x instanceof Set && y instanceof Set) {\n    const ex = [...x].sort(_compare), ey = [...y].sort(_compare);\n    const n = Math.min(ex.length, ey.length);\n    for (let i = 0;i < n; i++) {\n      const c = _compare(ex[i], ey[i]);\n      if (c !== 0)\n        return c;\n    }\n    return _compare(ex.length, ey.length);\n  }\n  if (typeof x === "object" && x !== null && (!Array.isArray(x) && typeof x[Symbol.iterator] === "function" || typeof y === "object" && !Array.isArray(y) && typeof y[Symbol.iterator] === "function"))\n    throw new TypeError("compare on List: force it first with List.toArray");\n  if (typeof x !== "object" || typeof y !== "object")\n    return 0;\n  return _compareRecords(x, y);\n};',
+  compare: "const compare = _curry(2, _compare);",
+  show: 'const show = (x) => {\n  const t = typeof x;\n  if (t === "string")\n    return JSON.stringify(x);\n  if (t !== "object" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(", ")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(", ")}}`;\n  if (typeof x[Symbol.iterator] === "function")\n    return "<List>";\n  if (typeof x._tag === "string") {\n    const ks = Object.keys(x).filter((k) => k !== "_tag");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(", ")})`;\n  }\n  const ks = Object.keys(x);\n  return ks.length === 0 ? String(x) : `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(", ")} }`;\n};',
+  ignore: "const ignore = (_x) => {\n  return;\n};",
+  lt: "const lt = _curry(2, (a, b) => a < b);",
+  gt: "const gt = _curry(2, (a, b) => a > b);",
+  gte: "const gte = _curry(2, (a, b) => a >= b);",
+  lte: "const lte = _curry(2, (a, b) => a <= b);",
+  not: "const not = (b) => !b;",
+  and: "const and = _curry(2, (a, b) => a && b);",
+  or: "const or = _curry(2, (a, b) => a || b);",
+  min: "const min = _curry(2, (a, b) => Math.min(a, b));",
+  max: "const max = _curry(2, (a, b) => Math.max(a, b));",
+  pow: "const pow = _curry(2, (a, b) => a ** b);",
+  mod: "const mod = _curry(2, (a, b) => (a % b + b) % b);",
+  abs: "const abs = (x) => Math.abs(x);",
+  floor: "const floor = (x) => Math.floor(x);",
+  ceil: "const ceil = (x) => Math.ceil(x);",
+  round: "const round = (x) => Math.round(x);",
+  sign: "const sign = (x) => Math.sign(x);",
+  negate: "const negate = (x) => -x;",
+  length: "const length = (xs) => xs.length;",
+  map: "const map = _curry(2, (f, xs) => xs.map((x) => f(x)));",
+  filter: "const filter = _curry(2, (f, xs) => xs.filter((x) => f(x)));",
+  reduce: "const reduce = _curry(3, (f, init, xs) => xs.reduce((acc, x) => f(acc)(x), init));",
+  identity: "const identity = (x) => x;",
+  always: "const always = _curry(2, (x, _y) => x);",
+  compose: "const compose = _curry(3, (f, g, x) => f(g(x)));",
+  capitalize: "const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);",
+  range:
+    "const range = _curry(2, (lo, hi) => _list(function* () {\n  for (let i = lo;i < hi; i++)\n    yield i;\n}));",
+  iterate:
+    "const iterate = _curry(2, (f, x) => _list(function* () {\n  let v = x;\n  for (;; ) {\n    yield v;\n    v = f(v);\n  }\n}));",
+  repeat: "const repeat = (x) => _list(function* () {\n  for (;; )\n    yield x;\n});",
+  take: "const take = _curry(2, (n, xs) => _list(function* () {\n  let i = 0;\n  for (const x of xs) {\n    if (i >= n)\n      break;\n    yield x;\n    i++;\n  }\n}));",
+  takeWhile:
+    "const takeWhile = _curry(2, (p, xs) => _list(function* () {\n  for (const x of xs) {\n    if (!p(x))\n      break;\n    yield x;\n  }\n}));",
+  drop: "const drop = _curry(2, (n, xs) => _list(function* () {\n  let i = 0;\n  for (const x of xs) {\n    if (i < n) {\n      i++;\n      continue;\n    }\n    yield x;\n  }\n}));",
+  fromArray: "const fromArray = (xs) => _list(function* () {\n  yield* xs;\n});",
+  toArray: "const toArray = (xs) => [...xs];",
+  _List_map:
+    "const _List_map = _curry(2, (f, xs) => _list(function* () {\n  for (const x of xs)\n    yield f(x);\n}));",
+  _List_filter:
+    "const _List_filter = _curry(2, (p, xs) => _list(function* () {\n  for (const x of xs)\n    if (p(x))\n      yield x;\n}));",
+  _List_concat:
+    "const _List_concat = _curry(2, (xs, ys) => _list(function* () {\n  yield* xs;\n  yield* ys;\n}));",
+  _List_flatMap:
+    "const _List_flatMap = _curry(2, (f, xs) => _list(function* () {\n  for (const x of xs)\n    yield* f(x);\n}));",
+  _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(x));",
+  _Set_add: "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
+  _Set_delete:
+    "const _Set_delete = _curry(2, (x, s) => {\n  const n = new Set(s);\n  n.delete(x);\n  return n;\n});",
+  _Set_size: "const _Set_size = (s) => s.size;",
+  _Set_toArray: "const _Set_toArray = (s) => [...s];",
+  _Set_fromArray: "const _Set_fromArray = (xs) => new Set(xs);",
+  _Set_union: "const _Set_union = _curry(2, (a, b) => new Set([...a, ...b]));",
+  _Set_intersect:
+    "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
+  _Set_diff: "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
+  _Map_has: "const _Map_has = _curry(2, (k, m) => m.has(k));",
+  _Map_getOr: "const _Map_getOr = _curry(3, (d, k, m) => m.has(k) ? m.get(k) : d);",
+  _Map_set:
+    "const _Map_set = _curry(3, (k, v, m) => {\n  const n = new Map(m);\n  n.set(k, v);\n  return n;\n});",
+  _Map_delete:
+    "const _Map_delete = _curry(2, (k, m) => {\n  const n = new Map(m);\n  n.delete(k);\n  return n;\n});",
+  _Map_size: "const _Map_size = (m) => m.size;",
+  _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
+  _Map_values: "const _Map_values = (m) => [...m.values()];",
+  _Map_get: "const _Map_get = _curry(2, (k, m) => m.has(k) ? Some(m.get(k)) : None);",
+  _Option_map:
+    'const _Option_map = _curry(2, (f, o) => o._tag === "Some" ? Some(f(o.value)) : None);',
+  _Option_flatMap:
+    'const _Option_flatMap = _curry(2, (f, o) => o._tag === "Some" ? f(o.value) : None);',
+  _Option_mapOr:
+    'const _Option_mapOr = _curry(3, (d, f, o) => o._tag === "Some" ? f(o.value) : d);',
+  _Option_exists: 'const _Option_exists = _curry(2, (p, o) => o._tag === "Some" && p(o.value));',
+  _Option_contains:
+    'const _Option_contains = _curry(2, (x, o) => o._tag === "Some" && eq(x, o.value));',
+  _Option_unwrapOr:
+    'const _Option_unwrapOr = _curry(2, (d, o) => o._tag === "Some" ? o.value : d);',
+  _Option_orElse: 'const _Option_orElse = _curry(2, (fb, o) => o._tag === "Some" ? o : fb);',
+  _Option_isSome: 'const _Option_isSome = (o) => o._tag === "Some";',
+  _Option_isNone: 'const _Option_isNone = (o) => o._tag === "None";',
+  _Result_map: 'const _Result_map = _curry(2, (f, r) => r._tag === "Ok" ? Ok(f(r.value)) : r);',
+  _Result_mapErr:
+    'const _Result_mapErr = _curry(2, (f, r) => r._tag === "Err" ? Err(f(r.error)) : r);',
+  _Result_flatMap: 'const _Result_flatMap = _curry(2, (f, r) => r._tag === "Ok" ? f(r.value) : r);',
+  _Result_unwrapOr: 'const _Result_unwrapOr = _curry(2, (d, r) => r._tag === "Ok" ? r.value : d);',
+  _Result_isOk: 'const _Result_isOk = (r) => r._tag === "Ok";',
+  _Result_isErr: 'const _Result_isErr = (r) => r._tag === "Err";',
+  _List_head:
+    "const _List_head = (xs) => {\n  for (const x of xs)\n    return Some(x);\n  return None;\n};",
+  _Array_head: "const _Array_head = (xs) => xs.length > 0 ? Some(xs[0]) : None;",
+  _Array_forEach:
+    "const _Array_forEach = _curry(2, (f, xs) => {\n  for (const x of xs)\n    f(x);\n});",
+  _Array_get:
+    "const _Array_get = _curry(2, (i, xs) => i >= 0 && i < xs.length ? Some(xs[i]) : None);",
+  _Array_find:
+    "const _Array_find = _curry(2, (p, xs) => {\n  for (const x of xs)\n    if (p(x))\n      return Some(x);\n  return None;\n});",
+  _Array_reverse: "const _Array_reverse = (xs) => [...xs].reverse();",
+  _Array_concat: "const _Array_concat = _curry(2, (xs, ys) => xs.concat(ys));",
+  _Array_append: "const _Array_append = _curry(2, (x, xs) => [...xs, x]);",
+  _Array_prepend: "const _Array_prepend = _curry(2, (x, xs) => [x, ...xs]);",
+  _Array_flatMap: "const _Array_flatMap = _curry(2, (f, xs) => xs.flatMap((x) => f(x)));",
+  _Array_take: "const _Array_take = _curry(2, (n, xs) => xs.slice(0, n));",
+  _Array_drop: "const _Array_drop = _curry(2, (n, xs) => xs.slice(n));",
+  _Array_tail: "const _Array_tail = (xs) => xs.slice(1);",
+  _Array_contains: "const _Array_contains = _curry(2, (x, xs) => xs.some((y) => eq(x, y)));",
+  _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
+  _Array_sortBy:
+    "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
+  _Array_dedupe:
+    "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
+  _Array_dedupeBy:
+    'const _Array_dedupeBy = _curry(2, (f, xs) => {\n  const primitive = new Set;\n  const structural = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (k !== null && typeof k === "object") {\n      if (structural.some((s) => eq(s, k)))\n        return false;\n      structural.push(k);\n      return true;\n    }\n    if (Number.isNaN(k))\n      return true;\n    if (primitive.has(k))\n      return false;\n    primitive.add(k);\n    return true;\n  });\n});',
+  _Array_max:
+    "const _Array_max = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) >= 0 ? a : b)) : None;",
+  _Array_min:
+    "const _Array_min = (xs) => xs.length ? Some(xs.reduce((a, b) => compare(a, b) <= 0 ? a : b)) : None;",
+  _Array_maxBy:
+    "const _Array_maxBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) >= 0 ? a : b)) : None);",
+  _Array_minBy:
+    "const _Array_minBy = _curry(2, (f, xs) => xs.length ? Some(xs.reduce((a, b) => compare(f(a), f(b)) <= 0 ? a : b)) : None);",
+  _Str_length: "const _Str_length = (s) => s.length;",
+  _Str_concat: "const _Str_concat = _curry(2, (a, b) => a + b);",
+  _Str_toUpper: "const _Str_toUpper = (s) => s.toUpperCase();",
+  _Str_toLower: "const _Str_toLower = (s) => s.toLowerCase();",
+  _Str_trim: "const _Str_trim = (s) => s.trim();",
+  _Str_split: "const _Str_split = _curry(2, (sep, s) => s.split(sep));",
+  _Str_join: "const _Str_join = _curry(2, (sep, xs) => xs.join(sep));",
+  _Str_contains: "const _Str_contains = _curry(2, (needle, s) => s.includes(needle));",
+  _Str_startsWith: "const _Str_startsWith = _curry(2, (p, s) => s.startsWith(p));",
+  _Str_endsWith: "const _Str_endsWith = _curry(2, (p, s) => s.endsWith(p));",
+  _Str_slice: "const _Str_slice = _curry(3, (start, end, s) => s.slice(start, end));",
+  _Str_replace: "const _Str_replace = _curry(3, (find, repl, s) => s.replaceAll(find, repl));",
+  _Str_get: "const _Str_get = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s[i]) : None);",
+  _Str_codeAt:
+    "const _Str_codeAt = _curry(2, (i, s) => i >= 0 && i < s.length ? Some(s.charCodeAt(i)) : None);",
+  _Str_fromCode: "const _Str_fromCode = (n) => String.fromCharCode(n);",
+  _Str_chars: "const _Str_chars = (s) => [...s];",
+  _Str_toNumber:
+    "const _Str_toNumber = (s) => {\n  const n = Number(s);\n  return Number.isNaN(n) ? None : Some(n);\n};",
+  _Task_of: "const _Task_of = (x) => () => Promise.resolve(Ok(x));",
+  _Task_fail: "const _Task_fail = (e) => () => Promise.resolve(Err(e));",
+  _Task_map:
+    'const _Task_map = _curry(2, (f, t) => () => t().then((r) => r._tag === "Ok" ? Ok(f(r.value)) : r));',
+  _Task_mapErr:
+    'const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => r._tag === "Err" ? Err(f(r.error)) : r));',
+  _Task_andThen:
+    'const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => r._tag === "Ok" ? f(r.value)() : r));',
+  _Task_recover:
+    'const _Task_recover = _curry(2, (f, t) => () => t().then((r) => r._tag === "Err" ? f(r.error)() : r));',
+  _Task_fromResult: "const _Task_fromResult = (r) => () => Promise.resolve(r);",
+  _Task_match:
+    'const _Task_match = _curry(3, (onOk, onErr, t) => () => t().then((r) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))));',
+  _Task_delay:
+    "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(Ok(x)), ms)));",
+  _Task_run: "const _Task_run = (t) => t();",
+  _Task_all:
+    'const _Task_all = (ts) => () => new Promise((res) => {\n  const out = new Array(ts.length);\n  let left = ts.length;\n  let settled = false;\n  if (left === 0) {\n    res(Ok(out));\n    return;\n  }\n  ts.forEach((t, i) => {\n    t().then((r) => {\n      if (settled)\n        return;\n      if (r._tag === "Err") {\n        settled = true;\n        res(r);\n        return;\n      }\n      out[i] = r.value;\n      left -= 1;\n      if (left === 0) {\n        settled = true;\n        res(Ok(out));\n      }\n    });\n  });\n});',
+  _Task_race:
+    "const _Task_race = (ts) => () => new Promise((res) => {\n  let settled = false;\n  ts.forEach((t) => {\n    t().then((r) => {\n      if (settled)\n        return;\n      settled = true;\n      res(r);\n    });\n  });\n});",
+  _Task_traverse: "const _Task_traverse = _curry(2, (f, xs) => _Task_all(xs.map(f)));",
 };
 const _runtimeDeps = {
-  "add": [
-    "_curry"
-  ],
-  "sub": [
-    "_curry"
-  ],
-  "mul": [
-    "_curry"
-  ],
-  "div": [
-    "_curry"
-  ],
-  "hypot": [
-    "_curry"
-  ],
-  "concat": [
-    "_curry",
-    "_List_concat"
-  ],
-  "eq": [
-    "_curry"
-  ],
-  "_compareSortedKeys": [
-    "_compareFieldNames"
-  ],
-  "_compareFirstKey": [
-    "_compareFieldNames"
-  ],
-  "_compareRecords": [
-    "_compareFieldNames",
-    "_compareSortedKeys",
-    "_compareFirstKey",
-    "_compare"
-  ],
-  "_compare": [
-    "_compareRecords"
-  ],
-  "compare": [
-    "_curry",
-    "_compare"
-  ],
-  "lt": [
-    "_curry"
-  ],
-  "gt": [
-    "_curry"
-  ],
-  "gte": [
-    "_curry"
-  ],
-  "lte": [
-    "_curry"
-  ],
-  "and": [
-    "_curry"
-  ],
-  "or": [
-    "_curry"
-  ],
-  "min": [
-    "_curry"
-  ],
-  "max": [
-    "_curry"
-  ],
-  "pow": [
-    "_curry"
-  ],
-  "mod": [
-    "_curry"
-  ],
-  "map": [
-    "_curry"
-  ],
-  "filter": [
-    "_curry"
-  ],
-  "reduce": [
-    "_curry"
-  ],
-  "always": [
-    "_curry"
-  ],
-  "compose": [
-    "_curry"
-  ],
-  "range": [
-    "_list",
-    "_curry"
-  ],
-  "iterate": [
-    "_list",
-    "_curry"
-  ],
-  "repeat": [
-    "_list"
-  ],
-  "take": [
-    "_list",
-    "_curry"
-  ],
-  "takeWhile": [
-    "_list",
-    "_curry"
-  ],
-  "drop": [
-    "_list",
-    "_curry"
-  ],
-  "fromArray": [
-    "_list"
-  ],
-  "_List_map": [
-    "_list",
-    "_curry"
-  ],
-  "_List_filter": [
-    "_list",
-    "_curry"
-  ],
-  "_List_concat": [
-    "_list",
-    "_curry"
-  ],
-  "_List_flatMap": [
-    "_list",
-    "_curry"
-  ],
-  "_Set_has": [
-    "_curry"
-  ],
-  "_Set_add": [
-    "_curry"
-  ],
-  "_Set_delete": [
-    "_curry"
-  ],
-  "_Set_union": [
-    "_curry"
-  ],
-  "_Set_intersect": [
-    "_curry"
-  ],
-  "_Set_diff": [
-    "_curry"
-  ],
-  "_Map_has": [
-    "_curry"
-  ],
-  "_Map_getOr": [
-    "_curry"
-  ],
-  "_Map_set": [
-    "_curry"
-  ],
-  "_Map_delete": [
-    "_curry"
-  ],
-  "_Map_get": [
-    "_curry",
-    "Some",
-    "None"
-  ],
-  "_Option_map": [
-    "_curry",
-    "Some",
-    "None"
-  ],
-  "_Option_flatMap": [
-    "_curry",
-    "None"
-  ],
-  "_Option_mapOr": [
-    "_curry"
-  ],
-  "_Option_exists": [
-    "_curry"
-  ],
-  "_Option_contains": [
-    "_curry",
-    "eq"
-  ],
-  "_Option_unwrapOr": [
-    "_curry"
-  ],
-  "_Option_orElse": [
-    "_curry"
-  ],
-  "_Result_map": [
-    "_curry",
-    "Ok"
-  ],
-  "_Result_mapErr": [
-    "_curry",
-    "Err"
-  ],
-  "_Result_flatMap": [
-    "_curry"
-  ],
-  "_Result_unwrapOr": [
-    "_curry"
-  ],
-  "_List_head": [
-    "Some",
-    "None"
-  ],
-  "_Array_head": [
-    "Some",
-    "None"
-  ],
-  "_Array_forEach": [
-    "_curry"
-  ],
-  "_Array_get": [
-    "_curry",
-    "Some",
-    "None"
-  ],
-  "_Array_find": [
-    "_curry",
-    "Some",
-    "None"
-  ],
-  "_Array_concat": [
-    "_curry"
-  ],
-  "_Array_append": [
-    "_curry"
-  ],
-  "_Array_prepend": [
-    "_curry"
-  ],
-  "_Array_flatMap": [
-    "_curry"
-  ],
-  "_Array_take": [
-    "_curry"
-  ],
-  "_Array_drop": [
-    "_curry"
-  ],
-  "_Array_contains": [
-    "_curry",
-    "eq"
-  ],
-  "_Array_sort": [
-    "compare"
-  ],
-  "_Array_sortBy": [
-    "_curry",
-    "compare"
-  ],
-  "_Array_dedupe": [
-    "eq"
-  ],
-  "_Array_dedupeBy": [
-    "_curry",
-    "eq"
-  ],
-  "_Array_max": [
-    "Some",
-    "None",
-    "compare"
-  ],
-  "_Array_min": [
-    "Some",
-    "None",
-    "compare"
-  ],
-  "_Array_maxBy": [
-    "_curry",
-    "Some",
-    "None",
-    "compare"
-  ],
-  "_Array_minBy": [
-    "_curry",
-    "Some",
-    "None",
-    "compare"
-  ],
-  "_Str_concat": [
-    "_curry"
-  ],
-  "_Str_split": [
-    "_curry"
-  ],
-  "_Str_join": [
-    "_curry"
-  ],
-  "_Str_contains": [
-    "_curry"
-  ],
-  "_Str_startsWith": [
-    "_curry"
-  ],
-  "_Str_endsWith": [
-    "_curry"
-  ],
-  "_Str_slice": [
-    "_curry"
-  ],
-  "_Str_replace": [
-    "_curry"
-  ],
-  "_Str_get": [
-    "_curry",
-    "Some",
-    "None"
-  ],
-  "_Str_codeAt": [
-    "_curry",
-    "Some",
-    "None"
-  ],
-  "_Str_toNumber": [
-    "Some",
-    "None"
-  ],
-  "_Task_of": [
-    "Ok"
-  ],
-  "_Task_fail": [
-    "Err"
-  ],
-  "_Task_map": [
-    "_curry",
-    "Ok"
-  ],
-  "_Task_mapErr": [
-    "_curry",
-    "Err"
-  ],
-  "_Task_andThen": [
-    "_curry"
-  ],
-  "_Task_recover": [
-    "_curry"
-  ],
-  "_Task_match": [
-    "_curry",
-    "Ok"
-  ],
-  "_Task_delay": [
-    "_curry",
-    "Ok"
-  ],
-  "_Task_all": [
-    "Ok"
-  ],
-  "_Task_traverse": [
-    "_curry",
-    "_Task_all"
-  ]
+  add: ["_curry"],
+  sub: ["_curry"],
+  mul: ["_curry"],
+  div: ["_curry"],
+  hypot: ["_curry"],
+  concat: ["_curry", "_List_concat"],
+  eq: ["_curry"],
+  _compareSortedKeys: ["_compareFieldNames"],
+  _compareFirstKey: ["_compareFieldNames"],
+  _compareRecords: ["_compareFieldNames", "_compareSortedKeys", "_compareFirstKey", "_compare"],
+  _compare: ["_compareRecords"],
+  compare: ["_curry", "_compare"],
+  lt: ["_curry"],
+  gt: ["_curry"],
+  gte: ["_curry"],
+  lte: ["_curry"],
+  and: ["_curry"],
+  or: ["_curry"],
+  min: ["_curry"],
+  max: ["_curry"],
+  pow: ["_curry"],
+  mod: ["_curry"],
+  map: ["_curry"],
+  filter: ["_curry"],
+  reduce: ["_curry"],
+  always: ["_curry"],
+  compose: ["_curry"],
+  range: ["_list", "_curry"],
+  iterate: ["_list", "_curry"],
+  repeat: ["_list"],
+  take: ["_list", "_curry"],
+  takeWhile: ["_list", "_curry"],
+  drop: ["_list", "_curry"],
+  fromArray: ["_list"],
+  _List_map: ["_list", "_curry"],
+  _List_filter: ["_list", "_curry"],
+  _List_concat: ["_list", "_curry"],
+  _List_flatMap: ["_list", "_curry"],
+  _Set_has: ["_curry"],
+  _Set_add: ["_curry"],
+  _Set_delete: ["_curry"],
+  _Set_union: ["_curry"],
+  _Set_intersect: ["_curry"],
+  _Set_diff: ["_curry"],
+  _Map_has: ["_curry"],
+  _Map_getOr: ["_curry"],
+  _Map_set: ["_curry"],
+  _Map_delete: ["_curry"],
+  _Map_get: ["_curry", "Some", "None"],
+  _Option_map: ["_curry", "Some", "None"],
+  _Option_flatMap: ["_curry", "None"],
+  _Option_mapOr: ["_curry"],
+  _Option_exists: ["_curry"],
+  _Option_contains: ["_curry", "eq"],
+  _Option_unwrapOr: ["_curry"],
+  _Option_orElse: ["_curry"],
+  _Result_map: ["_curry", "Ok"],
+  _Result_mapErr: ["_curry", "Err"],
+  _Result_flatMap: ["_curry"],
+  _Result_unwrapOr: ["_curry"],
+  _List_head: ["Some", "None"],
+  _Array_head: ["Some", "None"],
+  _Array_forEach: ["_curry"],
+  _Array_get: ["_curry", "Some", "None"],
+  _Array_find: ["_curry", "Some", "None"],
+  _Array_concat: ["_curry"],
+  _Array_append: ["_curry"],
+  _Array_prepend: ["_curry"],
+  _Array_flatMap: ["_curry"],
+  _Array_take: ["_curry"],
+  _Array_drop: ["_curry"],
+  _Array_contains: ["_curry", "eq"],
+  _Array_sort: ["compare"],
+  _Array_sortBy: ["_curry", "compare"],
+  _Array_dedupe: ["eq"],
+  _Array_dedupeBy: ["_curry", "eq"],
+  _Array_max: ["Some", "None", "compare"],
+  _Array_min: ["Some", "None", "compare"],
+  _Array_maxBy: ["_curry", "Some", "None", "compare"],
+  _Array_minBy: ["_curry", "Some", "None", "compare"],
+  _Str_concat: ["_curry"],
+  _Str_split: ["_curry"],
+  _Str_join: ["_curry"],
+  _Str_contains: ["_curry"],
+  _Str_startsWith: ["_curry"],
+  _Str_endsWith: ["_curry"],
+  _Str_slice: ["_curry"],
+  _Str_replace: ["_curry"],
+  _Str_get: ["_curry", "Some", "None"],
+  _Str_codeAt: ["_curry", "Some", "None"],
+  _Str_toNumber: ["Some", "None"],
+  _Task_of: ["Ok"],
+  _Task_fail: ["Err"],
+  _Task_map: ["_curry", "Ok"],
+  _Task_mapErr: ["_curry", "Err"],
+  _Task_andThen: ["_curry"],
+  _Task_recover: ["_curry"],
+  _Task_match: ["_curry", "Ok"],
+  _Task_delay: ["_curry", "Ok"],
+  _Task_all: ["Ok"],
+  _Task_traverse: ["_curry", "_Task_all"],
 };
 
 const _map = (o) => new Map(Object.entries(o));
