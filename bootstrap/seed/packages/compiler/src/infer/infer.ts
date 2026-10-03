@@ -181,9 +181,11 @@ import {
   _Map_keys,
   _Map_set,
   _Option_map,
+  _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
+  _Result_match,
   _Set_add,
   _Set_fromArray,
   _Set_has,
@@ -429,24 +431,21 @@ const aliasRowFrom: <A>(
     aliases: Map<string, QualAliasInfo>,
     i: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (RowEmpty as Row)
-        : _v._tag === "Some"
-          ? (({ value: f }) =>
-              (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-                rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
-                typeExprToType(
-                  f.fieldType,
-                  new Map<string, Ty>(),
-                  mkSt(0),
-                  aliases,
-                  _Set_fromArray([] as string[]),
-                ),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, fields)),
+    _Option_match(
+      _Array_get(i, fields),
+      () => RowEmpty as Row,
+      (f) =>
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+          rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
+          typeExprToType(
+            f.fieldType,
+            new Map<string, Ty>(),
+            mkSt(0),
+            aliases,
+            _Set_fromArray([] as string[]),
+          ),
+        ),
+    ),
 );
 const shownOfAlias: <A, B, C, D>(
   info: {
@@ -467,16 +466,14 @@ const shownOfAlias: <A, B, C, D>(
   ) =>
     length(info.params) !== 0
       ? (None as Option<string>)
-      : ((_v) =>
-          _v._tag === "Some"
-            ? (None as Option<string>)
-            : _v._tag === "None"
-              ? length(info.fields) === 0
-                ? (None as Option<string>)
-                : (Some(showType(tRecord(aliasRowFrom(info.fields, aliases, 0)))) as Option<string>)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(info.expr),
+      : _Option_match(
+          info.expr,
+          () =>
+            length(info.fields) === 0
+              ? (None as Option<string>)
+              : (Some(showType(tRecord(aliasRowFrom(info.fields, aliases, 0)))) as Option<string>),
+          () => None as Option<string>,
+        ),
 );
 const longerPrint: <A, B>(p: { shown: string } & A, q: { shown: string } & B) => boolean = _curry(
   2,
@@ -519,36 +516,27 @@ const printsFrom: _Curry<
     i: number,
     acc: { shown: string; name: string }[],
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: key }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? printsFrom(keys, aliases, i + 1, acc)
-                  : _v._tag === "Some"
-                    ? (({ value: info }) =>
-                        ((_v) =>
-                          _v._tag === "None"
-                            ? printsFrom(keys, aliases, i + 1, acc)
-                            : _v._tag === "Some"
-                              ? (({ value: shown }) =>
-                                  printsFrom(
-                                    keys,
-                                    aliases,
-                                    i + 1,
-                                    insertPrint({ shown: shown, name: lastSeg(key) }, acc),
-                                  ))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(shownOfAlias(info, aliases)))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(key, aliases)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, keys)),
+    _Option_match(
+      _Array_get(i, keys),
+      () => acc,
+      (key) =>
+        _Option_match(
+          _Map_get(key, aliases),
+          () => printsFrom(keys, aliases, i + 1, acc),
+          (info) =>
+            _Option_match(
+              shownOfAlias(info, aliases),
+              () => printsFrom(keys, aliases, i + 1, acc),
+              (shown) =>
+                printsFrom(
+                  keys,
+                  aliases,
+                  i + 1,
+                  insertPrint({ shown: shown, name: lastSeg(key) }, acc),
+                ),
+            ),
+        ),
+    ),
 );
 const applyPrints: <A>(
   msg: string,
@@ -557,14 +545,11 @@ const applyPrints: <A>(
 ) => string = _curry(
   3,
   <A>(msg: string, prints: ({ shown: string; name: string } & A)[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? msg
-        : _v._tag === "Some"
-          ? (({ value: p }) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, prints)),
+    _Option_match(
+      _Array_get(i, prints),
+      () => msg,
+      (p) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1),
+    ),
 );
 const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], string> = _curry(
   2,
@@ -613,15 +598,11 @@ const u: _Curry<
     st: St,
     sp: SpanAt,
   ) =>
-    ((_v) =>
-      _v._tag === "Ok"
-        ? (({ value: newSt }) => Ok(newSt) as Result<St, IErr>)(_v)
-        : _v._tag === "Err"
-          ? (({ error: e }) =>
-              Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(unify(left, right, st)),
+    _Result_match(
+      unify(left, right, st),
+      (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+      (newSt) => Ok(newSt) as Result<St, IErr>,
+    ),
 );
 /**
  * `actual` may be used as `expected` (ADR 0098 optional fields).
@@ -664,15 +645,11 @@ const checkFits: _Curry<
     st: St,
     sp: SpanAt,
   ) =>
-    ((_v) =>
-      _v._tag === "Ok"
-        ? (({ value: newSt }) => Ok(newSt) as Result<St, IErr>)(_v)
-        : _v._tag === "Err"
-          ? (({ error: e }) =>
-              Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(fits(actual, expected, st)),
+    _Result_match(
+      fits(actual, expected, st),
+      (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+      (newSt) => Ok(newSt) as Result<St, IErr>,
+    ),
 );
 const bindParamNamesFrom: <A>(
   names: A[],
@@ -741,14 +718,11 @@ const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _cu
   <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) =>
     _Array_flatMap(
       (n: A) =>
-        ((_v) =>
-          _v._tag === "Some"
-            ? (({ value: sc }) => [sc.ty])(_v)
-            : _v._tag === "None"
-              ? ([] as B[])
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Map_get(n, env)),
+        _Option_match(
+          _Map_get(n, env),
+          () => [] as B[],
+          (sc) => [sc.ty],
+        ),
       names,
     ),
 );
@@ -1178,34 +1152,32 @@ const inferLoopParamsFrom: _Curry<
     ownerAcc: Map<string, SpanAt>,
     st: St,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
-            [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
-            IErr
-          >)
-        : _v._tag === "Some"
-          ? (({ value: p }) =>
-              _Result_flatMap(
-                ([t, st1]) =>
-                  ((sp: SpanAt) =>
-                    inferLoopParamsFrom(
-                      ctx,
-                      params,
-                      i + 1,
-                      _Map_set(p.name, mono(t), envAcc),
-                      _Array_append(t, frameAcc),
-                      _Map_set(p.name, sp, ownerAcc),
-                      noteLet(
-                        sp,
-                        recordBinder(p.nameSpan, t, "let", p.name, None as Option<string>, st1),
-                      ),
-                    ))(exprSpan(p.init)),
-                inferExpr(ctx, p.init, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, params)),
+    _Option_match(
+      _Array_get(i, params),
+      () =>
+        Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
+          [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
+          IErr
+        >,
+      (p) =>
+        _Result_flatMap(
+          ([t, st1]) =>
+            ((sp: SpanAt) =>
+              inferLoopParamsFrom(
+                ctx,
+                params,
+                i + 1,
+                _Map_set(p.name, mono(t), envAcc),
+                _Array_append(t, frameAcc),
+                _Map_set(p.name, sp, ownerAcc),
+                noteLet(
+                  sp,
+                  recordBinder(p.nameSpan, t, "let", p.name, None as Option<string>, st1),
+                ),
+              ))(exprSpan(p.init)),
+          inferExpr(ctx, p.init, st),
+        ),
+    ),
 );
 const unifyRecurArgsFrom: _Curry<
   [
@@ -1245,30 +1217,24 @@ const unifyRecurArgsFrom: _Curry<
     i: number,
     st: St,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(st) as Result<St, IErr>)
-        : _v._tag === "Some"
-          ? (({ value: a }) =>
-              _Result_flatMap(
-                ([at, st1]) =>
-                  ((_v) =>
-                    _v._tag === "None"
-                      ? unifyRecurArgsFrom(ctx, args, frame, i + 1, st1)
-                      : _v._tag === "Some"
-                        ? (({ value: pt }) =>
-                            _Result_flatMap(
-                              (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
-                              u(ctx, at, pt, st1, exprSpan(a)),
-                            ))(_v)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(_Array_get(i, frame)),
-                inferExpr(ctx, a, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, args)),
+    _Option_match(
+      _Array_get(i, args),
+      () => Ok(st) as Result<St, IErr>,
+      (a) =>
+        _Result_flatMap(
+          ([at, st1]) =>
+            _Option_match(
+              _Array_get(i, frame),
+              () => unifyRecurArgsFrom(ctx, args, frame, i + 1, st1),
+              (pt) =>
+                _Result_flatMap(
+                  (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
+                  u(ctx, at, pt, st1, exprSpan(a)),
+                ),
+            ),
+          inferExpr(ctx, a, st),
+        ),
+    ),
 );
 const inferRecur: _Curry<
   [
@@ -1458,78 +1424,56 @@ const labFieldsFrom: _Curry<
                                   ))(
                                   or(
                                     optional,
-                                    ((_v) =>
-                                      _v._tag === "Some"
-                                        ? true
-                                        : _v._tag === "None"
-                                          ? false
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(defaultValue),
+                                    _Option_match(
+                                      defaultValue,
+                                      () => false,
+                                      () => true,
+                                    ),
                                   ),
                                 ))(
-                                ((_v) =>
-                                  _v._tag === "Some"
-                                    ? fieldT1
-                                    : _v._tag === "None"
-                                      ? optional
-                                        ? tCon("Option", [fieldT1])
-                                        : fieldT1
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(defaultValue),
+                                _Option_match(
+                                  defaultValue,
+                                  () => (optional ? tCon("Option", [fieldT1]) : fieldT1),
+                                  () => fieldT1,
+                                ),
                               ),
-                            ((_v) =>
-                              _v._tag === "None"
-                                ? (Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>)
-                                : _v._tag === "Some"
-                                  ? (({ value: d }) =>
-                                      _Result_flatMap(
-                                        ([dt, s2]) =>
-                                          ((_v) =>
-                                            _v._tag === "Some"
-                                              ? _Result_flatMap(
-                                                  (s3) =>
-                                                    Ok(_tuple(fieldT, s3)) as Result<
-                                                      [Ty, St],
-                                                      IErr
-                                                    >,
-                                                  checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
-                                                )
-                                              : _v._tag === "None"
-                                                ? ((widened: Ty) =>
-                                                    _Result_flatMap(
-                                                      (s3) =>
-                                                        Ok(_tuple(widened, s3)) as Result<
-                                                          [Ty, St],
-                                                          IErr
-                                                        >,
-                                                      u(ctx, fieldT, widened, s2, exprSpan(d)),
-                                                    ))(widenLits(zonk(dt, s2)))
-                                                : (() => {
-                                                    throw new Error("non-exhaustive match");
-                                                  })())(annot),
-                                        inferExpr(ctxWithEnv(ctx, env), d, st1),
-                                      ))(_v)
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(defaultValue),
+                            _Option_match(
+                              defaultValue,
+                              () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>,
+                              (d) =>
+                                _Result_flatMap(
+                                  ([dt, s2]) =>
+                                    _Option_match(
+                                      annot,
+                                      () => {
+                                        const widened: Ty = widenLits(zonk(dt, s2));
+                                        return _Result_flatMap(
+                                          (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
+                                          u(ctx, fieldT, widened, s2, exprSpan(d)),
+                                        );
+                                      },
+                                      () =>
+                                        _Result_flatMap(
+                                          (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
+                                          checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
+                                        ),
+                                    ),
+                                  inferExpr(ctxWithEnv(ctx, env), d, st1),
+                                ),
+                            ),
                           ))(
-                          ((_v) =>
-                            _v._tag === "Some"
-                              ? (({ value: te }) =>
-                                  typeExprToType(
-                                    te,
-                                    vars,
-                                    st,
-                                    ctx.aliasMap,
-                                    _Set_fromArray([] as string[]),
-                                  ))(_v)
-                              : _v._tag === "None"
-                                ? (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st))
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(annot),
+                          _Option_match(
+                            annot,
+                            () => (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
+                            (te) =>
+                              typeExprToType(
+                                te,
+                                vars,
+                                st,
+                                ctx.aliasMap,
+                                _Set_fromArray([] as string[]),
+                              ),
+                          ),
                         ))(_v)
                     : labFieldsFrom(ctx, rest, env, vars, st))(lab))(_v)
           : (() => {
@@ -1595,18 +1539,10 @@ const recordLabParamsFrom: <A>(
             recordLabParamsFrom(
               rest,
               fields,
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: f }) =>
-                      recordBinder(sp, f.bodyType, "parameter", name, None as Option<string>, st))(
-                      _v,
-                    )
-                  : _v._tag === "None"
-                    ? st
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(
+              _Option_match(
                 _Array_find((f: { name: string; bodyType: Ty } & A) => eq(f.name, name), fields),
+                () => st,
+                (f) => recordBinder(sp, f.bodyType, "parameter", name, None as Option<string>, st),
               ),
             ))(
             _v as [
@@ -2041,15 +1977,11 @@ const inferBindBody: _Curry<
                 })(freshVar(st3)),
               inferExpr(ctxWithEnv(ctx, bodyEnv), body, stNamed),
             ))(
-            ((_v) =>
-              _v._tag === "Some"
-                ? (({ value: name }) =>
-                    recordBinder(paramSpan, payloadT, "let", name, None as Option<string>, st2))(_v)
-                : _v._tag === "None"
-                  ? st2
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(bindNameOf(param)),
+            _Option_match(
+              bindNameOf(param),
+              () => st2,
+              (name) => recordBinder(paramSpan, payloadT, "let", name, None as Option<string>, st2),
+            ),
           ),
         u(ctx, paramT, payloadT, st1, paramSpan),
       ))(bindParam(param, ctx.env, st)),
@@ -2492,17 +2424,12 @@ const inferNsField: _Curry<
     sp: SpanAt,
     st: St,
   ) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: sc }) =>
-            (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
-              instantiate(sc, st),
-            ))(_v)
-        : _v._tag === "None"
-          ? (Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns))),
+    _Option_match(
+      _Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)),
+      () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
+      (sc) =>
+        (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+    ),
 );
 const inferInterpParts: _Curry<
   [
@@ -2842,14 +2769,11 @@ const mergeBindingMapsFrom: <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) =
       .with(
         (_v) => _v.length >= 1,
         ([k, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: v }) => mergeBindingMapsFrom(rest, src, _Map_set(k, v, dest)))(_v)
-              : _v._tag === "None"
-                ? mergeBindingMapsFrom(rest, src, dest)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(k, src)),
+          _Option_match(
+            _Map_get(k, src),
+            () => mergeBindingMapsFrom(rest, src, dest),
+            (v) => mergeBindingMapsFrom(rest, src, _Map_set(k, v, dest)),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -2872,16 +2796,11 @@ const mergeEnvBindingsFrom: <A>(
     .with(
       (_v) => _v.length >= 1,
       ([k, ...rest]) =>
-        ((_v) =>
-          _v._tag === "Some"
-            ? (({ value: t }) => mergeEnvBindingsFrom(rest, bindings, _Map_set(k, mono(t), env)))(
-                _v,
-              )
-            : _v._tag === "None"
-              ? mergeEnvBindingsFrom(rest, bindings, env)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Map_get(k, bindings)),
+        _Option_match(
+          _Map_get(k, bindings),
+          () => mergeEnvBindingsFrom(rest, bindings, env),
+          (t) => mergeEnvBindingsFrom(rest, bindings, _Map_set(k, mono(t), env)),
+        ),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -2950,18 +2869,15 @@ const inferArms: _Curry<
                                 ),
                               inferExpr(armCtx, arm.body, st3),
                             ),
-                          ((_v) =>
-                            _v._tag === "None"
-                              ? (Ok(st2) as Result<St, IErr>)
-                              : _v._tag === "Some"
-                                ? (({ value: g }) =>
-                                    _Result_flatMap(
-                                      ([guardT, stg]) => u(ctx, tBool, guardT, stg, exprSpan(g)),
-                                      inferExpr(armCtx, g, st2),
-                                    ))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(arm.guard),
+                          _Option_match(
+                            arm.guard,
+                            () => Ok(st2) as Result<St, IErr>,
+                            (g) =>
+                              _Result_flatMap(
+                                ([guardT, stg]) => u(ctx, tBool, guardT, stg, exprSpan(g)),
+                                inferExpr(armCtx, g, st2),
+                              ),
+                          ),
                         ))(ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env))),
                     u(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
                   ),
@@ -3116,60 +3032,53 @@ const inferExprRaw: _Curry<
               ? (({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)(_v)
               : _v._tag === "ERef"
                 ? (({ name, span: sp }) =>
-                    ((_v) =>
-                      _v._tag === "Some"
-                        ? (({ value: sc }) =>
-                            (([t, st1]: [Ty, St]) =>
-                              Ok(
-                                _tuple(
-                                  t,
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: vsp }) => noteUse(vsp, t, st1))(_v)
-                                      : _v._tag === "None"
-                                        ? st1
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(_Map_get(name, ctx.letOwner)),
+                    _Option_match(
+                      _Map_get(name, ctx.env),
+                      () =>
+                        ctx.open
+                          ? _Set_has(name, ctx.localNames)
+                            ? (Err(
+                                typeErrHelp(
+                                  `'${name}' is not in scope here`,
+                                  sp,
+                                  "it is bound elsewhere in this file, but not around this use — check the binder's extent",
                                 ),
-                              ) as Result<[Ty, St], IErr>)(instantiate(sc, st)))(_v)
-                        : _v._tag === "None"
-                          ? ctx.open
-                            ? _Set_has(name, ctx.localNames)
-                              ? (Err(
+                              ) as Result<[Ty, St], IErr>)
+                            : (([t, st1]: [Ty, St]) =>
+                                Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
+                          : _Option_match(
+                              closestName(name, _Map_keys(ctx.env)),
+                              () =>
+                                Err(
                                   typeErrHelp(
-                                    `'${name}' is not in scope here`,
+                                    `unbound variable '${name}'`,
                                     sp,
-                                    "it is bound elsewhere in this file, but not around this use — check the binder's extent",
+                                    "bind the name before using it, or check the spelling",
                                   ),
-                                ) as Result<[Ty, St], IErr>)
-                              : (([t, st1]: [Ty, St]) =>
-                                  Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
-                            : ((_v) =>
-                                _v._tag === "Some"
-                                  ? (({ value: hint }) =>
-                                      Err(
-                                        typeErrSuggest(
-                                          `unbound variable '${name}'`,
-                                          sp,
-                                          `did you mean '${hint}'?`,
-                                          hint,
-                                        ),
-                                      ) as Result<[Ty, St], IErr>)(_v)
-                                  : _v._tag === "None"
-                                    ? (Err(
-                                        typeErrHelp(
-                                          `unbound variable '${name}'`,
-                                          sp,
-                                          "bind the name before using it, or check the spelling",
-                                        ),
-                                      ) as Result<[Ty, St], IErr>)
-                                    : (() => {
-                                        throw new Error("non-exhaustive match");
-                                      })())(closestName(name, _Map_keys(ctx.env)))
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(_Map_get(name, ctx.env)))(_v)
+                                ) as Result<[Ty, St], IErr>,
+                              (hint) =>
+                                Err(
+                                  typeErrSuggest(
+                                    `unbound variable '${name}'`,
+                                    sp,
+                                    `did you mean '${hint}'?`,
+                                    hint,
+                                  ),
+                                ) as Result<[Ty, St], IErr>,
+                            ),
+                      (sc) =>
+                        (([t, st1]: [Ty, St]) =>
+                          Ok(
+                            _tuple(
+                              t,
+                              _Option_match(
+                                _Map_get(name, ctx.letOwner),
+                                () => st1,
+                                (vsp) => noteUse(vsp, t, st1),
+                              ),
+                            ),
+                          ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+                    ))(_v)
                 : _v._tag === "ELambda"
                   ? (({ params, body }) =>
                       (([posParams, labParams]: [LamParam[], LamParam[]]) =>
@@ -3236,15 +3145,11 @@ const inferExprRaw: _Curry<
                                       St,
                                       IErr[],
                                     ]) =>
-                                      ((_v) =>
-                                        _v._tag === "Some"
-                                          ? (({ value: firstErr }) =>
-                                              Err(firstErr) as Result<[Ty, St], IErr>)(_v)
-                                          : _v._tag === "None"
-                                            ? inferExpr(localCtx, tail, localSt)
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(_Array_get(0, localErrs)))(
+                                      _Option_match(
+                                        _Array_get(0, localErrs),
+                                        () => inferExpr(localCtx, tail, localSt),
+                                        (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
+                                      ))(
                                       processGroupsFrom(
                                         ctx,
                                         stronglyConnected(adjOf(lets, idxOf)),
@@ -3290,36 +3195,30 @@ const inferExprRaw: _Curry<
                                             widen,
                                           ),
                                         ))(
-                                        ((_v) =>
-                                          _v._tag === "Some"
-                                            ? false
-                                            : _v._tag === "None"
-                                              ? true
-                                              : (() => {
-                                                  throw new Error("non-exhaustive match");
-                                                })())(annot),
+                                        _Option_match(
+                                          annot,
+                                          () => true,
+                                          () => false,
+                                        ),
                                       ),
-                                    ((_v) =>
-                                      _v._tag === "Some"
-                                        ? (({ value: te }) =>
-                                            (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
-                                              _Result_map(
-                                                (stB: St) => _tuple(at, stB),
-                                                checkFits(ctx, valT, at, stA, annotSpan(te)),
-                                              ))(
-                                              typeExprToType(
-                                                te,
-                                                new Map<string, Ty>(),
-                                                st1,
-                                                ctx.aliasMap,
-                                                _Set_fromArray([] as string[]),
-                                              ),
-                                            ))(_v)
-                                        : _v._tag === "None"
-                                          ? (Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>)
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(annot),
+                                    _Option_match(
+                                      annot,
+                                      () => Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>,
+                                      (te) =>
+                                        (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
+                                          _Result_map(
+                                            (stB: St) => _tuple(at, stB),
+                                            checkFits(ctx, valT, at, stA, annotSpan(te)),
+                                          ))(
+                                          typeExprToType(
+                                            te,
+                                            new Map<string, Ty>(),
+                                            st1,
+                                            ctx.aliasMap,
+                                            _Set_fromArray([] as string[]),
+                                          ),
+                                        ),
+                                    ),
                                   ),
                                 inferExpr(ctx, value, st),
                               ))(value))(_v)
@@ -3331,14 +3230,11 @@ const inferExprRaw: _Curry<
                             ((api: InferApi) =>
                               _Result_flatMap(
                                 (claimed) =>
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: r }) => Ok(r) as Result<[Ty, St], IErr>)(_v)
-                                      : _v._tag === "None"
-                                        ? inferNormalCall(ctx, fn, args, st)
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(claimed),
+                                  _Option_match(
+                                    claimed,
+                                    () => inferNormalCall(ctx, fn, args, st),
+                                    (r) => Ok(r) as Result<[Ty, St], IErr>,
+                                  ),
                                 runInferCallHooks(
                                   inferCallHooksOf(ctx.plugins),
                                   fn,
@@ -3382,44 +3278,42 @@ const inferExprRaw: _Curry<
                                     inferTernary(ctx, cond, thenE, elseE, st))(_v)
                                 : _v._tag === "ERecord"
                                   ? (({ fields, spread, span: sp }) =>
-                                      ((_v) =>
-                                        _v._tag === "None"
-                                          ? _Result_flatMap(
-                                              ([row, st1]) =>
-                                                Ok(_tuple(tRecord(row), st1)) as Result<
-                                                  [Ty, St],
-                                                  IErr
-                                                >,
-                                              inferRecordRow(ctx, fields, st),
-                                            )
-                                          : _v._tag === "Some"
-                                            ? (({ value: spreadExpr }) =>
-                                                _Result_flatMap(
-                                                  ([row, st1]) =>
+                                      _Option_match(
+                                        spread,
+                                        () =>
+                                          _Result_flatMap(
+                                            ([row, st1]) =>
+                                              Ok(_tuple(tRecord(row), st1)) as Result<
+                                                [Ty, St],
+                                                IErr
+                                              >,
+                                            inferRecordRow(ctx, fields, st),
+                                          ),
+                                        (spreadExpr) =>
+                                          _Result_flatMap(
+                                            ([row, st1]) =>
+                                              _Result_flatMap(
+                                                ([baseT, st2]) =>
+                                                  (([tailVar, st3]: [Row, St]) =>
                                                     _Result_flatMap(
-                                                      ([baseT, st2]) =>
-                                                        (([tailVar, st3]: [Row, St]) =>
-                                                          _Result_flatMap(
-                                                            (st4) =>
-                                                              Ok(_tuple(baseT, st4)) as Result<
-                                                                [Ty, St],
-                                                                IErr
-                                                              >,
-                                                            u(
-                                                              ctx,
-                                                              baseT,
-                                                              tRecord(rWithTail(row, tailVar)),
-                                                              st3,
-                                                              sp,
-                                                            ),
-                                                          ))(freshRowVar(st2)),
-                                                      inferExpr(ctx, spreadExpr, st1),
-                                                    ),
-                                                  inferRecordRow(ctx, fields, st),
-                                                ))(_v)
-                                            : (() => {
-                                                throw new Error("non-exhaustive match");
-                                              })())(spread))(_v)
+                                                      (st4) =>
+                                                        Ok(_tuple(baseT, st4)) as Result<
+                                                          [Ty, St],
+                                                          IErr
+                                                        >,
+                                                      u(
+                                                        ctx,
+                                                        baseT,
+                                                        tRecord(rWithTail(row, tailVar)),
+                                                        st3,
+                                                        sp,
+                                                      ),
+                                                    ))(freshRowVar(st2)),
+                                                inferExpr(ctx, spreadExpr, st1),
+                                              ),
+                                            inferRecordRow(ctx, fields, st),
+                                          ),
+                                      ))(_v)
                                   : _v._tag === "EField"
                                     ? (({ target, name, span: sp }) =>
                                         ((_v) =>
@@ -3935,25 +3829,23 @@ const inferSeqPat: _Curry<
       const seqT: Ty = tCon(con, [elem]);
       return _Result_flatMap(
         ([bindings, st2]) =>
-          ((_v) =>
-            _v._tag === "None"
-              ? (Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>)
-              : _v._tag === "Some"
-                ? (({ value: r }) =>
-                    _Result_flatMap(
-                      ([subT, subBindings, st3]) =>
-                        _Result_flatMap(
-                          (st4) =>
-                            Ok(
-                              _tuple(seqT, mergeBindingMaps(bindings, subBindings), st4),
-                            ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-                          u(ctx, subT, seqT, st3, patSpan(r)),
-                        ),
-                      inferPat(ctx, r, st2),
-                    ))(_v)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(restPat),
+          _Option_match(
+            restPat,
+            () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+            (r) =>
+              _Result_flatMap(
+                ([subT, subBindings, st3]) =>
+                  _Result_flatMap(
+                    (st4) =>
+                      Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)) as Result<
+                        [Ty, Map<string, Ty>, St],
+                        IErr
+                      >,
+                    u(ctx, subT, seqT, st3, patSpan(r)),
+                  ),
+                inferPat(ctx, r, st2),
+              ),
+          ),
         inferSeqPatElems(ctx, elem, elems, st1),
       );
     })(freshVar(st)),
@@ -4097,58 +3989,51 @@ const inferPatRaw: _Curry<
                       ? (({ fields }) => inferPatRecord(ctx, fields, st))(_v)
                       : _v._tag === "PCtor"
                         ? (({ ctor, args, ns, span: sp }) =>
-                            ((_v) =>
-                              _v._tag === "Some"
-                                ? (({ value: alias }) =>
-                                    ((_v) =>
-                                      _v._tag === "None"
-                                        ? (Err(
-                                            typeErr(`'${alias}' has no member '${ctor}'`, sp),
-                                          ) as Result<[Ty, Map<string, Ty>, St], IErr>)
-                                        : _v._tag === "Some"
-                                          ? (({ value: sc }) =>
-                                              (([curT, st1]: [Ty, St]) =>
-                                                inferPatCtorArgs(
-                                                  ctx,
-                                                  ctor,
-                                                  curT,
-                                                  args,
-                                                  st1,
-                                                  new Map<string, Ty>(),
-                                                  sp,
-                                                ))(instantiate(sc, st)))(_v)
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(
-                                      _Map_get(
+                            _Option_match(
+                              ns,
+                              () =>
+                                _Option_match(
+                                  _Map_get(ctor, ctx.env),
+                                  () =>
+                                    Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
+                                      [Ty, Map<string, Ty>, St],
+                                      IErr
+                                    >,
+                                  (sc) =>
+                                    (([curT, st1]: [Ty, St]) =>
+                                      inferPatCtorArgs(
+                                        ctx,
                                         ctor,
-                                        _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns),
-                                      ),
-                                    ))(_v)
-                                : _v._tag === "None"
-                                  ? ((_v) =>
-                                      _v._tag === "None"
-                                        ? (Err(
-                                            typeErr(`unknown constructor '${ctor}'`, sp),
-                                          ) as Result<[Ty, Map<string, Ty>, St], IErr>)
-                                        : _v._tag === "Some"
-                                          ? (({ value: sc }) =>
-                                              (([curT, st1]: [Ty, St]) =>
-                                                inferPatCtorArgs(
-                                                  ctx,
-                                                  ctor,
-                                                  curT,
-                                                  args,
-                                                  st1,
-                                                  new Map<string, Ty>(),
-                                                  sp,
-                                                ))(instantiate(sc, st)))(_v)
-                                          : (() => {
-                                              throw new Error("non-exhaustive match");
-                                            })())(_Map_get(ctor, ctx.env))
-                                  : (() => {
-                                      throw new Error("non-exhaustive match");
-                                    })())(ns))(_v)
+                                        curT,
+                                        args,
+                                        st1,
+                                        new Map<string, Ty>(),
+                                        sp,
+                                      ))(instantiate(sc, st)),
+                                ),
+                              (alias) =>
+                                _Option_match(
+                                  _Map_get(
+                                    ctor,
+                                    _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns),
+                                  ),
+                                  () =>
+                                    Err(
+                                      typeErr(`'${alias}' has no member '${ctor}'`, sp),
+                                    ) as Result<[Ty, Map<string, Ty>, St], IErr>,
+                                  (sc) =>
+                                    (([curT, st1]: [Ty, St]) =>
+                                      inferPatCtorArgs(
+                                        ctx,
+                                        ctor,
+                                        curT,
+                                        args,
+                                        st1,
+                                        new Map<string, Ty>(),
+                                        sp,
+                                      ))(instantiate(sc, st)),
+                                ),
+                            ))(_v)
                         : _v._tag === "PTuple"
                           ? (({ elems }) => inferPatTuple(ctx, elems, st))(_v)
                           : _v._tag === "PArr"
@@ -4198,22 +4083,16 @@ const unifyOrPatBinding: <B>(
     st: St,
     sp: SpanAt,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(st) as Result<St, IErr>)
-        : _v._tag === "Some"
-          ? (({ value: prevT }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? (Ok(st) as Result<St, IErr>)
-                  : _v._tag === "Some"
-                    ? (({ value: ty }) => u(ctx, prevT, ty, st, sp))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(name, altBindings)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(name, bindings)),
+    _Option_match(
+      _Map_get(name, bindings),
+      () => Ok(st) as Result<St, IErr>,
+      (prevT) =>
+        _Option_match(
+          _Map_get(name, altBindings),
+          () => Ok(st) as Result<St, IErr>,
+          (ty) => u(ctx, prevT, ty, st, sp),
+        ),
+    ),
 );
 const unifyOrPatBindings: <B>(
   ctx: {
@@ -4309,33 +4188,30 @@ const inferOrPatAlts: _Curry<
     bindings: Map<string, Ty>,
     st: St,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(st) as Result<St, IErr>)
-        : _v._tag === "Some"
-          ? (({ value: alt }) =>
-              _Result_flatMap(
-                ([altT, altBindings, st1]) =>
-                  _Result_flatMap(
-                    (st2) =>
-                      _Result_flatMap(
-                        (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
-                        unifyOrPatBindings(
-                          ctx,
-                          _Map_keys(altBindings),
-                          altBindings,
-                          bindings,
-                          st2,
-                          patSpan(alt),
-                        ),
-                      ),
-                    u(ctx, t, altT, st1, patSpan(alt)),
+    _Option_match(
+      _Array_get(i, alts),
+      () => Ok(st) as Result<St, IErr>,
+      (alt) =>
+        _Result_flatMap(
+          ([altT, altBindings, st1]) =>
+            _Result_flatMap(
+              (st2) =>
+                _Result_flatMap(
+                  (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
+                  unifyOrPatBindings(
+                    ctx,
+                    _Map_keys(altBindings),
+                    altBindings,
+                    bindings,
+                    st2,
+                    patSpan(alt),
                   ),
-                inferPat(ctx, alt, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, alts)),
+                ),
+              u(ctx, t, altT, st1, patSpan(alt)),
+            ),
+          inferPat(ctx, alt, st),
+        ),
+    ),
 );
 const inferOrPat: _Curry<
   [
@@ -4395,14 +4271,11 @@ const inferOrPat: _Curry<
             })())(alts),
 );
 const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: r }) => patternBinds(r))(_v)
-      : _v._tag === "None"
-        ? ([] as string[])
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(rest);
+  _Option_match(
+    rest,
+    () => [] as string[],
+    (r) => patternBinds(r),
+  );
 const patternBinds: (p: Pattern) => string[] = (p: Pattern) =>
   ((_v) =>
     _v._tag === "PAs"
@@ -4423,14 +4296,11 @@ const patternBinds: (p: Pattern) => string[] = (p: Pattern) =>
                       _Array_concat(_Array_flatMap(patternBinds, elems), patternBindsOpt(rest)))(_v)
                   : _v._tag === "POr"
                     ? (({ alts }) =>
-                        ((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: first }) => patternBinds(first))(_v)
-                            : _v._tag === "None"
-                              ? ([] as string[])
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(_Array_head(alts)))(_v)
+                        _Option_match(
+                          _Array_head(alts),
+                          () => [] as string[],
+                          (first) => patternBinds(first),
+                        ))(_v)
                     : ([] as string[]))(p);
 const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: A[], set: Set<A>) =>
   match(names)
@@ -4520,16 +4390,11 @@ const loopInitRefsFrom: _Curry<
   [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
   Set<string>
 > = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? acc
-      : _v._tag === "Some"
-        ? (({ value: p }) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)))(
-            _v,
-          )
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Array_get(i, params)),
+  _Option_match(
+    _Array_get(i, params),
+    () => acc,
+    (p) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)),
+  ),
 );
 const freeRefsList: _Curry<
   [es: Expr[], bound: Set<string>, acc: Set<string>],
@@ -4607,14 +4472,11 @@ const freeRefsArms: _Curry<
             ((armBound: Set<string>) =>
               ((acc1: Set<string>) =>
                 freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: g }) => freeRefs(g, armBound, acc))(_v)
-                    : _v._tag === "None"
-                      ? acc
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(arm.guard),
+                _Option_match(
+                  arm.guard,
+                  () => acc,
+                  (g) => freeRefs(g, armBound, acc),
+                ),
               ))(addAllFrom(patternBinds(arm.pattern), bound)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -4687,14 +4549,11 @@ const freeRefs: _Curry<[e: Expr, bound: Set<string>, acc: Set<string>], Set<stri
                                           freeRefsFields(
                                             fields,
                                             bound,
-                                            ((_v) =>
-                                              _v._tag === "Some"
-                                                ? (({ value: s }) => freeRefs(s, bound, acc))(_v)
-                                                : _v._tag === "None"
-                                                  ? acc
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(spread),
+                                            _Option_match(
+                                              spread,
+                                              () => acc,
+                                              (s) => freeRefs(s, bound, acc),
+                                            ),
                                           ))(_v)
                                       : _v._tag === "EField"
                                         ? (({ target }) => freeRefs(target, bound, acc))(_v)
@@ -4747,20 +4606,12 @@ const seedBuiltinsFrom: <A>(
     .with(
       (_v) => _v.length >= 1,
       ([n, ...rest]) =>
-        ((_v) =>
-          _v._tag === "Some"
-            ? (({ value: t }) =>
-                seedBuiltinsFrom(
-                  rest,
-                  builtins,
-                  _Map_set(n, generalize(env, t, st, true), env),
-                  st,
-                ))(_v)
-            : _v._tag === "None"
-              ? seedBuiltinsFrom(rest, builtins, env, st)
-              : (() => {
-                  throw new Error("non-exhaustive match");
-                })())(_Map_get(n, builtins)),
+        _Option_match(
+          _Map_get(n, builtins),
+          () => seedBuiltinsFrom(rest, builtins, env, st),
+          (t) =>
+            seedBuiltinsFrom(rest, builtins, _Map_set(n, generalize(env, t, st, true), env), st),
+        ),
     )
     .otherwise(() => {
       throw new Error("non-exhaustive match");
@@ -4793,21 +4644,18 @@ const seedNsMembersFrom: <A, B, C>(
       .with(
         (_v) => _v.length >= 1,
         ([m, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: t }) =>
-                  seedNsMembersFrom(
-                    rest,
-                    members,
-                    env,
-                    st,
-                    _Map_set(m, generalize(env, t, st, true), acc),
-                  ))(_v)
-              : _v._tag === "None"
-                ? seedNsMembersFrom(rest, members, env, st, acc)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(m, members)),
+          _Option_match(
+            _Map_get(m, members),
+            () => seedNsMembersFrom(rest, members, env, st, acc),
+            (t) =>
+              seedNsMembersFrom(
+                rest,
+                members,
+                env,
+                st,
+                _Map_set(m, generalize(env, t, st, true), acc),
+              ),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -4836,25 +4684,22 @@ const seedNsFrom: <A, B, C, D>(
       .with(
         (_v) => _v.length >= 1,
         ([nsName, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: members }) =>
-                  seedNsFrom(
-                    rest,
-                    namespaces,
-                    env,
-                    st,
-                    _Map_set(
-                      nsName,
-                      seedNsMembersFrom(_Map_keys(members), members, env, st, new Map<B, Scheme>()),
-                      acc,
-                    ),
-                  ))(_v)
-              : _v._tag === "None"
-                ? seedNsFrom(rest, namespaces, env, st, acc)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(nsName, namespaces)),
+          _Option_match(
+            _Map_get(nsName, namespaces),
+            () => seedNsFrom(rest, namespaces, env, st, acc),
+            (members) =>
+              seedNsFrom(
+                rest,
+                namespaces,
+                env,
+                st,
+                _Map_set(
+                  nsName,
+                  seedNsMembersFrom(_Map_keys(members), members, env, st, new Map<B, Scheme>()),
+                  acc,
+                ),
+              ),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -4882,15 +4727,11 @@ const seedNsImportsFrom: <A, B>(aliases: A[], nsImports: Map<A, B>, ns: Map<A, B
       .with(
         (_v) => _v.length >= 1,
         ([alias, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: members }) =>
-                  seedNsImportsFrom(rest, nsImports, _Map_set(alias, members, ns)))(_v)
-              : _v._tag === "None"
-                ? seedNsImportsFrom(rest, nsImports, ns)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(alias, nsImports)),
+          _Option_match(
+            _Map_get(alias, nsImports),
+            () => seedNsImportsFrom(rest, nsImports, ns),
+            (members) => seedNsImportsFrom(rest, nsImports, _Map_set(alias, members, ns)),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -5212,14 +5053,11 @@ const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
         ? (({ value }) =>
             _Array_flatMap(
               (r: string) =>
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: j }) => [j])(_v)
-                    : _v._tag === "None"
-                      ? ([] as A[])
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(r, idxOf)),
+                _Option_match(
+                  _Map_get(r, idxOf),
+                  () => [] as A[],
+                  (j) => [j],
+                ),
               _Set_toArray(
                 freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
               ),
@@ -5238,14 +5076,11 @@ const groupOfFrom: <A>(idxs: number[], lets: A[]) => A[] = _curry(
         ? ([] as A[])
         : _v.length >= 1
           ? (([i, ...rest]) =>
-              ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: s }) => _Array_prepend(s, groupOfFrom(rest, lets)))(_v)
-                  : _v._tag === "None"
-                    ? groupOfFrom(rest, lets)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Array_get(i, lets)))(_v)
+              _Option_match(
+                _Array_get(i, lets),
+                () => groupOfFrom(rest, lets),
+                (s) => _Array_prepend(s, groupOfFrom(rest, lets)),
+              ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(idxs),
@@ -5315,63 +5150,39 @@ const inferMember: _Curry<
         ? (({ error: e }) => Err({ err: e, st: st }) as Result<[Ty, St], MemberErr>)(_v)
         : _v._tag === "Ok"
           ? (({ value: [t, st1] }) =>
-              ((_v) =>
-                _v._tag === "None"
-                  ? (Err({
-                      err: typeErr(`internal: missing self-binding for '${name}'`, span),
-                      st: st1,
-                    }) as Result<[Ty, St], MemberErr>)
-                  : _v._tag === "Some"
-                    ? (({ value: selfSc }) =>
-                        ((_v) =>
-                          _v._tag === "Err"
-                            ? (({ error: e }) =>
-                                Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>)(_v)
-                            : _v._tag === "Ok"
-                              ? (({ value: st2 }) =>
-                                  ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: te }) =>
-                                          (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
-                                            ((_v) =>
-                                              _v._tag === "Ok"
-                                                ? (({ value: stB }) =>
-                                                    Ok(_tuple(at, stB)) as Result<
-                                                      [Ty, St],
-                                                      MemberErr
-                                                    >)(_v)
-                                                : _v._tag === "Err"
-                                                  ? (({ error: e }) =>
-                                                      Err({ err: e, st: stA }) as Result<
-                                                        [Ty, St],
-                                                        MemberErr
-                                                      >)(_v)
-                                                  : (() => {
-                                                      throw new Error("non-exhaustive match");
-                                                    })())(
-                                              checkFits(ctx, t, at, stA, annotSpan(te)),
-                                            ))(
-                                            typeExprToType(
-                                              te,
-                                              new Map<string, Ty>(),
-                                              st2,
-                                              ctx.aliasMap,
-                                              _Set_fromArray([] as string[]),
-                                            ),
-                                          ))(_v)
-                                      : _v._tag === "None"
-                                        ? (Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>)
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(annot))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(u(ctx, selfSc.ty, t, st1, span)))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Map_get(name, ctx.env)))(
-              _v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>,
-            )
+              _Option_match(
+                _Map_get(name, ctx.env),
+                () =>
+                  Err({
+                    err: typeErr(`internal: missing self-binding for '${name}'`, span),
+                    st: st1,
+                  }) as Result<[Ty, St], MemberErr>,
+                (selfSc) =>
+                  _Result_match(
+                    u(ctx, selfSc.ty, t, st1, span),
+                    (e) => Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>,
+                    (st2) =>
+                      _Option_match(
+                        annot,
+                        () => Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>,
+                        (te) =>
+                          (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
+                            _Result_match(
+                              checkFits(ctx, t, at, stA, annotSpan(te)),
+                              (e) => Err({ err: e, st: stA }) as Result<[Ty, St], MemberErr>,
+                              (stB) => Ok(_tuple(at, stB)) as Result<[Ty, St], MemberErr>,
+                            ))(
+                            typeExprToType(
+                              te,
+                              new Map<string, Ty>(),
+                              st2,
+                              ctx.aliasMap,
+                              _Set_fromArray([] as string[]),
+                            ),
+                          ),
+                      ),
+                  ),
+              ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(inferExpr(ctx, value, st)),
@@ -5503,46 +5314,37 @@ const generalizeGroupFrom: _Curry<
               ((_v) =>
                 _v._tag === "SLet"
                   ? (({ name, annot }) =>
-                      ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: t }) =>
-                              ((widen: boolean) =>
-                                generalizeGroupFrom(
-                                  rest,
-                                  bodyTypes,
-                                  preEnv,
-                                  _Map_set(name, generalizeOver(env, names, t, st, widen), env),
-                                  names,
-                                  st,
-                                ))(
-                                ((_v) =>
-                                  _v._tag === "None"
-                                    ? true
-                                    : _v._tag === "Some"
-                                      ? false
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(annot),
-                              ))(_v)
-                          : _v._tag === "None"
-                            ? generalizeGroupFrom(
-                                rest,
-                                bodyTypes,
-                                preEnv,
-                                ((_v) =>
-                                  _v._tag === "Some"
-                                    ? (({ value: sc }) => _Map_set(name, sc, env))(_v)
-                                    : _v._tag === "None"
-                                      ? env
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(_Map_get(name, preEnv)),
-                                names,
-                                st,
-                              )
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(_Map_get(name, bodyTypes)))(_v)
+                      _Option_match(
+                        _Map_get(name, bodyTypes),
+                        () =>
+                          generalizeGroupFrom(
+                            rest,
+                            bodyTypes,
+                            preEnv,
+                            _Option_match(
+                              _Map_get(name, preEnv),
+                              () => env,
+                              (sc) => _Map_set(name, sc, env),
+                            ),
+                            names,
+                            st,
+                          ),
+                        (t) => {
+                          const widen: boolean = _Option_match(
+                            annot,
+                            () => true,
+                            () => false,
+                          );
+                          return generalizeGroupFrom(
+                            rest,
+                            bodyTypes,
+                            preEnv,
+                            _Map_set(name, generalizeOver(env, names, t, st, widen), env),
+                            names,
+                            st,
+                          );
+                        },
+                      ))(_v)
                   : generalizeGroupFrom(rest, bodyTypes, preEnv, env, names, st))(s))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -5702,20 +5504,11 @@ const inferExprStmtsFrom: _Curry<
                               inferExprStmtsFrom(ctx, rest, st, _Array_append(e, errs)))(_v)
                           : _v._tag === "Ok"
                             ? (({ value: [t, st1] }) =>
-                                ((_v) =>
-                                  _v._tag === "Err"
-                                    ? (({ error: e }) =>
-                                        inferExprStmtsFrom(ctx, rest, st1, _Array_append(e, errs)))(
-                                        _v,
-                                      )
-                                    : _v._tag === "Ok"
-                                      ? (({ value: st2 }) =>
-                                          inferExprStmtsFrom(ctx, rest, st2, errs))(_v)
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(u(ctx, t, tUnit, st1, span)))(
-                                _v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>,
-                              )
+                                _Result_match(
+                                  u(ctx, t, tUnit, st1, span),
+                                  (e) => inferExprStmtsFrom(ctx, rest, st1, _Array_append(e, errs)),
+                                  (st2) => inferExprStmtsFrom(ctx, rest, st2, errs),
+                                ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
                             : (() => {
                                 throw new Error("non-exhaustive match");
                               })())(inferExpr(ctx, value, st)))(_v)
@@ -5735,14 +5528,11 @@ const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => 
       .with(
         (_v) => _v.length >= 1,
         ([k, ...rest]) =>
-          ((_v) =>
-            _v._tag === "Some"
-              ? (({ value: sc }) => seedImportsFrom(rest, imports, _Map_set(k, sc, env)))(_v)
-              : _v._tag === "None"
-                ? seedImportsFrom(rest, imports, env)
-                : (() => {
-                    throw new Error("non-exhaustive match");
-                  })())(_Map_get(k, imports)),
+          _Option_match(
+            _Map_get(k, imports),
+            () => seedImportsFrom(rest, imports, env),
+            (sc) => seedImportsFrom(rest, imports, _Map_set(k, sc, env)),
+          ),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -5921,15 +5711,11 @@ const qualAliasSeedFrom: <E, F>(
                 rest,
                 alias,
                 from,
-                ((_v) =>
-                  _v._tag === "Some"
-                    ? (({ value: info }) =>
-                        _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc))(_v)
-                    : _v._tag === "None"
-                      ? acc
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(_Map_get(n, from)),
+                _Option_match(
+                  _Map_get(n, from),
+                  () => acc,
+                  (info) => _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc),
+                ),
               ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -5991,20 +5777,12 @@ const qualAliasSeed: <E, F, G>(
                 ((_v) =>
                   _v._tag === "SImportNs"
                     ? (({ alias }) =>
-                        ((_v) =>
-                          _v._tag === "Some"
-                            ? (({ value: dep }) =>
-                                qualAliasSeedFrom(
-                                  _Map_keys(dep.aliases),
-                                  alias.name,
-                                  dep.aliases,
-                                  acc,
-                                ))(_v)
-                            : _v._tag === "None"
-                              ? acc
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(_Map_get(alias.name, quals)))(_v)
+                        _Option_match(
+                          _Map_get(alias.name, quals),
+                          () => acc,
+                          (dep) =>
+                            qualAliasSeedFrom(_Map_keys(dep.aliases), alias.name, dep.aliases, acc),
+                        ))(_v)
                     : acc)(s),
               ))(_v)
           : (() => {
@@ -6030,17 +5808,14 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => {
 const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
   3,
   (shown: string, uses: Ty[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? true
-        : _v._tag === "Some"
-          ? (({ value: t }) =>
-              and(isConcrete(t), eq(showType(t), shown))
-                ? allSameConcreteFrom(shown, uses, i + 1)
-                : false)(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, uses)),
+    _Option_match(
+      _Array_get(i, uses),
+      () => true,
+      (t) =>
+        and(isConcrete(t), eq(showType(t), shown))
+          ? allSameConcreteFrom(shown, uses, i + 1)
+          : false,
+    ),
 );
 const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
   2,
@@ -6062,29 +5837,20 @@ const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
           ? (([k, ...rest]) =>
               ((tail) =>
                 ((uses: Ty[]) =>
-                  ((_v) =>
-                    _v._tag === "None"
-                      ? tail
-                      : _v._tag === "Some"
-                        ? (({ value: first }) =>
-                            allSameConcrete(showType(first), uses)
-                              ? ((_v) =>
-                                  _v._tag === "Some"
-                                    ? (({ value: span }) =>
-                                        _Array_prepend({ span: span, ty: first, sym: None }, tail))(
-                                        _v,
-                                      )
-                                    : _v._tag === "None"
-                                      ? tail
-                                      : (() => {
-                                          throw new Error("non-exhaustive match");
-                                        })())(_Map_get(k, st.letSpans))
-                              : tail)(_v)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(_Array_get(0, uses)))(
-                  map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses)),
-                ))(resolveLetParamsFrom(rest, st)))(_v)
+                  _Option_match(
+                    _Array_get(0, uses),
+                    () => tail,
+                    (first) =>
+                      allSameConcrete(showType(first), uses)
+                        ? _Option_match(
+                            _Map_get(k, st.letSpans),
+                            () => tail,
+                            (span) => _Array_prepend({ span: span, ty: first, sym: None }, tail),
+                          )
+                        : tail,
+                  ))(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
+                resolveLetParamsFrom(rest, st),
+              ))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(keys),
@@ -6596,14 +6362,11 @@ export const inferProgramWith: _Curry<
 const takeScheme: <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: sc }) => _Map_set(name, sc, acc))(_v)
-        : _v._tag === "None"
-          ? acc
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Map_get(name, env)),
+    _Option_match(
+      _Map_get(name, env),
+      () => acc,
+      (sc) => _Map_set(name, sc, acc),
+    ),
 );
 const exportCtorsInto: <A, B, C>(
   ctors: ({ name: A } & C)[],
@@ -6613,14 +6376,11 @@ const exportCtorsInto: <A, B, C>(
 ) => Map<A, B> = _curry(
   4,
   <A, B, C>(ctors: ({ name: A } & C)[], i: number, env: Map<A, B>, acc: Map<A, B>) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: c }) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, ctors)),
+    _Option_match(
+      _Array_get(i, ctors),
+      () => acc,
+      (c) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc)),
+    ),
 );
 const exportedSchemesFrom: <A>(
   stmts: Stmt[],

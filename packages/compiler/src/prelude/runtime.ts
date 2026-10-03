@@ -12,6 +12,27 @@ export type Option<A> = { _tag: "Some"; value: A } | { _tag: "None" };
 export type Result<A, B> = { _tag: "Ok"; value: A } | { _tag: "Err"; error: B };
 export type Task<A, E> = () => Promise<Result<A, E>>;
 
+// Flat dispatch for compiler-generated, exhaustive builtin matches. Separate
+// callback result types preserve mixed loop-step and generic return branches.
+export const _Result_match: <A, E, L, R>(
+  result: Result<A, E>,
+  onErr: (error: E) => L,
+  onOk: (value: A) => R,
+) => L | R = (result, onErr, onOk) => {
+  if (result._tag === "Err") return onErr(result.error);
+  if (result._tag === "Ok") return onOk(result.value);
+  throw new Error("non-exhaustive match");
+};
+export const _Option_match: <A, L, R>(
+  option: Option<A>,
+  onNone: () => L,
+  onSome: (value: A) => R,
+) => L | R = (option, onNone, onSome) => {
+  if (option._tag === "None") return onNone();
+  if (option._tag === "Some") return onSome(option.value);
+  throw new Error("non-exhaustive match");
+};
+
 /**
  * The curry-compatible function type (ADR 0093). `_curry` makes an arity-n
  * binding callable in ANY partial-application grouping — `f(a, b)`, `f(a)(b)`,

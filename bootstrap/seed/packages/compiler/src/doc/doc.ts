@@ -25,6 +25,7 @@ import {
   Some,
   _Array_append,
   _Array_get,
+  _Option_match,
   _Option_unwrapOr,
   _Str_length,
   _Str_split,
@@ -65,20 +66,17 @@ export const lineSuffix: (doc: Doc) => Doc = (doc: Doc) => DLineSuffix(doc);
 const joinFrom: <A>(sep: A, parts: A[], i: number, acc: A[]) => A[] = _curry(
   4,
   <A>(sep: A, parts: A[], i: number, acc: A[]) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? acc
-        : _v._tag === "Some"
-          ? (({ value: p }) =>
-              joinFrom(
-                sep,
-                parts,
-                i + 1,
-                i === 0 ? _Array_append(p, acc) : _Array_append(p, _Array_append(sep, acc)),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, parts)),
+    _Option_match(
+      _Array_get(i, parts),
+      () => acc,
+      (p) =>
+        joinFrom(
+          sep,
+          parts,
+          i + 1,
+          i === 0 ? _Array_append(p, acc) : _Array_append(p, _Array_append(sep, acc)),
+        ),
+    ),
 );
 export const join: _Curry<[sep: Doc, parts: Doc[]], Doc> = _curry(2, (sep: Doc, parts: Doc[]) =>
   DCat(joinFrom(sep, parts, 0, [] as Doc[])),
@@ -182,14 +180,11 @@ const fits: _Curry<[width: number, start: Work], boolean> = _curry(
 const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(
   2,
   (parts: Doc[], i: number) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? false
-        : _v._tag === "Some"
-          ? (({ value: p }) => or(forcesBreak(p), anyForcesBreak(parts, i + 1)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, parts)),
+    _Option_match(
+      _Array_get(i, parts),
+      () => false,
+      (p) => or(forcesBreak(p), anyForcesBreak(parts, i + 1)),
+    ),
 );
 /**
  * Does this document contain a hardline anywhere in its subtree? If so every

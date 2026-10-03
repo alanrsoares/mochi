@@ -79,7 +79,9 @@ import {
   _Array_take,
   _Option_contains,
   _Option_exists,
+  _Option_match,
   _Option_unwrapOr,
+  _Result_match,
   _Str_codeAt,
   _Str_fromCode,
   _Str_get,
@@ -325,27 +327,21 @@ const scanTemplateLoop: _Curry<
               }>,
             )
           : _v._tag === "Some" && _v.value === "\\"
-            ? ((_v) =>
-                _v._tag === "Some"
-                  ? (({ value: n }) => _recur(j + 2, `${value}${escChar(n)}`, parts))(_v)
-                  : _v._tag === "None"
-                    ? _recur(j + 1, `${value}\\`, parts)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(_Str_get(j + 1, src))
+            ? _Option_match(
+                _Str_get(j + 1, src),
+                () => _recur(j + 1, `${value}\\`, parts),
+                (n) => _recur(j + 2, `${value}${escChar(n)}`, parts),
+              )
             : _v._tag === "Some" && _v.value === "$" && _Option_contains("{", _Str_get(j + 1, src))
-              ? ((_v) =>
-                  _v._tag === "None"
-                    ? _done(None as Option<{ parts: TPart[]; end: number }>)
-                    : _v._tag === "Some"
-                      ? (({ value: holeEnd }) =>
-                          ((withLit: TPart[]) =>
-                            ((withHole: TPart[]) => _recur(holeEnd, "", withHole))(
-                              _Array_append(PHole(j + 2, holeEnd - 1), withLit),
-                            ))(_Array_append(PLit(value), parts)))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(findHoleEnd(src, j + 2))
+              ? _Option_match(
+                  findHoleEnd(src, j + 2),
+                  () => _done(None as Option<{ parts: TPart[]; end: number }>),
+                  (holeEnd) => {
+                    const withLit: TPart[] = _Array_append(PLit(value), parts);
+                    const withHole: TPart[] = _Array_append(PHole(j + 2, holeEnd - 1), withLit);
+                    return _recur(holeEnd, "", withHole);
+                  },
+                )
               : _v._tag === "Some"
                 ? (({ value: c }) => _recur(j + 1, `${value}${c}`, parts))(_v)
                 : (() => {
@@ -444,38 +440,33 @@ const spliceHoleToks: <A>(
     by: number,
     toks: LocTok[][],
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? toks
-        : _v._tag === "Some"
-          ? (({ value: ht }) =>
-              ((toks2: LocTok[][]) => spliceHoleToks(_Array_tail(holeToks), by, toks2))(
-                ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_head(holeToks)),
+    _Option_match(
+      _Array_head(holeToks),
+      () => toks,
+      (ht) => {
+        const toks2: LocTok[][] =
+          ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks);
+        return spliceHoleToks(_Array_tail(holeToks), by, toks2);
+      },
+    ),
 );
 const spliceHole: _Curry<
   [src: string, start: number, stop: number, toks: LocTok[][]],
   Result<LocTok[][], { message: string; start: number; end: number }>
 > = _curry(4, (src: string, start: number, stop: number, toks: LocTok[][]) =>
-  ((_v) =>
-    _v._tag === "Ok"
-      ? (({ value: holeToks }) =>
-          Ok(spliceHoleToks(holeToks, start, toks)) as Result<
-            LocTok[][],
-            { message: string; start: number; end: number }
-          >)(_v)
-      : _v._tag === "Err"
-        ? (({ error: e }) =>
-            Err({ message: e.message, start: e.start + start, end: e.end + start }) as Result<
-              LocTok[][],
-              { message: string; start: number; end: number }
-            >)(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(lex(_Str_slice(start, stop, src))),
+  _Result_match(
+    lex(_Str_slice(start, stop, src)),
+    (e) =>
+      Err({ message: e.message, start: e.start + start, end: e.end + start }) as Result<
+        LocTok[][],
+        { message: string; start: number; end: number }
+      >,
+    (holeToks) =>
+      Ok(spliceHoleToks(holeToks, start, toks)) as Result<
+        LocTok[][],
+        { message: string; start: number; end: number }
+      >,
+  ),
 );
 const lexParts: _Curry<
   [
@@ -501,55 +492,46 @@ const lexParts: _Curry<
     doc: string[],
     toks: LocTok[][],
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? (Ok(toks) as Result<LocTok[][], { end: number; start: number; message: string }>)
-        : _v._tag === "Some"
-          ? (({ value: part }) =>
-              ((_v) =>
-                _v._tag === "PLit"
-                  ? (({ value }) =>
-                      ((t: LocTok) =>
-                        lexParts(
-                          src,
-                          _Array_tail(parts),
-                          idx + 1,
-                          total,
-                          wholeStart,
-                          wholeEnd,
-                          [] as string[],
-                          pushTok(t, toks),
-                        ))(mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc)))(_v)
-                  : _v._tag === "PHole"
-                    ? (({ start: hs, end: he }) =>
-                        ((_v) =>
-                          _v._tag === "Err"
-                            ? (({ error: e }) =>
-                                Err(e) as Result<
-                                  LocTok[][],
-                                  { message: string; start: number; end: number }
-                                >)(_v)
-                            : _v._tag === "Ok"
-                              ? (({ value: toks2 }) =>
-                                  lexParts(
-                                    src,
-                                    _Array_tail(parts),
-                                    idx + 1,
-                                    total,
-                                    wholeStart,
-                                    wholeEnd,
-                                    doc,
-                                    toks2,
-                                  ))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(spliceHole(src, hs, he, toks)))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(part))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_head(parts)),
+    _Option_match(
+      _Array_head(parts),
+      () => Ok(toks) as Result<LocTok[][], { end: number; start: number; message: string }>,
+      (part) =>
+        ((_v) =>
+          _v._tag === "PLit"
+            ? (({ value }) =>
+                ((t: LocTok) =>
+                  lexParts(
+                    src,
+                    _Array_tail(parts),
+                    idx + 1,
+                    total,
+                    wholeStart,
+                    wholeEnd,
+                    [] as string[],
+                    pushTok(t, toks),
+                  ))(mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc)))(_v)
+            : _v._tag === "PHole"
+              ? (({ start: hs, end: he }) =>
+                  _Result_match(
+                    spliceHole(src, hs, he, toks),
+                    (e) =>
+                      Err(e) as Result<LocTok[][], { message: string; start: number; end: number }>,
+                    (toks2) =>
+                      lexParts(
+                        src,
+                        _Array_tail(parts),
+                        idx + 1,
+                        total,
+                        wholeStart,
+                        wholeEnd,
+                        doc,
+                        toks2,
+                      ),
+                  ))(_v)
+              : (() => {
+                  throw new Error("non-exhaustive match");
+                })())(part),
+    ),
 );
 const emit: _Curry<
   [src: string, tok: Tok, start: number, stop: number, doc: string[], toks: LocTok[][]],
@@ -563,25 +545,16 @@ const lexString: _Curry<
   [src: string, i: number, doc: string[], toks: LocTok[][]],
   Result<LocTok[], { message: string; start: number; end: number }>
 > = _curry(4, (src: string, i: number, doc: string[], toks: LocTok[][]) =>
-  ((_v) =>
-    _v._tag === "None"
-      ? lexError("unterminated string literal", i, _Str_length(src))
-      : _v._tag === "Some"
-        ? (({ value: scanned }) =>
-            ((_v) =>
-              _v._tag === "Err"
-                ? (({ error: e }) =>
-                    Err(e) as Result<LocTok[], { end: number; start: number; message: string }>)(_v)
-                : _v._tag === "Ok"
-                  ? (({ value: toks2 }) => go(src, scanned.end, [] as string[], 0, true, toks2))(_v)
-                  : (() => {
-                      throw new Error("non-exhaustive match");
-                    })())(
-              lexParts(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks),
-            ))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(scanTemplate(src, i)),
+  _Option_match(
+    scanTemplate(src, i),
+    () => lexError("unterminated string literal", i, _Str_length(src)),
+    (scanned) =>
+      _Result_match(
+        lexParts(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks),
+        (e) => Err(e) as Result<LocTok[], { end: number; start: number; message: string }>,
+        (toks2) => go(src, scanned.end, [] as string[], 0, true, toks2),
+      ),
+  ),
 );
 const go: _Curry<
   [src: string, i: number, doc: string[], nlRun: number, lineTok: boolean, toks: LocTok[][]],
@@ -619,39 +592,35 @@ const go: _Curry<
               ? (({ value: c }) =>
                   _Str_slice(i, i + 3, src) === "..."
                     ? emit(src, TSpread as Tok, i, i + 3, doc, toks)
-                    : ((_v) =>
-                        _v._tag === "Some"
-                          ? (({ value: t }) => emit(src, t, i, i + 2, doc, toks))(_v)
-                          : _v._tag === "None"
-                            ? c === '"'
-                              ? lexString(src, i, doc, toks)
-                              : numStart(src, i, c)
-                                ? ((j: number) =>
-                                    ((raw: string) =>
-                                      emit(src, TNum(numValue(raw), raw), i, j, doc, toks))(
-                                      _Str_slice(i, j, src),
-                                    ))(scanWhile(isNumChar, src, i + 1))
-                                : ((_v) =>
-                                    _v._tag === "Some"
-                                      ? (({ value: t }) => emit(src, t, i, i + 1, doc, toks))(_v)
-                                      : _v._tag === "None"
-                                        ? isIdStart(c)
-                                          ? ((j: number) =>
-                                              emit(
-                                                src,
-                                                identTok(_Str_slice(i, j, src)),
-                                                i,
-                                                j,
-                                                doc,
-                                                toks,
-                                              ))(scanWhile(isIdChar, src, i + 1))
-                                          : lexError(`unexpected char '${c}'`, i, i + 1)
-                                        : (() => {
-                                            throw new Error("non-exhaustive match");
-                                          })())(punctTok(c))
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(digraphTok(_Str_slice(i, i + 2, src))))(_v)
+                    : _Option_match(
+                        digraphTok(_Str_slice(i, i + 2, src)),
+                        () =>
+                          c === '"'
+                            ? lexString(src, i, doc, toks)
+                            : numStart(src, i, c)
+                              ? ((j: number) =>
+                                  ((raw: string) =>
+                                    emit(src, TNum(numValue(raw), raw), i, j, doc, toks))(
+                                    _Str_slice(i, j, src),
+                                  ))(scanWhile(isNumChar, src, i + 1))
+                              : _Option_match(
+                                  punctTok(c),
+                                  () =>
+                                    isIdStart(c)
+                                      ? ((j: number) =>
+                                          emit(
+                                            src,
+                                            identTok(_Str_slice(i, j, src)),
+                                            i,
+                                            j,
+                                            doc,
+                                            toks,
+                                          ))(scanWhile(isIdChar, src, i + 1))
+                                      : lexError(`unexpected char '${c}'`, i, i + 1),
+                                  (t) => emit(src, t, i, i + 1, doc, toks),
+                                ),
+                        (t) => emit(src, t, i, i + 2, doc, toks),
+                      ))(_v)
               : (() => {
                   throw new Error("non-exhaustive match");
                 })())(_Str_get(i, src)),

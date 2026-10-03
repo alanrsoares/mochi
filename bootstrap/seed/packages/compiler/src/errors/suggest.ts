@@ -5,6 +5,7 @@ import {
   Some,
   _Array_append,
   _Array_get,
+  _Option_match,
   _Str_codeAt,
   _Str_get,
   _Str_length,
@@ -23,14 +24,11 @@ import {
 const at: <A>(xs: A[], i: number, fallback: A) => A = _curry(
   3,
   <A>(xs: A[], i: number, fallback: A) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: v }) => v)(_v)
-        : _v._tag === "None"
-          ? fallback
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, xs)),
+    _Option_match(
+      _Array_get(i, xs),
+      () => fallback,
+      (v) => v,
+    ),
 );
 const charsEq: _Curry<[a: string, i: number, b: string, j: number], boolean> = _curry(
   4,
@@ -116,14 +114,11 @@ const lev: _Curry<[a: string, b: string], number> = _curry(2, (a: string, b: str
  * `^[A-Z]` — identifier heads are ASCII. Empty and non-letters are lower.
  */
 const upperStart: (s: string) => boolean = (s: string) =>
-  ((_v) =>
-    _v._tag === "Some"
-      ? (({ value: n }) => and(n >= 65, n <= 90))(_v)
-      : _v._tag === "None"
-        ? false
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(_Str_codeAt(0, s));
+  _Option_match(
+    _Str_codeAt(0, s),
+    () => false,
+    (n) => and(n >= 65, n <= 90),
+  );
 const sameCaseClass: _Curry<[a: string, b: string], boolean> = _curry(2, (a: string, b: string) =>
   eq(upperStart(a), upperStart(b)),
 );
@@ -164,18 +159,15 @@ const closestFrom: _Curry<
     best: Option<string>,
     bestDist: number,
   ) =>
-    ((_v) =>
-      _v._tag === "None"
-        ? best
-        : _v._tag === "Some"
-          ? (({ value: n }) =>
-              (([next, dist]: [Option<string>, number]) =>
-                closestFrom(want, names, i + 1, budget, next, dist))(
-                consider(want, budget, best, bestDist, n),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(i, names)),
+    _Option_match(
+      _Array_get(i, names),
+      () => best,
+      (n) =>
+        (([next, dist]: [Option<string>, number]) =>
+          closestFrom(want, names, i + 1, budget, next, dist))(
+          consider(want, budget, best, bestDist, n),
+        ),
+    ),
 );
 /**
  * Closest candidate within the edit-distance budget, or None.

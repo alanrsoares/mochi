@@ -45,6 +45,7 @@ import {
   _Array_get,
   _Array_prepend,
   _Option_exists,
+  _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
@@ -346,17 +347,12 @@ const expectLabel: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], 
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    return ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: name }) =>
-            Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>)(
-            _v,
-          )
-        : _v._tag === "None"
-          ? expectId(toks, pos)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(keywordText(lt.tok));
+    return _Option_match(
+      keywordText(lt.tok),
+      () => expectId(toks, pos),
+      (name) =>
+        Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
+    );
   },
 );
 const expectStr: _Curry<[toks: LocTok[], pos: number], Result<[string, number], PErr>> = _curry(
@@ -3281,15 +3277,11 @@ const parseTypeApp: _Curry<
                 : _Result_flatMap(
                     ([args, lastSp, p2]) =>
                       Ok(
-                        ((_v) =>
-                          _v._tag === "None"
-                            ? _tuple(head, p2)
-                            : _v._tag === "Some"
-                              ? (({ value: ls }) =>
-                                  _tuple(Ast.TyApp(name, args, spanning(sp, ls)), p2))(_v)
-                              : (() => {
-                                  throw new Error("non-exhaustive match");
-                                })())(lastSp),
+                        _Option_match(
+                          lastSp,
+                          () => _tuple(head, p2),
+                          (ls) => _tuple(Ast.TyApp(name, args, spanning(sp, ls)), p2),
+                        ),
                       ) as Result<[TypeExpr, number], PErr>,
                     legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<SpanAt>),
                   ))(_v)
@@ -3313,18 +3305,12 @@ const parseTypeApp: _Curry<
                   : _Result_flatMap(
                       ([args, lastSp, p2]) =>
                         Ok(
-                          ((_v) =>
-                            _v._tag === "None"
-                              ? _tuple(head, p2)
-                              : _v._tag === "Some"
-                                ? (({ value: ls }) =>
-                                    _tuple(
-                                      Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)),
-                                      p2,
-                                    ))(_v)
-                                : (() => {
-                                    throw new Error("non-exhaustive match");
-                                  })())(lastSp),
+                          _Option_match(
+                            lastSp,
+                            () => _tuple(head, p2),
+                            (ls) =>
+                              _tuple(Ast.TyQual(alias, nm, nameSpan, args, spanning(sp, ls)), p2),
+                          ),
                         ) as Result<[TypeExpr, number], PErr>,
                       legacyTypeArgsLoop(toks, p, [] as TypeExpr[], None as Option<SpanAt>),
                     ))(_v)
@@ -4547,13 +4533,10 @@ export const parseWith: <A, B, C, D, E>(
     >,
   ) => {
     const r: { stmts: Stmt[]; diagnostics: PErr[] } = parseRecovering(toks, pluginsOpt);
-    return ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: d }) => Err(d) as Result<Stmt[], PErr>)(_v)
-        : _v._tag === "None"
-          ? (Ok(r.stmts) as Result<Stmt[], PErr>)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(_Array_get(0, r.diagnostics));
+    return _Option_match(
+      _Array_get(0, r.diagnostics),
+      () => Ok(r.stmts) as Result<Stmt[], PErr>,
+      (d) => Err(d) as Result<Stmt[], PErr>,
+    );
   },
 );
