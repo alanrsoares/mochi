@@ -288,11 +288,22 @@ const inferDeps: <A, B, E, F>(
       inferExpr: (a: Expr, b: A) => Result<[B, { next: number } & E], BoundErr>;
     } & F,
     name: string,
-  ) => {
-    const $match = _Array_get(2, args);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: surplus } = $match;
+  ) =>
+    _Option_match(
+      _Array_get(2, args),
+      () =>
+        _Option_match(
+          _Array_get(1, args),
+          () => Ok(st),
+          (deps) =>
+            _Result_flatMap(
+              ([depsT, st1]: [B, { next: number } & E]) =>
+                (([elem, st2]: [Ty, { next: number } & E]) =>
+                  api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
+              api.inferExpr(deps, st),
+            ),
+        ),
+      (surplus) => {
         const sp: SpanAt = preactSpan(surplus);
         return Err({
           message: `${name} takes one dependency array after its callback`,
@@ -301,32 +312,8 @@ const inferDeps: <A, B, E, F>(
           help: None,
           suggestions: [] as { end: number; replaceWith: string; start: number; title: string }[],
         });
-      }
-      case "None": {
-        const $match$ = _Array_get(1, args);
-        switch ($match$._tag) {
-          case "None": {
-            return Ok(st);
-          }
-          case "Some": {
-            const { value: deps } = $match$;
-            return _Result_flatMap(
-              ([depsT, st1]: [B, { next: number } & E]) =>
-                (([elem, st2]: [Ty, { next: number } & E]) =>
-                  api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)),
-              api.inferExpr(deps, st),
-            );
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 const inferEffectLike: <A, D, E, F>(
   fn: Expr,
@@ -494,11 +481,11 @@ const inferHookDeps: <A, B, C, D, E>(
           : isRef(fn, "hookDeps")
             ? (Some(3) as Option<number>)
             : (None as Option<number>);
-    const $match = expected;
-    switch ($match._tag) {
-      case "Some": {
-        const { value: n } = $match;
-        return eq(length(args), n)
+    return _Option_match(
+      expected,
+      () => Ok(None),
+      (n) =>
+        eq(length(args), n)
           ? _Result_map(
               (st1: { next: number } & D) =>
                 (([elem, st2]: [Ty, { next: number } & D]) => Some(_tuple(arrOf(elem), st2)))(
@@ -506,15 +493,8 @@ const inferHookDeps: <A, B, C, D, E>(
                 ),
               inferArgs(args, st, api.inferExpr),
             )
-          : Ok(None);
-      }
-      case "None": {
-        return Ok(None);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
+          : Ok(None),
+    );
   },
 );
 export const inferPreactCall: <A, D>(

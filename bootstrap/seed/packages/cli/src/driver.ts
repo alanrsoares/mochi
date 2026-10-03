@@ -238,21 +238,12 @@ const _runEntry = isCliEntry(undefined)
               _Option_match(
                 _Array_get(write ? 2 : 1, argv),
                 () => die("usage: mochic fmt [--write] <file.mochi>"),
-                (path) => {
-                  const $match = fmtOne(path, write);
-                  switch ($match._tag) {
-                    case "Ok": {
-                      return "";
-                    }
-                    case "Err": {
-                      const { error: msg } = $match;
-                      return die(msg);
-                    }
-                    default: {
-                      throw new Error("non-exhaustive match");
-                    }
-                  }
-                },
+                (path) =>
+                  _Result_match(
+                    fmtOne(path, write),
+                    (msg) => die(msg),
+                    () => "",
+                  ),
               ))(
               ((_v) => (_v._tag === "Some" && _v.value === "--write" ? true : false))(
                 _Array_get(1, argv),
@@ -262,43 +253,23 @@ const _runEntry = isCliEntry(undefined)
             ? _Option_match(
                 _Array_get(1, argv),
                 () => die("usage: mochic ts <file.mochi>"),
-                (path) => {
-                  const $match = buildOneTs(path, "@mochi/runtime");
-                  switch ($match._tag) {
-                    case "Ok": {
-                      const { value: out } = $match;
-                      return print(`wrote ${out}`);
-                    }
-                    case "Err": {
-                      const { error: msg } = $match;
-                      return die(msg);
-                    }
-                    default: {
-                      throw new Error("non-exhaustive match");
-                    }
-                  }
-                },
+                (path) =>
+                  _Result_match(
+                    buildOneTs(path, "@mochi/runtime"),
+                    (msg) => die(msg),
+                    (out) => print(`wrote ${out}`),
+                  ),
               )
             : _v._tag === "Some" && _v.value === "dts"
               ? _Option_match(
                   _Array_get(1, argv),
                   () => die("usage: mochic dts <file.mochi>"),
-                  (path) => {
-                    const $match = buildOneDts(path, "@mochi/runtime");
-                    switch ($match._tag) {
-                      case "Ok": {
-                        const { value: out } = $match;
-                        return print(`wrote ${out}`);
-                      }
-                      case "Err": {
-                        const { error: msg } = $match;
-                        return die(msg);
-                      }
-                      default: {
-                        throw new Error("non-exhaustive match");
-                      }
-                    }
-                  },
+                  (path) =>
+                    _Result_match(
+                      buildOneDts(path, "@mochi/runtime"),
+                      (msg) => die(msg),
+                      (out) => print(`wrote ${out}`),
+                    ),
                 )
               : _v._tag === "Some" && _v.value === "build"
                 ? ((_v) =>
@@ -308,21 +279,12 @@ const _runEntry = isCliEntry(undefined)
                         ? _Option_match(
                             _Array_get(2, argv),
                             () => die("usage: mochic build --emit=ts <entry.mochi>"),
-                            (entry) => {
-                              const $match = buildMultiTs(entry, "@mochi/runtime");
-                              switch ($match._tag) {
-                                case "Ok": {
-                                  return print("build ok");
-                                }
-                                case "Err": {
-                                  const { error: msg } = $match;
-                                  return die(msg);
-                                }
-                                default: {
-                                  throw new Error("non-exhaustive match");
-                                }
-                              }
-                            },
+                            (entry) =>
+                              _Result_match(
+                                buildMultiTs(entry, "@mochi/runtime"),
+                                (msg) => die(msg),
+                                () => print("build ok"),
+                              ),
                           )
                         : _v._tag === "Some"
                           ? (({ value: entry }) =>

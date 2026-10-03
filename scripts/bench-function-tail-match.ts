@@ -37,14 +37,17 @@ if (import.meta.main) {
     tailMatchFixtures.map((fixture) => [fixture.name, unwrapOk(compile(fixture.source))]),
   );
   for (const fixture of tailMatchFixtures) {
-    if (!emitted[fixture.name]?.includes("switch ($match._tag)"))
-      throw new Error("missing tail switch");
+    const expected =
+      fixture.family === "Shape" ? "switch ($match._tag)" : `_${fixture.family}_match(`;
+    if (!emitted[fixture.name]?.includes(expected)) throw new Error("missing selected lowering");
+    if (fixture.family !== "Shape" && emitted[fixture.name] !== baseline[fixture.name])
+      throw new Error("builtin control output changed");
   }
   for (const round of [0, 1, 2, 3]) {
-    for (const fixture of tailMatchFixtures) {
+    for (const fixture of tailMatchFixtures.filter((fixture) => fixture.family === "Shape")) {
       const variants = [
-        { name: "dispatch", code: baseline[fixture.name] },
-        { name: "switch", code: emitted[fixture.name] },
+        { name: "previous", code: baseline[fixture.name] },
+        { name: "current", code: emitted[fixture.name] },
       ];
       for (const variant of round % 2 === 0 ? variants : variants.toReversed()) {
         const file = join(out, `${fixture.name}-${variant.name}.mjs`);

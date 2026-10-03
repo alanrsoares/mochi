@@ -3,22 +3,28 @@
 - **Status:** Accepted
 - **Date:** 2026-10-03
 - **Source:** issue #182
-- **Amends:** ADR 0113 and ADR 0146 for eligible function tails.
+- **Amends:** ADR 0113 for eligible function tails; ADR 0146 keeps priority.
 
 ## Context
 
 Function-tail matches still introduce nested ternaries, destructuring IIFEs or
 builtin dispatch callbacks. A function body already provides a statement context:
-its branches can return directly without constructing handlers.
+its branches can return directly without constructing handlers. Builtin
+Result/Option pairs already have compact, readable dispatch helpers; preserve
+that form.
 
 ## Decision
 
 Emit one scrutinee temporary and a native `switch (temporary._tag)` for matches
 directly at a lambda's tail, including after a safely flattened let chain. Accept
 unguarded, distinct constructor arms whose payloads are bindings or wildcards,
-and an optional final binding or wildcard catch-all. This includes builtin,
-local and imported constructors; field layout still comes from the constructor
-registry. Each case has its own block, destructures the narrowed scrutinee and
+and an optional final binding or wildcard catch-all. Eligible builtin
+Result/Option pairs retain `_Result_match` / `_Option_match`, including function tails, after let
+chains and inside custom switch cases. Reuse the existing builtin match planner
+so constructor layouts, guards, namespaces and helper-name capture retain their
+eligibility rules. Other eligible matches use statements, including local and
+imported constructors; field layout still comes from the constructor registry.
+Each case has its own block, destructures the narrowed scrutinee and
 returns directly. A match without a catch-all retains a throwing default for an
 invalid runtime tag.
 
@@ -53,6 +59,6 @@ through their existing scripts. Full checks, conformance and the self-hosted
 strict TypeScript north-star must remain green.
 
 This removes match-site handler construction and indirect dispatch calls on the
-eligible path, but emitted blocks occupy more formatted lines and engine
+statement path, but emitted blocks occupy more formatted lines and engine
 optimization remains workload-dependent. The [benchmark report](../function-tail-match-benchmark.md)
 compares actual emitted code on Bun and Node, plus compiler/formatter workloads.

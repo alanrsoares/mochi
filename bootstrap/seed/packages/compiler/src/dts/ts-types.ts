@@ -114,21 +114,12 @@ export const genericNames: <A, B>(sc: { vars: A[]; rvars: A[] } & B) => Map<A, s
 ) => genericNamesFrom(_Array_concat(sc.vars, sc.rvars), 0, new Map<A, string>());
 const genericNamesFrom: <A>(ids: A[], i: number, names: Map<A, string>) => Map<A, string> = _curry(
   3,
-  <A>(ids: A[], i: number, names: Map<A, string>) => {
-    const $match = _Array_get(i, ids);
-    switch ($match._tag) {
-      case "None": {
-        return names;
-      }
-      case "Some": {
-        const { value: id } = $match;
-        return genericNamesFrom(ids, i + 1, _Map_set(id, letterAt(i), names));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A>(ids: A[], i: number, names: Map<A, string>) =>
+    _Option_match(
+      _Array_get(i, ids),
+      () => names,
+      (id) => genericNamesFrom(ids, i + 1, _Map_set(id, letterAt(i), names)),
+    ),
 );
 const primitiveTs: (name: string) => string = (name: string) =>
   ((_v) =>
@@ -343,48 +334,26 @@ export const rowAliasName: _Curry<[row: Row, recs: Map<string, string>], Option<
   2,
   (row: Row, recs: Map<string, string>) => aliasNameFor(row, recsEnv(recs)),
 );
-const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: TsEnv) => {
-  const $match = aliasNameFor(row, env);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: alias } = $match;
-      return alias;
-    }
-    case "None": {
-      return (([fields, tail]: [string[], Option<number>]) => {
+const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, (row: Row, env: TsEnv) =>
+  _Option_match(
+    aliasNameFor(row, env),
+    () =>
+      (([fields, tail]: [string[], Option<number>]) => {
         const body: string = length(fields) === 0 ? "{}" : `{ ${_Str_join("; ", fields)} }`;
-        const $match$ = tail;
-        switch ($match$._tag) {
-          case "None": {
-            return body;
-          }
-          case "Some": {
-            const { value: id } = $match$;
-            const $match$$ = _Map_get(id, env.vars);
-            switch ($match$$._tag) {
-              case "None": {
-                return body;
-              }
-              case "Some": {
-                const { value: name } = $match$$;
-                return length(fields) === 0 ? name : `(${body} & ${name})`;
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      })(tsRowFields(row, env));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+        return _Option_match(
+          tail,
+          () => body,
+          (id) =>
+            _Option_match(
+              _Map_get(id, env.vars),
+              () => body,
+              (name) => (length(fields) === 0 ? name : `(${body} & ${name})`),
+            ),
+        );
+      })(tsRowFields(row, env)),
+    (alias) => alias,
+  ),
+);
 /**
  * A `unit` result renders `void`, not `undefined`: a declared fn type has to
  * accept the host's ordinary `() => void` callbacks (ADR 0055). Standalone
@@ -471,36 +440,18 @@ const tsOfRaw: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, (t: Ty, env: TsEn
  * A scheme variable prints as `A`, `B`, … then `T26`. A nominal type named
  * `Tok` is not one of those letters, so it must not be treated as a hole.
  */
-const isDigitChar: (ch: string) => boolean = (ch: string) => {
-  const $match = _Str_codeAt(0, ch);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: n } = $match;
-      return and(n >= 48, n <= 57);
-    }
-    case "None": {
-      return false;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
-const isUpperChar: (ch: string) => boolean = (ch: string) => {
-  const $match = _Str_codeAt(0, ch);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: n } = $match;
-      return and(n >= 65, n <= 90);
-    }
-    case "None": {
-      return false;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+const isDigitChar: (ch: string) => boolean = (ch: string) =>
+  _Option_match(
+    _Str_codeAt(0, ch),
+    () => false,
+    (n) => and(n >= 48, n <= 57),
+  );
+const isUpperChar: (ch: string) => boolean = (ch: string) =>
+  _Option_match(
+    _Str_codeAt(0, ch),
+    () => false,
+    (n) => and(n >= 65, n <= 90),
+  );
 const allDigitsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, (s: string, i: number) =>
   i >= _Str_length(s) ? i > 1 : and(isDigitChar(_Str_slice(i, i + 1, s)), allDigitsFrom(s, i + 1)),
 );
@@ -555,21 +506,12 @@ const findTop: _Curry<[ch: string, s: string, i: number, depth: number], Option<
 );
 const bindLetter: <A, B>(letter: A, concrete: B, subst: Map<A, B>) => Option<Map<A, B>> = _curry(
   3,
-  <A, B>(letter: A, concrete: B, subst: Map<A, B>) => {
-    const $match = _Map_get(letter, subst);
-    switch ($match._tag) {
-      case "None": {
-        return Some(_Map_set(letter, concrete, subst));
-      }
-      case "Some": {
-        const { value: prev } = $match;
-        return eq(prev, concrete) ? Some(subst) : None;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A, B>(letter: A, concrete: B, subst: Map<A, B>) =>
+    _Option_match(
+      _Map_get(letter, subst),
+      () => Some(_Map_set(letter, concrete, subst)),
+      (prev) => (eq(prev, concrete) ? Some(subst) : None),
+    ),
 );
 const agreeList: _Curry<
   [useTs: string[], aliasTs: string[], subst: Map<string, string>, i: number],
@@ -582,55 +524,31 @@ const agreeList: _Curry<
       : _Option_match(
           _Array_get(i, useTs),
           () => None as Option<Map<string, string>>,
-          (u) => {
-            const $match = _Array_get(i, aliasTs);
-            switch ($match._tag) {
-              case "None": {
-                return None as Option<Map<string, string>>;
-              }
-              case "Some": {
-                const { value: a } = $match;
-                const $match$ = typesAgree(u, a, subst);
-                switch ($match$._tag) {
-                  case "None": {
-                    return None as Option<Map<string, string>>;
-                  }
-                  case "Some": {
-                    const { value: subst1 } = $match$;
-                    return agreeList(useTs, aliasTs, subst1, i + 1);
-                  }
-                  default: {
-                    throw new Error("non-exhaustive match");
-                  }
-                }
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          },
+          (u) =>
+            _Option_match(
+              _Array_get(i, aliasTs),
+              () => None as Option<Map<string, string>>,
+              (a) =>
+                _Option_match(
+                  typesAgree(u, a, subst),
+                  () => None as Option<Map<string, string>>,
+                  (subst1) => agreeList(useTs, aliasTs, subst1, i + 1),
+                ),
+            ),
         ),
 );
-const peelApp: (s: string) => Option<{ name: string; args: string }> = (s: string) => {
-  const $match = findTop("<", s, 0, 0);
-  switch ($match._tag) {
-    case "None": {
-      return None as Option<{ name: string; args: string }>;
-    }
-    case "Some": {
-      const { value: i } = $match;
-      return and(hasSuffix(">", s), i > 0)
+const peelApp: (s: string) => Option<{ name: string; args: string }> = (s: string) =>
+  _Option_match(
+    findTop("<", s, 0, 0),
+    () => None as Option<{ name: string; args: string }>,
+    (i) =>
+      and(hasSuffix(">", s), i > 0)
         ? (Some({
             name: _Str_slice(0, i, s),
             args: _Str_slice(i + 1, _Str_length(s) - 1, s),
           }) as Option<{ name: string; args: string }>)
-        : (None as Option<{ name: string; args: string }>);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+        : (None as Option<{ name: string; args: string }>),
+  );
 const wrapped: _Curry<[open: string, close: string, s: string], boolean> = _curry(
   3,
   (open: string, close: string, s: string) =>
@@ -654,85 +572,49 @@ const agreeArray: _Curry<
 const agreeApp: _Curry<
   [useT: string, aliasT: string, subst: Map<string, string>],
   Option<Map<string, string>>
-> = _curry(3, (useT: string, aliasT: string, subst: Map<string, string>) => {
-  const $match = peelApp(useT);
-  switch ($match._tag) {
-    case "None": {
-      return None as Option<Map<string, string>>;
-    }
-    case "Some": {
-      const { value: u } = $match;
-      const $match$ = peelApp(aliasT);
-      switch ($match$._tag) {
-        case "None": {
-          return None as Option<Map<string, string>>;
-        }
-        case "Some": {
-          const { value: a } = $match$;
-          return eq(u.name, a.name)
+> = _curry(3, (useT: string, aliasT: string, subst: Map<string, string>) =>
+  _Option_match(
+    peelApp(useT),
+    () => None as Option<Map<string, string>>,
+    (u) =>
+      _Option_match(
+        peelApp(aliasT),
+        () => None as Option<Map<string, string>>,
+        (a) =>
+          eq(u.name, a.name)
             ? agreeList(splitTop(", ", u.args), splitTop(", ", a.args), subst, 0)
-            : (None as Option<Map<string, string>>);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-const splitLabel: (s: string) => Option<{ label: string; ty: string }> = (s: string) => {
-  const $match = findTop(":", s, 0, 0);
-  switch ($match._tag) {
-    case "None": {
-      return None as Option<{ label: string; ty: string }>;
-    }
-    case "Some": {
-      const { value: i } = $match;
-      return Some({
-        label: _Str_slice(0, i, s),
-        ty: _Str_slice(i + 1, _Str_length(s), s),
-      }) as Option<{ label: string; ty: string }>;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+            : (None as Option<Map<string, string>>),
+      ),
+  ),
+);
+const splitLabel: (s: string) => Option<{ label: string; ty: string }> = (s: string) =>
+  _Option_match(
+    findTop(":", s, 0, 0),
+    () => None as Option<{ label: string; ty: string }>,
+    (i) =>
+      Some({ label: _Str_slice(0, i, s), ty: _Str_slice(i + 1, _Str_length(s), s) }) as Option<{
+        label: string;
+        ty: string;
+      }>,
+  );
 const fieldAgree: _Curry<
   [useF: string, aliasF: string, subst: Map<string, string>],
   Option<Map<string, string>>
-> = _curry(3, (useF: string, aliasF: string, subst: Map<string, string>) => {
-  const $match = splitLabel(useF);
-  switch ($match._tag) {
-    case "None": {
-      return None as Option<Map<string, string>>;
-    }
-    case "Some": {
-      const { value: u } = $match;
-      const $match$ = splitLabel(aliasF);
-      switch ($match$._tag) {
-        case "None": {
-          return None as Option<Map<string, string>>;
-        }
-        case "Some": {
-          const { value: a } = $match$;
-          return eq(_Str_trim(u.label), _Str_trim(a.label))
+> = _curry(3, (useF: string, aliasF: string, subst: Map<string, string>) =>
+  _Option_match(
+    splitLabel(useF),
+    () => None as Option<Map<string, string>>,
+    (u) =>
+      _Option_match(
+        splitLabel(aliasF),
+        () => None as Option<Map<string, string>>,
+        (a) =>
+          eq(_Str_trim(u.label), _Str_trim(a.label))
             ? typesAgree(_Str_trim(u.ty), _Str_trim(a.ty), subst)
-            : (None as Option<Map<string, string>>);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+            : (None as Option<Map<string, string>>),
+      ),
+  ),
+);
 const fieldsAgree: _Curry<
   [useFs: string[], aliasFs: string[], subst: Map<string, string>],
   Option<Map<string, string>>
@@ -750,33 +632,17 @@ const agreeFields: _Curry<
       : _Option_match(
           _Array_get(i, useFs),
           () => None as Option<Map<string, string>>,
-          (u) => {
-            const $match = _Array_get(i, aliasFs);
-            switch ($match._tag) {
-              case "None": {
-                return None as Option<Map<string, string>>;
-              }
-              case "Some": {
-                const { value: a } = $match;
-                const $match$ = fieldAgree(u, a, subst);
-                switch ($match$._tag) {
-                  case "None": {
-                    return None as Option<Map<string, string>>;
-                  }
-                  case "Some": {
-                    const { value: subst1 } = $match$;
-                    return agreeFields(useFs, aliasFs, subst1, i + 1);
-                  }
-                  default: {
-                    throw new Error("non-exhaustive match");
-                  }
-                }
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          },
+          (u) =>
+            _Option_match(
+              _Array_get(i, aliasFs),
+              () => None as Option<Map<string, string>>,
+              (a) =>
+                _Option_match(
+                  fieldAgree(u, a, subst),
+                  () => None as Option<Map<string, string>>,
+                  (subst1) => agreeFields(useFs, aliasFs, subst1, i + 1),
+                ),
+            ),
         ),
 );
 const agreeBrace: _Curry<
@@ -807,20 +673,12 @@ const agreeUnion: _Curry<
 });
 const firstSome: <A>(a: Option<A>, b: Option<A>) => Option<A> = _curry(
   2,
-  <A>(a: Option<A>, b: Option<A>) => {
-    const $match = a;
-    switch ($match._tag) {
-      case "Some": {
-        return a;
-      }
-      case "None": {
-        return b;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A>(a: Option<A>, b: Option<A>) =>
+    _Option_match(
+      a,
+      () => b,
+      () => a,
+    ),
 );
 /**
  * `useT` matches `aliasT` exactly, or by binding a scheme letter (`A`, `T26`)
@@ -854,105 +712,57 @@ const typesAgree: _Curry<
 const uniqueSubst: _Curry<
   [useKey: string, keys: string[], i: number, found: Option<Map<string, string>>],
   Option<Map<string, string>>
-> = _curry(4, (useKey: string, keys: string[], i: number, found: Option<Map<string, string>>) => {
-  const $match = _Array_get(i, keys);
-  switch ($match._tag) {
-    case "None": {
-      return found;
-    }
-    case "Some": {
-      const { value: k } = $match;
-      const $match$ = fieldsAgree(
-        splitTop("; ", useKey),
-        splitTop("; ", k),
-        new Map<string, string>(),
-      );
-      switch ($match$._tag) {
-        case "None": {
-          return uniqueSubst(useKey, keys, i + 1, found);
-        }
-        case "Some": {
-          const { value: subst } = $match$;
-          const $match$$ = found;
-          switch ($match$$._tag) {
-            case "None": {
-              return uniqueSubst(useKey, keys, i + 1, Some(subst) as Option<Map<string, string>>);
-            }
-            case "Some": {
-              return uniqueSubst(
+> = _curry(4, (useKey: string, keys: string[], i: number, found: Option<Map<string, string>>) =>
+  _Option_match(
+    _Array_get(i, keys),
+    () => found,
+    (k) =>
+      _Option_match(
+        fieldsAgree(splitTop("; ", useKey), splitTop("; ", k), new Map<string, string>()),
+        () => uniqueSubst(useKey, keys, i + 1, found),
+        (subst) =>
+          _Option_match(
+            found,
+            () => uniqueSubst(useKey, keys, i + 1, Some(subst) as Option<Map<string, string>>),
+            () =>
+              uniqueSubst(
                 useKey,
                 keys,
                 i + 1,
                 Some(new Map([["*", ""]])) as Option<Map<string, string>>,
-              );
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+              ),
+          ),
+      ),
+  ),
+);
 const substOf: <A, B>(
   useKey: string,
   env: { recs: Map<string, A> } & B,
 ) => Option<Map<string, string>> = _curry(
   2,
-  <A, B>(useKey: string, env: { recs: Map<string, A> } & B) => {
-    const $match = uniqueSubst(useKey, _Map_keys(env.recs), 0, None as Option<Map<string, string>>);
-    switch ($match._tag) {
-      case "None": {
-        return None as Option<Map<string, string>>;
-      }
-      case "Some": {
-        const { value: subst } = $match;
-        return _Map_has("*", subst)
+  <A, B>(useKey: string, env: { recs: Map<string, A> } & B) =>
+    _Option_match(
+      uniqueSubst(useKey, _Map_keys(env.recs), 0, None as Option<Map<string, string>>),
+      () => None as Option<Map<string, string>>,
+      (subst) =>
+        _Map_has("*", subst)
           ? (None as Option<Map<string, string>>)
-          : (Some(subst) as Option<Map<string, string>>);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+          : (Some(subst) as Option<Map<string, string>>),
+    ),
 );
 const idForLetter: <A, B>(letter: A, ids: B[], vars: Map<B, A>, i: number) => Option<B> = _curry(
   4,
-  <A, B>(letter: A, ids: B[], vars: Map<B, A>, i: number) => {
-    const $match = _Array_get(i, ids);
-    switch ($match._tag) {
-      case "None": {
-        return None;
-      }
-      case "Some": {
-        const { value: id } = $match;
-        const $match$ = _Map_get(id, vars);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: name } = $match$;
-            return eq(name, letter) ? Some(id) : idForLetter(letter, ids, vars, i + 1);
-          }
-          case "None": {
-            return idForLetter(letter, ids, vars, i + 1);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A, B>(letter: A, ids: B[], vars: Map<B, A>, i: number) =>
+    _Option_match(
+      _Array_get(i, ids),
+      () => None,
+      (id) =>
+        _Option_match(
+          _Map_get(id, vars),
+          () => idForLetter(letter, ids, vars, i + 1),
+          (name) => (eq(name, letter) ? Some(id) : idForLetter(letter, ids, vars, i + 1)),
+        ),
+    ),
 );
 /**
  * A variable pinned to two different concrete types is dropped. Printing it
@@ -990,45 +800,22 @@ const mergeSubst: <A, B, C>(
     ids: C[],
     st: { bad: Set<C>; pins: Map<C, B> },
     i: number,
-  ) => {
-    const $match = _Array_get(i, letters);
-    switch ($match._tag) {
-      case "None": {
-        return st;
-      }
-      case "Some": {
-        const { value: letter } = $match;
-        const $match$ = _Map_get(letter, subst);
-        switch ($match$._tag) {
-          case "None": {
-            return mergeSubst(letters, subst, vars, ids, st, i + 1);
-          }
-          case "Some": {
-            const { value: concrete } = $match$;
-            const $match$$ = idForLetter(letter, ids, vars, 0);
-            switch ($match$$._tag) {
-              case "None": {
-                return mergeSubst(letters, subst, vars, ids, st, i + 1);
-              }
-              case "Some": {
-                const { value: id } = $match$$;
-                return mergeSubst(letters, subst, vars, ids, notePin(id, concrete, st), i + 1);
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Option_match(
+      _Array_get(i, letters),
+      () => st,
+      (letter) =>
+        _Option_match(
+          _Map_get(letter, subst),
+          () => mergeSubst(letters, subst, vars, ids, st, i + 1),
+          (concrete) =>
+            _Option_match(
+              idForLetter(letter, ids, vars, 0),
+              () => mergeSubst(letters, subst, vars, ids, st, i + 1),
+              (id) => mergeSubst(letters, subst, vars, ids, notePin(id, concrete, st), i + 1),
+            ),
+        ),
+    ),
 );
 const emptyPins: { pins: Map<number, string>; bad: Set<number> } = {
   pins: new Map([]),
@@ -1044,44 +831,22 @@ const considerClosed: <A, B>(
     row: Row,
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
-  ) => {
-    const $match = rowShapeKey(row, env.vars);
-    switch ($match._tag) {
-      case "None": {
-        return st;
-      }
-      case "Some": {
-        const { value: key } = $match;
-        const $match$ = _Map_get(key, env.recs);
-        switch ($match$._tag) {
-          case "Some": {
-            return st;
-          }
-          case "None": {
-            const $match$$ = substOf(key, env);
-            switch ($match$$._tag) {
-              case "None": {
-                return st;
-              }
-              case "Some": {
-                const { value: subst } = $match$$;
-                return mergeSubst(_Map_keys(subst), subst, env.vars, _Map_keys(env.vars), st, 0);
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Option_match(
+      rowShapeKey(row, env.vars),
+      () => st,
+      (key) =>
+        _Option_match(
+          _Map_get(key, env.recs),
+          () =>
+            _Option_match(
+              substOf(key, env),
+              () => st,
+              (subst) => mergeSubst(_Map_keys(subst), subst, env.vars, _Map_keys(env.vars), st, 0),
+            ),
+          () => st,
+        ),
+    ),
 );
 const pinInTys: <A, B>(
   ts: Ty[],
@@ -1095,21 +860,12 @@ const pinInTys: <A, B>(
     env: { vars: Map<number, string>; recs: Map<string, A> } & B,
     st: { bad: Set<number>; pins: Map<number, string> },
     i: number,
-  ) => {
-    const $match = _Array_get(i, ts);
-    switch ($match._tag) {
-      case "None": {
-        return st;
-      }
-      case "Some": {
-        const { value: t } = $match;
-        return pinInTys(ts, env, pinInTy(t, env, st), i + 1);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Option_match(
+      _Array_get(i, ts),
+      () => st,
+      (t) => pinInTys(ts, env, pinInTy(t, env, st), i + 1),
+    ),
 );
 const pinInRow: <A, B>(
   row: Row,
@@ -1183,33 +939,18 @@ const pinAliasVars: <A, B>(
     pinInTy(t, env, emptyPins).pins,
 );
 const overlayPins: <A, B>(ids: A[], pins: Map<A, B>, names: Map<A, B>, i: number) => Map<A, B> =
-  _curry(4, <A, B>(ids: A[], pins: Map<A, B>, names: Map<A, B>, i: number) => {
-    const $match = _Array_get(i, ids);
-    switch ($match._tag) {
-      case "None": {
-        return names;
-      }
-      case "Some": {
-        const { value: id } = $match;
-        const $match$ = _Map_get(id, pins);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: concrete } = $match$;
-            return overlayPins(ids, pins, _Map_set(id, concrete, names), i + 1);
-          }
-          case "None": {
-            return overlayPins(ids, pins, names, i + 1);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  });
+  _curry(4, <A, B>(ids: A[], pins: Map<A, B>, names: Map<A, B>, i: number) =>
+    _Option_match(
+      _Array_get(i, ids),
+      () => names,
+      (id) =>
+        _Option_match(
+          _Map_get(id, pins),
+          () => overlayPins(ids, pins, names, i + 1),
+          (concrete) => overlayPins(ids, pins, _Map_set(id, concrete, names), i + 1),
+        ),
+    ),
+  );
 const headLetters: <A, B>(names: Map<A, string>, pins: Map<A, B>) => string = _curry(
   2,
   <A, B>(names: Map<A, string>, pins: Map<A, B>) => {

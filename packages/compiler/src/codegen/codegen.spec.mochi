@@ -50,11 +50,26 @@ testEach("builtin matches select their flat runtime dispatch", [
 })
 
 testEach("function-tail matches emit flat constructor cases", [
-  "let f = x => switch x { | Ok(n) => n | Err(_) => 0 }",
-  "let f = x => let fallback = 0 in switch x { | None => fallback | Some(n) => n }",
+  "type Choice = Yes(number) | No\nlet f = x => switch x { | Yes(n) => n | No => 0 }",
+  "type Option a = Some(value: a) | None\nlet f = x => let fallback = 0 in switch x { | None => fallback | Some(n) => n }",
   "type Shape = Dot | Box(number)\nlet f = x => switch x { | Box(n) => n | rest => 0 }"
 ], source => switch genSrc(source) {
   | Ok(js) => js |> Str.contains("switch ($match._tag)") |> ok
+  | Err(_) => false |> ok
+})
+
+testEach("builtin function tails retain compact dispatch", [
+  ("let f = x => switch x { | Ok(n) => n | Err(_) => 0 }", "_Result_match("),
+  ("let f = x => switch x { | Err(_) => 0 | Ok(n) => n }", "_Result_match("),
+  ("let f = x => switch x { | Some(n) => n | None => 0 }", "_Option_match("),
+  (
+    "let f = x => let fallback = 0 in switch x { | None => fallback | Some(n) => n }",
+    "_Option_match("
+  )
+], ((source, helper)) => switch genSrc(source) {
+  | Ok(js) => (js
+      |> Str.contains(helper)) && !(js |> Str.contains("switch ($match._tag)"))
+      |> ok
   | Err(_) => false |> ok
 })
 

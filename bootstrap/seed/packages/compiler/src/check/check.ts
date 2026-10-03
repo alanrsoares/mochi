@@ -414,21 +414,12 @@ const ctorNameOf: (p: Pattern) => string = (p: Pattern) => {
 };
 const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(
   2,
-  (ctor: string, ns: Option<string>) => {
-    const $match = ns;
-    switch ($match._tag) {
-      case "Some": {
-        const { value: alias } = $match;
-        return `${alias}.${ctor}`;
-      }
-      case "None": {
-        return ctor;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  (ctor: string, ns: Option<string>) =>
+    _Option_match(
+      ns,
+      () => ctor,
+      (alias) => `${alias}.${ctor}`,
+    ),
 );
 const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) => {
   const $match = p;
@@ -462,26 +453,19 @@ const checkPattern: <A, B>(
       case "PCtor": {
         const { ctor, args, ns, span: sp } = $match;
         const key: string = patCtorKey(ctor, ns);
-        const $match$ = _Map_get(key, reg.ctors);
-        switch ($match$._tag) {
-          case "None": {
-            return Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>;
-          }
-          case "Some": {
-            const { value: info } = $match$;
-            return eq(length(args), info.arity)
+        return _Option_match(
+          _Map_get(key, reg.ctors),
+          () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>,
+          (info) =>
+            eq(length(args), info.arity)
               ? firstSome((a: Pattern) => checkPattern(a, reg, false), args)
               : (Some(
                   checkErr(
                     `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
                     sp,
                   ),
-                ) as Option<PErr>);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
+                ) as Option<PErr>),
+        );
       }
       case "PRecord": {
         const { fields } = $match;
@@ -533,66 +517,45 @@ const checkPattern: <A, B>(
 const binderPathsArgs: _Curry<
   [args: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) => {
-  const $match = _Array_get(i, args);
-  switch ($match._tag) {
-    case "None": {
-      return Ok(acc) as Result<Map<string, string>, PErr>;
-    }
-    case "Some": {
-      const { value: a } = $match;
-      return _Result_flatMap(
+> = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
+  _Option_match(
+    _Array_get(i, args),
+    () => Ok(acc) as Result<Map<string, string>, PErr>,
+    (a) =>
+      _Result_flatMap(
         (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
         binderPaths(a, `${at}.a${show(i)}`, acc),
-      );
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+      ),
+  ),
+);
 const binderPathsFields: _Curry<
   [fields: PatField[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) => {
-  const $match = _Array_get(i, fields);
-  switch ($match._tag) {
-    case "None": {
-      return Ok(acc) as Result<Map<string, string>, PErr>;
-    }
-    case "Some": {
-      const { value: f } = $match;
-      return _Result_flatMap(
+> = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
+  _Option_match(
+    _Array_get(i, fields),
+    () => Ok(acc) as Result<Map<string, string>, PErr>,
+    (f) =>
+      _Result_flatMap(
         (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
         binderPaths(f.pat, `${at}.${f.label}`, acc),
-      );
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+      ),
+  ),
+);
 const binderPathsElems: _Curry<
   [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) => {
-  const $match = _Array_get(i, elems);
-  switch ($match._tag) {
-    case "None": {
-      return Ok(acc) as Result<Map<string, string>, PErr>;
-    }
-    case "Some": {
-      const { value: e } = $match;
-      return _Result_flatMap(
+> = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
+  _Option_match(
+    _Array_get(i, elems),
+    () => Ok(acc) as Result<Map<string, string>, PErr>,
+    (e) =>
+      _Result_flatMap(
         (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
         binderPaths(e, `${at}.t${show(i)}`, acc),
-      );
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+      ),
+  ),
+);
 const binderPaths: _Curry<
   [p: Pattern, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
@@ -650,15 +613,12 @@ const altMapsFrom: <A, B>(
     i: number,
     reg: { ctors: Map<string, { arity: number } & A> } & B,
     acc: Map<string, string>[],
-  ) => {
-    const $match = _Array_get(i, alts);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(acc) as Result<Map<string, string>[], PErr>;
-      }
-      case "Some": {
-        const { value: alt } = $match;
-        return isCatchAll(alt)
+  ) =>
+    _Option_match(
+      _Array_get(i, alts),
+      () => Ok(acc) as Result<Map<string, string>[], PErr>,
+      (alt) =>
+        isCatchAll(alt)
           ? (Err(
               checkErr(
                 "an or-pattern alternative can't be a catch-all (`_` or a bare binding)",
@@ -680,13 +640,8 @@ const altMapsFrom: <A, B>(
                     binderPaths(alt, "", new Map<string, string>()),
                   ),
                 (e) => Err(e) as Result<Map<string, string>[], PErr>,
-              );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+              ),
+    ),
 );
 const missingNameErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
   2,
@@ -708,15 +663,12 @@ const consistentBindsFrom: <C>(
     i: number,
     ref: Map<string, string>,
     sp: { end: number; start: number } & C,
-  ) => {
-    const $match = _Array_get(i, maps);
-    switch ($match._tag) {
-      case "None": {
-        return None;
-      }
-      case "Some": {
-        const { value: m } = $match;
-        return _Option_orElse(
+  ) =>
+    _Option_match(
+      _Array_get(i, maps),
+      () => None,
+      (m) =>
+        _Option_orElse(
           consistentBindsFrom(maps, i + 1, ref, sp),
           _Option_orElse(
             firstSome(
@@ -738,13 +690,8 @@ const consistentBindsFrom: <C>(
               _Map_keys(ref),
             ),
           ),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const checkOrPattern: <A, B>(
   alts: Pattern[],
@@ -752,34 +699,17 @@ const checkOrPattern: <A, B>(
   reg: { ctors: Map<string, { arity: number } & A> } & B,
 ) => Option<PErr> = _curry(
   3,
-  <A, B>(alts: Pattern[], sp: SpanAt, reg: { ctors: Map<string, { arity: number } & A> } & B) => {
-    const $match = altMapsFrom(alts, 0, reg, [] as Map<string, string>[]);
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
-        return Some(e) as Option<PErr>;
-      }
-      case "Ok": {
-        const { value: maps } = $match;
-        const $match$ = _Array_head(maps);
-        switch ($match$._tag) {
-          case "None": {
-            return None as Option<PErr>;
-          }
-          case "Some": {
-            const { value: ref } = $match$;
-            return consistentBindsFrom(maps, 1, ref, sp);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A, B>(alts: Pattern[], sp: SpanAt, reg: { ctors: Map<string, { arity: number } & A> } & B) =>
+    _Result_match(
+      altMapsFrom(alts, 0, reg, [] as Map<string, string>[]),
+      (e) => Some(e) as Option<PErr>,
+      (maps) =>
+        _Option_match(
+          _Array_head(maps),
+          () => None as Option<PErr>,
+          (ref) => consistentBindsFrom(maps, 1, ref, sp),
+        ),
+    ),
 );
 const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B) => boolean = <
   A,
@@ -790,28 +720,23 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<PErr>> = _curry(
   2,
   (arms: MatchArm[], listSwitch: boolean) =>
-    firstSome((a: MatchArm) => {
-      const $match = a.guard;
-      switch ($match._tag) {
-        case "None": {
-          return None as Option<PErr>;
-        }
-        case "Some": {
-          const { value: g } = $match;
-          return or(isPList(a.pattern), listSwitch)
-            ? (Some(
-                checkErr(
-                  "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
-                  exprSpan(g),
-                ),
-              ) as Option<PErr>)
-            : (None as Option<PErr>);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }, arms),
+    firstSome(
+      (a: MatchArm) =>
+        _Option_match(
+          a.guard,
+          () => None as Option<PErr>,
+          (g) =>
+            or(isPList(a.pattern), listSwitch)
+              ? (Some(
+                  checkErr(
+                    "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+                    exprSpan(g),
+                  ),
+                ) as Option<PErr>)
+              : (None as Option<PErr>),
+        ),
+      arms,
+    ),
 );
 const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _curry(
   2,
@@ -837,35 +762,20 @@ const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _c
     }
   },
 );
-const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) => {
-  const $match = firstCatchIdx(arms, 0);
-  switch ($match._tag) {
-    case "None": {
-      return None as Option<PErr>;
-    }
-    case "Some": {
-      const { value: i } = $match;
-      const $match$ = _Array_get(i + 1, arms);
-      switch ($match$._tag) {
-        case "None": {
-          return None as Option<PErr>;
-        }
-        case "Some": {
-          const { value: a } = $match$;
-          return Some(
+const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
+  _Option_match(
+    firstCatchIdx(arms, 0),
+    () => None as Option<PErr>,
+    (i) =>
+      _Option_match(
+        _Array_get(i + 1, arms),
+        () => None as Option<PErr>,
+        (a) =>
+          Some(
             checkErr("unreachable arm: a catch-all arm above it matches first", patSpan(a.pattern)),
-          ) as Option<PErr>;
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+          ) as Option<PErr>,
+      ),
+  );
 const SeqNotSeq: SeqCheck = { _tag: "SeqNotSeq" };
 const SeqTotal: SeqCheck = { _tag: "SeqTotal" };
 const SeqFail = (e: PErr): SeqCheck => ({ _tag: "SeqFail", e });
@@ -937,30 +847,25 @@ const ctorLoop: <A, B, C, D>(
     reg: { ctors: Map<string, { arity: number; owner: string } & C> } & D,
     owner: Option<string>,
     covered: Set<string>,
-  ) => {
-    const $match = _Array_get(i, arms);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>;
-      }
-      case "Some": {
-        const { value: a } = $match;
-        const $match$ = a.pattern;
-        switch ($match$._tag) {
+  ) =>
+    _Option_match(
+      _Array_get(i, arms),
+      () => Ok(_tuple(owner, covered)) as Result<[Option<string>, Set<string>], PErr>,
+      (a) => {
+        const $match = a.pattern;
+        switch ($match._tag) {
           case "PCtor": {
-            const { ctor, args, ns, span: sp } = $match$;
+            const { ctor, args, ns, span: sp } = $match;
             const key: string = patCtorKey(ctor, ns);
-            const $match$$ = _Map_get(key, reg.ctors);
-            switch ($match$$._tag) {
-              case "None": {
-                return Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
+            return _Option_match(
+              _Map_get(key, reg.ctors),
+              () =>
+                Err(checkErr(`unknown constructor '${key}'`, sp)) as Result<
                   [Option<string>, Set<string>],
                   PErr
-                >;
-              }
-              case "Some": {
-                const { value: info } = $match$$;
-                return !eq(length(args), info.arity)
+                >,
+              (info) =>
+                !eq(length(args), info.arity)
                   ? (Err(
                       checkErr(
                         `constructor '${ctor}' expects ${show(info.arity)} arg(s), got ${show(length(args))}`,
@@ -984,23 +889,15 @@ const ctorLoop: <A, B, C, D>(
                             and(allOf(isCatchAll, args), _Option_isNone(a.guard))
                               ? _Set_add(ctor, covered)
                               : covered,
-                          ))(owner);
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
+                          ))(owner),
+            );
           }
           default: {
             return ctorLoop(arms, i + 1, reg, owner, covered);
           }
         }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 const seqVerdict: <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => Option<PErr> =
   _curry(2, <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A) => {
@@ -1113,32 +1010,20 @@ const checkMatch: <A>(
   reg: Registry,
 ) => Option<PErr> = _curry(
   3,
-  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) => {
-    const $match = firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: e } = $match;
-        return Some(e) as Option<PErr>;
-      }
-      case "None": {
+  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
+    _Option_match(
+      firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms),
+      () => {
         const listSwitch: boolean = someOf(
           (a: MatchArm) => and(isPList(a.pattern), !isCatchAll(a.pattern)),
           arms,
         );
-        const $match$ = guardErrs(arms, listSwitch);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: e } = $match$;
-            return Some(e) as Option<PErr>;
-          }
-          case "None": {
-            const $match$$ = unreachableAfterCatch(arms);
-            switch ($match$$._tag) {
-              case "Some": {
-                const { value: e } = $match$$;
-                return Some(e) as Option<PErr>;
-              }
-              case "None": {
+        return _Option_match(
+          guardErrs(arms, listSwitch),
+          () =>
+            _Option_match(
+              unreachableAfterCatch(arms),
+              () => {
                 const hasCatchAll: boolean = someOf(armUnguardedCatchAll, arms);
                 const leaves: { pattern: Pattern; guard: Option<Expr> }[] = _Array_flatMap(
                   leavesOfArm,
@@ -1174,22 +1059,14 @@ const checkMatch: <A>(
                         _Set_fromArray([] as string[]),
                       ),
                     );
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+              },
+              (e) => Some(e) as Option<PErr>,
+            ),
+          (e) => Some(e) as Option<PErr>,
+        );
+      },
+      (e) => Some(e) as Option<PErr>,
+    ),
 );
 const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(
   2,
@@ -2046,21 +1923,15 @@ const checkReservedWordsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
         const { ctors } = $match;
         return _Array_flatMap(
           (ctor: Ctor) =>
-            _Array_flatMap((field: CtorField) => {
-              const $match$ = field.name;
-              switch ($match$._tag) {
-                case "Some": {
-                  const { value: name } = $match$;
-                  return reservedWord(name, typeExprSpan(field.fieldType));
-                }
-                case "None": {
-                  return [] as PErr[];
-                }
-                default: {
-                  throw new Error("non-exhaustive match");
-                }
-              }
-            }, ctor.fields),
+            _Array_flatMap(
+              (field: CtorField) =>
+                _Option_match(
+                  field.name,
+                  () => [] as PErr[],
+                  (name) => reservedWord(name, typeExprSpan(field.fieldType)),
+                ),
+              ctor.fields,
+            ),
           ctors,
         );
       }
@@ -2071,21 +1942,12 @@ const checkReservedWordsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
   }, stmts);
 const checkReservedWords: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   _Array_head(checkReservedWordsAll(stmts));
-const isUpperStart: (s: string) => boolean = (s: string) => {
-  const $match = _Str_codeAt(0, s);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: c } = $match;
-      return and(c >= 65, c <= 90);
-    }
-    case "None": {
-      return false;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+const isUpperStart: (s: string) => boolean = (s: string) =>
+  _Option_match(
+    _Str_codeAt(0, s),
+    () => false,
+    (c) => and(c >= 65, c <= 90),
+  );
 const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, SpanAt]>> = _curry(
   2,
   (params: string[], te: TypeExpr) => {
@@ -2670,14 +2532,11 @@ const checkLoopExpr: _Curry<
     }
     case "ERecur": {
       const { args, span: sp } = $match;
-      const $match$ = frame;
-      switch ($match$._tag) {
-        case "None": {
-          return Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>;
-        }
-        case "Some": {
-          const { value: current } = $match$;
-          return !tail
+      return _Option_match(
+        frame,
+        () => Some(checkErr("'recur' is only legal inside a loop body", sp)) as Option<PErr>,
+        (current) =>
+          !tail
             ? (Some(
                 checkErr("'recur' must be in tail position of its enclosing loop", sp),
               ) as Option<PErr>)
@@ -2688,12 +2547,8 @@ const checkLoopExpr: _Curry<
                     sp,
                   ),
                 ) as Option<PErr>)
-              : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+              : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+      );
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
@@ -2705,24 +2560,19 @@ const checkLoopExpr: _Curry<
     case "EMatch": {
       const { scrutinee, arms } = $match;
       return _Option_orElse(
-        firstSome((arm: MatchArm) => {
-          const $match$ = arm.guard;
-          switch ($match$._tag) {
-            case "Some": {
-              const { value: guard } = $match$;
-              return _Option_orElse(
-                checkLoopExpr(arm.body, frame, tail),
-                checkLoopExpr(guard, frame, false),
-              );
-            }
-            case "None": {
-              return checkLoopExpr(arm.body, frame, tail);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, arms),
+        firstSome(
+          (arm: MatchArm) =>
+            _Option_match(
+              arm.guard,
+              () => checkLoopExpr(arm.body, frame, tail),
+              (guard) =>
+                _Option_orElse(
+                  checkLoopExpr(arm.body, frame, tail),
+                  checkLoopExpr(guard, frame, false),
+                ),
+            ),
+          arms,
+        ),
         checkLoopExpr(scrutinee, frame, false),
       );
     }
@@ -3235,55 +3085,35 @@ export const checkWith: <A, B>(
     stmts: Stmt[],
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
-  ) => {
-    const $match = checkReservedNames(stmts);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: e } = $match;
-        return Err(e) as Result<Stmt[], PErr>;
-      }
-      case "None": {
-        const $match$ = checkReservedWords(stmts);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: e } = $match$;
-            return Err(e) as Result<Stmt[], PErr>;
-          }
-          case "None": {
-            const $match$$ = checkCtorFieldVars(stmts);
-            switch ($match$$._tag) {
-              case "Some": {
-                const { value: e } = $match$$;
-                return Err(e) as Result<Stmt[], PErr>;
-              }
-              case "None": {
-                const $match$$$ = checkQualifiedTypeNames(stmts, quals);
-                switch ($match$$$._tag) {
-                  case "Some": {
-                    const { value: e } = $match$$$;
-                    return Err(e) as Result<Stmt[], PErr>;
-                  }
-                  case "None": {
-                    const $match$$$$ = checkLoops(stmts);
-                    switch ($match$$$$._tag) {
-                      case "Some": {
-                        const { value: e } = $match$$$$;
-                        return Err(e) as Result<Stmt[], PErr>;
-                      }
-                      case "None": {
-                        return _Result_flatMap(
+  ) =>
+    _Option_match(
+      checkReservedNames(stmts),
+      () =>
+        _Option_match(
+          checkReservedWords(stmts),
+          () =>
+            _Option_match(
+              checkCtorFieldVars(stmts),
+              () =>
+                _Option_match(
+                  checkQualifiedTypeNames(stmts, quals),
+                  () =>
+                    _Option_match(
+                      checkLoops(stmts),
+                      () =>
+                        _Result_flatMap(
                           (reg0) =>
                             ((reg: Registry) =>
                               _Option_match(
                                 firstSome((s: Stmt) => {
-                                  const $match$$$$$ = s;
-                                  switch ($match$$$$$._tag) {
+                                  const $match = s;
+                                  switch ($match._tag) {
                                     case "SLet": {
-                                      const { value } = $match$$$$$;
+                                      const { value } = $match;
                                       return checkExpr(value, reg);
                                     }
                                     case "SExpr": {
-                                      const { value } = $match$$$$$;
+                                      const { value } = $match;
                                       return checkExpr(value, reg);
                                     }
                                     default: {
@@ -3306,33 +3136,17 @@ export const checkWith: <A, B>(
                               ),
                             }),
                           buildRegistry(stmts),
-                        );
-                      }
-                      default: {
-                        throw new Error("non-exhaustive match");
-                      }
-                    }
-                  }
-                  default: {
-                    throw new Error("non-exhaustive match");
-                  }
-                }
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+                        ),
+                      (e) => Err(e) as Result<Stmt[], PErr>,
+                    ),
+                  (e) => Err(e) as Result<Stmt[], PErr>,
+                ),
+              (e) => Err(e) as Result<Stmt[], PErr>,
+            ),
+          (e) => Err(e) as Result<Stmt[], PErr>,
+        ),
+      (e) => Err(e) as Result<Stmt[], PErr>,
+    ),
 );
 export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
   checkWith(
@@ -3355,11 +3169,10 @@ export const checkAllWith: <A, B>(
     stmts: Stmt[],
     imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
     quals: Map<string, { types: Set<string> } & B>,
-  ) => {
-    const $match = buildRegistry(stmts);
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
+  ) =>
+    _Result_match(
+      buildRegistry(stmts),
+      (e) => {
         const errors: PErr[] = [
           ...checkReservedNamesAll(stmts),
           ...checkReservedWordsAll(stmts),
@@ -3371,9 +3184,8 @@ export const checkAllWith: <A, B>(
         return length(errors) === 0
           ? (Ok(stmts) as Result<Stmt[], PErr[]>)
           : (Err(errors) as Result<Stmt[], PErr[]>);
-      }
-      case "Ok": {
-        const { value: reg0 } = $match;
+      },
+      (reg0) => {
         const reg: Registry = {
           ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
           types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
@@ -3385,14 +3197,14 @@ export const checkAllWith: <A, B>(
           ...checkQualifiedTypeNamesAll(stmts, quals),
           ...checkLoopsAll(stmts),
           ..._Array_flatMap((stmt: Stmt) => {
-            const $match$ = stmt;
-            switch ($match$._tag) {
+            const $match = stmt;
+            switch ($match._tag) {
               case "SLet": {
-                const { value } = $match$;
+                const { value } = $match;
                 return checkExprs(value, reg);
               }
               case "SExpr": {
-                const { value } = $match$;
+                const { value } = $match;
                 return checkExprs(value, reg);
               }
               default: {
@@ -3404,12 +3216,8 @@ export const checkAllWith: <A, B>(
         return length(errors) === 0
           ? (Ok(stmts) as Result<Stmt[], PErr[]>)
           : (Err(errors) as Result<Stmt[], PErr[]>);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 export const checkAll: (stmts: Stmt[]) => Result<Stmt[], PErr[]> = (stmts: Stmt[]) =>
   checkAllWith(

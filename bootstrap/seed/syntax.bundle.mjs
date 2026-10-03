@@ -1,4 +1,4 @@
-import { Err, None as None2, Ok, Some as Some2, _Array_append, _Array_concat, _Array_flatMap, _Array_get, _Array_head, _Array_tail, _Array_take, _Option_contains as _Option_contains2, _Option_exists, _Option_match as _Option_match2, _Option_unwrapOr, _Str_codeAt, _Str_fromCode, _Str_get as _Str_get2, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry as _curry2, _done as _done2, _recur as _recur2, and, eq, length, lt, or } from "@mochi/compiler/runtime";
+import { Err, None as None2, Ok, Some as Some2, _Array_append, _Array_concat, _Array_flatMap, _Array_get, _Array_head, _Array_tail, _Array_take, _Option_contains as _Option_contains2, _Option_exists, _Option_match as _Option_match2, _Option_unwrapOr, _Result_match, _Str_codeAt, _Str_fromCode, _Str_get as _Str_get2, _Str_join, _Str_length, _Str_slice, _Str_toNumber, _curry as _curry2, _done as _done2, _recur as _recur2, and, eq, length, lt, or } from "@mochi/compiler/runtime";
 
 import { None, Some, _Option_contains, _Option_match, _Str_get, _curry, _done, _recur } from "@mochi/compiler/runtime";
 var skipStrLoop = _curry(2, (src, j0) => {
@@ -147,109 +147,30 @@ var lexError = _curry2(3, (message, start, stop) => Err({ message, start, end: s
 var numValue = (raw) => _Option_unwrapOr(0 / 0, _Str_toNumber(raw));
 var numStart = _curry2(3, (src, i, c) => or(isDigit(c), and(c === "-", _Option_exists(isDigit, _Str_get2(i + 1, src)))));
 var offsetLocTok = _curry2(2, (lt, by) => ({ tok: lt.tok, start: lt.start + by, end: lt.end + by, doc: lt.doc }));
-var spliceHoleToks = _curry2(3, (holeToks, by, toks) => {
-  const $match = _Array_head(holeToks);
+var spliceHoleToks = _curry2(3, (holeToks, by, toks) => _Option_match2(_Array_head(holeToks), () => toks, (ht) => {
+  const toks2 = ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks);
+  return spliceHoleToks(_Array_tail(holeToks), by, toks2);
+}));
+var spliceHole = _curry2(4, (src, start, stop, toks) => _Result_match(lex(_Str_slice(start, stop, src)), (e) => Err({ message: e.message, start: e.start + start, end: e.end + start }), (holeToks) => Ok(spliceHoleToks(holeToks, start, toks))));
+var lexParts = _curry2(8, (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => _Option_match2(_Array_head(parts), () => Ok(toks), (part) => {
+  const $match = part;
   switch ($match._tag) {
-    case "None": {
-      return toks;
+    case "PLit": {
+      const { value } = $match;
+      const t = mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc);
+      return lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, [], pushTok(t, toks));
     }
-    case "Some": {
-      const { value: ht } = $match;
-      const toks2 = ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks);
-      return spliceHoleToks(_Array_tail(holeToks), by, toks2);
+    case "PHole": {
+      const { start: hs, end: he } = $match;
+      return _Result_match(spliceHole(src, hs, he, toks), (e) => Err(e), (toks2) => lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2));
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
-});
-var spliceHole = _curry2(4, (src, start, stop, toks) => {
-  const $match = lex(_Str_slice(start, stop, src));
-  switch ($match._tag) {
-    case "Ok": {
-      const { value: holeToks } = $match;
-      return Ok(spliceHoleToks(holeToks, start, toks));
-    }
-    case "Err": {
-      const { error: e } = $match;
-      return Err({ message: e.message, start: e.start + start, end: e.end + start });
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var lexParts = _curry2(8, (src, parts, idx, total, wholeStart, wholeEnd, doc, toks) => {
-  const $match = _Array_head(parts);
-  switch ($match._tag) {
-    case "None": {
-      return Ok(toks);
-    }
-    case "Some": {
-      const { value: part } = $match;
-      const $match$ = part;
-      switch ($match$._tag) {
-        case "PLit": {
-          const { value } = $match$;
-          const t = mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc);
-          return lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, [], pushTok(t, toks));
-        }
-        case "PHole": {
-          const { start: hs, end: he } = $match$;
-          const $match$$ = spliceHole(src, hs, he, toks);
-          switch ($match$$._tag) {
-            case "Err": {
-              const { error: e } = $match$$;
-              return Err(e);
-            }
-            case "Ok": {
-              const { value: toks2 } = $match$$;
-              return lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+}));
 var emit = _curry2(6, (src, tok, start, stop, doc, toks) => go(src, stop, [], 0, true, pushTok(mkTok(tok, start, stop, doc), toks)));
-var lexString = _curry2(4, (src, i, doc, toks) => {
-  const $match = scanTemplate(src, i);
-  switch ($match._tag) {
-    case "None": {
-      return lexError("unterminated string literal", i, _Str_length(src));
-    }
-    case "Some": {
-      const { value: scanned } = $match;
-      const $match$ = lexParts(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks);
-      switch ($match$._tag) {
-        case "Err": {
-          const { error: e } = $match$;
-          return Err(e);
-        }
-        case "Ok": {
-          const { value: toks2 } = $match$;
-          return go(src, scanned.end, [], 0, true, toks2);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var lexString = _curry2(4, (src, i, doc, toks) => _Option_match2(scanTemplate(src, i), () => lexError("unterminated string literal", i, _Str_length(src)), (scanned) => _Result_match(lexParts(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks), (e) => Err(e), (toks2) => go(src, scanned.end, [], 0, true, toks2))));
 var go = _curry2(6, (src, i, doc, nlRun, lineTok, toks) => ((_v) => _v._tag === "None" ? Ok(bufToks(pushTok(mkTok(TEof, i, i, doc), toks))) : _v._tag === "Some" && (({ value: c }) => isSpace(c))(_v) ? (({ value: c }) => c === `
 ` ? ((n) => ((kept) => go(src, i + 1, kept, n, false, toks))(lt(n, 2) ? doc : []))(nlRun + 1) : go(src, i + 1, doc, nlRun, lineTok, toks))(_v) : _v._tag === "Some" && _v.value === "/" && _Option_contains2("/", _Str_get2(i + 1, src)) ? ((_v) => _v._tag === "Trailing" ? (({ stop }) => go(src, stop, doc, nlRun, lineTok, toks))(_v) : _v._tag === "PlainOwn" ? (({ stop }) => go(src, stop, [], 0, lineTok, toks))(_v) : _v._tag === "DocLine" ? (({ text, stop }) => go(src, stop, _Array_append(text, doc), 0, lineTok, toks))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -257,7 +178,7 @@ var go = _curry2(6, (src, i, doc, nlRun, lineTok, toks) => ((_v) => _v._tag === 
   throw new Error("non-exhaustive match");
 })())(_Str_get2(i, src)));
 var lex = (src) => go(src, 0, [], 0, false, []);
-import { Err as Err7, None as None11, Ok as Ok7, Some as Some11, _Array_append as _Array_append8, _Array_concat as _Array_concat5, _Array_get as _Array_get10, _Array_prepend as _Array_prepend4, _Option_exists as _Option_exists3, _Option_match as _Option_match11, _Option_unwrapOr as _Option_unwrapOr6, _Result_flatMap as _Result_flatMap5, _Result_map as _Result_map5, _Str_codeAt as _Str_codeAt5, _curry as _curry12, _done as _done5, _recur as _recur5, _tuple as _tuple6, and as and8, eq as eq9, length as length9, lt as lt6, map as map6, or as or6, show as show4 } from "@mochi/compiler/runtime";
+import { Err as Err7, None as None11, Ok as Ok7, Some as Some11, _Array_append as _Array_append8, _Array_concat as _Array_concat5, _Array_get as _Array_get10, _Array_prepend as _Array_prepend4, _Option_exists as _Option_exists3, _Option_match as _Option_match11, _Option_unwrapOr as _Option_unwrapOr6, _Result_flatMap as _Result_flatMap5, _Result_map as _Result_map5, _Str_codeAt as _Str_codeAt5, _curry as _curry12, _done as _done5, _recur as _recur5, _tuple as _tuple6, and as and8, eq as eq9, length as length9, lt as lt5, map as map6, or as or6, show as show4 } from "@mochi/compiler/runtime";
 
 import { _curry as _curry3 } from "@mochi/compiler/runtime";
 var LPName = _curry3(2, (name, annot) => ({ _tag: "LPName", name, annot }));
@@ -327,7 +248,7 @@ import { match as match5 } from "@onrails/pattern";
 import { Err as Err3, None as None6, Ok as Ok3, Some as Some6, _Array_append as _Array_append5, _Array_concat as _Array_concat3, _Array_find, _Array_get as _Array_get5, _Map_get as _Map_get2, _Map_keys as _Map_keys2, _Option_exists as _Option_exists2, _Option_isSome, _Option_match as _Option_match6, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap2, _Result_map as _Result_map2, _Str_codeAt as _Str_codeAt3, _Str_contains, _Str_join as _Str_join3, _Str_length as _Str_length4, _Str_slice as _Str_slice2, _Str_split as _Str_split2, _Str_startsWith as _Str_startsWith2, _curry as _curry7, _tuple as _tuple3, and as and5, eq as eq4, length as length4, map as map2, or as or5, reduce, show as show2 } from "@mochi/compiler/runtime";
 import { match } from "@onrails/pattern";
 
-import { Err as Err2, None as None3, Ok as Ok2, Some as Some3, _Array_append as _Array_append2, _Array_concat as _Array_concat2, _Array_flatMap as _Array_flatMap2, _Array_get as _Array_get2, _Array_prepend, _Map_get, _Map_getOr, _Map_keys, _Map_set, _Map_values, _Option_match as _Option_match3, _Result_flatMap, _Result_map, _Str_join as _Str_join2, _curry as _curry4, _tuple, and as and2, eq as eq2, floor, length as length2, map, or as or2, show } from "@mochi/compiler/runtime";
+import { Err as Err2, None as None3, Ok as Ok2, Some as Some3, _Array_append as _Array_append2, _Array_concat as _Array_concat2, _Array_flatMap as _Array_flatMap2, _Array_get as _Array_get2, _Array_prepend, _Map_get, _Map_getOr, _Map_keys, _Map_set, _Map_values, _Option_match as _Option_match3, _Result_flatMap, _Result_map, _Result_match as _Result_match2, _Str_join as _Str_join2, _curry as _curry4, _tuple, and as and2, eq as eq2, floor, length as length2, map, or as or2, show } from "@mochi/compiler/runtime";
 var TyVar = (id) => ({ _tag: "TyVar", id });
 var TyCon = _curry4(2, (name, args) => ({ _tag: "TyCon", name, args }));
 var TyFn = _curry4(2, (from, to) => ({ _tag: "TyFn", from, to }));
@@ -429,63 +350,9 @@ var typeEq = _curry4(2, (a, b) => {
     }
   }
 });
-var typeEqList = _curry4(3, (as_, bs, i) => {
-  const $match = _Array_get2(i, as_);
-  switch ($match._tag) {
-    case "None": {
-      return true;
-    }
-    case "Some": {
-      const { value: a } = $match;
-      const $match$ = _Array_get2(i, bs);
-      switch ($match$._tag) {
-        case "None": {
-          return false;
-        }
-        case "Some": {
-          const { value: b } = $match$;
-          return and2(typeEq(a, b), typeEqList(as_, bs, i + 1));
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var memberEqIn = _curry4(3, (t, xs, i) => {
-  const $match = _Array_get2(i, xs);
-  switch ($match._tag) {
-    case "None": {
-      return false;
-    }
-    case "Some": {
-      const { value: x } = $match;
-      return typeEq(t, x) ? true : memberEqIn(t, xs, i + 1);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var allMembersIn = _curry4(3, (am, bm, i) => {
-  const $match = _Array_get2(i, am);
-  switch ($match._tag) {
-    case "None": {
-      return true;
-    }
-    case "Some": {
-      const { value: m } = $match;
-      return and2(memberEqIn(m, bm, 0), allMembersIn(am, bm, i + 1));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var typeEqList = _curry4(3, (as_, bs, i) => _Option_match3(_Array_get2(i, as_), () => true, (a) => _Option_match3(_Array_get2(i, bs), () => false, (b) => and2(typeEq(a, b), typeEqList(as_, bs, i + 1)))));
+var memberEqIn = _curry4(3, (t, xs, i) => _Option_match3(_Array_get2(i, xs), () => false, (x) => typeEq(t, x) ? true : memberEqIn(t, xs, i + 1)));
+var allMembersIn = _curry4(3, (am, bm, i) => _Option_match3(_Array_get2(i, am), () => true, (m) => and2(memberEqIn(m, bm, 0), allMembersIn(am, bm, i + 1))));
 var rowEq = _curry4(2, (a, b) => {
   const $match = a;
   switch ($match._tag) {
@@ -531,30 +398,18 @@ var rowEq = _curry4(2, (a, b) => {
     }
   }
 });
-var flattenUnionFrom = _curry4(3, (members, acc, i) => {
-  const $match = _Array_get2(i, members);
+var flattenUnionFrom = _curry4(3, (members, acc, i) => _Option_match3(_Array_get2(i, members), () => acc, (t) => {
+  const $match = t;
   switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: t } = $match;
-      const $match$ = t;
-      switch ($match$._tag) {
-        case "TyOneOf": {
-          const { members: ms } = $match$;
-          return flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), i + 1);
-        }
-        default: {
-          return flattenUnionFrom(members, memberEqIn(t, acc, 0) ? acc : _Array_append2(t, acc), i + 1);
-        }
-      }
+    case "TyOneOf": {
+      const { members: ms } = $match;
+      return flattenUnionFrom(members, flattenUnionFrom(ms, acc, 0), i + 1);
     }
     default: {
-      throw new Error("non-exhaustive match");
+      return flattenUnionFrom(members, memberEqIn(t, acc, 0) ? acc : _Array_append2(t, acc), i + 1);
     }
   }
-});
+}));
 var tUnion = (members) => {
   const flat = flattenUnionFrom(members, [], 0);
   return ((_v) => _v.length === 0 ? tPrim("string") : _v.length === 1 && _v[0]._tag === "TySingleton" ? TyOneOf(flat) : _v.length === 1 ? (([only]) => only)(_v) : TyOneOf(flat))(flat);
@@ -623,39 +478,11 @@ var showRow = (row) => (([fields, tailId]) => {
   const tail = _Option_match3(tailId, () => "", (id) => `${length2(fields) === 0 ? "" : " "}| 'r${show(id)}`);
   return and2(length2(fields) === 0, tail === "") ? "{}" : `{ ${_Str_join2(", ", fields)}${tail} }`;
 })(showRowFields(row));
-var someOfFrom = _curry4(3, (f, xs, i) => {
-  const $match = _Array_get2(i, xs);
-  switch ($match._tag) {
-    case "None": {
-      return false;
-    }
-    case "Some": {
-      const { value: x } = $match;
-      return f(x) ? true : someOfFrom(f, xs, i + 1);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var someOfFrom = _curry4(3, (f, xs, i) => _Option_match3(_Array_get2(i, xs), () => false, (x) => f(x) ? true : someOfFrom(f, xs, i + 1)));
 var someOf = _curry4(2, (f, xs) => someOfFrom(f, xs, 0));
 var mkSt = (start) => ({ tv: new Map, rv: new Map, next: start, recorded: { cur: [], full: [] }, letSpans: new Map, letUses: new Map });
 var ID_CHUNK = 64;
-var idGet = _curry4(2, (id, m) => {
-  const $match = _Map_get(floor(id / ID_CHUNK), m);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: chunk } = $match;
-      return _Map_get(id, chunk);
-    }
-    case "None": {
-      return None3;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var idGet = _curry4(2, (id, m) => _Option_match3(_Map_get(floor(id / ID_CHUNK), m), () => None3, (chunk) => _Map_get(id, chunk)));
 var idSet = _curry4(3, (id, v, m) => {
   const k = floor(id / ID_CHUNK);
   return _Map_set(k, _Map_set(id, v, _Map_getOr(new Map, k, m)), m);
@@ -675,19 +502,7 @@ var noteLet = _curry4(2, (span, st) => {
 });
 var noteUse = _curry4(3, (span, t, st) => {
   const k = spanKeyOf(span);
-  const $match = _Map_get(k, st.letUses);
-  switch ($match._tag) {
-    case "None": {
-      return st;
-    }
-    case "Some": {
-      const { value: uses } = $match;
-      return { ...st, letUses: _Map_set(k, _Array_append2(t, uses), st.letUses) };
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match3(_Map_get(k, st.letUses), () => st, (uses) => ({ ...st, letUses: _Map_set(k, _Array_append2(t, uses), st.letUses) }));
 });
 var fail = (message) => Err2({ message });
 var freshVar = (st) => _tuple(tVar(st.next), { ...st, next: st.next + 1 });
@@ -697,19 +512,7 @@ var resolve = _curry4(2, (t, st) => {
   switch ($match._tag) {
     case "TyVar": {
       const { id } = $match;
-      const $match$ = idGet(id, st.tv);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: next } = $match$;
-          return resolve(next, st);
-        }
-        case "None": {
-          return t;
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match3(idGet(id, st.tv), () => t, (next) => resolve(next, st));
     }
     default: {
       return t;
@@ -721,19 +524,7 @@ var resolveRow = _curry4(2, (r, st) => {
   switch ($match._tag) {
     case "RowVar": {
       const { id } = $match;
-      const $match$ = idGet(id, st.rv);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: next } = $match$;
-          return resolveRow(next, st);
-        }
-        case "None": {
-          return r;
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match3(idGet(id, st.rv), () => r, (next) => resolveRow(next, st));
     }
     default: {
       return r;
@@ -904,33 +695,7 @@ var isTupleT = (t) => {
 var tupleParenMsg = _curry4(3, (a, b, shown) => !eq2(isTupleT(a), isTupleT(b)) ? `${shown} — ((a, b)) => takes one tuple; (a, b) => takes two arguments` : shown);
 var collectionUnifyMsg = _curry4(3, (aname, bname, shown) => or2(or2(eq2(aname, bname), !isCollection(aname)), !isCollection(bname)) ? shown : ((other) => ((hint) => `${shown} — ${hint}`)(other === "List" ? "unqualified map/filter/length expect Array; use List.map" : other === "Set" ? "unqualified map/filter/length expect Array; convert with Set.toArray or use Set.*" : other === "Map" ? "unqualified map/filter/length expect Array; use Map.*" : `${aname} and ${bname} are distinct collections`))(aname === "Array" ? bname : bname === "Array" ? aname : ""));
 var unifyMismatch = _curry4(2, (ra, rb) => !eq2(isArrowT(ra), isArrowT(rb)) ? (([fn, val]) => fail(tupleParenMsg(ra, rb, `cannot unify ${showType(ra)} with ${showType(rb)} — a function (${showType(fn)}) was used where a ${showType(val)} was expected; a call may be missing an argument`)))(isArrowT(ra) ? _tuple(ra, rb) : _tuple(rb, ra)) : fail(tupleParenMsg(ra, rb, `cannot unify ${showType(ra)} with ${showType(rb)}`)));
-var unifyArgs = _curry4(4, (as_, bs, i, st) => {
-  const $match = _Array_get2(i, as_);
-  switch ($match._tag) {
-    case "None": {
-      return Ok2(st);
-    }
-    case "Some": {
-      const { value: a } = $match;
-      const $match$ = _Array_get2(i, bs);
-      switch ($match$._tag) {
-        case "None": {
-          return Ok2(st);
-        }
-        case "Some": {
-          const { value: b } = $match$;
-          return _Result_flatMap((s1) => unifyArgs(as_, bs, i + 1, s1), unify(a, b, st));
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var unifyArgs = _curry4(4, (as_, bs, i, st) => _Option_match3(_Array_get2(i, as_), () => Ok2(st), (a) => _Option_match3(_Array_get2(i, bs), () => Ok2(st), (b) => _Result_flatMap((s1) => unifyArgs(as_, bs, i + 1, s1), unify(a, b, st)))));
 var isPrimT = _curry4(2, (t, name) => {
   const $match = t;
   switch ($match._tag) {
@@ -944,97 +709,49 @@ var isPrimT = _curry4(2, (t, name) => {
   }
 });
 var isLitOnlyUnion = (members) => ((_v) => _v.length === 0 ? true : _v.length >= 1 && _v[0]._tag === "TySingleton" ? (([, ...rest]) => isLitOnlyUnion(rest))(_v) : false)(members);
-var widenLitBindingsFrom = _curry4(4, (ids, i, lit, st) => {
-  const $match = _Array_get2(i, ids);
+var widenLitBindingsFrom = _curry4(4, (ids, i, lit, st) => _Option_match3(_Array_get2(i, ids), () => st, (id) => _Option_match3(idGet(id, st.tv), () => widenLitBindingsFrom(ids, i + 1, lit, st), (t) => {
+  const $match = resolve(t, st);
   switch ($match._tag) {
-    case "None": {
-      return st;
-    }
-    case "Some": {
-      const { value: id } = $match;
-      const $match$ = idGet(id, st.tv);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: t } = $match$;
-          const $match$$ = resolve(t, st);
-          switch ($match$$._tag) {
-            case "TySingleton": {
-              const { base, value } = $match$$;
-              const $match$$$ = lit;
-              switch ($match$$$._tag) {
-                case "TySingleton": {
-                  const { base: lbase, value: lvalue } = $match$$$;
-                  return and2(eq2(base, lbase), eq2(value, lvalue)) ? widenLitBindingsFrom(ids, i + 1, lit, { ...st, tv: idSet(id, tPrim(base), st.tv) }) : widenLitBindingsFrom(ids, i + 1, lit, st);
-                }
-                default: {
-                  return widenLitBindingsFrom(ids, i + 1, lit, st);
-                }
-              }
-            }
-            default: {
-              return widenLitBindingsFrom(ids, i + 1, lit, st);
-            }
-          }
-        }
-        case "None": {
-          return widenLitBindingsFrom(ids, i + 1, lit, st);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var widenLitBindings = _curry4(2, (lit, st) => widenLitBindingsFrom(idKeys(st.tv), 0, lit, st));
-var litInUnionFrom = _curry4(4, (lit, members, i, st) => {
-  const $match = _Array_get2(i, members);
-  switch ($match._tag) {
-    case "None": {
-      return fail(`cannot unify ${showType(lit)} with ${showType(TyOneOf(members))}`);
-    }
-    case "Some": {
-      const { value: m } = $match;
-      const $match$ = m;
+    case "TySingleton": {
+      const { base, value } = $match;
+      const $match$ = lit;
       switch ($match$._tag) {
         case "TySingleton": {
-          const { base, value } = $match$;
-          const $match$$ = lit;
-          switch ($match$$._tag) {
-            case "TySingleton": {
-              const { base: lbase, value: lvalue } = $match$$;
-              return and2(eq2(base, lbase), eq2(value, lvalue)) ? Ok2(st) : litInUnionFrom(lit, members, i + 1, st);
-            }
-            default: {
-              return litInUnionFrom(lit, members, i + 1, st);
-            }
-          }
+          const { base: lbase, value: lvalue } = $match$;
+          return and2(eq2(base, lbase), eq2(value, lvalue)) ? widenLitBindingsFrom(ids, i + 1, lit, { ...st, tv: idSet(id, tPrim(base), st.tv) }) : widenLitBindingsFrom(ids, i + 1, lit, st);
         }
         default: {
-          const $match$$ = unify(lit, m, st);
-          switch ($match$$._tag) {
-            case "Ok": {
-              const { value: st1 } = $match$$;
-              return Ok2(st1);
-            }
-            case "Err": {
-              return litInUnionFrom(lit, members, i + 1, st);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
+          return widenLitBindingsFrom(ids, i + 1, lit, st);
         }
       }
     }
     default: {
-      throw new Error("non-exhaustive match");
+      return widenLitBindingsFrom(ids, i + 1, lit, st);
     }
   }
-});
+})));
+var widenLitBindings = _curry4(2, (lit, st) => widenLitBindingsFrom(idKeys(st.tv), 0, lit, st));
+var litInUnionFrom = _curry4(4, (lit, members, i, st) => _Option_match3(_Array_get2(i, members), () => fail(`cannot unify ${showType(lit)} with ${showType(TyOneOf(members))}`), (m) => {
+  const $match = m;
+  switch ($match._tag) {
+    case "TySingleton": {
+      const { base, value } = $match;
+      const $match$ = lit;
+      switch ($match$._tag) {
+        case "TySingleton": {
+          const { base: lbase, value: lvalue } = $match$;
+          return and2(eq2(base, lbase), eq2(value, lvalue)) ? Ok2(st) : litInUnionFrom(lit, members, i + 1, st);
+        }
+        default: {
+          return litInUnionFrom(lit, members, i + 1, st);
+        }
+      }
+    }
+    default: {
+      return _Result_match2(unify(lit, m, st), () => litInUnionFrom(lit, members, i + 1, st), (st1) => Ok2(st1));
+    }
+  }
+}));
 var unifyMemberAgainstUnionFrom = _curry4(4, (member, members, i, st) => {
   const $match = member;
   switch ($match._tag) {
@@ -1046,57 +763,19 @@ var unifyMemberAgainstUnionFrom = _curry4(4, (member, members, i, st) => {
     }
   }
 });
-var unifyConcreteAgainstUnionFrom = _curry4(4, (member, members, i, st) => {
-  const $match = _Array_get2(i, members);
+var unifyConcreteAgainstUnionFrom = _curry4(4, (member, members, i, st) => _Option_match3(_Array_get2(i, members), () => fail(`cannot unify ${showType(member)} with ${showType(TyOneOf(members))}`), (m) => _Result_match2(unify(member, m, st), () => unifyConcreteAgainstUnionFrom(member, members, i + 1, st), (st1) => Ok2(st1))));
+var unifyUnionMembersFrom = _curry4(4, (members, u, i, st) => _Option_match3(_Array_get2(i, members), () => Ok2(st), (m) => {
+  const $match = u;
   switch ($match._tag) {
-    case "None": {
-      return fail(`cannot unify ${showType(member)} with ${showType(TyOneOf(members))}`);
-    }
-    case "Some": {
-      const { value: m } = $match;
-      const $match$ = unify(member, m, st);
-      switch ($match$._tag) {
-        case "Ok": {
-          const { value: st1 } = $match$;
-          return Ok2(st1);
-        }
-        case "Err": {
-          return unifyConcreteAgainstUnionFrom(member, members, i + 1, st);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+    case "TyOneOf": {
+      const { members: ums } = $match;
+      return _Result_flatMap((s1) => unifyUnionMembersFrom(members, u, i + 1, s1), unifyMemberAgainstUnionFrom(m, ums, 0, st));
     }
     default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var unifyUnionMembersFrom = _curry4(4, (members, u, i, st) => {
-  const $match = _Array_get2(i, members);
-  switch ($match._tag) {
-    case "None": {
       return Ok2(st);
     }
-    case "Some": {
-      const { value: m } = $match;
-      const $match$ = u;
-      switch ($match$._tag) {
-        case "TyOneOf": {
-          const { members: ums } = $match$;
-          return _Result_flatMap((s1) => unifyUnionMembersFrom(members, u, i + 1, s1), unifyMemberAgainstUnionFrom(m, ums, 0, st));
-        }
-        default: {
-          return Ok2(st);
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
   }
-});
+}));
 var unifyLitUnion = _curry4(3, (a, b, st) => {
   const $match = a;
   switch ($match._tag) {
@@ -1407,19 +1086,7 @@ var fitsRows = _curry4(3, (actual, expected, st) => {
     case "RowExtend": {
       const { label: elabel, fieldType: etype, optional: eopt, rest: erest } = $match;
       const rw = rewriteRow(act, elabel, st);
-      const $match$ = rw;
-      switch ($match$._tag) {
-        case "Err": {
-          return eopt ? fitsRows(act, erest, st) : fail(`record missing field '${elabel}'`);
-        }
-        case "Ok": {
-          const { value: hit } = $match$;
-          return (([htype, hopt, hrest, s1]) => and2(hopt, !eopt) ? fail(`record field '${elabel}' is required but missing or optional`) : _Result_flatMap((s2) => fitsRows(hrest, erest, s2), unify(htype, etype, s1)))(hit);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Result_match2(rw, () => eopt ? fitsRows(act, erest, st) : fail(`record missing field '${elabel}'`), (hit) => (([htype, hopt, hrest, s1]) => and2(hopt, !eopt) ? fail(`record field '${elabel}' is required but missing or optional`) : _Result_flatMap((s2) => fitsRows(hrest, erest, s2), unify(htype, etype, s1)))(hit));
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -1427,22 +1094,8 @@ var fitsRows = _curry4(3, (actual, expected, st) => {
   }
 });
 
-import { None as None4, Some as Some4, _Array_append as _Array_append3, _Array_get as _Array_get3, _Str_codeAt as _Str_codeAt2, _Str_get as _Str_get3, _Str_length as _Str_length2, _Str_startsWith, _curry as _curry5, _tuple as _tuple2, and as and3, eq as eq3, floor as floor2, max, min, or as or3 } from "@mochi/compiler/runtime";
-var at = _curry5(3, (xs, i, fallback) => {
-  const $match = _Array_get3(i, xs);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: v } = $match;
-      return v;
-    }
-    case "None": {
-      return fallback;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+import { None as None4, Some as Some4, _Array_append as _Array_append3, _Array_get as _Array_get3, _Option_match as _Option_match4, _Str_codeAt as _Str_codeAt2, _Str_get as _Str_get3, _Str_length as _Str_length2, _Str_startsWith, _curry as _curry5, _tuple as _tuple2, and as and3, eq as eq3, floor as floor2, max, min, or as or3 } from "@mochi/compiler/runtime";
+var at = _curry5(3, (xs, i, fallback) => _Option_match4(_Array_get3(i, xs), () => fallback, (v) => v));
 var charsEq = _curry5(4, (a, i, b, j) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: x }, { value: y }]) => eq3(x, y))(_v) : false)(_tuple2(_Str_get3(i, a), _Str_get3(j, b))));
 var initRow = (n) => {
   let j = 0;
@@ -1504,45 +1157,17 @@ var lev = _curry5(2, (a, b) => {
   const n = _Str_length2(b);
   return m === 0 ? n : n === 0 ? m : levFrom(a, b, m, n);
 });
-var upperStart = (s) => {
-  const $match = _Str_codeAt2(0, s);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: n } = $match;
-      return and3(n >= 65, n <= 90);
-    }
-    case "None": {
-      return false;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var upperStart = (s) => _Option_match4(_Str_codeAt2(0, s), () => false, (n) => and3(n >= 65, n <= 90));
 var sameCaseClass = _curry5(2, (a, b) => eq3(upperStart(a), upperStart(b)));
 var skipName = _curry5(2, (want, n) => or3(or3(or3(or3(n === "", eq3(n, want)), _Str_startsWith("$", n)), _Str_startsWith("_", n)), !sameCaseClass(want, n)));
 var consider = _curry5(5, (want, budget, best, bestDist, n) => skipName(want, n) ? _tuple2(best, bestDist) : ((d) => and3(d <= budget, d < bestDist) ? _tuple2(Some4(n), d) : _tuple2(best, bestDist))(lev(want, n)));
-var closestFrom = _curry5(6, (want, names, i, budget, best, bestDist) => {
-  const $match = _Array_get3(i, names);
-  switch ($match._tag) {
-    case "None": {
-      return best;
-    }
-    case "Some": {
-      const { value: n } = $match;
-      return (([next, dist]) => closestFrom(want, names, i + 1, budget, next, dist))(consider(want, budget, best, bestDist, n));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var closestFrom = _curry5(6, (want, names, i, budget, best, bestDist) => _Option_match4(_Array_get3(i, names), () => best, (n) => (([next, dist]) => closestFrom(want, names, i + 1, budget, next, dist))(consider(want, budget, best, bestDist, n))));
 var closestName = _curry5(2, (want, names) => {
   const budget = max(1, floor2(_Str_length2(want) / 3));
   return closestFrom(want, names, 0, budget, None4, _Str_length2(want) + 2);
 });
 
-import { _Array_append as _Array_append4, _Array_get as _Array_get4, _Option_unwrapOr as _Option_unwrapOr2, _Str_length as _Str_length3, _Str_split, _curry as _curry6, _done as _done3, _recur as _recur3, and as and4, length as length3, or as or4 } from "@mochi/compiler/runtime";
+import { _Array_append as _Array_append4, _Array_get as _Array_get4, _Option_match as _Option_match5, _Option_unwrapOr as _Option_unwrapOr2, _Str_length as _Str_length3, _Str_split, _curry as _curry6, _done as _done3, _recur as _recur3, and as and4, length as length3, or as or4 } from "@mochi/compiler/runtime";
 var DText = (s) => ({ _tag: "DText", s });
 var DVerbatim = (s) => ({ _tag: "DVerbatim", s });
 var DLine = _curry6(2, (hard, soft) => ({ _tag: "DLine", hard, soft }));
@@ -1562,21 +1187,7 @@ var breakParent = DBreakParent;
 var indent = (doc) => DIndent(doc);
 var group = (doc) => DGroup(doc, forcesBreak(doc));
 var lineSuffix = (doc) => DLineSuffix(doc);
-var joinFrom = _curry6(4, (sep, parts, i, acc) => {
-  const $match = _Array_get4(i, parts);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      return joinFrom(sep, parts, i + 1, i === 0 ? _Array_append4(p, acc) : _Array_append4(p, _Array_append4(sep, acc)));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var joinFrom = _curry6(4, (sep, parts, i, acc) => _Option_match5(_Array_get4(i, parts), () => acc, (p) => joinFrom(sep, parts, i + 1, i === 0 ? _Array_append4(p, acc) : _Array_append4(p, _Array_append4(sep, acc)))));
 var join = _curry6(2, (sep, parts) => DCat(joinFrom(sep, parts, 0, [])));
 var WNil = { _tag: "WNil" };
 var WCons = _curry6(2, (head, tail) => ({ _tag: "WCons", head, tail }));
@@ -1627,21 +1238,7 @@ var fits2 = _curry6(2, (width, start) => {
     }
   }
 });
-var anyForcesBreak = _curry6(2, (parts, i) => {
-  const $match = _Array_get4(i, parts);
-  switch ($match._tag) {
-    case "None": {
-      return false;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      return or4(forcesBreak(p), anyForcesBreak(parts, i + 1));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var anyForcesBreak = _curry6(2, (parts, i) => _Option_match5(_Array_get4(i, parts), () => false, (p) => or4(forcesBreak(p), anyForcesBreak(parts, i + 1))));
 var forcesBreak = (d) => {
   const $match = d;
   switch ($match._tag) {
@@ -7709,19 +7306,7 @@ var jxKeywordText = (t) => {
 };
 var jxExpectLabel = _curry7(2, (toks, pos) => {
   const lt = jxTokAt(toks, pos);
-  const $match = jxKeywordText(lt.tok);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: name } = $match;
-      return Ok3(_tuple3({ name, span: jxSpanOf(lt) }, pos + 1));
-    }
-    case "None": {
-      return jxExpectId(toks, pos);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match6(jxKeywordText(lt.tok), () => jxExpectId(toks, pos), (name) => Ok3(_tuple3({ name, span: jxSpanOf(lt) }, pos + 1)));
 });
 var jxAttrNameFrom = _curry7(3, (toks, pos, acc) => {
   const minusTok = jxTokAt(toks, pos);
@@ -7919,30 +7504,18 @@ var recordHasAttr = _curry7(2, (expr, label) => {
   }
 });
 var jsxChildCount = (restArgs) => ((_v) => _v.length >= 1 && _v[0]._tag === "EArr" ? (([{ elements }]) => length4(elements))(_v) : 0)(restArgs);
-var jsxPropsWithSynthesizedChildren = _curry7(4, (propsT, propsExpr, expectedRow, restArgs) => {
-  const $match = rowField(expectedRow, "children");
+var jsxPropsWithSynthesizedChildren = _curry7(4, (propsT, propsExpr, expectedRow, restArgs) => _Option_match6(rowField(expectedRow, "children"), () => propsT, (expectedChildren) => {
+  const $match = propsT;
   switch ($match._tag) {
-    case "None": {
-      return propsT;
-    }
-    case "Some": {
-      const { value: expectedChildren } = $match;
-      const $match$ = propsT;
-      switch ($match$._tag) {
-        case "TyRecord": {
-          const { row: prow } = $match$;
-          return or5(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0) ? propsT : tRecord(rExtend("children", expectedChildren, prow));
-        }
-        default: {
-          return propsT;
-        }
-      }
+    case "TyRecord": {
+      const { row: prow } = $match;
+      return or5(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0) ? propsT : tRecord(rExtend("children", expectedChildren, prow));
     }
     default: {
-      throw new Error("non-exhaustive match");
+      return propsT;
     }
   }
-});
+}));
 var attrKindType = (kind) => kind === "string" ? Some6(tPrim("string")) : kind === "number" ? Some6(tPrim("number")) : kind === "bool" ? Some6(tPrim("bool")) : kind === "string|number" ? Some6(tUnion([tPrim("string"), tPrim("number")])) : kind === "string|bool" ? Some6(tUnion([tPrim("string"), tPrim("bool")])) : _Str_startsWith2("enum:", kind) ? Some6(tUnion(map2(tLit, _Str_split2(",", _Str_slice2(5, _Str_length4(kind), kind))))) : None6;
 var mismatchHint = (name) => ((_v) => _v === "class" ? Some6("In JSX, use 'className' instead of 'class'.") : _v === "for" ? Some6("In JSX, use 'htmlFor' instead of 'for'.") : _v === "tabindex" ? Some6("In JSX, use 'tabIndex' instead of 'tabindex'.") : _v === "autofocus" ? Some6("In JSX, use 'autoFocus' instead of 'autofocus'.") : _v === "autocomplete" ? Some6("In JSX, use 'autoComplete' instead of 'autocomplete'.") : _v === "readonly" ? Some6("In JSX, use 'readOnly' instead of 'readonly'.") : _v === "maxlength" ? Some6("In JSX, use 'maxLength' instead of 'maxlength'.") : _v === "minlength" ? Some6("In JSX, use 'minLength' instead of 'minlength'.") : _v === "spellcheck" ? Some6("In JSX, use 'spellCheck' instead of 'spellcheck'.") : _v === "contenteditable" ? Some6("In JSX, use 'contentEditable' instead of 'contenteditable'.") : _v === "viewbox" ? Some6("In JSX, use 'viewBox' instead of 'viewbox'.") : _v === "strokewidth" ? Some6("In JSX, use 'strokeWidth' instead of 'strokewidth'.") : _v === "strokelinecap" ? Some6("In JSX, use 'strokeLinecap' instead of 'strokelinecap'.") : _v === "strokelinejoin" ? Some6("In JSX, use 'strokeLinejoin' instead of 'strokelinejoin'.") : _v === "onclick" ? Some6("In JSX, event handlers are camelCase: use 'onClick' instead of 'onclick'.") : _v === "onchange" ? Some6("In JSX, event handlers are camelCase: use 'onChange' instead of 'onchange'.") : _v === "oninput" ? Some6("In JSX, event handlers are camelCase: use 'onInput' instead of 'oninput'.") : _v === "onkeydown" ? Some6("In JSX, event handlers are camelCase: use 'onKeyDown' instead of 'onkeydown'.") : _v === "onkeyup" ? Some6("In JSX, event handlers are camelCase: use 'onKeyUp' instead of 'onkeyup'.") : _v === "onsubmit" ? Some6("In JSX, event handlers are camelCase: use 'onSubmit' instead of 'onsubmit'.") : _v === "onfocus" ? Some6("In JSX, event handlers are camelCase: use 'onFocus' instead of 'onfocus'.") : _v === "onblur" ? Some6("In JSX, event handlers are camelCase: use 'onBlur' instead of 'onblur'.") : None6)(name);
 var noJxSuggestions = [];
@@ -7976,19 +7549,7 @@ var noteProp = _curry7(3, (f, t, st) => recordBinder(f.nameSpan, t, "property", 
 var handlerType = TyFn(tPrim("Event"), tPrim("unit"));
 var inferIntrinsicFields = _curry7(5, (tag, fields, st, api, schema) => ((_v) => _v.length === 0 ? Ok3(st) : _v.length >= 1 ? (([f, ...rest]) => ((cont) => _Option_match6(mismatchHint(f.name), () => or5(_Str_startsWith2("data-", f.name), _Str_startsWith2("aria-", f.name)) ? _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)) : _Option_match6(schema, () => _Result_flatMap2(([valT, st1]) => cont(noteProp(f, valT, st1)), api.inferExpr(f.value, st)), (m) => {
   const expected = _Option_match6(_Map_get2(f.name, m), () => isHandlerName(f.name) ? Some6("event") : None6, (k) => Some6(k));
-  const $match = expected;
-  switch ($match._tag) {
-    case "None": {
-      return unknownProp(tag, f.name, f.value, m);
-    }
-    case "Some": {
-      const { value: kind } = $match;
-      return kind === "event" ? checkHandler(f.name, f.value, st, api, (st1) => cont(noteProp(f, handlerType, st1))) : kind === "any" ? _Result_flatMap2(([, st1]) => cont(noteProp(f, tPrim("any"), st1)), api.inferExpr(f.value, st)) : _Option_match6(attrKindType(kind), () => _Result_flatMap2(([, st1]) => cont(st1), api.inferExpr(f.value, st)), (expectedT) => _Result_flatMap2(([valT, st1]) => _Result_flatMap2((st2) => cont(noteProp(f, expectedT, st2)), api.unify(valT, expectedT, st1, jxExprSpan(f.value))), api.inferExpr(f.value, st)));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match6(expected, () => unknownProp(tag, f.name, f.value, m), (kind) => kind === "event" ? checkHandler(f.name, f.value, st, api, (st1) => cont(noteProp(f, handlerType, st1))) : kind === "any" ? _Result_flatMap2(([, st1]) => cont(noteProp(f, tPrim("any"), st1)), api.inferExpr(f.value, st)) : _Option_match6(attrKindType(kind), () => _Result_flatMap2(([, st1]) => cont(st1), api.inferExpr(f.value, st)), (expectedT) => _Result_flatMap2(([valT, st1]) => _Result_flatMap2((st2) => cont(noteProp(f, expectedT, st2)), api.unify(valT, expectedT, st1, jxExprSpan(f.value))), api.inferExpr(f.value, st))));
 }), (msg) => jxTypeErr(msg, jxExprSpan(f.value))))((st1) => inferIntrinsicFields(tag, rest, st1, api, schema)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(fields));
@@ -8006,21 +7567,7 @@ var noteComponentProps = _curry7(3, (propsExpr, expectedRow, st) => {
   switch ($match._tag) {
     case "ERecord": {
       const { fields } = $match;
-      return reduce(_curry7(2, (acc, f) => {
-        const $match$ = rowField(expectedRow, f.name);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: t } = $match$;
-            return noteProp(f, zonk(t, acc), acc);
-          }
-          case "None": {
-            return acc;
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }), st, fields);
+      return reduce(_curry7(2, (acc, f) => _Option_match6(rowField(expectedRow, f.name), () => acc, (t) => noteProp(f, zonk(t, acc), acc))), st, fields);
     }
     default: {
       return st;
@@ -8068,21 +7615,7 @@ var inferJsxCall = _curry7(5, (tagExpr, propsExpr, restArgs, st, api) => _Result
     }
   }
 }, inferJsxChildren(restArgs, st2, api.inferExpr)), api.inferExpr(propsExpr, st1)), api.inferExpr(tagExpr, st)));
-var inferJsxCallHook = _curry7(5, (_fn, args, origin, st, api) => {
-  const $match = origin;
-  switch ($match._tag) {
-    case "Some": {
-      const { value: o } = $match;
-      return o === "jsx" ? ((_v) => _v.length >= 2 ? (([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some6(r), inferJsxCall(tagExpr, propsExpr, rest, st, api)))(_v) : Ok3(None6))(args) : Ok3(None6);
-    }
-    case "None": {
-      return Ok3(None6);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var inferJsxCallHook = _curry7(5, (_fn, args, origin, st, api) => _Option_match6(origin, () => Ok3(None6), (o) => o === "jsx" ? ((_v) => _v.length >= 2 ? (([tagExpr, propsExpr, ...rest]) => _Result_map2((r) => Some6(r), inferJsxCall(tagExpr, propsExpr, rest, st, api)))(_v) : Ok3(None6))(args) : Ok3(None6)));
 var vnodeTs = (api) => {
   const printed = api.tsType(TyCon("VNode", []));
   return printed === "VNode" ? "any" : printed;
@@ -8144,19 +7677,7 @@ var componentPropsParamTs = _curry7(2, (t, api) => {
   switch ($match._tag) {
     case "TyRecord": {
       const { row } = $match;
-      const $match$ = api.aliasOf(row);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: name } = $match$;
-          return name;
-        }
-        case "None": {
-          return componentPropsTs(row, api);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match6(api.aliasOf(row), () => componentPropsTs(row, api), (name) => name);
     }
     case "TyVar": {
       return "Record<string, unknown>";
@@ -8231,24 +7752,12 @@ var jsxAttrsD = _curry7(2, (shape, api) => {
   const spreadD = _Option_match6(shape.spread, () => [], (sp) => [jsxHoleD("{...", sp, api)]);
   return _Array_concat3(spreadD, map2((f) => jsxAttrD(f.name, f.value, api), shape.fields));
 });
-var formatJsx = _curry7(2, (e, api) => {
-  const $match = jsxShape(e);
-  switch ($match._tag) {
-    case "None": {
-      return None6;
-    }
-    case "Some": {
-      const { value: shape } = $match;
-      const fragment = isFragment(shape.tag);
-      const tag = fragment ? "" : jsxTag(shape.tag, api);
-      const attrs = jsxAttrsD(shape, api);
-      return and5(length4(shape.children) === 0, !fragment) ? Some6(jsxOpenD(tag, attrs, true)) : Some6(group(cat([fragment ? txt("<>") : jsxOpenD(tag, attrs, false), indent(cat(map2((child) => cat([softline, jsxChildD(child, api)]), shape.children))), softline, txt(fragment ? "</>" : `</${tag}>`)])));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var formatJsx = _curry7(2, (e, api) => _Option_match6(jsxShape(e), () => None6, (shape) => {
+  const fragment = isFragment(shape.tag);
+  const tag = fragment ? "" : jsxTag(shape.tag, api);
+  const attrs = jsxAttrsD(shape, api);
+  return and5(length4(shape.children) === 0, !fragment) ? Some6(jsxOpenD(tag, attrs, true)) : Some6(group(cat([fragment ? txt("<>") : jsxOpenD(tag, attrs, false), indent(cat(map2((child) => cat([softline, jsxChildD(child, api)]), shape.children))), softline, txt(fragment ? "</>" : `</${tag}>`)])));
+}));
 var jsxPlugin = { name: "jsx", parse: Some6(parseJsxAtom), inferCall: Some6(inferJsxCallHook), format: None6, formatDoc: Some6(formatJsx), dtsBinding: None6, bindingType: Some6(componentBindingTs) };
 
 import { Err as Err5, None as None9, Ok as Ok5, Some as Some9, _Array_get as _Array_get8, _Option_match as _Option_match9, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _curry as _curry10, _tuple as _tuple5, and as and7, eq as eq7, length as length7 } from "@mochi/compiler/runtime";
@@ -8257,25 +7766,11 @@ import { match as match4 } from "@onrails/pattern";
 import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get3, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_match as _Option_match8, _Option_unwrapOr as _Option_unwrapOr5, _Set_add, _Set_diff, _Set_fromArray, _Set_has, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt4, _Str_split as _Str_split3, _curry as _curry9, _tuple as _tuple4, and as and6, eq as eq6, filter as filter2, length as length6, map as map4, reduce as reduce2 } from "@mochi/compiler/runtime";
 import { match as match3 } from "@onrails/pattern";
 
-import { Err as Err4, Ok as Ok4, Some as Some7, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Map_has, _Map_set as _Map_set2, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry8, _done as _done4, _recur as _recur4, eq as eq5, filter, length as length5, map as map3, show as show3 } from "@mochi/compiler/runtime";
+import { Err as Err4, Ok as Ok4, Some as Some7, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Map_has, _Map_set as _Map_set2, _Option_match as _Option_match7, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry8, _done as _done4, _recur as _recur4, eq as eq5, filter, length as length5, map as map3, show as show3 } from "@mochi/compiler/runtime";
 import { match as match2 } from "@onrails/pattern";
 var emptyRegistry = { ctors: new Map, types: new Map };
 var primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
-var keysOfFrom = _curry8(2, (fields, i) => {
-  const $match = _Array_get6(i, fields);
-  switch ($match._tag) {
-    case "None": {
-      return [];
-    }
-    case "Some": {
-      const { value: f } = $match;
-      return _Array_prepend2(_Option_unwrapOr4(`_${show3(i)}`, f.name), keysOfFrom(fields, i + 1));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var keysOfFrom = _curry8(2, (fields, i) => _Option_match7(_Array_get6(i, fields), () => [], (f) => _Array_prepend2(_Option_unwrapOr4(`_${show3(i)}`, f.name), keysOfFrom(fields, i + 1))));
 var keysOf = (fields) => keysOfFrom(fields, 0);
 var builtinSpan = { start: 0, end: 0 };
 var builtinTypeDecls = [{ name: "Option", params: ["a"], ctors: [{ name: "Some", fields: [{ name: Some7("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "None", fields: [], span: builtinSpan }] }, { name: "Result", params: ["a", "e"], ctors: [{ name: "Ok", fields: [{ name: Some7("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "Err", fields: [{ name: Some7("error"), fieldType: TyName("e", builtinSpan) }], span: builtinSpan }] }];
@@ -8283,52 +7778,10 @@ var declaresType = _curry8(3, (stmts, i, name) => ((_v) => _v._tag === "None" ? 
   throw new Error("non-exhaustive match");
 })())(_Array_get6(i, stmts)));
 var builtinDeclsFor = (stmts) => filter((bt) => !declaresType(stmts, 0, bt.name), builtinTypeDecls);
-var seedRegCtorsFrom = _curry8(4, (ctors, i, owner, acc) => {
-  const $match = _Array_get6(i, ctors);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: c } = $match;
-      return seedRegCtorsFrom(ctors, i + 1, owner, _Map_has(c.name, acc) ? acc : _Map_set2(c.name, { owner, arity: length5(c.fields) }, acc));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var seedRegDeclsFrom = _curry8(3, (decls, i, reg) => {
-  const $match = _Array_get6(i, decls);
-  switch ($match._tag) {
-    case "None": {
-      return reg;
-    }
-    case "Some": {
-      const { value: bt } = $match;
-      return seedRegDeclsFrom(decls, i + 1, { ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors), types: _Map_set2(bt.name, map3((c) => c.name, bt.ctors), reg.types) });
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var seedRegCtorsFrom = _curry8(4, (ctors, i, owner, acc) => _Option_match7(_Array_get6(i, ctors), () => acc, (c) => seedRegCtorsFrom(ctors, i + 1, owner, _Map_has(c.name, acc) ? acc : _Map_set2(c.name, { owner, arity: length5(c.fields) }, acc))));
+var seedRegDeclsFrom = _curry8(3, (decls, i, reg) => _Option_match7(_Array_get6(i, decls), () => reg, (bt) => seedRegDeclsFrom(decls, i + 1, { ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors), types: _Map_set2(bt.name, map3((c) => c.name, bt.ctors), reg.types) })));
 var ctorErr = _curry8(2, (message, sp) => ({ message, start: sp.start, end: sp.end }));
-var ctorsInto = _curry8(5, (ctors, i, owner, sp, acc) => {
-  const $match = _Array_get6(i, ctors);
-  switch ($match._tag) {
-    case "None": {
-      return Ok4(acc);
-    }
-    case "Some": {
-      const { value: c } = $match;
-      return _Map_has(c.name, acc) ? Err4(ctorErr(`duplicate constructor '${c.name}'`, sp)) : ctorsInto(ctors, i + 1, owner, sp, _Map_set2(c.name, { owner, arity: length5(c.fields) }, acc));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var ctorsInto = _curry8(5, (ctors, i, owner, sp, acc) => _Option_match7(_Array_get6(i, ctors), () => Ok4(acc), (c) => _Map_has(c.name, acc) ? Err4(ctorErr(`duplicate constructor '${c.name}'`, sp)) : ctorsInto(ctors, i + 1, owner, sp, _Map_set2(c.name, { owner, arity: length5(c.fields) }, acc))));
 var buildLoop = _curry8(3, (stmts, i, reg) => ((_v) => _v._tag === "None" ? Ok4(reg) : _v._tag === "Some" && _v.value._tag === "SType" ? (({ value: { name, ctors, span: sp } }) => _Map_has(name, reg.types) ? Err4(ctorErr(`duplicate type '${name}'`, sp)) : _Result_flatMap3((cs) => buildLoop(stmts, i + 1, { ctors: cs, types: _Map_set2(name, map3((c) => c.name, ctors), reg.types) }), ctorsInto(ctors, 0, name, sp, reg.ctors)))(_v) : _v._tag === "Some" ? buildLoop(stmts, i + 1, reg) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get6(i, stmts)));
@@ -8396,21 +7849,7 @@ var collect = _curry9(2, (t, acc) => {
   }
 });
 var collectArgs = _curry9(2, (args, acc) => collectArgsFrom(args, 0, acc));
-var collectArgsFrom = _curry9(3, (args, i, acc) => {
-  const $match = _Array_get7(i, args);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: a } = $match;
-      return collectArgsFrom(args, i + 1, collect(a, acc));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var collectArgsFrom = _curry9(3, (args, i, acc) => _Option_match8(_Array_get7(i, args), () => acc, (a) => collectArgsFrom(args, i + 1, collect(a, acc))));
 var collectRow = _curry9(2, (row, acc) => {
   const $match = row;
   switch ($match._tag) {
@@ -8463,21 +7902,7 @@ var collectFree = _curry9(4, (t, bound, st, acc) => {
   }
 });
 var collectFreeArgs = _curry9(4, (args, bound, st, acc) => collectFreeArgsFrom(args, 0, bound, st, acc));
-var collectFreeArgsFrom = _curry9(5, (args, i, bound, st, acc) => {
-  const $match = _Array_get7(i, args);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: a } = $match;
-      return collectFreeArgsFrom(args, i + 1, bound, st, collectFree(a, bound, st, acc));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var collectFreeArgsFrom = _curry9(5, (args, i, bound, st, acc) => _Option_match8(_Array_get7(i, args), () => acc, (a) => collectFreeArgsFrom(args, i + 1, bound, st, collectFree(a, bound, st, acc))));
 var collectFreeRow = _curry9(4, (row, bound, st, acc) => {
   const $match = row;
   switch ($match._tag) {
@@ -8498,37 +7923,9 @@ var collectFreeRow = _curry9(4, (row, bound, st, acc) => {
   }
 });
 var freeInScheme = _curry9(3, (sc, st, acc) => collectFree(sc.ty, { tv: _Set_fromArray(sc.vars), rv: _Set_fromArray(sc.rvars) }, st, acc));
-var freeInEnvFrom = _curry9(4, (schemes, i, st, acc) => {
-  const $match = _Array_get7(i, schemes);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: sc } = $match;
-      return freeInEnvFrom(schemes, i + 1, st, freeInScheme(sc, st, acc));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var freeInEnvFrom = _curry9(4, (schemes, i, st, acc) => _Option_match8(_Array_get7(i, schemes), () => acc, (sc) => freeInEnvFrom(schemes, i + 1, st, freeInScheme(sc, st, acc))));
 var freeInEnv = _curry9(2, (env, st) => freeInEnvFrom(_Map_values2(env), 0, st, emptyVarSets));
-var freeInNamedFrom = _curry9(5, (names, i, env, st, acc) => {
-  const $match = _Array_get7(i, names);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: n } = $match;
-      return freeInNamedFrom(names, i + 1, env, st, _Option_match8(_Map_get3(n, env), () => acc, (sc) => freeInScheme(sc, st, acc)));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var freeInNamedFrom = _curry9(5, (names, i, env, st, acc) => _Option_match8(_Array_get7(i, names), () => acc, (n) => freeInNamedFrom(names, i + 1, env, st, _Option_match8(_Map_get3(n, env), () => acc, (sc) => freeInScheme(sc, st, acc)))));
 var generalizeAgainst = _curry9(4, (envFree, t, st, widen) => {
   const zt = widen ? widenLits(zonk(t, st)) : zonk(t, st);
   const own = freeInType(zt);
@@ -8626,39 +8023,11 @@ var instSubRow = _curry9(3, (row, tmap, rmap) => {
   }
 });
 var instantiate = _curry9(2, (sc, st) => (([tmap, st1]) => (([rmap, st2]) => _tuple4(instSub(sc.ty, tmap, rmap), st2))(instRowMapFrom(sc.rvars, new Map, st1)))(instMapFrom(sc.vars, new Map, st)));
-var isUpperStart = (s) => {
-  const $match = _Str_codeAt4(0, s);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: c } = $match;
-      return and6(c >= 65, c <= 90);
-    }
-    case "None": {
-      return false;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var isUpperStart = (s) => _Option_match8(_Str_codeAt4(0, s), () => false, (c) => and6(c >= 65, c <= 90));
 var typeExprListToType = _curry9(5, (tes, vars, st, aliases, expanding) => ((_v) => _v.length === 0 ? _tuple4([], vars, st) : _v.length >= 1 ? (([te, ...rest]) => (([t, vars1, st1]) => (([restTs, vars2, st2]) => _tuple4(_Array_prepend3(t, restTs), vars2, st2))(typeExprListToType(rest, vars1, st1, aliases, expanding)))(typeExprToType(te, vars, st, aliases, expanding)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(tes));
-var typeExprName = _curry9(5, (name, vars, st, aliases, expanding) => _Array_contains(name, primTypeNames) ? _tuple4(primType(name), vars, st) : _Option_match8(_Map_get3(name, vars), () => {
-  const $match = _Map_get3(name, aliases);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: info } = $match;
-      return (([t, st1]) => _tuple4(t, vars, st1))(aliasRow(name, info, [], st, aliases, expanding));
-    }
-    case "None": {
-      return isUpperStart(name) ? _tuple4(tPrim(name), vars, st) : (([v, st1]) => _tuple4(v, _Map_set3(name, v, vars), st1))(freshVar(st));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-}, (v) => _tuple4(v, vars, st)));
+var typeExprName = _curry9(5, (name, vars, st, aliases, expanding) => _Array_contains(name, primTypeNames) ? _tuple4(primType(name), vars, st) : _Option_match8(_Map_get3(name, vars), () => _Option_match8(_Map_get3(name, aliases), () => isUpperStart(name) ? _tuple4(tPrim(name), vars, st) : (([v, st1]) => _tuple4(v, _Map_set3(name, v, vars), st1))(freshVar(st)), (info) => (([t, st1]) => _tuple4(t, vars, st1))(aliasRow(name, info, [], st, aliases, expanding))), (v) => _tuple4(v, vars, st)));
 var typeExprToType = _curry9(5, (te, vars, st, aliases, expanding) => {
   const $match = te;
   switch ($match._tag) {
@@ -8668,21 +8037,7 @@ var typeExprToType = _curry9(5, (te, vars, st, aliases, expanding) => {
     }
     case "TyApp": {
       const { ctor, args: argTes } = $match;
-      return (([args, vars1, st1]) => {
-        const $match$ = _Map_get3(ctor, aliases);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: info } = $match$;
-            return (([t, st2]) => _tuple4(t, vars1, st2))(aliasRow(ctor, info, args, st1, aliases, expanding));
-          }
-          case "None": {
-            return _tuple4(tCon(ctor, args), vars1, st1);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      })(typeExprListToType(argTes, vars, st, aliases, expanding));
+      return (([args, vars1, st1]) => _Option_match8(_Map_get3(ctor, aliases), () => _tuple4(tCon(ctor, args), vars1, st1), (info) => (([t, st2]) => _tuple4(t, vars1, st2))(aliasRow(ctor, info, args, st1, aliases, expanding))))(typeExprListToType(argTes, vars, st, aliases, expanding));
     }
     case "TyTuple": {
       const { elems: elemTes } = $match;
@@ -8698,21 +8053,7 @@ var typeExprToType = _curry9(5, (te, vars, st, aliases, expanding) => {
     }
     case "TyQual": {
       const { alias, name, args: argTes } = $match;
-      return (([args, vars1, st1]) => {
-        const $match$ = _Map_get3(`${alias}.${name}`, aliases);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: info } = $match$;
-            return (([t, st2]) => _tuple4(t, vars1, st2))(aliasRow(name, info, args, st1, aliases, expanding));
-          }
-          case "None": {
-            return _tuple4(tCon(name, args), vars1, st1);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      })(typeExprListToType(argTes, vars, st, aliases, expanding));
+      return (([args, vars1, st1]) => _Option_match8(_Map_get3(`${alias}.${name}`, aliases), () => _tuple4(tCon(name, args), vars1, st1), (info) => (([t, st2]) => _tuple4(t, vars1, st2))(aliasRow(name, info, args, st1, aliases, expanding))))(typeExprListToType(argTes, vars, st, aliases, expanding));
     }
     case "TyLit": {
       const { value } = $match;
@@ -8771,49 +8112,9 @@ var closedFieldsOf = _curry9(2, (row, acc) => {
     }
   }
 });
-var matchFieldsFrom = _curry9(5, (tpls, actuals, params, binds, i) => {
-  const $match = _Array_get7(i, tpls);
-  switch ($match._tag) {
-    case "None": {
-      return Some8(binds);
-    }
-    case "Some": {
-      const { value: t } = $match;
-      const $match$ = _Array_find2((a) => eq6(a.label, t.label), actuals);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: a } = $match$;
-          return eq6(a.optional, t.optional) ? _Option_flatMap((b) => matchFieldsFrom(tpls, actuals, params, b, i + 1), matchTy(t.fieldType, a.fieldType, params, binds)) : None8;
-        }
-        case "None": {
-          return None8;
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var matchFieldsFrom = _curry9(5, (tpls, actuals, params, binds, i) => _Option_match8(_Array_get7(i, tpls), () => Some8(binds), (t) => _Option_match8(_Array_find2((a) => eq6(a.label, t.label), actuals), () => None8, (a) => eq6(a.optional, t.optional) ? _Option_flatMap((b) => matchFieldsFrom(tpls, actuals, params, b, i + 1), matchTy(t.fieldType, a.fieldType, params, binds)) : None8)));
 var matchTy = _curry9(4, (tpl, actual, params, binds) => ((_v) => _v[0]._tag === "TyVar" && (([{ id }]) => _Set_has(id, params))(_v) ? (([{ id }]) => _Option_match8(_Map_get3(id, binds), () => Some8(_Map_set3(id, actual, binds)), (prev) => eq6(showType(prev), showType(actual)) ? Some8(binds) : None8))(_v) : _v[0]._tag === "TyVar" && _v[1]._tag === "TyVar" ? (([{ id: a }, { id: b }]) => eq6(a, b) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyCon" && _v[1]._tag === "TyCon" ? (([{ name: n, args: targs }, { name: m, args: aargs }]) => and6(eq6(n, m), eq6(length6(targs), length6(aargs))) ? matchTysFrom(targs, aargs, params, binds, 0) : None8)(_v) : _v[0]._tag === "TyFn" && _v[1]._tag === "TyFn" ? (([{ from: tf, to: tt }, { from: af, to: at }]) => _Option_flatMap((b) => matchTy(tt, at, params, b), matchTy(tf, af, params, binds)))(_v) : _v[0]._tag === "TyRecord" && _v[1]._tag === "TyRecord" ? (([{ row: trow }, { row: arow }]) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: tfs }, { value: afs }]) => eq6(length6(tfs), length6(afs)) ? matchFieldsFrom(tfs, afs, params, binds, 0) : None8)(_v) : None8)(_tuple4(closedFieldsOf(trow, []), closedFieldsOf(arow, []))))(_v) : _v[0]._tag === "TySingleton" && _v[1]._tag === "TySingleton" ? (([{ base: tb, value: tv }, { base: ab, value: av }]) => and6(eq6(tb, ab), eq6(tv, av)) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf" ? eq6(showType(tpl), showType(actual)) ? Some8(binds) : None8 : None8)(_tuple4(tpl, actual)));
-var templateRowFrom = _curry9(4, (fields, vars, aliases, i) => {
-  const $match = _Array_get7(i, fields);
-  switch ($match._tag) {
-    case "None": {
-      return RowEmpty;
-    }
-    case "Some": {
-      const { value: f } = $match;
-      return (([t, _vars, _st]) => RowExtend(f.name, t, f.optional, templateRowFrom(fields, vars, aliases, i + 1)))(typeExprToType(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray([])));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var templateRowFrom = _curry9(4, (fields, vars, aliases, i) => _Option_match8(_Array_get7(i, fields), () => RowEmpty, (f) => (([t, _vars, _st]) => RowExtend(f.name, t, f.optional, templateRowFrom(fields, vars, aliases, i + 1)))(typeExprToType(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray([])))));
 var templateVars = (params) => reduce2(_curry9(2, ([vs, ids], p) => {
   const id = -1e6 - length6(ids);
   return _tuple4(_Map_set3(p, TyVar(id), vs), _Array_append6(id, ids));
@@ -8823,60 +8124,13 @@ var bareAliasName = (key) => {
   const parts = _Str_split3(".", key);
   return _Option_unwrapOr5(key, _Array_get7(length6(parts) - 1, parts));
 };
-var foldingAliasFrom = _curry9(4, (t, keys, aliases, i) => {
-  const $match = _Array_get7(i, keys);
-  switch ($match._tag) {
-    case "None": {
-      return None8;
-    }
-    case "Some": {
-      const { value: key } = $match;
-      const next = () => foldingAliasFrom(t, keys, aliases, i + 1);
-      const $match$ = _Map_get3(key, aliases);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: info } = $match$;
-          const $match$$ = info.expr;
-          switch ($match$$._tag) {
-            case "Some": {
-              return next();
-            }
-            case "None": {
-              return (([vars, ids]) => {
-                const tpl = TyRecord(templateRowFrom(info.fields, vars, aliases, 0));
-                const $match$$$ = matchTy(tpl, t, _Set_fromArray(ids), new Map);
-                switch ($match$$$._tag) {
-                  case "Some": {
-                    const { value: binds } = $match$$$;
-                    return allBound(ids, binds) ? Some8(bareAliasName(key)) : next();
-                  }
-                  case "None": {
-                    return next();
-                  }
-                  default: {
-                    throw new Error("non-exhaustive match");
-                  }
-                }
-              })(templateVars(info.params));
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }
-        case "None": {
-          return next();
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var foldingAliasFrom = _curry9(4, (t, keys, aliases, i) => _Option_match8(_Array_get7(i, keys), () => None8, (key) => {
+  const next = () => foldingAliasFrom(t, keys, aliases, i + 1);
+  return _Option_match8(_Map_get3(key, aliases), () => next(), (info) => _Option_match8(info.expr, () => (([vars, ids]) => {
+    const tpl = TyRecord(templateRowFrom(info.fields, vars, aliases, 0));
+    return _Option_match8(matchTy(tpl, t, _Set_fromArray(ids), new Map), () => next(), (binds) => allBound(ids, binds) ? Some8(bareAliasName(key)) : next());
+  })(templateVars(info.params)), () => next()));
+}));
 var nominalTypeName = _curry9(2, (t, aliases) => {
   const $match = widenLits(t);
   switch ($match._tag) {
@@ -8893,63 +8147,11 @@ var nominalTypeName = _curry9(2, (t, aliases) => {
     }
   }
 });
-var foldTemplatesFrom = _curry9(4, (keys, aliases, i, acc) => {
-  const $match = _Array_get7(i, keys);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: key } = $match;
-      const $match$ = _Map_get3(key, aliases);
-      switch ($match$._tag) {
-        case "None": {
-          return foldTemplatesFrom(keys, aliases, i + 1, acc);
-        }
-        case "Some": {
-          const { value: info } = $match$;
-          return (([_vars, ids]) => {
-            const name = bareAliasName(key);
-            return (([tpl, _st]) => foldTemplatesFrom(keys, aliases, i + 1, _Array_append6({ name, ids, tpl }, acc)))(aliasRow(name, info, map4((id) => TyVar(id), ids), mkSt(0), aliases, _Set_fromArray([])));
-          })(templateVars(info.params));
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var foldHeadFrom = _curry9(3, (t, tpls, i) => {
-  const $match = _Array_get7(i, tpls);
-  switch ($match._tag) {
-    case "None": {
-      return None8;
-    }
-    case "Some": {
-      const { value: a } = $match;
-      const $match$ = matchTy(a.tpl, t, _Set_fromArray(a.ids), new Map);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: binds } = $match$;
-          return allBound(a.ids, binds) ? Some8(_tuple4(a.name, map4((id) => _Map_getOr2(t, id, binds), a.ids))) : foldHeadFrom(t, tpls, i + 1);
-        }
-        case "None": {
-          return foldHeadFrom(t, tpls, i + 1);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var foldTemplatesFrom = _curry9(4, (keys, aliases, i, acc) => _Option_match8(_Array_get7(i, keys), () => acc, (key) => _Option_match8(_Map_get3(key, aliases), () => foldTemplatesFrom(keys, aliases, i + 1, acc), (info) => (([_vars, ids]) => {
+  const name = bareAliasName(key);
+  return (([tpl, _st]) => foldTemplatesFrom(keys, aliases, i + 1, _Array_append6({ name, ids, tpl }, acc)))(aliasRow(name, info, map4((id) => TyVar(id), ids), mkSt(0), aliases, _Set_fromArray([])));
+})(templateVars(info.params)))));
+var foldHeadFrom = _curry9(3, (t, tpls, i) => _Option_match8(_Array_get7(i, tpls), () => None8, (a) => _Option_match8(matchTy(a.tpl, t, _Set_fromArray(a.ids), new Map), () => foldHeadFrom(t, tpls, i + 1), (binds) => allBound(a.ids, binds) ? Some8(_tuple4(a.name, map4((id) => _Map_getOr2(t, id, binds), a.ids))) : foldHeadFrom(t, tpls, i + 1))));
 var foldWith = _curry9(2, (t, tpls) => ((_v) => _v._tag === "Some" ? (({ value: [name, args] }) => tCon(name, map4((a) => foldWith(a, tpls), args)))(_v) : _v._tag === "None" ? ((_v) => _v._tag === "TyCon" ? (({ name, args }) => tCon(name, map4((a) => foldWith(a, tpls), args)))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => tArrow(foldWith(fromT, tpls), foldWith(toT, tpls)))(_v) : _v._tag === "TyRecord" ? (({ row }) => tRecord(foldRowWith(row, tpls)))(_v) : _v._tag === "TyOneOf" ? (({ members }) => tUnion(map4((m) => foldWith(m, tpls), members)))(_v) : t)(t) : (() => {
   throw new Error("non-exhaustive match");
 })())(foldHeadFrom(t, tpls, 0)));
@@ -9094,234 +8296,38 @@ var inferUseLazyState = _curry10(4, (fn, args, st, api) => and7(isRef(fn, "useLa
   return Some9(_tuple5(tTuple([value, tArrow(setStateDomain(value), tUnit)]), st3));
 }, api.unify(thunkT, tArrow(tUnit, state), st2, preactSpan(thunk))), api.inferExpr(thunk, st1)))(freshVar(st))) : Ok5(None9));
 var inferUseRef = _curry10(4, (fn, args, st, api) => and7(isRef(fn, "useRef"), length7(args) === 1) ? _Option_match9(_Array_get8(0, args), () => Ok5(None9), (init) => _Result_map4(([state, st1]) => Some9(_tuple5(tRecord(rExtend("current", zonk(state, st1), RowEmpty)), st1)), api.inferExpr(init, st))) : Ok5(None9));
-var inferDeps = _curry10(4, (args, st, api, name) => {
-  const $match = _Array_get8(2, args);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: surplus } = $match;
-      const sp = preactSpan(surplus);
-      return Err5({ message: `${name} takes one dependency array after its callback`, start: sp.start, end: sp.end, help: None9, suggestions: [] });
-    }
-    case "None": {
-      const $match$ = _Array_get8(1, args);
-      switch ($match$._tag) {
-        case "None": {
-          return Ok5(st);
-        }
-        case "Some": {
-          const { value: deps } = $match$;
-          return _Result_flatMap4(([depsT, st1]) => (([elem, st2]) => api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)), api.inferExpr(deps, st));
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var inferDeps = _curry10(4, (args, st, api, name) => _Option_match9(_Array_get8(2, args), () => _Option_match9(_Array_get8(1, args), () => Ok5(st), (deps) => _Result_flatMap4(([depsT, st1]) => (([elem, st2]) => api.unify(depsT, arrOf(elem), st2, preactSpan(deps)))(freshVar(st1)), api.inferExpr(deps, st))), (surplus) => {
+  const sp = preactSpan(surplus);
+  return Err5({ message: `${name} takes one dependency array after its callback`, start: sp.start, end: sp.end, help: None9, suggestions: [] });
+}));
 var inferEffectLike = _curry10(5, (fn, args, st, api, name) => and7(isRef(fn, name), length7(args) >= 1) ? _Option_match9(_Array_get8(0, args), () => Ok5(None9), (effect) => (([cleanup, st1]) => _Result_flatMap4(([effectT, st2]) => _Result_flatMap4((st3) => length7(args) === 1 ? (([dep, st4]) => Ok5(Some9(_tuple5(tArrow(arrOf(dep), tUnit), st4))))(freshVar(st3)) : _Result_map4((st4) => Some9(_tuple5(tUnit, st4)), inferDeps(args, st3, api, name)), api.unify(effectT, tArrow(tUnit, cleanup), st2, preactSpan(effect))), api.inferExpr(effect, st1)))(freshVar(st))) : Ok5(None9));
 var inferUseCallback = _curry10(4, (fn, args, st, api) => and7(isRef(fn, "useCallback"), length7(args) >= 1) ? _Option_match9(_Array_get8(0, args), () => Ok5(None9), (callback) => _Result_flatMap4(([callbackT, st1]) => length7(args) === 1 ? (([dep, st2]) => Ok5(Some9(_tuple5(tArrow(arrOf(dep), zonk(callbackT, st2)), st2))))(freshVar(st1)) : _Result_map4((st2) => Some9(_tuple5(zonk(callbackT, st2), st2)), inferDeps(args, st1, api, "useCallback")), api.inferExpr(callback, st))) : Ok5(None9));
 var inferUseMemo = _curry10(4, (fn, args, st, api) => and7(isRef(fn, "useMemo"), length7(args) >= 1) ? _Option_match9(_Array_get8(0, args), () => Ok5(None9), (thunk) => (([value, st1]) => _Result_flatMap4(([thunkT, st2]) => _Result_flatMap4((st3) => length7(args) === 1 ? (([dep, st4]) => Ok5(Some9(_tuple5(tArrow(arrOf(dep), zonk(value, st4)), st4))))(freshVar(st3)) : _Result_map4((st4) => Some9(_tuple5(zonk(value, st4), st4)), inferDeps(args, st3, api, "useMemo")), api.unify(thunkT, tArrow(tUnit, value), st2, preactSpan(thunk))), api.inferExpr(thunk, st1)))(freshVar(st))) : Ok5(None9));
 var inferHookDeps = _curry10(4, (fn, args, st, api) => {
   const expected = isRef(fn, "hookDeps0") ? Some9(0) : isRef(fn, "hookDeps1") ? Some9(1) : isRef(fn, "hookDeps2") ? Some9(2) : isRef(fn, "hookDeps") ? Some9(3) : None9;
-  const $match = expected;
-  switch ($match._tag) {
-    case "Some": {
-      const { value: n } = $match;
-      return eq7(length7(args), n) ? _Result_map4((st1) => (([elem, st2]) => Some9(_tuple5(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok5(None9);
-    }
-    case "None": {
-      return Ok5(None9);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match9(expected, () => Ok5(None9), (n) => eq7(length7(args), n) ? _Result_map4((st1) => (([elem, st2]) => Some9(_tuple5(arrOf(elem), st2)))(freshVar(st1)), inferArgs(args, st, api.inferExpr)) : Ok5(None9));
 });
 var inferPreactCall = _curry10(5, (fn, args, _origin, st, api) => _Result_flatMap4((first) => _Option_match9(first, () => _Result_flatMap4((lazy) => _Option_match9(lazy, () => _Result_flatMap4((ref) => _Option_match9(ref, () => _Result_flatMap4((effect) => _Option_match9(effect, () => _Result_flatMap4((layout) => _Option_match9(layout, () => _Result_flatMap4((callback) => _Option_match9(callback, () => _Result_flatMap4((memo) => _Option_match9(memo, () => inferHookDeps(fn, args, st, api), () => Ok5(memo)), inferUseMemo(fn, args, st, api)), () => Ok5(callback)), inferUseCallback(fn, args, st, api)), () => Ok5(layout)), inferEffectLike(fn, args, st, api, "useLayoutEffect")), () => Ok5(effect)), inferEffectLike(fn, args, st, api, "useEffect")), () => Ok5(ref)), inferUseRef(fn, args, st, api)), () => Ok5(lazy)), inferUseLazyState(fn, args, st, api)), () => Ok5(first)), inferUseState(fn, args, st, api)));
 var preactPlugin = { name: "preact", parse: None9, inferCall: Some9(inferPreactCall), format: None9, formatDoc: None9, dtsBinding: None9, bindingType: None9 };
 
 var DEFAULT_PLUGINS = [jsxPlugin];
-var shadowing = _curry11(2, (ps, b) => {
-  const $match = _Array_find3((p) => eq8(p.name, b.name), ps);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: p } = $match;
-      return p;
-    }
-    case "None": {
-      return b;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var resolvePlugins = _curry11(2, (pluginsOpt, builtins) => {
-  const $match = pluginsOpt;
-  switch ($match._tag) {
-    case "None": {
-      return builtins;
-    }
-    case "Some": {
-      const { value: ps } = $match;
-      return length8(ps) === 0 ? [] : _Array_concat4(map5((b) => shadowing(ps, b), builtins), filter3((p) => length8(filter3((b) => eq8(b.name, p.name), builtins)) === 0, ps));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var shadowing = _curry11(2, (ps, b) => _Option_match10(_Array_find3((p) => eq8(p.name, b.name), ps), () => b, (p) => p));
+var resolvePlugins = _curry11(2, (pluginsOpt, builtins) => _Option_match10(pluginsOpt, () => builtins, (ps) => length8(ps) === 0 ? [] : _Array_concat4(map5((b) => shadowing(ps, b), builtins), filter3((p) => length8(filter3((b) => eq8(b.name, p.name), builtins)) === 0, ps))));
 var resolvePluginsDefault = (pluginsOpt) => resolvePlugins(pluginsOpt, DEFAULT_PLUGINS);
 var parseHooksFrom = _curry11(3, (plugins, i, acc) => match5(_Array_get9(i, plugins)).with({ _tag: "None" }, () => acc).with((_v) => _v._tag === "Some", ({ value: { parse } }) => _Option_match10(parse, () => parseHooksFrom(plugins, i + 1, acc), (hook) => parseHooksFrom(plugins, i + 1, _Array_append7(hook, acc)))).exhaustive());
 var parseHooksOf = (plugins) => parseHooksFrom(plugins, 0, []);
-var inferHooksFrom = _curry11(3, (plugins, i, acc) => {
-  const $match = _Array_get9(i, plugins);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      const $match$ = p.inferCall;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: hook } = $match$;
-          return inferHooksFrom(plugins, i + 1, _Array_append7(hook, acc));
-        }
-        case "None": {
-          return inferHooksFrom(plugins, i + 1, acc);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var runParseHooks = _curry11(4, (hooks, toks, pos, parseExpr) => match5(hooks).with((_v) => _v.length === 0, () => Ok6(None10)).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Result_match3(hook(toks, pos, parseExpr), (e) => Err6(e), (v) => {
-  const $match = v;
-  switch ($match._tag) {
-    case "None": {
-      return runParseHooks(rest, toks, pos, parseExpr);
-    }
-    case "Some": {
-      const { value: claim } = $match;
-      return Ok6(Some10(claim));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-})).otherwise(() => {
+var inferHooksFrom = _curry11(3, (plugins, i, acc) => _Option_match10(_Array_get9(i, plugins), () => acc, (p) => _Option_match10(p.inferCall, () => inferHooksFrom(plugins, i + 1, acc), (hook) => inferHooksFrom(plugins, i + 1, _Array_append7(hook, acc)))));
+var runParseHooks = _curry11(4, (hooks, toks, pos, parseExpr) => match5(hooks).with((_v) => _v.length === 0, () => Ok6(None10)).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Result_match3(hook(toks, pos, parseExpr), (e) => Err6(e), (v) => _Option_match10(v, () => runParseHooks(rest, toks, pos, parseExpr), (claim) => Ok6(Some10(claim))))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var runInferCallHooks = _curry11(6, (hooks, fn, args, origin, st, api) => match5(hooks).with((_v) => _v.length === 0, () => Ok6(None10)).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Result_match3(hook(fn, args, origin, st, api), (e) => Err6(e), (v) => {
-  const $match = v;
-  switch ($match._tag) {
-    case "None": {
-      return runInferCallHooks(rest, fn, args, origin, st, api);
-    }
-    case "Some": {
-      const { value: claim } = $match;
-      return Ok6(Some10(claim));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-})).otherwise(() => {
+var runInferCallHooks = _curry11(6, (hooks, fn, args, origin, st, api) => match5(hooks).with((_v) => _v.length === 0, () => Ok6(None10)).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Result_match3(hook(fn, args, origin, st, api), (e) => Err6(e), (v) => _Option_match10(v, () => runInferCallHooks(rest, fn, args, origin, st, api), (claim) => Ok6(Some10(claim))))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var formatHooksFrom = _curry11(3, (plugins, i, acc) => {
-  const $match = _Array_get9(i, plugins);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      const $match$ = p.format;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: hook } = $match$;
-          return formatHooksFrom(plugins, i + 1, _Array_append7(hook, acc));
-        }
-        case "None": {
-          return formatHooksFrom(plugins, i + 1, acc);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var formatDocHooksFrom = _curry11(3, (plugins, i, acc) => {
-  const $match = _Array_get9(i, plugins);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      const $match$ = p.formatDoc;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: hook } = $match$;
-          return formatDocHooksFrom(plugins, i + 1, _Array_append7(hook, acc));
-        }
-        case "None": {
-          return formatDocHooksFrom(plugins, i + 1, acc);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var formatHooksFrom = _curry11(3, (plugins, i, acc) => _Option_match10(_Array_get9(i, plugins), () => acc, (p) => _Option_match10(p.format, () => formatHooksFrom(plugins, i + 1, acc), (hook) => formatHooksFrom(plugins, i + 1, _Array_append7(hook, acc)))));
+var formatDocHooksFrom = _curry11(3, (plugins, i, acc) => _Option_match10(_Array_get9(i, plugins), () => acc, (p) => _Option_match10(p.formatDoc, () => formatDocHooksFrom(plugins, i + 1, acc), (hook) => formatDocHooksFrom(plugins, i + 1, _Array_append7(hook, acc)))));
 var formatHooksOf = (plugins) => ({ rewrite: formatHooksFrom(plugins, 0, []), layout: formatDocHooksFrom(plugins, 0, []) });
 var formatHooksFor = (pluginsOpt) => formatHooksOf(resolvePluginsDefault(pluginsOpt));
-var dtsHooksFrom = _curry11(3, (plugins, i, acc) => {
-  const $match = _Array_get9(i, plugins);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      const $match$ = p.dtsBinding;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: hook } = $match$;
-          return dtsHooksFrom(plugins, i + 1, _Array_append7(hook, acc));
-        }
-        case "None": {
-          return dtsHooksFrom(plugins, i + 1, acc);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var dtsHooksFrom = _curry11(3, (plugins, i, acc) => _Option_match10(_Array_get9(i, plugins), () => acc, (p) => _Option_match10(p.dtsBinding, () => dtsHooksFrom(plugins, i + 1, acc), (hook) => dtsHooksFrom(plugins, i + 1, _Array_append7(hook, acc)))));
 var runFormatHooks = _curry11(2, (hooks, e) => match5(hooks).with((_v) => _v.length === 0, () => None10).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Option_match10(hook(e), () => runFormatHooks(rest, e), (out) => Some10(out))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
@@ -9331,33 +8337,7 @@ var runFormatDocHooks = _curry11(3, (hooks, e, api) => match5(hooks).with((_v) =
 var runDtsHooks = _curry11(5, (hooks, name, value, ty, api) => match5(hooks).with((_v) => _v.length === 0, () => None10).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Option_match10(hook(name, value, ty, api), () => runDtsHooks(rest, name, value, ty, api), (ts) => Some10(ts))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var bindingHooksFrom = _curry11(3, (plugins, i, acc) => {
-  const $match = _Array_get9(i, plugins);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      const $match$ = p.bindingType;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: hook } = $match$;
-          return bindingHooksFrom(plugins, i + 1, _Array_append7(hook, acc));
-        }
-        case "None": {
-          return bindingHooksFrom(plugins, i + 1, acc);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var bindingHooksFrom = _curry11(3, (plugins, i, acc) => _Option_match10(_Array_get9(i, plugins), () => acc, (p) => _Option_match10(p.bindingType, () => bindingHooksFrom(plugins, i + 1, acc), (hook) => bindingHooksFrom(plugins, i + 1, _Array_append7(hook, acc)))));
 var runBindingHooks = _curry11(4, (hooks, value, ty, api) => match5(hooks).with((_v) => _v.length === 0, () => None10).with((_v) => _v.length >= 1, ([hook, ...rest]) => _Option_match10(hook(value, ty, api), () => runBindingHooks(rest, value, ty, api), (ts) => Some10(ts))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
@@ -9590,19 +8570,7 @@ var keywordText = (t) => {
 };
 var expectLabel = _curry12(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
-  const $match = keywordText(lt.tok);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: name } = $match;
-      return Ok7(_tuple6({ name, span: spanOf(lt) }, pos + 1));
-    }
-    case "None": {
-      return expectId(toks, pos);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match11(keywordText(lt.tok), () => expectId(toks, pos), (name) => Ok7(_tuple6({ name, span: spanOf(lt) }, pos + 1)));
 });
 var expectStr = _curry12(2, (toks, pos) => {
   const lt = tokAt(toks, pos);
@@ -10559,7 +9527,7 @@ var isSyncTok = (t) => {
 var isOpener = (t) => or6(or6(t._tag === "TLparen", t._tag === "TLbrace"), t._tag === "TLbracket");
 var isCloser = (t) => or6(or6(t._tag === "TRparen", t._tag === "TRbrace"), t._tag === "TRbracket");
 var maxParseErrors = 100;
-var resumeAt = _curry12(3, (toks, pos, at) => and8(lt6(pos + 1, length9(toks)), lt6(tokAt(toks, pos).start, at)) ? resumeAt(toks, pos + 1, at) : pos);
+var resumeAt = _curry12(3, (toks, pos, at) => and8(lt5(pos + 1, length9(toks)), lt5(tokAt(toks, pos).start, at)) ? resumeAt(toks, pos + 1, at) : pos);
 var skipToSync = _curry12(3, (toks, pos, depth) => {
   const t = tokAt(toks, pos).tok;
   return or6(t._tag === "TEof", and8(depth === 0, isSyncTok(t))) ? pos : skipToSync(toks, pos + 1, isOpener(t) ? depth + 1 : and8(isCloser(t), depth > 0) ? depth - 1 : depth);
@@ -10600,19 +9568,7 @@ var parseRecovering = _curry12(2, (toks, pluginsOpt) => {
 var parse = (toks) => parseWith(toks, None11);
 var parseWith = _curry12(2, (toks, pluginsOpt) => {
   const r = parseRecovering(toks, pluginsOpt);
-  const $match = _Array_get10(0, r.diagnostics);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: d } = $match;
-      return Err7(d);
-    }
-    case "None": {
-      return Ok7(r.stmts);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match11(_Array_get10(0, r.diagnostics), () => Ok7(r.stmts), (d) => Err7(d));
 });
 import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_prepend as _Array_prepend5, _Array_sortBy, _Array_take as _Array_take2, _Map_delete, _Map_get as _Map_get4, _Map_keys as _Map_keys4, _Map_set as _Map_set4, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome2, _Option_match as _Option_match12, _Option_unwrapOr as _Option_unwrapOr7, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt6, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry14, _tuple as _tuple7, and as and9, concat, eq as eq10, filter as filter4, floor as floor3, length as length11, map as map8, or as or7, reduce as reduce3, show as show5 } from "@mochi/compiler/runtime";
 
@@ -15527,21 +14483,7 @@ var strLit2 = (s) => `"${escStrBody(s)}"`;
 var WIDTH = 80;
 var commaJoin = _curry14(2, (f, xs) => _Str_join5(", ", map8(f, xs)));
 var patField = (f) => ((_v) => _v._tag === "PBind" && (({ name }) => eq10(name, f.label))(_v) ? (({ name }) => f.label)(_v) : `${f.label}: ${pattern(f.pat)}`)(f.pat);
-var restOf = (rest) => {
-  const $match = rest;
-  switch ($match._tag) {
-    case "None": {
-      return [];
-    }
-    case "Some": {
-      const { value: p } = $match;
-      return [`...${pattern(p)}`];
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var restOf = (rest) => _Option_match12(rest, () => [], (p) => [`...${pattern(p)}`]);
 var pattern = (p) => {
   const $match = p;
   switch ($match._tag) {
@@ -15601,41 +14543,17 @@ var pattern = (p) => {
     }
   }
 };
-var ctorField = (f) => {
-  const $match = f.name;
-  switch ($match._tag) {
-    case "None": {
-      return showTypeExpr(f.fieldType);
-    }
-    case "Some": {
-      const { value: name } = $match;
-      return `${name}: ${showTypeExpr(f.fieldType)}`;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var ctorField = (f) => _Option_match12(f.name, () => showTypeExpr(f.fieldType), (name) => `${name}: ${showTypeExpr(f.fieldType)}`);
 var ctorText = (c) => length11(c.fields) === 0 ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
 var generics = (params) => length11(params) === 0 ? "" : `<${_Str_join5(", ", params)}>`;
 var conventionOf = (module) => _Array_get11(0, filter4((c) => _Str_startsWith3(`mochi:${c}:`, module), ["global", "send", "get", "set", "new"]));
 var externStmt = _curry14(6, (name, params, typeExpr, module, imported, curried) => {
   const head = `extern ${name}${generics(params)} : ${showTypeExpr(typeExpr)} = `;
-  const $match = conventionOf(module);
-  switch ($match._tag) {
-    case "None": {
-      return `${head}${curried ? "curried " : ""}${strLit2(module)} ${strLit2(imported)}`;
-    }
-    case "Some": {
-      const { value: convention } = $match;
-      const first = _Str_slice3(_Str_length5(`mochi:${convention}:`), _Str_length5(module), module);
-      const second = imported === "" ? "" : ` ${strLit2(imported)}`;
-      return `${head}${convention} ${strLit2(first)}${second}`;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match12(conventionOf(module), () => `${head}${curried ? "curried " : ""}${strLit2(module)} ${strLit2(imported)}`, (convention) => {
+    const first = _Str_slice3(_Str_length5(`mochi:${convention}:`), _Str_length5(module), module);
+    const second = imported === "" ? "" : ` ${strLit2(imported)}`;
+    return `${head}${convention} ${strLit2(first)}${second}`;
+  });
 });
 var sepLine = cat([txt(","), line]);
 var bracketed = _curry14(3, (open, close, items) => length11(items) === 0 ? txt(`${open}${close}`) : group(cat([txt(open), indent(cat([softline, join(sepLine, items)])), softline, txt(close)])));
@@ -15772,21 +14690,7 @@ var spanKey = _curry14(2, (kind, sp) => `${kind}:${show5(sp.start)}:${show5(sp.e
 var STMT = "s";
 var EXPR = "e";
 var CTOR = "c";
-var atKey = _curry14(2, (table, key) => {
-  const $match = _Map_get4(key, table);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: cs } = $match;
-      return cs;
-    }
-    case "None": {
-      return [];
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var atKey = _curry14(2, (table, key) => _Option_match12(_Map_get4(key, table), () => [], (cs) => cs));
 var pushAt = _curry14(3, (key, c, table) => _Map_set4(key, _Array_append9(c, atKey(table, key)), table));
 var lineEndFrom = _curry14(2, (src, i) => ((_v) => _v._tag === "None" ? i : _v._tag === "Some" && _v.value === `
 ` ? i : _v._tag === "Some" ? lineEndFrom(src, i + 1) : (() => {
@@ -15851,47 +14755,9 @@ var trailedBy = _curry14(3, (idx, c, src) => {
 var leadTarget = _curry14(2, (idx, c) => _Array_get11(lowerBound(idx.byStart, startOf, c.end, 0, length11(idx.byStart)), idx.byStart));
 var attachOne = _curry14(4, (idx, src, c, tbl) => {
   const trailed = c.trailing ? trailedBy(idx, c, src) : None12;
-  const $match = trailed;
-  switch ($match._tag) {
-    case "Some": {
-      const { value: a } = $match;
-      return Some12({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) });
-    }
-    case "None": {
-      const $match$ = leadTarget(idx, c);
-      switch ($match$._tag) {
-        case "None": {
-          return None12;
-        }
-        case "Some": {
-          const { value: a } = $match$;
-          return Some12({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) });
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match12(trailed, () => _Option_match12(leadTarget(idx, c), () => None12, (a) => Some12({ ...tbl, leading: pushAt(spanKey(a.kind, a.sp), c, tbl.leading) })), (a) => Some12({ ...tbl, trailing: pushAt(spanKey(a.kind, a.sp), c, tbl.trailing) }));
 });
-var attachFrom = _curry14(5, (comments, i, idx, src, acc) => {
-  const $match = _Array_get11(i, comments);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: c } = $match;
-      return attachFrom(comments, i + 1, idx, src, _Option_match12(attachOne(idx, src, c, acc.table), () => ({ table: acc.table, tail: _Array_append9(c, acc.tail) }), (table) => ({ table, tail: acc.tail })));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var attachFrom = _curry14(5, (comments, i, idx, src, acc) => _Option_match12(_Array_get11(i, comments), () => acc, (c) => attachFrom(comments, i + 1, idx, src, _Option_match12(attachOne(idx, src, c, acc.table), () => ({ table: acc.table, tail: _Array_append9(c, acc.tail) }), (table) => ({ table, tail: acc.tail })))));
 var commentsForExpr = _curry14(2, (src, e) => attachFrom(collectComments(src), 0, anchorIndex(sortAnchors(exprAnchors(e))), src, { table: noComments, tail: [] }).table);
 var leadingDocs = _curry14(3, (cts, kind, sp) => _Array_flatMap3((c) => c.blankAfter ? [txt(c.text), hardline, hardline] : [txt(c.text), hardline], atKey(cts.leading, spanKey(kind, sp))));
 var trailingDocs = _curry14(3, (cts, kind, sp) => _Array_flatMap3((c) => [lineSuffix(txt(` ${c.text}`)), breakParent], atKey(cts.trailing, spanKey(kind, sp))));
@@ -15901,21 +14767,7 @@ var withComments = _curry14(4, (cts, kind, sp, doc) => {
   const trail = trailingDocs(cts, kind, sp);
   return and9(length11(lead) === 0, length11(trail) === 0) ? doc : cat([...lead, doc, ...trail]);
 });
-var curryArityFrom = _curry14(3, (def, i, acc) => {
-  const $match = _Str_codeAt6(i, def);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: code } = $match;
-      return and9(code >= 48, code <= 57) ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode2(code)}`) : acc;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var curryArityFrom = _curry14(3, (def, i, acc) => _Option_match12(_Str_codeAt6(i, def), () => acc, (code) => and9(code >= 48, code <= 57) ? curryArityFrom(def, i + 1, `${acc}${_Str_fromCode2(code)}`) : acc));
 var commaCountFrom = _curry14(3, (s, i, acc) => ((_v) => _v._tag === "None" ? acc : _v._tag === "Some" && _v.value === "," ? commaCountFrom(s, i + 1, acc + 1) : _v._tag === "Some" ? commaCountFrom(s, i + 1, acc) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Str_get4(i, s)));
@@ -15924,42 +14776,16 @@ var arityOfDef = (def) => {
   const curried = indexOfFrom("_curry(", def, 0);
   return curried >= 0 ? ((digits) => _Str_length5(digits) === 0 ? 0 : _Option_unwrapOr7(0, _Str_toNumber2(digits)))(curryArityFrom(def, curried + 7, "")) : ((open) => open < 0 ? 0 : ((close) => close < 0 ? 0 : ((params) => _Str_length5(params) === 0 ? 0 : commaCountFrom(params, 0, 1))(_Str_trim(_Str_slice3(open + 3, close, def))))(indexOfFrom(") =>", def, open)))(indexOfFrom("= (", def, 0));
 };
-var runtimeArityOf = (jsId) => {
-  const $match = _Map_get4(jsId, preludeJsDefs);
-  switch ($match._tag) {
-    case "None": {
-      return None12;
-    }
-    case "Some": {
-      const { value: def } = $match;
-      const n = arityOfDef(def);
-      return n >= 2 ? Some12(n) : None12;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var runtimeArityOf = (jsId) => _Option_match12(_Map_get4(jsId, preludeJsDefs), () => None12, (def) => {
+  const n = arityOfDef(def);
+  return n >= 2 ? Some12(n) : None12;
+});
 var namespaceArity = _curry14(3, (shadowed, target, member) => {
   const $match = target;
   switch ($match._tag) {
     case "ERef": {
       const { name: nsName } = $match;
-      return _Set_has2(nsName, shadowed) ? None12 : _Option_match12(_Map_get4(nsName, namespaceRuntime), () => None12, (members) => {
-        const $match$ = _Map_get4(member, members);
-        switch ($match$._tag) {
-          case "None": {
-            return None12;
-          }
-          case "Some": {
-            const { value: jsId } = $match$;
-            return runtimeArityOf(jsId);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      });
+      return _Set_has2(nsName, shadowed) ? None12 : _Option_match12(_Map_get4(nsName, namespaceRuntime), () => None12, (members) => _Option_match12(_Map_get4(member, members), () => None12, (jsId) => runtimeArityOf(jsId)));
     }
     default: {
       return None12;
@@ -16362,44 +15188,7 @@ var neqOperands = (e) => {
     }
   }
 };
-var infixPrec = (e) => {
-  const $match = pipePrecOf(e);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: p } = $match;
-      return Some12(p);
-    }
-    case "None": {
-      const $match$ = binOpOf(e);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: info } = $match$;
-          return Some12(info.prec);
-        }
-        case "None": {
-          const $match$$ = neqOperands(e);
-          switch ($match$$._tag) {
-            case "Some": {
-              return Some12(NEQ_PREC);
-            }
-            case "None": {
-              return None12;
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var infixPrec = (e) => _Option_match12(pipePrecOf(e), () => _Option_match12(binOpOf(e), () => _Option_match12(neqOperands(e), () => None12, () => Some12(NEQ_PREC)), (info) => Some12(info.prec)), (p) => Some12(p));
 var binOperandD = _curry14(4, (cts, e, parentPrec, isRight) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : _Option_match12(infixPrec(e), () => exprD(cts, e), (prec) => parenIf(isRight ? prec <= parentPrec : prec < parentPrec, exprD(cts, e))));
 var pipeLeftD = _curry14(3, (cts, e, parentPrec) => isLambdaOrTernary(cts, e) ? cat([txt("("), exprD(cts, e), txt(")")]) : _Option_match12(infixPrec(e), () => exprD(cts, e), (prec) => parenIf(prec < parentPrec, exprD(cts, e))));
 var concatSegmentsFrom = _curry14(2, (e, acc) => ((_v) => _v._tag === "ECall" && _v.fn._tag === "ERef" && _v.fn.name === "concat" && _v.args.length === 2 ? (({ args: [l, r] }) => concatSegmentsFrom(l, _Array_prepend5(r, acc)))(_v) : _Array_prepend5(e, acc))(e));
@@ -16470,33 +15259,7 @@ var composeSegmentsFrom = _curry14(2, (e, acc) => {
   }
 });
 var destructureLetD = _curry14(3, (cts, fn, args) => ((_v) => _v[0]._tag === "ELambda" && _v[0].params.length === 1 && _v[1].length === 1 ? (([{ params: [p], body: lbody }, [value]]) => ((_v) => _v._tag === "LPName" ? None12 : Some12(letLikeD(cts, `let ${paramText(cts, p)}`, value, lbody)))(unspan(p)))(_v) : None12)(_tuple7(fn, args)));
-var refoldCall = _curry14(3, (cts, fn, args) => {
-  const $match = destructureLetD(cts, fn, args);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: d } = $match;
-      return Some12(d);
-    }
-    case "None": {
-      const $match$ = binaryD(cts, fn, args);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: d } = $match$;
-          return Some12(d);
-        }
-        case "None": {
-          return unaryD(cts, fn, args);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var refoldCall = _curry14(3, (cts, fn, args) => _Option_match12(destructureLetD(cts, fn, args), () => _Option_match12(binaryD(cts, fn, args), () => unaryD(cts, fn, args), (d) => Some12(d)), (d) => Some12(d)));
 var labeledFieldD = _curry14(2, (cts, f) => ((_v) => _v._tag === "ERef" && (({ name }) => eq10(name, f.name))(_v) ? (({ name }) => txt(`~${f.name}`))(_v) : cat([txt(`~${f.name}=`), exprD(cts, f.value)]))(f.value));
 var callArgDocs = _curry14(3, (cts, args, origin) => ((_v) => _v._tag === "Some" && _v.value === "labeled" ? ((_v) => _v._tag === "Some" && _v.value._tag === "ERecord" && _v.value.spread._tag === "None" ? (({ value: { fields } }) => _Array_concat6(map8((x) => exprD(cts, x), _Array_take2(length11(args) - 1, args)), map8((f) => labeledFieldD(cts, f), fields)))(_v) : map8((x) => exprD(cts, x), args))(_Array_get11(length11(args) - 1, args)) : map8((x) => exprD(cts, x), args))(origin));
 var labeledParamText = _curry14(5, (cts, name, annot, optional, defaultValue) => {
@@ -16509,19 +15272,7 @@ var paramText = _curry14(2, (cts, p) => {
   switch ($match._tag) {
     case "LPName": {
       const { name, annot } = $match;
-      const $match$ = annot;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: te } = $match$;
-          return `${name}: ${showTypeExpr(te)}`;
-        }
-        case "None": {
-          return name;
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match12(annot, () => name, (te) => `${name}: ${showTypeExpr(te)}`);
     }
     case "LPTuple": {
       const { names } = $match;
@@ -16568,46 +15319,9 @@ var discardedFrom = _curry14(2, (e, acc) => ((_v) => _v._tag === "ELetIn" && _v.
 var discardedLetExprs = (e) => discardedFrom(e, []);
 var doBlockD = _curry14(2, (cts, exprs) => cat([txt("{"), indent(cat([hardline, join(cat([txt(";"), hardline]), map8((x) => exprD(cts, x), exprs))])), hardline, txt("}")]));
 var doD = _curry14(2, (cts, exprs) => cat([txt("do "), doBlockD(cts, exprs)]));
-var lambdaD = _curry14(3, (cts, params, body) => {
-  const $match = sectionOf(cts, params, body);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: section } = $match;
-      return section;
-    }
-    case "None": {
-      const $match$ = cts.etaSkip ? None12 : etaPartial(cts, params, body);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: eta } = $match$;
-          return exprD(cts, eta);
-        }
-        case "None": {
-          const $match$$ = composeParts(params, body);
-          switch ($match$$._tag) {
-            case "Some": {
-              return ((_v) => _v.length === 0 ? txt("") : _v.length >= 1 ? (([head, ...rest]) => group(cat([operandD(cts, head), indent(cat(map8((s) => cat([line, txt(">> "), operandD(cts, s)]), rest)))])))(_v) : (() => {
-                throw new Error("non-exhaustive match");
-              })())(composeSegmentsFrom(ELambda(params, body, { start: 0, end: 0 }), []));
-            }
-            case "None": {
-              return plainLambdaD({ ...cts, etaSkip: isLambdaExpr(body) }, params, body);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var lambdaD = _curry14(3, (cts, params, body) => _Option_match12(sectionOf(cts, params, body), () => _Option_match12(cts.etaSkip ? None12 : etaPartial(cts, params, body), () => _Option_match12(composeParts(params, body), () => plainLambdaD({ ...cts, etaSkip: isLambdaExpr(body) }, params, body), () => ((_v) => _v.length === 0 ? txt("") : _v.length >= 1 ? (([head, ...rest]) => group(cat([operandD(cts, head), indent(cat(map8((s) => cat([line, txt(">> "), operandD(cts, s)]), rest)))])))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(composeSegmentsFrom(ELambda(params, body, { start: 0, end: 0 }), []))), (eta) => exprD(cts, eta)), (section) => section));
 var plainLambdaD = _curry14(3, (cts, params, body) => {
   const head = txt(`${paramsText(cts, params)} =>`);
   const $match = body;
@@ -16617,19 +15331,7 @@ var plainLambdaD = _curry14(3, (cts, params, body) => {
       return cat([head, txt(" "), doBlockD(cts, exprs)]);
     }
     default: {
-      const $match$ = discardedLetExprs(body);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: exprs } = $match$;
-          return cat([head, txt(" "), doBlockD(cts, exprs)]);
-        }
-        case "None": {
-          return ((_v) => _v._tag === "EMatch" && !hasLead(cts, EXPR, exprSpan2(body)) ? cat([head, txt(" "), exprD(cts, body)]) : group(cat([head, indent(cat([line, exprD(cts, body)]))])))(body);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match12(discardedLetExprs(body), () => ((_v) => _v._tag === "EMatch" && !hasLead(cts, EXPR, exprSpan2(body)) ? cat([head, txt(" "), exprD(cts, body)]) : group(cat([head, indent(cat([line, exprD(cts, body)]))])))(body), (exprs) => cat([head, txt(" "), doBlockD(cts, exprs)]));
     }
   }
 });
@@ -16657,36 +15359,8 @@ var ternaryArmsFrom = _curry14(2, (e, acc) => {
     }
   }
 });
-var ternaryRestParts = _curry14(3, (cts, arms, i) => {
-  const $match = _Array_get11(i, arms);
-  switch ($match._tag) {
-    case "None": {
-      return [];
-    }
-    case "Some": {
-      const { value: a } = $match;
-      return [line, hasLead(cts, EXPR, exprSpan2(a.cond)) ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))]) : cat([txt(": "), condD(cts, a.cond)]), line, branchD(cts, "?", a.thenE), ...ternaryRestParts(cts, arms, i + 1)];
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var ternaryD = _curry14(2, (cts, e) => (([arms, elseE]) => {
-  const $match = _Array_get11(0, arms);
-  switch ($match._tag) {
-    case "None": {
-      return txt("");
-    }
-    case "Some": {
-      const { value: first } = $match;
-      return group(cat([condD(cts, first.cond), indent(cat([line, branchD(cts, "?", first.thenE), ...ternaryRestParts(cts, arms, 1), line, branchD(cts, ":", elseE)]))]));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-})(ternaryArmsFrom(e, [])));
+var ternaryRestParts = _curry14(3, (cts, arms, i) => _Option_match12(_Array_get11(i, arms), () => [], (a) => [line, hasLead(cts, EXPR, exprSpan2(a.cond)) ? cat([txt(":"), indent(cat([hardline, condD(cts, a.cond)]))]) : cat([txt(": "), condD(cts, a.cond)]), line, branchD(cts, "?", a.thenE), ...ternaryRestParts(cts, arms, i + 1)]));
+var ternaryD = _curry14(2, (cts, e) => (([arms, elseE]) => _Option_match12(_Array_get11(0, arms), () => txt(""), (first) => group(cat([condD(cts, first.cond), indent(cat([line, branchD(cts, "?", first.thenE), ...ternaryRestParts(cts, arms, 1), line, branchD(cts, ":", elseE)]))]))))(ternaryArmsFrom(e, [])));
 var printsAsLet = (e) => ((_v) => _v._tag === "ELetIn" ? _Option_isNone(discardedLetExprs(e)) : _v._tag === "ELetBind" ? true : _v._tag === "ECall" && _v.fn._tag === "ELambda" && _v.fn.params.length === 1 && _v.args.length === 1 ? (({ fn: { params: [p] } }) => ((_v) => _v._tag === "LPName" ? false : true)(unspan(p)))(_v) : false)(e);
 var letLikeD = _curry14(4, (cts, head, value, body) => {
   const cont = printsAsLet(body) ? cat([line, exprD(cts, body)]) : indent(cat([line, exprD(cts, body)]));
@@ -16738,21 +15412,7 @@ var lastArgHugs = (body) => {
     }
   }
 };
-var callArgsD = _curry14(5, (cts, fn, args, origin, asCallee) => {
-  const $match = refoldCall(cts, fn, args);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: d } = $match;
-      return d;
-    }
-    case "None": {
-      return ((_v) => _v._tag === "Some" && _v.value._tag === "ECall" ? (({ value: { fn: ffn, args: fargs, origin: forigin } }) => callArgsD(cts, ffn, fargs, forigin, asCallee))(_v) : plainCallD(cts, fn, args, origin, asCallee))(flattenCallSpine(cts, ECall(fn, args, origin, { start: 0, end: 0 })));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var callArgsD = _curry14(5, (cts, fn, args, origin, asCallee) => _Option_match12(refoldCall(cts, fn, args), () => ((_v) => _v._tag === "Some" && _v.value._tag === "ECall" ? (({ value: { fn: ffn, args: fargs, origin: forigin } }) => callArgsD(cts, ffn, fargs, forigin, asCallee))(_v) : plainCallD(cts, fn, args, origin, asCallee))(flattenCallSpine(cts, ECall(fn, args, origin, { start: 0, end: 0 }))), (d) => d));
 var plainCallD = _curry14(5, (cts, fn, args, origin, asCallee) => {
   const fnD = calleeD(cts, fn);
   return ((_v) => _v.length === 0 ? cat([fnD, txt("()")]) : _v.length === 1 && _v[0]._tag === "ETuple" ? (([{ elements, span: tsp }]) => group(cat([fnD, txt("("), exprD(cts, ETuple(elements, tsp)), txt(")")])))(_v) : ((argDocs) => ((_v) => _v._tag === "Some" && _v.value._tag === "ELambda" ? (({ value: { body: lbody } }) => group(cat([fnD, txt("("), join(txt(", "), argDocs), or7(lastArgHugs(lbody), !asCallee) ? txt(")") : cat([softline, txt(")")])])))(_v) : cat([fnD, group(cat([txt("("), indent(cat([softline, join(cat([txt(","), line]), argDocs)])), softline, txt(")")]))]))(_Array_get11(length11(args) - 1, args)))(callArgDocs(cts, args, origin)))(args);
@@ -16850,20 +15510,10 @@ var exprRawOf = _curry14(2, (cts, e) => {
     }
     case "ELetIn": {
       const { name, annot, value, body } = $match;
-      const $match$ = discardedLetExprs(e);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: exprs } = $match$;
-          return doD(cts, exprs);
-        }
-        case "None": {
-          const ann = _Option_match12(annot, () => "", (te) => ` : ${showTypeExpr(te)}`);
-          return letLikeD(cts, `let ${name}${ann}`, value, body);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match12(discardedLetExprs(e), () => {
+        const ann = _Option_match12(annot, () => "", (te) => ` : ${showTypeExpr(te)}`);
+        return letLikeD(cts, `let ${name}${ann}`, value, body);
+      }, (exprs) => doD(cts, exprs));
     }
     case "ELetBind": {
       const { param, monad, value, body } = $match;
@@ -16903,48 +15553,10 @@ var exprRawOf = _curry14(2, (cts, e) => {
   }
 });
 var aliasFieldText = (f) => `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
-var ctorArms = _curry14(3, (cts, ctors, i) => {
-  const $match = _Array_get11(i, ctors);
-  switch ($match._tag) {
-    case "None": {
-      return [];
-    }
-    case "Some": {
-      const { value: c } = $match;
-      return _Array_prepend5(cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]), ctorArms(cts, ctors, i + 1));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var ctorArms = _curry14(3, (cts, ctors, i) => _Option_match12(_Array_get11(i, ctors), () => [], (c) => _Array_prepend5(cat([hardline, withComments(cts, CTOR, c.span, txt(`| ${ctorText(c)}`))]), ctorArms(cts, ctors, i + 1))));
 var typeStmtD = _curry14(6, (cts, name, params, ctors, alias, aliasType) => {
   const head = `type ${name}${generics(params)}`;
-  const $match = alias;
-  switch ($match._tag) {
-    case "Some": {
-      const { value: fields } = $match;
-      return cat([txt(`${head} = `), braced("{", "}", map8((f) => txt(aliasFieldText(f)), fields))]);
-    }
-    case "None": {
-      const $match$ = aliasType;
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: te } = $match$;
-          return txt(`${head} = ${showTypeExpr(te)}`);
-        }
-        case "None": {
-          return length11(ctors) === 0 ? txt(`extern ${head}`) : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))]);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match12(alias, () => _Option_match12(aliasType, () => length11(ctors) === 0 ? txt(`extern ${head}`) : cat([txt(`${head} =`), indent(cat(ctorArms(cts, ctors, 0)))]), (te) => txt(`${head} = ${showTypeExpr(te)}`)), (fields) => cat([txt(`${head} = `), braced("{", "}", map8((f) => txt(aliasFieldText(f)), fields))]));
 });
 var importStmtD = _curry14(2, (names, from) => group(cat([txt("import "), braced("{", "}", map8((n) => txt(n.name), names)), txt(` from ${strLit2(from)}`)])));
 var importNsStmtD = _curry14(2, (alias, from) => txt(`import * as ${alias} from ${strLit2(from)}`));
@@ -16952,54 +15564,42 @@ var exprD = _curry14(2, (cts, e) => withComments(cts, EXPR, exprSpan2(e), exprRa
 var expPrefix = (exported) => exported ? "export " : "";
 var fieldOf = _curry14(2, (e, tmp) => ((_v) => _v._tag === "EField" && _v.target._tag === "ERef" ? (({ target: { name: target }, name }) => eq10(target, tmp) ? Some12(name) : None12)(_v) : None12)(e));
 var destructureFieldsFrom = _curry14(4, (stmts, j, tmp, acc) => ((_v) => _v._tag === "Some" && _v.value._tag === "SLet" ? (({ value: { name, value } }) => _Option_match12(fieldOf(value, tmp), () => acc, (f) => eq10(f, name) ? destructureFieldsFrom(stmts, j + 1, tmp, _Array_append9(f, acc)) : acc))(_v) : acc)(_Array_get11(j, stmts)));
-var stmtDoc = _curry14(4, (cts, stmts, i, src) => {
-  const $match = _Array_get11(i, stmts);
+var stmtDoc = _curry14(4, (cts, stmts, i, src) => _Option_match12(_Array_get11(i, stmts), () => ({ doc: txt(""), consumed: 1 }), (s) => {
+  const $match = s;
   switch ($match._tag) {
-    case "None": {
-      return { doc: txt(""), consumed: 1 };
+    case "SImport": {
+      const { names, from } = $match;
+      return { doc: importStmtD(names, from), consumed: 1 };
     }
-    case "Some": {
-      const { value: s } = $match;
-      const $match$ = s;
-      switch ($match$._tag) {
-        case "SImport": {
-          const { names, from } = $match$;
-          return { doc: importStmtD(names, from), consumed: 1 };
-        }
-        case "SImportNs": {
-          const { alias, from } = $match$;
-          return { doc: importNsStmtD(alias.name, from), consumed: 1 };
-        }
-        case "SType": {
-          const { name, params, ctors, alias, aliasType, exported } = $match$;
-          return { doc: cat([txt(expPrefix(exported)), typeStmtD(cts, name, params, ctors, alias, aliasType)]), consumed: 1 };
-        }
-        case "SExtern": {
-          const { name, params, typeExpr: te, module, imported, curried, exported } = $match$;
-          return { doc: txt(`${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`), consumed: 1 };
-        }
-        case "SError": {
-          const { span: sp } = $match$;
-          return { doc: verbatim(_Str_slice3(sp.start, sp.end, src)), consumed: 1 };
-        }
-        case "SExpr": {
-          const { value } = $match$;
-          return { doc: exprD(cts, value), consumed: 1 };
-        }
-        case "SLet": {
-          const { name, annot, value, exported } = $match$;
-          return _Str_startsWith3("$", name) ? ((fields) => ({ doc: cat([txt(`${expPrefix(exported)}let { ${_Str_join5(", ", fields)} } = `), exprD(cts, value)]), consumed: length11(fields) + 1 }))(destructureFieldsFrom(stmts, i + 1, name, [])) : ((ann) => ({ doc: cat([txt(`${expPrefix(exported)}let ${name}${ann} = `), exprD(cts, value)]), consumed: 1 }))(_Option_match12(annot, () => "", (te) => ` : ${showTypeExpr(te)}`));
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+    case "SImportNs": {
+      const { alias, from } = $match;
+      return { doc: importNsStmtD(alias.name, from), consumed: 1 };
+    }
+    case "SType": {
+      const { name, params, ctors, alias, aliasType, exported } = $match;
+      return { doc: cat([txt(expPrefix(exported)), typeStmtD(cts, name, params, ctors, alias, aliasType)]), consumed: 1 };
+    }
+    case "SExtern": {
+      const { name, params, typeExpr: te, module, imported, curried, exported } = $match;
+      return { doc: txt(`${expPrefix(exported)}${externStmt(name, params, te, module, imported, curried)}`), consumed: 1 };
+    }
+    case "SError": {
+      const { span: sp } = $match;
+      return { doc: verbatim(_Str_slice3(sp.start, sp.end, src)), consumed: 1 };
+    }
+    case "SExpr": {
+      const { value } = $match;
+      return { doc: exprD(cts, value), consumed: 1 };
+    }
+    case "SLet": {
+      const { name, annot, value, exported } = $match;
+      return _Str_startsWith3("$", name) ? ((fields) => ({ doc: cat([txt(`${expPrefix(exported)}let { ${_Str_join5(", ", fields)} } = `), exprD(cts, value)]), consumed: length11(fields) + 1 }))(destructureFieldsFrom(stmts, i + 1, name, [])) : ((ann) => ({ doc: cat([txt(`${expPrefix(exported)}let ${name}${ann} = `), exprD(cts, value)]), consumed: 1 }))(_Option_match12(annot, () => "", (te) => ` : ${showTypeExpr(te)}`));
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
-});
+}));
 var stmtSpan = (s) => {
   const $match = s;
   switch ($match._tag) {
@@ -17043,77 +15643,27 @@ var blankBetweenFrom = _curry14(3, (s, i, seenNl) => ((_v) => _v._tag === "None"
 var blankBetween = (gap) => blankBetweenFrom(gap, 0, false);
 var anchorStart = _curry14(2, (cts, s) => {
   const sp = stmtSpan(s);
-  const $match = _Array_get11(0, atKey(cts.leading, spanKey(STMT, sp)));
-  switch ($match._tag) {
-    case "Some": {
-      const { value: c } = $match;
-      return c.start;
-    }
-    case "None": {
-      return sp.start;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+  return _Option_match12(_Array_get11(0, atKey(cts.leading, spanKey(STMT, sp))), () => sp.start, (c) => c.start);
 });
-var stmtParts = _curry14(6, (cts, stmts, i, src, prevEnd, acc) => {
-  const $match = _Array_get11(i, stmts);
-  switch ($match._tag) {
-    case "None": {
-      return _tuple7(acc, prevEnd);
-    }
-    case "Some": {
-      const { value: cur } = $match;
-      const sep = _Option_match12(prevEnd, () => [], (pe) => blankBetween(_Str_slice3(pe, anchorStart(cts, cur), src)) ? [hardline, hardline] : [hardline]);
-      const printed = stmtDoc(cts, stmts, i, src);
-      const lastIdx = i + printed.consumed - 1;
-      const end = _Option_match12(_Array_get11(lastIdx, stmts), () => 0, (last) => stmtSpan(last).end);
-      return stmtParts(cts, stmts, i + printed.consumed, src, Some12(end), _Array_concat6(acc, _Array_append9(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep)));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
-var tailParts = _curry14(3, (tail, src, prevEnd) => {
-  const $match = _Array_get11(0, tail);
-  switch ($match._tag) {
-    case "None": {
-      return [];
-    }
-    case "Some": {
-      const { value: first } = $match;
-      const sep = _Option_match12(prevEnd, () => [], (pe) => blankBetween(_Str_slice3(pe, first.start, src)) ? [hardline, hardline] : [hardline]);
-      return _Array_append9(join(hardline, map8((c) => txt(c.text), tail)), sep);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+var stmtParts = _curry14(6, (cts, stmts, i, src, prevEnd, acc) => _Option_match12(_Array_get11(i, stmts), () => _tuple7(acc, prevEnd), (cur) => {
+  const sep = _Option_match12(prevEnd, () => [], (pe) => blankBetween(_Str_slice3(pe, anchorStart(cts, cur), src)) ? [hardline, hardline] : [hardline]);
+  const printed = stmtDoc(cts, stmts, i, src);
+  const lastIdx = i + printed.consumed - 1;
+  const end = _Option_match12(_Array_get11(lastIdx, stmts), () => 0, (last) => stmtSpan(last).end);
+  return stmtParts(cts, stmts, i + printed.consumed, src, Some12(end), _Array_concat6(acc, _Array_append9(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep)));
+}));
+var tailParts = _curry14(3, (tail, src, prevEnd) => _Option_match12(_Array_get11(0, tail), () => [], (first) => {
+  const sep = _Option_match12(prevEnd, () => [], (pe) => blankBetween(_Str_slice3(pe, first.start, src)) ? [hardline, hardline] : [hardline]);
+  return _Array_append9(join(hardline, map8((c) => txt(c.text), tail)), sep);
+}));
 var programDoc = _curry14(4, (cts, stmts, src, tail) => (([parts, prevEnd]) => cat(_Array_concat6(_Array_concat6(parts, tailParts(tail, src, prevEnd)), [hardline])))(stmtParts(cts, stmts, 0, src, None12, [])));
 var stmtAnchors = (s) => _Array_append9({ kind: STMT, sp: stmtSpan(s) }, ((_v) => _v._tag === "SLet" ? (({ value }) => exprAnchors(value))(_v) : _v._tag === "SExpr" ? (({ value }) => exprAnchors(value))(_v) : _v._tag === "SType" ? (({ ctors }) => map8((c) => ({ kind: CTOR, sp: c.span }), ctors))(_v) : [])(s));
 var inErrorSpanFrom = _curry14(3, (stmts, i, c) => ((_v) => _v._tag === "None" ? false : _v._tag === "Some" && _v.value._tag === "SError" ? (({ value: { span: sp } }) => or7(and9(c.start >= sp.start, c.start < sp.end), inErrorSpanFrom(stmts, i + 1, c)))(_v) : _v._tag === "Some" ? inErrorSpanFrom(stmts, i + 1, c) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get11(i, stmts)));
 var inErrorSpan = _curry14(2, (stmts, c) => inErrorSpanFrom(stmts, 0, c));
-var hasOpenDirective = (src) => {
-  const $match = _Array_get11(0, _Str_split4(`
-`, _Str_trim(src)));
-  switch ($match._tag) {
-    case "Some": {
-      const { value: first } = $match;
-      return _Str_trim(first) === '"use open"';
-    }
-    case "None": {
-      return false;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+var hasOpenDirective = (src) => _Option_match12(_Array_get11(0, _Str_split4(`
+`, _Str_trim(src))), () => false, (first) => _Str_trim(first) === '"use open"');
 var formatProgram = _curry14(2, (stmts, src) => {
   const hooks = formatHooksFor(None12);
   return formatProgramWith(stmts, src, hooks);

@@ -406,22 +406,12 @@ const expectLabel: _Curry<[toks: LocTok[], pos: number], Result<[Name, number], 
   2,
   (toks: LocTok[], pos: number) => {
     const lt = tokAt(toks, pos);
-    const $match = keywordText(lt.tok);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: name } = $match;
-        return Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<
-          [Name, number],
-          PErr
-        >;
-      }
-      case "None": {
-        return expectId(toks, pos);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
+    return _Option_match(
+      keywordText(lt.tok),
+      () => expectId(toks, pos),
+      (name) =>
+        Ok(_tuple({ name: name, span: spanOf(lt) }, pos + 1)) as Result<[Name, number], PErr>,
+    );
   },
 );
 const expectStr: _Curry<[toks: LocTok[], pos: number], Result<[string, number], PErr>> = _curry(
@@ -4900,18 +4890,10 @@ export const parseWith: <A, B, C, D, E>(
     >,
   ) => {
     const r: { stmts: Stmt[]; diagnostics: PErr[] } = parseRecovering(toks, pluginsOpt);
-    const $match = _Array_get(0, r.diagnostics);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: d } = $match;
-        return Err(d) as Result<Stmt[], PErr>;
-      }
-      case "None": {
-        return Ok(r.stmts) as Result<Stmt[], PErr>;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
+    return _Option_match(
+      _Array_get(0, r.diagnostics),
+      () => Ok(r.stmts) as Result<Stmt[], PErr>,
+      (d) => Err(d) as Result<Stmt[], PErr>,
+    );
   },
 );

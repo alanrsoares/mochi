@@ -439,49 +439,35 @@ const spliceHoleToks: <A>(
     holeToks: ({ tok: Tok; doc: Option<string>; end: number; start: number } & A)[],
     by: number,
     toks: LocTok[][],
-  ) => {
-    const $match = _Array_head(holeToks);
-    switch ($match._tag) {
-      case "None": {
-        return toks;
-      }
-      case "Some": {
-        const { value: ht } = $match;
+  ) =>
+    _Option_match(
+      _Array_head(holeToks),
+      () => toks,
+      (ht) => {
         const toks2: LocTok[][] =
           ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks);
         return spliceHoleToks(_Array_tail(holeToks), by, toks2);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 const spliceHole: _Curry<
   [src: string, start: number, stop: number, toks: LocTok[][]],
   Result<LocTok[][], { message: string; start: number; end: number }>
-> = _curry(4, (src: string, start: number, stop: number, toks: LocTok[][]) => {
-  const $match = lex(_Str_slice(start, stop, src));
-  switch ($match._tag) {
-    case "Ok": {
-      const { value: holeToks } = $match;
-      return Ok(spliceHoleToks(holeToks, start, toks)) as Result<
+> = _curry(4, (src: string, start: number, stop: number, toks: LocTok[][]) =>
+  _Result_match(
+    lex(_Str_slice(start, stop, src)),
+    (e) =>
+      Err({ message: e.message, start: e.start + start, end: e.end + start }) as Result<
         LocTok[][],
         { message: string; start: number; end: number }
-      >;
-    }
-    case "Err": {
-      const { error: e } = $match;
-      return Err({ message: e.message, start: e.start + start, end: e.end + start }) as Result<
+      >,
+    (holeToks) =>
+      Ok(spliceHoleToks(holeToks, start, toks)) as Result<
         LocTok[][],
         { message: string; start: number; end: number }
-      >;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+      >,
+  ),
+);
 const lexParts: _Curry<
   [
     src: string,
@@ -505,18 +491,15 @@ const lexParts: _Curry<
     wholeEnd: number,
     doc: string[],
     toks: LocTok[][],
-  ) => {
-    const $match = _Array_head(parts);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(toks) as Result<LocTok[][], { end: number; start: number; message: string }>;
-      }
-      case "Some": {
-        const { value: part } = $match;
-        const $match$ = part;
-        switch ($match$._tag) {
+  ) =>
+    _Option_match(
+      _Array_head(parts),
+      () => Ok(toks) as Result<LocTok[][], { end: number; start: number; message: string }>,
+      (part) => {
+        const $match = part;
+        switch ($match._tag) {
           case "PLit": {
-            const { value } = $match$;
+            const { value } = $match;
             const t: LocTok = mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc);
             return lexParts(
               src,
@@ -530,44 +513,20 @@ const lexParts: _Curry<
             );
           }
           case "PHole": {
-            const { start: hs, end: he } = $match$;
-            const $match$$ = spliceHole(src, hs, he, toks);
-            switch ($match$$._tag) {
-              case "Err": {
-                const { error: e } = $match$$;
-                return Err(e) as Result<
-                  LocTok[][],
-                  { message: string; start: number; end: number }
-                >;
-              }
-              case "Ok": {
-                const { value: toks2 } = $match$$;
-                return lexParts(
-                  src,
-                  _Array_tail(parts),
-                  idx + 1,
-                  total,
-                  wholeStart,
-                  wholeEnd,
-                  doc,
-                  toks2,
-                );
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
+            const { start: hs, end: he } = $match;
+            return _Result_match(
+              spliceHole(src, hs, he, toks),
+              (e) => Err(e) as Result<LocTok[][], { message: string; start: number; end: number }>,
+              (toks2) =>
+                lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2),
+            );
           }
           default: {
             throw new Error("non-exhaustive match");
           }
         }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 const emit: _Curry<
   [src: string, tok: Tok, start: number, stop: number, doc: string[], toks: LocTok[][]],
@@ -580,43 +539,18 @@ const emit: _Curry<
 const lexString: _Curry<
   [src: string, i: number, doc: string[], toks: LocTok[][]],
   Result<LocTok[], { message: string; start: number; end: number }>
-> = _curry(4, (src: string, i: number, doc: string[], toks: LocTok[][]) => {
-  const $match = scanTemplate(src, i);
-  switch ($match._tag) {
-    case "None": {
-      return lexError("unterminated string literal", i, _Str_length(src));
-    }
-    case "Some": {
-      const { value: scanned } = $match;
-      const $match$ = lexParts(
-        src,
-        scanned.parts,
-        0,
-        length(scanned.parts),
-        i,
-        scanned.end,
-        doc,
-        toks,
-      );
-      switch ($match$._tag) {
-        case "Err": {
-          const { error: e } = $match$;
-          return Err(e) as Result<LocTok[], { end: number; start: number; message: string }>;
-        }
-        case "Ok": {
-          const { value: toks2 } = $match$;
-          return go(src, scanned.end, [] as string[], 0, true, toks2);
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+> = _curry(4, (src: string, i: number, doc: string[], toks: LocTok[][]) =>
+  _Option_match(
+    scanTemplate(src, i),
+    () => lexError("unterminated string literal", i, _Str_length(src)),
+    (scanned) =>
+      _Result_match(
+        lexParts(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks),
+        (e) => Err(e) as Result<LocTok[], { end: number; start: number; message: string }>,
+        (toks2) => go(src, scanned.end, [] as string[], 0, true, toks2),
+      ),
+  ),
+);
 const go: _Curry<
   [src: string, i: number, doc: string[], nlRun: number, lineTok: boolean, toks: LocTok[][]],
   Result<LocTok[], { end: number; start: number; message: string }>

@@ -7,7 +7,7 @@ export type TSt = {
   sccs: number[][];
 };
 
-import type { _Curry } from "@mochi/compiler/runtime";
+import type { Option, _Curry } from "@mochi/compiler/runtime";
 
 import {
   None,
@@ -45,21 +45,13 @@ const lowOfV: <A, B>(v: A, st: { low: Map<A, number> } & B) => number = _curry(
   2,
   <A, B>(v: A, st: { low: Map<A, number> } & B) => _Map_getOr(-1, v, st.low),
 );
-const neighborsOf: <A>(v: number, adj: A[][]) => A[] = _curry(2, <A>(v: number, adj: A[][]) => {
-  const $match = _Array_get(v, adj);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: ws } = $match;
-      return ws;
-    }
-    case "None": {
-      return [] as A[];
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+const neighborsOf: <A>(v: number, adj: A[][]) => A[] = _curry(2, <A>(v: number, adj: A[][]) =>
+  _Option_match(
+    _Array_get(v, adj),
+    () => [] as A[],
+    (ws) => ws,
+  ),
+);
 const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
   3,
   <A>(v: A, xs: A[], i: number) => {

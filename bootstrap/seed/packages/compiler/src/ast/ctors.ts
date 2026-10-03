@@ -45,21 +45,12 @@ const emptyRegistry: Registry = {
 export const primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
 const keysOfFrom: <A>(fields: ({ name: Option<string> } & A)[], i: number) => string[] = _curry(
   2,
-  <A>(fields: ({ name: Option<string> } & A)[], i: number) => {
-    const $match = _Array_get(i, fields);
-    switch ($match._tag) {
-      case "None": {
-        return [] as string[];
-      }
-      case "Some": {
-        const { value: f } = $match;
-        return _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A>(fields: ({ name: Option<string> } & A)[], i: number) =>
+    _Option_match(
+      _Array_get(i, fields),
+      () => [] as string[],
+      (f) => _Array_prepend(_Option_unwrapOr(`_${show(i)}`, f.name), keysOfFrom(fields, i + 1)),
+    ),
 );
 export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] = <A>(
   fields: ({ name: Option<string> } & A)[],
@@ -144,28 +135,20 @@ const seedRegCtorsFrom: <A, B, D>(
     i: number,
     owner: string,
     acc: Map<A, CtorInfo>,
-  ) => {
-    const $match = _Array_get(i, ctors);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: c } = $match;
-        return seedRegCtorsFrom(
+  ) =>
+    _Option_match(
+      _Array_get(i, ctors),
+      () => acc,
+      (c) =>
+        seedRegCtorsFrom(
           ctors,
           i + 1,
           owner,
           _Map_has(c.name, acc)
             ? acc
             : _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const seedRegDeclsFrom: <C, D, E>(
   decls: ({ name: string; ctors: ({ name: string; fields: C[] } & D)[] } & E)[],
@@ -177,28 +160,20 @@ const seedRegDeclsFrom: <C, D, E>(
     decls: ({ name: string; ctors: ({ name: string; fields: C[] } & D)[] } & E)[],
     i: number,
     reg: Registry,
-  ) => {
-    const $match = _Array_get(i, decls);
-    switch ($match._tag) {
-      case "None": {
-        return reg;
-      }
-      case "Some": {
-        const { value: bt } = $match;
-        return seedRegDeclsFrom(decls, i + 1, {
+  ) =>
+    _Option_match(
+      _Array_get(i, decls),
+      () => reg,
+      (bt) =>
+        seedRegDeclsFrom(decls, i + 1, {
           ctors: seedRegCtorsFrom(bt.ctors, 0, bt.name, reg.ctors),
           types: _Map_set(
             bt.name,
             map((c: { name: string; fields: C[] } & D) => c.name, bt.ctors),
             reg.types,
           ),
-        });
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        }),
+    ),
 );
 const ctorErr: <A, B, C, D>(
   message: A,
@@ -225,15 +200,12 @@ const ctorsInto: <A, C, D, E, F>(
     owner: string,
     sp: { end: C; start: D } & F,
     acc: Map<string, CtorInfo>,
-  ) => {
-    const $match = _Array_get(i, ctors);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(acc);
-      }
-      case "Some": {
-        const { value: c } = $match;
-        return _Map_has(c.name, acc)
+  ) =>
+    _Option_match(
+      _Array_get(i, ctors),
+      () => Ok(acc),
+      (c) =>
+        _Map_has(c.name, acc)
           ? Err(ctorErr(`duplicate constructor '${c.name}'`, sp))
           : ctorsInto(
               ctors,
@@ -241,13 +213,8 @@ const ctorsInto: <A, C, D, E, F>(
               owner,
               sp,
               _Map_set(c.name, { owner: owner, arity: length(c.fields) }, acc),
-            );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+            ),
+    ),
 );
 const buildLoop: _Curry<
   [stmts: Stmt[], i: number, reg: Registry],

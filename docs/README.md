@@ -26,7 +26,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 | [`tooling.md`](tooling.md) | The CLI, the LSP surfaces, the formatter, and `.d.ts` emission. |
 | [`runtime-comparison-benchmark.md`](runtime-comparison-benchmark.md) | Current Mochi versus handwritten JS: repeated runs, raw samples, fixtures and limits. |
 | [`structural-compare-benchmark.md`](structural-compare-benchmark.md) | Record and variant ordering versus the previous JSON fallback, with timing limits and raw samples. |
-| [`function-tail-match-benchmark.md`](function-tail-match-benchmark.md) | Native function-tail switches versus previous emitted dispatch, with runtime and tooling measurements. |
+| [`function-tail-match-benchmark.md`](function-tail-match-benchmark.md) | Native custom-variant function-tail switches versus previous ternary output, with runtime and tooling measurements. |
 | [`dx-tracer-bullets.md`](dx-tracer-bullets.md) | Editor DX slices (rich diagnostics + navigation) — tracked as GitHub issues. |
 | [`docs-reframe.md`](docs-reframe.md) | Directed execution plan for reframing `apps/docs` content & positioning. |
 | [`adr/0053-path-to-wasm3.md`](adr/0053-path-to-wasm3.md) | Proposed: WasmGC as eventual third backend — no Rust rewrite, prerequisites, gates. (`PATH_TO_WASM3.md` stubs here.) |

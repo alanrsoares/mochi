@@ -138,33 +138,22 @@ const writtenQualsIn: _Curry<
 const writtenQualsInAll: _Curry<
   [tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number],
   Map<string, string>
-> = _curry(4, (tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number) => {
-  const $match = _Array_get(i, tes);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: te } = $match;
-      return writtenQualsInAll(tes, local, writtenQualsIn(te, local, acc), i + 1);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+> = _curry(4, (tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number) =>
+  _Option_match(
+    _Array_get(i, tes),
+    () => acc,
+    (te) => writtenQualsInAll(tes, local, writtenQualsIn(te, local, acc), i + 1),
+  ),
+);
 const ctorQualsFrom: _Curry<
   [ctors: Ctor[], local: Set<string>, acc: Map<string, string>, i: number],
   Map<string, string>
-> = _curry(4, (ctors: Ctor[], local: Set<string>, acc: Map<string, string>, i: number) => {
-  const $match = _Array_get(i, ctors);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: c } = $match;
-      return ctorQualsFrom(
+> = _curry(4, (ctors: Ctor[], local: Set<string>, acc: Map<string, string>, i: number) =>
+  _Option_match(
+    _Array_get(i, ctors),
+    () => acc,
+    (c) =>
+      ctorQualsFrom(
         ctors,
         local,
         writtenQualsInAll(
@@ -174,13 +163,9 @@ const ctorQualsFrom: _Curry<
           0,
         ),
         i + 1,
-      );
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+      ),
+  ),
+);
 const writtenQualsFrom: _Curry<
   [stmts: Stmt[], local: Set<string>, acc: Map<string, string>, i: number],
   Map<string, string>
@@ -433,18 +418,11 @@ const typeDeclsFrom: _Curry<
                 ((docComment: string) =>
                   _Option_match(
                     alias,
-                    () => {
-                      const $match = aliasType;
-                      switch ($match._tag) {
-                        case "Some": {
-                          const { value: te } = $match;
-                          return _Array_prepend(
-                            `${docComment}${aliasTsDecl(name, params, qualifyTe(te, qualify), aliases, recs)}`,
-                            rest,
-                          );
-                        }
-                        case "None": {
-                          return length(ctors) === 0
+                    () =>
+                      _Option_match(
+                        aliasType,
+                        () =>
+                          length(ctors) === 0
                             ? _Array_prepend(`${docComment}${opaqueTypeDecl(name)}`, rest)
                             : _Array_prepend(
                                 `${docComment}${typeDecl(
@@ -455,13 +433,13 @@ const typeDeclsFrom: _Curry<
                                   recs,
                                 )}`,
                                 rest,
-                              );
-                        }
-                        default: {
-                          throw new Error("non-exhaustive match");
-                        }
-                      }
-                    },
+                              ),
+                        (te) =>
+                          _Array_prepend(
+                            `${docComment}${aliasTsDecl(name, params, qualifyTe(te, qualify), aliases, recs)}`,
+                            rest,
+                          ),
+                      ),
                     (fields) =>
                       _Array_prepend(
                         `${docComment}${recordAliasDecl(
@@ -629,24 +607,17 @@ const builtinDeclsFor: _Curry<
   string[]
 > = _curry(
   4,
-  (names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) => {
-    const $match = _Array_get(i, builtinTypeDecls);
-    switch ($match._tag) {
-      case "None": {
-        return [] as string[];
-      }
-      case "Some": {
-        const { value: bt } = $match;
+  (names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number) =>
+    _Option_match(
+      _Array_get(i, builtinTypeDecls),
+      () => [] as string[],
+      (bt) => {
         const rest: string[] = builtinDeclsFor(names, aliases, recs, i + 1);
         return _Array_contains(bt.name, names)
           ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
           : rest;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 /**
  * Sidecar imports keep the `.mochi` specifier so `allowArbitraryExtensions`
@@ -703,38 +674,23 @@ const blankNonLocal: <A>(
   i: number,
 ) => Map<A, string> = _curry(
   4,
-  <A>(keys: A[], recs: Map<A, string>, locals: Set<string>, i: number) => {
-    const $match = _Array_get(i, keys);
-    switch ($match._tag) {
-      case "None": {
-        return recs;
-      }
-      case "Some": {
-        const { value: k } = $match;
-        const $match$ = _Map_get(k, recs);
-        switch ($match$._tag) {
-          case "None": {
-            return blankNonLocal(keys, recs, locals, i + 1);
-          }
-          case "Some": {
-            const { value: name } = $match$;
-            return blankNonLocal(
+  <A>(keys: A[], recs: Map<A, string>, locals: Set<string>, i: number) =>
+    _Option_match(
+      _Array_get(i, keys),
+      () => recs,
+      (k) =>
+        _Option_match(
+          _Map_get(k, recs),
+          () => blankNonLocal(keys, recs, locals, i + 1),
+          (name) =>
+            blankNonLocal(
               keys,
               and(name !== "", !_Set_has(name, locals)) ? _Map_set(k, "", recs) : recs,
               locals,
               i + 1,
-            );
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+            ),
+        ),
+    ),
 );
 export const declarationRecs: _Curry<
   [stmts: Stmt[], aliases: Map<string, AliasInfo>],
@@ -770,58 +726,36 @@ const qualConRecs: <A, B, C, D, E>(
     aliases: Map<B, { expr: Option<C>; fields: D[] } & E>,
     recs: Map<A, B>,
     i: number,
-  ) => {
-    const $match = _Array_get(i, keys);
-    switch ($match._tag) {
-      case "None": {
-        return recs;
-      }
-      case "Some": {
-        const { value: name } = $match;
-        return qualConRecs(
+  ) =>
+    _Option_match(
+      _Array_get(i, keys),
+      () => recs,
+      (name) =>
+        qualConRecs(
           keys,
           qualify,
           aliases,
           _Option_match(
             _Map_get(name, qualify),
             () => recs,
-            (qual) => {
-              const $match$ = _Map_get(qual, aliases);
-              switch ($match$._tag) {
-                case "None": {
-                  return recs;
-                }
-                case "Some": {
-                  const { value: info } = $match$;
-                  const $match$$ = info.expr;
-                  switch ($match$$._tag) {
-                    case "Some": {
-                      return recs;
-                    }
-                    case "None": {
-                      return and(length(info.fields) > 0, !_Map_has(name, recs))
+            (qual) =>
+              _Option_match(
+                _Map_get(qual, aliases),
+                () => recs,
+                (info) =>
+                  _Option_match(
+                    info.expr,
+                    () =>
+                      and(length(info.fields) > 0, !_Map_has(name, recs))
                         ? _Map_set(name, qual, recs)
-                        : recs;
-                    }
-                    default: {
-                      throw new Error("non-exhaustive match");
-                    }
-                  }
-                }
-                default: {
-                  throw new Error("non-exhaustive match");
-                }
-              }
-            },
+                        : recs,
+                    () => recs,
+                  ),
+              ),
           ),
           i + 1,
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 /**
  * Host spellings use the same nominal-name index as namespace qualifications.
@@ -917,15 +851,12 @@ const addQuals: _Curry<
   Map<string, string>
 > = _curry(
   5,
-  (alias: string, names: string[], local: Set<string>, acc: Map<string, string>, i: number) => {
-    const $match = _Array_get(i, names);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: name } = $match;
-        return addQuals(
+  (alias: string, names: string[], local: Set<string>, acc: Map<string, string>, i: number) =>
+    _Option_match(
+      _Array_get(i, names),
+      () => acc,
+      (name) =>
+        addQuals(
           alias,
           names,
           local,
@@ -933,13 +864,8 @@ const addQuals: _Curry<
             ? acc
             : _Map_set(name, `${alias}.${name}`, acc),
           i + 1,
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const qualsFromAliases: <A>(
   aliases: string[],
@@ -955,39 +881,24 @@ const qualsFromAliases: <A>(
     local: Set<string>,
     acc: Map<string, string>,
     i: number,
-  ) => {
-    const $match = _Array_get(i, aliases);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: alias } = $match;
-        const $match$ = _Map_get(alias, quals);
-        switch ($match$._tag) {
-          case "None": {
-            return qualsFromAliases(aliases, quals, local, acc, i + 1);
-          }
-          case "Some": {
-            const { value: scope } = $match$;
-            return qualsFromAliases(
+  ) =>
+    _Option_match(
+      _Array_get(i, aliases),
+      () => acc,
+      (alias) =>
+        _Option_match(
+          _Map_get(alias, quals),
+          () => qualsFromAliases(aliases, quals, local, acc, i + 1),
+          (scope) =>
+            qualsFromAliases(
               aliases,
               quals,
               local,
               addQuals(alias, _Set_toArray(scope.types), local, acc, 0),
               i + 1,
-            );
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+            ),
+        ),
+    ),
 );
 /**
  * The graph's contribution to the qualify map: what each namespace alias

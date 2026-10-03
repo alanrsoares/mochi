@@ -198,84 +198,51 @@ const firstAtPath: <A>(
   es: ({ end: number; start: number; message: string } & A)[],
 ) => MErr = _curry(
   2,
-  <A>(path: string, es: ({ end: number; start: number; message: string } & A)[]) => {
-    const $match = _Array_get(0, es);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: e } = $match;
-        return atPath("type", path, e);
-      }
-      case "None": {
-        return { kind: "type", message: `module '${path}': type error`, start: 0, end: 0 };
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A>(path: string, es: ({ end: number; start: number; message: string } & A)[]) =>
+    _Option_match(
+      _Array_get(0, es),
+      () => ({ kind: "type", message: `module '${path}': type error`, start: 0, end: 0 }),
+      (e) => atPath("type", path, e),
+    ),
 );
 const parseModule: _Curry<
   [src: string, plugins: Option<HostPlugin[]>],
   Result<Stmt[], MErr>
-> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) => {
-  const $match = lex(src);
-  switch ($match._tag) {
-    case "Err": {
-      const { error: e } = $match;
-      return Err(stamp("lex", e)) as Result<Stmt[], MErr>;
-    }
-    case "Ok": {
-      const { value: toks } = $match;
-      const $match$ = parseWith(toks, plugins);
-      switch ($match$._tag) {
-        case "Err": {
-          const { error: e } = $match$;
-          return Err(stamp("parse", e)) as Result<Stmt[], MErr>;
-        }
-        case "Ok": {
-          const { value: stmts } = $match$;
-          return Ok(stmts) as Result<Stmt[], MErr>;
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
+  _Result_match(
+    lex(src),
+    (e) => Err(stamp("lex", e)) as Result<Stmt[], MErr>,
+    (toks) =>
+      _Result_match(
+        parseWith(toks, plugins),
+        (e) => Err(stamp("parse", e)) as Result<Stmt[], MErr>,
+        (stmts) => Ok(stmts) as Result<Stmt[], MErr>,
+      ),
+  ),
+);
 const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
   3,
-  (stmts: Stmt[], i: number, acc: string[]) => {
-    const $match = _Array_get(i, stmts);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: s } = $match;
-        const $match$ = s;
-        switch ($match$._tag) {
+  (stmts: Stmt[], i: number, acc: string[]) =>
+    _Option_match(
+      _Array_get(i, stmts),
+      () => acc,
+      (s) => {
+        const $match = s;
+        switch ($match._tag) {
           case "SImport": {
-            const { from } = $match$;
+            const { from } = $match;
             return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
           }
           case "SImportNs": {
-            const { from } = $match$;
+            const { from } = $match;
             return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
           }
           default: {
             return importFromsFrom(stmts, i + 1, acc);
           }
         }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
   importFromsFrom(stmts, 0, [] as string[]);
@@ -293,38 +260,21 @@ const visit: _Curry<
             _Result_match(
               readFile(path),
               () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, MErr>,
-              (src) => {
-                const $match = parseModule(src, plugins);
-                switch ($match._tag) {
-                  case "Err": {
-                    const { error: e } = $match;
-                    return Err(e) as Result<Acc, MErr>;
-                  }
-                  case "Ok": {
-                    const { value: stmts } = $match;
-                    const $match$ = visitAll(importFroms(stmts), path, acc1, plugins);
-                    switch ($match$._tag) {
-                      case "Err": {
-                        const { error: e } = $match$;
-                        return Err(e) as Result<Acc, MErr>;
-                      }
-                      case "Ok": {
-                        const { value: acc2 } = $match$;
-                        return Ok({
+              (src) =>
+                _Result_match(
+                  parseModule(src, plugins),
+                  (e) => Err(e) as Result<Acc, MErr>,
+                  (stmts) =>
+                    _Result_match(
+                      visitAll(importFroms(stmts), path, acc1, plugins),
+                      (e) => Err(e) as Result<Acc, MErr>,
+                      (acc2) =>
+                        Ok({
                           state: _Map_set(path, "done", acc2.state),
                           order: _Array_append({ path: path, src: src, stmts: stmts }, acc2.order),
-                        }) as Result<Acc, MErr>;
-                      }
-                      default: {
-                        throw new Error("non-exhaustive match");
-                      }
-                    }
-                  }
-                  default: {
-                    throw new Error("non-exhaustive match");
-                  }
-                }
-              },
+                        }) as Result<Acc, MErr>,
+                    ),
+                ),
             ))({ state: _Map_set(path, "loading", acc.state), order: acc.order }))(
     _Map_get(path, acc.state),
   ),
@@ -579,40 +529,25 @@ const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
       nsImports: G;
       imports: H;
     },
-  ) => {
-    const $match = _Map_get(name, depReg.ctors);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(res);
-      }
-      case "Some": {
-        const { value: info } = $match;
-        const $match$ = _Map_get(name, res.reg.ctors);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: prior } = $match$;
-            return !eq(prior.owner, info.owner)
+  ) =>
+    _Option_match(
+      _Map_get(name, depReg.ctors),
+      () => Ok(res),
+      (info) =>
+        _Option_match(
+          _Map_get(name, res.reg.ctors),
+          () => Ok(withNamedCtor(name, info, depReg, depKeys, res)),
+          (prior) =>
+            !eq(prior.owner, info.owner)
               ? Err({
                   kind: "check",
                   message: `duplicate constructor '${name}'`,
                   start: span.start,
                   end: span.end,
                 })
-              : Ok(withNamedCtor(name, info, depReg, depKeys, res));
-          }
-          case "None": {
-            return Ok(withNamedCtor(name, info, depReg, depKeys, res));
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+              : Ok(withNamedCtor(name, info, depReg, depKeys, res)),
+        ),
+    ),
 );
 const prefixCtorsInto: <A>(
   keys: string[],
@@ -714,28 +649,18 @@ const resolveNames: <D, E, F, G, H, I, J, K, L>(
                     start: n.span.start,
                     end: n.span.end,
                   }),
-            (sc) => {
-              const $match = takeNamedCtor(n.name, n.span, depReg, depKeys, {
-                imports: _Map_set(n.name, sc, res.imports),
-                nsImports: res.nsImports,
-                reg: res.reg,
-                keys: res.keys,
-                quals: res.quals,
-              });
-              switch ($match._tag) {
-                case "Err": {
-                  const { error: e } = $match;
-                  return Err(e);
-                }
-                case "Ok": {
-                  const { value: res1 } = $match;
-                  return resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering);
-                }
-                default: {
-                  throw new Error("non-exhaustive match");
-                }
-              }
-            },
+            (sc) =>
+              _Result_match(
+                takeNamedCtor(n.name, n.span, depReg, depKeys, {
+                  imports: _Map_set(n.name, sc, res.imports),
+                  nsImports: res.nsImports,
+                  reg: res.reg,
+                  keys: res.keys,
+                  quals: res.quals,
+                }),
+                (e) => Err(e),
+                (res1) => resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering),
+              ),
           ),
       )
       .otherwise(() => {
@@ -895,55 +820,45 @@ const compileOne: <A>(
     recovering: boolean,
     isEntry: boolean,
     opts: Opts,
-  ) => {
-    const $match = resolveImportsFrom(
-      ctx,
-      loaded.stmts,
-      0,
-      loaded.path,
-      {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<string, RecoveryQualScope>(),
-      },
-      recovering,
-    );
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
-        return Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>;
-      }
-      case "Ok": {
-        const { value: res } = $match;
-        const $match$ = checkWith(loaded.stmts, res.reg, res.quals);
-        switch ($match$._tag) {
-          case "Err": {
-            const { error: e } = $match$;
-            return Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>;
-          }
-          case "Ok": {
-            const $match$$ = inferProgramImports(
-              loaded.stmts,
-              builtins,
-              namespaces,
-              openFor(loaded, isEntry, opts),
-              res.imports,
-              res.nsImports,
-              res.quals,
-              opts.plugins,
-            );
-            switch ($match$$._tag) {
-              case "Err": {
-                const { error: es } = $match$$;
-                return Err(map((e: IErr) => atPath("type", loaded.path, e), es)) as Result<
+  ) =>
+    _Result_match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, RecoveryQualScope>(),
+        },
+        recovering,
+      ),
+      (e) => Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) => Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>,
+          () =>
+            _Result_match(
+              inferProgramImports(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openFor(loaded, isEntry, opts),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(map((e: IErr) => atPath("type", loaded.path, e), es)) as Result<
                   RecoveryCtx,
                   MErr[]
-                >;
-              }
-              case "Ok": {
-                const { value: env } = $match$$;
+                >,
+              (env) => {
                 const js: string = codegenWith(
                   loaded.stmts,
                   res.keys,
@@ -968,22 +883,10 @@ const compileOne: <A>(
                   ),
                   outputs: [...ctx.outputs, { path: loaded.path, js: js }],
                 }) as Result<RecoveryCtx, MErr[]>;
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+              },
+            ),
+        ),
+    ),
 );
 const compileAll: _Curry<
   [ctx: RecoveryCtx, graph: Loaded[], opts: Opts],
@@ -1097,48 +1000,33 @@ const checkErrorsRecovering: <B, C, D>(
           () => [] as MErr[],
         )
       : ([] as MErr[]);
-    const $match = resolveImportsFrom(
-      ctx,
-      loaded.stmts,
-      0,
-      loaded.path,
-      {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, B>(),
-        quals: new Map<string, { types: Set<string> } & C>(),
-      },
-      true,
-    );
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
-        return [atPath("check", loaded.path, e)];
-      }
-      case "Ok": {
-        const { value: res } = $match;
-        const $match$ = checkAllWith(loaded.stmts, res.reg, res.quals);
-        switch ($match$._tag) {
-          case "Err": {
-            const { error: es } = $match$;
-            return _Array_concat(
+    return _Result_match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, B>(),
+          quals: new Map<string, { types: Set<string> } & C>(),
+        },
+        true,
+      ),
+      (e) => [atPath("check", loaded.path, e)],
+      (res) =>
+        _Result_match(
+          checkAllWith(loaded.stmts, res.reg, res.quals),
+          (es) =>
+            _Array_concat(
               importErrors,
               map((e: StageErr) => atPath("check", loaded.path, e), es),
-            );
-          }
-          case "Ok": {
-            return importErrors;
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
+            ),
+          () => importErrors,
+        ),
+    );
   },
 );
 const sameErr: _Curry<[a: MErr, b: MErr], boolean> = _curry(2, (a: MErr, b: MErr) =>
@@ -1158,23 +1046,16 @@ const mergeRecovered: _Curry<[es: MErr[], checks: MErr[]], MErr[]> = _curry(
 const recoverOne: _Curry<
   [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts],
   RecoveryGraphState
-> = _curry(5, (ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts) => {
-  const $match = compileOne(ctx, m, true, isEntry, opts);
-  switch ($match._tag) {
-    case "Err": {
-      const { error: es } = $match;
+> = _curry(5, (ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts) =>
+  _Result_match(
+    compileOne(ctx, m, true, isEntry, opts),
+    (es) => {
       const checks: MErr[] = checkErrorsRecovering(ctx, m);
       return { ctx: ctx, errors: _Array_concat(errors, mergeRecovered(es, checks)) };
-    }
-    case "Ok": {
-      const { value: ctx1 } = $match;
-      return { ctx: ctx1, errors: errors };
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+    },
+    (ctx1) => ({ ctx: ctx1, errors: errors }),
+  ),
+);
 const compileAllRecovering: _Curry<
   [ctx: RecoveryCtx, graph: Loaded[], errors: MErr[], opts: Opts],
   RecoveryGraphState
@@ -1241,21 +1122,12 @@ export const recoverModuleWith: _Curry<
 );
 const keepOnly: <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => Map<A, B> = _curry(
   4,
-  <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => {
-    const $match = _Array_get(i, keys);
-    switch ($match._tag) {
-      case "None": {
-        return m;
-      }
-      case "Some": {
-        const { value: k } = $match;
-        return keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) =>
+    _Option_match(
+      _Array_get(i, keys),
+      () => m,
+      (k) => keepOnly(key, keys, i + 1, eq(k, key) ? m : _Map_delete(k, m)),
+    ),
 );
 const onlyAt: <A, B>(key: A, m: Map<A, B>) => Map<A, B> = _curry(2, <A, B>(key: A, m: Map<A, B>) =>
   keepOnly(key, _Map_keys(m), 0, m),
@@ -1358,25 +1230,24 @@ const inferOne: <A, B>(
     } & A,
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
-  ) => {
-    const $match = resolveImportsFrom(
-      ctx,
-      loaded.stmts,
-      0,
-      loaded.path,
-      {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<string, RecoveryQualScope>(),
-      },
-      false,
-    );
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
-        return Err(atPath("check", loaded.path, e)) as Result<
+  ) =>
+    _Result_match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, RecoveryQualScope>(),
+        },
+        false,
+      ),
+      (e) =>
+        Err(atPath("check", loaded.path, e)) as Result<
           {
             exportsByPath: Map<string, Map<string, Scheme>>;
             regByPath: Map<string, Registry>;
@@ -1392,15 +1263,12 @@ const inferOne: <A, B>(
             }[];
           },
           MErr
-        >;
-      }
-      case "Ok": {
-        const { value: res } = $match;
-        const $match$ = checkWith(loaded.stmts, res.reg, res.quals);
-        switch ($match$._tag) {
-          case "Err": {
-            const { error: e } = $match$;
-            return Err(atPath("check", loaded.path, e)) as Result<
+        >,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) =>
+            Err(atPath("check", loaded.path, e)) as Result<
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
                 regByPath: Map<string, Registry>;
@@ -1416,23 +1284,21 @@ const inferOne: <A, B>(
                 }[];
               },
               MErr
-            >;
-          }
-          case "Ok": {
-            const $match$$ = inferProgramImportsTypes(
-              loaded.stmts,
-              builtins,
-              namespaces,
-              openMode(loaded.src, opts.open),
-              res.imports,
-              res.nsImports,
-              res.quals,
-              opts.plugins,
-            );
-            switch ($match$$._tag) {
-              case "Err": {
-                const { error: es } = $match$$;
-                return Err(firstAtPath(loaded.path, es)) as Result<
+            >,
+          () =>
+            _Result_match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(firstAtPath(loaded.path, es)) as Result<
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
@@ -1448,11 +1314,9 @@ const inferOne: <A, B>(
                     }[];
                   },
                   MErr
-                >;
-              }
-              case "Ok": {
-                const { value: r } = $match$$;
-                return Ok({
+                >,
+              (r) =>
+                Ok({
                   exportsByPath: _Map_set(
                     loaded.path,
                     exportedSchemes(loaded.stmts, r.env),
@@ -1500,23 +1364,10 @@ const inferOne: <A, B>(
                     }[];
                   },
                   MErr
-                >;
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+                >,
+            ),
+        ),
+    ),
 );
 const inferAll: <A>(
   ctx: {
@@ -1908,49 +1759,34 @@ export const inferGraphTypes: <A>(
 export const buildModulesWith: _Curry<
   [entry: string, opts: Opts],
   Result<ModuleOutput[], MErr[]>
-> = _curry(2, (entry: string, opts: Opts) => {
-  const $match = loadGraphWith(entry, opts.plugins);
-  switch ($match._tag) {
-    case "Err": {
-      const { error: e } = $match;
-      return Err([e]) as Result<ModuleOutput[], MErr[]>;
-    }
-    case "Ok": {
-      const { value: graph } = $match;
+> = _curry(2, (entry: string, opts: Opts) =>
+  _Result_match(
+    loadGraphWith(entry, opts.plugins),
+    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
+    (graph) => {
       const recovered: GraphRecovery = compileGraphRecoveringWith(graph, opts);
       return length(recovered.errors) === 0
         ? compileGraphWith(graph, opts)
         : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+    },
+  ),
+);
 export const buildModules: (entry: string) => Result<ModuleOutput[], MErr[]> = (entry: string) =>
   buildModulesWith(entry, defaultOpts);
 import { relSpec as $relSpec } from "./host.mjs";
 const relSpec = _curry(2, $relSpec);
 import { externDtsPath as $externDtsPath } from "./host.mjs";
 const externDtsPath = _curry(2, $externDtsPath);
-const isIdentChar: (c: string) => boolean = (c: string) => {
-  const $match = _Str_codeAt(0, c);
-  switch ($match._tag) {
-    case "None": {
-      return false;
-    }
-    case "Some": {
-      const { value: n } = $match;
-      return or(
+const isIdentChar: (c: string) => boolean = (c: string) =>
+  _Option_match(
+    _Str_codeAt(0, c),
+    () => false,
+    (n) =>
+      or(
         or(or(or(and(n >= 48, n <= 57), and(n >= 65, n <= 90)), and(n >= 97, n <= 122)), n === 95),
         n === 36,
-      );
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+      ),
+  );
 const endsAtBoundary: (part: string) => boolean = (part: string) =>
   _Str_length(part) === 0
     ? true
@@ -1959,26 +1795,15 @@ const startsAtBoundary: (part: string) => boolean = (part: string) =>
   _Str_length(part) === 0 ? true : !isIdentChar(_Option_unwrapOr("", _Str_get(0, part)));
 const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
   2,
-  (parts: string[], i: number) => {
-    const $match = _Array_get(i, parts);
-    switch ($match._tag) {
-      case "None": {
-        return false;
-      }
-      case "Some": {
-        const { value: after } = $match;
-        return and(
-          _Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)),
-          startsAtBoundary(after),
-        )
+  (parts: string[], i: number) =>
+    _Option_match(
+      _Array_get(i, parts),
+      () => false,
+      (after) =>
+        and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
           ? true
-          : occursAsWordFrom(parts, i + 1);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+          : occursAsWordFrom(parts, i + 1),
+    ),
 );
 const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(
   2,
@@ -1990,37 +1815,22 @@ const importedBinding: (spec: string) => string = (spec: string) => {
 };
 const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
   2,
-  (line: string, acc: Set<string>) => {
-    const $match = _Array_get(1, _Str_split("{", line));
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: rest } = $match;
-        const $match$ = _Array_get(0, _Str_split("}", rest));
-        switch ($match$._tag) {
-          case "None": {
-            return acc;
-          }
-          case "Some": {
-            const { value: names } = $match$;
-            return reduce(
+  (line: string, acc: Set<string>) =>
+    _Option_match(
+      _Array_get(1, _Str_split("{", line)),
+      () => acc,
+      (rest) =>
+        _Option_match(
+          _Array_get(0, _Str_split("}", rest)),
+          () => acc,
+          (names) =>
+            reduce(
               _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
               acc,
               _Str_split(",", names),
-            );
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+            ),
+        ),
+    ),
 );
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
@@ -2087,21 +1897,13 @@ const typeOwnerOf: <A, B>(
 const nullaryDeclared: <A, B, C, D>(
   name: A,
   local: Map<A, { params: B[]; fields: C[] } & D>,
-) => boolean = _curry(2, <A, B, C, D>(name: A, local: Map<A, { params: B[]; fields: C[] } & D>) => {
-  const $match = _Map_get(name, local);
-  switch ($match._tag) {
-    case "None": {
-      return false;
-    }
-    case "Some": {
-      const { value: info } = $match;
-      return and(length(info.params) === 0, length(info.fields) > 0);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+) => boolean = _curry(2, <A, B, C, D>(name: A, local: Map<A, { params: B[]; fields: C[] } & D>) =>
+  _Option_match(
+    _Map_get(name, local),
+    () => false,
+    (info) => and(length(info.params) === 0, length(info.fields) > 0),
+  ),
+);
 /**
  * A synthetic parameterised homonym makes `withoutAmbiguousAlias` blank the
  * printed name while the nullary shape stays in the index, so the variables
@@ -2119,15 +1921,12 @@ const addDupMarkers: <A, B, E>(
     local: Map<string, { params: A[]; fields: B[] } & E>,
     acc: Map<string, RecoveryAliasInfo>,
     i: number,
-  ) => {
-    const $match = _Array_get(i, names);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: name } = $match;
-        return addDupMarkers(
+  ) =>
+    _Option_match(
+      _Array_get(i, names),
+      () => acc,
+      (name) =>
+        addDupMarkers(
           names,
           local,
           nullaryDeclared(name, local)
@@ -2147,13 +1946,8 @@ const addDupMarkers: <A, B, E>(
                 acc,
               ),
           i + 1,
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const aliasesForTs: <C, D, E>(
   merged: Map<string, RecoveryAliasInfo>,
@@ -2344,25 +2138,24 @@ const compileOneTs: <A, B>(
     } & A,
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
-  ) => {
-    const $match = resolveImportsFrom(
-      ctx,
-      loaded.stmts,
-      0,
-      loaded.path,
-      {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<string, RecoveryQualScope>(),
-      },
-      false,
-    );
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
-        return Err(atPath("check", loaded.path, e)) as Result<
+  ) =>
+    _Result_match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, RecoveryQualScope>(),
+        },
+        false,
+      ),
+      (e) =>
+        Err(atPath("check", loaded.path, e)) as Result<
           {
             exportsByPath: Map<string, Map<string, Scheme>>;
             regByPath: Map<string, Registry>;
@@ -2376,15 +2169,12 @@ const compileOneTs: <A, B>(
             outputs: ModuleOutput[];
           },
           MErr
-        >;
-      }
-      case "Ok": {
-        const { value: res } = $match;
-        const $match$ = checkWith(loaded.stmts, res.reg, res.quals);
-        switch ($match$._tag) {
-          case "Err": {
-            const { error: e } = $match$;
-            return Err(atPath("check", loaded.path, e)) as Result<
+        >,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) =>
+            Err(atPath("check", loaded.path, e)) as Result<
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
                 regByPath: Map<string, Registry>;
@@ -2398,23 +2188,21 @@ const compileOneTs: <A, B>(
                 outputs: ModuleOutput[];
               },
               MErr
-            >;
-          }
-          case "Ok": {
-            const $match$$ = inferProgramImportsTypes(
-              loaded.stmts,
-              builtins,
-              namespaces,
-              openMode(loaded.src, opts.open),
-              res.imports,
-              res.nsImports,
-              res.quals,
-              opts.plugins,
-            );
-            switch ($match$$._tag) {
-              case "Err": {
-                const { error: es } = $match$$;
-                return Err(firstAtPath(loaded.path, es)) as Result<
+            >,
+          () =>
+            _Result_match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(firstAtPath(loaded.path, es)) as Result<
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
@@ -2428,10 +2216,8 @@ const compileOneTs: <A, B>(
                     outputs: ModuleOutput[];
                   },
                   MErr
-                >;
-              }
-              case "Ok": {
-                const { value: r } = $match$$;
+                >,
+              (r) => {
                 const body: string = emitTsModuleWith(
                   loaded.stmts,
                   r.env,
@@ -2497,22 +2283,10 @@ ${body}`;
                   },
                   MErr
                 >;
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+              },
+            ),
+        ),
+    ),
 );
 const noAliases: Map<string, RecoveryAliasInfo> = aliasesOf([] as Stmt[]);
 const externOutputs: <B, C>(
@@ -2674,25 +2448,24 @@ const dtsOne: <A, B>(
     } & A,
     loaded: { stmts: Stmt[]; path: string; src: string } & B,
     opts: Opts,
-  ) => {
-    const $match = resolveImportsFrom(
-      ctx,
-      loaded.stmts,
-      0,
-      loaded.path,
-      {
-        imports: new Map<string, Scheme>(),
-        nsImports: new Map<string, Map<string, Scheme>>(),
-        reg: emptyReg,
-        keys: new Map<string, string[]>(),
-        quals: new Map<string, RecoveryQualScope>(),
-      },
-      false,
-    );
-    switch ($match._tag) {
-      case "Err": {
-        const { error: e } = $match;
-        return Err(atPath("check", loaded.path, e)) as Result<
+  ) =>
+    _Result_match(
+      resolveImportsFrom(
+        ctx,
+        loaded.stmts,
+        0,
+        loaded.path,
+        {
+          imports: new Map<string, Scheme>(),
+          nsImports: new Map<string, Map<string, Scheme>>(),
+          reg: emptyReg,
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, RecoveryQualScope>(),
+        },
+        false,
+      ),
+      (e) =>
+        Err(atPath("check", loaded.path, e)) as Result<
           {
             exportsByPath: Map<string, Map<string, Scheme>>;
             regByPath: Map<string, Registry>;
@@ -2704,15 +2477,12 @@ const dtsOne: <A, B>(
             dts: string;
           },
           MErr
-        >;
-      }
-      case "Ok": {
-        const { value: res } = $match;
-        const $match$ = checkWith(loaded.stmts, res.reg, res.quals);
-        switch ($match$._tag) {
-          case "Err": {
-            const { error: e } = $match$;
-            return Err(atPath("check", loaded.path, e)) as Result<
+        >,
+      (res) =>
+        _Result_match(
+          checkWith(loaded.stmts, res.reg, res.quals),
+          (e) =>
+            Err(atPath("check", loaded.path, e)) as Result<
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
                 regByPath: Map<string, Registry>;
@@ -2724,23 +2494,21 @@ const dtsOne: <A, B>(
                 dts: string;
               },
               MErr
-            >;
-          }
-          case "Ok": {
-            const $match$$ = inferProgramImportsTypes(
-              loaded.stmts,
-              builtins,
-              namespaces,
-              openMode(loaded.src, opts.open),
-              res.imports,
-              res.nsImports,
-              res.quals,
-              opts.plugins,
-            );
-            switch ($match$$._tag) {
-              case "Err": {
-                const { error: es } = $match$$;
-                return Err(firstAtPath(loaded.path, es)) as Result<
+            >,
+          () =>
+            _Result_match(
+              inferProgramImportsTypes(
+                loaded.stmts,
+                builtins,
+                namespaces,
+                openMode(loaded.src, opts.open),
+                res.imports,
+                res.nsImports,
+                res.quals,
+                opts.plugins,
+              ),
+              (es) =>
+                Err(firstAtPath(loaded.path, es)) as Result<
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
@@ -2752,11 +2520,9 @@ const dtsOne: <A, B>(
                     dts: string;
                   },
                   MErr
-                >;
-              }
-              case "Ok": {
-                const { value: r } = $match$$;
-                return Ok({
+                >,
+              (r) =>
+                Ok({
                   exportsByPath: _Map_set(
                     loaded.path,
                     exportedSchemes(loaded.stmts, r.env),
@@ -2797,23 +2563,10 @@ const dtsOne: <A, B>(
                     dts: string;
                   },
                   MErr
-                >;
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+                >,
+            ),
+        ),
+    ),
 );
 const dtsAll: <A>(
   ctx: {
@@ -2903,15 +2656,11 @@ export const emitDtsForFile: _Curry<
 export const buildModulesTsWith: _Curry<
   [entry: string, runtimeImport: string, opts: Opts],
   Result<ModuleOutput[], MErr[]>
-> = _curry(3, (entry: string, runtimeImport: string, opts: Opts) => {
-  const $match = loadGraphWith(entry, opts.plugins);
-  switch ($match._tag) {
-    case "Err": {
-      const { error: e } = $match;
-      return Err([e]) as Result<ModuleOutput[], MErr[]>;
-    }
-    case "Ok": {
-      const { value: graph } = $match;
+> = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
+  _Result_match(
+    loadGraphWith(entry, opts.plugins),
+    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
+    (graph) => {
       const recovered: GraphRecovery = compileGraphRecoveringWith(graph, {
         ...opts,
         strictEntry: false,
@@ -2919,12 +2668,9 @@ export const buildModulesTsWith: _Curry<
       return length(recovered.errors) === 0
         ? _Result_mapErr((e: MErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
         : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+    },
+  ),
+);
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],
   Result<ModuleOutput[], MErr[]>

@@ -34,7 +34,7 @@ const fixtures = [
 const runs: unknown[] = [];
 for (const round of [0, 1]) {
   for (const fixture of fixtures) {
-    for (const variant of round === 0 ? ["previous", "switch"] : ["switch", "previous"]) {
+    for (const variant of round === 0 ? ["previous", "current"] : ["current", "previous"]) {
       const module =
         variant === "previous"
           ? join(out, `previous-${fixture.bundle}`)

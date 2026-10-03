@@ -66,26 +66,18 @@ export const group: (doc: Doc) => Doc = (doc: Doc) => DGroup(doc, forcesBreak(do
 export const lineSuffix: (doc: Doc) => Doc = (doc: Doc) => DLineSuffix(doc);
 const joinFrom: <A>(sep: A, parts: A[], i: number, acc: A[]) => A[] = _curry(
   4,
-  <A>(sep: A, parts: A[], i: number, acc: A[]) => {
-    const $match = _Array_get(i, parts);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: p } = $match;
-        return joinFrom(
+  <A>(sep: A, parts: A[], i: number, acc: A[]) =>
+    _Option_match(
+      _Array_get(i, parts),
+      () => acc,
+      (p) =>
+        joinFrom(
           sep,
           parts,
           i + 1,
           i === 0 ? _Array_append(p, acc) : _Array_append(p, _Array_append(sep, acc)),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 export const join: _Curry<[sep: Doc, parts: Doc[]], Doc> = _curry(2, (sep: Doc, parts: Doc[]) =>
   DCat(joinFrom(sep, parts, 0, [] as Doc[])),
@@ -188,21 +180,12 @@ const fits: _Curry<[width: number, start: Work], boolean> = _curry(
 );
 const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(
   2,
-  (parts: Doc[], i: number) => {
-    const $match = _Array_get(i, parts);
-    switch ($match._tag) {
-      case "None": {
-        return false;
-      }
-      case "Some": {
-        const { value: p } = $match;
-        return or(forcesBreak(p), anyForcesBreak(parts, i + 1));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  (parts: Doc[], i: number) =>
+    _Option_match(
+      _Array_get(i, parts),
+      () => false,
+      (p) => or(forcesBreak(p), anyForcesBreak(parts, i + 1)),
+    ),
 );
 /**
  * Does this document contain a hardline anywhere in its subtree? If so every

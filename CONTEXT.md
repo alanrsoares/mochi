@@ -253,4 +253,5 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   lower to a self-contained pull IIFE instead. Simple exhaustive builtin Result
   and Option matches use flat runtime dispatch (ADR 0146).
   Eligible function-tail constructor matches emit native switches with direct
-  returns (ADR 0147); expression contexts retain the existing lowering.
+  returns (ADR 0147); eligible builtin Result/Option pairs retain their compact
+  runtime helpers, and expression contexts retain the existing lowering.

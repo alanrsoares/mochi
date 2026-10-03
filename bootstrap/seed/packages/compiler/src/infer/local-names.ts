@@ -46,21 +46,12 @@ const addBinderNames: <A>(names: A[], out: Set<A>) => Set<A> = _curry(
 );
 const patternNamesOpt: _Curry<[p: Option<Pattern>, out: Set<string>], Set<string>> = _curry(
   2,
-  (p: Option<Pattern>, out: Set<string>) => {
-    const $match = p;
-    switch ($match._tag) {
-      case "None": {
-        return out;
-      }
-      case "Some": {
-        const { value: pat } = $match;
-        return patternNames(pat, out);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  (p: Option<Pattern>, out: Set<string>) =>
+    _Option_match(
+      p,
+      () => out,
+      (pat) => patternNames(pat, out),
+    ),
 );
 const patternNamesAll: _Curry<[pats: Pattern[], out: Set<string>], Set<string>> = _curry(
   2,
@@ -158,21 +149,12 @@ const exprNamesAll: _Curry<[exprs: Expr[], out: Set<string>], Set<string>> = _cu
 );
 const exprNamesOpt: _Curry<[e: Option<Expr>, out: Set<string>], Set<string>> = _curry(
   2,
-  (e: Option<Expr>, out: Set<string>) => {
-    const $match = e;
-    switch ($match._tag) {
-      case "None": {
-        return out;
-      }
-      case "Some": {
-        const { value: ex } = $match;
-        return exprNames(ex, out);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  (e: Option<Expr>, out: Set<string>) =>
+    _Option_match(
+      e,
+      () => out,
+      (ex) => exprNames(ex, out),
+    ),
 );
 const seqNames: _Curry<[elems: SeqElem[], out: Set<string>], Set<string>> = _curry(
   2,

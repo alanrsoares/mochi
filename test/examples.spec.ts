@@ -15,14 +15,14 @@ const path = (p: string): string => repoPath(import.meta.url, p);
 
 test("builtin Result and Option matches use flat dispatch with one scrutinee evaluation", () => {
   const source = `
-let result = (read: () -> Result<number, string>, log: number -> unit) => let matched = switch read() {
+let result = (read: () -> Result<number, string>, log: number -> unit) => switch read() {
   | Ok(n) => let printed = log(n) in n + 1
   | Err(e) => Str.length(e)
-} in matched
-let option = (read: () -> Option<number>, log: number -> unit) => let matched = switch read() {
+}
+let option = (read: () -> Option<number>, log: number -> unit) => let fallback = 0 in switch read() {
   | Some(n) => let printed = log(n) in n + 1
-  | None => 0
-} in matched
+  | None => fallback
+}
 `;
   const emitted = unwrapOk(compileTargets(source, { runtime: false }));
   expect(emitted.js).toContain("_Result_match(");
@@ -31,6 +31,8 @@ let option = (read: () -> Option<number>, log: number -> unit) => let matched = 
   expect(emitted.ts).toContain("_Option_match(");
   expect(emitted.js).not.toContain('._tag === "Ok"');
   expect(emitted.js).not.toContain('._tag === "Some"');
+  expect(emitted.js).not.toContain("switch (");
+  expect(emitted.ts).not.toContain("switch (");
   const result = compileAndEval(source, "result") as (
     read: () => unknown,
     log: (n: number) => void,
@@ -104,6 +106,7 @@ let shadowLoop = x => switch x { | Box(n) => loop (n = 0) { n >= 3 ? n : recur(n
     expect(output).toContain('case "Pair":');
     expect(output).toContain("default:");
     expect(output).not.toContain('._tag === "Box"');
+    expect(output).toContain("_Option_match(");
   }
   const run = compileAndEval(source, "run") as (
     read: () => unknown,

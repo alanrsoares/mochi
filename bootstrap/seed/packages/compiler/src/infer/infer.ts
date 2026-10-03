@@ -527,15 +527,12 @@ const aliasRowFrom: <A>(
     fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & A)[],
     aliases: Map<string, QualAliasInfo>,
     i: number,
-  ) => {
-    const $match = _Array_get(i, fields);
-    switch ($match._tag) {
-      case "None": {
-        return RowEmpty as Row;
-      }
-      case "Some": {
-        const { value: f } = $match;
-        return (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+  ) =>
+    _Option_match(
+      _Array_get(i, fields),
+      () => RowEmpty as Row,
+      (f) =>
+        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
           rField(f.name, t, aliasRowFrom(fields, aliases, i + 1), f.optional))(
           typeExprToType(
             f.fieldType,
@@ -544,13 +541,8 @@ const aliasRowFrom: <A>(
             aliases,
             _Set_fromArray([] as string[]),
           ),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const shownOfAlias: <A, B, C, D>(
   info: {
@@ -620,50 +612,28 @@ const printsFrom: _Curry<
     aliases: Map<string, QualAliasInfo>,
     i: number,
     acc: { shown: string; name: string }[],
-  ) => {
-    const $match = _Array_get(i, keys);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: key } = $match;
-        const $match$ = _Map_get(key, aliases);
-        switch ($match$._tag) {
-          case "None": {
-            return printsFrom(keys, aliases, i + 1, acc);
-          }
-          case "Some": {
-            const { value: info } = $match$;
-            const $match$$ = shownOfAlias(info, aliases);
-            switch ($match$$._tag) {
-              case "None": {
-                return printsFrom(keys, aliases, i + 1, acc);
-              }
-              case "Some": {
-                const { value: shown } = $match$$;
-                return printsFrom(
+  ) =>
+    _Option_match(
+      _Array_get(i, keys),
+      () => acc,
+      (key) =>
+        _Option_match(
+          _Map_get(key, aliases),
+          () => printsFrom(keys, aliases, i + 1, acc),
+          (info) =>
+            _Option_match(
+              shownOfAlias(info, aliases),
+              () => printsFrom(keys, aliases, i + 1, acc),
+              (shown) =>
+                printsFrom(
                   keys,
                   aliases,
                   i + 1,
                   insertPrint({ shown: shown, name: lastSeg(key) }, acc),
-                );
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+                ),
+            ),
+        ),
+    ),
 );
 const applyPrints: <A>(
   msg: string,
@@ -671,21 +641,12 @@ const applyPrints: <A>(
   i: number,
 ) => string = _curry(
   3,
-  <A>(msg: string, prints: ({ shown: string; name: string } & A)[], i: number) => {
-    const $match = _Array_get(i, prints);
-    switch ($match._tag) {
-      case "None": {
-        return msg;
-      }
-      case "Some": {
-        const { value: p } = $match;
-        return applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A>(msg: string, prints: ({ shown: string; name: string } & A)[], i: number) =>
+    _Option_match(
+      _Array_get(i, prints),
+      () => msg,
+      (p) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1),
+    ),
 );
 const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], string> = _curry(
   2,
@@ -733,22 +694,12 @@ const u: _Curry<
     right: Ty,
     st: St,
     sp: SpanAt,
-  ) => {
-    const $match = unify(left, right, st);
-    switch ($match._tag) {
-      case "Ok": {
-        const { value: newSt } = $match;
-        return Ok(newSt) as Result<St, IErr>;
-      }
-      case "Err": {
-        const { error: e } = $match;
-        return Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Result_match(
+      unify(left, right, st),
+      (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+      (newSt) => Ok(newSt) as Result<St, IErr>,
+    ),
 );
 /**
  * `actual` may be used as `expected` (ADR 0098 optional fields).
@@ -790,22 +741,12 @@ const checkFits: _Curry<
     expected: Ty,
     st: St,
     sp: SpanAt,
-  ) => {
-    const $match = fits(actual, expected, st);
-    switch ($match._tag) {
-      case "Ok": {
-        const { value: newSt } = $match;
-        return Ok(newSt) as Result<St, IErr>;
-      }
-      case "Err": {
-        const { error: e } = $match;
-        return Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Result_match(
+      fits(actual, expected, st),
+      (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+      (newSt) => Ok(newSt) as Result<St, IErr>,
+    ),
 );
 const bindParamNamesFrom: <A>(
   names: A[],
@@ -872,21 +813,15 @@ const recordParamNamesFrom: _Curry<
 const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _curry(
   2,
   <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) =>
-    _Array_flatMap((n: A) => {
-      const $match = _Map_get(n, env);
-      switch ($match._tag) {
-        case "Some": {
-          const { value: sc } = $match;
-          return [sc.ty];
-        }
-        case "None": {
-          return [] as B[];
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
-    }, names),
+    _Array_flatMap(
+      (n: A) =>
+        _Option_match(
+          _Map_get(n, env),
+          () => [] as B[],
+          (sc) => [sc.ty],
+        ),
+      names,
+    ),
 );
 const bindParam: _Curry<
   [p: LamParam, env: Map<string, Scheme>, st: St],
@@ -1319,18 +1254,16 @@ const inferLoopParamsFrom: _Curry<
     frameAcc: Ty[],
     ownerAcc: Map<string, SpanAt>,
     st: St,
-  ) => {
-    const $match = _Array_get(i, params);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
+  ) =>
+    _Option_match(
+      _Array_get(i, params),
+      () =>
+        Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
           [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
           IErr
-        >;
-      }
-      case "Some": {
-        const { value: p } = $match;
-        return _Result_flatMap(
+        >,
+      (p) =>
+        _Result_flatMap(
           ([t, st1]) =>
             ((sp: SpanAt) =>
               inferLoopParamsFrom(
@@ -1346,13 +1279,8 @@ const inferLoopParamsFrom: _Curry<
                 ),
               ))(exprSpan(p.init)),
           inferExpr(ctx, p.init, st),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const unifyRecurArgsFrom: _Curry<
   [
@@ -1391,15 +1319,12 @@ const unifyRecurArgsFrom: _Curry<
     frame: Ty[],
     i: number,
     st: St,
-  ) => {
-    const $match = _Array_get(i, args);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(st) as Result<St, IErr>;
-      }
-      case "Some": {
-        const { value: a } = $match;
-        return _Result_flatMap(
+  ) =>
+    _Option_match(
+      _Array_get(i, args),
+      () => Ok(st) as Result<St, IErr>,
+      (a) =>
+        _Result_flatMap(
           ([at, st1]) =>
             _Option_match(
               _Array_get(i, frame),
@@ -1411,13 +1336,8 @@ const unifyRecurArgsFrom: _Curry<
                 ),
             ),
           inferExpr(ctx, a, st),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const inferRecur: _Curry<
   [
@@ -2688,23 +2608,13 @@ const inferNsField: _Curry<
     name: string,
     sp: SpanAt,
     st: St,
-  ) => {
-    const $match = _Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns));
-    switch ($match._tag) {
-      case "Some": {
-        const { value: sc } = $match;
-        return (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
-          instantiate(sc, st),
-        );
-      }
-      case "None": {
-        return Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Option_match(
+      _Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)),
+      () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
+      (sc) =>
+        (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+    ),
 );
 const inferInterpParts: _Curry<
   [
@@ -3426,21 +3336,12 @@ const inferExprRaw: _Curry<
                                       },
                                       St,
                                       IErr[],
-                                    ]) => {
-                                      const $match = _Array_get(0, localErrs);
-                                      switch ($match._tag) {
-                                        case "Some": {
-                                          const { value: firstErr } = $match;
-                                          return Err(firstErr) as Result<[Ty, St], IErr>;
-                                        }
-                                        case "None": {
-                                          return inferExpr(localCtx, tail, localSt);
-                                        }
-                                        default: {
-                                          throw new Error("non-exhaustive match");
-                                        }
-                                      }
-                                    })(
+                                    ]) =>
+                                      _Option_match(
+                                        _Array_get(0, localErrs),
+                                        () => inferExpr(localCtx, tail, localSt),
+                                        (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
+                                      ))(
                                       processGroupsFrom(
                                         ctx,
                                         stronglyConnected(adjOf(lets, idxOf)),
@@ -4290,55 +4191,37 @@ const inferPatRaw: _Curry<
       }
       case "PCtor": {
         const { ctor, args, ns, span: sp } = $match;
-        const $match$ = ns;
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: alias } = $match$;
-            const $match$$ = _Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns));
-            switch ($match$$._tag) {
-              case "None": {
-                return Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
+        return _Option_match(
+          ns,
+          () =>
+            _Option_match(
+              _Map_get(ctor, ctx.env),
+              () =>
+                Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
                   [Ty, Map<string, Ty>, St],
                   IErr
-                >;
-              }
-              case "Some": {
-                const { value: sc } = $match$$;
-                return (([curT, st1]: [Ty, St]) =>
+                >,
+              (sc) =>
+                (([curT, st1]: [Ty, St]) =>
                   inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                   instantiate(sc, st),
-                );
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          case "None": {
-            const $match$$ = _Map_get(ctor, ctx.env);
-            switch ($match$$._tag) {
-              case "None": {
-                return Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
+                ),
+            ),
+          (alias) =>
+            _Option_match(
+              _Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)),
+              () =>
+                Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
                   [Ty, Map<string, Ty>, St],
                   IErr
-                >;
-              }
-              case "Some": {
-                const { value: sc } = $match$$;
-                return (([curT, st1]: [Ty, St]) =>
+                >,
+              (sc) =>
+                (([curT, st1]: [Ty, St]) =>
                   inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                   instantiate(sc, st),
-                );
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
+                ),
+            ),
+        );
       }
       case "PTuple": {
         const { elems } = $match;
@@ -4398,33 +4281,17 @@ const unifyOrPatBinding: <B>(
     bindings: Map<B, Ty>,
     st: St,
     sp: SpanAt,
-  ) => {
-    const $match = _Map_get(name, bindings);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(st) as Result<St, IErr>;
-      }
-      case "Some": {
-        const { value: prevT } = $match;
-        const $match$ = _Map_get(name, altBindings);
-        switch ($match$._tag) {
-          case "None": {
-            return Ok(st) as Result<St, IErr>;
-          }
-          case "Some": {
-            const { value: ty } = $match$;
-            return u(ctx, prevT, ty, st, sp);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  ) =>
+    _Option_match(
+      _Map_get(name, bindings),
+      () => Ok(st) as Result<St, IErr>,
+      (prevT) =>
+        _Option_match(
+          _Map_get(name, altBindings),
+          () => Ok(st) as Result<St, IErr>,
+          (ty) => u(ctx, prevT, ty, st, sp),
+        ),
+    ),
 );
 const unifyOrPatBindings: <B>(
   ctx: {
@@ -4519,15 +4386,12 @@ const inferOrPatAlts: _Curry<
     t: Ty,
     bindings: Map<string, Ty>,
     st: St,
-  ) => {
-    const $match = _Array_get(i, alts);
-    switch ($match._tag) {
-      case "None": {
-        return Ok(st) as Result<St, IErr>;
-      }
-      case "Some": {
-        const { value: alt } = $match;
-        return _Result_flatMap(
+  ) =>
+    _Option_match(
+      _Array_get(i, alts),
+      () => Ok(st) as Result<St, IErr>,
+      (alt) =>
+        _Result_flatMap(
           ([altT, altBindings, st1]) =>
             _Result_flatMap(
               (st2) =>
@@ -4545,13 +4409,8 @@ const inferOrPatAlts: _Curry<
               u(ctx, t, altT, st1, patSpan(alt)),
             ),
           inferPat(ctx, alt, st),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+        ),
+    ),
 );
 const inferOrPat: _Curry<
   [
@@ -4610,21 +4469,12 @@ const inferOrPat: _Curry<
               throw new Error("non-exhaustive match");
             })())(alts),
 );
-const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) => {
-  const $match = rest;
-  switch ($match._tag) {
-    case "Some": {
-      const { value: r } = $match;
-      return patternBinds(r);
-    }
-    case "None": {
-      return [] as string[];
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) =>
+  _Option_match(
+    rest,
+    () => [] as string[],
+    (r) => patternBinds(r),
+  );
 const patternBinds: (p: Pattern) => string[] = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -4658,19 +4508,11 @@ const patternBinds: (p: Pattern) => string[] = (p: Pattern) => {
     }
     case "POr": {
       const { alts } = $match;
-      const $match$ = _Array_head(alts);
-      switch ($match$._tag) {
-        case "Some": {
-          const { value: first } = $match$;
-          return patternBinds(first);
-        }
-        case "None": {
-          return [] as string[];
-        }
-        default: {
-          throw new Error("non-exhaustive match");
-        }
-      }
+      return _Option_match(
+        _Array_head(alts),
+        () => [] as string[],
+        (first) => patternBinds(first),
+      );
     }
     default: {
       return [] as string[];
@@ -4777,21 +4619,13 @@ const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = 
 const loopInitRefsFrom: _Curry<
   [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
   Set<string>
-> = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) => {
-  const $match = _Array_get(i, params);
-  switch ($match._tag) {
-    case "None": {
-      return acc;
-    }
-    case "Some": {
-      const { value: p } = $match;
-      return loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+> = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
+  _Option_match(
+    _Array_get(i, params),
+    () => acc,
+    (p) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)),
+  ),
+);
 const freeRefsList: _Curry<
   [es: Expr[], bound: Set<string>, acc: Set<string>],
   Set<string>
@@ -5460,21 +5294,12 @@ const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
       case "SLet": {
         const { value } = $match;
         return _Array_flatMap(
-          (r: string) => {
-            const $match$ = _Map_get(r, idxOf);
-            switch ($match$._tag) {
-              case "Some": {
-                const { value: j } = $match$;
-                return [j];
-              }
-              case "None": {
-                return [] as A[];
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          },
+          (r: string) =>
+            _Option_match(
+              _Map_get(r, idxOf),
+              () => [] as A[],
+              (j) => [j],
+            ),
           _Set_toArray(
             freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
           ),
@@ -5579,35 +5404,21 @@ const inferMember: _Curry<
                     err: typeErr(`internal: missing self-binding for '${name}'`, span),
                     st: st1,
                   }) as Result<[Ty, St], MemberErr>,
-                (selfSc) => {
-                  const $match = u(ctx, selfSc.ty, t, st1, span);
-                  switch ($match._tag) {
-                    case "Err": {
-                      const { error: e } = $match;
-                      return Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>;
-                    }
-                    case "Ok": {
-                      const { value: st2 } = $match;
-                      const $match$ = annot;
-                      switch ($match$._tag) {
-                        case "Some": {
-                          const { value: te } = $match$;
-                          return (([at, , stA]: [Ty, Map<string, Ty>, St]) => {
-                            const $match$$ = checkFits(ctx, t, at, stA, annotSpan(te));
-                            switch ($match$$._tag) {
-                              case "Ok": {
-                                const { value: stB } = $match$$;
-                                return Ok(_tuple(at, stB)) as Result<[Ty, St], MemberErr>;
-                              }
-                              case "Err": {
-                                const { error: e } = $match$$;
-                                return Err({ err: e, st: stA }) as Result<[Ty, St], MemberErr>;
-                              }
-                              default: {
-                                throw new Error("non-exhaustive match");
-                              }
-                            }
-                          })(
+                (selfSc) =>
+                  _Result_match(
+                    u(ctx, selfSc.ty, t, st1, span),
+                    (e) => Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>,
+                    (st2) =>
+                      _Option_match(
+                        annot,
+                        () => Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>,
+                        (te) =>
+                          (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
+                            _Result_match(
+                              checkFits(ctx, t, at, stA, annotSpan(te)),
+                              (e) => Err({ err: e, st: stA }) as Result<[Ty, St], MemberErr>,
+                              (stB) => Ok(_tuple(at, stB)) as Result<[Ty, St], MemberErr>,
+                            ))(
                             typeExprToType(
                               te,
                               new Map<string, Ty>(),
@@ -5615,21 +5426,9 @@ const inferMember: _Curry<
                               ctx.aliasMap,
                               _Set_fromArray([] as string[]),
                             ),
-                          );
-                        }
-                        case "None": {
-                          return Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>;
-                        }
-                        default: {
-                          throw new Error("non-exhaustive match");
-                        }
-                      }
-                    }
-                    default: {
-                      throw new Error("non-exhaustive match");
-                    }
-                  }
-                },
+                          ),
+                      ),
+                  ),
               ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
           : (() => {
               throw new Error("non-exhaustive match");
@@ -6264,23 +6063,15 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => {
 };
 const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
   3,
-  (shown: string, uses: Ty[], i: number) => {
-    const $match = _Array_get(i, uses);
-    switch ($match._tag) {
-      case "None": {
-        return true;
-      }
-      case "Some": {
-        const { value: t } = $match;
-        return and(isConcrete(t), eq(showType(t), shown))
+  (shown: string, uses: Ty[], i: number) =>
+    _Option_match(
+      _Array_get(i, uses),
+      () => true,
+      (t) =>
+        and(isConcrete(t), eq(showType(t), shown))
           ? allSameConcreteFrom(shown, uses, i + 1)
-          : false;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+          : false,
+    ),
 );
 const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
   2,
@@ -6826,21 +6617,12 @@ export const inferProgramWith: _Curry<
 );
 const takeScheme: <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) => Map<A, B> = _curry(
   3,
-  <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) => {
-    const $match = _Map_get(name, env);
-    switch ($match._tag) {
-      case "Some": {
-        const { value: sc } = $match;
-        return _Map_set(name, sc, acc);
-      }
-      case "None": {
-        return acc;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) =>
+    _Option_match(
+      _Map_get(name, env),
+      () => acc,
+      (sc) => _Map_set(name, sc, acc),
+    ),
 );
 const exportCtorsInto: <A, B, C>(
   ctors: ({ name: A } & C)[],
@@ -6849,21 +6631,12 @@ const exportCtorsInto: <A, B, C>(
   acc: Map<A, B>,
 ) => Map<A, B> = _curry(
   4,
-  <A, B, C>(ctors: ({ name: A } & C)[], i: number, env: Map<A, B>, acc: Map<A, B>) => {
-    const $match = _Array_get(i, ctors);
-    switch ($match._tag) {
-      case "None": {
-        return acc;
-      }
-      case "Some": {
-        const { value: c } = $match;
-        return exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  <A, B, C>(ctors: ({ name: A } & C)[], i: number, env: Map<A, B>, acc: Map<A, B>) =>
+    _Option_match(
+      _Array_get(i, ctors),
+      () => acc,
+      (c) => exportCtorsInto(ctors, i + 1, env, takeScheme(c.name, env, acc)),
+    ),
 );
 const exportedSchemesFrom: <A>(
   stmts: Stmt[],

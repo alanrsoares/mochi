@@ -251,22 +251,15 @@ const jxExpectLabel: _Curry<
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, (toks: LocTok[], pos: number) => {
   const lt = jxTokAt(toks, pos);
-  const $match = jxKeywordText(lt.tok);
-  switch ($match._tag) {
-    case "Some": {
-      const { value: name } = $match;
-      return Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
+  return _Option_match(
+    jxKeywordText(lt.tok),
+    () => jxExpectId(toks, pos),
+    (name) =>
+      Ok(_tuple({ name: name, span: jxSpanOf(lt) }, pos + 1)) as Result<
         [Name, number],
         { message: string; start: number; end: number }
-      >;
-    }
-    case "None": {
-      return jxExpectId(toks, pos);
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
+      >,
+  );
 });
 /**
  * Attribute names may contain hyphens (`data-testid`, `aria-label`). The lexer
@@ -948,18 +941,15 @@ const jsxChildCount: (restArgs: Expr[]) => number = (restArgs: Expr[]) =>
 const jsxPropsWithSynthesizedChildren: _Curry<
   [propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]],
   Ty
-> = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) => {
-  const $match = rowField(expectedRow, "children");
-  switch ($match._tag) {
-    case "None": {
-      return propsT;
-    }
-    case "Some": {
-      const { value: expectedChildren } = $match;
-      const $match$ = propsT;
-      switch ($match$._tag) {
+> = _curry(4, (propsT: Ty, propsExpr: Expr, expectedRow: Row, restArgs: Expr[]) =>
+  _Option_match(
+    rowField(expectedRow, "children"),
+    () => propsT,
+    (expectedChildren) => {
+      const $match = propsT;
+      switch ($match._tag) {
         case "TyRecord": {
-          const { row: prow } = $match$;
+          const { row: prow } = $match;
           return or(recordHasAttr(propsExpr, "children"), jsxChildCount(restArgs) === 0)
             ? propsT
             : tRecord(rExtend("children", expectedChildren, prow));
@@ -968,12 +958,9 @@ const jsxPropsWithSynthesizedChildren: _Curry<
           return propsT;
         }
       }
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-});
+    },
+  ),
+);
 import { intrinsicElements as jsxIntrinsicElements } from "./jsx-schema.gen.mjs";
 /**
  * A kind string from the generated schema as an HM type. `event` and `any` are
@@ -1199,14 +1186,11 @@ const inferIntrinsicFields: <A>(
                                   : (None as Option<string>),
                               (k) => Some(k) as Option<string>,
                             );
-                            const $match = expected;
-                            switch ($match._tag) {
-                              case "None": {
-                                return unknownProp(tag, f.name, f.value, m);
-                              }
-                              case "Some": {
-                                const { value: kind } = $match;
-                                return kind === "event"
+                            return _Option_match(
+                              expected,
+                              () => unknownProp(tag, f.name, f.value, m),
+                              (kind) =>
+                                kind === "event"
                                   ? checkHandler(f.name, f.value, st, api, (st1: St) =>
                                       cont(noteProp(f, handlerType, st1)),
                                     )
@@ -1236,12 +1220,8 @@ const inferIntrinsicFields: <A>(
                                               ),
                                             api.inferExpr(f.value, st),
                                           ),
-                                      );
-                              }
-                              default: {
-                                throw new Error("non-exhaustive match");
-                              }
-                            }
+                                      ),
+                            );
                           },
                         ),
                   (msg) => jxTypeErr(msg, jxExprSpan(f.value)),
@@ -1345,21 +1325,13 @@ const noteComponentProps: _Curry<[propsExpr: Expr, expectedRow: Row, st: St], St
       case "ERecord": {
         const { fields } = $match;
         return reduce(
-          _curry(2, (acc: St, f: Field) => {
-            const $match$ = rowField(expectedRow, f.name);
-            switch ($match$._tag) {
-              case "Some": {
-                const { value: t } = $match$;
-                return noteProp(f, zonk(t, acc), acc);
-              }
-              case "None": {
-                return acc;
-              }
-              default: {
-                throw new Error("non-exhaustive match");
-              }
-            }
-          }),
+          _curry(2, (acc: St, f: Field) =>
+            _Option_match(
+              rowField(expectedRow, f.name),
+              () => acc,
+              (t) => noteProp(f, zonk(t, acc), acc),
+            ),
+          ),
           st,
           fields,
         );
@@ -1481,12 +1453,12 @@ export const inferJsxCallHook: <A, B>(
       unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, BoundErr>;
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     } & B,
-  ) => {
-    const $match = origin;
-    switch ($match._tag) {
-      case "Some": {
-        const { value: o } = $match;
-        return o === "jsx"
+  ) =>
+    _Option_match(
+      origin,
+      () => Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>,
+      (o) =>
+        o === "jsx"
           ? ((_v) =>
               _v.length >= 2
                 ? (([tagExpr, propsExpr, ...rest]) =>
@@ -1495,16 +1467,8 @@ export const inferJsxCallHook: <A, B>(
                       inferJsxCall(tagExpr, propsExpr, rest, st, api),
                     ))(_v)
                 : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>))(args)
-          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>);
-      }
-      case "None": {
-        return Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+          : (Ok(None as Option<[Ty, St]>) as Result<Option<[Ty, St]>, BoundErr>),
+    ),
 );
 const vnodeTs: <A>(api: { tsType: (a: Ty) => string } & A) => string = <A>(
   api: { tsType: (a: Ty) => string } & A,
@@ -1636,19 +1600,11 @@ const componentPropsParamTs: <A>(
     switch ($match._tag) {
       case "TyRecord": {
         const { row } = $match;
-        const $match$ = api.aliasOf(row);
-        switch ($match$._tag) {
-          case "Some": {
-            const { value: name } = $match$;
-            return name;
-          }
-          case "None": {
-            return componentPropsTs(row, api);
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
+        return _Option_match(
+          api.aliasOf(row),
+          () => componentPropsTs(row, api),
+          (name) => name,
+        );
       }
       case "TyVar": {
         return "Record<string, unknown>";
@@ -1864,14 +1820,11 @@ const jsxAttrsD: _Curry<[shape: JsxShape, api: FormatApi], Doc[]> = _curry(
  */
 export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
   2,
-  (e: Expr, api: FormatApi) => {
-    const $match = jsxShape(e);
-    switch ($match._tag) {
-      case "None": {
-        return None as Option<Doc>;
-      }
-      case "Some": {
-        const { value: shape } = $match;
+  (e: Expr, api: FormatApi) =>
+    _Option_match(
+      jsxShape(e),
+      () => None as Option<Doc>,
+      (shape) => {
         const fragment: boolean = isFragment(shape.tag);
         const tag: string = fragment ? "" : jsxTag(shape.tag, api);
         const attrs: Doc[] = jsxAttrsD(shape, api);
@@ -1894,12 +1847,8 @@ export const formatJsx: _Curry<[e: Expr, api: FormatApi], Option<Doc>> = _curry(
                 ]),
               ),
             ) as Option<Doc>);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+      },
+    ),
 );
 export const jsxPlugin = {
   name: "jsx",
