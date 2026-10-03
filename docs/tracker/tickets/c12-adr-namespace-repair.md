@@ -16,7 +16,7 @@ blocked-by: []
 **Problem:** `docs/adr/` contains only `0000`–`0015`, yet source comments, `AGENTS.md`,
 memory, and this tracker cite ADRs `0016, 0023, 0026, 0028, 0035, 0039, 0042, 0043,
 0044` — and those numbers **collide with real files in `docs/plan/tickets/`** (e.g.
-`0026-codegen-hook-context.md` is a ticket, while `codegen-ts.ts` is annotated
+`0026-codegen-hook-context.md` is a ticket, while `typescript.ts` is annotated
 "ADR 0026" meaning the typed-TS-backend decision). ~23 cited numbers are dangling or
 double-booked.
 

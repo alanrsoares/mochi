@@ -101,8 +101,8 @@ plugin-only list — not just spot-checked at one hook.
 
 Out of wave (deliberate, tracked, closed by Wave 8):
 
-- `bootstrap/parser.mochi` / `bootstrap/infer.mochi` JSX moved to
-  `bootstrap/plugins/jsx.mochi` behind `extensions.mochi` (Wave 8 / ADR 0011 §6).
+- `packages/compiler/src/parser/parser.mochi` / `packages/compiler/src/infer/infer.mochi` JSX moved to
+  `packages/compiler/src/extensions/plugins/jsx.mochi` behind `extensions.mochi` (Wave 8 / ADR 0011 §6).
 - The lexical nav helpers (`definitionAt`, `highlightsAt`, `referencesAt`,
   `renameAt`, `documentSymbolsAt`, `workspaceSymbolsAt`, and their `module*`
   twins other than `moduleTypeDefinitionAt`) take no `plugins` option and
@@ -159,14 +159,14 @@ are bridges — shrink, don’t clone.
 Close the structural gap: `bootstrap/` still parses/infers JSX inline while
 `src/` owns it as `jsxPlugin`. Port sugar provenance + a thin LanguagePlugin
 seam (parse + inferCall only — bootstrap has no format/dts) and move JSX into
-`bootstrap/plugins/jsx.mochi`. Hooks adapt to Result/(toks, pos), not an
+`packages/compiler/src/extensions/plugins/jsx.mochi`. Hooks adapt to Result/(toks, pos), not an
 imperative `ParserApi` clone. `fixpoint` stays output-equality.
 
 | # | Title | Type | Blocked by | Status |
 |---|---|---|---|---|
 | 40 | `ECall` sugar provenance (`origin`) + drop `name == "h"` heuristic | AFK | — | done |
-| 41 | Thin `bootstrap/extensions.mochi` (`resolvePlugins`, parse/inferCall) | AFK | 40 | done |
-| 42 | `bootstrap/plugins/jsx.mochi` + wire parse/infer/compile/module | AFK | 41 | done |
+| 41 | Thin `packages/compiler/src/extensions/extensions.mochi` (`resolvePlugins`, parse/inferCall) | AFK | 40 | done |
+| 42 | `packages/compiler/src/extensions/plugins/jsx.mochi` + wire parse/infer/compile/module | AFK | 41 | done |
 | 43 | Gate: grep-clean, opt-out test, docs/ADR reconcile, `check:full` | AFK | 42 | done |
 
 **Wave 8 shipped:** bootstrap JSX lives behind the same LanguagePlugin seam as
@@ -845,7 +845,7 @@ module-level — the printers reference each other by name (`e.args.map(exprD)`)
 so a threaded context would touch every function. `format` still runs lex +
 parse only; the hook never sees a type.
 
-**`bindingTsType` is shared with the TS backend** (`codegen-ts.ts:171`), so a
+**`bindingTsType` is shared with the TS backend** (`typescript.ts:171`), so a
 hook only `emitDts` ran would have silently dropped component typing from the
 emitted `.ts`. The new `bindingType` hook is consulted *inside*
 `bindingTsType`, whose `hooks` parameter is **required** — the type checker,
@@ -951,7 +951,7 @@ default `origin: "jsx"` vs its empty-list Diagnostic, and core grammar formattin
 identically with `plugins: []`.
 
 Verified: `bun run check` green (1070 pass); `bun run fixpoint` PASS (stage2 ≡
-stage3 ≡ TS reference, byte-for-byte — `bootstrap/parser.mochi` keeps its inline
+stage3 ≡ TS reference, byte-for-byte — `packages/compiler/src/parser/parser.mochi` keeps its inline
 `parseJsx`, the structural divergence ADR 0011 §6 defers); `bun run
 bootstrap:tsc` **0** errors; `bun run fmt:check` green; `bun run docs:build`
 green; `bun run gen:mochi-dts:check` green; `bun run build:ext` ok.
@@ -960,7 +960,7 @@ For #29: the headline empty-list test can now assert a parse `Diagnostic` end to
 end (`compile(jsxSrc, { plugins: [] })`), which `test/extensions.spec.ts` only
 spot-checks. Two known residuals to weigh: the lexical nav helpers listed above
 still index JSX with builtins because they take no `plugins` option, and
-`bootstrap/parser.mochi` still parses `<…>` inline.
+`packages/compiler/src/parser/parser.mochi` still parses `<…>` inline.
 
 ---
 
@@ -1222,11 +1222,11 @@ JSX V4, genType outbound-only).
 
 ---
 
-### 40 — Bootstrap `ECall` sugar provenance
+### 40 — Compiler `ECall` sugar provenance
 
 ## What to build
 
-Add `origin: Option<string>` on `bootstrap/ast.mochi`'s `ECall`. JSX
+Add `origin: Option<string>` on `packages/compiler/src/ast/ast.mochi`'s `ECall`. JSX
 `makeJsxCall` sets `Some("jsx")`; every other call uses `None`. Infer keys
 off provenance, not `name == "h"`. Update the bootstrap↔TS parser
 canonicalizer to round-trip `origin`.
@@ -1244,7 +1244,7 @@ None
 
 ---
 
-### 41 — Thin `bootstrap/extensions.mochi`
+### 41 — Thin `packages/compiler/src/extensions/extensions.mochi`
 
 ## What to build
 
@@ -1264,7 +1264,7 @@ shape — no imperative `ParserApi`.
 
 ---
 
-### 42 — `bootstrap/plugins/jsx.mochi` + wire
+### 42 — `packages/compiler/src/extensions/plugins/jsx.mochi` + wire
 
 ## What to build
 

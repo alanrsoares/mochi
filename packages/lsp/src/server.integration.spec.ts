@@ -120,7 +120,7 @@ test("watched plugin manifests reload diagnostics without an LSP restart", async
     writeFileSync(
       manifest,
       [
-        'import { tString } from "@mochi/compiler/bootstrap/types";',
+        'import { tString } from "@mochi/compiler/infer/types";',
         "export default [{",
         '  name: "dynamic-as-string",',
         "  inferCall: (fn, _args, _origin, st) =>",

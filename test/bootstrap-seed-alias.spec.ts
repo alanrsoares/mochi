@@ -14,7 +14,9 @@ test(
 
     expect(built._tag).toBe("Ok");
     if (built._tag !== "Ok") return;
-    const compile = built.value.find((output) => output.path.endsWith("bootstrap/compile.mochi"));
+    const compile = built.value.find((output) =>
+      output.path.endsWith("packages/compiler/src/compile/compile.mochi"),
+    );
     // compile's error is the named `Stamped` diagnostic (kind, help, suggestions).
     // `IErr` is infer's alias and must stay named, not expand to a structural record.
     expect(compile?.js).toContain("Result<string, Stamped[]>");

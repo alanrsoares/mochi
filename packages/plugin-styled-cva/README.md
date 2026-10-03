@@ -2,7 +2,7 @@
 
 Vendor plugin (not language core) that teaches the Mochi compiler about
 [`@styled-cva/react`](https://www.npmjs.com/package/@styled-cva/react) `tw.*`
-factories. It is a self-hosted `BootstrapPlugin` that supplies inference,
+factories. It is a self-hosted `CompilerPlugin` that supplies inference,
 declaration, formatting, and completion hooks without changing the pipeline.
 
 What it teaches:
@@ -20,10 +20,10 @@ bullet #20) — one array that Vite, `.d.mochi.ts` generation and the LSP entry
 all read. For the docs app that is `apps/docs/mochi.plugins.ts`:
 
 ```ts
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 
-export const docsVendorPlugins: BootstrapPlugin[] = [styledCvaBootstrap];
+export const docsVendorPlugins: CompilerPlugin[] = [styledCvaPlugin];
 export const plugins = docsVendorPlugins;
 export default plugins;
 ```

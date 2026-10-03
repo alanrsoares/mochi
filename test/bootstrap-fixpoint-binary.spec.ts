@@ -1,5 +1,5 @@
 // Ticket 0007 — the permanent self-hosting guard, driven through the shipped
-// mochic (bootstrap/cli.mochi) over real disk IO rather than the in-memory
+// mochic (packages/cli/src/driver.mochi) over real disk IO rather than the in-memory
 // harness. See scripts/fixpoint.ts for the ceremony. Every bootstrap module —
 // including compile.mochi and cli.mochi themselves — must satisfy:
 //   stage2 ≡ stage3   (the binary reproduces its own emitted source), and
@@ -21,15 +21,21 @@ test("every bootstrap module reaches a binary fixpoint (stage2 ≡ stage3)", () 
 });
 
 test("all bootstrap modules in the fixpoint graph are covered", () => {
-  expect(modules.sort()).toEqual(
+  expect(
+    modules
+      .map((path) =>
+        path.replace(/^packages\/compiler\/src\/[^/]+\//, "").replace(/^packages\/cli\/src\//, ""),
+      )
+      .sort(),
+  ).toEqual(
     [
       "ast",
       "check",
-      "cli",
+      "driver",
       "codegen",
-      "codegen-literals",
-      "codegen-pattern",
-      "codegen-ts",
+      "literals",
+      "pattern",
+      "typescript",
       "compile",
       "dts",
       "doc",

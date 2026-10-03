@@ -3,7 +3,7 @@
 // must be real. The dep is served from an in-memory map, so no disk is touched.
 import { expect, test } from "bun:test";
 import { diagnostics, moduleDiagnostics } from "@mochi/dx/diagnostics";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 import { memRead } from "@mochi/test-support";
 
 const DEP = "/proj/ast.mochi";
@@ -84,7 +84,7 @@ export let bad = <Btn $tone={1} />
 
 test("with plugins, an invalid prop on a tw.* component is a real diagnostic", async () => {
   const diags = await moduleDiagnostics(ENTRY, TW_JSX_SRC, memRead({}), {
-    plugins: [styledCvaBootstrap],
+    plugins: [styledCvaPlugin],
   });
   expect(diags.length).toBeGreaterThan(0);
 });
@@ -95,11 +95,11 @@ test("without plugins, the same tw.* JSX usage is today's blind spot (no diagnos
 });
 
 // Tracer #51: bare package import must resolve via Node exports so LSP can
-// load `@mochi/plugin-preact/hooks` and run `preactBootstrap.inferCall`.
+// load `@mochi/plugin-preact/hooks` and run `preactPlugin.inferCall`.
 test("package import of plugin-preact hooks + plugin surfaces useState misuse", async () => {
   const { readFile } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const { preactBootstrap } = await import("@mochi/plugin-preact");
+  const { preactPlugin } = await import("@mochi/plugin-preact");
   // Real monorepo path so createRequire walks to workspace node_modules.
   const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
   const src = `
@@ -109,15 +109,15 @@ let bad = _ =>
   let _ = setN("oops") in n
 `;
   const diags = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    plugins: [preactBootstrap],
+    plugins: [preactPlugin],
   });
   expect(diags.some((d) => d.message.startsWith("type:"))).toBe(true);
 });
 
-test("same package import without preactBootstrap leaves useRef unpinned", async () => {
+test("same package import without preactPlugin leaves useRef unpinned", async () => {
   const { readFile } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
-  const { preactBootstrap } = await import("@mochi/plugin-preact");
+  const { preactPlugin } = await import("@mochi/plugin-preact");
   const entry = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
   const src = `
 import { useRef } from "@mochi/plugin-preact/hooks"
@@ -126,7 +126,7 @@ let bad = _ =>
   eq(r.current, "x")
 `;
   const withPlugin = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
-    plugins: [preactBootstrap],
+    plugins: [preactPlugin],
   });
   const without = await moduleDiagnostics(entry, src, (p) => readFile(p, "utf8"), {
     plugins: [],
@@ -136,9 +136,9 @@ let bad = _ =>
 });
 test("resolveImport maps @mochi/plugin-preact/hooks via package exports", async () => {
   const { resolve } = await import("node:path");
-  const { resolveImportBootstrap } = await import("@mochi/compiler/bootstrap");
+  const { resolveImport } = await import("@mochi/compiler/graph");
   const importer = resolve(import.meta.dir, "../apps/docs/src/components/HeroCarousel.mochi");
-  const hit = await resolveImportBootstrap(importer, "@mochi/plugin-preact/hooks");
+  const hit = await resolveImport(importer, "@mochi/plugin-preact/hooks");
   expect(hit.endsWith("packages/plugin-preact/hooks.mochi")).toBe(true);
 });
 

@@ -8,10 +8,7 @@
 // command would take.
 import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import {
-  type BootstrapRecoveryGraphCache,
-  createBootstrapRecoveryGraphCache,
-} from "@mochi/compiler/bootstrap";
+import { type CompilerRecoveryGraphCache, createRecoveryGraphCache } from "@mochi/compiler/graph";
 import { moduleDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { type ProjectPlugins, pluginsForDocument } from "@mochi/lsp/load-plugins";
 
@@ -71,13 +68,13 @@ const report = (file: string, d: PublishDiagnostic): string => {
 // Neighbouring entries share almost all of their graph — without this the
 // 34-file `bootstrap/` sweep infers the whole compiler 34 times. A cache is only
 // valid for one plugin list, so each manifest gets its own.
-const builtinCache = createBootstrapRecoveryGraphCache();
-const projectCaches = new Map<ProjectPlugins, BootstrapRecoveryGraphCache>();
-const cacheFor = (project: ProjectPlugins | undefined): BootstrapRecoveryGraphCache => {
+const builtinCache = createRecoveryGraphCache();
+const projectCaches = new Map<ProjectPlugins, CompilerRecoveryGraphCache>();
+const cacheFor = (project: ProjectPlugins | undefined): CompilerRecoveryGraphCache => {
   if (project === undefined) return builtinCache;
   const hit = projectCaches.get(project);
   if (hit) return hit;
-  const fresh = createBootstrapRecoveryGraphCache();
+  const fresh = createRecoveryGraphCache();
   projectCaches.set(project, fresh);
   return fresh;
 };

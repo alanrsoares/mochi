@@ -6,16 +6,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import {
-  type BootstrapRecoveryGraphCache,
-  createBootstrapRecoveryGraphCache,
-} from "@mochi/compiler/bootstrap";
+import { type CompilerRecoveryGraphCache, createRecoveryGraphCache } from "@mochi/compiler/graph";
 import { isPreludePath, PRELUDE_PATH, preludeVirtualSource } from "@mochi/compiler/prelude-virtual";
 import type { Span } from "@mochi/compiler/span";
-import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
 import { type CompletionItem as MochiCompletion, moduleCompleteAt } from "@mochi/dx/complete";
 import { documentDiagnostics, type PublishDiagnostic } from "@mochi/dx/diagnostics";
 import { format } from "@mochi/dx/format";
+import { moduleHoverAt } from "@mochi/dx/hover-query";
 import {
   documentSymbolsAt,
   moduleDefinitionAt,
@@ -177,14 +174,14 @@ export function startServer(opts: ServerOptions = {}): void {
   // manifest changes, since that changes what every call site means.
   //
   // A bootstrap cache is only valid for the plugin list it was filled under, so
-  // each manifest gets its own; `bootstrapCache` is the builtin-only one.
-  let bootstrapCache = createBootstrapRecoveryGraphCache();
-  let projectCaches = new WeakMap<ProjectPlugins, BootstrapRecoveryGraphCache>();
-  const bootstrapCacheFor = (project: ProjectPlugins | undefined): BootstrapRecoveryGraphCache => {
-    if (project === undefined) return bootstrapCache;
+  // each manifest gets its own; `graphCache` is the builtin-only one.
+  let graphCache = createRecoveryGraphCache();
+  let projectCaches = new WeakMap<ProjectPlugins, CompilerRecoveryGraphCache>();
+  const graphCacheFor = (project: ProjectPlugins | undefined): CompilerRecoveryGraphCache => {
+    if (project === undefined) return graphCache;
     const hit = projectCaches.get(project);
     if (hit) return hit;
-    const fresh = createBootstrapRecoveryGraphCache();
+    const fresh = createRecoveryGraphCache();
     projectCaches.set(project, fresh);
     return fresh;
   };
@@ -208,7 +205,7 @@ export function startServer(opts: ServerOptions = {}): void {
   const diagnosticsFor = async (path: string, src: string) => {
     const project = await projectPlugins(path);
     return documentDiagnostics(path, src, read, {
-      cache: bootstrapCacheFor(project),
+      cache: graphCacheFor(project),
       plugins: project?.plugins,
     });
   };
@@ -270,7 +267,7 @@ export function startServer(opts: ServerOptions = {}): void {
     const path = docPath(textDocument.uri);
     const project = await projectPlugins(path);
     const result = await moduleHoverAt(path, doc.getText(), doc.offsetAt(position), read, {
-      cache: bootstrapCacheFor(project).types,
+      cache: graphCacheFor(project).types,
       plugins: project?.plugins,
     });
     if (!result) return null;
@@ -304,7 +301,7 @@ export function startServer(opts: ServerOptions = {}): void {
     const project = await projectPlugins(path);
     // Answered by the self-hosted core with the project's plugins (ADR 0120).
     const items = await moduleCompleteAt(path, doc.getText(), doc.offsetAt(position), read, {
-      cache: bootstrapCacheFor(project).types,
+      cache: graphCacheFor(project).types,
       plugins: project?.plugins,
     });
     return items.map((i) => ({
@@ -351,7 +348,7 @@ export function startServer(opts: ServerOptions = {}): void {
       const path = docPath(textDocument.uri);
       const project = await projectPlugins(path);
       const loc = await moduleTypeDefinitionAt(path, doc.getText(), doc.offsetAt(position), read, {
-        cache: bootstrapCacheFor(project).types,
+        cache: graphCacheFor(project).types,
         plugins: project?.plugins,
       });
       return !loc ? null : rangeAtPath(loc.path, loc.span);
@@ -580,7 +577,7 @@ export function startServer(opts: ServerOptions = {}): void {
     );
     if (!manifestChanged) return;
     clearPluginsCache();
-    bootstrapCache = createBootstrapRecoveryGraphCache();
+    graphCache = createRecoveryGraphCache();
     projectCaches = new WeakMap();
     for (const doc of documents.all()) {
       if (doc.uri.endsWith(".mochi")) scheduleValidate(doc);

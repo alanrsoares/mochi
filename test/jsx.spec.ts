@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { codegenTs, compile, emitDts } from "@mochi/compiler";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import { parseProgram } from "@mochi/compiler/syntax";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
 type ParsedLet = { _tag: string; name?: string; value?: unknown };

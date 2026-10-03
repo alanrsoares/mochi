@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { parseProgram } from "@mochi/compiler/bootstrap/syntax";
+import { parseProgram } from "@mochi/compiler/syntax";
 import { compileJs } from "@mochi/test-support";
 import { formatSrc as fmt } from "@mochi/test-support/format";
 import { isErr, isOk, unwrapErr, unwrapOk } from "@onrails/result";

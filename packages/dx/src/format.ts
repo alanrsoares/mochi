@@ -1,5 +1,5 @@
 /**
- * `mochi fmt`: the self-hosted formatter (`bootstrap/format.mochi`) behind the
+ * `mochi fmt`: the self-hosted formatter (`packages/compiler/src/format/format.mochi`) behind the
  * `Result` surface the CLI, the LSP and `scripts/fmt.ts` call. Parsing recovers
  * (ADR 0045), so a file with parse errors still formats and every region it
  * skipped passes through verbatim; a lex error is the only failure.
@@ -8,12 +8,12 @@
  * `[]` = hard opt-out. Their `format` hooks rewrite nodes before layout.
  */
 
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { formatStmts, parseProgram } from "@mochi/compiler/bootstrap/syntax";
 import type { Diagnostic } from "@mochi/compiler/errors";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import { formatStmts, parseProgram } from "@mochi/compiler/syntax";
 import { err, ok, type Result } from "@onrails/result";
 
-export type FormatOptions = { plugins?: readonly BootstrapPlugin[] };
+export type FormatOptions = { plugins?: readonly CompilerPlugin[] };
 
 export const format = (src: string, opts: FormatOptions = {}): Result<string, Diagnostic[]> => {
   const parsed = parseProgram(src, opts.plugins);

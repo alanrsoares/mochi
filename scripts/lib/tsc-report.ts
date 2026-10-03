@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { BOOTSTRAP_DIR, REPO_ROOT, TSC_BIN } from "./repo";
+import { REPO_ROOT, TSC_BIN } from "./repo";
 
 export type TscReport = {
   readonly total: number;
@@ -53,7 +53,7 @@ export const writeBootstrapTsFiles = async (
   modules: readonly EmittedTsModule[],
 ): Promise<void> => {
   for (const { path, js } of modules) {
-    const rel = relative(BOOTSTRAP_DIR, path);
+    const rel = relative(REPO_ROOT, path);
     const outRel = path.endsWith(".mochi") ? rel.replace(/\.mochi$/, ".ts") : rel;
     const dest = join(dir, outRel);
     await mkdir(dirname(dest), { recursive: true });

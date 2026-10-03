@@ -38,7 +38,7 @@ test("repo paths and hashes", () => {
 test("vendorPluginsFor routes trees correctly", () => {
   expect(vendorPluginsFor("apps/docs/src/Button.mochi")).toBeDefined();
   expect(vendorPluginsFor("examples/snake/src/main.mochi")).toBeDefined();
-  expect(vendorPluginsFor("bootstrap/ast.mochi")).toBeUndefined();
+  expect(vendorPluginsFor("packages/compiler/src/ast/ast.mochi")).toBeUndefined();
   expect(vendorPluginsFor("packages/compiler/src/index.ts")).toBeUndefined();
 });
 

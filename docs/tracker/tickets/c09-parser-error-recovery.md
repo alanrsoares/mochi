@@ -25,7 +25,7 @@ it is a *track*. Slices, in order (each independently shippable):
 | c | check/infer skip error nodes without cascading; multi-error file test | `bun run check` |
 | d | Formatter: raw-slice passthrough for error-node spans (never destroys unparsable code); idempotency + PBT (format of broken file round-trips source bytes) | `bun run check` |
 | e | LSP: hover/symbols/diagnostics verified against a file with 2+ parse errors | `bun run check` |
-| f | Bootstrap parity: `bootstrap/parser.mochi` mirrors recovery; differential message + span parity | `bun run check:full` |
+| f | Compiler parity: `packages/compiler/src/parser/parser.mochi` mirrors recovery; differential message + span parity | `bun run check:full` |
 
 - [x] Slice a (ADR — blocked by C12 numbering repair)
 - [x] Slice b
@@ -53,10 +53,10 @@ it is a *track*. Slices, in order (each independently shippable):
       form (which can still fail `check` on an imported-variant `switch`). Making
       the graph's entry load recovering touches `module.ts` and its bootstrap
       mirror `module.mochi`, so it is its own slice.
-- [x] Slice f — `bootstrap/parser.mochi` mirrors recovery. `SError(span)` added to
-      `bootstrap/ast.mochi`, with the pass-through arms in `bootstrap/check.mochi`
+- [x] Slice f — `packages/compiler/src/parser/parser.mochi` mirrors recovery. `SError(span)` added to
+      `packages/compiler/src/ast/ast.mochi`, with the pass-through arms in `packages/compiler/src/check/check.mochi`
       (`boundNamesFrom`, `checkReservedNames`) and the loud invariant throw in
-      `bootstrap/codegen.mochi`. The mirror forced one amendment to ADR 0045 that
+      `packages/compiler/src/codegen/codegen.mochi`. The mirror forced one amendment to ADR 0045 that
       also improves the TS side: **recovery restarts at the token the diagnostic
       points at, by span**, not at wherever the failing production left the cursor.
       A `Result` failure in the bootstrap parser discards the cursor, and the error

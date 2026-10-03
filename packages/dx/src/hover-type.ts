@@ -1,5 +1,5 @@
 /** Width-aware Mochi type rendering for editor hovers, over the bootstrap core's values. */
-import type { Row, Stmt, Ty, TypeExpr } from "@mochi/compiler/bootstrap/types";
+
 import {
   type Doc,
   group,
@@ -11,6 +11,7 @@ import {
   softline,
   txt,
 } from "@mochi/compiler/doc";
+import type { Row, Stmt, Ty, TypeExpr } from "@mochi/compiler/infer/types";
 import { TUPLE, UNIT } from "@mochi/compiler/types";
 
 type TypeStmt = Extract<Stmt, { _tag: "SType" }>;

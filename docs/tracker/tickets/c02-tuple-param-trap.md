@@ -34,5 +34,5 @@ render it more clearly.
 - [x] Spans on `LamParam`/`ptuple` regardless of direction (hover/diagnostics want
       them anyway).
 - [x] If kept: targeted diagnostic + formatter test locking the rendering.
-- [ ] If changed: parser + `bootstrap/parser.mochi` parity + migration note.
+- [ ] If changed: parser + `packages/compiler/src/parser/parser.mochi` parity + migration note.
 - [x] `docs/language.md` documents the rule (all three paren cases) either way.

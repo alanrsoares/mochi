@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
-import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { inferTypesSyncWith } from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { typeOf as seedTypeOf } from "@mochi/test-support";
 import { isErr, map, unwrapErr, unwrapOk } from "@onrails/result";
 
 const infer = (src: string) =>
-  map(inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: false }), () => src);
+  map(inferTypesSyncWith(src, { ...defaultOptions, open: false }), () => src);
 const typeOf = (src: string, name: string): string =>
   seedTypeOf(
     /^[A-Z]/.test(name) ? `${src}\nlet probe = ${name}` : src,

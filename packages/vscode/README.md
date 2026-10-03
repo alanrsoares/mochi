@@ -29,9 +29,9 @@ support, which isn't a guaranteed contract. Export `default` or named `plugins`
 (self-hosted-core plugins, ADR 0123):
 
 ```js
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 
-export default [styledCvaBootstrap];
+export default [styledCvaPlugin];
 ```
 
 Saving the manifest reloads it automatically and republishes diagnostics for

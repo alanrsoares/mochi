@@ -1,4 +1,4 @@
-// Ticket 0006 — the shipped `mochic` (bootstrap/cli.mochi) compiles a single .mochi
+// Ticket 0006 — the shipped `mochic` (packages/cli/src/driver.mochi) compiles a single .mochi
 // file to a sibling .js through real disk IO, end-to-end under Bun. We build
 // the bootstrap graph once, then drive the emitted cli.js as a subprocess: a
 // good file compiles and runs,
@@ -12,7 +12,7 @@ import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
 const root = repoRoot(import.meta.url);
-const cliJs = join(root, "bootstrap/cli.js");
+const cliJs = join(root, "packages/cli/src/driver.js");
 
 let dir: string;
 
@@ -136,7 +136,7 @@ test("mochic build renders every independent graph checker diagnostic", () => {
 
 // ---- `mochic fmt [--write] <file>` — the self-hosted formatter -------------
 //
-// The formatter's layout is covered by bootstrap/format.spec.mochi and the dx
+// The formatter's layout is covered by packages/compiler/src/format/format.spec.mochi and the dx
 // format specs; what is checked here is the CLI seam:
 // stdout carries the formatted source verbatim (no added newline, nothing on
 // it but the source), and `--write` puts the same bytes back over the file.

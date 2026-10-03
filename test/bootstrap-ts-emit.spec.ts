@@ -1,5 +1,5 @@
 /**
- * The self-hosted TypeScript backend (ADR 0090): `bootstrap/codegen-ts.mochi`
+ * The self-hosted TypeScript backend (ADR 0090): `packages/compiler/src/codegen/typescript.mochi`
  * drives the shared codegen's `GenOpts` hooks from `inferProgramTypes`'s
  * span → type table. This is the north-star check for stage 1 — the emitted
  * program must not merely parse, it must survive `tsc --strict`.
@@ -16,7 +16,7 @@ const REPO = resolve(import.meta.dir, "..");
 const RUNTIME = join(REPO, "packages/compiler/src/prelude/runtime");
 
 type AlResult = { _tag: "Ok"; value: string } | { _tag: "Err"; error: unknown };
-const { compileTs } = (await import(join(REPO, "bootstrap/compile.js"))) as {
+const { compileTs } = (await import(join(REPO, "packages/compiler/src/compile/compile.js"))) as {
   compileTs: (src: string, runtimeImport: string) => AlResult;
 };
 
@@ -109,7 +109,7 @@ test("emitted TypeScript is strict-clean", () => {
 // `buildModulesTs`.
 
 type Output = { path: string; js: string };
-const { buildModulesTs } = (await import(join(REPO, "bootstrap/module.js"))) as {
+const { buildModulesTs } = (await import(join(REPO, "packages/compiler/src/module/module.js"))) as {
   buildModulesTs: (
     entry: string,
     runtimeImport: string,

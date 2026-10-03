@@ -1,7 +1,7 @@
-import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { formatStmts, parseProgram } from "@mochi/compiler/bootstrap/syntax";
-import type { Stmt } from "@mochi/compiler/bootstrap/types";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import type { Stmt } from "@mochi/compiler/infer/types";
+import { formatStmts, parseProgram } from "@mochi/compiler/syntax";
 import { err, ok, type Result } from "@onrails/result";
 
 /** A module's statements, as the bootstrap parser builds them (ADR 0109). */
@@ -13,7 +13,7 @@ export type CodemodTransform = (prog: Program, ctx: CodemodContext) => Program;
 
 export type CodemodOptions = {
   /** Host plugins, added to the builtins (JSX); `[]` turns the builtins off too. */
-  plugins?: readonly BootstrapPlugin[];
+  plugins?: readonly CompilerPlugin[];
   /** Source path (passed through to transform context). */
   path?: string;
   /** Fail when parse recovery reports diagnostics (default false). */
@@ -25,7 +25,7 @@ export const transformSource = (
   src: string,
   transform: CodemodTransform,
   opts: CodemodOptions = {},
-): Result<string, BootstrapDiagnostic[]> => {
+): Result<string, CompilerDiagnostic[]> => {
   const parsed = parseProgram(src, opts.plugins);
   if (parsed._tag === "Err") return err([parsed.error]);
   const { stmts, diagnostics } = parsed.value;

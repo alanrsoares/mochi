@@ -8,20 +8,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
-import {
-  buildModulesBootstrapWith,
-  buildModulesTsBootstrapWith,
-  emitDtsForFileBootstrapWith,
-} from "@mochi/compiler/bootstrap/module";
-import type { BootstrapOptions, BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import {
-  compileBootstrapSyncWith,
-  compileTsBootstrapSyncWith,
-} from "@mochi/compiler/bootstrap/sync";
-import { formatBootstrap } from "@mochi/compiler/bootstrap/syntax";
-import { preactBootstrap } from "@mochi/plugin-preact/bootstrap";
-import { reReducedBootstrap } from "@mochi/plugin-re-reduced/bootstrap";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { compileSyncWith, compileTsSyncWith } from "@mochi/compiler/compile/sync";
+import type { CompilerOptions, CompilerPlugin } from "@mochi/compiler/extensions";
+import { buildModulesTsWith, buildModulesWith, emitDtsForFileWith } from "@mochi/compiler/module";
+import { format } from "@mochi/compiler/syntax";
+import { preactPlugin } from "@mochi/plugin-preact";
+import { reReducedPlugin } from "@mochi/plugin-re-reduced";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 import { match } from "@onrails/pattern";
 
 type CompileCase = { id: string; kind: "compile"; source: string; expect: string };
@@ -64,7 +57,7 @@ type Manifest = {
   cases: ManifestCase[];
 };
 
-const baseOptions: BootstrapOptions = {
+const baseOptions: CompilerOptions = {
   open: false,
   runtime: true,
   docs: true,
@@ -76,13 +69,13 @@ const baseOptions: BootstrapOptions = {
  * Host plugins, in the bootstrap shape (ADR 0109), that cases may name. A case
  * naming one missing from here fails.
  */
-const conformancePlugins: Record<string, BootstrapPlugin> = {
-  preact: preactBootstrap,
-  "re-reduced": reReducedBootstrap,
-  "styled-cva": styledCvaBootstrap,
+const conformancePlugins: Record<string, CompilerPlugin> = {
+  preact: preactPlugin,
+  "re-reduced": reReducedPlugin,
+  "styled-cva": styledCvaPlugin,
 };
 
-const optionsFor = (test: ManifestCase): BootstrapOptions | string => {
+const optionsFor = (test: ManifestCase): CompilerOptions | string => {
   const opts = { ...baseOptions, docs: test.docs ?? baseOptions.docs };
   if (test.plugins === undefined) return opts;
   const missing = test.plugins.filter((name) => !(name in conformancePlugins));
@@ -173,7 +166,7 @@ const runCase = (test: ManifestCase): string | null => {
   if (typeof options === "string") return resultError(test.id, options);
   switch (test.kind) {
     case "compile": {
-      const result = compileBootstrapSyncWith(text(test.source), options);
+      const result = compileSyncWith(text(test.source), options);
       if (result._tag === "Err")
         return resultError(
           test.id,
@@ -184,7 +177,7 @@ const runCase = (test: ManifestCase): string | null => {
         : resultError(test.id, "emitted JavaScript differs");
     }
     case "diagnostic": {
-      const result = compileBootstrapSyncWith(text(test.source), options);
+      const result = compileSyncWith(text(test.source), options);
       if (result._tag === "Ok") return resultError(test.id, "expected a diagnostic");
       const actual = compactDiagnostics(result.error);
       return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
@@ -192,7 +185,7 @@ const runCase = (test: ManifestCase): string | null => {
         : resultError(test.id, `diagnostic differs: ${JSON.stringify(actual)}`);
     }
     case "runtime": {
-      const result = compileBootstrapSyncWith(text(test.source), options);
+      const result = compileSyncWith(text(test.source), options);
       if (result._tag === "Err")
         return resultError(
           test.id,
@@ -207,7 +200,7 @@ const runCase = (test: ManifestCase): string | null => {
     }
     case "graph": {
       const entry = join(fixtureRoot, test.entry);
-      const result = buildModulesBootstrapWith(entry, options);
+      const result = buildModulesWith(entry, options);
       if (result._tag === "Err")
         return resultError(
           test.id,
@@ -220,7 +213,7 @@ const runCase = (test: ManifestCase): string | null => {
     }
     case "graph-diagnostic": {
       const entry = join(fixtureRoot, test.entry);
-      const result = buildModulesBootstrapWith(entry, options);
+      const result = buildModulesWith(entry, options);
       if (result._tag === "Ok") return resultError(test.id, "expected a graph diagnostic");
       const actual = graphDiagnostics(entry, result.error);
       return JSON.stringify(actual) === JSON.stringify(expectedJson(test.expect))
@@ -229,7 +222,7 @@ const runCase = (test: ManifestCase): string | null => {
     }
     case "dts": {
       const entry = join(fixtureRoot, test.entry);
-      const result = emitDtsForFileBootstrapWith(entry, "@mochi/runtime", options);
+      const result = emitDtsForFileWith(entry, "@mochi/runtime", options);
       if (result._tag === "Err")
         return resultError(
           test.id,
@@ -240,7 +233,7 @@ const runCase = (test: ManifestCase): string | null => {
         : resultError(test.id, `declarations differ: ${JSON.stringify(result.value)}`);
     }
     case "format": {
-      const result = formatBootstrap(text(test.source), options.plugins);
+      const result = format(text(test.source), options.plugins);
       if (result === null) return resultError(test.id, "unexpected lex error");
       return result === text(test.expect)
         ? null
@@ -248,7 +241,7 @@ const runCase = (test: ManifestCase): string | null => {
     }
     case "typed-ts-graph": {
       const entry = join(fixtureRoot, test.entry);
-      const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
+      const result = buildModulesTsWith(entry, "@mochi/runtime", options);
       if (result._tag === "Err")
         return resultError(
           test.id,
@@ -261,7 +254,7 @@ const runCase = (test: ManifestCase): string | null => {
     }
   }
 
-  const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
+  const result = compileTsSyncWith(text(test.source), "@mochi/runtime", options);
   if (result._tag === "Err")
     return resultError(
       test.id,
@@ -276,13 +269,13 @@ const candidateFor = (test: ManifestCase): { path: string; contents: string } =>
   if (typeof options === "string") throw new Error(resultError(test.id, options));
   switch (test.kind) {
     case "compile": {
-      const result = compileBootstrapSyncWith(text(test.source), options);
+      const result = compileSyncWith(text(test.source), options);
       if (result._tag === "Err")
         throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
       return { path: test.expect, contents: result.value };
     }
     case "diagnostic": {
-      const result = compileBootstrapSyncWith(text(test.source), options);
+      const result = compileSyncWith(text(test.source), options);
       if (result._tag === "Ok") throw new Error(resultError(test.id, "expected a diagnostic"));
       return {
         path: test.expect,
@@ -290,7 +283,7 @@ const candidateFor = (test: ManifestCase): { path: string; contents: string } =>
       };
     }
     case "runtime": {
-      const result = compileBootstrapSyncWith(text(test.source), options);
+      const result = compileSyncWith(text(test.source), options);
       if (result._tag === "Err")
         throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
       const expected = expectedJson(test.expect) as Record<string, unknown>;
@@ -300,7 +293,7 @@ const candidateFor = (test: ManifestCase): { path: string; contents: string } =>
     }
     case "graph": {
       const entry = join(fixtureRoot, test.entry);
-      const result = buildModulesBootstrapWith(entry, options);
+      const result = buildModulesWith(entry, options);
       if (result._tag === "Err")
         throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
       return {
@@ -310,33 +303,33 @@ const candidateFor = (test: ManifestCase): { path: string; contents: string } =>
     }
     case "graph-diagnostic": {
       const entry = join(fixtureRoot, test.entry);
-      const result = buildModulesBootstrapWith(entry, options);
+      const result = buildModulesWith(entry, options);
       if (result._tag === "Ok")
         throw new Error(resultError(test.id, "expected a graph diagnostic"));
       return { path: test.expect, contents: json(graphDiagnostics(entry, result.error)) };
     }
     case "dts": {
       const entry = join(fixtureRoot, test.entry);
-      const result = emitDtsForFileBootstrapWith(entry, "@mochi/runtime", options);
+      const result = emitDtsForFileWith(entry, "@mochi/runtime", options);
       if (result._tag === "Err")
         throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics([result.error]))));
       return { path: test.expect, contents: result.value };
     }
     case "format": {
-      const result = formatBootstrap(text(test.source), options.plugins);
+      const result = format(text(test.source), options.plugins);
       if (result === null) throw new Error(resultError(test.id, "unexpected lex error"));
       return { path: test.expect, contents: result };
     }
     case "typed-ts-graph": {
       const entry = join(fixtureRoot, test.entry);
-      const result = buildModulesTsBootstrapWith(entry, "@mochi/runtime", options);
+      const result = buildModulesTsWith(entry, "@mochi/runtime", options);
       if (result._tag === "Err")
         throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
       return { path: test.expect, contents: json(graphOutput(entry, result.value)) };
     }
   }
 
-  const result = compileTsBootstrapSyncWith(text(test.source), "@mochi/runtime", options);
+  const result = compileTsSyncWith(text(test.source), "@mochi/runtime", options);
   if (result._tag === "Err")
     throw new Error(resultError(test.id, JSON.stringify(compactDiagnostics(result.error))));
   return { path: test.expect, contents: result.value };
@@ -362,7 +355,7 @@ const coverageErrorsFor = (manifest: Manifest): string[] => {
  * Write candidate expectations for human review. This is deliberately separate
  * from the normal runner: it never mutates the checked-in fixture tree.
  */
-export const freezeBootstrapConformance = (out = candidateRoot): string[] => {
+export const freezeConformance = (out = candidateRoot): string[] => {
   const manifest = JSON.parse(text("manifest.json")) as Manifest;
   if (manifest.version !== 1)
     throw new Error(`unsupported conformance manifest version ${manifest.version}`);
@@ -386,7 +379,7 @@ export const freezeBootstrapConformance = (out = candidateRoot): string[] => {
 export type PendingStatus = { id: string; failure: string | null };
 
 /** Where each pending case stands: its current failure, or `null` once it conforms. */
-export const pendingBootstrapConformance = (): PendingStatus[] => {
+export const pendingConformance = (): PendingStatus[] => {
   const manifest = JSON.parse(text("manifest.json")) as Manifest;
   const pending = new Set(manifest.coverage.pending ?? []);
   return manifest.cases
@@ -409,7 +402,7 @@ export const manifestConformanceErrors = (): string[] => {
 export const bootstrapConformanceCaseIds = (): string[] => readManifest().cases.map((c) => c.id);
 
 /** One case's failure, or null. A pending case that conforms is itself a failure. */
-export const runBootstrapConformanceCase = (id: string): string | null => {
+export const runConformanceCase = (id: string): string | null => {
   const manifest = readManifest();
   const test = manifest.cases.find((c) => c.id === id);
   if (test === undefined) return resultError(id, "no such case");
@@ -420,24 +413,24 @@ export const runBootstrapConformanceCase = (id: string): string | null => {
     : resultError(id, "pending case now conforms; move it to coverage.required");
 };
 
-export const runBootstrapConformance = (): string[] => {
+export const runConformance = (): string[] => {
   const errors = manifestConformanceErrors();
   if (readManifest().version !== 1) return errors;
   return [
     ...errors,
-    ...bootstrapConformanceCaseIds().flatMap((id) => runBootstrapConformanceCase(id) ?? []),
+    ...bootstrapConformanceCaseIds().flatMap((id) => runConformanceCase(id) ?? []),
   ];
 };
 
 if (import.meta.main) {
   if (process.argv.includes("--pending")) {
-    for (const { id, failure } of pendingBootstrapConformance())
+    for (const { id, failure } of pendingConformance())
       process.stdout.write(`${failure === null ? "conforms" : "pending "}  ${failure ?? id}\n`);
   } else if (process.argv.includes("--freeze")) {
-    const paths = freezeBootstrapConformance();
+    const paths = freezeConformance();
     process.stdout.write(`bootstrap conformance candidates: ${paths.length}\n`);
   } else {
-    const failures = runBootstrapConformance();
+    const failures = runConformance();
     if (failures.length === 0) process.stdout.write("bootstrap conformance: PASS\n");
     else {
       process.stderr.write(`${failures.join("\n")}\n`);

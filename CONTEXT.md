@@ -1,8 +1,8 @@
 # CONTEXT.md — the mochi domain model
 
 The shared vocabulary for designing and discussing the compiler. When a term here has
-a precise meaning, use it precisely. Core authoring lives in `bootstrap/*.mochi`;
-`packages/compiler/src/` contains host façades and compatibility DTOs, not a
+a precise meaning, use it precisely. Core authoring lives in `packages/compiler/src/**/*.mochi`;
+TypeScript files contain host façades and compatibility DTOs, not a
 second compiler (ADR 0131). The committed generated seed compiles its successor;
 core changes do not require a TypeScript port.
 
@@ -45,7 +45,7 @@ string ─lex→ Located[] ─parse→ Program ─check→ Program ─typecheck�
 - Every `Located`, every AST node, and every inferred `TypeAt` carries a `Span`. This
   is what makes hover, inlay hints, and diagnostics possible (see ADR on spans-first).
 
-## AST (`bootstrap/ast.mochi`; host DTOs in `packages/compiler/src/ast/`)
+## AST (`packages/compiler/src/ast/ast.mochi`; host DTOs in `packages/compiler/src/ast/`)
 
 The lowercase `kind` shapes below describe host DTOs. The self-hosted graph
 uses tagged unions (`ENum`, `SLet`, `TyVar`, etc.); façades adapt them at the boundary.
@@ -80,7 +80,7 @@ Empty `#{}` is Map. Array / List / Set literals share expression spreads (`[a, .
 `@{a, ...xs}`, `#{a, ...s}` — ADR 0001). `List` is lazy — its patterns lower to a
 buffered pull, not to `@onrails/pattern`.
 
-## Types & schemes (`bootstrap/types.mochi`, `bootstrap/infer.mochi`)
+## Types & schemes (`packages/compiler/src/infer/types.mochi`, `packages/compiler/src/infer/infer.mochi`)
 
 - **Type** — `var | con | arrow | record`. Constructors `tVar`, `tCon`, `tArrow`,
   `tRecord`, `tApp` (sugar for `tCon` with args).
@@ -88,7 +88,7 @@ buffered pull, not to `@onrails/pattern`.
   Constructors `rEmpty`, `rVar`, `rExtend` (optionality defaults to required). Records
   are rows; **row polymorphism** is real (open tails), not faked subtyping.
 - **Scheme** — a generalized (∀-quantified) type: host `{ vars, rvars, type }`,
-  core `{ vars, rvars, ty }` in `bootstrap/schemes.mochi`. **Env** —
+  core `{ vars, rvars, ty }` in `packages/compiler/src/infer/schemes.mochi`. **Env** —
   `Map<string, Scheme>`; `mono`, `generalize`, and `instantiate` manage schemes.
 - **Fresh supply** — `St.next` in the core; fresh-variable allocation threads
   immutable inference state alongside the new type.
@@ -97,7 +97,7 @@ buffered pull, not to `@onrails/pattern`.
 - **Numeric:** one runtime type, `number`. `int`/`float` are transparent aliases today —
   same checking, erase to `number` — with the names reserved for a future split.
 
-## Unification (`bootstrap/types.mochi`)
+## Unification (`packages/compiler/src/infer/types.mochi`)
 
 - **St** — immutable threaded core state containing type/row substitutions,
   the fresh-variable supply, and recorded types. `mkSt` initializes it.
@@ -177,10 +177,10 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 ## Language plugins ([ADR 0011](docs/adr/0011-language-plugins.md))
 
 - **Core (surface)** — HM + rows + variants + `Expr.call`; no kit-specific or
-  JSX-specific knowledge lives in `bootstrap/{parser,infer,format,dts}.mochi`
+  JSX-specific knowledge lives in the core parser, inference, formatter, and declaration modules
   (ADR 0011).
-- **`BootstrapPlugin`** — the shipped cross-pass registration seam
-  (`bootstrap/extensions.mochi`, host `bootstrap/options.ts`): Result/token-cursor
+- **`CompilerPlugin`** — the shipped cross-pass registration seam
+  (`packages/compiler/src/extensions/extensions.mochi`, host `extensions/options.ts`): Result/token-cursor
   parse hooks, inference, formatting, binding-type, and completion hooks consumed
   by compile, module graphs, DX, Vite, and LSP. Parse hooks extend atom syntax
   after core prefix tokens; errors are values, with no `ParseAbort`. Typed TS and
@@ -189,7 +189,7 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
   [ADR 0132](docs/adr/0132-simplify-seed-host-seams.md).
 - **Builtin plugin** — ships in the compiler itself and is registered by
   default on every standard compile path (`DEFAULT_PLUGINS`). `jsxPlugin`
-  (`bootstrap/plugins/jsx.mochi`) is the first and owns all of JSX: parsing `<tag/>` →
+  (`packages/compiler/src/extensions/plugins/jsx.mochi`) is the first and owns all of JSX: parsing `<tag/>` →
   `h(tag, props, children)`, JSX inference, the formatter's `<tag>` re-fold, and
   `VNode` component dts. The lexer stays generic — `<` is a plain `lt` token.
 - **Vendor plugin** — a library-owned adapter a project opts into, not part of
@@ -225,7 +225,7 @@ mechanically (the compiler can't inspect a JS export's body) and deliberate
 - **Not primary:** inbound “read host `.d.ts` into HM” (ReScript genType is
   outbound-only). Wave 6 AST→string dts plugins are **bridges**.
 
-## Module graph (`bootstrap/module.mochi`; host `bootstrap/module.ts` façade)
+## Module graph (`packages/compiler/src/module/module.mochi`; host `module/host.ts` façade)
 
 - **ModuleOutput** — `{ path, js }`. Core **Loaded** — `{ path, src, stmts }`.
   Host **ReadFile** — `(path) => Promise<string>`.

@@ -1,3 +1,4 @@
+import type { Result } from "@onrails/result";
 // One typed-graph emit shared by `seed:check` and `bootstrap:self-tsc`.
 // Those tasks pass different runtime import strings, but the import is only
 // spliced into `from "..."` specifiers, so the compile runs once against a
@@ -14,12 +15,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import type {
-  BootstrapDiagnostic,
-  BootstrapModuleOutput,
-  BootstrapResult,
-} from "@mochi/compiler/bootstrap";
-import { buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
+import type { CompilerDiagnostic, CompilerModuleOutput } from "@mochi/compiler/graph";
+import { buildModulesTs } from "@mochi/compiler/module";
 import { bootstrapCacheHash } from "@mochi/test-support/bootstrap";
 import { BOOTSTRAP_CLI, REPO_ROOT, repoPath } from "./repo";
 
@@ -31,7 +28,7 @@ const WAIT_MS = 12 * 60 * 1000;
 
 export type TsEmitBuild = (
   runtimeImport: string,
-) => BootstrapResult<readonly BootstrapModuleOutput[], readonly BootstrapDiagnostic[]>;
+) => Result<readonly CompilerModuleOutput[], readonly CompilerDiagnostic[]>;
 
 export type TsEmitCache = {
   readonly root: string;
@@ -61,7 +58,7 @@ const parseStored = (raw: string): readonly StoredOutput[] | null => {
   return files;
 };
 
-const readEmit = (dir: string, runtimeImport: string): readonly BootstrapModuleOutput[] | null => {
+const readEmit = (dir: string, runtimeImport: string): readonly CompilerModuleOutput[] | null => {
   try {
     const stored = parseStored(readFileSync(join(dir, "outputs.json"), "utf8"));
     if (stored === null) return null;
@@ -76,7 +73,7 @@ const readEmit = (dir: string, runtimeImport: string): readonly BootstrapModuleO
   }
 };
 
-const writeEmit = (dir: string, modules: readonly BootstrapModuleOutput[]): void => {
+const writeEmit = (dir: string, modules: readonly CompilerModuleOutput[]): void => {
   const stored = modules.map((mod) => {
     const rel = relative(REPO_ROOT, mod.path);
     const dest = join(dir, "files", rel);
@@ -156,7 +153,7 @@ const waitUntilReady = (dir: string, claim: string): boolean => {
 export const cachedTsEmit = (
   runtimeImport: string,
   cache: TsEmitCache,
-): BootstrapResult<readonly BootstrapModuleOutput[], readonly BootstrapDiagnostic[]> => {
+): Result<readonly CompilerModuleOutput[], readonly CompilerDiagnostic[]> => {
   const dest = join(cache.root, cache.key);
   if (ready(dest)) {
     const hit = readEmit(dest, runtimeImport);
@@ -224,9 +221,9 @@ export const cachedTsEmit = (
 
 export const loadCachedTsEmit = (
   runtimeImport: string,
-): BootstrapResult<readonly BootstrapModuleOutput[], readonly BootstrapDiagnostic[]> =>
+): Result<readonly CompilerModuleOutput[], readonly CompilerDiagnostic[]> =>
   cachedTsEmit(runtimeImport, {
     root: CACHE_ROOT,
     key: bootstrapCacheHash(),
-    build: (runtime) => buildModulesTsBootstrap(BOOTSTRAP_CLI, runtime),
+    build: (runtime) => buildModulesTs(BOOTSTRAP_CLI, runtime),
   });

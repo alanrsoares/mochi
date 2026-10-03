@@ -3,7 +3,7 @@
  * for both implementations (ADR 0097).
  *
  * Plain data, no compiler imports: `jsx.ts` reads it directly, and
- * `scripts/gen-jsx-schema.ts` projects it into `bootstrap/plugins/jsx-schema.gen.mjs`
+ * `scripts/gen-jsx-schema.ts` projects it into `packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs`
  * for the self-hosted plugin to consume through the host seam, the same way
  * `prelude.gen.mjs` carries the prelude tables (ADR 0075). Adding an attribute
  * is a one-line edit HERE plus `bun run gen:jsx-schema`; neither implementation

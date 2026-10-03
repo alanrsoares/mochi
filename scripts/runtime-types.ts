@@ -11,7 +11,7 @@
 // annotation gives importers real types; the body's own params are `any` (the
 // annotation is the contract, and the JS-backend differential tests are what
 // prove the body correct).
-import { runtimeAnnotationBootstrapSync } from "@mochi/compiler/bootstrap/sync";
+import { runtimeAnnotationSync } from "@mochi/compiler/compile/sync";
 import { runtimeArity } from "@mochi/compiler/prelude";
 
 // Builtin ctor factory types — stable (4 entries), hardcoded like infer.mochi's
@@ -34,5 +34,5 @@ export const UNTYPED_BY_HM: readonly string[] = ["_list", "_tuple", "_recur", "_
 export const expectedAnnotation = (jsId: string): string | null => {
   if (UNTYPED_BY_HM.includes(jsId)) return null;
   if (CTOR_TYPES[jsId]) return CTOR_TYPES[jsId] as string;
-  return runtimeAnnotationBootstrapSync(jsId, runtimeArity[jsId] ?? 0);
+  return runtimeAnnotationSync(jsId, runtimeArity[jsId] ?? 0);
 };

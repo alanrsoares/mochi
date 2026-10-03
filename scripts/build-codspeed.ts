@@ -36,7 +36,7 @@ const result = await Bun.build({
     {
       name: "mochi-seed-for-node",
       setup(build) {
-        build.onLoad({ filter: /bootstrap[\\/]seed-path\.ts$/ }, () => ({
+        build.onLoad({ filter: /seed[\\/]loader\.ts$/ }, () => ({
           contents: seedPathShim,
           loader: "js",
         }));

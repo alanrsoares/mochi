@@ -40,6 +40,6 @@ O(n) deep equality in a hot loop is invisible at the call site. The plugin seam
 - [x] ADR: extension exit path — scoped instances / per-nominal override registry /
       permanent-structural-only — with the accepted failure modes named.
 - [x] `docs/language.md` documents `eq`-on-functions and hot-loop cost.
-- [x] Bootstrap impact: none expected (runtime string change; bootstrap emits the same
+- [x] Compiler impact: none expected (runtime string change; bootstrap emits the same
       prelude runtime) — verify via fixpoint.
 - [x] `bun run check:full` green.

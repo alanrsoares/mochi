@@ -1,7 +1,7 @@
 // Haskell-style operator sections: `(x op)` (left, missing right operand) and
 // `(op x)` (right, missing left operand) desugar to a one-param lambda calling
 // the same prelude builtin every infix operator already lowers to (see
-// the section parse in `bootstrap/parser.mochi`) — no new AST node.
+// the section parse in `packages/compiler/src/parser/parser.mochi`) — no new AST node.
 import { expect, test } from "bun:test";
 import { codegenTs } from "@mochi/compiler";
 import { compileJs } from "@mochi/test-support";

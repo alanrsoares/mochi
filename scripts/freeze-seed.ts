@@ -14,7 +14,6 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import {
   BIOME_BIN,
-  BOOTSTRAP_DIR,
   BOOTSTRAP_SEED,
   HOST_SHIMS,
   loadCachedTsEmit,
@@ -85,13 +84,16 @@ if (built._tag === "Err") {
 }
 
 for (const { path, js } of built.value) {
-  const rel = relative(BOOTSTRAP_DIR, path);
+  const rel = relative(REPO_ROOT, path);
   const outRel = /\.mochi$/.test(rel) ? rel.replace(/\.mochi$/, ".ts") : rel;
   const dest = join(tmp, outRel);
   mkdirSync(dirname(dest), { recursive: true });
   writeFileSync(dest, js);
 }
-for (const shim of HOST_SHIMS) cpSync(join(BOOTSTRAP_DIR, shim), join(tmp, shim));
+for (const shim of HOST_SHIMS) {
+  mkdirSync(dirname(join(tmp, shim)), { recursive: true });
+  cpSync(join(REPO_ROOT, shim), join(tmp, shim));
+}
 
 // Keep a synchronous entry for host integrations whose hooks cannot await
 // dynamic seed loading (notably Vite's transform). The bundle embeds the seed
@@ -99,7 +101,7 @@ for (const shim of HOST_SHIMS) cpSync(join(BOOTSTRAP_DIR, shim), join(tmp, shim)
 // `dts.ts` imports `compile.ts`, so the entry adds its single-file drivers.
 writeFileSync(
   join(tmp, "compile-entry.ts"),
-  'export * from "./compile.ts";\nexport { compileTargetsWith, emitDtsTextWith } from "./dts.ts";\n',
+  'export * from "./packages/compiler/src/compile/compile.ts";\nexport { compileTargetsWith, emitDtsTextWith } from "./packages/compiler/src/dts/dts.ts";\n',
 );
 execFileSync(
   "bun",
@@ -163,7 +165,7 @@ execFileSync(
   "bun",
   [
     "build",
-    join(tmp, "module.ts"),
+    join(tmp, "packages/compiler/src/module/module.ts"),
     "--outfile",
     join(tmp, "module.bundle.cjs"),
     "--target",
@@ -178,7 +180,7 @@ execFileSync(
 stripBundleSourceLabels(join(tmp, "module.bundle.cjs"));
 writeFileSync(
   join(tmp, "syntax-entry.ts"),
-  'export { lex } from "./lexer.ts";\nexport { parse, parseRecovering, parseWith } from "./parser.ts";\nexport { formatProgram, formatProgramWith } from "./format.ts";\nexport { formatHooksFor } from "./extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, showType, tRecord, tTuple, tUnion, UNIT, zonk } from "./types.ts";\nexport { foldAliases, tBool, tNumber, tString, widenLits } from "./schemes.ts";\n',
+  'export { lex } from "./packages/compiler/src/lexer/lexer.ts";\nexport { parse, parseRecovering, parseWith } from "./packages/compiler/src/parser/parser.ts";\nexport { formatProgram, formatProgramWith } from "./packages/compiler/src/format/format.ts";\nexport { formatHooksFor } from "./packages/compiler/src/extensions/extensions.ts";\nexport { freshRowVar, freshVar, rExtend, tArrow, tCon, tLit, tPrim, showType, tRecord, tTuple, tUnion, UNIT, zonk } from "./packages/compiler/src/infer/types.ts";\nexport { foldAliases, tBool, tNumber, tString, widenLits } from "./packages/compiler/src/infer/schemes.ts";\n',
 );
 // ESM, imported statically by the host façades (`bootstrap/syntax.ts`,
 // `bootstrap/types.ts`), so the formatter and the type constructors also run in
@@ -221,7 +223,7 @@ writeFileSync(
         saturated: true,
         values: [
           {
-            file: "compile.ts",
+            file: "packages/compiler/src/compile/compile.ts",
             names: [
               "compile",
               "compileTs",
@@ -235,7 +237,10 @@ writeFileSync(
               "runtimeAnnotation",
             ],
           },
-          { file: "dts.ts", names: ["compileTargetsWith", "emitDtsTextWith"] },
+          {
+            file: "packages/compiler/src/dts/dts.ts",
+            names: ["compileTargetsWith", "emitDtsTextWith"],
+          },
         ],
       },
     ],
@@ -252,7 +257,7 @@ writeFileSync(
         saturated: true,
         values: [
           {
-            file: "module.ts",
+            file: "packages/compiler/src/module/module.ts",
             names: [
               "buildModulesWith",
               "buildModulesTsWith",
@@ -284,17 +289,23 @@ writeFileSync(
   hostTypesDts(
     tmp,
     [
-      { file: "ast.ts", names: ["Expr", "Field", "Pattern", "Span", "Stmt", "TypeExpr"] },
-      { file: "infer.ts", names: ["HostPlugin", "IErr", "InferApi", "LocTok", "TsApi"] },
-      { file: "lexer.ts", names: ["Tok"] },
-      { file: "types.ts", names: ["Row", "St", "Ty"] },
+      {
+        file: "packages/compiler/src/ast/ast.ts",
+        names: ["Expr", "Field", "Pattern", "Span", "Stmt", "TypeExpr"],
+      },
+      {
+        file: "packages/compiler/src/infer/infer.ts",
+        names: ["HostPlugin", "IErr", "InferApi", "LocTok", "TsApi"],
+      },
+      { file: "packages/compiler/src/lexer/lexer.ts", names: ["Tok"] },
+      { file: "packages/compiler/src/infer/types.ts", names: ["Row", "St", "Ty"] },
     ],
     [
       {
         name: "SeedTypeCtors",
         values: [
           {
-            file: "types.ts",
+            file: "packages/compiler/src/infer/types.ts",
             names: [
               "tCon",
               "tArrow",
@@ -312,7 +323,7 @@ writeFileSync(
             ],
           },
           {
-            file: "schemes.ts",
+            file: "packages/compiler/src/infer/schemes.ts",
             names: ["tNumber", "tString", "tBool", "widenLits", "foldAliases"],
           },
         ],

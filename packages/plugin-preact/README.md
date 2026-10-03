@@ -11,7 +11,7 @@ import { useState, useEffect, hookDeps } from "@mochi/plugin-preact/hooks"
 Register on the project plugin list (required for call-site hook shapes):
 
 ```ts
-import { preactBootstrap } from "@mochi/plugin-preact";
+import { preactPlugin } from "@mochi/plugin-preact";
 ```
 
 Vite: alias `@mochi/plugin-preact/hooks` → the package `hooks.mochi` (or rely on
@@ -19,7 +19,7 @@ package `exports`).
 
 ## Honest types
 
-| Binding | Seam (`hooks.mochi`) | With `preactBootstrap.inferCall` |
+| Binding | Seam (`hooks.mochi`) | With `preactPlugin.inferCall` |
 |---|---|---|
 | `useState` | loose `a -> (a, a -> b)` | `(a, (a \| (a -> a)) -> unit)` |
 | `useRef` | loose `a -> b` | `{ current: a }` |
@@ -29,5 +29,5 @@ package `exports`).
 | `hookDeps*` | pack heterogeneous deps | `Array<'a>` (element opaque) |
 
 Without the plugin on the project list, extern schemes alone are polymorphic —
-anything goes. Register `preactBootstrap` (from `@mochi/plugin-preact`) in
+anything goes. Register `preactPlugin` (from `@mochi/plugin-preact`) in
 `mochi.plugins.ts` (ADR 0110, 0123).

@@ -1,4 +1,4 @@
-// Ticket 0004 — the generated prelude shim `bootstrap/prelude.gen.mjs` gives the
+// Ticket 0004 — the generated prelude shim `packages/compiler/src/prelude/prelude.gen.mjs` gives the
 // shipped self-hosted compiler its five prelude tables with no `src/` import.
 //
 // Two guards:
@@ -39,11 +39,11 @@ test(
     const shim = await import(join(root, SHIM_PATH));
 
     const { lex } = evalNames<{ lex: (s: string) => AlResult }>(
-      compileAl("bootstrap/lexer.mochi"),
+      compileAl("packages/compiler/src/lexer/lexer.mochi"),
       ["lex"],
     );
     const { parse } = evalNames<{ parse: (t: unknown) => AlResult }>(
-      compileAl("bootstrap/parser.mochi"),
+      compileAl("packages/compiler/src/parser/parser.mochi"),
       ["parse"],
     );
     const { inferProgram } = evalNames<{
@@ -53,7 +53,7 @@ test(
         namespaces: Map<string, Map<string, unknown>>,
         openMode: boolean,
       ) => AlResult;
-    }>(compileAl("bootstrap/infer.mochi"), ["inferProgram"]);
+    }>(compileAl("packages/compiler/src/infer/infer.mochi"), ["inferProgram"]);
     const { codegen } = evalNames<{
       codegen: (
         stmts: unknown,
@@ -63,7 +63,7 @@ test(
         jsDefs: Map<string, string>,
         deps: Map<string, string[]>,
       ) => string;
-    }>(compileAl("bootstrap/codegen.mochi"), ["codegen"]);
+    }>(compileAl("packages/compiler/src/codegen/codegen.mochi"), ["codegen"]);
 
     const lr = lex("let twice = n => mul(n, 2)\n");
     const pr = parse(unwrapOk(lr as never));

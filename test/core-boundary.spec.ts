@@ -1,105 +1,66 @@
-// ADR 0131 deleted the hand-authored TypeScript core. Surviving modules — the
-// barrel and its bootstrap façades (ADR 0127), the plugin seam (ADR 0011), the
-// prelude tables, `ast/`, `errors/`, DX and LSP — must not reintroduce it.
-// Specs outside the core must observe the same boundary (ADR 0130).
+// ADRs 0131/0143: authored compiler passes are Mochi. Component directories also
+// hold host façades, so enforce the boundary by source ownership, not folder name.
 import { expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { repoRoot } from "@mochi/test-support";
 
 const root = repoRoot(import.meta.url);
-const compilerSrc = join(root, "packages/compiler/src");
-const CORE_DIRS = ["lexer", "parser", "check", "infer", "codegen", "module", "compile", "dts"];
-const CORE_SUBPATHS = [
-  "extensions",
-  "plugin-kit",
-  "plugins/jsx",
-  "lexer",
-  "parser",
-  "check",
-  "infer",
-  "codegen",
-  "codegen-ts",
-  "module",
-  "compile",
-  "dts",
-  "unify",
-  "scc",
-  "schemes",
-  "show-type-expr",
-  "symbols",
-  "compile-targets",
-];
-
-const exportsMap = JSON.parse(readFileSync(join(root, "packages/compiler/package.json"), "utf8"))
+const compilerSrc = resolve(root, "packages/compiler/src");
+const exportsMap = JSON.parse(readFileSync(resolve(compilerSrc, "../package.json"), "utf8"))
   .exports as Record<string, string>;
 
-const sources = (dir: string): string[] =>
-  statSync(dir).isFile()
-    ? [dir]
-    : readdirSync(dir).flatMap((name) => {
-        const p = join(dir, name);
-        if (["node_modules", "dist", ".cache", ".output"].includes(name)) return [];
-        if (statSync(p).isDirectory()) return sources(p);
-        return /\.(?:tsx?|mts|mochi)$/.test(name) ? [p] : [];
-      });
+const authoredPass = (path: string): boolean =>
+  path.endsWith(".ts") && existsSync(path.replace(/\.ts$/, ".mochi"));
+
+const retired = [
+  "extensions/extensions.ts",
+  "extensions/plugin-kit.ts",
+  "extensions/plugins/jsx.ts",
+];
+
+test("compiler passes have no hand-authored TypeScript twins", () => {
+  const twins = [...new Bun.Glob("**/*.ts").scanSync({ cwd: compilerSrc })].filter((file) =>
+    authoredPass(resolve(compilerSrc, file)),
+  );
+  expect(twins).toEqual([]);
+  expect(retired.filter((file) => existsSync(resolve(compilerSrc, file)))).toEqual([]);
+});
+
+test("compiler exports point to host façades without migration subpaths", () => {
+  expect(Object.keys(exportsMap).filter((key) => key.startsWith("./bootstrap"))).toEqual([]);
+  expect(
+    Object.values(exportsMap).filter((path) => authoredPass(resolve(compilerSrc, "..", path))),
+  ).toEqual([]);
+  expect(
+    Object.values(exportsMap).every((path) => existsSync(resolve(compilerSrc, "..", path))),
+  ).toBe(true);
+});
 
 const SPECIFIER = /(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g;
 
-/** The file a specifier names, when it lands in `packages/compiler/src`. */
-const target = (file: string, spec: string): string | null => {
-  if (spec.startsWith(".")) return resolve(dirname(file), spec);
-  if (spec === "@mochi/compiler" || spec.startsWith("@mochi/compiler/")) {
-    const sub = exportsMap[`.${spec.slice("@mochi/compiler".length)}`];
-    return sub ? resolve(root, "packages/compiler", sub) : null;
-  }
-  return null;
-};
-
-const isCore = (path: string): boolean => {
-  const rel = relative(compilerSrc, path);
-  return CORE_DIRS.some((d) => rel === d || rel.startsWith(`${d}/`));
-};
-
-const SURVIVORS = ["packages", "scripts", "test", "apps", "examples"];
-
-test("the hand-authored TypeScript core stays deleted", () => {
-  expect(CORE_DIRS.filter((dir) => existsSync(join(compilerSrc, dir)))).toEqual([]);
-  expect(
-    [
-      "extensions/extensions.ts",
-      "extensions/plugin-kit.ts",
-      "extensions/index.ts",
-      "extensions/plugins/jsx.ts",
-    ].filter((file) => existsSync(join(compilerSrc, file))),
-  ).toEqual([]);
-});
-
-test("the compiler publishes no TypeScript-core subpaths", () => {
-  expect(
-    Object.values(exportsMap).filter((path) => isCore(resolve(root, "packages/compiler", path))),
-  ).toEqual([]);
-  expect(CORE_SUBPATHS.filter((sub) => `./${sub}` in exportsMap)).toEqual([]);
-});
-
-test.each(SURVIVORS)("%s imports no TypeScript-core module", (dir) => {
-  const hits = sources(join(root, dir))
-    .filter((file) => !isCore(file))
-    .flatMap((file) =>
-      [...readFileSync(file, "utf8").matchAll(SPECIFIER)]
-        .map((m) => m[2] as string)
-        .filter((spec) => {
-          if (
-            CORE_SUBPATHS.some(
-              (sub) =>
-                spec === `@mochi/compiler/${sub}` || spec.startsWith(`@mochi/compiler/${sub}/`),
-            )
-          )
-            return true;
-          const path = target(file, spec);
-          return path !== null && isCore(path);
-        })
-        .map((spec) => `${relative(root, file)}: ${spec}`),
-    );
-  expect(hits).toEqual([]);
-});
+test.each(["packages", "scripts", "test", "apps", "examples"])(
+  "%s imports no hand-authored TypeScript pass",
+  (dir) => {
+    const hits = [...new Bun.Glob("**/*.{ts,tsx,mts,mochi}").scanSync({ cwd: resolve(root, dir) })]
+      .filter(
+        (file) =>
+          !file
+            .split("/")
+            .some((part) => ["node_modules", "dist", ".cache", ".output"].includes(part)),
+      )
+      .flatMap((file) => {
+        const absolute = resolve(root, dir, file);
+        return [...readFileSync(absolute, "utf8").matchAll(SPECIFIER)]
+          .map((match) => match[2]!)
+          .filter((spec) => {
+            if (!spec.startsWith(".")) return false;
+            const target = resolve(dirname(absolute), spec);
+            const ts = target.endsWith(".ts") ? target : `${target}.ts`;
+            return ts.startsWith(`${compilerSrc}/`) && authoredPass(ts);
+          })
+          .map((spec) => `${dir}/${file}: ${spec}`);
+      });
+    expect(hits).toEqual([]);
+  },
+);

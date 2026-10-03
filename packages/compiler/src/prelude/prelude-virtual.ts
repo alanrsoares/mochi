@@ -229,12 +229,12 @@ const build = (): PreludeVirtual => {
   return { source, origins, nsMembers };
 };
 
-let cached: PreludeVirtual | undefined;
+let cachedVirtual: PreludeVirtual | undefined;
 
 /** Memoized virtual prelude source + export Locations. */
 export const preludeVirtual = (): PreludeVirtual => {
-  cached ??= build();
-  return cached;
+  cachedVirtual ??= build();
+  return cachedVirtual;
 };
 
 export const preludeVirtualSource = (): string => preludeVirtual().source;
@@ -280,8 +280,8 @@ export const preludeDocForBinding = (b: PreludeDocBinding): string | undefined =
 /** A Location flattened to the `{ path, start, end }` shape bootstrap symbol queries take. */
 export type FlatLocation = { path: string; start: number; end: number };
 
-/** Virtual prelude defs as `bootstrap/symbols.mochi` takes them (`Prelude`). */
-export type PreludeBootstrap = {
+/** Virtual prelude defs as `packages/compiler/src/check/symbols.mochi` takes them (`Prelude`). */
+export type Prelude = {
   origins: {
     values: Map<string, FlatLocation>;
     types: Map<string, FlatLocation>;
@@ -295,13 +295,13 @@ const flatLocations = (m: Map<string, Location>): Map<string, FlatLocation> =>
     [...m].map(([name, at]) => [name, { path: at.path, start: at.span.start, end: at.span.end }]),
   );
 
-let cachedBootstrap: PreludeBootstrap | undefined;
+let cachedSymbols: Prelude | undefined;
 
 /** Memoized virtual prelude for the bootstrap symbol index. */
-export const preludeBootstrap = (): PreludeBootstrap => {
-  if (cachedBootstrap) return cachedBootstrap;
+export const preludeSymbols = (): Prelude => {
+  if (cachedSymbols) return cachedSymbols;
   const { origins, nsMembers } = preludeVirtual();
-  cachedBootstrap = {
+  cachedSymbols = {
     origins: {
       values: flatLocations(origins.value),
       types: flatLocations(origins.type),
@@ -309,5 +309,5 @@ export const preludeBootstrap = (): PreludeBootstrap => {
     },
     members: flatLocations(nsMembers),
   };
-  return cachedBootstrap;
+  return cachedSymbols;
 };

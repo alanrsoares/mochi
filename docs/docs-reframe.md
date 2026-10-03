@@ -86,7 +86,7 @@ Add a dedicated comparative section for devs transitioning from TypeScript (insp
 
 > Syntax note for whoever builds this table: mochi has **no `match` keyword and no `->`
 > in patterns**. It is `switch <scrutinee> { | Pat => expr }`, arms separated by `|`, not
-> commas. Verify snippets against `bootstrap/lexer.mochi` before shipping
+> commas. Verify snippets against `packages/compiler/src/lexer/lexer.mochi` before shipping
 > them to the site.
 
 ---

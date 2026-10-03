@@ -69,7 +69,7 @@ test("when highlights as keyword in switch guards and plain/function in calls", 
   const whenCall = callSpans.find((s) => s.text === "when");
   expect(whenCall?.kind).toBe("plain");
 
-  const importSpans = api.highlightMochiCode('import { when } from "../lib/vnode"');
+  const importSpans = api.highlightMochiCode('import { when } from "./vnode"');
   const whenImport = importSpans.find((s) => s.text === "when");
   expect(whenImport?.kind).toBe("plain");
 

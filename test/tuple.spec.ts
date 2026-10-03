@@ -2,15 +2,15 @@
 // (distinct arities never unify), `switch` destructure + narrowing, codegen to
 // JS arrays, extern tuple signatures, and formatter round-trip.
 import { expect, test } from "bun:test";
-import { defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
-import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { inferTypesSyncWith } from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { format } from "@mochi/dx/format";
 import { compileJs, typeOf } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { unwrapOk } from "@onrails/result";
 
 const inferFails = (src: string): boolean =>
-  inferTypesBootstrapSyncWith(src, { ...defaultBootstrapOptions, open: true })._tag === "Err";
+  inferTypesSyncWith(src, { ...defaultOptions, open: true })._tag === "Err";
 const run = (src: string): unknown => {
   const js = compileJs(src, { stripImports: true, runtime: true });
   return new Function("match", `${js}\nreturn r;`)(match);

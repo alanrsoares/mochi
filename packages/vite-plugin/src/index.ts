@@ -6,10 +6,10 @@
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { BootstrapDiagnostic } from "@mochi/compiler/bootstrap";
-import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
-import type { BootstrapOptions, BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { compileBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
+import { compileSyncWith } from "@mochi/compiler/compile/sync";
+import type { CompilerOptions, CompilerPlugin } from "@mochi/compiler/extensions";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import { buildModulesWith } from "@mochi/compiler/module";
 import {
   capability,
   createComponentHost,
@@ -22,12 +22,12 @@ import type { Plugin, ViteDevServer } from "vite";
 
 /** The capability through which a live host supplies compiler plugins. */
 export const languagePluginsCapability =
-  capability<readonly BootstrapPlugin[]>("mochi.language-plugins");
+  capability<readonly CompilerPlugin[]>("mochi.language-plugins");
 
 /** Create the resource-owning runtime component for a static plugin list. */
 export const languagePluginsComponent = (
   name: string,
-  plugins: readonly BootstrapPlugin[],
+  plugins: readonly CompilerPlugin[],
 ): RuntimeComponent => ({
   name,
   provides: [languagePluginsCapability],
@@ -62,7 +62,7 @@ export type MochiPluginOptions = {
    * Self-hosted-core plugins to run (styled-cva, …; ADR 0109). `undefined` →
    * builtins; `[]` → hard opt-out; non-empty → builtins + this list (ADR 0011).
    */
-  plugins?: readonly BootstrapPlugin[];
+  plugins?: readonly CompilerPlugin[];
   /** Permit host globals across transformed files; prefer per-file `"use open"`. */
   open?: boolean;
   /**
@@ -73,7 +73,7 @@ export type MochiPluginOptions = {
   runtimePlugins?: RuntimePluginSource;
 };
 
-const compileFailure = (id: string, errors: readonly BootstrapDiagnostic[]): SyntaxError =>
+const compileFailure = (id: string, errors: readonly CompilerDiagnostic[]): SyntaxError =>
   new SyntaxError(
     `Mochi compilation failed for ${id}:\n${errors.map((error) => `[${error.kind ?? "type"}] ${error.message}`).join("\n")}`,
   );
@@ -142,7 +142,7 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
 
       // Keep sibling imports as `.mochi` so Vite re-enters this plugin
       // (default codegen rewrites to `.js` for the standalone CLI/graph).
-      const opts: BootstrapOptions = {
+      const opts: CompilerOptions = {
         open: options.open ?? false,
         runtime,
         docs: true,
@@ -152,13 +152,13 @@ export function mochiPlugin(options: MochiPluginOptions = {}): Plugin {
       };
       let transformedCode: string;
       if (/^\s*import\b/m.test(code) && existsSync(id)) {
-        const graph = buildModulesBootstrapWith(id, opts);
+        const graph = buildModulesWith(id, opts);
         if (graph._tag === "Err") throw compileFailure(id, graph.error);
         const output = graph.value.find((module) => resolve(module.path) === resolve(id));
         if (!output) throw new SyntaxError(`Mochi compilation omitted ${id}`);
         transformedCode = output.js;
       } else {
-        const res = compileBootstrapSyncWith(code, opts);
+        const res = compileSyncWith(code, opts);
         if (res._tag === "Err") throw compileFailure(id, res.error);
         transformedCode = res.value;
       }

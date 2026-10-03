@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/bootstrap.ts",
-    "./bootstrap": "./src/bootstrap.ts",
+    ".": "./src/plugin.ts",
     "./container": "./container.mochi",
     "./runtime": "./src/runtime.ts"
   },

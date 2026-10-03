@@ -2,10 +2,10 @@
 // hover works at all) and report types that mention the imported type. Without
 // the dep registry the file fails `check` and hover is null everywhere.
 import { expect, test } from "bun:test";
-import { createBootstrapGraphCache } from "@mochi/compiler/bootstrap";
-import { moduleHoverAt } from "@mochi/dx/bootstrap-hover";
+import { createGraphCache } from "@mochi/compiler/graph";
 import { hoverAt } from "@mochi/dx/hover";
-import { styledCvaBootstrap } from "@mochi/plugin-styled-cva/bootstrap";
+import { moduleHoverAt } from "@mochi/dx/hover-query";
+import { styledCvaPlugin } from "@mochi/plugin-styled-cva";
 import { memRead } from "@mochi/test-support";
 
 const DEP = "/proj/ast.mochi";
@@ -36,7 +36,7 @@ test("bootstrap graph hover reports an imported constructor scheme", async () =>
   const src = 'import { A } from "./ast.mochi"\nlet f = A(1)';
   const aOff = src.lastIndexOf("A");
   const info = await moduleHoverAt(ENTRY, src, aOff, memRead({ [DEP]: DEP_SRC }), {
-    cache: createBootstrapGraphCache(),
+    cache: createGraphCache(),
   });
   expect(info?.code).toBe("number -> E");
 });
@@ -75,7 +75,7 @@ const badgeUseOffset = TW_SRC.lastIndexOf("Badge");
 
 test("with plugins, hovering a tw.* factory binding shows a component scheme, not unknown/'t0", async () => {
   const info = await moduleHoverAt(ENTRY, TW_SRC, badgeUseOffset, memRead({}), {
-    plugins: [styledCvaBootstrap],
+    plugins: [styledCvaPlugin],
   });
   expect(info?.code).toContain("VNode");
   expect(info?.code).not.toMatch(/'t\d/);
@@ -97,7 +97,7 @@ export let el = <Badge $tone="rose" />
 `;
   const off = src.lastIndexOf("$tone");
   const info = await moduleHoverAt(ENTRY, src, off + 1, memRead({}), {
-    plugins: [styledCvaBootstrap],
+    plugins: [styledCvaPlugin],
   });
   expect(info?.code).toContain("(property) $tone:");
   expect(info?.code).toContain('"rose"');

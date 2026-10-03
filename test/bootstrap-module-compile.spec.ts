@@ -1,4 +1,4 @@
-// Ticket 0013 (part b) — bootstrap/module.mochi's compileGraph / buildModules.
+// Ticket 0013 (part b) — packages/compiler/src/module/module.mochi's compileGraph / buildModules.
 // Having loaded the graph (part a) and added the four cross-module seams, we
 // now compile a real multi-module program end to end. Then we assert the
 // cross-module gates actually fire — a
@@ -8,7 +8,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { buildModulesTsBootstrap } from "@mochi/compiler/bootstrap/module";
+import { buildModulesTs } from "@mochi/compiler/module";
 import { repoRoot } from "@mochi/test-support";
 import { BOOTSTRAP_BUILD_HOOK_MS, ensureInTreeBootstrapBuild } from "@mochi/test-support/bootstrap";
 
@@ -23,9 +23,9 @@ let buildModules: (entry: string) => Res;
 const bases = (outs: Out[]): string[] => outs.map((o) => basename(o.path));
 
 beforeAll(async () => {
-  // Shared cache → bootstrap/module.js (+ deps). Import the shipped driver.
+  // Shared cache → packages/compiler/src/module/module.js (+ deps). Import the shipped driver.
   ensureInTreeBootstrapBuild();
-  ({ buildModules } = await import(join(root, "bootstrap/module.js")));
+  ({ buildModules } = await import(join(root, "packages/compiler/src/module/module.js")));
 }, BOOTSTRAP_BUILD_HOOK_MS);
 
 test("compiles examples/modules end to end", () => {
@@ -150,7 +150,7 @@ test("a nested alias resolves in the DECLARING module, not the importer", () => 
 
 test("same-shaped aliases in different modules do not fold into a cycle", () => {
   const dir = writeFixture(TWIN_ALIAS);
-  const built = buildModulesTsBootstrap(join(dir, "b.mochi"), "@mochi/runtime");
+  const built = buildModulesTs(join(dir, "b.mochi"), "@mochi/runtime");
   expect(built._tag).toBe("Ok");
   if (built._tag !== "Ok") return;
   const byName = new Map(built.value.map((o) => [basename(o.path), o.js]));

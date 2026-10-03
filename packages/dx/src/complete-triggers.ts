@@ -3,7 +3,7 @@
  * raw buffer so an incomplete edit (`Task.`, `<Badge $tone="`) still triggers.
  * Shared by the bootstrap path and the TS-plugin path in `complete.ts`.
  */
-import type { CompletionItem } from "@mochi/compiler/bootstrap/options";
+import type { CompletionItem } from "@mochi/compiler/extensions";
 
 /** Lexical `receiver.prefix` ending at `offset` — incomplete buffers included. */
 export type MemberTrigger = {

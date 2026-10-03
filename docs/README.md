@@ -7,7 +7,7 @@ share one codegen: readable JavaScript, and typed TypeScript that is clean under
 
 **Current state:**
 
-- **Self-hosting.** The compiler is authored only in mochi under `bootstrap/` (ADR 0131). The
+- **Self-hosting.** The compiler is authored only in mochi under `packages/compiler/src/` (ADR 0131). The
   shipped binary compiles that source and reproduces itself byte-for-byte at the
   fixpoint — `bun run fixpoint` is green.
 - **Dual backend, strict-clean.** The self-hosted graph emits **0 `tsc --strict`
@@ -35,3 +35,5 @@ For working *in* the repo (commands, conventions, definition of done) see
 [`../AGENTS.md`](../AGENTS.md); for the precise domain vocabulary see
 [`../CONTEXT.md`](../CONTEXT.md). The complete, runnable feature tour is
 [`../examples/example.mochi`](../examples/example.mochi).
+
+- [0143 — Compiler module layout](adr/0143-compiler-module-layout.md)

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { bootstrapDocumentSymbolsAt } from "@mochi/dx/bootstrap-symbols";
 import {
   definitionAt,
   highlightsAt,
@@ -9,6 +8,7 @@ import {
   referencesAt,
   renameAt,
 } from "@mochi/dx/nav";
+import { documentSymbolsFromSource } from "@mochi/dx/symbol-query";
 import { pos } from "@mochi/test-support";
 
 test("definitionAt jumps from use to def", () => {
@@ -53,7 +53,7 @@ test("moduleDefinitionAt follows an imported bootstrap graph binding", async () 
 test("bootstrap document symbols preserve declaration spans", () => {
   const src =
     'export let answer = 42\nexport type Shape = | Circle(number)\nextern host : number = "m" "x"';
-  expect(bootstrapDocumentSymbolsAt(src)).toEqual([
+  expect(documentSymbolsFromSource(src)).toEqual([
     { name: "answer", kind: "let", span: { start: 11, end: 17 } },
     { name: "Shape", kind: "type", span: { start: 35, end: 40 } },
     { name: "Circle", kind: "ctor", span: { start: 45, end: 51 }, detail: "Shape" },

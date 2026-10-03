@@ -32,8 +32,8 @@ const held = HELD.flatMap((dir) =>
 ).sort();
 
 test("the sweep covers the self-hosted compiler", () => {
-  expect(held).toContain("bootstrap/infer.mochi");
-  expect(held).toContain("bootstrap/plugins/jsx.mochi");
+  expect(held).toContain("packages/compiler/src/infer/infer.mochi");
+  expect(held).toContain("packages/compiler/src/extensions/plugins/jsx.mochi");
 });
 
 for (const path of held) {

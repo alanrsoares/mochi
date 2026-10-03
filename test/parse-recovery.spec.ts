@@ -5,14 +5,14 @@
  */
 import { expect, test } from "bun:test";
 import { compile } from "@mochi/compiler";
-import type { BootstrapDiagnostic, BootstrapResult } from "@mochi/compiler/bootstrap";
-import { parseProgram, lex as seedLex, parse as seedParse } from "@mochi/compiler/bootstrap/syntax";
-import type { LocTok, Stmt, Tok } from "@mochi/compiler/bootstrap/types";
+import type { CompilerDiagnostic } from "@mochi/compiler/graph";
+import type { LocTok, Stmt, Tok } from "@mochi/compiler/infer/types";
+import { parseProgram, lex as seedLex, parse as seedParse } from "@mochi/compiler/syntax";
+import type { Result } from "@onrails/result";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 
-const lex = (src: string) => seedLex(src) as BootstrapResult<LocTok<Tok>[], BootstrapDiagnostic>;
-const parse = (tokens: LocTok<Tok>[]) =>
-  seedParse(tokens) as BootstrapResult<Stmt[], BootstrapDiagnostic>;
+const lex = (src: string) => seedLex(src) as Result<LocTok<Tok>[], CompilerDiagnostic>;
+const parse = (tokens: LocTok<Tok>[]) => seedParse(tokens) as Result<Stmt[], CompilerDiagnostic>;
 
 const recover = (src: string) => unwrapOk(parseProgram(src));
 const errorNodes = (src: string) => recover(src).stmts.filter((s) => s._tag === "SError");

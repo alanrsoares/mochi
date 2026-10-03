@@ -27,8 +27,8 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
-import { buildModulesBootstrapWith } from "@mochi/compiler/bootstrap/module";
+import { basename, dirname, join, relative } from "node:path";
+import { buildModulesWith } from "@mochi/compiler/module";
 import { repoRoot } from "./repo.ts";
 
 const root = repoRoot(import.meta.url);
@@ -41,16 +41,18 @@ let outDir: string | null = null;
 /**
  * Inputs for `.cache/bootstrap-build` and `.cache/bootstrap-ts-emit`.
  * `.github/workflows/ci.yml` `hashFiles` must list these same patterns.
- * `**` not `*`: `bootstrap/plugins/jsx.mochi` is part of the graph, so a
+ * `**` not `*`: `packages/compiler/src/extensions/plugins/jsx.mochi` is part of the graph, so a
  * change to it must invalidate the cache.
  */
 export const BOOTSTRAP_CACHE_GLOBS = [
-  "bootstrap/**/*.mochi",
+  "packages/compiler/src/**/*.mochi",
+  "packages/cli/src/**/*.mochi",
+  "packages/compiler/src/**/*.mjs",
   "bootstrap/seed/**/*.ts",
   "bootstrap/seed/**/*.cjs",
   "bootstrap/seed/**/*.mjs",
   "bootstrap/seed/**/*.d.mts",
-  "packages/compiler/src/bootstrap/**/*.ts",
+  "packages/compiler/src/**/*.ts",
   "packages/test-support/src/bootstrap.ts",
 ] as const;
 
@@ -86,7 +88,8 @@ export const bootstrapCacheHash = (): string => {
 // Both must be present: a cache written before `format.mochi` joined the graph
 // has `cli.js` but no `format.js`, and would be reused as-is.
 const ready = (dir: string): boolean =>
-  existsSync(join(dir, "cli.js")) && existsSync(join(dir, "format.js"));
+  existsSync(join(dir, "packages/cli/src/driver.js")) &&
+  existsSync(join(dir, "packages/compiler/src/format/format.js"));
 
 const waitUntilReady = (dir: string): boolean => {
   const deadline = Date.now() + WAIT_MS;
@@ -124,10 +127,8 @@ const releaseClaim = (claim: string): void => {
   }
 };
 
-// Build the graph into a content-addressed cache dir — never into shared
-// `bootstrap/`. `mochic build` writes a .js beside each .mochi, so we copy
-// sources into an isolated dir and build there. Parallel workers share the
-// result via hash + claim.
+// Emit the graph into a content-addressed cache, keeping repository-relative
+// imports intact. Parallel workers share the result via hash + claim.
 const buildGraph = (): string => {
   if (outDir) return outDir;
 
@@ -157,18 +158,12 @@ const buildGraph = (): string => {
   const tmp = join(CACHE_ROOT, `${hash}.tmp-${process.pid}`);
   rmSync(tmp, { recursive: true, force: true });
   mkdirSync(tmp, { recursive: true });
-  // Copy sources only — skip stale emit so the build is authoritative.
-  for (const name of readdirSync(join(root, "bootstrap"))) {
-    if (name.endsWith(".js") || name.endsWith(".ts") || name.endsWith(".d.mts")) continue;
-    if (name.startsWith(".")) continue;
-    cpSync(join(root, "bootstrap", name), join(tmp, name), { recursive: true });
-  }
   try {
     // Compile current sources with the frozen Mochi seed. The cache deliberately
     // never reaches through the hand-authored compiler core: conformance is the
     // behavioral oracle (ADR 0105), while this just supplies executable modules
     // to the isolated bootstrap-pass specs.
-    const built = buildModulesBootstrapWith(join(tmp, "cli.mochi"), {
+    const built = buildModulesWith(join(root, "packages/cli/src/driver.mochi"), {
       open: true,
       runtime: true,
       docs: true,
@@ -180,7 +175,17 @@ const buildGraph = (): string => {
         `bootstrap build failed: ${built.error.map((error) => error.message).join("\n")}`,
       );
     for (const output of built.value) {
-      writeFileSync(output.path.replace(/\.mochi$/, ".js"), output.js);
+      const dest = join(tmp, relative(root, output.path).replace(/\.mochi$/, ".js"));
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, output.js);
+    }
+    for (const rel of [
+      "packages/compiler/src/module/host.mjs",
+      "packages/compiler/src/prelude/prelude.gen.mjs",
+      "packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs",
+    ]) {
+      mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+      cpSync(join(root, rel), join(tmp, rel));
     }
     try {
       // A cache dir from an older layout (say, before `format.js` was emitted)
@@ -201,10 +206,9 @@ const buildGraph = (): string => {
   return dest;
 };
 
-/** Ensure `bootstrap/*.js` match the shared cache (for specs that import/run in-tree). */
+/** Ensure emitted compiler/CLI `.js` files match the shared cache (for specs that import/run in-tree). */
 export const ensureInTreeBootstrapBuild = (): void => {
   const dir = buildGraph();
-  const bootstrapDir = join(root, "bootstrap");
   const copyJs = (fromDir: string, toDir: string): void => {
     mkdirSync(toDir, { recursive: true });
     for (const name of readdirSync(fromDir)) {
@@ -220,10 +224,18 @@ export const ensureInTreeBootstrapBuild = (): void => {
       renameSync(tmp, to);
     }
   };
-  copyJs(dir, bootstrapDir);
+  copyJs(dir, root);
 };
 
-const raw = (rel: string): string => readFileSync(join(outDir as string, `${rel}.js`), "utf8");
+const sourceModules = [
+  ...new Bun.Glob("packages/compiler/src/**/*.mochi").scanSync({ cwd: root }),
+].filter((path) => !path.endsWith(".spec.mochi"));
+const modulePath = (id: string): string => {
+  const path = sourceModules.find((path) => path.endsWith(`/${id}.mochi`));
+  if (!path) throw new Error(`unknown compiler module '${id}'`);
+  return path.replace(/\.mochi$/, ".js");
+};
+const raw = (id: string): string => readFileSync(join(outDir as string, modulePath(id)), "utf8");
 // Strip module wiring so the body evals standalone in `new Function`. Match only
 // genuine top-level export STATEMENTS: a multi-line template literal can place
 // `export { … }` at column 0 as string content (codegen's own `export extern`
@@ -255,8 +267,8 @@ const CTOR_MODULES = [
   "str-scan",
   "doc",
   "show-type-expr",
-  "codegen-literals",
-  "codegen-pattern",
+  "literals",
+  "pattern",
 ];
 
 // Modules prepended for their constructors only, not their whole body.
@@ -343,10 +355,10 @@ const ctorDefsOnly = (js: string): string => {
 };
 
 /** Relative module id from an import path: `./extensions.js` → `extensions`, `./plugins/jsx.js` → `plugins/jsx`. */
-const importRel = (spec: string): string => spec.replace(/^\.\//, "").replace(/\.(js|mochi)$/, "");
+const importRel = (spec: string): string => basename(spec).replace(/\.(js|mochi)$/, "");
 
 // Modules that must be prepended (in order) when eval'ing a bootstrap pass that
-// imports the BootstrapPlugin seam.
+// imports the CompilerPlugin seam.
 const PLUGIN_SEAM = ["plugins/jsx", "plugins/preact", "extensions"];
 
 // Generated host-seam shims the plugin reaches through `extern`. Module wiring
@@ -359,7 +371,7 @@ const PLUGIN_SEAM = ["plugins/jsx", "plugins/preact", "extensions"];
 // import statements are already gone by the time the body is assembled.
 const HOST_SHIMS: Readonly<Record<string, { readonly rel: string; readonly exported: string }>> = {
   jsxIntrinsicElements: {
-    rel: "plugins/jsx-schema.gen.mjs",
+    rel: "packages/compiler/src/extensions/plugins/jsx-schema.gen.mjs",
     exported: "intrinsicElements",
   },
 };
@@ -367,15 +379,12 @@ const HOST_SHIMS: Readonly<Record<string, { readonly rel: string; readonly expor
 const shimDefs = (body: string): string[] =>
   Object.entries(HOST_SHIMS).flatMap(([local, { rel, exported }]) => {
     if (!body.includes(local)) return [];
-    const defs = readFileSync(join(root, "bootstrap", rel), "utf8").replace(
-      /^export (const|let|var) /gm,
-      "$1 ",
-    );
+    const defs = readFileSync(join(root, rel), "utf8").replace(/^export (const|let|var) /gm, "$1 ");
     return [`${defs}\nconst ${local} = ${exported};`];
   });
 
 // The compiled JS of one bootstrap module, ready to eval in isolation.
-// Accepts either a bare name ("check") or a repo path ("bootstrap/check.mochi").
+// Accepts either a bare name ("check") or a repo path ("packages/compiler/src/check/check.mochi").
 export const bootstrapModuleJs = (nameOrPath: string): string => {
   buildGraph();
   const name = basename(nameOrPath).replace(/\.mochi$/, "");
@@ -387,7 +396,7 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
   const parts: string[] = [];
   const seenAlias = new Set<string>();
   const injectNs = (jsSrc: string): void => {
-    for (const m of jsSrc.matchAll(/^import \* as (\w+) from "(\.\/[^"]+)";$/gm)) {
+    for (const m of jsSrc.matchAll(/^import \* as (\w+) from "(\.\.?\/[^"]+)";$/gm)) {
       const alias = m[1]!;
       const dep = importRel(m[2]!);
       if (seenAlias.has(alias)) continue;
@@ -402,14 +411,14 @@ export const bootstrapModuleJs = (nameOrPath: string): string => {
     for (const d of CTOR_MODULES) {
       if (needed.has(d)) continue;
       // `\.\.?/` — plugins/jsx.js reaches the root modules as `../lexer.js`.
-      if (new RegExp(`from "\\.\\.?/${d}\\.(js|mochi)"`).test(jsSrc)) {
+      if (new RegExp(`from "[^"\\n]*/${d}\\.(js|mochi)"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }
     }
     for (const d of PLUGIN_SEAM) {
       if (needed.has(d)) continue;
-      if (new RegExp(`from "\\./${d}\\.(js|mochi)"`).test(jsSrc)) {
+      if (new RegExp(`from "[^"\\n]*/${d}\\.(js|mochi)"`).test(jsSrc)) {
         needed.add(d);
         consider(raw(d));
       }

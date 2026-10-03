@@ -13,7 +13,7 @@ const COVERAGE_DIR = "coverage/mochi";
 const MINIMUM_PERCENT = 65;
 
 export const bootstrapMochiCoverage = (lcov: string): Coverage => {
-  let inBootstrapMochi = false;
+  let inMochi = false;
   let functionsFound = 0;
   let functionsHit = 0;
   let linesFound = 0;
@@ -22,10 +22,12 @@ export const bootstrapMochiCoverage = (lcov: string): Coverage => {
   for (const line of lcov.split("\n")) {
     if (line.startsWith("SF:")) {
       const path = line.slice(3);
-      inBootstrapMochi = path.startsWith("bootstrap/") && path.endsWith(".mochi");
+      inMochi =
+        (path.startsWith("packages/compiler/src/") || path.startsWith("packages/cli/src/")) &&
+        path.endsWith(".mochi");
       continue;
     }
-    if (!inBootstrapMochi) continue;
+    if (!inMochi) continue;
     if (line.startsWith("FNF:")) functionsFound += Number(line.slice(4));
     if (line.startsWith("FNH:")) functionsHit += Number(line.slice(4));
     if (line.startsWith("LF:")) linesFound += Number(line.slice(3));
@@ -39,7 +41,9 @@ const percent = (hit: number, found: number): number => (found === 0 ? 0 : (hit 
 
 const main = async (): Promise<void> => {
   const specs: string[] = [];
-  for await (const path of new Bun.Glob("bootstrap/**/*.spec.mochi").scan({ cwd: ROOT })) {
+  for await (const path of new Bun.Glob("packages/{compiler,cli}/src/**/*.spec.mochi").scan({
+    cwd: ROOT,
+  })) {
     specs.push(path);
   }
   const test = Bun.spawn(

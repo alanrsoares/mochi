@@ -5,21 +5,21 @@
  * infer table when typecheck succeeds (ADR 0119).
  */
 import { dirname, resolve } from "node:path";
+import type { CompilerPlugin } from "@mochi/compiler/extensions";
 import {
-  type BootstrapGraphCache,
-  type BootstrapTypeAt,
-  inferEntryGraphTypesBootstrap,
-  inferTypesBootstrapSync,
-  loadBootstrapGraph,
-  nominalTypeNameBootstrap,
-  resolveImportBootstrap,
-} from "@mochi/compiler/bootstrap";
-import type { BootstrapPlugin } from "@mochi/compiler/bootstrap/options";
-import { lex as bootstrapLex } from "@mochi/compiler/bootstrap/syntax";
-import type { AliasInfo, Stmt } from "@mochi/compiler/bootstrap/types";
+  type CompilerGraphCache,
+  type CompilerTypeAt,
+  inferEntryGraphTypes,
+  inferTypesSync,
+  loadGraph,
+  nominalTypeName,
+  resolveImport,
+} from "@mochi/compiler/graph";
+import type { AliasInfo, Stmt } from "@mochi/compiler/infer/types";
 import { isPreludePath } from "@mochi/compiler/prelude-virtual";
 import type { Location, Span } from "@mochi/compiler/span";
 import { spanContainsClosed, tightestHit } from "@mochi/compiler/span";
+import { lex } from "@mochi/compiler/syntax";
 import {
   type Binding,
   emptyOrigins,
@@ -28,9 +28,9 @@ import {
   indexStmts,
   mergeOrigins,
   parseStmts,
-} from "./bootstrap-index";
-import { indexModule, originsForEntry } from "./bootstrap-module-index";
-import { bootstrapDocumentSymbolsAt, bootstrapWorkspaceSymbolsAt } from "./bootstrap-symbols";
+} from "./file-index";
+import { indexModule, originsForEntry } from "./module-index";
+import { documentSymbolsFromSource, workspaceSymbolsFromGraph } from "./symbol-query";
 
 export type Highlight = { span: Span; role: "def" | "use" };
 export type Ref = { location: Location; role: "def" | "use" };
@@ -68,7 +68,7 @@ type ReadFile = (path: string) => Promise<string>;
  */
 export type ListFiles = () => Promise<readonly string[]>;
 
-type BootstrapToken = { tok: { _tag: string; value?: string }; start: number; end: number };
+type CompilerToken = { tok: { _tag: string; value?: string }; start: number; end: number };
 
 /** A relative `import` resolves as the graph loader resolves it; an extern names its file. */
 const relativeTarget = (path: string, stmt: Stmt, spec: string): string =>
@@ -78,13 +78,13 @@ const relativeTarget = (path: string, stmt: Stmt, spec: string): string =>
 
 /** Relative import/extern module specifiers, including a possible extern member. */
 const relativeModuleSpecifiers = (src: string, path: string): RelativeModuleSpecifier[] => {
-  const lexed = bootstrapLex(src) as { _tag: "Ok"; value: BootstrapToken[] } | { _tag: "Err" };
+  const lexed = lex(src) as { _tag: "Ok"; value: CompilerToken[] } | { _tag: "Err" };
   const stmts = parseStmts(src);
   if (lexed._tag === "Err" || !stmts) return [];
   return stmts.flatMap((stmt): RelativeModuleSpecifier[] => {
     if (stmt._tag !== "SImport" && stmt._tag !== "SImportNs" && stmt._tag !== "SExtern") return [];
     const spec = stmt._tag === "SExtern" ? stmt.module : stmt.from;
-    if (!spec.startsWith("./") && !spec.startsWith("../")) return [];
+    if (!spec.startsWith(".") && !spec.startsWith("../")) return [];
     const stringTokenAt = (value: string) =>
       lexed.value.find(
         (token) =>
@@ -179,12 +179,12 @@ const typeDeclOf = (name: string, idx: FileIndex, origins?: Map<string, Location
  * both (ADR 0119). Record aliases fold back through the result's own map.
  */
 const nominalTypeAt = (
-  types: readonly BootstrapTypeAt[],
+  types: readonly CompilerTypeAt[],
   aliases: Map<string, AliasInfo>,
   offset: number,
 ): string | null => {
   const hit = tightestHit(types, offset, spanContainsClosed);
-  return hit._tag === "Some" ? nominalTypeNameBootstrap(hit.value.ty, aliases) : null;
+  return hit._tag === "Some" ? nominalTypeName(hit.value.ty, aliases) : null;
 };
 
 /** Export origins of `path`'s dependency graph, keyed as Locations. */
@@ -210,7 +210,7 @@ export const typeDefinitionAt = (
 ): Location | null => {
   const idx = indexSource(path, src);
   if (!idx) return null;
-  const inferred = inferTypesBootstrapSync(src);
+  const inferred = inferTypesSync(src);
   if (inferred._tag === "Err") return null;
   const name = nominalTypeAt(inferred.value.types, inferred.value.aliases, offset);
   return name ? typeDeclOf(name, idx) : null;
@@ -219,9 +219,9 @@ export const typeDefinitionAt = (
 /** Options threaded into module-aware go-to-type, which types the graph. */
 export type ModuleNavOptions = {
   /** Caller-owned bootstrap graph memo, valid for one `plugins` list. */
-  cache?: BootstrapGraphCache;
+  cache?: CompilerGraphCache;
   /** Project plugins for the bootstrap graph (ADR 0109); omitted means the builtins. */
-  plugins?: readonly BootstrapPlugin[];
+  plugins?: readonly CompilerPlugin[];
 };
 
 /** Module-aware go-to-type (imported variants/aliases via export origins). */
@@ -232,13 +232,7 @@ export const moduleTypeDefinitionAt = async (
   readFile: ReadFile,
   opts: ModuleNavOptions = {},
 ): Promise<Location | null> => {
-  const inferred = await inferEntryGraphTypesBootstrap(
-    path,
-    src,
-    readFile,
-    opts.cache,
-    opts.plugins,
-  );
+  const inferred = await inferEntryGraphTypes(path, src, readFile, opts.cache, opts.plugins);
   if (inferred._tag === "Err") return null;
   const entryPath = resolve(path);
   const entry = inferred.value.find((module) => module.path === entryPath);
@@ -314,7 +308,7 @@ const dependentsOf = async (
       if (!stmts) return;
       for (const st of stmts) {
         if (st._tag !== "SImport" && st._tag !== "SImportNs") continue;
-        const dep = await resolveImportBootstrap(file, st.from);
+        const dep = await resolveImport(file, st.from);
         const at = importers.get(dep);
         if (at) at.push(file);
         else importers.set(dep, [file]);
@@ -363,7 +357,7 @@ const collectGraphRefs = async (
       : [entryPath];
   if (!entries.includes(entryPath)) entries.push(entryPath);
   const graphs = await Promise.all(
-    entries.map(async (e) => loadBootstrapGraph(e, await read(e).catch(() => ""), read)),
+    entries.map(async (e) => loadGraph(e, await read(e).catch(() => ""), read)),
   );
   const byPath = new Map<string, GraphModule>();
   for (const g of graphs) {
@@ -489,7 +483,7 @@ export const moduleRenameAt = async (
 };
 
 /** Top-level document symbols for outline. */
-export const documentSymbolsAt = (src: string): DocSymbol[] => bootstrapDocumentSymbolsAt(src);
+export const documentSymbolsAt = (src: string): DocSymbol[] => documentSymbolsFromSource(src);
 
 /** Workspace symbol search over the module graph from `entry`. */
 export const workspaceSymbolsAt = (
@@ -498,4 +492,4 @@ export const workspaceSymbolsAt = (
   readFile: ReadFile,
   liveSrc?: string,
 ): Promise<WorkspaceSymbol[]> =>
-  bootstrapWorkspaceSymbolsAt(resolve(entry), query, readFile, liveSrc);
+  workspaceSymbolsFromGraph(resolve(entry), query, readFile, liveSrc);

@@ -11,8 +11,8 @@ blocked-by: []
 **Problem (fact-checked):** `TypeExpr` (`ast.ts:141-146`) has no qualified form —
 `tname.name` / `tapp.ctor` are bare strings, and there is no record TypeExpr at all.
 `let g : D.Shape = …` fails with `ParseError: expected eq, got dot`. The self-host paid
-for this: the bootstrap graph was reshaped into shared `bootstrap/ast.mochi` /
-`bootstrap/types.mochi` modules purely to keep type names same-file.
+for this: the bootstrap graph was reshaped into shared `packages/compiler/src/ast/ast.mochi` /
+`packages/compiler/src/infer/types.mochi` modules purely to keep type names same-file.
 
 **Correction from sanity check:** cross-module **ctor matching already works** —
 `module.ts:98-102` merges the dep's exported ctor table, `parser.ts:812` parses
@@ -39,7 +39,7 @@ Strict before this ships = mandatory annotations that can't be written.
       `checkQualifiedTypeNames` diagnostics fire. **Constraint discovered:** no
       checked-in `.mochi` file may use `Alias.T` until slice d —
       `test/bootstrap-parser.spec.ts:517` globs `**/*.mochi` into the differential
-      corpus, so a fixture fails on `bootstrap/parser.mochi`'s missing production.
+      corpus, so a fixture fails on `packages/compiler/src/parser/parser.mochi`'s missing production.
       The examples case is an in-memory graph until then.
 - [x] **hover** fold-back to qualified alias names. `qualifyTypeNames` in `src/types.ts`
       is a display-only `Type -> Type` nominal rename (identity-preserving: untouched
@@ -70,16 +70,16 @@ Strict before this ships = mandatory annotations that can't be written.
       `tqual` nodes (single-file), and prepends `import type * as Alias from "….mochi"`.
       `emitDtsForFile` / `mochi dts` run the import graph so inferred `Shape` prints as
       `D.Shape`. Record aliases still expand (ADR 0005), same as hover.
-- [ ] Bootstrap impact: **large** — `bootstrap/parser.mochi` + `infer`/`check` mirrors
+- [ ] Compiler impact: **large** — `packages/compiler/src/parser/parser.mochi` + `infer`/`check` mirrors
       need the same production (differential tests, message + span parity); afterwards,
       check whether any shared-module workaround in the bootstrap graph can unwind.
-      Sliced: **d-1/d-2 done** — `TyQual` in the shared `bootstrap/ast.mochi` (one
+      Sliced: **d-1/d-2 done** — `TyQual` in the shared `packages/compiler/src/ast/ast.mochi` (one
       variant for both arities), the `parseTypeAtom`/`parseTypeApp` productions with
       byte-exact message *and* span parity, `strayTypeVar`, and `typeExprToType`
       lowering to the bare nominal `con(name, args)`. Two differential cases pin it
       (AST + error). **d-3 done:** `qualsByPath` + `ModuleContext` seed in
-      `bootstrap/module.mochi`, `checkQualifiedTypeNames` + 3-ary `checkWith` in
-      `bootstrap/check.mochi` (both messages byte-exact), and a `quals` scope threaded
+      `packages/compiler/src/module/module.mochi`, `checkQualifiedTypeNames` + 3-ary `checkWith` in
+      `packages/compiler/src/check/check.mochi` (both messages byte-exact), and a `quals` scope threaded
       into `inferProgramImports` → `schemes.mochi`'s `TyQual` arm. Rather than mirror
       `src/schemes.ts`'s mutually-recursive `TypeScope`/`QualScope`, the importer's
       alias map is pre-seeded with composite `"Alias.Name"` keys (a dot cannot occur in

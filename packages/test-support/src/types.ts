@@ -1,14 +1,14 @@
-import type { BootstrapTypeAt } from "@mochi/compiler/bootstrap";
-import { type BootstrapPlugin, defaultBootstrapOptions } from "@mochi/compiler/bootstrap/options";
-import { inferTypesBootstrapSyncWith } from "@mochi/compiler/bootstrap/sync";
-import { type AliasInfo, foldAliases, showType, type Ty } from "@mochi/compiler/bootstrap/types";
+import { inferTypesSyncWith } from "@mochi/compiler/compile/sync";
+import { type CompilerPlugin, defaultOptions } from "@mochi/compiler/extensions";
+import type { CompilerTypeAt } from "@mochi/compiler/graph";
+import { type AliasInfo, foldAliases, showType, type Ty } from "@mochi/compiler/infer/types";
 
-export type TypeOfOpts = { open?: boolean; plugins?: readonly BootstrapPlugin[] };
+export type TypeOfOpts = { open?: boolean; plugins?: readonly CompilerPlugin[] };
 
 /** Every recorded type in `src`, from the self-hosted core. Throws on a diagnostic. */
-export const typesOf = (src: string, opts: TypeOfOpts = {}): BootstrapTypeAt[] => {
-  const r = inferTypesBootstrapSyncWith(src, {
-    ...defaultBootstrapOptions,
+export const typesOf = (src: string, opts: TypeOfOpts = {}): CompilerTypeAt[] => {
+  const r = inferTypesSyncWith(src, {
+    ...defaultOptions,
     open: opts.open ?? true,
     plugins: opts.plugins,
   });
@@ -35,8 +35,8 @@ export const typeOf = (src: string, name: string, opts: TypeOfOpts = {}): string
  * literals), this keeps an annotated singleton: `let m : "hi" = "hi"` → `"hi"`.
  */
 export const schemeOf = (src: string, name: string, opts: TypeOfOpts = {}): string => {
-  const r = inferTypesBootstrapSyncWith(src, {
-    ...defaultBootstrapOptions,
+  const r = inferTypesSyncWith(src, {
+    ...defaultOptions,
     open: opts.open ?? true,
     plugins: opts.plugins,
   });

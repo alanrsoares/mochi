@@ -1,5 +1,5 @@
 /**
- * Token vocabulary — what the lexer emits and what `BootstrapPlugin` parse hooks
+ * Token vocabulary — what the lexer emits and what `CompilerPlugin` parse hooks
  * read (ADR 0011). Lives in `ast/` so plugin types outlive the TypeScript lexer.
  */
 import type { Span } from "./span";

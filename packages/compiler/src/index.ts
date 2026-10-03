@@ -11,6 +11,6 @@ export {
   DEFAULT_RUNTIME_IMPORT,
   type EmitOptions,
   emitDts,
-} from "./bootstrap/compile.ts";
-export type { BootstrapPlugin } from "./bootstrap/options.ts";
+} from "./compile/api.ts";
 export { type Diagnostic, formatError } from "./errors/errors.ts";
+export type { CompilerPlugin } from "./extensions/options.ts";

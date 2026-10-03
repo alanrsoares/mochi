@@ -1,6 +1,5 @@
 /** DX query + format surfaces over `@mochi/compiler` (ADR 0048). */
 
-export { type ModuleHoverOptions, moduleHoverAt } from "./bootstrap-hover";
 export { type CompletionItem, type CompletionKind, completeAt, moduleCompleteAt } from "./complete";
 export {
   diagnostics,
@@ -13,6 +12,7 @@ export {
 } from "./diagnostics";
 export { type FormatOptions, format } from "./format";
 export { type HoverInfo, hoverAt, hoverAtOption } from "./hover";
+export { type ModuleHoverOptions, moduleHoverAt } from "./hover-query";
 export {
   type DocSymbol,
   definitionAt,

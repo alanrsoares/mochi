@@ -1,4 +1,4 @@
-import type { Expr, Stmt } from "@mochi/compiler/bootstrap/types";
+import type { Expr, Stmt } from "@mochi/compiler/infer/types";
 import type { Option } from "@mochi/compiler/runtime";
 import type { Program } from "./transform.ts";
 

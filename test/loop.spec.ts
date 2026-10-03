@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from "bun:test";
 import { compile } from "@mochi/compiler";
-import { lex, parse } from "@mochi/compiler/bootstrap/syntax";
-import type { Stmt } from "@mochi/compiler/bootstrap/types";
+import type { Stmt } from "@mochi/compiler/infer/types";
+import { lex, parse } from "@mochi/compiler/syntax";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
 

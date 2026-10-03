@@ -1,4 +1,4 @@
-import { lex } from "@mochi/compiler/bootstrap/syntax";
+import { lex } from "@mochi/compiler/syntax";
 
 type SeedToken = { tok: { _tag: string; value?: unknown }; start: number; end: number };
 type SeedLexed = { _tag: "Ok"; value: SeedToken[] } | { _tag: "Err"; error: unknown };

@@ -1,0 +1,269 @@
+import { expect, test } from "bun:test";
+import { basename, join } from "node:path";
+import { repoRoot } from "@mochi/test-support";
+import { compileSync, compileTsSync, inferTypesSync } from "../compile/sync.ts";
+import {
+  checkGraph,
+  checkGraphRecovering,
+  createGraphCache,
+  createRecoveryGraphCache,
+  inferEntryGraphTypes,
+} from "./graph.ts";
+import { buildModules } from "./host.ts";
+
+test("bootstrap runtime loads the manifest-verified seed compiler", async () => {
+  const src = "type Flag = On | Off\nlet value = On\n";
+
+  expect(compileSync(src)).toEqual({
+    _tag: "Ok",
+    value: expect.stringContaining('const On = { _tag: "On" }'),
+  });
+});
+
+test("bootstrap runtime emits typed TypeScript", async () => {
+  expect(compileTsSync("let answer = 42", "@mochi/runtime")).toEqual({
+    _tag: "Ok",
+    value: expect.stringContaining("const answer"),
+  });
+});
+
+test("bootstrap typed query records source spans", () => {
+  const result = inferTypesSync("let answer = 42");
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.objectContaining({
+      types: expect.arrayContaining([
+        expect.objectContaining({ span: { start: 13, end: 15 }, display: "number" }),
+      ]),
+    }),
+  });
+});
+
+test("bootstrap runtime builds a module graph", async () => {
+  const root = repoRoot(import.meta.url);
+  const entry = join(root, "examples/modules/main.mochi");
+
+  const result = buildModules(entry);
+  expect(result._tag).toBe("Ok");
+  if (result._tag === "Ok") {
+    expect(result.value.map((output) => basename(output.path))).toEqual([
+      "geometry.mochi",
+      "main.mochi",
+    ]);
+    expect(result.value.every((output) => output.js.length > 0)).toBe(true);
+  }
+});
+
+test("bootstrap graph typed query serves the entry buffer", async () => {
+  const result = await inferEntryGraphTypes(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    async (path) => {
+      if (path === "/virtual/dep.mochi") return "export let value = 42";
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(result).toEqual({
+    _tag: "Ok",
+    value: expect.arrayContaining([
+      expect.objectContaining({
+        path: "/virtual/main.mochi",
+        types: expect.arrayContaining([
+          expect.objectContaining({ span: { start: 43, end: 48 }, display: "number" }),
+        ]),
+      }),
+    ]),
+  });
+});
+
+test("bootstrap graph typed-query cache keys every dependency source", async () => {
+  const cache = createGraphCache();
+  const entry = "/virtual/main.mochi";
+  const src = 'import { value } from "./dep"\nlet answer = value';
+  let dep = "export let value = 42";
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/dep.mochi") return dep;
+    throw new Error(`unexpected read: ${path}`);
+  };
+
+  const first = await inferEntryGraphTypes(entry, src, read, cache);
+  const again = await inferEntryGraphTypes(entry, src, read, cache);
+  expect(again).toBe(first);
+  expect(cache.entries).toHaveLength(1);
+  expect(cache.modules).toHaveLength(2);
+
+  const peer = await inferEntryGraphTypes(
+    "/virtual/peer.mochi",
+    'import { value } from "./dep"\nlet peer = value',
+    read,
+    cache,
+  );
+  expect(peer).toMatchObject({ _tag: "Ok" });
+  // The dependency's slice is shared; only the peer entry adds one.
+  expect(cache.modules).toHaveLength(3);
+
+  dep = 'export let value = "changed"';
+  const changed = await inferEntryGraphTypes(entry, src, read, cache);
+  expect(changed).not.toBe(first);
+  expect(cache.entries).toHaveLength(3);
+});
+
+test("bootstrap recovery cache reuses healthy dependency slices", async () => {
+  const cache = createRecoveryGraphCache();
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/dep.mochi") return "export let value = 42";
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const first = await checkGraphRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    read,
+    cache,
+  );
+  const again = await checkGraphRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet answer = value',
+    read,
+    cache,
+  );
+  expect(again).toBe(first);
+  expect(cache.modules).toHaveLength(2);
+
+  const peer = await checkGraphRecovering(
+    "/virtual/peer.mochi",
+    'import { value } from "./dep"\nlet peer = value',
+    read,
+    cache,
+  );
+  expect(peer).toEqual([]);
+  expect(cache.modules).toHaveLength(3);
+});
+
+test("bootstrap caches share modules whatever order an entry imports them in", async () => {
+  const cache = createRecoveryGraphCache();
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/a.mochi") return "export let a = 1";
+    if (path === "/virtual/b.mochi") return "export let b = 2";
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const ab = 'import { a } from "./a"\nimport { b } from "./b"\nlet ab = a + b';
+  const ba = 'import { b } from "./b"\nimport { a } from "./a"\nlet ba = b + a';
+  expect(await checkGraphRecovering("/virtual/ab.mochi", ab, read, cache)).toEqual([]);
+  expect(await checkGraphRecovering("/virtual/ba.mochi", ba, read, cache)).toEqual([]);
+  // `a` and `b` once each, plus the two entries: no ordered prefix is shared.
+  expect(cache.modules).toHaveLength(4);
+  expect(cache.types.modules).toHaveLength(4);
+});
+
+test("bootstrap recovery judges only the entry strictly", async () => {
+  const read = async (path: string): Promise<string> => {
+    if (path === "/virtual/host.mochi") return '"use open"\nexport let v = hostGlobal';
+    throw new Error(`unexpected read: ${path}`);
+  };
+  const src = 'import { v } from "./host"\nlet w = v';
+  expect(await checkGraphRecovering("/virtual/main.mochi", src, read)).toEqual([]);
+  const typo = 'import { v } from "./host"\nlet w = vv';
+  expect(await checkGraphRecovering("/virtual/main.mochi", typo, read)).toMatchObject([
+    { message: "unbound variable 'vv'" },
+  ]);
+});
+
+test("bootstrap runtime checks an editor buffer through its graph", async () => {
+  expect(await checkGraph("/virtual/main.mochi", "let n = nope", async () => "")).toEqual({
+    _tag: "Err",
+    error: [
+      {
+        kind: "type",
+        message: "unbound variable 'nope'",
+        path: "/virtual/main.mochi",
+        start: 8,
+        end: 12,
+      },
+    ],
+  });
+});
+
+test("bootstrap graph recovery preserves multiple entry parse diagnostics", async () => {
+  const errors = await checkGraphRecovering(
+    "/virtual/main.mochi",
+    "let =\nlet =\n",
+    async () => "",
+  );
+  expect(errors).toHaveLength(2);
+});
+
+test("bootstrap graph recovery reports dependency parse diagnostics", async () => {
+  const root = "/virtual/main.mochi";
+  const errors = await checkGraphRecovering(
+    root,
+    'import { value } from "./dep"\n',
+    async (path) => {
+      if (path === "/virtual/dep.mochi") return "let =\nlet =\n";
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors[0]?.path).toBe("/virtual/dep.mochi");
+});
+
+test("bootstrap graph recovery reports an import cycle", async () => {
+  const errors = await checkGraphRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nexport let main = value\n',
+    async (path) => {
+      if (path === "/virtual/dep.mochi")
+        return 'import { main } from "./main"\nexport let value = main\n';
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toEqual([
+    {
+      kind: "check",
+      message: "import cycle through '/virtual/main.mochi'",
+      start: 0,
+      end: 0,
+      path: "/virtual/main.mochi",
+    },
+  ]);
+});
+
+test("bootstrap graph recovery reports dependency semantic diagnostics", async () => {
+  const root = "/virtual/main.mochi";
+  const errors = await checkGraphRecovering(
+    root,
+    'import { value } from "./dep"\n',
+    async (path) => {
+      if (path === "/virtual/dep.mochi") return 'let value = add(1, "bad")\n';
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toHaveLength(1);
+  expect(errors[0]?.path).toBe("/virtual/dep.mochi");
+  expect(errors[0]?.message).toContain("unify");
+});
+
+test("bootstrap graph recovery collects semantic errors from sibling dependencies", async () => {
+  const root = "/virtual/main.mochi";
+  const errors = await checkGraphRecovering(
+    root,
+    'import { left } from "./left"\nimport { right } from "./right"\n',
+    async (path) => {
+      if (path === "/virtual/left.mochi") return 'let left = add(1, "bad")\n';
+      if (path === "/virtual/right.mochi") return 'let right = add(1, "bad")\n';
+      throw new Error(`unexpected read: ${path}`);
+    },
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors.every((error) => error.path)).toBe(true);
+});
+
+test("bootstrap graph recovery keeps entry errors after a dependency fails", async () => {
+  const errors = await checkGraphRecovering(
+    "/virtual/main.mochi",
+    'import { value } from "./dep"\nlet local = add(1, "bad")\n',
+    async () => 'let value = add(1, "bad")\n',
+  );
+  expect(errors).toHaveLength(2);
+  expect(errors.some((error) => error.path === "/virtual/dep.mochi")).toBe(true);
+  expect(errors.some((error) => error.path === "/virtual/main.mochi")).toBe(true);
+});

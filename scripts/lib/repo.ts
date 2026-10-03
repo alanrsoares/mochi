@@ -7,7 +7,7 @@ export const REPO_ROOT = resolve(import.meta.dir, "../..");
 export const repoPath = (...parts: readonly string[]): string => join(REPO_ROOT, ...parts);
 
 export const BOOTSTRAP_DIR = repoPath("bootstrap");
-export const BOOTSTRAP_CLI = join(BOOTSTRAP_DIR, "cli.mochi");
+export const BOOTSTRAP_CLI = repoPath("packages/cli/src/driver.mochi");
 export const BOOTSTRAP_SEED = join(BOOTSTRAP_DIR, "seed");
 export const RUNTIME_SRC = repoPath("packages", "compiler", "src", "prelude", "runtime");
 export const TSC_BIN = repoPath("node_modules", ".bin", "tsc");

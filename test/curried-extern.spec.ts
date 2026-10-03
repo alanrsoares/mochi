@@ -7,10 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { compile } from "@mochi/compiler";
-import {
-  buildModulesTsBootstrapWith,
-  defaultBootstrapOptions,
-} from "@mochi/compiler/bootstrap/module";
+import { buildModulesTsWith, defaultOptions } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
 import { compileAndEval, compileJs } from "@mochi/test-support";
 import { isErr, unwrapOk } from "@onrails/result";
@@ -88,7 +85,7 @@ test("a curried host's .d.ts declares the host's own nested shape", () => {
     entry,
     `${CURRIED}extern tag : string -> string -> string = "./m" "tag"\nlet a = add(1, 2)\nlet b = tag("x", "y")\n`,
   );
-  const built = buildModulesTsBootstrapWith(entry, "@mochi/runtime", defaultBootstrapOptions);
+  const built = buildModulesTsWith(entry, "@mochi/runtime", defaultOptions);
   if (built._tag === "Err") throw new Error(built.error[0]!.message);
   const dts = built.value.find((o) => basename(o.path) === "m.d.ts");
   expect(dts).toBeDefined();
