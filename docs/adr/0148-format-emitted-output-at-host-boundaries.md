@@ -32,9 +32,9 @@ the existing formatter returns raw code if formatting fails.
 
 Core codegen, compiler APIs and runtime loaders retain their raw string contract.
 Formatting belongs to presentation and file output, not language semantics.
-`seed:freeze` formats every JS/TS artifact, including bundled `.mjs` / `.cjs`
-and declaration files, using a dedicated config at the repository's width of
-100. Preserve the existing two formatter passes for large generic arrows.
+`seed:freeze` formats JS/TS modules and declaration files, excluding `.bundle.*`
+artifacts, using a dedicated config at the repository's width of 100. Bundles
+retain Bun's emitted bytes. Preserve the existing two formatter passes for large generic arrows.
 Record raw emitted hashes before formatting and artifact hashes afterward;
 regenerate the seed through this script rather than editing generated files.
 

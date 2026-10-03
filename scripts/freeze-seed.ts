@@ -4,7 +4,7 @@
 //
 //   bun scripts/freeze-seed.ts
 //
-// After emit, format all seed JS/TS artifacts, including bundles (twice: first
+// After emit, format seed JS/TS modules, excluding bundles (twice: first
 // wrap of huge generic arrows is not idempotent). `bun run lint` covers the TS snapshot; generated
 // `_g: any`, unused bindings, and inline struct types are path-exempt in biome.json.
 import { execFileSync } from "node:child_process";
@@ -380,11 +380,10 @@ cpSync(tmp, BOOTSTRAP_SEED, { recursive: true });
 rmSync(tmp, { recursive: true, force: true });
 const formatSeed = (): void => {
   for (const rel of walkFiles(BOOTSTRAP_SEED)) {
+    if (rel.includes(".bundle.")) continue;
     if (!/\.(?:[cm]?[jt]s|tsx)$/.test(rel)) continue;
     const path = join(BOOTSTRAP_SEED, rel);
-    // Bun's CJS bundles retain import declarations. Parse them as JS modules
-    // for formatting while preserving the actual artifact name and contents.
-    const language = /\.(?:[cm]?ts|tsx)$/.test(rel) ? "ts" : "js";
+    const language = rel.endsWith(".tsx") ? "tsx" : /\.[cm]?ts$/.test(rel) ? "ts" : "js";
     const formatted = execFileSync(
       BIOME_BIN,
       ["format", "--config-path=scripts/seed-format.json", `--stdin-file-path=seed.${language}`],

@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "04390d3b627ce89d0b42748690da0aae178dac61",
+  "sourceRevision": "e57d537a8a5ce2e3b7c15bed744bd8fef8b00936",
   "emitted": {
     "compile-host-types.d.ts": "3a3cdcab4321ce83414c1b144907123a4b1c8977aeca8e223e054f8efed284a6",
     "compile.bundle.cjs": "e13c9d692ac011581c7cd566c463b7de1906cee0b4879d9ddea0467426a370f2",
@@ -49,12 +49,12 @@
   },
   "files": {
     "compile-host-types.d.ts": "f703cc46830d26d536e04dd1dd1cf2ecbb9db539aff90155500c0e3e42bfbb9a",
-    "compile.bundle.cjs": "ff7e5f22d056e2dc7018b75304bcd2069249b7ecccbaf0ade425989de74cd8fe",
+    "compile.bundle.cjs": "e13c9d692ac011581c7cd566c463b7de1906cee0b4879d9ddea0467426a370f2",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "b4a95cdf3c661e6319aa8ca35d6cec03b569e7df94fcfd1ef770fc5e36a0d3ba",
+    "compile.bundle.mjs": "2af184bb5f14077ac2553908865ddbaa9e1f3206a21d303c02fbe3c50a16f3ce",
     "host-types.d.ts": "128a718cbfe8086231fd3c8492a6cbcc1459165b7e23a9e8d8c6898e28b5a18c",
     "module-host-types.d.ts": "58fcfea8e3e4e7621c7f6bea055250988a0744518619b812413d8e79157a26c9",
-    "module.bundle.cjs": "f2270f0a72b5cfcb263e9fcf3343c11d1e043afe7bdfb6caf04409f61462d7e8",
+    "module.bundle.cjs": "81c1fa77f28d1129b16f9c7633bee9ee824e5765792bcd6491edc567076755a3",
     "packages/cli/src/driver.ts": "50126d7cb3ebb1a0f8376885cf13bd4678ecb8b6ee66199f7ad486b9e31e4c66",
     "packages/compiler/src/ast/ast.ts": "14654273b6e03dd2f42348f5f99736cea28642444c20b442a8d3806062096dd1",
     "packages/compiler/src/ast/ctors.ts": "5f8dee74781be7d2736eb6cf09ebb4d5818002e8c8bcb18e8065adc9873acd69",
@@ -92,6 +92,6 @@
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
     "packages/compiler/src/prelude/prelude.gen.mjs": "0bbcfd2f52f4d699af29aaad1bf75e044dc0bdf5cfbb4e78742dfd0018aef79e",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "e84850d451282c708f65bebf5b14bef3d2034bae3ce4c1f716ec325686cf2a28"
+    "syntax.bundle.mjs": "32538f91b2f5acdef436d8ee2ce5f166ca68421b7d9b6c675ae7cf184ff54f53"
   }
 }

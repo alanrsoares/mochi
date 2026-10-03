@@ -92,8 +92,8 @@ CLI stdout and file output are formatted with Biome at the host boundary;
 the playground uses its browser formatter. Core codegen and compiler APIs retain
 their raw, pure emission contract
 ([ADR 0148](adr/0148-format-emitted-output-at-host-boundaries.md)).
-`seed:freeze` also formats all seed JS/TS artifacts, including browser and Node
-bundles, before recording their artifact hashes.
+`seed:freeze` also formats seed JS/TS modules and declarations before recording
+their artifact hashes. `.bundle.*` artifacts retain Bun's emitted bytes.
 
 Core Mochi uses exhaustive `switch`; TypeScript host tooling uses
 `@onrails/pattern`'s `.exhaustive()`. Ordinary emitted code does not use it: a `switch`
