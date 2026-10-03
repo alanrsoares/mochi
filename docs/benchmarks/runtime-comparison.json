@@ -1,0 +1,1570 @@
+{
+  "measured": "2026-10-02T23:44:12.710Z",
+  "compilerRevision": "bd42ab43c3eca38265768fc261ccee96c224969d",
+  "environment": "darwin arm64",
+  "workloads": [
+    {
+      "name": "unique-ids",
+      "size": "4,000 records / 4,000 IDs",
+      "source": "let run = xs => Array.dedupeBy(row => row.id, xs)",
+      "javascript": "const run = xs => {\n  const seen = new Set();\n  return xs.filter(row => {\n    if (seen.has(row.id)) return false;\n    seen.add(row.id); return true;\n  });\n};",
+      "batch": 32,
+      "emitted": "const _curry = (n, f) => {\n  const apply = (a) => {\n    switch (a.length) {\n      case 2:\n        return f(a[0], a[1]);\n      case 3:\n        return f(a[0], a[1], a[2]);\n      case 4:\n        return f(a[0], a[1], a[2], a[3]);\n      case 5:\n        return f(a[0], a[1], a[2], a[3], a[4]);\n      case 6:\n        return f(a[0], a[1], a[2], a[3], a[4], a[5]);\n      default:\n        return f(...a);\n    }\n  };\n  function c(...a) {\n    if (a.length === n)\n      return apply(a);\n    if (a.length < n)\n      return (...b) => c(...a, ...b);\n    return a.slice(n).reduce((g, x) => g(x), apply(a.slice(0, n)));\n  }\n  if (n === 2)\n    return (...a) => {\n      if (a.length === 2)\n        return f(a[0], a[1]);\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return (...b) => b.length === 1 ? f(x, b[0]) : c(x, ...b);\n    };\n  if (n === 3)\n    return (...a) => {\n      if (a.length === 3)\n        return f(a[0], a[1], a[2]);\n      if (a.length === 2) {\n        const [x, y] = a;\n        return (...b) => b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b);\n      }\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return _curry(2, (y, z) => f(x, y, z));\n    };\n  return c;\n};\nconst eq = _curry(2, (x, y) => {\n  if (x === y)\n    return true;\n  if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null)\n    return false;\n  const ax = Array.isArray(x);\n  if (ax !== Array.isArray(y))\n    return false;\n  if (ax) {\n    if (x.length !== y.length)\n      return false;\n    for (let i = 0;i < x.length; i++)\n      if (!eq(x[i], y[i]))\n        return false;\n    return true;\n  }\n  if (x instanceof Map || y instanceof Map) {\n    if (!(x instanceof Map) || !(y instanceof Map))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const [k, v] of x) {\n      if (!y.has(k) || !eq(v, y.get(k)))\n        return false;\n    }\n    return true;\n  }\n  if (x instanceof Set || y instanceof Set) {\n    if (!(x instanceof Set) || !(y instanceof Set))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const v of x)\n      if (!y.has(v))\n        return false;\n    return true;\n  }\n  if (typeof x[Symbol.iterator] === \"function\" || typeof y[Symbol.iterator] === \"function\")\n    throw new TypeError(\"eq on List: force it first with List.toArray\");\n  const kx = Object.keys(x), ky = Object.keys(y);\n  if (kx.length !== ky.length)\n    return false;\n  for (const k of kx)\n    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))\n      return false;\n  return true;\n});\nconst _Array_dedupeBy = _curry(2, (f, xs) => {\n  const primitive = new Set;\n  const structural = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (k !== null && typeof k === \"object\") {\n      if (structural.some((s) => eq(s, k)))\n        return false;\n      structural.push(k);\n      return true;\n    }\n    if (Number.isNaN(k))\n      return true;\n    if (primitive.has(k))\n      return false;\n    primitive.add(k);\n    return true;\n  });\n});\n\nconst run = (xs) => _Array_dedupeBy((row) => row.id, xs);\n"
+    },
+    {
+      "name": "repeated-ids",
+      "size": "4,000 records / 64 IDs",
+      "source": "let run = xs => Array.dedupeBy(row => row.id, xs)",
+      "javascript": "const run = xs => {\n  const seen = new Set();\n  return xs.filter(row => {\n    if (seen.has(row.id)) return false;\n    seen.add(row.id); return true;\n  });\n};",
+      "batch": 32,
+      "emitted": "const _curry = (n, f) => {\n  const apply = (a) => {\n    switch (a.length) {\n      case 2:\n        return f(a[0], a[1]);\n      case 3:\n        return f(a[0], a[1], a[2]);\n      case 4:\n        return f(a[0], a[1], a[2], a[3]);\n      case 5:\n        return f(a[0], a[1], a[2], a[3], a[4]);\n      case 6:\n        return f(a[0], a[1], a[2], a[3], a[4], a[5]);\n      default:\n        return f(...a);\n    }\n  };\n  function c(...a) {\n    if (a.length === n)\n      return apply(a);\n    if (a.length < n)\n      return (...b) => c(...a, ...b);\n    return a.slice(n).reduce((g, x) => g(x), apply(a.slice(0, n)));\n  }\n  if (n === 2)\n    return (...a) => {\n      if (a.length === 2)\n        return f(a[0], a[1]);\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return (...b) => b.length === 1 ? f(x, b[0]) : c(x, ...b);\n    };\n  if (n === 3)\n    return (...a) => {\n      if (a.length === 3)\n        return f(a[0], a[1], a[2]);\n      if (a.length === 2) {\n        const [x, y] = a;\n        return (...b) => b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b);\n      }\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return _curry(2, (y, z) => f(x, y, z));\n    };\n  return c;\n};\nconst eq = _curry(2, (x, y) => {\n  if (x === y)\n    return true;\n  if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null)\n    return false;\n  const ax = Array.isArray(x);\n  if (ax !== Array.isArray(y))\n    return false;\n  if (ax) {\n    if (x.length !== y.length)\n      return false;\n    for (let i = 0;i < x.length; i++)\n      if (!eq(x[i], y[i]))\n        return false;\n    return true;\n  }\n  if (x instanceof Map || y instanceof Map) {\n    if (!(x instanceof Map) || !(y instanceof Map))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const [k, v] of x) {\n      if (!y.has(k) || !eq(v, y.get(k)))\n        return false;\n    }\n    return true;\n  }\n  if (x instanceof Set || y instanceof Set) {\n    if (!(x instanceof Set) || !(y instanceof Set))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const v of x)\n      if (!y.has(v))\n        return false;\n    return true;\n  }\n  if (typeof x[Symbol.iterator] === \"function\" || typeof y[Symbol.iterator] === \"function\")\n    throw new TypeError(\"eq on List: force it first with List.toArray\");\n  const kx = Object.keys(x), ky = Object.keys(y);\n  if (kx.length !== ky.length)\n    return false;\n  for (const k of kx)\n    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))\n      return false;\n  return true;\n});\nconst _Array_dedupeBy = _curry(2, (f, xs) => {\n  const primitive = new Set;\n  const structural = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (k !== null && typeof k === \"object\") {\n      if (structural.some((s) => eq(s, k)))\n        return false;\n      structural.push(k);\n      return true;\n    }\n    if (Number.isNaN(k))\n      return true;\n    if (primitive.has(k))\n      return false;\n    primitive.add(k);\n    return true;\n  });\n});\n\nconst run = (xs) => _Array_dedupeBy((row) => row.id, xs);\n"
+    },
+    {
+      "name": "tail-sum",
+      "size": "2 million iterations",
+      "source": "let run = n => loop (i = 0, acc = 0) { switch i >= n { | true => acc | false => recur(i + 1, acc + i) } }",
+      "javascript": "const run = n => { let acc = 0; for (let i = 0; i < n; i++) acc += i; return acc; };",
+      "batch": 4,
+      "emitted": "const _curry = (n, f) => {\n  const apply = (a) => {\n    switch (a.length) {\n      case 2:\n        return f(a[0], a[1]);\n      case 3:\n        return f(a[0], a[1], a[2]);\n      case 4:\n        return f(a[0], a[1], a[2], a[3]);\n      case 5:\n        return f(a[0], a[1], a[2], a[3], a[4]);\n      case 6:\n        return f(a[0], a[1], a[2], a[3], a[4], a[5]);\n      default:\n        return f(...a);\n    }\n  };\n  function c(...a) {\n    if (a.length === n)\n      return apply(a);\n    if (a.length < n)\n      return (...b) => c(...a, ...b);\n    return a.slice(n).reduce((g, x) => g(x), apply(a.slice(0, n)));\n  }\n  if (n === 2)\n    return (...a) => {\n      if (a.length === 2)\n        return f(a[0], a[1]);\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return (...b) => b.length === 1 ? f(x, b[0]) : c(x, ...b);\n    };\n  if (n === 3)\n    return (...a) => {\n      if (a.length === 3)\n        return f(a[0], a[1], a[2]);\n      if (a.length === 2) {\n        const [x, y] = a;\n        return (...b) => b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b);\n      }\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return _curry(2, (y, z) => f(x, y, z));\n    };\n  return c;\n};\nconst add = _curry(2, (a, b) => a + b);\nconst gte = _curry(2, (a, b) => a >= b);\n\nconst run = (n) => { let i = 0; let acc = 0; while (true) { { const $loopMatch = gte(i, n); if ($loopMatch === true) { return acc; } if ($loopMatch === false) { { const $recur0 = add(i, 1); const $recur1 = add(acc, i); i = $recur0; acc = $recur1; continue; } } throw new Error(\"non-exhaustive match\"); } } };\n"
+    },
+    {
+      "name": "optional-match",
+      "size": "1 million matches / 256 records",
+      "source": "type Row = { value?: number }\nlet read = (row: Row) => switch row.value { | Some(v) => v | None => 0 }",
+      "javascript": "const read = row => { const v = row.value; return v != null ? v : 0; };",
+      "batch": 4,
+      "emitted": "\nconst read = (row) => (($optional) => { if ($optional != null) { const v = $optional; return v; } return 0; })(row.value);\n",
+      "driver": "const run = rows => { let acc = 0; for (let i = 0; i < 1000000; i++) acc += read(rows[i % 256]); return acc; };"
+    },
+    {
+      "name": "record-pipeline",
+      "size": "20,000 records / 5,000 IDs",
+      "source": "type Row = { id: number, active: bool, amount?: number }\nlet run = (rows: Array<Row>) => rows\n  |> Array.filter((row: Row) => row.active)\n  |> Array.dedupeBy((row: Row) => row.id)\n  |> Array.map((row: Row) => switch row.amount { | Some(v) => v | None => 0 })\n  |> Array.reduce((acc, amount) => acc + amount, 0)",
+      "javascript": "const run = rows => {\n  const seen = new Set();\n  return rows.filter(row => row.active)\n    .filter(row => { if (seen.has(row.id)) return false; seen.add(row.id); return true; })\n    .map(row => { const v = row.amount; return v != null ? v : 0; })\n    .reduce((acc, amount) => acc + amount, 0);\n};",
+      "batch": 16,
+      "emitted": "const _curry = (n, f) => {\n  const apply = (a) => {\n    switch (a.length) {\n      case 2:\n        return f(a[0], a[1]);\n      case 3:\n        return f(a[0], a[1], a[2]);\n      case 4:\n        return f(a[0], a[1], a[2], a[3]);\n      case 5:\n        return f(a[0], a[1], a[2], a[3], a[4]);\n      case 6:\n        return f(a[0], a[1], a[2], a[3], a[4], a[5]);\n      default:\n        return f(...a);\n    }\n  };\n  function c(...a) {\n    if (a.length === n)\n      return apply(a);\n    if (a.length < n)\n      return (...b) => c(...a, ...b);\n    return a.slice(n).reduce((g, x) => g(x), apply(a.slice(0, n)));\n  }\n  if (n === 2)\n    return (...a) => {\n      if (a.length === 2)\n        return f(a[0], a[1]);\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return (...b) => b.length === 1 ? f(x, b[0]) : c(x, ...b);\n    };\n  if (n === 3)\n    return (...a) => {\n      if (a.length === 3)\n        return f(a[0], a[1], a[2]);\n      if (a.length === 2) {\n        const [x, y] = a;\n        return (...b) => b.length === 1 ? f(x, y, b[0]) : c(x, y, ...b);\n      }\n      if (a.length !== 1)\n        return c(...a);\n      const x = a[0];\n      return _curry(2, (y, z) => f(x, y, z));\n    };\n  return c;\n};\nconst add = _curry(2, (a, b) => a + b);\nconst eq = _curry(2, (x, y) => {\n  if (x === y)\n    return true;\n  if (typeof x !== \"object\" || x === null || typeof y !== \"object\" || y === null)\n    return false;\n  const ax = Array.isArray(x);\n  if (ax !== Array.isArray(y))\n    return false;\n  if (ax) {\n    if (x.length !== y.length)\n      return false;\n    for (let i = 0;i < x.length; i++)\n      if (!eq(x[i], y[i]))\n        return false;\n    return true;\n  }\n  if (x instanceof Map || y instanceof Map) {\n    if (!(x instanceof Map) || !(y instanceof Map))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const [k, v] of x) {\n      if (!y.has(k) || !eq(v, y.get(k)))\n        return false;\n    }\n    return true;\n  }\n  if (x instanceof Set || y instanceof Set) {\n    if (!(x instanceof Set) || !(y instanceof Set))\n      return false;\n    if (x.size !== y.size)\n      return false;\n    for (const v of x)\n      if (!y.has(v))\n        return false;\n    return true;\n  }\n  if (typeof x[Symbol.iterator] === \"function\" || typeof y[Symbol.iterator] === \"function\")\n    throw new TypeError(\"eq on List: force it first with List.toArray\");\n  const kx = Object.keys(x), ky = Object.keys(y);\n  if (kx.length !== ky.length)\n    return false;\n  for (const k of kx)\n    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))\n      return false;\n  return true;\n});\nconst map = _curry(2, (f, xs) => xs.map((x) => f(x)));\nconst filter = _curry(2, (f, xs) => xs.filter((x) => f(x)));\nconst reduce = _curry(3, (f, init, xs) => xs.reduce((acc, x) => f(acc)(x), init));\nconst _Array_dedupeBy = _curry(2, (f, xs) => {\n  const primitive = new Set;\n  const structural = [];\n  return xs.filter((x) => {\n    const k = f(x);\n    if (k !== null && typeof k === \"object\") {\n      if (structural.some((s) => eq(s, k)))\n        return false;\n      structural.push(k);\n      return true;\n    }\n    if (Number.isNaN(k))\n      return true;\n    if (primitive.has(k))\n      return false;\n    primitive.add(k);\n    return true;\n  });\n});\n\n\nconst run = (rows) => reduce(_curry(2, (acc, amount) => add(acc, amount)), 0)(map((row) => (($optional) => { if ($optional != null) { const v = $optional; return v; } return 0; })(row.amount))(_Array_dedupeBy((row) => row.id)(filter((row) => row.active)(rows))));\n"
+    }
+  ],
+  "runs": [
+    {
+      "round": 0,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.07605990625000025,
+      "samples": [
+        0.07999218749999981,
+        0.07694399999999968,
+        0.0737083437499999,
+        0.07605990625000025,
+        0.07495184375000008,
+        0.07176303124999972,
+        0.07637500000000008,
+        0.06837628124999995,
+        0.08426040624999986
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.1884361874999998,
+      "samples": [
+        0.19731250000000067,
+        0.1887838749999995,
+        0.18908853125000036,
+        0.1863958124999998,
+        0.18519921875000023,
+        0.19308334375000058,
+        0.1884361874999998,
+        0.18749090624999987,
+        0.1866770937500002
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.0720676874999997,
+      "samples": [
+        0.07380078125000011,
+        0.07271743750000015,
+        0.06855337500000003,
+        0.07092709374999995,
+        0.0720676874999997,
+        0.07431640624999991,
+        0.07140496875000002,
+        0.06919531250000022,
+        0.07281509375000006
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.18975521875000023,
+      "samples": [
+        0.2079010625000004,
+        0.1950963437499995,
+        0.19362890625000073,
+        0.18975521875000023,
+        0.18797396874999972,
+        0.1886927187500005,
+        0.18505990625000024,
+        0.19175650000000033,
+        0.18205337499999974
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.01737109375000001,
+      "samples": [
+        0.017318999999999973,
+        0.01739453125000001,
+        0.017109374999999982,
+        0.016805999999999988,
+        0.01690365625000001,
+        0.01737109375000001,
+        0.018343749999999992,
+        0.01749349999999994,
+        0.017621093750000094
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.05124740625000013,
+      "samples": [
+        0.05218100000000003,
+        0.05118881249999996,
+        0.05064190624999987,
+        0.05124740625000013,
+        0.05114843749999998,
+        0.05373568749999991,
+        0.05088540624999993,
+        0.052098968749999974,
+        0.052213531250000056
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.01460809374999994,
+      "samples": [
+        0.014584625000000018,
+        0.014847656250000063,
+        0.014639312499999946,
+        0.014570312500000071,
+        0.014955750000000045,
+        0.01460809374999994,
+        0.014716124999999969,
+        0.014509125000000012,
+        0.014501312499999974
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.04759243749999986,
+      "samples": [
+        0.0476888124999999,
+        0.04709243749999992,
+        0.04686196875000004,
+        0.04945181250000008,
+        0.04750259374999999,
+        0.050613281249999975,
+        0.047683593749999975,
+        0.04759243749999986,
+        0.04701431250000021
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 11.294635499999998,
+      "samples": [
+        11.234843749999982,
+        11.294635499999998,
+        11.320978999999994,
+        11.275208249999991,
+        11.30397899999997,
+        11.325104250000038,
+        11.28798949999998,
+        11.229739499999994,
+        11.461552250000011
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.9648750000000064,
+      "samples": [
+        2.9648750000000064,
+        2.949645750000002,
+        2.962989499999992,
+        3.0009582499999965,
+        2.9729480000000024,
+        2.9824272500000006,
+        2.94689575000001,
+        2.9637500000000045,
+        2.9652394999999956
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.8499894999999995,
+      "samples": [
+        0.8494062500000013,
+        0.8501977499999995,
+        0.8550312500000032,
+        0.8553020000000018,
+        0.8477292500000004,
+        0.856562499999999,
+        0.8499894999999995,
+        0.849916750000002,
+        0.8469374999999992
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 1.9980832500000005,
+      "samples": [
+        1.988708250000002,
+        1.9980832500000005,
+        1.9816562500000003,
+        1.9988124999999997,
+        1.9973335000000034,
+        1.9940105000000017,
+        2.004208249999998,
+        2.117281250000005,
+        2.002187499999998
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 4.164989750000004,
+      "samples": [
+        4.247739500000009,
+        3.8761457500000063,
+        4.263760500000004,
+        3.970812499999994,
+        4.164989750000004,
+        4.091510499999998,
+        4.058583249999998,
+        4.213895750000006,
+        4.260093749999996
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.215270750000002,
+      "samples": [
+        2.215270750000002,
+        2.216333249999998,
+        2.2119062499999984,
+        2.211999999999996,
+        2.211354,
+        2.2063334999999995,
+        2.220541499999996,
+        2.3362394999999907,
+        2.2344585000000023
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 1.9227812499999999,
+      "samples": [
+        1.9266457499999987,
+        1.932645749999999,
+        1.9233332499999989,
+        1.921739500000001,
+        1.9134164999999967,
+        1.9227812499999999,
+        1.9132812500000043,
+        1.923291749999997,
+        1.920020749999999
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 2.2008229999999998,
+      "samples": [
+        2.2032812500000034,
+        2.200458249999997,
+        2.2015937500000007,
+        2.2008229999999998,
+        2.1997915000000035,
+        2.2066665000000043,
+        2.198562499999994,
+        2.1991145000000074,
+        2.2018230000000045
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.3472708750000013,
+      "samples": [
+        0.34636462499999965,
+        0.3787656249999998,
+        0.32511199999999896,
+        0.3580599375000002,
+        0.32639843749999997,
+        0.3223906249999988,
+        0.3472708750000013,
+        0.34938018749999955,
+        0.36016668750000136
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.8242370000000001,
+      "samples": [
+        0.911489624999998,
+        0.8232187500000023,
+        0.8565259999999988,
+        0.8234193125000004,
+        0.8007760624999989,
+        0.7975703124999995,
+        0.8311458750000007,
+        0.8397109375000014,
+        0.8242370000000001
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.27205987500000006,
+      "samples": [
+        0.30914325,
+        0.27205987500000006,
+        0.2674453125000005,
+        0.2770338749999999,
+        0.292315125,
+        0.2710208749999996,
+        0.27758337500000074,
+        0.2539323124999999,
+        0.27025000000000077
+      ]
+    },
+    {
+      "round": 0,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.7179531250000011,
+      "samples": [
+        0.7308619999999983,
+        0.7141275624999999,
+        0.7215755000000001,
+        0.7133541874999985,
+        0.7271901249999999,
+        0.7079218750000003,
+        0.7179531250000011,
+        0.7089218750000015,
+        0.768963562499998
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.18216665624999973,
+      "samples": [
+        0.18715362499999966,
+        0.18396221874999963,
+        0.18216665624999973,
+        0.18346484375000038,
+        0.18206900000000026,
+        0.18201043750000068,
+        0.18357421875000046,
+        0.18161459375,
+        0.18159503124999965
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.06912890625000001,
+      "samples": [
+        0.07027865625000018,
+        0.0676562500000002,
+        0.06847134374999975,
+        0.06820831249999992,
+        0.06912890625000001,
+        0.07477865625000035,
+        0.07949218750000009,
+        0.07340234374999977,
+        0.06807943749999978
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.18665365625000074,
+      "samples": [
+        0.19414712499999975,
+        0.18665365625000074,
+        0.1859205937499997,
+        0.18764062500000023,
+        0.18767056250000014,
+        0.18492709374999983,
+        0.18505731249999968,
+        0.18828387499999977,
+        0.18509375000000006
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.07761978124999969,
+      "samples": [
+        0.08832681250000007,
+        0.07978774999999994,
+        0.07761978124999969,
+        0.07618749999999963,
+        0.07474478125000017,
+        0.07543359375000014,
+        0.08323959374999967,
+        0.06654165625000008,
+        0.0835182187500001
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.05079296875000017,
+      "samples": [
+        0.054451843749999895,
+        0.05574868749999995,
+        0.04954818750000012,
+        0.05079296875000017,
+        0.050407562500000225,
+        0.05450259374999966,
+        0.05203646875000034,
+        0.04970831249999996,
+        0.050127624999999565
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.01446225000000001,
+      "samples": [
+        0.014634124999999942,
+        0.014539062500000033,
+        0.01446225000000001,
+        0.014419281249999916,
+        0.01459765624999998,
+        0.014450499999999922,
+        0.014503906249999976,
+        0.014423187500000045,
+        0.014375000000000027
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.049817718750000406,
+      "samples": [
+        0.05062237500000011,
+        0.05030209374999983,
+        0.049572937500000025,
+        0.04969012499999992,
+        0.049833343750000036,
+        0.05290496874999984,
+        0.04941534375000023,
+        0.04936200000000035,
+        0.049817718750000406
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.017304687500000027,
+      "samples": [
+        0.017505187500000075,
+        0.017169281250000057,
+        0.017249999999999988,
+        0.017460937499999996,
+        0.018098968749999944,
+        0.017264312500000045,
+        0.017304687500000027,
+        0.01758462500000002,
+        0.017183593750000004
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 1.9645207500000055,
+      "samples": [
+        1.9645207500000055,
+        1.9717917500000013,
+        1.9638022500000005,
+        1.965135249999996,
+        1.9642082499999987,
+        1.9683437499999954,
+        1.9642707499999972,
+        1.9673437499999977,
+        1.964031249999998
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.8418437500000024,
+      "samples": [
+        0.8414374999999978,
+        0.8539895000000008,
+        0.841353999999999,
+        0.8396769999999982,
+        0.8549062499999991,
+        0.8418437500000024,
+        0.8496249999999996,
+        0.8427915000000006,
+        0.8417812500000004
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.917073000000002,
+      "samples": [
+        2.9193647499999997,
+        2.91836450000001,
+        2.9169062499999967,
+        2.9146980000000013,
+        2.916468749999993,
+        2.925833499999996,
+        2.917073000000002,
+        2.9148229999999984,
+        2.922562500000012
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 11.167416500000002,
+      "samples": [
+        11.137895749999984,
+        11.106906250000009,
+        11.20233325000001,
+        11.17447924999999,
+        11.11435425000002,
+        11.132895749999989,
+        11.23796875000005,
+        11.167416500000002,
+        11.182260499999984
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 2.2058020000000056,
+      "samples": [
+        2.201228999999998,
+        2.202906249999998,
+        2.205447999999997,
+        2.2037394999999975,
+        2.2058647499999964,
+        2.2077395000000024,
+        2.212822999999993,
+        2.2058020000000056,
+        2.2385519999999985
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 1.9142395000000008,
+      "samples": [
+        1.9266457499999987,
+        1.9182914999999952,
+        1.9127289999999988,
+        1.9155312500000008,
+        1.912698000000006,
+        1.9191457500000055,
+        1.9129165000000015,
+        1.9142395000000008,
+        1.9124374999999958
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.19960425,
+      "samples": [
+        2.2078644999999995,
+        2.198749999999997,
+        2.199333249999995,
+        2.2064480000000017,
+        2.198531250000002,
+        2.19960425,
+        2.1980105000000023,
+        2.203895750000001,
+        2.202093750000003
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 4.313500000000005,
+      "samples": [
+        4.457718749999998,
+        4.313500000000005,
+        4.390812499999996,
+        4.403541500000003,
+        4.047104250000004,
+        4.162270750000005,
+        4.27345824999999,
+        4.001968749999989,
+        4.844874999999988
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.7202187500000008,
+      "samples": [
+        0.7723723749999998,
+        0.7647135625000026,
+        0.7752239999999979,
+        0.7182396249999989,
+        0.7271328125000025,
+        0.7138932499999981,
+        0.7161510624999998,
+        0.7083333749999987,
+        0.7202187500000008
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.2682161875000002,
+      "samples": [
+        0.2624010625000004,
+        0.28939843750000005,
+        0.24757549999999995,
+        0.2682161875000002,
+        0.3216068124999998,
+        0.24838281250000094,
+        0.27949999999999875,
+        0.2865911249999993,
+        0.26175781250000085
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.7990729375000001,
+      "samples": [
+        0.8285937499999996,
+        0.794302124999998,
+        0.7990729375000001,
+        0.7876197500000011,
+        0.7915624999999977,
+        0.7904427499999969,
+        0.8184323125000006,
+        0.8293515625000012,
+        0.822786500000003
+      ]
+    },
+    {
+      "round": 1,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.379390625000001,
+      "samples": [
+        0.4259556875000001,
+        0.3710754999999999,
+        0.3671145624999994,
+        0.379390625000001,
+        0.3527005625000008,
+        0.3535703125000005,
+        0.41154687500000087,
+        0.48569793749999945,
+        0.3870494999999998
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.08372915624999999,
+      "samples": [
+        0.08433721875,
+        0.07923437499999997,
+        0.08219268750000008,
+        0.08372915624999999,
+        0.08889453125000024,
+        0.0872395625000002,
+        0.07598306249999975,
+        0.06703646875000002,
+        0.08732553124999987
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.18792837500000026,
+      "samples": [
+        0.18909112500000003,
+        0.1889687499999999,
+        0.18962368750000014,
+        0.18860678125000074,
+        0.18599609375000004,
+        0.1859466249999997,
+        0.18792837500000026,
+        0.18705468750000076,
+        0.18599349999999948
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.0678697812500002,
+      "samples": [
+        0.0706171874999999,
+        0.06675518750000009,
+        0.0678697812500002,
+        0.06752343749999978,
+        0.06948437500000004,
+        0.061626312499999614,
+        0.06663540625000008,
+        0.07763149999999985,
+        0.08006509375000004
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.18461328124999987,
+      "samples": [
+        0.19182812500000068,
+        0.18341665624999948,
+        0.18315625000000058,
+        0.18587628125000055,
+        0.18487109375,
+        0.18404815625000026,
+        0.18515106250000013,
+        0.1823749999999995,
+        0.18461328124999987
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.01717187500000006,
+      "samples": [
+        0.017281250000000026,
+        0.01702865625000005,
+        0.01703256249999996,
+        0.017071625000000035,
+        0.017031250000000053,
+        0.01717187500000006,
+        0.017532562500000015,
+        0.017552093749999997,
+        0.017579437500000017
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.04928515624999985,
+      "samples": [
+        0.04994921874999991,
+        0.049213562500000085,
+        0.04931250000000009,
+        0.0492005312499999,
+        0.04968228124999996,
+        0.05198178125000008,
+        0.04917840625000003,
+        0.04928515624999985,
+        0.04926043750000009
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.014381500000000047,
+      "samples": [
+        0.01454687499999996,
+        0.014526031250000071,
+        0.01431249999999995,
+        0.014308593750000043,
+        0.014447937499999952,
+        0.014381500000000047,
+        0.014381500000000047,
+        0.01430340625000004,
+        0.014325531249999912
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.04736587500000011,
+      "samples": [
+        0.04827603124999991,
+        0.04816406249999994,
+        0.047755218749999884,
+        0.04736587500000011,
+        0.04692840624999994,
+        0.04917446874999998,
+        0.04713671875000003,
+        0.0468333125,
+        0.04668878124999987
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 11.214020750000032,
+      "samples": [
+        11.18298950000002,
+        11.212916750000005,
+        11.220124999999996,
+        11.297364500000015,
+        11.170093750000035,
+        11.200781250000034,
+        11.21841674999996,
+        11.214020750000032,
+        11.217093750000004
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.9185105000000107,
+      "samples": [
+        2.9185105000000107,
+        2.919812500000006,
+        2.921843750000008,
+        2.9175625000000025,
+        2.9167917500000016,
+        2.917447750000008,
+        2.9146980000000013,
+        3.2643125000000026,
+        2.9350832500000053
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.8415417499999975,
+      "samples": [
+        0.8417082500000035,
+        0.8407812499999991,
+        0.8492292500000005,
+        0.8423020000000001,
+        0.8415417499999975,
+        0.8443334999999976,
+        0.8403332500000005,
+        0.8397395000000003,
+        0.841270999999999
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 1.9669167499999958,
+      "samples": [
+        1.9668647499999992,
+        1.9682082500000035,
+        1.97007275,
+        1.963989749999996,
+        1.9669167499999958,
+        1.9667187499999983,
+        1.964020749999996,
+        2.022968750000004,
+        1.9789792499999947
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 4.567218749999995,
+      "samples": [
+        4.185625000000002,
+        4.700666749999996,
+        4.754041749999999,
+        4.567218749999995,
+        4.53587499999999,
+        4.463187500000004,
+        5.325208500000002,
+        4.580354249999999,
+        4.0747915000000035
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.20910425000001,
+      "samples": [
+        2.207979250000001,
+        2.210166749999999,
+        2.2091874999999987,
+        2.2501352499999996,
+        2.207521,
+        2.2109165000000033,
+        2.2072187500000027,
+        2.2066457499999927,
+        2.20910425000001
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 1.921531250000001,
+      "samples": [
+        1.9268020000000021,
+        1.9183020000000042,
+        1.921531250000001,
+        1.9248852500000027,
+        1.9186979999999991,
+        1.9250000000000043,
+        1.9133332499999938,
+        1.930500000000002,
+        1.920364499999998
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 2.2051562499999946,
+      "samples": [
+        2.202603999999994,
+        2.2056874999999962,
+        2.2003437499999947,
+        2.2051562499999946,
+        2.2003230000000045,
+        2.2362605,
+        2.3106770000000054,
+        2.2207499999999953,
+        2.2029374999999902
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.38333593750000006,
+      "samples": [
+        0.39663543749999874,
+        0.38247393750000036,
+        0.39728643750000003,
+        0.3831354375,
+        0.401947937500001,
+        0.35543749999999896,
+        0.36033074999999926,
+        0.38333593750000006,
+        0.3870520624999987
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.8081067500000003,
+      "samples": [
+        0.8239999999999981,
+        0.8081067500000003,
+        0.7982421874999979,
+        0.7878932499999998,
+        0.7937734375000005,
+        0.7925182500000005,
+        0.818638,
+        0.8338411249999993,
+        0.8393385625
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.29860156250000003,
+      "samples": [
+        0.32561981250000027,
+        0.2822239375000004,
+        0.3071041249999995,
+        0.2589818125000001,
+        0.3012474375000007,
+        0.298828125,
+        0.249729125,
+        0.2596640625000006,
+        0.29860156250000003
+      ]
+    },
+    {
+      "round": 2,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.7268359375000024,
+      "samples": [
+        0.7268359375000024,
+        0.7113958124999975,
+        0.7842109374999993,
+        0.7180494374999995,
+        0.7286302500000019,
+        0.7206745000000012,
+        0.7492916875000013,
+        0.7115234374999986,
+        0.7272500000000015
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.18629037500000045,
+      "samples": [
+        0.19122134375000055,
+        0.18309506249999963,
+        0.1827721250000005,
+        0.18390103124999957,
+        0.1871914062500002,
+        0.1863398437499999,
+        0.18629037500000045,
+        0.18799609374999982,
+        0.18618749999999995
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.08033725000000036,
+      "samples": [
+        0.07944403124999999,
+        0.08138281250000001,
+        0.08086328125000009,
+        0.07360678124999964,
+        0.08095312500000018,
+        0.07457684375000007,
+        0.08033725000000036,
+        0.08198437499999978,
+        0.07312759375000022
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "unique-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.18517709375000013,
+      "samples": [
+        0.19001431249999978,
+        0.1864088749999997,
+        0.18719790625000066,
+        0.18480990624999993,
+        0.18449868750000054,
+        0.18424609374999967,
+        0.18685546875000014,
+        0.18517709375000013,
+        0.18492187499999968
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "unique-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.08409506249999987,
+      "samples": [
+        0.08767318750000008,
+        0.08409506249999987,
+        0.08255859374999996,
+        0.08006118750000013,
+        0.08788799999999997,
+        0.08544921875,
+        0.08736200000000016,
+        0.07702471875000017,
+        0.07568618750000011
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.04722525000000011,
+      "samples": [
+        0.047802062499999964,
+        0.04700649999999995,
+        0.0470377500000001,
+        0.04756249999999995,
+        0.047167968749999956,
+        0.05056121874999997,
+        0.04746484375000004,
+        0.04722525000000011,
+        0.04701693750000002
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.014686187500000059,
+      "samples": [
+        0.014410156249999972,
+        0.014503906249999976,
+        0.014389312499999973,
+        0.015027343749999922,
+        0.01742578124999994,
+        0.015184906250000019,
+        0.014835937500000007,
+        0.014661468749999962,
+        0.014686187500000059
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "repeated-ids",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.05034246875000026,
+      "samples": [
+        0.050600281249999934,
+        0.04951562499999995,
+        0.04967840624999997,
+        0.04968359374999998,
+        0.04996484374999999,
+        0.0524974062500001,
+        0.05073565624999987,
+        0.05057550000000033,
+        0.05034246875000026
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "repeated-ids",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.016619781249999965,
+      "samples": [
+        0.01692059374999999,
+        0.01738803124999999,
+        0.016575531249999997,
+        0.016619781249999965,
+        0.016511718750000015,
+        0.01691015625000003,
+        0.01652084375000007,
+        0.016799468750000046,
+        0.016541656250000036
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 1.9656250000000028,
+      "samples": [
+        1.9701459999999997,
+        1.9693749999999994,
+        1.9656250000000028,
+        1.9624062500000008,
+        1.9641352499999982,
+        1.970333249999996,
+        1.966343749999993,
+        1.9652812499999968,
+        1.9628019999999964
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.8430210000000002,
+      "samples": [
+        0.8418227500000022,
+        0.8409687499999983,
+        0.8421457500000002,
+        0.8426667499999994,
+        0.8438852499999996,
+        0.8749687500000007,
+        0.8524895000000008,
+        0.8430210000000002,
+        0.8445
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "tail-sum",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.918604000000002,
+      "samples": [
+        2.9173959999999965,
+        2.9264584999999954,
+        2.9166250000000105,
+        2.918604000000002,
+        2.925010499999999,
+        2.9138334999999955,
+        2.917812500000011,
+        2.9198227499999945,
+        2.921229249999996
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "tail-sum",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 11.184552250000024,
+      "samples": [
+        11.260447999999997,
+        11.171791750000011,
+        11.22037499999999,
+        11.163208249999968,
+        11.125854249999975,
+        11.185468749999984,
+        11.264614499999993,
+        11.172437500000001,
+        11.184552250000024
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 2.2413019999999904,
+      "samples": [
+        2.29446875,
+        2.229520749999999,
+        2.2425937499999975,
+        2.2556145,
+        2.249645750000006,
+        2.2194585000000018,
+        2.2413019999999904,
+        2.217770999999999,
+        2.1487602500000094
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 1.9260832499999978,
+      "samples": [
+        1.932916750000004,
+        1.9323332499999992,
+        1.9260832499999978,
+        2.0866979999999984,
+        1.9229374999999962,
+        1.9286250000000038,
+        1.9240937500000044,
+        1.917197999999999,
+        1.922687500000002
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "optional-match",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 2.212260499999992,
+      "samples": [
+        2.208885500000001,
+        2.2153644999999997,
+        2.2169999999999987,
+        2.2426042499999994,
+        2.2288542499999977,
+        2.206593749999996,
+        2.212260499999992,
+        2.2027292500000044,
+        2.205781250000001
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "optional-match",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 4.984958250000005,
+      "samples": [
+        4.635385499999998,
+        4.984958250000005,
+        4.960479250000006,
+        4.473885499999994,
+        5.051114499999997,
+        4.7619894999999985,
+        5.352937499999996,
+        5.177510499999997,
+        5.049728999999985
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "javascript",
+      "version": "v22.22.3",
+      "median": 0.7153385625000013,
+      "samples": [
+        0.7272265625000003,
+        0.70945575,
+        0.7204400624999998,
+        0.7088411249999993,
+        0.7216640625000004,
+        0.7082213124999974,
+        0.7153385625000013,
+        0.7101640625000023,
+        0.8642343749999988
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "javascript",
+      "version": "1.4.2",
+      "median": 0.27724218749999974,
+      "samples": [
+        0.25694012499999985,
+        0.2905234375000001,
+        0.27724218749999974,
+        0.28780206249999907,
+        0.29025781250000016,
+        0.27720568749999863,
+        0.2612317500000003,
+        0.29982812499999945,
+        0.23947918749999886
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "record-pipeline",
+      "engine": "node",
+      "variant": "mochi",
+      "version": "v22.22.3",
+      "median": 0.7984479375000006,
+      "samples": [
+        0.836054687499999,
+        0.7917083124999991,
+        0.7984479375000006,
+        0.7860286250000001,
+        0.7890182500000016,
+        0.7914010625000003,
+        0.8196275625000027,
+        0.8233385625000018,
+        0.8122369999999997
+      ]
+    },
+    {
+      "round": 3,
+      "workload": "record-pipeline",
+      "engine": "bun",
+      "variant": "mochi",
+      "version": "1.4.2",
+      "median": 0.37834900000000005,
+      "samples": [
+        0.41279425000000103,
+        0.34621356249999913,
+        0.3633801874999989,
+        0.41021356250000096,
+        0.3876223750000012,
+        0.43138543750000125,
+        0.36646874999999923,
+        0.3667109375000006,
+        0.37834900000000005
+      ]
+    }
+  ]
+}

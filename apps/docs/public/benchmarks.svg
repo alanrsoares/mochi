@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="604" viewBox="0 0 640 604" role="img" aria-labelledby="title description">
-  <title id="title">Mochi runtime benchmark snapshots</title>
-  <desc id="description">Deduplicate records by ID, 4,000 records · numeric projection keys: Bun 186×, Node 202×. Sum through a tail switch, 2 million loop iterations: Bun 2.8×, Node 14×. Match optional field reads, 1 million immediate Some / None matches: Bun 2.9×, Node 2.9×. Historical median speedups against previous Mochi implementations; microbenchmarks, not application throughput.</desc>
+  <title id="title">Mochi runtime optimization snapshots</title>
+  <desc id="description">Deduplicate records by ID, 4,000 unique IDs · numeric projection keys: Bun 186×, Node 202×. Sum through a tail switch, 2 million loop iterations: Bun 2.8×, Node 14×. Match optional field reads, 1 million immediate Some / None matches: Bun 2.9×, Node 2.9×. Historical median speedups against previous Mochi implementations; microbenchmarks, not application throughput.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1f2328; }
     .name { font-size: 20px; font-weight: 600; }
@@ -11,12 +11,12 @@
     .divider { stroke: #d1d9e0; }
   </style>
   <rect x="0.5" y="0.5" width="639" height="603" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
-  <text x="32" y="43" font-size="22" font-weight="600">Runtime benchmarks</text>
+  <text x="32" y="43" font-size="22" font-weight="600">Runtime optimization snapshots</text>
   <text x="32" y="68" class="muted">Historical medians · previous → optimized Mochi</text>
 
   <path d="M24 92H616" class="divider"/>
   <text x="48" y="121" class="name">Deduplicate records by ID</text>
-  <text x="48" y="143" class="size">4,000 records · numeric projection keys</text>
+  <text x="48" y="143" class="size">4,000 unique IDs · numeric projection keys</text>
 
   <text x="48" y="177" class="engine">Bun</text>
   <text x="113" y="179" class="gain">186×</text>

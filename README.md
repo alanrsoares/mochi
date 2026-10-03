@@ -208,7 +208,7 @@ their own reproduction scripts and reports.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/benchmarks-dark.svg" />
-  <img src="apps/docs/public/benchmarks.svg" alt="Recorded Mochi runtime speedups for record-ID dedupe, tail-switch sum and optional matches, with Bun and Node median timings. Full results are available in the linked reports." width="640" />
+  <img src="apps/docs/public/benchmarks.svg" alt="Historical Mochi optimization snapshots: deduplication of 4,000 unique numeric IDs, tail-switch sum and immediate optional matches. Bun and Node timings compare earlier Mochi implementations with optimized output; full results are in the linked reports." width="640" />
 </picture>
 
 Workloads and methodology: [record-ID dedupe](docs/dedupe-by-benchmark.md),
@@ -220,11 +220,31 @@ against handwritten JavaScript or TypeScript. They are microbenchmarks, not
 application throughput claims. Structural dedupe keys retain the existing scan;
 the reports include workload limits, repeat runs and regressions.
 
+For context, current emitted Mochi versus equivalent handwritten JavaScript,
+in **milliseconds per operation** (lower is better):
+
+| Workload | Bun Mochi | Bun JS | Node Mochi | Node JS |
+|---|---:|---:|---:|---:|
+| 4,000 unique IDs | 0.081 | 0.071 | 0.187 | 0.185 |
+| 4,000 records / 64 IDs | 0.017 | 0.015 | 0.050 | 0.047 |
+| Tail sum / 2 million iterations | 11.199 | 0.842 | 2.919 | 1.966 |
+| Immediate optional match / 1 million reads | 4.440 | 1.922 | 2.211 | 2.205 |
+| Record pipeline / 20,000 rows | 0.379 | 0.275 | 0.804 | 0.719 |
+
+These are warmed synthetic workloads measured on October 3, 2026, macOS arm64,
+Bun 1.4.2 and Node 22.22.3. The pipeline filters, deduplicates, normalizes optional
+amounts and sums; both versions use the same collection stages. Each cell is the
+median of four fresh-process medians, with alternating implementation/engine
+order. See [fixtures, raw samples and run ranges](docs/runtime-comparison-benchmark.md).
+The tail sum still has substantial overhead on Bun; this table makes no
+whole-language or application throughput claim.
+
 ```bash
 bun run bench                     # compiler, formatter and direct-loop suites
 bun scripts/bench-dedupe-by.ts     # previous scan vs primitive projection cache
 bun scripts/bench-tail-switch.ts   # previous steps vs scalar tail switches
 bun scripts/bench-optional-read.ts # previous wrappers vs immediate-match fusion
+bun scripts/bench-runtime-comparison.ts # current Mochi vs JS, four process rounds
 ```
 
 See [benchmark tooling](docs/tooling.md#benchmarks) for CI coverage, profiling

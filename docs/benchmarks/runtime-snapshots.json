@@ -4,7 +4,7 @@
   "workloads": [
     {
       "name": "Deduplicate records by ID",
-      "size": "4,000 records · numeric projection keys",
+      "size": "4,000 unique IDs · numeric projection keys",
       "report": "docs/dedupe-by-benchmark.md",
       "precision": 3,
       "bun": { "before": 27.031, "after": 0.145 },
