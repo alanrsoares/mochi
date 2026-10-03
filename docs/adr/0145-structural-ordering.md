@@ -52,8 +52,11 @@ JSON escaping in show remains intentional.
 
 ## Costs and validation
 
-Visiting a record with k fields sorts two key arrays: O(k log k), plus recursive
-comparison of reached values. There is no serialized copy of the entire value.
+Visiting a record with k fields first finds its minimum key in O(k). An early
+difference stops there. Otherwise, sort remaining key lists in O(k log k),
+reusing the sorted list when both fresh field lists match. Small unsorted lists
+use insertion sort bounded to 16 keys; larger lists use native sorting. Field
+values use the existing identity shortcut before recursive comparison. There is no serialized copy of the entire value.
 Sorting an Array still requires O(n log n) comparisons, with value traversal
 costs dependent on the input. No allocation-free or universal speedup claim.
 
@@ -63,6 +66,7 @@ and lazy Lists. Property tests cover antisymmetry, transitivity, equality
 agreement and insertion-order invariance over finite same-schema values.
 Compiled-language sorting and strict TypeScript guards exercise both backends.
 The [isolated benchmark report](../structural-compare-benchmark.md) records
-Bun/Node results and limitations, including the wide-record regression on Bun.
+Bun/Node results and limitations, including the corrected initial wide-record
+regression and added late-difference/equal-record fixtures.
 Use an uncurried internal recursive helper while retaining the public curry
 contract, and skip key sorting when the freshly collected list is already ordered.

@@ -34,12 +34,25 @@ const fixtures: readonly Fixture[] = [
     input: 'ids.map(id => Object.freeze({_tag:id%2?"B":"A", _0:id, note:"x".repeat(64)}))',
     model: "(a,b)=>a._tag<b._tag?-1:a._tag>b._tag?1:a._0-b._0",
   },
+  {
+    name: "wide-records-late",
+    input:
+      'ids.map(id => Object.freeze({...Object.fromEntries(Array.from({length:12},(_,i)=>["field"+i,"x".repeat(32)])), z:id}))',
+    model: "(a,b)=>a.z-b.z",
+  },
+  {
+    name: "wide-records-equal",
+    input:
+      'ids.map(() => Object.freeze({a:0, ...Object.fromEntries(Array.from({length:12},(_,i)=>["field"+i,"x".repeat(32)]))}))',
+    model: "()=>0",
+  },
 ];
 const baseline = readFileSync(repoPath("docs/benchmarks/structural-compare-baseline.mjs"), "utf8");
 const emitted = [
   preludeJsDefs._curry,
   preludeJsDefs._compareFieldNames,
   preludeJsDefs._compareSortedKeys,
+  preludeJsDefs._compareFirstKey,
   preludeJsDefs._compareRecords,
   preludeJsDefs._compare,
   preludeJsDefs.compare,

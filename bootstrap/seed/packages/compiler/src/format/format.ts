@@ -95,6 +95,7 @@ import {
   _Str_trim,
   _compare,
   _compareFieldNames,
+  _compareFirstKey,
   _compareRecords,
   _compareSortedKeys,
   _curry,

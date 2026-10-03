@@ -14010,10 +14010,32 @@ var _preludeJsDefs = {
   _compareSortedKeys: `const _compareSortedKeys = (keys, tagged) => {
   for (let i = 1;i < keys.length; i++) {
     const order = tagged ? _compareFieldNames(keys[i - 1], keys[i]) : keys[i - 1] < keys[i] ? -1 : 1;
-    if (order > 0)
-      return keys.slice().sort(tagged ? _compareFieldNames : undefined);
+    if (order > 0) {
+      if (keys.length > 16)
+        return keys.slice().sort(tagged ? _compareFieldNames : undefined);
+      const sorted = keys.slice();
+      for (let at = i;at < sorted.length; at++) {
+        const key = sorted[at];
+        let before = at - 1;
+        while (before >= 0 && (tagged ? _compareFieldNames(sorted[before], key) > 0 : sorted[before] > key)) {
+          sorted[before + 1] = sorted[before];
+          before -= 1;
+        }
+        sorted[before + 1] = key;
+      }
+      return sorted;
+    }
   }
   return keys;
+};`,
+  _compareFirstKey: `const _compareFirstKey = (keys, tagged) => {
+  let first = keys[0];
+  for (let i = 1;i < keys.length; i++) {
+    const key = keys[i];
+    if (tagged ? _compareFieldNames(key, first) < 0 : key < first)
+      first = key;
+  }
+  return first;
 };`,
   _compareRecords: `const _compareRecords = (x, y) => {
   const keysX = Object.keys(x), keysY = Object.keys(y);
@@ -14026,15 +14048,34 @@ var _preludeJsDefs = {
     if (tag !== 0)
       return tag;
   }
-  const kx = tagged ? _compareSortedKeys(keysX.filter((k) => k !== "_tag"), true) : _compareSortedKeys(keysX, false), ky = tagged ? _compareSortedKeys(keysY.filter((k) => k !== "_tag"), true) : _compareSortedKeys(keysY, false);
+  const fieldsX = tagged ? keysX.filter((k) => k !== "_tag") : keysX, fieldsY = tagged ? keysY.filter((k) => k !== "_tag") : keysY;
+  if (fieldsX.length === 0 || fieldsY.length === 0)
+    return _compare(fieldsX.length, fieldsY.length);
+  let sameKeys = fieldsX.length === fieldsY.length;
+  for (let i = 0;sameKeys && i < fieldsX.length; i++) {
+    if (fieldsX[i] !== fieldsY[i])
+      sameKeys = false;
+  }
+  const firstX = _compareFirstKey(fieldsX, tagged), firstY = sameKeys ? firstX : _compareFirstKey(fieldsY, tagged);
+  if (firstX !== firstY)
+    return tagged ? _compareFieldNames(firstX, firstY) : _compare(firstX, firstY);
+  const firstLeft = x[firstX], firstRight = y[firstY];
+  if (firstLeft !== firstRight) {
+    const firstValue = _compare(firstLeft, firstRight);
+    if (firstValue !== 0)
+      return firstValue;
+  }
+  const kx = _compareSortedKeys(fieldsX, tagged), ky = sameKeys ? kx : _compareSortedKeys(fieldsY, tagged);
   const n = Math.min(kx.length, ky.length);
-  for (let i = 0;i < n; i++) {
-    const key = tagged ? _compareFieldNames(kx[i], ky[i]) : _compare(kx[i], ky[i]);
-    if (key !== 0)
-      return key;
-    const value = _compare(x[kx[i]], y[ky[i]]);
-    if (value !== 0)
-      return value;
+  for (let i = 1;i < n; i++) {
+    if (kx[i] !== ky[i])
+      return tagged ? _compareFieldNames(kx[i], ky[i]) : _compare(kx[i], ky[i]);
+    const left = x[kx[i]], right = y[ky[i]];
+    if (left !== right) {
+      const value = _compare(left, right);
+      if (value !== 0)
+        return value;
+    }
   }
   return _compare(kx.length, ky.length);
 };`,
@@ -14369,9 +14410,13 @@ var _runtimeDeps = {
   _compareSortedKeys: [
     "_compareFieldNames"
   ],
+  _compareFirstKey: [
+    "_compareFieldNames"
+  ],
   _compareRecords: [
     "_compareFieldNames",
     "_compareSortedKeys",
+    "_compareFirstKey",
     "_compare"
   ],
   _compare: [

@@ -64,6 +64,7 @@ import {
   _Str_startsWith,
   _compare,
   _compareFieldNames,
+  _compareFirstKey,
   _compareRecords,
   _compareSortedKeys,
   _curry,

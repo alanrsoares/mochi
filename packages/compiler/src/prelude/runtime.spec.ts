@@ -140,6 +140,22 @@ test("variant ordering reads tags once and only reaches selected payload fields"
   expect(events).toEqual(["left:tag", "right:tag", "left:value", "right:value"]);
 });
 
+test("record ordering reads the first field once when later fields decide", () => {
+  const events: string[] = [];
+  const item = (side: string, later: number) => ({
+    get z() {
+      events.push(`${side}:z`);
+      return later;
+    },
+    get a() {
+      events.push(`${side}:a`);
+      return 1;
+    },
+  });
+  expect(compare(item("left", 10), item("right", 2))).toBe(1);
+  expect(events).toEqual(["left:a", "right:a", "left:z", "right:z"]);
+});
+
 test("Option ctors match the runtime tag shape", () => {
   expect(Some(1)).toEqual({ _tag: "Some", value: 1 });
   expect(None).toEqual({ _tag: "None" });

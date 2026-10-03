@@ -40,9 +40,17 @@ const variantFixture = fc.oneof(
   fc.record({ _tag: fc.constant("Leaf"), _0: fc.integer() }),
   fc.record({ _tag: fc.constant("Branch"), left: rowFixture, right: rowFixture }),
 );
+const wideRecordFixture = fc.dictionary(fc.string({ maxLength: 10 }), fc.integer(), {
+  minKeys: 17,
+  maxKeys: 24,
+});
+const smallRecordFixture = fc.dictionary(fc.string({ maxLength: 10 }), fc.integer(), {
+  minKeys: 2,
+  maxKeys: 16,
+});
 
 test("structural ordering laws hold for finite records and variants", () => {
-  for (const value of [rowFixture, variantFixture]) {
+  for (const value of [rowFixture, variantFixture, smallRecordFixture, wideRecordFixture]) {
     fc.assert(
       fc.property(value, value, value, (a, b, c) => {
         const ab = compare(a, b),
