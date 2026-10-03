@@ -24,6 +24,7 @@ export type Opts = {
   moduleExt: string;
   strictEntry: boolean;
   plugins: Option<HostPlugin[]>;
+  dtsTypeNames: Map<string, string>;
 };
 export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
 export type StageErr = { message: string; start: number; end: number };
@@ -127,6 +128,7 @@ export const defaultOpts: Opts = {
   moduleExt: ".js",
   strictEntry: false,
   plugins: None as Option<HostPlugin[]>,
+  dtsTypeNames: new Map<string, string>(),
 };
 const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(
   2,

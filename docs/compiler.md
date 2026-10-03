@@ -47,6 +47,12 @@ the first builtin, `packages/compiler/src/extensions/plugins/jsx.mochi`'s plugin
 core seams. `@mochi/plugin-styled-cva` is a vendor plugin built the same way, outside
 the compiler tree. See [ADR 0011](adr/0011-language-plugins.md).
 
+Declaration hosts can supply `dtsTypeNames`, for example
+`{ VNode: 'import("preact").VNode' }`, to preserve JSX result types and host types
+inside props and containers. Local declarations take precedence. This option
+affects `.d.ts` only; JS and typed TypeScript keep their existing emit contract.
+See [ADR 0144](adr/0144-host-types-in-declarations.md).
+
 Host interop end state ([ADR 0012](adr/0012-host-interop-end-state.md)): prefer typed
 `extern`, then core literal/union formers, then thin sugar plugins that *assign*
 those formers; keep heavy host generics in outbound `.d.mochi.ts`. Wave 6 AST→string

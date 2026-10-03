@@ -23,6 +23,8 @@ export type CompilerOptions = {
   moduleExt: string;
   strictEntry: boolean;
   plugins?: readonly CompilerPlugin[];
+  /** Host type spellings used only by declaration emit. Local type names win. */
+  dtsTypeNames?: Readonly<Record<string, string>>;
 };
 
 export type CompilerOption<T> = { _tag: "Some"; value: T } | { _tag: "None" };
@@ -97,8 +99,9 @@ export type CompilerPlugin = {
 };
 
 /** The options record as the seed reads it: `plugins` is an `Option`. */
-export type SeedOptions = Omit<CompilerOptions, "plugins"> & {
+export type SeedOptions = Omit<CompilerOptions, "plugins" | "dtsTypeNames"> & {
   plugins: CompilerOption<SeedPlugin[]>;
+  dtsTypeNames: Map<string, string>;
 };
 
 const none: { _tag: "None" } = { _tag: "None" };
@@ -127,9 +130,14 @@ export const toSeedPlugins = (
   plugins: readonly CompilerPlugin[] | undefined,
 ): CompilerOption<SeedPlugin[]> => (plugins === undefined ? none : some(plugins.map(toSeedPlugin)));
 
-export const toSeedOptions = ({ plugins, ...rest }: CompilerOptions): SeedOptions => ({
+export const toSeedOptions = ({
+  plugins,
+  dtsTypeNames,
+  ...rest
+}: CompilerOptions): SeedOptions => ({
   ...rest,
   plugins: toSeedPlugins(plugins),
+  dtsTypeNames: new Map(Object.entries(dtsTypeNames ?? {})),
 });
 
 /** Strict inference, docstrings retained, `.js` siblings, directive in charge. */

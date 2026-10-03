@@ -423,18 +423,34 @@ let qualConRecs = (keys, qualify, aliases, recs, i) => switch Array.get(i, keys)
     )
 }
 
+/// Host spellings use the same nominal-name index as namespace qualifications.
+/// A local declaration or imported type keeps its own meaning.
+let hostTypeRecs = (names, local, recs) =>
+  Map.keys(names)
+    |> Array.reduce(
+      (acc, name) =>
+        Set.has(name, local) || Map.has(name, acc)
+          ? acc
+          : Map.set(name, Map.getOr("", name, names), acc),
+      recs
+    )
+
 /// Emit `.d.ts` text from an already-typed program.
-export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs, dtsHooks, bindingHooks) =>
+export let emitDtsFromTypedWith = (stmts, env, aliases, qualify, runtimeImport, docs, dtsHooks, bindingHooks, dtsTypeNames) =>
   // A name this file declares itself is already writable bare, so it shadows
   // any qualification the caller (or the file's own `tqual` nodes) supply.
   let local = declaredTypeNames(stmts, 0, Set.fromArray([])) in
   let quals = writtenQualsFrom(stmts, local, qualify, 0) in
-  let recs = qualConRecs(
-    Map.keys(quals),
-    quals,
-    aliases,
-    declarationRecs(stmts, aliases),
-    0
+  let recs = hostTypeRecs(
+    dtsTypeNames,
+    local,
+    qualConRecs(
+      Map.keys(quals),
+      quals,
+      aliases,
+      declarationRecs(stmts, aliases),
+      0
+    )
   ) in
   let types = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0) in
   let bindings = bindingDeclsFrom(
@@ -510,7 +526,8 @@ export let emitDtsFromTyped = (stmts, env, aliases, qualify, runtimeImport) =>
     runtimeImport,
     true,
     [],
-    bindingHooksFor(None)
+    bindingHooksFor(None),
+    #{}
   )
 
 /// Source -> `.d.ts` text under caller options. Infers first; type errors
@@ -526,7 +543,8 @@ export let emitDtsTextWith = (src, runtimeImport, opts) =>
         runtimeImport,
         opts.docs,
         dtsHooksFor(opts.plugins),
-        bindingHooksFor(opts.plugins)
+        bindingHooksFor(opts.plugins),
+        opts.dtsTypeNames
       ))
 
 export let emitDtsText = (src, runtimeImport) =>
@@ -549,6 +567,7 @@ export let compileTargetsWith = (src, runtimeImport, opts) =>
           runtimeImport,
           opts.docs,
           dtsHooksFor(opts.plugins),
-          bindingHooksFor(opts.plugins)
+          bindingHooksFor(opts.plugins),
+          opts.dtsTypeNames
         )
       })

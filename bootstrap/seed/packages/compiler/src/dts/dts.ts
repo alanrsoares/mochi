@@ -50,6 +50,7 @@ import {
   map,
   not,
   or,
+  reduce,
 } from "@mochi/compiler/runtime";
 
 import * as Ast from "../ast/ast";
@@ -754,6 +755,25 @@ const qualConRecs: <A, B, C, D, E>(
             })())(_Array_get(i, keys)),
 );
 /**
+ * Host spellings use the same nominal-name index as namespace qualifications.
+ * A local declaration or imported type keeps its own meaning.
+ */
+const hostTypeRecs: <A>(
+  names: Map<A, string>,
+  local: Set<A>,
+  recs: Map<A, string>,
+) => Map<A, string> = _curry(3, <A>(names: Map<A, string>, local: Set<A>, recs: Map<A, string>) =>
+  reduce(
+    _curry(2, (acc: Map<A, string>, name: A) =>
+      or(_Set_has(name, local), _Map_has(name, acc))
+        ? acc
+        : _Map_set(name, _Map_getOr("", name, names), acc),
+    ),
+    recs,
+    _Map_keys(names),
+  ),
+);
+/**
  * Emit `.d.ts` text from an already-typed program.
  */
 export const emitDtsFromTypedWith: <A>(
@@ -765,8 +785,9 @@ export const emitDtsFromTypedWith: <A>(
   docs: boolean,
   dtsHooks: ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
   bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
+  dtsTypeNames: Map<string, string>,
 ) => string = _curry(
-  8,
+  9,
   <A>(
     stmts: Stmt[],
     env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
@@ -776,15 +797,14 @@ export const emitDtsFromTypedWith: <A>(
     docs: boolean,
     dtsHooks: ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
     bindingHooks: ((a: Expr, b: Ty, c: TsApi) => Option<string>)[],
+    dtsTypeNames: Map<string, string>,
   ) => {
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
     const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
-    const recs: Map<string, string> = qualConRecs(
-      _Map_keys(quals),
-      quals,
-      aliases,
-      declarationRecs(stmts, aliases),
-      0,
+    const recs: Map<string, string> = hostTypeRecs(
+      dtsTypeNames,
+      local,
+      qualConRecs(_Map_keys(quals), quals, aliases, declarationRecs(stmts, aliases), 0),
     );
     const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
     const bindings: string[] = bindingDeclsFrom(
@@ -925,6 +945,7 @@ export const emitDtsFromTyped: <A>(
       true,
       [] as ((a: string, b: Expr, c: Ty, d: TsApi) => Option<string>)[],
       bindingHooksFor(None),
+      new Map<string, string>(),
     ),
 );
 /**
@@ -965,6 +986,7 @@ export const emitDtsTextWith: _Curry<
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
+      dtsTypeNames: Map<string, string>;
       open: boolean;
       runtime: boolean;
       moduleExt: string;
@@ -1007,6 +1029,7 @@ export const emitDtsTextWith: _Curry<
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
+      dtsTypeNames: Map<string, string>;
       open: boolean;
       runtime: boolean;
       moduleExt: string;
@@ -1032,6 +1055,7 @@ export const emitDtsTextWith: _Curry<
           opts.docs,
           dtsHooksFor(opts.plugins),
           bindingHooksFor(opts.plugins),
+          opts.dtsTypeNames,
         ),
       typedProgramWith(src, opts),
     ),
@@ -1081,6 +1105,7 @@ export const compileTargetsWith: _Curry<
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
+      dtsTypeNames: Map<string, string>;
       open: boolean;
       runtime: boolean;
       moduleExt: string;
@@ -1123,6 +1148,7 @@ export const compileTargetsWith: _Curry<
           bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
         }[]
       >;
+      dtsTypeNames: Map<string, string>;
       open: boolean;
       runtime: boolean;
       moduleExt: string;
@@ -1150,6 +1176,7 @@ export const compileTargetsWith: _Curry<
           opts.docs,
           dtsHooksFor(opts.plugins),
           bindingHooksFor(opts.plugins),
+          opts.dtsTypeNames,
         ),
       }),
       typedProgramWith(src, opts),

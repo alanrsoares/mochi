@@ -5,6 +5,49 @@ import { unwrapOk } from "@onrails/result";
 
 const dts = (src: string): string => unwrapOk(emitDts(src)).trim();
 
+const hostTypes = { VNode: 'import("preact").VNode' };
+
+test("host declaration spellings reach curried JSX returns and VNode props", () => {
+  const source = `
+type Props = { body: VNode, label: string }
+let Card : Props -> string -> VNode = (props, suffix) =>
+  <div>{props.body}{props.label ++ suffix}</div>
+type InlineProps = { body: VNode }
+let Inline : InlineProps -> VNode = props => <div>{props.body}</div>
+let child = <span />
+let inline = Inline({ body: child })
+let app = Card({ body: child, label: "Hello" }, "!")
+let nodes = [app, child]
+`;
+  const out = unwrapOk(emitDts(source, { dtsTypeNames: hostTypes }));
+  expect(out).toContain('body: import("preact").VNode');
+  expect(out).toContain('_Curry<[props: Props, _1: string], import("preact").VNode>');
+  expect(out).toContain('const nodes: import("preact").VNode[];');
+  expect(out).toContain('import type { _Curry } from "@mochi/runtime";');
+  expect(out).not.toContain("body: unknown");
+  expect(out).not.toMatch(/=> any|const \w+: any/);
+});
+
+test("declaration type mappings can name a different host and respect local declarations", () => {
+  const out = unwrapOk(
+    emitDts(
+      "type Local = { count: number }\nlet local : Local = { count: 1 }\nlet node = <div />",
+      {
+        dtsTypeNames: { VNode: 'import("other-host").Node', Local: "never" },
+      },
+    ),
+  );
+  expect(out).toContain('const node: import("other-host").Node;');
+  expect(out).toContain("export type Local = { count: number };");
+  expect(out).toContain("const local: Local;");
+  const plainName = unwrapOk(
+    emitDts('extern node : HostNode = "./host" "node"\nlet app = node', {
+      dtsTypeNames: { HostNode: "unknown" },
+    }),
+  );
+  expect(plainName).toContain("const app: unknown;");
+});
+
 test("a plain value declares a const of its type", () => {
   expect(dts("let answer = 42")).toBe("export declare const answer: number;");
 });

@@ -34,7 +34,6 @@ import {
   _Set_fromArray,
   _Set_has,
   _Str_codeAt,
-  _Str_contains,
   _Str_fromCode,
   _Str_get,
   _Str_join,
@@ -143,14 +142,14 @@ const namesOf: _Curry<[ts: Ty[], env: TsEnv], string> = _curry(2, (ts: Ty[], env
 /**
  * `aliasRow` falls back to a bare con (`Node`) so a cycle still unifies with
  * the declaring module. A `.d.ts` records `Node` → `Ast.Node` in this index
- * under the bare name, which is never a row-shape key. A value without a dot
- * is an alias fold, not a qualifier, and prints as itself.
+ * under the bare name, which is never a row-shape key. Declaration hosts can
+ * also supply nominal spellings here (ADR 0144). Empty entries fall through.
  */
 const qualifiedCon: _Curry<[name: string, env: TsEnv], string> = _curry(
   2,
   (name: string, env: TsEnv) =>
     ((_v) =>
-      _v._tag === "Some" && (({ value: qual }) => _Str_contains(".", qual))(_v)
+      _v._tag === "Some" && (({ value: qual }) => qual !== "")(_v)
         ? (({ value: qual }) => qual)(_v)
         : primitiveTs(name))(_Map_get(name, env.recs)),
 );

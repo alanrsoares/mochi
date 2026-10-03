@@ -4,6 +4,7 @@
  * Message protocol is structured-clone only (plain diagnostics + strings).
  */
 import { compileTargets, type Diagnostic } from "@mochi/compiler";
+import { preactDtsTypeNames } from "@mochi/plugin-preact";
 import { isErr } from "@onrails/result";
 import { pretty } from "../pretty";
 
@@ -37,7 +38,10 @@ ctx.onmessage = async (event: MessageEvent<CompileWorkerRequest>) => {
   const { id, source } = event.data;
   const start = performance.now();
   try {
-    const result = compileTargets(source, { runtimeImport: "@mochi/compiler/runtime" });
+    const result = compileTargets(source, {
+      runtimeImport: "@mochi/compiler/runtime",
+      dtsTypeNames: preactDtsTypeNames,
+    });
     // Measured before formatting: `ms` is the compiler's number, not the
     // pretty-printer's.
     const ms = performance.now() - start;

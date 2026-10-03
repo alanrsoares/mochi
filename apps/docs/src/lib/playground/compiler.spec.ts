@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { compile, compileTargets } from "@mochi/compiler";
+import { preactDtsTypeNames } from "@mochi/plugin-preact";
 import { readRepo } from "@mochi/test-support";
 import { match } from "@onrails/pattern";
 import { isErr, unwrapOk } from "@onrails/result";
@@ -10,13 +11,25 @@ const read = (p: string): string => readRepo(import.meta.url, p);
 describe("playground compile Task (ADR 0006)", () => {
   test("playground uses the complete single-pass emit with its runtime path", async () => {
     const source = "let values = Array.map(x => x + 1, [1, 2])";
-    const expected = compileTargets(source, { runtimeImport: "@mochi/compiler/runtime" });
+    const expected = compileTargets(source, {
+      runtimeImport: "@mochi/compiler/runtime",
+      dtsTypeNames: preactDtsTypeNames,
+    });
     const result = await compileSyncTask(source)();
     expect(expected._tag).toBe("Ok");
     expect(result._tag).toBe("Ok");
     if (expected._tag !== "Ok" || result._tag !== "Ok") return;
     expect(result.value).toMatchObject(expected.value);
     expect(result.value.ts).toContain('from "@mochi/compiler/runtime"');
+  });
+  test("playground declarations preserve checked props and Preact results", async () => {
+    const source = read("apps/docs/src/examples/presets/jsx.mochi");
+    const result = await compileSyncTask(source)();
+    expect(result._tag).toBe("Ok");
+    if (result._tag !== "Ok") return;
+    expect(result.value.dts).toContain('(props: Props) => import("preact").VNode');
+    expect(result.value.dts).toContain('const app: import("preact").VNode;');
+    expect(result.value.dts).not.toContain("any");
   });
   test("Task-shaped compile settles Ok with js/ts/dts on clean source", async () => {
     const result = await compileSyncTask("let x = 1\nlet app = x\n")();

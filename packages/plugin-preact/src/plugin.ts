@@ -194,3 +194,6 @@ export const preactPlugin: CompilerPlugin = {
   name: "preact",
   inferCall: inferPreactCall,
 };
+
+/** Declaration emit can name the host's VNode without changing typed TS emit. */
+export const preactDtsTypeNames = { VNode: 'import("preact").VNode' } as const;

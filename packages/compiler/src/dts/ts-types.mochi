@@ -76,10 +76,10 @@ let namesOf = (ts, env: TsEnv) =>
 
 /// `aliasRow` falls back to a bare con (`Node`) so a cycle still unifies with
 /// the declaring module. A `.d.ts` records `Node` → `Ast.Node` in this index
-/// under the bare name, which is never a row-shape key. A value without a dot
-/// is an alias fold, not a qualifier, and prints as itself.
+/// under the bare name, which is never a row-shape key. Declaration hosts can
+/// also supply nominal spellings here (ADR 0144). Empty entries fall through.
 let qualifiedCon = (name, env: TsEnv) => switch Map.get(name, env.recs) {
-  | Some(qual) when Str.contains(".", qual) => qual
+  | Some(qual) when qual != "" => qual
   | _ => primitiveTs(name)
 }
 

@@ -4,7 +4,7 @@
 // or the typed runtime (src/runtime.ts) regresses, tsc catches it here.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { codegenTs } from "@mochi/compiler";
+import { codegenTs, emitDts } from "@mochi/compiler";
 import { unwrapOk } from "@onrails/result";
 
 const DIR = new URL("./.tsgen/", import.meta.url).pathname;
@@ -288,6 +288,34 @@ beforeAll(() => {
   for (const [name, src] of Object.entries(PROGRAMS))
     writeFileSync(`${DIR}${name}.ts`, unwrapOk(codegenTs(src, { runtimeImport: RUNTIME_IMPORT })));
   writeFileSync(
+    `${DIR}jsx.d.ts`,
+    unwrapOk(
+      emitDts(
+        `
+type Props = { label: string, disabled: bool, body: VNode }
+let Button : Props -> VNode = props => <button>{props.body}{props.label}</button>
+let Curried : Props -> string -> VNode = (props, suffix) => <div>{props.label ++ suffix}</div>
+let child = <span />
+let app = Button({ label: "Save", disabled: false, body: child })
+`,
+        { runtimeImport: RUNTIME_IMPORT, dtsTypeNames: { VNode: 'import("preact").VNode' } },
+      ),
+    ),
+  );
+  writeFileSync(
+    `${DIR}jsx-consumer.ts`,
+    `
+import type { VNode } from "preact";
+import { Button, Curried, app, child } from "./jsx";
+const props = { label: "Save", disabled: false, body: child };
+const nodes: VNode[] = [app, Button(props), Curried(props)("!"), Curried(props, "!")];
+// @ts-expect-error JSX results must not accept an arbitrary scalar.
+const badNode: typeof app = 42;
+// @ts-expect-error The checked prop contract survives the host mapping.
+Button({ ...props, disabled: "no" });
+`,
+  );
+  writeFileSync(
     `${DIR}tsconfig.json`,
     JSON.stringify({
       compilerOptions: {
@@ -297,6 +325,7 @@ beforeAll(() => {
         target: "es2020",
         module: "esnext",
         moduleResolution: "bundler",
+        paths: { preact: ["../../apps/docs/node_modules/preact"] },
       },
       include: ["*.ts"],
     }),
@@ -308,5 +337,6 @@ afterAll(() => rmSync(DIR, { recursive: true, force: true }));
 test("emitted .ts type-checks under tsc --strict", () => {
   const proc = Bun.spawnSync(["bunx", "tsc", "-p", `${DIR}tsconfig.json`], { cwd: DIR });
   const out = `${proc.stdout.toString()}${proc.stderr.toString()}`.trim();
+  expect(proc.exitCode).toBe(0);
   expect(out).toBe("");
 });
