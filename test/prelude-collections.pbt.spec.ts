@@ -26,6 +26,40 @@ const setFixture = fc
   .uniqueArray(fc.integer(), { minLength: 1, maxLength: 8 })
   .map((xs) => new Set(xs));
 
+// Same-schema, finite values: NaN, functions, cycles and identity-keyed host
+// collections do not have the equality/order equivalence asserted here.
+const rowFixture = fc.record(
+  {
+    a: fc.option(fc.integer(), { nil: undefined }),
+    b: fc.array(fc.integer(), { maxLength: 6 }),
+    child: fc.record({ z: fc.integer() }),
+  },
+  { requiredKeys: ["b", "child"] },
+);
+const variantFixture = fc.oneof(
+  fc.record({ _tag: fc.constant("Leaf"), _0: fc.integer() }),
+  fc.record({ _tag: fc.constant("Branch"), left: rowFixture, right: rowFixture }),
+);
+
+test("structural ordering laws hold for finite records and variants", () => {
+  for (const value of [rowFixture, variantFixture]) {
+    fc.assert(
+      fc.property(value, value, value, (a, b, c) => {
+        const ab = compare(a, b),
+          bc = compare(b, c),
+          ac = compare(a, c);
+        expect(Math.sign(ab) + Math.sign(compare(b, a))).toBe(0);
+        if (ab <= 0 && bc <= 0) expect(ac).toBeLessThanOrEqual(0);
+        expect(ab === 0).toBe(eq(a, b));
+        const reversed = Object.fromEntries(Object.entries(a).reverse());
+        expect(compare(a, reversed)).toBe(0);
+        expect(compare(a, b)).toBe(compare(reversed, b));
+      }),
+      { numRuns: 500 },
+    );
+  }
+});
+
 test("eq(x, x) is true for Map and Set fixtures", () => {
   fc.assert(fc.property(mapFixture, (m) => expect(eq(m, m)).toBe(true)));
   fc.assert(fc.property(setFixture, (s) => expect(eq(s, s)).toBe(true)));

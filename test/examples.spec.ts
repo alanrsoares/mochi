@@ -13,6 +13,33 @@ import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
 const read = (p: string): string => readRepo(import.meta.url, p);
 const path = (p: string): string => repoPath(import.meta.url, p);
 
+test("compiled sorting compares record and variant payloads structurally", () => {
+  const source = `
+type Entry = | Box(number) | Named(value: number)
+let rows = Array.sort([{value: 10}, {value: 2}, {value: -2}])
+let entries = Array.sort([Named(1), Box(10), Box(2)])
+let nested = compare({item: {value: 10}}, {item: {value: 2}})
+let same = compare({a: 1, b: 2}, {b: 2, a: 1})
+let result = (rows, entries, nested, same)
+`;
+  expect(compileAndEval(source, "result")).toEqual([
+    [{ value: -2 }, { value: 2 }, { value: 10 }],
+    [
+      { _tag: "Box", _0: 2 },
+      { _tag: "Box", _0: 10 },
+      { _tag: "Named", value: 1 },
+    ],
+    1,
+    0,
+  ]);
+  const order = compileAndEval(
+    "type Row = { value?: number }\nlet order = (a: Row, b: Row) => compare(a, b)",
+    "order",
+  ) as (a: Record<string, unknown>, b: Record<string, unknown>) => number;
+  expect(order({}, { value: undefined })).toBe(-1);
+  expect(order({ value: undefined }, { value: 2 })).toBe(-1);
+});
+
 test("hosts preserve JSX declaration results without changing JS or typed TS", () => {
   const source = `
 type Props = { label: string, disabled: bool }

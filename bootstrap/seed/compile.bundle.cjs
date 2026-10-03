@@ -14000,49 +14000,94 @@ var _preludeJsDefs = {
       return false;
   return true;
 });`,
-  compare: `const compare = _curry(2, (x, y) => {
+  _compareFieldNames: `const _compareFieldNames = (a, b) => {
+  const ax = /^_(0|[1-9]\\d*)$/.test(a), bx = /^_(0|[1-9]\\d*)$/.test(b);
+  if (ax !== bx)
+    return ax ? -1 : 1;
+  if (ax && a.length !== b.length)
+    return a.length < b.length ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+};`,
+  _compareSortedKeys: `const _compareSortedKeys = (keys, tagged) => {
+  for (let i = 1;i < keys.length; i++) {
+    const order = tagged ? _compareFieldNames(keys[i - 1], keys[i]) : keys[i - 1] < keys[i] ? -1 : 1;
+    if (order > 0)
+      return keys.slice().sort(tagged ? _compareFieldNames : undefined);
+  }
+  return keys;
+};`,
+  _compareRecords: `const _compareRecords = (x, y) => {
+  const keysX = Object.keys(x), keysY = Object.keys(y);
+  const tx = keysX.includes("_tag") ? x._tag : undefined, ty = keysY.includes("_tag") ? y._tag : undefined;
+  const tagged = typeof tx === "string", otherTagged = typeof ty === "string";
+  if (tagged !== otherTagged)
+    return tagged ? -1 : 1;
+  if (tagged) {
+    const tag = _compare(tx, ty);
+    if (tag !== 0)
+      return tag;
+  }
+  const kx = tagged ? _compareSortedKeys(keysX.filter((k) => k !== "_tag"), true) : _compareSortedKeys(keysX, false), ky = tagged ? _compareSortedKeys(keysY.filter((k) => k !== "_tag"), true) : _compareSortedKeys(keysY, false);
+  const n = Math.min(kx.length, ky.length);
+  for (let i = 0;i < n; i++) {
+    const key = tagged ? _compareFieldNames(kx[i], ky[i]) : _compare(kx[i], ky[i]);
+    if (key !== 0)
+      return key;
+    const value = _compare(x[kx[i]], y[ky[i]]);
+    if (value !== 0)
+      return value;
+  }
+  return _compare(kx.length, ky.length);
+};`,
+  _compare: `const _compare = (x, y) => {
   if (x === y)
     return 0;
+  if (x === undefined || y === undefined)
+    return x === undefined ? -1 : 1;
+  if (x === null || y === null)
+    return x === null ? -1 : 1;
   const t = typeof x;
   if (t === "number" || t === "string" || t === "boolean")
     return x < y ? -1 : x > y ? 1 : 0;
   if (Array.isArray(x) && Array.isArray(y)) {
     const n = Math.min(x.length, y.length);
     for (let i = 0;i < n; i++) {
-      const c = compare(x[i], y[i]);
+      const c = _compare(x[i], y[i]);
       if (c !== 0)
         return c;
     }
-    return compare(x.length, y.length);
+    return _compare(x.length, y.length);
   }
   if (x instanceof Map && y instanceof Map) {
-    const kx = [...x.keys()].sort(compare), ky = [...y.keys()].sort(compare);
+    const kx = [...x.keys()].sort(_compare), ky = [...y.keys()].sort(_compare);
     const n = Math.min(kx.length, ky.length);
     for (let i = 0;i < n; i++) {
-      const kc = compare(kx[i], ky[i]);
+      const kc = _compare(kx[i], ky[i]);
       if (kc !== 0)
         return kc;
-      const vc = compare(x.get(kx[i]), y.get(ky[i]));
+      const vc = _compare(x.get(kx[i]), y.get(ky[i]));
       if (vc !== 0)
         return vc;
     }
-    return compare(kx.length, ky.length);
+    return _compare(kx.length, ky.length);
   }
   if (x instanceof Set && y instanceof Set) {
-    const ex = [...x].sort(compare), ey = [...y].sort(compare);
+    const ex = [...x].sort(_compare), ey = [...y].sort(_compare);
     const n = Math.min(ex.length, ey.length);
     for (let i = 0;i < n; i++) {
-      const c = compare(ex[i], ey[i]);
+      const c = _compare(ex[i], ey[i]);
       if (c !== 0)
         return c;
     }
-    return compare(ex.length, ey.length);
+    return _compare(ex.length, ey.length);
   }
-  if (typeof x === "object" && x !== null && !Array.isArray(x) && typeof x[Symbol.iterator] === "function")
+  if (typeof x === "object" && x !== null && (!Array.isArray(x) && typeof x[Symbol.iterator] === "function" || typeof y === "object" && !Array.isArray(y) && typeof y[Symbol.iterator] === "function"))
     throw new TypeError("compare on List: force it first with List.toArray");
-  const sx = JSON.stringify(x), sy = JSON.stringify(y);
-  return sx < sy ? -1 : sx > sy ? 1 : 0;
-});`,
+  if (typeof x !== "object" || typeof y !== "object")
+    return 0;
+  return _compareRecords(x, y);
+};`,
+  compare: "const compare = _curry(2, _compare);",
   show: 'const show = (x) => {\n  const t = typeof x;\n  if (t === "string")\n    return JSON.stringify(x);\n  if (t !== "object" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(", ")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(", ")}}`;\n  if (typeof x[Symbol.iterator] === "function")\n    return "<List>";\n  if (typeof x._tag === "string") {\n    const ks = Object.keys(x).filter((k) => k !== "_tag");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(", ")})`;\n  }\n  const ks = Object.keys(x);\n  return ks.length === 0 ? String(x) : `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(", ")} }`;\n};',
   ignore: `const ignore = (_x) => {
   return;
@@ -14322,8 +14367,20 @@ var _runtimeDeps = {
   eq: [
     "_curry"
   ],
+  _compareSortedKeys: [
+    "_compareFieldNames"
+  ],
+  _compareRecords: [
+    "_compareFieldNames",
+    "_compareSortedKeys",
+    "_compare"
+  ],
+  _compare: [
+    "_compareRecords"
+  ],
   compare: [
-    "_curry"
+    "_curry",
+    "_compare"
   ],
   lt: [
     "_curry"
