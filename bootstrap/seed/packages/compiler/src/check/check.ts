@@ -412,15 +412,13 @@ const ctorNameOf: (p: Pattern) => string = (p: Pattern) => {
     }
   }
 };
-const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(
-  2,
-  (ctor: string, ns: Option<string>) =>
-    _Option_match(
-      ns,
-      () => ctor,
-      (alias) => `${alias}.${ctor}`,
-    ),
-);
+const patCtorKey$ = (ctor: string, ns: Option<string>): string =>
+  _Option_match(
+    ns,
+    () => ctor,
+    (alias) => `${alias}.${ctor}`,
+  );
+const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(2, patCtorKey$);
 const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -452,7 +450,7 @@ const checkPattern: <A, B>(
       }
       case "PCtor": {
         const { ctor, args, ns, span: sp } = $match;
-        const key: string = patCtorKey(ctor, ns);
+        const key: string = patCtorKey$(ctor, ns);
         return _Option_match(
           _Map_get(key, reg.ctors),
           () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>,
@@ -514,52 +512,68 @@ const checkPattern: <A, B>(
     }
   },
 );
-const binderPathsArgs: _Curry<
-  [args: Pattern[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, PErr>
-> = _curry(4, (args: Pattern[], i: number, at: string, acc: Map<string, string>) =>
+const binderPathsArgs$ = (
+  args: Pattern[],
+  i: number,
+  at: string,
+  acc: Map<string, string>,
+): Result<Map<string, string>, PErr> =>
   _Option_match(
     _Array_get(i, args),
     () => Ok(acc) as Result<Map<string, string>, PErr>,
     (a) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
-        binderPaths(a, `${at}.a${show(i)}`, acc),
+        (acc2: Map<string, string>) => binderPathsArgs$(args, i + 1, at, acc2),
+        binderPaths$(a, `${at}.a${show(i)}`, acc),
       ),
-  ),
-);
-const binderPathsFields: _Curry<
-  [fields: PatField[], i: number, at: string, acc: Map<string, string>],
+  );
+const binderPathsArgs: _Curry<
+  [args: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (fields: PatField[], i: number, at: string, acc: Map<string, string>) =>
+> = _curry(4, binderPathsArgs$);
+const binderPathsFields$ = (
+  fields: PatField[],
+  i: number,
+  at: string,
+  acc: Map<string, string>,
+): Result<Map<string, string>, PErr> =>
   _Option_match(
     _Array_get(i, fields),
     () => Ok(acc) as Result<Map<string, string>, PErr>,
     (f) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
-        binderPaths(f.pat, `${at}.${f.label}`, acc),
+        (acc2: Map<string, string>) => binderPathsFields$(fields, i + 1, at, acc2),
+        binderPaths$(f.pat, `${at}.${f.label}`, acc),
       ),
-  ),
-);
-const binderPathsElems: _Curry<
-  [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
+  );
+const binderPathsFields: _Curry<
+  [fields: PatField[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(4, (elems: Pattern[], i: number, at: string, acc: Map<string, string>) =>
+> = _curry(4, binderPathsFields$);
+const binderPathsElems$ = (
+  elems: Pattern[],
+  i: number,
+  at: string,
+  acc: Map<string, string>,
+): Result<Map<string, string>, PErr> =>
   _Option_match(
     _Array_get(i, elems),
     () => Ok(acc) as Result<Map<string, string>, PErr>,
     (e) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
-        binderPaths(e, `${at}.t${show(i)}`, acc),
+        (acc2: Map<string, string>) => binderPathsElems$(elems, i + 1, at, acc2),
+        binderPaths$(e, `${at}.t${show(i)}`, acc),
       ),
-  ),
-);
-const binderPaths: _Curry<
-  [p: Pattern, at: string, acc: Map<string, string>],
+  );
+const binderPathsElems: _Curry<
+  [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
   Result<Map<string, string>, PErr>
-> = _curry(3, (p: Pattern, at: string, acc: Map<string, string>) => {
+> = _curry(4, binderPathsElems$);
+const binderPaths$ = (
+  p: Pattern,
+  at: string,
+  acc: Map<string, string>,
+): Result<Map<string, string>, PErr> => {
   const $match = p;
   switch ($match._tag) {
     case "PAs": {
@@ -572,7 +586,7 @@ const binderPaths: _Curry<
                 PErr
               >)
             : (Ok(_Map_set(name, at, acc1)) as Result<Map<string, string>, PErr>),
-        binderPaths(pat, at, acc),
+        binderPaths$(pat, at, acc),
       );
     }
     case "PBind": {
@@ -586,21 +600,25 @@ const binderPaths: _Curry<
     }
     case "PCtor": {
       const { args } = $match;
-      return binderPathsArgs(args, 0, at, acc);
+      return binderPathsArgs$(args, 0, at, acc);
     }
     case "PRecord": {
       const { fields } = $match;
-      return binderPathsFields(fields, 0, at, acc);
+      return binderPathsFields$(fields, 0, at, acc);
     }
     case "PTuple": {
       const { elems } = $match;
-      return binderPathsElems(elems, 0, at, acc);
+      return binderPathsElems$(elems, 0, at, acc);
     }
     default: {
       return Ok(acc) as Result<Map<string, string>, PErr>;
     }
   }
-});
+};
+const binderPaths: _Curry<
+  [p: Pattern, at: string, acc: Map<string, string>],
+  Result<Map<string, string>, PErr>
+> = _curry(3, binderPaths$);
 const altMapsFrom: <A, B>(
   alts: Pattern[],
   i: number,
@@ -637,7 +655,7 @@ const altMapsFrom: <A, B>(
                 () =>
                   _Result_flatMap(
                     (m) => altMapsFrom(alts, i + 1, reg, _Array_append(m, acc)),
-                    binderPaths(alt, "", new Map<string, string>()),
+                    binderPaths$(alt, "", new Map<string, string>()),
                   ),
                 (e) => Err(e) as Result<Map<string, string>[], PErr>,
               ),
@@ -717,54 +735,56 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 >(
   a: { pattern: Pattern; guard: Option<A> } & B,
 ) => and(isCatchAll(a.pattern), _Option_isNone(a.guard));
+const guardErrs$ = (arms: MatchArm[], listSwitch: boolean): Option<PErr> =>
+  firstSome(
+    (a: MatchArm) =>
+      _Option_match(
+        a.guard,
+        () => None as Option<PErr>,
+        (g) =>
+          or(isPList(a.pattern), listSwitch)
+            ? (Some(
+                checkErr(
+                  "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
+                  exprSpan(g),
+                ),
+              ) as Option<PErr>)
+            : (None as Option<PErr>),
+      ),
+    arms,
+  );
 const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<PErr>> = _curry(
   2,
-  (arms: MatchArm[], listSwitch: boolean) =>
-    firstSome(
-      (a: MatchArm) =>
-        _Option_match(
-          a.guard,
-          () => None as Option<PErr>,
-          (g) =>
-            or(isPList(a.pattern), listSwitch)
-              ? (Some(
-                  checkErr(
-                    "`when` guards are unsupported in a lazy-List switch (matching pulls from the sequence)",
-                    exprSpan(g),
-                  ),
-                ) as Option<PErr>)
-              : (None as Option<PErr>),
-        ),
-      arms,
-    ),
+  guardErrs$,
 );
+const firstCatchIdx$ = (arms: MatchArm[], i0: number): Option<number> => {
+  let i: number = i0;
+  while (true) {
+    {
+      const $loopMatch = _Array_get(i, arms);
+      if ($loopMatch._tag === "None") {
+        return None as Option<number>;
+      }
+      if ($loopMatch._tag === "Some") {
+        const { value: a } = $loopMatch;
+        if (armUnguardedCatchAll(a)) {
+          return Some(i) as Option<number>;
+        } else {
+          i = i + 1;
+          continue;
+        }
+      }
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _curry(
   2,
-  (arms: MatchArm[], i0: number) => {
-    let i: number = i0;
-    while (true) {
-      {
-        const $loopMatch = _Array_get(i, arms);
-        if ($loopMatch._tag === "None") {
-          return None as Option<number>;
-        }
-        if ($loopMatch._tag === "Some") {
-          const { value: a } = $loopMatch;
-          if (armUnguardedCatchAll(a)) {
-            return Some(i) as Option<number>;
-          } else {
-            i = i + 1;
-            continue;
-          }
-        }
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  firstCatchIdx$,
 );
 const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
   _Option_match(
-    firstCatchIdx(arms, 0),
+    firstCatchIdx$(arms, 0),
     () => None as Option<PErr>,
     (i) =>
       _Option_match(
@@ -856,7 +876,7 @@ const ctorLoop: <A, B, C, D>(
         switch ($match._tag) {
           case "PCtor": {
             const { ctor, args, ns, span: sp } = $match;
-            const key: string = patCtorKey(ctor, ns);
+            const key: string = patCtorKey$(ctor, ns);
             return _Option_match(
               _Map_get(key, reg.ctors),
               () =>
@@ -1019,7 +1039,7 @@ const checkMatch: <A>(
           arms,
         );
         return _Option_match(
-          guardErrs(arms, listSwitch),
+          guardErrs$(arms, listSwitch),
           () =>
             _Option_match(
               unreachableAfterCatch(arms),
@@ -1068,197 +1088,195 @@ const checkMatch: <A>(
       (e) => Some(e) as Option<PErr>,
     ),
 );
-const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(
-  2,
-  (e: Expr, reg: Registry) => {
-    const $match = e;
-    switch ($match._tag) {
-      case "ENum": {
-        return None as Option<PErr>;
-      }
-      case "EUnit": {
-        return None as Option<PErr>;
-      }
-      case "EBool": {
-        return None as Option<PErr>;
-      }
-      case "EStr": {
-        return None as Option<PErr>;
-      }
-      case "ERef": {
-        return None as Option<PErr>;
-      }
-      case "ECall": {
-        const { fn, args } = $match;
-        return _Option_orElse(
-          firstSome((a: Expr) => checkExpr(a, reg), args),
-          checkExpr(fn, reg),
-        );
-      }
-      case "ELambda": {
-        const { body } = $match;
-        return checkExpr(body, reg);
-      }
-      case "ELetIn": {
-        const { value, body } = $match;
-        return _Option_orElse(checkExpr(body, reg), checkExpr(value, reg));
-      }
-      case "ELetBind": {
-        const { value, body } = $match;
-        return _Option_orElse(checkExpr(body, reg), checkExpr(value, reg));
-      }
-      case "EPipe": {
-        const { left, right } = $match;
-        return _Option_orElse(checkExpr(right, reg), checkExpr(left, reg));
-      }
-      case "EDo": {
-        const { exprs } = $match;
-        return firstSome((x: Expr) => checkExpr(x, reg), exprs);
-      }
-      case "ETernary": {
-        const { cond, thenE, elseE } = $match;
-        return _Option_orElse(
-          checkExpr(elseE, reg),
-          _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
-        );
-      }
-      case "EMatch": {
-        const { scrutinee, arms, span: sp } = $match;
-        return _Option_orElse(
-          checkMatch(arms, sp, reg),
-          _Option_orElse(
-            firstSome(
-              (a: MatchArm) =>
-                _Option_orElse(
-                  checkExpr(a.body, reg),
-                  _Option_match(
-                    a.guard,
-                    () => None as Option<PErr>,
-                    (g) => checkExpr(g, reg),
-                  ),
-                ),
-              arms,
-            ),
-            checkExpr(scrutinee, reg),
-          ),
-        );
-      }
-      case "ERecord": {
-        const { fields, spread } = $match;
-        return _Option_orElse(
-          firstSome((f: Field) => checkExpr(f.value, reg), fields),
-          _Option_match(
-            spread,
-            () => None as Option<PErr>,
-            (s) => checkExpr(s, reg),
-          ),
-        );
-      }
-      case "EField": {
-        const { target } = $match;
-        return checkExpr(target, reg);
-      }
-      case "ELoop": {
-        const { params, body } = $match;
-        return _Option_orElse(
-          checkExpr(body, reg),
-          firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
-        );
-      }
-      case "ERecur": {
-        const { args } = $match;
-        return firstSome((a: Expr) => checkExpr(a, reg), args);
-      }
-      case "ETuple": {
-        const { elements } = $match;
-        return firstSome((el: Expr) => checkExpr(el, reg), elements);
-      }
-      case "EArr": {
-        const { elements } = $match;
-        return firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              ((_v) =>
-                _v._tag === "SEExpr"
-                  ? (({ expr: e }) => e)(_v)
-                  : _v._tag === "SESpread"
-                    ? (({ expr: e }) => e)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(el),
-              reg,
-            ),
-          elements,
-        );
-      }
-      case "EList": {
-        const { elements } = $match;
-        return firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              ((_v) =>
-                _v._tag === "SEExpr"
-                  ? (({ expr: e }) => e)(_v)
-                  : _v._tag === "SESpread"
-                    ? (({ expr: e }) => e)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(el),
-              reg,
-            ),
-          elements,
-        );
-      }
-      case "ESet": {
-        const { elements } = $match;
-        return firstSome(
-          (el: SeqElem) =>
-            checkExpr(
-              ((_v) =>
-                _v._tag === "SEExpr"
-                  ? (({ expr: e }) => e)(_v)
-                  : _v._tag === "SESpread"
-                    ? (({ expr: e }) => e)(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(el),
-              reg,
-            ),
-          elements,
-        );
-      }
-      case "EMap": {
-        const { entries } = $match;
-        return firstSome(
-          (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
-          entries,
-        );
-      }
-      case "EInterp": {
-        const { parts } = $match;
-        return firstSome((p: InterpPart) => {
-          const $match$ = p;
-          switch ($match$._tag) {
-            case "IPLit": {
-              return None as Option<PErr>;
-            }
-            case "IPExpr": {
-              const { expr: ex } = $match$;
-              return checkExpr(ex, reg);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, parts);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
+const checkExpr$ = (e: Expr, reg: Registry): Option<PErr> => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return None as Option<PErr>;
     }
-  },
-);
-const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr, reg: Registry) => {
+    case "EUnit": {
+      return None as Option<PErr>;
+    }
+    case "EBool": {
+      return None as Option<PErr>;
+    }
+    case "EStr": {
+      return None as Option<PErr>;
+    }
+    case "ERef": {
+      return None as Option<PErr>;
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return _Option_orElse(
+        firstSome((a: Expr) => checkExpr$(a, reg), args),
+        checkExpr$(fn, reg),
+      );
+    }
+    case "ELambda": {
+      const { body } = $match;
+      return checkExpr$(body, reg);
+    }
+    case "ELetIn": {
+      const { value, body } = $match;
+      return _Option_orElse(checkExpr$(body, reg), checkExpr$(value, reg));
+    }
+    case "ELetBind": {
+      const { value, body } = $match;
+      return _Option_orElse(checkExpr$(body, reg), checkExpr$(value, reg));
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return _Option_orElse(checkExpr$(right, reg), checkExpr$(left, reg));
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return firstSome((x: Expr) => checkExpr$(x, reg), exprs);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return _Option_orElse(
+        checkExpr$(elseE, reg),
+        _Option_orElse(checkExpr$(thenE, reg), checkExpr$(cond, reg)),
+      );
+    }
+    case "EMatch": {
+      const { scrutinee, arms, span: sp } = $match;
+      return _Option_orElse(
+        checkMatch(arms, sp, reg),
+        _Option_orElse(
+          firstSome(
+            (a: MatchArm) =>
+              _Option_orElse(
+                checkExpr$(a.body, reg),
+                _Option_match(
+                  a.guard,
+                  () => None as Option<PErr>,
+                  (g) => checkExpr$(g, reg),
+                ),
+              ),
+            arms,
+          ),
+          checkExpr$(scrutinee, reg),
+        ),
+      );
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return _Option_orElse(
+        firstSome((f: Field) => checkExpr$(f.value, reg), fields),
+        _Option_match(
+          spread,
+          () => None as Option<PErr>,
+          (s) => checkExpr$(s, reg),
+        ),
+      );
+    }
+    case "EField": {
+      const { target } = $match;
+      return checkExpr$(target, reg);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return _Option_orElse(
+        checkExpr$(body, reg),
+        firstSome((p: LoopParam) => checkExpr$(p.init, reg), params),
+      );
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return firstSome((a: Expr) => checkExpr$(a, reg), args);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return firstSome((el: Expr) => checkExpr$(el, reg), elements);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return firstSome(
+        (el: SeqElem) =>
+          checkExpr$(
+            ((_v) =>
+              _v._tag === "SEExpr"
+                ? (({ expr: e }) => e)(_v)
+                : _v._tag === "SESpread"
+                  ? (({ expr: e }) => e)(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(el),
+            reg,
+          ),
+        elements,
+      );
+    }
+    case "EList": {
+      const { elements } = $match;
+      return firstSome(
+        (el: SeqElem) =>
+          checkExpr$(
+            ((_v) =>
+              _v._tag === "SEExpr"
+                ? (({ expr: e }) => e)(_v)
+                : _v._tag === "SESpread"
+                  ? (({ expr: e }) => e)(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(el),
+            reg,
+          ),
+        elements,
+      );
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return firstSome(
+        (el: SeqElem) =>
+          checkExpr$(
+            ((_v) =>
+              _v._tag === "SEExpr"
+                ? (({ expr: e }) => e)(_v)
+                : _v._tag === "SESpread"
+                  ? (({ expr: e }) => e)(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(el),
+            reg,
+          ),
+        elements,
+      );
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return firstSome(
+        (en: MapEntry) => _Option_orElse(checkExpr$(en.value, reg), checkExpr$(en.key, reg)),
+        entries,
+      );
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return firstSome((p: InterpPart) => {
+        const $match$ = p;
+        switch ($match$._tag) {
+          case "IPLit": {
+            return None as Option<PErr>;
+          }
+          case "IPExpr": {
+            const { expr: ex } = $match$;
+            return checkExpr$(ex, reg);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, parts);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(2, checkExpr$);
+const checkExprs$ = (e: Expr, reg: Registry): PErr[] => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -1278,44 +1296,44 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
     }
     case "ECall": {
       const { fn, args } = $match;
-      return [...checkExprs(fn, reg), ..._Array_flatMap((a: Expr) => checkExprs(a, reg), args)];
+      return [...checkExprs$(fn, reg), ..._Array_flatMap((a: Expr) => checkExprs$(a, reg), args)];
     }
     case "ELambda": {
       const { body } = $match;
-      return checkExprs(body, reg);
+      return checkExprs$(body, reg);
     }
     case "ELetIn": {
       const { value, body } = $match;
-      return [...checkExprs(value, reg), ...checkExprs(body, reg)];
+      return [...checkExprs$(value, reg), ...checkExprs$(body, reg)];
     }
     case "ELetBind": {
       const { value, body } = $match;
-      return [...checkExprs(value, reg), ...checkExprs(body, reg)];
+      return [...checkExprs$(value, reg), ...checkExprs$(body, reg)];
     }
     case "EPipe": {
       const { left, right } = $match;
-      return [...checkExprs(left, reg), ...checkExprs(right, reg)];
+      return [...checkExprs$(left, reg), ...checkExprs$(right, reg)];
     }
     case "EDo": {
       const { exprs } = $match;
-      return _Array_flatMap((x: Expr) => checkExprs(x, reg), exprs);
+      return _Array_flatMap((x: Expr) => checkExprs$(x, reg), exprs);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return [...checkExprs(cond, reg), ...checkExprs(thenE, reg), ...checkExprs(elseE, reg)];
+      return [...checkExprs$(cond, reg), ...checkExprs$(thenE, reg), ...checkExprs$(elseE, reg)];
     }
     case "EMatch": {
       const { scrutinee, arms, span: sp } = $match;
       return [
-        ...checkExprs(scrutinee, reg),
+        ...checkExprs$(scrutinee, reg),
         ..._Array_flatMap(
           (a: MatchArm) => [
             ..._Option_match(
               a.guard,
               () => [] as PErr[],
-              (g) => checkExprs(g, reg),
+              (g) => checkExprs$(g, reg),
             ),
-            ...checkExprs(a.body, reg),
+            ...checkExprs$(a.body, reg),
           ],
           arms,
         ),
@@ -1332,29 +1350,29 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
         ..._Option_match(
           spread,
           () => [] as PErr[],
-          (s) => checkExprs(s, reg),
+          (s) => checkExprs$(s, reg),
         ),
-        ..._Array_flatMap((f: Field) => checkExprs(f.value, reg), fields),
+        ..._Array_flatMap((f: Field) => checkExprs$(f.value, reg), fields),
       ];
     }
     case "EField": {
       const { target } = $match;
-      return checkExprs(target, reg);
+      return checkExprs$(target, reg);
     }
     case "ELoop": {
       const { params, body } = $match;
       return [
-        ..._Array_flatMap((p: LoopParam) => checkExprs(p.init, reg), params),
-        ...checkExprs(body, reg),
+        ..._Array_flatMap((p: LoopParam) => checkExprs$(p.init, reg), params),
+        ...checkExprs$(body, reg),
       ];
     }
     case "ERecur": {
       const { args } = $match;
-      return _Array_flatMap((a: Expr) => checkExprs(a, reg), args);
+      return _Array_flatMap((a: Expr) => checkExprs$(a, reg), args);
     }
     case "ETuple": {
       const { elements } = $match;
-      return _Array_flatMap((el: Expr) => checkExprs(el, reg), elements);
+      return _Array_flatMap((el: Expr) => checkExprs$(el, reg), elements);
     }
     case "EArr": {
       const { elements } = $match;
@@ -1363,11 +1381,11 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1382,11 +1400,11 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1401,11 +1419,11 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1416,7 +1434,7 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
     case "EMap": {
       const { entries } = $match;
       return _Array_flatMap(
-        (entry: MapEntry) => [...checkExprs(entry.key, reg), ...checkExprs(entry.value, reg)],
+        (entry: MapEntry) => [...checkExprs$(entry.key, reg), ...checkExprs$(entry.value, reg)],
         entries,
       );
     }
@@ -1430,7 +1448,7 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
           }
           case "IPExpr": {
             const { expr: value } = $match$;
-            return checkExprs(value, reg);
+            return checkExprs$(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1442,7 +1460,8 @@ const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, (e: Expr,
       throw new Error("non-exhaustive match");
     }
   }
-});
+};
+const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, checkExprs$);
 const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Task", "Str"];
 const redeclarableTypes: string[] = ["Option", "Result"];
 const reservedErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
@@ -1662,43 +1681,44 @@ const typeExprSpan: (te: TypeExpr) => SpanAt = (te: TypeExpr) => {
     }
   }
 };
+const checkReservedParam$ = (param: LamParam, sp: SpanAt): PErr[] => {
+  const $match = param;
+  switch ($match._tag) {
+    case "LPName": {
+      const { name } = $match;
+      return reservedWord(name, sp);
+    }
+    case "LPRecord": {
+      const { fields } = $match;
+      return _Array_flatMap((name: string) => reservedWord(name, sp), fields);
+    }
+    case "LPTuple": {
+      const { names } = $match;
+      return _Array_flatMap((name: string) => reservedWord(name, sp), names);
+    }
+    case "LPLabeled": {
+      const { name, defaultValue } = $match;
+      return [
+        ...reservedWord(name, sp),
+        ..._Option_match(
+          defaultValue,
+          () => [] as PErr[],
+          (value) => checkReservedExpr(value),
+        ),
+      ];
+    }
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return checkReservedParam$(inner, sp);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const checkReservedParam: _Curry<[param: LamParam, sp: SpanAt], PErr[]> = _curry(
   2,
-  (param: LamParam, sp: SpanAt) => {
-    const $match = param;
-    switch ($match._tag) {
-      case "LPName": {
-        const { name } = $match;
-        return reservedWord(name, sp);
-      }
-      case "LPRecord": {
-        const { fields } = $match;
-        return _Array_flatMap((name: string) => reservedWord(name, sp), fields);
-      }
-      case "LPTuple": {
-        const { names } = $match;
-        return _Array_flatMap((name: string) => reservedWord(name, sp), names);
-      }
-      case "LPLabeled": {
-        const { name, defaultValue } = $match;
-        return [
-          ...reservedWord(name, sp),
-          ..._Option_match(
-            defaultValue,
-            () => [] as PErr[],
-            (value) => checkReservedExpr(value),
-          ),
-        ];
-      }
-      case "LPSpanned": {
-        const { param: inner } = $match;
-        return checkReservedParam(inner, sp);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  checkReservedParam$,
 );
 const checkReservedPattern: (pat: Pattern) => PErr[] = (pat: Pattern) => {
   const $match = pat;
@@ -1780,7 +1800,7 @@ const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) => {
     case "ELambda": {
       const { params, body, span: sp } = $match;
       return [
-        ..._Array_flatMap((param: LamParam) => checkReservedParam(param, sp), params),
+        ..._Array_flatMap((param: LamParam) => checkReservedParam$(param, sp), params),
         ...checkReservedExpr(body),
       ];
     }
@@ -1795,7 +1815,7 @@ const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) => {
     case "ELetBind": {
       const { param, paramSpan: paramSp, value, body } = $match;
       return [
-        ...checkReservedParam(param, paramSp),
+        ...checkReservedParam$(param, paramSp),
         ...checkReservedExpr(value),
         ...checkReservedExpr(body),
       ];
@@ -1948,52 +1968,53 @@ const isUpperStart: (s: string) => boolean = (s: string) =>
     () => false,
     (c) => and(c >= 65, c <= 90),
   );
+const strayTypeVar$ = (params: string[], te: TypeExpr): Option<[string, SpanAt]> => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyName": {
+      const { name, span: sp } = $match;
+      return or(
+        isUpperStart(name),
+        or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
+      )
+        ? (None as Option<[string, SpanAt]>)
+        : (Some(_tuple(name, sp)) as Option<[string, SpanAt]>);
+    }
+    case "TyArrow": {
+      const { from, to } = $match;
+      return _Option_orElse(strayTypeVar$(params, to), strayTypeVar$(params, from));
+    }
+    case "TyApp": {
+      const { args } = $match;
+      return firstSome(strayTypeVar(params), args);
+    }
+    case "TyTuple": {
+      const { elems } = $match;
+      return firstSome(strayTypeVar(params), elems);
+    }
+    case "TyList": {
+      const { elem } = $match;
+      return strayTypeVar$(params, elem);
+    }
+    case "TyQual": {
+      const { args } = $match;
+      return firstSome(strayTypeVar(params), args);
+    }
+    case "TyLit": {
+      return None as Option<[string, SpanAt]>;
+    }
+    case "TyUnion": {
+      const { members } = $match;
+      return firstSome(strayTypeVar(params), members);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const strayTypeVar: _Curry<[params: string[], te: TypeExpr], Option<[string, SpanAt]>> = _curry(
   2,
-  (params: string[], te: TypeExpr) => {
-    const $match = te;
-    switch ($match._tag) {
-      case "TyName": {
-        const { name, span: sp } = $match;
-        return or(
-          isUpperStart(name),
-          or(_Array_contains(name, primTypeNames), _Array_contains(name, params)),
-        )
-          ? (None as Option<[string, SpanAt]>)
-          : (Some(_tuple(name, sp)) as Option<[string, SpanAt]>);
-      }
-      case "TyArrow": {
-        const { from, to } = $match;
-        return _Option_orElse(strayTypeVar(params, to), strayTypeVar(params, from));
-      }
-      case "TyApp": {
-        const { args } = $match;
-        return firstSome(strayTypeVar(params), args);
-      }
-      case "TyTuple": {
-        const { elems } = $match;
-        return firstSome(strayTypeVar(params), elems);
-      }
-      case "TyList": {
-        const { elem } = $match;
-        return strayTypeVar(params, elem);
-      }
-      case "TyQual": {
-        const { args } = $match;
-        return firstSome(strayTypeVar(params), args);
-      }
-      case "TyLit": {
-        return None as Option<[string, SpanAt]>;
-      }
-      case "TyUnion": {
-        const { members } = $match;
-        return firstSome(strayTypeVar(params), members);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  strayTypeVar$,
 );
 const checkCtorFieldVars: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   firstSome((s: Stmt) => {
@@ -2020,7 +2041,7 @@ const checkCtorFieldVars: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
                       ? (None as Option<PErr>)
                       : (() => {
                           throw new Error("non-exhaustive match");
-                        })())(strayTypeVar(params, f.fieldType)),
+                        })())(strayTypeVar$(params, f.fieldType)),
               c.fields,
             ),
           ctors,
@@ -2053,7 +2074,7 @@ const checkCtorFieldVarsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
                       ? ([] as PErr[])
                       : (() => {
                           throw new Error("non-exhaustive match");
-                        })())(strayTypeVar(params, f.fieldType)),
+                        })())(strayTypeVar$(params, f.fieldType)),
               c.fields,
             ),
           ctors,
@@ -2473,10 +2494,7 @@ const duplicateLoopParam: <C, D>(
     }
   }
 };
-const checkLoopDo: _Curry<
-  [exprs: Expr[], frame: Option<LoopFrame>, tail: boolean],
-  Option<PErr>
-> = _curry(3, (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean) => {
+const checkLoopDo$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
   let i: number = 0;
   while (true) {
     {
@@ -2487,10 +2505,10 @@ const checkLoopDo: _Curry<
       if ($loopMatch._tag === "Some") {
         const { value: expr } = $loopMatch;
         if (_Option_isNone(_Array_get(i + 1, exprs))) {
-          return checkLoopExpr(expr, frame, tail);
+          return checkLoopExpr$(expr, frame, tail);
         } else {
           {
-            const $loopMatch = checkLoopExpr(expr, frame, false);
+            const $loopMatch = checkLoopExpr$(expr, frame, false);
             if ($loopMatch._tag === "Some") {
               const { value: error } = $loopMatch;
               return Some(error) as Option<PErr>;
@@ -2506,17 +2524,18 @@ const checkLoopDo: _Curry<
       throw new Error("non-exhaustive match");
     }
   }
-});
-const checkLoopExpr: _Curry<
-  [e: Expr, frame: Option<LoopFrame>, tail: boolean],
+};
+const checkLoopDo: _Curry<
+  [exprs: Expr[], frame: Option<LoopFrame>, tail: boolean],
   Option<PErr>
-> = _curry(3, (e: Expr, frame: Option<LoopFrame>, tail: boolean) => {
+> = _curry(3, checkLoopDo$);
+const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
   const $match = e;
   switch ($match._tag) {
     case "ELoop": {
       const { params, body } = $match;
       return _Option_orElse(
-        checkLoopExpr(
+        checkLoopExpr$(
           body,
           Some({
             arity: length(params),
@@ -2525,7 +2544,7 @@ const checkLoopExpr: _Curry<
           true,
         ),
         _Option_orElse(
-          firstSome((p: LoopParam) => checkLoopExpr(p.init, frame, false), params),
+          firstSome((p: LoopParam) => checkLoopExpr$(p.init, frame, false), params),
           duplicateLoopParam(params),
         ),
       );
@@ -2547,14 +2566,14 @@ const checkLoopExpr: _Curry<
                     sp,
                   ),
                 ) as Option<PErr>)
-              : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+              : firstSome((a: Expr) => checkLoopExpr$(a, frame, false), args),
       );
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
       return _Option_orElse(
-        checkLoopExpr(elseE, frame, tail),
-        _Option_orElse(checkLoopExpr(thenE, frame, tail), checkLoopExpr(cond, frame, false)),
+        checkLoopExpr$(elseE, frame, tail),
+        _Option_orElse(checkLoopExpr$(thenE, frame, tail), checkLoopExpr$(cond, frame, false)),
       );
     }
     case "EMatch": {
@@ -2564,22 +2583,22 @@ const checkLoopExpr: _Curry<
           (arm: MatchArm) =>
             _Option_match(
               arm.guard,
-              () => checkLoopExpr(arm.body, frame, tail),
+              () => checkLoopExpr$(arm.body, frame, tail),
               (guard) =>
                 _Option_orElse(
-                  checkLoopExpr(arm.body, frame, tail),
-                  checkLoopExpr(guard, frame, false),
+                  checkLoopExpr$(arm.body, frame, tail),
+                  checkLoopExpr$(guard, frame, false),
                 ),
             ),
           arms,
         ),
-        checkLoopExpr(scrutinee, frame, false),
+        checkLoopExpr$(scrutinee, frame, false),
       );
     }
     case "ELetIn": {
       const { name, nameSpan: nameSp, value, body } = $match;
       return _Option_orElse(
-        checkLoopExpr(body, frame, tail),
+        checkLoopExpr$(body, frame, tail),
         _Option_orElse(
           ((_v) =>
             _v._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_v)
@@ -2591,54 +2610,57 @@ const checkLoopExpr: _Curry<
                     ),
                   ) as Option<PErr>)(_v)
               : (None as Option<PErr>))(frame),
-          checkLoopExpr(value, frame, false),
+          checkLoopExpr$(value, frame, false),
         ),
       );
     }
     case "ELetBind": {
       const { value, body } = $match;
       return _Option_orElse(
-        checkLoopExpr(body, None as Option<LoopFrame>, false),
-        checkLoopExpr(value, frame, false),
+        checkLoopExpr$(body, None as Option<LoopFrame>, false),
+        checkLoopExpr$(value, frame, false),
       );
     }
     case "ELambda": {
       const { body } = $match;
-      return checkLoopExpr(body, None as Option<LoopFrame>, false);
+      return checkLoopExpr$(body, None as Option<LoopFrame>, false);
     }
     case "ECall": {
       const { fn, args } = $match;
       return _Option_orElse(
-        firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
-        checkLoopExpr(fn, frame, false),
+        firstSome((a: Expr) => checkLoopExpr$(a, frame, false), args),
+        checkLoopExpr$(fn, frame, false),
       );
     }
     case "EPipe": {
       const { left, right } = $match;
-      return _Option_orElse(checkLoopExpr(right, frame, false), checkLoopExpr(left, frame, false));
+      return _Option_orElse(
+        checkLoopExpr$(right, frame, false),
+        checkLoopExpr$(left, frame, false),
+      );
     }
     case "EDo": {
       const { exprs } = $match;
-      return checkLoopDo(exprs, frame, tail);
+      return checkLoopDo$(exprs, frame, tail);
     }
     case "ERecord": {
       const { fields, spread } = $match;
       return _Option_orElse(
-        firstSome((field: Field) => checkLoopExpr(field.value, frame, false), fields),
+        firstSome((field: Field) => checkLoopExpr$(field.value, frame, false), fields),
         _Option_match(
           spread,
           () => None as Option<PErr>,
-          (value) => checkLoopExpr(value, frame, false),
+          (value) => checkLoopExpr$(value, frame, false),
         ),
       );
     }
     case "EField": {
       const { target } = $match;
-      return checkLoopExpr(target, frame, false);
+      return checkLoopExpr$(target, frame, false);
     }
     case "ETuple": {
       const { elements } = $match;
-      return firstSome((el: Expr) => checkLoopExpr(el, frame, false), elements);
+      return firstSome((el: Expr) => checkLoopExpr$(el, frame, false), elements);
     }
     case "EArr": {
       const { elements } = $match;
@@ -2647,11 +2669,11 @@ const checkLoopExpr: _Curry<
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2666,11 +2688,11 @@ const checkLoopExpr: _Curry<
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2685,11 +2707,11 @@ const checkLoopExpr: _Curry<
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2702,8 +2724,8 @@ const checkLoopExpr: _Curry<
       return firstSome(
         (entry: MapEntry) =>
           _Option_orElse(
-            checkLoopExpr(entry.value, frame, false),
-            checkLoopExpr(entry.key, frame, false),
+            checkLoopExpr$(entry.value, frame, false),
+            checkLoopExpr$(entry.key, frame, false),
           ),
         entries,
       );
@@ -2718,7 +2740,7 @@ const checkLoopExpr: _Curry<
           }
           case "IPExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr(value, frame, false);
+            return checkLoopExpr$(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2730,18 +2752,22 @@ const checkLoopExpr: _Curry<
       return None as Option<PErr>;
     }
   }
-});
+};
+const checkLoopExpr: _Curry<
+  [e: Expr, frame: Option<LoopFrame>, tail: boolean],
+  Option<PErr>
+> = _curry(3, checkLoopExpr$);
 const checkLoops: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   firstSome((stmt: Stmt) => {
     const $match = stmt;
     switch ($match._tag) {
       case "SLet": {
         const { value } = $match;
-        return checkLoopExpr(value, None as Option<LoopFrame>, false);
+        return checkLoopExpr$(value, None as Option<LoopFrame>, false);
       }
       case "SExpr": {
         const { value } = $match;
-        return checkLoopExpr(value, None as Option<LoopFrame>, false);
+        return checkLoopExpr$(value, None as Option<LoopFrame>, false);
       }
       default: {
         return None as Option<PErr>;
@@ -2780,256 +2806,255 @@ const loopParamErrors: <C, D>(
     }
   }
 };
-const checkLoopDoAll: _Curry<[exprs: Expr[], frame: Option<LoopFrame>, tail: boolean], PErr[]> =
-  _curry(3, (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean) => {
-    let i: number = 0;
-    let errors: PErr[] = [] as PErr[];
-    while (true) {
-      {
-        const $loopMatch = _Array_get(i, exprs);
-        if ($loopMatch._tag === "None") {
-          return errors;
-        }
-        if ($loopMatch._tag === "Some") {
-          const { value: expr } = $loopMatch;
+const checkLoopDoAll$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): PErr[] => {
+  let i: number = 0;
+  let errors: PErr[] = [] as PErr[];
+  while (true) {
+    {
+      const $loopMatch = _Array_get(i, exprs);
+      if ($loopMatch._tag === "None") {
+        return errors;
+      }
+      if ($loopMatch._tag === "Some") {
+        const { value: expr } = $loopMatch;
+        {
+          const isLast: boolean = _Option_isNone(_Array_get(i + 1, exprs));
           {
-            const isLast: boolean = _Option_isNone(_Array_get(i + 1, exprs));
-            {
-              const $recur0: number = i + 1;
-              const $recur1: PErr[] = [
-                ...errors,
-                ...checkLoopExprs(expr, frame, isLast ? tail : false),
-              ];
-              i = $recur0;
-              errors = $recur1;
-              continue;
-            }
+            const $recur0: number = i + 1;
+            const $recur1: PErr[] = [
+              ...errors,
+              ...checkLoopExprs$(expr, frame, isLast ? tail : false),
+            ];
+            i = $recur0;
+            errors = $recur1;
+            continue;
           }
         }
-        throw new Error("non-exhaustive match");
       }
+      throw new Error("non-exhaustive match");
     }
-  });
+  }
+};
+const checkLoopDoAll: _Curry<[exprs: Expr[], frame: Option<LoopFrame>, tail: boolean], PErr[]> =
+  _curry(3, checkLoopDoAll$);
+const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr[] => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ELoop": {
+      const { params, body } = $match;
+      return [
+        ...loopParamErrors(params),
+        ..._Array_flatMap((p: LoopParam) => checkLoopExprs$(p.init, frame, false), params),
+        ...checkLoopExprs$(
+          body,
+          Some({
+            arity: length(params),
+            names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
+          }) as Option<LoopFrame>,
+          true,
+        ),
+      ];
+    }
+    case "ERecur": {
+      const { args, span: sp } = $match;
+      const siteErrors: PErr[] = _Option_match(
+        frame,
+        () => [checkErr("'recur' is only legal inside a loop body", sp)],
+        (current) => [
+          ...(!tail
+            ? [checkErr("'recur' must be in tail position of its enclosing loop", sp)]
+            : ([] as PErr[])),
+          ...(!eq(length(args), current.arity)
+            ? [
+                checkErr(
+                  `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
+                  sp,
+                ),
+              ]
+            : ([] as PErr[])),
+        ],
+      );
+      return [
+        ...siteErrors,
+        ..._Array_flatMap((a: Expr) => checkLoopExprs$(a, frame, false), args),
+      ];
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return [
+        ...checkLoopExprs$(cond, frame, false),
+        ...checkLoopExprs$(thenE, frame, tail),
+        ...checkLoopExprs$(elseE, frame, tail),
+      ];
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return [
+        ...checkLoopExprs$(scrutinee, frame, false),
+        ..._Array_flatMap(
+          (arm: MatchArm) => [
+            ..._Option_match(
+              arm.guard,
+              () => [] as PErr[],
+              (guard) => checkLoopExprs$(guard, frame, false),
+            ),
+            ...checkLoopExprs$(arm.body, frame, tail),
+          ],
+          arms,
+        ),
+      ];
+    }
+    case "ELetIn": {
+      const { name, nameSpan: nameSp, value, body } = $match;
+      return [
+        ...((_v) =>
+          _v._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_v)
+            ? (({ value: current }) => [
+                checkErr(`'${name}' shadows a loop param inside the loop body; rename it`, nameSp),
+              ])(_v)
+            : ([] as PErr[]))(frame),
+        ...checkLoopExprs$(value, frame, false),
+        ...checkLoopExprs$(body, frame, tail),
+      ];
+    }
+    case "ELetBind": {
+      const { value, body } = $match;
+      return [
+        ...checkLoopExprs$(value, frame, false),
+        ...checkLoopExprs$(body, None as Option<LoopFrame>, false),
+      ];
+    }
+    case "ELambda": {
+      const { body } = $match;
+      return checkLoopExprs$(body, None as Option<LoopFrame>, false);
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return [
+        ...checkLoopExprs$(fn, frame, false),
+        ..._Array_flatMap((a: Expr) => checkLoopExprs$(a, frame, false), args),
+      ];
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return [...checkLoopExprs$(left, frame, false), ...checkLoopExprs$(right, frame, false)];
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return checkLoopDoAll$(exprs, frame, tail);
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return [
+        ..._Option_match(
+          spread,
+          () => [] as PErr[],
+          (value) => checkLoopExprs$(value, frame, false),
+        ),
+        ..._Array_flatMap((field: Field) => checkLoopExprs$(field.value, frame, false), fields),
+      ];
+    }
+    case "EField": {
+      const { target } = $match;
+      return checkLoopExprs$(target, frame, false);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Array_flatMap((el: Expr) => checkLoopExprs$(el, frame, false), elements);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return _Array_flatMap((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return _Array_flatMap((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return _Array_flatMap((el: SeqElem) => {
+        const $match$ = el;
+        switch ($match$._tag) {
+          case "SEExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          case "SESpread": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, elements);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return _Array_flatMap(
+        (entry: MapEntry) => [
+          ...checkLoopExprs$(entry.key, frame, false),
+          ...checkLoopExprs$(entry.value, frame, false),
+        ],
+        entries,
+      );
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Array_flatMap((part: InterpPart) => {
+        const $match$ = part;
+        switch ($match$._tag) {
+          case "IPLit": {
+            return [] as PErr[];
+          }
+          case "IPExpr": {
+            const { expr: value } = $match$;
+            return checkLoopExprs$(value, frame, false);
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, parts);
+    }
+    default: {
+      return [] as PErr[];
+    }
+  }
+};
 const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean], PErr[]> = _curry(
   3,
-  (e: Expr, frame: Option<LoopFrame>, tail: boolean) => {
-    const $match = e;
-    switch ($match._tag) {
-      case "ELoop": {
-        const { params, body } = $match;
-        return [
-          ...loopParamErrors(params),
-          ..._Array_flatMap((p: LoopParam) => checkLoopExprs(p.init, frame, false), params),
-          ...checkLoopExprs(
-            body,
-            Some({
-              arity: length(params),
-              names: _Set_fromArray(map((p: LoopParam) => p.name, params)),
-            }) as Option<LoopFrame>,
-            true,
-          ),
-        ];
-      }
-      case "ERecur": {
-        const { args, span: sp } = $match;
-        const siteErrors: PErr[] = _Option_match(
-          frame,
-          () => [checkErr("'recur' is only legal inside a loop body", sp)],
-          (current) => [
-            ...(!tail
-              ? [checkErr("'recur' must be in tail position of its enclosing loop", sp)]
-              : ([] as PErr[])),
-            ...(!eq(length(args), current.arity)
-              ? [
-                  checkErr(
-                    `'recur' takes ${show(current.arity)} argument${current.arity === 1 ? "" : "s"} (one per loop param), got ${show(length(args))}`,
-                    sp,
-                  ),
-                ]
-              : ([] as PErr[])),
-          ],
-        );
-        return [
-          ...siteErrors,
-          ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
-        ];
-      }
-      case "ETernary": {
-        const { cond, thenE, elseE } = $match;
-        return [
-          ...checkLoopExprs(cond, frame, false),
-          ...checkLoopExprs(thenE, frame, tail),
-          ...checkLoopExprs(elseE, frame, tail),
-        ];
-      }
-      case "EMatch": {
-        const { scrutinee, arms } = $match;
-        return [
-          ...checkLoopExprs(scrutinee, frame, false),
-          ..._Array_flatMap(
-            (arm: MatchArm) => [
-              ..._Option_match(
-                arm.guard,
-                () => [] as PErr[],
-                (guard) => checkLoopExprs(guard, frame, false),
-              ),
-              ...checkLoopExprs(arm.body, frame, tail),
-            ],
-            arms,
-          ),
-        ];
-      }
-      case "ELetIn": {
-        const { name, nameSpan: nameSp, value, body } = $match;
-        return [
-          ...((_v) =>
-            _v._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_v)
-              ? (({ value: current }) => [
-                  checkErr(
-                    `'${name}' shadows a loop param inside the loop body; rename it`,
-                    nameSp,
-                  ),
-                ])(_v)
-              : ([] as PErr[]))(frame),
-          ...checkLoopExprs(value, frame, false),
-          ...checkLoopExprs(body, frame, tail),
-        ];
-      }
-      case "ELetBind": {
-        const { value, body } = $match;
-        return [
-          ...checkLoopExprs(value, frame, false),
-          ...checkLoopExprs(body, None as Option<LoopFrame>, false),
-        ];
-      }
-      case "ELambda": {
-        const { body } = $match;
-        return checkLoopExprs(body, None as Option<LoopFrame>, false);
-      }
-      case "ECall": {
-        const { fn, args } = $match;
-        return [
-          ...checkLoopExprs(fn, frame, false),
-          ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
-        ];
-      }
-      case "EPipe": {
-        const { left, right } = $match;
-        return [...checkLoopExprs(left, frame, false), ...checkLoopExprs(right, frame, false)];
-      }
-      case "EDo": {
-        const { exprs } = $match;
-        return checkLoopDoAll(exprs, frame, tail);
-      }
-      case "ERecord": {
-        const { fields, spread } = $match;
-        return [
-          ..._Option_match(
-            spread,
-            () => [] as PErr[],
-            (value) => checkLoopExprs(value, frame, false),
-          ),
-          ..._Array_flatMap((field: Field) => checkLoopExprs(field.value, frame, false), fields),
-        ];
-      }
-      case "EField": {
-        const { target } = $match;
-        return checkLoopExprs(target, frame, false);
-      }
-      case "ETuple": {
-        const { elements } = $match;
-        return _Array_flatMap((el: Expr) => checkLoopExprs(el, frame, false), elements);
-      }
-      case "EArr": {
-        const { elements } = $match;
-        return _Array_flatMap((el: SeqElem) => {
-          const $match$ = el;
-          switch ($match$._tag) {
-            case "SEExpr": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            case "SESpread": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, elements);
-      }
-      case "EList": {
-        const { elements } = $match;
-        return _Array_flatMap((el: SeqElem) => {
-          const $match$ = el;
-          switch ($match$._tag) {
-            case "SEExpr": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            case "SESpread": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, elements);
-      }
-      case "ESet": {
-        const { elements } = $match;
-        return _Array_flatMap((el: SeqElem) => {
-          const $match$ = el;
-          switch ($match$._tag) {
-            case "SEExpr": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            case "SESpread": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, elements);
-      }
-      case "EMap": {
-        const { entries } = $match;
-        return _Array_flatMap(
-          (entry: MapEntry) => [
-            ...checkLoopExprs(entry.key, frame, false),
-            ...checkLoopExprs(entry.value, frame, false),
-          ],
-          entries,
-        );
-      }
-      case "EInterp": {
-        const { parts } = $match;
-        return _Array_flatMap((part: InterpPart) => {
-          const $match$ = part;
-          switch ($match$._tag) {
-            case "IPLit": {
-              return [] as PErr[];
-            }
-            case "IPExpr": {
-              const { expr: value } = $match$;
-              return checkLoopExprs(value, frame, false);
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, parts);
-      }
-      default: {
-        return [] as PErr[];
-      }
-    }
-  },
+  checkLoopExprs$,
 );
 const checkLoopsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
   _Array_flatMap((stmt: Stmt) => {
@@ -3037,11 +3062,11 @@ const checkLoopsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
     switch ($match._tag) {
       case "SLet": {
         const { value } = $match;
-        return checkLoopExprs(value, None as Option<LoopFrame>, false);
+        return checkLoopExprs$(value, None as Option<LoopFrame>, false);
       }
       case "SExpr": {
         const { value } = $match;
-        return checkLoopExprs(value, None as Option<LoopFrame>, false);
+        return checkLoopExprs$(value, None as Option<LoopFrame>, false);
       }
       default: {
         return [] as PErr[];
@@ -3110,11 +3135,11 @@ export const checkWith: <A, B>(
                                   switch ($match._tag) {
                                     case "SLet": {
                                       const { value } = $match;
-                                      return checkExpr(value, reg);
+                                      return checkExpr$(value, reg);
                                     }
                                     case "SExpr": {
                                       const { value } = $match;
-                                      return checkExpr(value, reg);
+                                      return checkExpr$(value, reg);
                                     }
                                     default: {
                                       return None as Option<PErr>;
@@ -3201,11 +3226,11 @@ export const checkAllWith: <A, B>(
             switch ($match._tag) {
               case "SLet": {
                 const { value } = $match;
-                return checkExprs(value, reg);
+                return checkExprs$(value, reg);
               }
               case "SExpr": {
                 const { value } = $match;
-                return checkExprs(value, reg);
+                return checkExprs$(value, reg);
               }
               default: {
                 return [] as PErr[];

@@ -119,6 +119,8 @@ import { namespaceRuntime } from "../prelude/prelude.gen.mjs";
 import { preludeJsDefs } from "../prelude/prelude.gen.mjs";
 import { runtimeDeps } from "../prelude/prelude.gen.mjs";
 import * as Ast from "../ast/ast";
+const emitDts$ = (src: string, runtimeImport: string): Result<string, Stamped[]> =>
+  emitDtsText(src, runtimeImport);
 /**
  * Host-facing `.d.ts` emit. Lives here for the same reason the TypeScript
  * mirror puts `emitDtsForFile` in its module driver: declaration emit is a
@@ -127,13 +129,19 @@ import * as Ast from "../ast/ast";
 export const emitDts: _Curry<
   [src: string, runtimeImport: string],
   Result<string, Stamped[]>
-> = _curry(2, (src: string, runtimeImport: string) => emitDtsText(src, runtimeImport));
+> = _curry(2, emitDts$);
 /**
  * Host-facing lexical occurrence query. The index itself is source-owned;
  * this re-export makes it reachable from the frozen graph without teaching
  * host DX code about bootstrap's internal module layout.
  */
 export const symbolOccurrences: (stmts: Stmt[]) => Occurrence[] = (stmts: Stmt[]) => index(stmts);
+const symbolIndex$ = (
+  path: string,
+  origins: Origins,
+  prelude: SymPrelude,
+  stmts: Stmt[],
+): SymIndex => indexWith(path, origins, prelude, stmts);
 /**
  * Host-facing symbol index over all four spaces, imports resolved through
  * `origins` and builtins through the host's virtual `prelude`.
@@ -141,15 +149,14 @@ export const symbolOccurrences: (stmts: Stmt[]) => Occurrence[] = (stmts: Stmt[]
 export const symbolIndex: _Curry<
   [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
   SymIndex
-> = _curry(4, (path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]) =>
-  indexWith(path, origins, prelude, stmts),
-);
+> = _curry(4, symbolIndex$);
+const exportedOrigins$ = (path: string, stmts: Stmt[]): Origins => originsOf(path, stmts);
 /**
  * A module's export sites, the `origins` an importer's `symbolIndex` takes.
  */
 export const exportedOrigins: _Curry<[path: string, stmts: Stmt[]], Origins> = _curry(
   2,
-  (path: string, stmts: Stmt[]) => originsOf(path, stmts),
+  exportedOrigins$,
 );
 
 const defaultOpts: Opts = {
@@ -205,10 +212,7 @@ const firstAtPath: <A>(
       (e) => atPath("type", path, e),
     ),
 );
-const parseModule: _Curry<
-  [src: string, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], MErr>
-> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
+const parseModule$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], MErr> =>
   _Result_match(
     lex(src),
     (e) => Err(stamp("lex", e)) as Result<Stmt[], MErr>,
@@ -218,39 +222,40 @@ const parseModule: _Curry<
         (e) => Err(stamp("parse", e)) as Result<Stmt[], MErr>,
         (stmts) => Ok(stmts) as Result<Stmt[], MErr>,
       ),
-  ),
-);
+  );
+const parseModule: _Curry<
+  [src: string, plugins: Option<HostPlugin[]>],
+  Result<Stmt[], MErr>
+> = _curry(2, parseModule$);
+const importFromsFrom$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
+  _Option_match(
+    _Array_get(i, stmts),
+    () => acc,
+    (s) => {
+      const $match = s;
+      switch ($match._tag) {
+        case "SImport": {
+          const { from } = $match;
+          return importFromsFrom$(stmts, i + 1, _Array_append(from, acc));
+        }
+        case "SImportNs": {
+          const { from } = $match;
+          return importFromsFrom$(stmts, i + 1, _Array_append(from, acc));
+        }
+        default: {
+          return importFromsFrom$(stmts, i + 1, acc);
+        }
+      }
+    },
+  );
 const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
   3,
-  (stmts: Stmt[], i: number, acc: string[]) =>
-    _Option_match(
-      _Array_get(i, stmts),
-      () => acc,
-      (s) => {
-        const $match = s;
-        switch ($match._tag) {
-          case "SImport": {
-            const { from } = $match;
-            return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
-          }
-          case "SImportNs": {
-            const { from } = $match;
-            return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
-          }
-          default: {
-            return importFromsFrom(stmts, i + 1, acc);
-          }
-        }
-      },
-    ),
+  importFromsFrom$,
 );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
-  importFromsFrom(stmts, 0, [] as string[]);
+  importFromsFrom$(stmts, 0, [] as string[]);
 
-const visit: _Curry<
-  [path: string, acc: Acc, plugins: Option<HostPlugin[]>],
-  Result<Acc, MErr>
-> = _curry(3, (path: string, acc: Acc, plugins: Option<HostPlugin[]>) =>
+const visit$ = (path: string, acc: Acc, plugins: Option<HostPlugin[]>): Result<Acc, MErr> =>
   ((_v) =>
     _v._tag === "Some" && _v.value === "done"
       ? (Ok(acc) as Result<Acc, MErr>)
@@ -262,11 +267,11 @@ const visit: _Curry<
               () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, MErr>,
               (src) =>
                 _Result_match(
-                  parseModule(src, plugins),
+                  parseModule$(src, plugins),
                   (e) => Err(e) as Result<Acc, MErr>,
                   (stmts) =>
                     _Result_match(
-                      visitAll(importFroms(stmts), path, acc1, plugins),
+                      visitAll$(importFroms(stmts), path, acc1, plugins),
                       (e) => Err(e) as Result<Acc, MErr>,
                       (acc2) =>
                         Ok({
@@ -277,26 +282,39 @@ const visit: _Curry<
                 ),
             ))({ state: _Map_set(path, "loading", acc.state), order: acc.order }))(
     _Map_get(path, acc.state),
-  ),
-);
-const visitAll: _Curry<
-  [froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>],
+  );
+const visit: _Curry<
+  [path: string, acc: Acc, plugins: Option<HostPlugin[]>],
   Result<Acc, MErr>
-> = _curry(4, (froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>) =>
+> = _curry(3, visit$);
+const visitAll$ = (
+  froms: string[],
+  importer: string,
+  acc: Acc,
+  plugins: Option<HostPlugin[]>,
+): Result<Acc, MErr> =>
   ((_v) =>
     _v.length === 0
       ? (Ok(acc) as Result<Acc, MErr>)
       : _v.length >= 1
         ? (([from, ...rest]) =>
             _Result_match(
-              visit(resolveImport(importer, from), acc, plugins),
+              visit$(resolveImport(importer, from), acc, plugins),
               (e) => Err(e) as Result<Acc, MErr>,
-              (acc1) => visitAll(rest, importer, acc1, plugins),
+              (acc1) => visitAll$(rest, importer, acc1, plugins),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(froms),
-);
+          })())(froms);
+const visitAll: _Curry<
+  [froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>],
+  Result<Acc, MErr>
+> = _curry(4, visitAll$);
+const loadGraphWith$ = (entry: string, plugins: Option<HostPlugin[]>): Result<Loaded[], MErr> =>
+  _Result_flatMap(
+    (acc) => Ok(acc.order) as Result<Loaded[], MErr>,
+    visit$(absPath(entry), { state: new Map<string, string>(), order: [] as Loaded[] }, plugins),
+  );
 /**
  * loadGraphWith : string -> Option [Plugin] -> Result [Loaded] MErr
  * Load every module reachable from `entry`, in dependency order, parsing
@@ -305,17 +323,12 @@ const visitAll: _Curry<
 export const loadGraphWith: _Curry<
   [entry: string, plugins: Option<HostPlugin[]>],
   Result<Loaded[], MErr>
-> = _curry(2, (entry: string, plugins: Option<HostPlugin[]>) =>
-  _Result_flatMap(
-    (acc) => Ok(acc.order) as Result<Loaded[], MErr>,
-    visit(absPath(entry), { state: new Map<string, string>(), order: [] as Loaded[] }, plugins),
-  ),
-);
+> = _curry(2, loadGraphWith$);
 /**
  * loadGraph : string -> Result [Loaded] MErr — default plugins.
  */
 export const loadGraph: (entry: string) => Result<Loaded[], MErr> = (entry: string) =>
-  loadGraphWith(entry, None as Option<HostPlugin[]>);
+  loadGraphWith$(entry, None as Option<HostPlugin[]>);
 
 const emptyReg: Registry = {
   ctors: new Map<string, CtorInfo>(),
@@ -789,10 +802,11 @@ const resolveImportsFrom: <B, C, D>(
                   throw new Error("non-exhaustive match");
                 })())(_Array_get(i, stmts)),
 );
+const openFor$ = (loaded: Loaded, isEntry: boolean, opts: Opts): boolean =>
+  and(isEntry, opts.strictEntry) ? opts.open : openMode(loaded.src, opts.open);
 const openFor: _Curry<[loaded: Loaded, isEntry: boolean, opts: Opts], boolean> = _curry(
   3,
-  (loaded: Loaded, isEntry: boolean, opts: Opts) =>
-    and(isEntry, opts.strictEntry) ? opts.open : openMode(loaded.src, opts.open),
+  openFor$,
 );
 const compileOne: <A>(
   ctx: {
@@ -847,7 +861,7 @@ const compileOne: <A>(
                 loaded.stmts,
                 builtins,
                 namespaces,
-                openFor(loaded, isEntry, opts),
+                openFor$(loaded, isEntry, opts),
                 res.imports,
                 res.nsImports,
                 res.quals,
@@ -888,10 +902,11 @@ const compileOne: <A>(
         ),
     ),
 );
-const compileAll: _Curry<
-  [ctx: RecoveryCtx, graph: Loaded[], opts: Opts],
-  Result<ModuleOutput[], MErr[]>
-> = _curry(3, (ctx: RecoveryCtx, graph: Loaded[], opts: Opts) =>
+const compileAll$ = (
+  ctx: RecoveryCtx,
+  graph: Loaded[],
+  opts: Opts,
+): Result<ModuleOutput[], MErr[]> =>
   ((_v) =>
     _v.length === 0
       ? (Ok(ctx.outputs) as Result<ModuleOutput[], MErr[]>)
@@ -900,22 +915,17 @@ const compileAll: _Curry<
             _Result_match(
               compileOne(ctx, m, false, length(rest) === 0, opts),
               (e) => Err(e) as Result<ModuleOutput[], MErr[]>,
-              (ctx1) => compileAll(ctx1, rest, opts),
+              (ctx1) => compileAll$(ctx1, rest, opts),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(graph),
-);
-/**
- * compileGraph : [Loaded] -> Result [ModuleOutput] [MErr]
- * Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
- * multi-param function uncurried, so a partial application is a tsc error.
- */
-export const compileGraphWith: _Curry<
-  [graph: Loaded[], opts: Opts],
+          })())(graph);
+const compileAll: _Curry<
+  [ctx: RecoveryCtx, graph: Loaded[], opts: Opts],
   Result<ModuleOutput[], MErr[]>
-> = _curry(2, (graph: Loaded[], opts: Opts) =>
-  compileAll(
+> = _curry(3, compileAll$);
+const compileGraphWith$ = (graph: Loaded[], opts: Opts): Result<ModuleOutput[], MErr[]> =>
+  compileAll$(
     {
       exportsByPath: new Map<string, Map<string, Scheme>>(),
       regByPath: new Map<string, Registry>(),
@@ -925,11 +935,19 @@ export const compileGraphWith: _Curry<
     },
     graph,
     opts,
-  ),
-);
+  );
+/**
+ * compileGraph : [Loaded] -> Result [ModuleOutput] [MErr]
+ * Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
+ * multi-param function uncurried, so a partial application is a tsc error.
+ */
+export const compileGraphWith: _Curry<
+  [graph: Loaded[], opts: Opts],
+  Result<ModuleOutput[], MErr[]>
+> = _curry(2, compileGraphWith$);
 export const compileGraph: (graph: Loaded[]) => Result<ModuleOutput[], MErr[]> = (
   graph: Loaded[],
-) => compileGraphWith(graph, defaultOpts);
+) => compileGraphWith$(graph, defaultOpts);
 
 const depsPublished: <A, B>(
   ctx: { exportsByPath: Map<string, A> } & B,
@@ -1029,49 +1047,59 @@ const checkErrorsRecovering: <B, C, D>(
     );
   },
 );
-const sameErr: _Curry<[a: MErr, b: MErr], boolean> = _curry(2, (a: MErr, b: MErr) =>
+const sameErr$ = (a: MErr, b: MErr): boolean =>
   and(
     and(and(eq(a.kind, b.kind), eq(a.message, b.message)), eq(a.start, b.start)),
     eq(a.end, b.end),
-  ),
-);
-const mergeRecovered: _Curry<[es: MErr[], checks: MErr[]], MErr[]> = _curry(
-  2,
-  (es: MErr[], checks: MErr[]) =>
-    _Array_concat(
-      checks,
-      filter((e: MErr) => length(filter((c: MErr) => sameErr(c, e), checks)) === 0, es),
-    ),
-);
-const recoverOne: _Curry<
-  [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts],
-  RecoveryGraphState
-> = _curry(5, (ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts) =>
+  );
+const sameErr: _Curry<[a: MErr, b: MErr], boolean> = _curry(2, sameErr$);
+const mergeRecovered$ = (es: MErr[], checks: MErr[]): MErr[] =>
+  _Array_concat(
+    checks,
+    filter((e: MErr) => length(filter((c: MErr) => sameErr$(c, e), checks)) === 0, es),
+  );
+const mergeRecovered: _Curry<[es: MErr[], checks: MErr[]], MErr[]> = _curry(2, mergeRecovered$);
+const recoverOne$ = (
+  ctx: RecoveryCtx,
+  m: Loaded,
+  isEntry: boolean,
+  errors: MErr[],
+  opts: Opts,
+): RecoveryGraphState =>
   _Result_match(
     compileOne(ctx, m, true, isEntry, opts),
     (es) => {
       const checks: MErr[] = checkErrorsRecovering(ctx, m);
-      return { ctx: ctx, errors: _Array_concat(errors, mergeRecovered(es, checks)) };
+      return { ctx: ctx, errors: _Array_concat(errors, mergeRecovered$(es, checks)) };
     },
     (ctx1) => ({ ctx: ctx1, errors: errors }),
-  ),
-);
-const compileAllRecovering: _Curry<
-  [ctx: RecoveryCtx, graph: Loaded[], errors: MErr[], opts: Opts],
+  );
+const recoverOne: _Curry<
+  [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts],
   RecoveryGraphState
-> = _curry(4, (ctx: RecoveryCtx, graph: Loaded[], errors: MErr[], opts: Opts) =>
+> = _curry(5, recoverOne$);
+const compileAllRecovering$ = (
+  ctx: RecoveryCtx,
+  graph: Loaded[],
+  errors: MErr[],
+  opts: Opts,
+): RecoveryGraphState =>
   ((_v) =>
     _v.length === 0
       ? { ctx: ctx, errors: errors }
       : _v.length >= 1
         ? (([m, ...rest]) =>
-            ((next: RecoveryGraphState) => compileAllRecovering(next.ctx, rest, next.errors, opts))(
-              recoverOne(ctx, m, length(rest) === 0, errors, opts),
+            ((next: RecoveryGraphState) =>
+              compileAllRecovering$(next.ctx, rest, next.errors, opts))(
+              recoverOne$(ctx, m, length(rest) === 0, errors, opts),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(graph),
-);
+          })())(graph);
+const compileAllRecovering: _Curry<
+  [ctx: RecoveryCtx, graph: Loaded[], errors: MErr[], opts: Opts],
+  RecoveryGraphState
+> = _curry(4, compileAllRecovering$);
 /**
  * freshRecoveryGraphState : unit -> RecoveryGraphState
  * Opaque open-world graph context plus accumulated errors. Hosts retain this
@@ -1098,7 +1126,7 @@ export const recoverGraphFromWith: <A>(
 ) => RecoveryGraphState = _curry(
   3,
   <A>(state: { ctx: RecoveryCtx; errors: MErr[] } & A, graph: Loaded[], opts: Opts) =>
-    compileAllRecovering(state.ctx, graph, state.errors, opts),
+    compileAllRecovering$(state.ctx, graph, state.errors, opts),
 );
 export const recoverGraphFrom: <A>(
   state: { ctx: RecoveryCtx; errors: MErr[] } & A,
@@ -1108,6 +1136,12 @@ export const recoverGraphFrom: <A>(
   <A>(state: { ctx: RecoveryCtx; errors: MErr[] } & A, graph: Loaded[]) =>
     recoverGraphFromWith(state, graph, defaultOpts),
 );
+const recoverModuleWith$ = (
+  state: RecoveryGraphState,
+  loaded: Loaded,
+  isEntry: boolean,
+  opts: Opts,
+): RecoveryGraphState => recoverOne$(state.ctx, loaded, isEntry, state.errors, opts);
 /**
  * recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Opts -> RecoveryGraphState
  * Recover one module on top of a state that already holds its dependencies.
@@ -1117,9 +1151,7 @@ export const recoverGraphFrom: <A>(
 export const recoverModuleWith: _Curry<
   [state: RecoveryGraphState, loaded: Loaded, isEntry: boolean, opts: Opts],
   RecoveryGraphState
-> = _curry(4, (state: RecoveryGraphState, loaded: Loaded, isEntry: boolean, opts: Opts) =>
-  recoverOne(state.ctx, loaded, isEntry, state.errors, opts),
-);
+> = _curry(4, recoverModuleWith$);
 const keepOnly: <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => Map<A, B> = _curry(
   4,
   <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) =>
@@ -1132,15 +1164,7 @@ const keepOnly: <A, B>(key: A, keys: A[], i: number, m: Map<A, B>) => Map<A, B> 
 const onlyAt: <A, B>(key: A, m: Map<A, B>) => Map<A, B> = _curry(2, <A, B>(key: A, m: Map<A, B>) =>
   keepOnly(key, _Map_keys(m), 0, m),
 );
-/**
- * recoverySliceOf : RecoveryGraphState -> string -> RecoveryGraphState
- * The entries `path` published into `state`, and no errors: the host keeps
- * each module's errors itself, as the suffix `recoverModuleWith` appended.
- */
-export const recoverySliceOf: _Curry<
-  [state: RecoveryGraphState, path: string],
-  RecoveryGraphState
-> = _curry(2, (state: RecoveryGraphState, path: string) => ({
+const recoverySliceOf$ = (state: RecoveryGraphState, path: string): RecoveryGraphState => ({
   ctx: {
     exportsByPath: onlyAt(path, state.ctx.exportsByPath),
     regByPath: onlyAt(path, state.ctx.regByPath),
@@ -1149,15 +1173,20 @@ export const recoverySliceOf: _Curry<
     outputs: filter((o: ModuleOutput) => eq(o.path, path), state.ctx.outputs),
   },
   errors: [] as { end: number; kind: string; message: string; start: number }[],
-}));
+});
 /**
- * mergeRecoveryStates : RecoveryGraphState -> RecoveryGraphState -> RecoveryGraphState
- * `b`'s modules after `a`'s. Slices hold disjoint paths, so no entry is lost.
+ * recoverySliceOf : RecoveryGraphState -> string -> RecoveryGraphState
+ * The entries `path` published into `state`, and no errors: the host keeps
+ * each module's errors itself, as the suffix `recoverModuleWith` appended.
  */
-export const mergeRecoveryStates: _Curry<
-  [a: RecoveryGraphState, b: RecoveryGraphState],
+export const recoverySliceOf: _Curry<
+  [state: RecoveryGraphState, path: string],
   RecoveryGraphState
-> = _curry(2, (a: RecoveryGraphState, b: RecoveryGraphState) => ({
+> = _curry(2, recoverySliceOf$);
+const mergeRecoveryStates$ = (
+  a: RecoveryGraphState,
+  b: RecoveryGraphState,
+): RecoveryGraphState => ({
   ctx: {
     exportsByPath: mergeMap(b.ctx.exportsByPath, a.ctx.exportsByPath),
     regByPath: mergeMap(b.ctx.regByPath, a.ctx.regByPath),
@@ -1166,18 +1195,27 @@ export const mergeRecoveryStates: _Curry<
     outputs: _Array_concat(a.ctx.outputs, b.ctx.outputs),
   },
   errors: _Array_concat(a.errors, b.errors),
-}));
+});
+/**
+ * mergeRecoveryStates : RecoveryGraphState -> RecoveryGraphState -> RecoveryGraphState
+ * `b`'s modules after `a`'s. Slices hold disjoint paths, so no entry is lost.
+ */
+export const mergeRecoveryStates: _Curry<
+  [a: RecoveryGraphState, b: RecoveryGraphState],
+  RecoveryGraphState
+> = _curry(2, mergeRecoveryStates$);
+const compileGraphRecoveringWith$ = (graph: Loaded[], opts: Opts): GraphRecovery => {
+  const state: RecoveryGraphState = recoverGraphFromWith(freshRecoveryGraphState(), graph, opts);
+  return { outputs: state.ctx.outputs, errors: state.errors };
+};
 /**
  * Recovery graph driver: keeps checking after failures and gives downstream
  * imports a polymorphic placeholder rather than an unbound-name cascade.
  */
 export const compileGraphRecoveringWith: _Curry<[graph: Loaded[], opts: Opts], GraphRecovery> =
-  _curry(2, (graph: Loaded[], opts: Opts) => {
-    const state: RecoveryGraphState = recoverGraphFromWith(freshRecoveryGraphState(), graph, opts);
-    return { outputs: state.ctx.outputs, errors: state.errors };
-  });
+  _curry(2, compileGraphRecoveringWith$);
 export const compileGraphRecovering: (graph: Loaded[]) => GraphRecovery = (graph: Loaded[]) =>
-  compileGraphRecoveringWith(graph, defaultOpts);
+  compileGraphRecoveringWith$(graph, defaultOpts);
 const inferOne: <A, B>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
@@ -1750,6 +1788,17 @@ export const inferGraphTypes: <A>(
   MErr
 > = <A>(graph: ({ stmts: Stmt[]; path: string; src: string } & A)[]) =>
   inferGraphTypesWith(graph, defaultOpts);
+const buildModulesWith$ = (entry: string, opts: Opts): Result<ModuleOutput[], MErr[]> =>
+  _Result_match(
+    loadGraphWith$(entry, opts.plugins),
+    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
+    (graph) => {
+      const recovered: GraphRecovery = compileGraphRecoveringWith$(graph, opts);
+      return length(recovered.errors) === 0
+        ? compileGraphWith$(graph, opts)
+        : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
+    },
+  );
 /**
  * buildModules : string -> Result [ModuleOutput] [MErr]
  * Resolve the graph, collect every recoverable module diagnostic, then emit.
@@ -1759,20 +1808,9 @@ export const inferGraphTypes: <A>(
 export const buildModulesWith: _Curry<
   [entry: string, opts: Opts],
   Result<ModuleOutput[], MErr[]>
-> = _curry(2, (entry: string, opts: Opts) =>
-  _Result_match(
-    loadGraphWith(entry, opts.plugins),
-    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
-    (graph) => {
-      const recovered: GraphRecovery = compileGraphRecoveringWith(graph, opts);
-      return length(recovered.errors) === 0
-        ? compileGraphWith(graph, opts)
-        : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
-    },
-  ),
-);
+> = _curry(2, buildModulesWith$);
 export const buildModules: (entry: string) => Result<ModuleOutput[], MErr[]> = (entry: string) =>
-  buildModulesWith(entry, defaultOpts);
+  buildModulesWith$(entry, defaultOpts);
 import { relSpec as $relSpec } from "./host.mjs";
 const relSpec = _curry(2, $relSpec);
 import { externDtsPath as $externDtsPath } from "./host.mjs";
@@ -1793,48 +1831,49 @@ const endsAtBoundary: (part: string) => boolean = (part: string) =>
     : !isIdentChar(_Option_unwrapOr("", _Str_get(_Str_length(part) - 1, part)));
 const startsAtBoundary: (part: string) => boolean = (part: string) =>
   _Str_length(part) === 0 ? true : !isIdentChar(_Option_unwrapOr("", _Str_get(0, part)));
+const occursAsWordFrom$ = (parts: string[], i: number): boolean =>
+  _Option_match(
+    _Array_get(i, parts),
+    () => false,
+    (after) =>
+      and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
+        ? true
+        : occursAsWordFrom$(parts, i + 1),
+  );
 const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
   2,
-  (parts: string[], i: number) =>
-    _Option_match(
-      _Array_get(i, parts),
-      () => false,
-      (after) =>
-        and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
-          ? true
-          : occursAsWordFrom(parts, i + 1),
-    ),
+  occursAsWordFrom$,
 );
-const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(
-  2,
-  (name: string, text: string) => occursAsWordFrom(_Str_split(name, text), 1),
-);
+const occursAsWord$ = (name: string, text: string): boolean =>
+  occursAsWordFrom$(_Str_split(name, text), 1);
+const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(2, occursAsWord$);
 const importedBinding: (spec: string) => string = (spec: string) => {
   const parts: string[] = _Str_split(" as ", spec);
   return _Str_trim(_Option_unwrapOr(spec, _Array_get(length(parts) - 1, parts)));
 };
+const bindingsInLine$ = (line: string, acc: Set<string>): Set<string> =>
+  _Option_match(
+    _Array_get(1, _Str_split("{", line)),
+    () => acc,
+    (rest) =>
+      _Option_match(
+        _Array_get(0, _Str_split("}", rest)),
+        () => acc,
+        (names) =>
+          reduce(
+            _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
+            acc,
+            _Str_split(",", names),
+          ),
+      ),
+  );
 const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
   2,
-  (line: string, acc: Set<string>) =>
-    _Option_match(
-      _Array_get(1, _Str_split("{", line)),
-      () => acc,
-      (rest) =>
-        _Option_match(
-          _Array_get(0, _Str_split("}", rest)),
-          () => acc,
-          (names) =>
-            reduce(
-              _curry(2, (a: Set<string>, n: string) => _Set_add(importedBinding(n), a)),
-              acc,
-              _Str_split(",", names),
-            ),
-        ),
-    ),
+  bindingsInLine$,
 );
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
-    _curry(2, (acc: Set<string>, line: string) => bindingsInLine(line, acc)),
+    _curry(2, (acc: Set<string>, line: string) => bindingsInLine$(line, acc)),
     _Set_fromArray([] as string[]),
     filter(_Str_startsWith("import {"), _Str_split("\n", ts)),
   );
@@ -2005,7 +2044,7 @@ const groupByOwner: <A>(
             or(eq(owner, ctx.importer), _Set_has(name, ctx.localTypes)),
             _Set_has(name, ctx.bound),
           ),
-          !occursAsWord(name, ctx.ts),
+          !occursAsWord$(name, ctx.ts),
         )
           ? acc
           : ((spec: string) =>
@@ -2017,6 +2056,25 @@ const groupByOwner: <A>(
       names,
     ),
 );
+const crossModuleTypeImports$ = (
+  ts: string,
+  importer: string,
+  localTypes: Set<string>,
+  typeOwner: Map<string, string>,
+): string[] => {
+  const byOwner: Map<string, string[]> = groupByOwner(_Map_keys(typeOwner), {
+    ts: ts,
+    importer: importer,
+    localTypes: localTypes,
+    typeOwner: typeOwner,
+    bound: valueImported(ts),
+  });
+  return map(
+    (spec: string) =>
+      `import type { ${_Str_join(", ", _Array_sort(_Map_getOr([] as string[], spec, byOwner)))} } from "${spec}";`,
+    _Map_keys(byOwner),
+  );
+};
 /**
  * `import type { … }` lines for every non-local type name the EMITTED text
  * references, grouped by declaring module. Builtin variants never appear in
@@ -2025,23 +2083,7 @@ const groupByOwner: <A>(
 const crossModuleTypeImports: _Curry<
   [ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>],
   string[]
-> = _curry(
-  4,
-  (ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>) => {
-    const byOwner: Map<string, string[]> = groupByOwner(_Map_keys(typeOwner), {
-      ts: ts,
-      importer: importer,
-      localTypes: localTypes,
-      typeOwner: typeOwner,
-      bound: valueImported(ts),
-    });
-    return map(
-      (spec: string) =>
-        `import type { ${_Str_join(", ", _Array_sort(_Map_getOr([] as string[], spec, byOwner)))} } from "${spec}";`,
-      _Map_keys(byOwner),
-    );
-  },
-);
+> = _curry(4, crossModuleTypeImports$);
 const externBindingsInto: <A>(
   stmts: Stmt[],
   path: string,
@@ -2237,7 +2279,7 @@ const compileOneTs: <A, B>(
                   opts.docs,
                   bindingHooksFor(opts.plugins),
                 );
-                const lines: string[] = crossModuleTypeImports(
+                const lines: string[] = crossModuleTypeImports$(
                   body,
                   loaded.path,
                   localTypeNames(loaded.stmts),
@@ -2615,14 +2657,11 @@ const dtsAll: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-/**
- * emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
- * file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
- */
-export const emitDtsForFileWith: _Curry<
-  [entry: string, runtimeImport: string, opts: Opts],
-  Result<string, MErr>
-> = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
+const emitDtsForFileWith$ = (
+  entry: string,
+  runtimeImport: string,
+  opts: Opts,
+): Result<string, MErr> =>
   _Result_flatMap(
     (graph) =>
       dtsAll(
@@ -2639,15 +2678,40 @@ export const emitDtsForFileWith: _Curry<
         graph,
         opts,
       ),
-    loadGraphWith(entry, opts.plugins),
-  ),
-);
+    loadGraphWith$(entry, opts.plugins),
+  );
+/**
+ * emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
+ * file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
+ */
+export const emitDtsForFileWith: _Curry<
+  [entry: string, runtimeImport: string, opts: Opts],
+  Result<string, MErr>
+> = _curry(3, emitDtsForFileWith$);
+const emitDtsForFile$ = (entry: string, runtimeImport: string): Result<string, MErr> =>
+  emitDtsForFileWith$(entry, runtimeImport, defaultOpts);
 export const emitDtsForFile: _Curry<
   [entry: string, runtimeImport: string],
   Result<string, MErr>
-> = _curry(2, (entry: string, runtimeImport: string) =>
-  emitDtsForFileWith(entry, runtimeImport, defaultOpts),
-);
+> = _curry(2, emitDtsForFile$);
+const buildModulesTsWith$ = (
+  entry: string,
+  runtimeImport: string,
+  opts: Opts,
+): Result<ModuleOutput[], MErr[]> =>
+  _Result_match(
+    loadGraphWith$(entry, opts.plugins),
+    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
+    (graph) => {
+      const recovered: GraphRecovery = compileGraphRecoveringWith$(graph, {
+        ...opts,
+        strictEntry: false,
+      });
+      return length(recovered.errors) === 0
+        ? _Result_mapErr((e: MErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
+        : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
+    },
+  );
 /**
  * buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
  * Typed graph emit shares the recovery preflight with JS graph emit, so both
@@ -2656,24 +2720,10 @@ export const emitDtsForFile: _Curry<
 export const buildModulesTsWith: _Curry<
   [entry: string, runtimeImport: string, opts: Opts],
   Result<ModuleOutput[], MErr[]>
-> = _curry(3, (entry: string, runtimeImport: string, opts: Opts) =>
-  _Result_match(
-    loadGraphWith(entry, opts.plugins),
-    (e) => Err([e]) as Result<ModuleOutput[], MErr[]>,
-    (graph) => {
-      const recovered: GraphRecovery = compileGraphRecoveringWith(graph, {
-        ...opts,
-        strictEntry: false,
-      });
-      return length(recovered.errors) === 0
-        ? _Result_mapErr((e: MErr) => [e], compileGraphTsWith(graph, runtimeImport, opts))
-        : (Err(recovered.errors) as Result<ModuleOutput[], MErr[]>);
-    },
-  ),
-);
+> = _curry(3, buildModulesTsWith$);
+const buildModulesTs$ = (entry: string, runtimeImport: string): Result<ModuleOutput[], MErr[]> =>
+  buildModulesTsWith$(entry, runtimeImport, defaultOpts);
 export const buildModulesTs: _Curry<
   [entry: string, runtimeImport: string],
   Result<ModuleOutput[], MErr[]>
-> = _curry(2, (entry: string, runtimeImport: string) =>
-  buildModulesTsWith(entry, runtimeImport, defaultOpts),
-);
+> = _curry(2, buildModulesTs$);

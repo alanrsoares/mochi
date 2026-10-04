@@ -439,6 +439,29 @@ test("a generic binding keeps its letters on the value lambda", () =>
       |> Str.contains("const identity: <A>(value: A) => A")
   ))
 
+test("a monomorphic raw twin annotates its return type (ADR 0149)", () =>
+  assertEq(
+    true,
+    tsOf("let go = (n, acc) => n == 0 ? acc : go(n - 1, acc * n)")
+      |> Str.contains("const go$ = (n: number, acc: number): number =>")
+  ))
+
+test("a saturated call takes the raw twin in typed emit (ADR 0149)", () =>
+  assertEq(
+    true,
+    tsOf(
+      "let go = (n, acc) => n == 0 ? acc : go(n - 1, acc * n)\nlet r = go(3, 1)"
+    )
+      |> Str.contains("const r = go$(3, 1);")
+  ))
+
+test("a generic binding keeps no raw twin in typed emit (ADR 0149)", () =>
+  assertEq(
+    false,
+    tsOf("let pair = (a, b) => (a, b)\nlet r = pair(1, 2)")
+      |> Str.contains("pair$")
+  ))
+
 test("a tuple emits through the _tuple helper (ADR 0036)", () =>
   assertEq(true, tsOf("let pt = (1, 2)") |> Str.contains("_tuple(1, 2)")))
 

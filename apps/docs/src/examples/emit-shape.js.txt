@@ -16,6 +16,7 @@ const area = (shape) => {
     }
   }
 };
-const widen = _curry(2, (k, box) => ({ ...box, w: mul(box.w, k) }));
+const widen$ = (k, box) => ({ ...box, w: mul(box.w, k) });
+const widen = _curry(2, widen$);
 const circleArea = area(Circle(2));
-const wider = widen(3, { w: 2, label: "box" });
+const wider = widen$(3, { w: 2, label: "box" });

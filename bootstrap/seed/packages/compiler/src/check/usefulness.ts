@@ -264,7 +264,7 @@ const headsOf: (col: MP[]) => MHead[] = (col: MP[]) =>
 const addLabel: <A>(acc: A[], l: A) => A[] = _curry(2, <A>(acc: A[], l: A) =>
   _Array_contains(l, acc) ? acc : _Array_append(l, acc),
 );
-const labelsOfMP: _Curry<[acc: string[], mp: MP], string[]> = _curry(2, (acc: string[], mp: MP) => {
+const labelsOfMP$ = (acc: string[], mp: MP): string[] => {
   const $match = mp;
   switch ($match._tag) {
     case "MRecord": {
@@ -275,7 +275,8 @@ const labelsOfMP: _Curry<[acc: string[], mp: MP], string[]> = _curry(2, (acc: st
       return acc;
     }
   }
-});
+};
+const labelsOfMP: _Curry<[acc: string[], mp: MP], string[]> = _curry(2, labelsOfMP$);
 const recordLabelsOf: (col: MP[]) => string[] = (col: MP[]) =>
   reduce(labelsOfMP, [] as string[], col);
 const indexOfLabel: <A>(l: A, labels: A[], i: number) => number = _curry(
@@ -295,34 +296,32 @@ const fieldOf: <A>(l: A, labels: A[], pats: MP[]) => MP = _curry(
   },
 );
 
-const arrShapeStep: _Curry<[acc: ArrShape, mp: MP], ArrShape> = _curry(
-  2,
-  (acc: ArrShape, mp: MP) => {
-    const $match = mp;
-    switch ($match._tag) {
-      case "MArr": {
-        const { elems, rest } = $match;
-        const n: number = length(elems);
-        return rest
-          ? {
-              fixed: acc.fixed,
-              restFrom: _Option_match(
-                acc.restFrom,
-                () => Some(n) as Option<number>,
-                (m) => Some(m < n ? m : n) as Option<number>,
-              ),
-            }
-          : {
-              fixed: _Array_contains(n, acc.fixed) ? acc.fixed : _Array_append(n, acc.fixed),
-              restFrom: acc.restFrom,
-            };
-      }
-      default: {
-        return acc;
-      }
+const arrShapeStep$ = (acc: ArrShape, mp: MP): ArrShape => {
+  const $match = mp;
+  switch ($match._tag) {
+    case "MArr": {
+      const { elems, rest } = $match;
+      const n: number = length(elems);
+      return rest
+        ? {
+            fixed: acc.fixed,
+            restFrom: _Option_match(
+              acc.restFrom,
+              () => Some(n) as Option<number>,
+              (m) => Some(m < n ? m : n) as Option<number>,
+            ),
+          }
+        : {
+            fixed: _Array_contains(n, acc.fixed) ? acc.fixed : _Array_append(n, acc.fixed),
+            restFrom: acc.restFrom,
+          };
     }
-  },
-);
+    default: {
+      return acc;
+    }
+  }
+};
+const arrShapeStep: _Curry<[acc: ArrShape, mp: MP], ArrShape> = _curry(2, arrShapeStep$);
 const arrShapeOf: (col: MP[]) => ArrShape = (col: MP[]) =>
   reduce(arrShapeStep, { fixed: [] as number[], restFrom: None as Option<number> }, col);
 const rangeCovered: <A>(shape: { fixed: number[] } & A, i: number, n: number) => boolean = _curry(
@@ -353,9 +352,9 @@ const arrMissingLen: <A>(
     ? n
     : arrMissingLen(shape, n + 1),
 );
-const rangeArr: _Curry<[i: number, top: number], number[]> = _curry(2, (i: number, top: number) =>
-  i > top ? ([] as number[]) : _Array_prepend(i, rangeArr(i + 1, top)),
-);
+const rangeArr$ = (i: number, top: number): number[] =>
+  i > top ? ([] as number[]) : _Array_prepend(i, rangeArr$(i + 1, top));
+const rangeArr: _Curry<[i: number, top: number], number[]> = _curry(2, rangeArr$);
 const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => number[] = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
 ) => {
@@ -364,136 +363,138 @@ const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) 
     _Option_unwrapOr(0, shape.restFrom),
     shape.fixed,
   );
-  return rangeArr(0, top);
+  return rangeArr$(0, top);
+};
+const specializeRow$ = (h: MHead, mp: MP, labels: string[]): Option<MP[]> => {
+  const $match = h;
+  switch ($match._tag) {
+    case "HCtor": {
+      const { name } = $match;
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MCtor": {
+          const { name: n, args } = $match$;
+          return eq(n, name) ? (Some(args) as Option<MP[]>) : (None as Option<MP[]>);
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    case "HBool": {
+      const { value: v } = $match;
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MBool": {
+          const { value: b } = $match$;
+          return eq(b, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>);
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    case "HNum": {
+      const { value: v } = $match;
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MNum": {
+          const { value: x } = $match$;
+          return eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>);
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    case "HStr": {
+      const { value: v } = $match;
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MStr": {
+          const { value: x } = $match$;
+          return eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>);
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    case "HTuple": {
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MTuple": {
+          const { elems } = $match$;
+          return Some(elems) as Option<MP[]>;
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    case "HRecord": {
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MRecord": {
+          const { labels: ls, pats: ps } = $match$;
+          return Some(map((l: string) => fieldOf(l, ls, ps), labels)) as Option<MP[]>;
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    case "HArr": {
+      const { len } = $match;
+      const $match$ = mp;
+      switch ($match$._tag) {
+        case "MArr": {
+          const { elems, rest } = $match$;
+          const k: number = length(elems);
+          return rest
+            ? k <= len
+              ? (Some(_Array_concat(elems, mWilds(sub(len, k)))) as Option<MP[]>)
+              : (None as Option<MP[]>)
+            : eq(k, len)
+              ? (Some(elems) as Option<MP[]>)
+              : (None as Option<MP[]>);
+        }
+        default: {
+          return None as Option<MP[]>;
+        }
+      }
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
 };
 const specializeRow: _Curry<[h: MHead, mp: MP, labels: string[]], Option<MP[]>> = _curry(
   3,
-  (h: MHead, mp: MP, labels: string[]) => {
-    const $match = h;
-    switch ($match._tag) {
-      case "HCtor": {
-        const { name } = $match;
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MCtor": {
-            const { name: n, args } = $match$;
-            return eq(n, name) ? (Some(args) as Option<MP[]>) : (None as Option<MP[]>);
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      case "HBool": {
-        const { value: v } = $match;
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MBool": {
-            const { value: b } = $match$;
-            return eq(b, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>);
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      case "HNum": {
-        const { value: v } = $match;
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MNum": {
-            const { value: x } = $match$;
-            return eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>);
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      case "HStr": {
-        const { value: v } = $match;
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MStr": {
-            const { value: x } = $match$;
-            return eq(x, v) ? (Some([] as MP[]) as Option<MP[]>) : (None as Option<MP[]>);
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      case "HTuple": {
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MTuple": {
-            const { elems } = $match$;
-            return Some(elems) as Option<MP[]>;
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      case "HRecord": {
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MRecord": {
-            const { labels: ls, pats: ps } = $match$;
-            return Some(map((l: string) => fieldOf(l, ls, ps), labels)) as Option<MP[]>;
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      case "HArr": {
-        const { len } = $match;
-        const $match$ = mp;
-        switch ($match$._tag) {
-          case "MArr": {
-            const { elems, rest } = $match$;
-            const k: number = length(elems);
-            return rest
-              ? k <= len
-                ? (Some(_Array_concat(elems, mWilds(sub(len, k)))) as Option<MP[]>)
-                : (None as Option<MP[]>)
-              : eq(k, len)
-                ? (Some(elems) as Option<MP[]>)
-                : (None as Option<MP[]>);
-          }
-          default: {
-            return None as Option<MP[]>;
-          }
-        }
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  specializeRow$,
 );
-const specializeOne: _Curry<[h: MHead, arity: number, labels: string[], row: MP[]], MP[][]> =
-  _curry(4, (h: MHead, arity: number, labels: string[], row: MP[]) =>
-    _Option_match(
-      _Array_head(row),
-      () => [] as MP[][],
-      (hd) => {
-        const rest: MP[] = _Array_tail(row);
-        return isWildMP(hd)
-          ? [_Array_concat(mWilds(arity), rest)]
-          : _Option_match(
-              specializeRow(h, hd, labels),
-              () => [] as MP[][],
-              (sub) => [_Array_concat(sub, rest)],
-            );
-      },
-    ),
+const specializeOne$ = (h: MHead, arity: number, labels: string[], row: MP[]): MP[][] =>
+  _Option_match(
+    _Array_head(row),
+    () => [] as MP[][],
+    (hd) => {
+      const rest: MP[] = _Array_tail(row);
+      return isWildMP(hd)
+        ? [_Array_concat(mWilds(arity), rest)]
+        : _Option_match(
+            specializeRow$(h, hd, labels),
+            () => [] as MP[][],
+            (sub) => [_Array_concat(sub, rest)],
+          );
+    },
   );
+const specializeOne: _Curry<[h: MHead, arity: number, labels: string[], row: MP[]], MP[][]> =
+  _curry(4, specializeOne$);
+const specializeM$ = (m: MP[][], h: MHead, arity: number, labels: string[]): MP[][] =>
+  _Array_flatMap((row: MP[]) => specializeOne$(h, arity, labels, row), m);
 const specializeM: _Curry<[m: MP[][], h: MHead, arity: number, labels: string[]], MP[][]> = _curry(
   4,
-  (m: MP[][], h: MHead, arity: number, labels: string[]) =>
-    _Array_flatMap((row: MP[]) => specializeOne(h, arity, labels, row), m),
+  specializeM$,
 );
 const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
   _Array_flatMap(
@@ -505,42 +506,40 @@ const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
       ),
     m,
   );
-const rebuild: _Curry<[h: MHead, args: MP[], labels: string[]], MP> = _curry(
-  3,
-  (h: MHead, args: MP[], labels: string[]) => {
-    const $match = h;
-    switch ($match._tag) {
-      case "HCtor": {
-        const { name } = $match;
-        return MCtor(name, args);
-      }
-      case "HTuple": {
-        return MTuple(args);
-      }
-      case "HRecord": {
-        return MRecord(labels, args);
-      }
-      case "HArr": {
-        return MArr(args, false);
-      }
-      case "HBool": {
-        const { value: v } = $match;
-        return MBool(v);
-      }
-      case "HNum": {
-        const { value: v } = $match;
-        return MNum(v);
-      }
-      case "HStr": {
-        const { value: v } = $match;
-        return MStr(v);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
+const rebuild$ = (h: MHead, args: MP[], labels: string[]): MP => {
+  const $match = h;
+  switch ($match._tag) {
+    case "HCtor": {
+      const { name } = $match;
+      return MCtor(name, args);
     }
-  },
-);
+    case "HTuple": {
+      return MTuple(args);
+    }
+    case "HRecord": {
+      return MRecord(labels, args);
+    }
+    case "HArr": {
+      return MArr(args, false);
+    }
+    case "HBool": {
+      const { value: v } = $match;
+      return MBool(v);
+    }
+    case "HNum": {
+      const { value: v } = $match;
+      return MNum(v);
+    }
+    case "HStr": {
+      const { value: v } = $match;
+      return MStr(v);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const rebuild: _Curry<[h: MHead, args: MP[], labels: string[]], MP> = _curry(3, rebuild$);
 const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -554,10 +553,9 @@ const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
       }
     }
   }, heads);
-const freshNum: _Curry<[taken: number[], i: number], number> = _curry(
-  2,
-  (taken: number[], i: number) => (_Array_contains(i, taken) ? freshNum(taken, i + 1) : i),
-);
+const freshNum$ = (taken: number[], i: number): number =>
+  _Array_contains(i, taken) ? freshNum$(taken, i + 1) : i;
+const freshNum: _Curry<[taken: number[], i: number], number> = _curry(2, freshNum$);
 const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -573,13 +571,11 @@ const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   }, heads);
 const starsOf: (n: number) => string = (n: number) =>
   n <= 0 ? "" : _Str_concat("*", starsOf(sub(n, 1)));
-const freshStr: _Curry<[taken: string[], i: number], string> = _curry(
-  2,
-  (taken: string[], i: number) => {
-    const s: string = starsOf(i);
-    return _Array_contains(s, taken) ? freshStr(taken, i + 1) : s;
-  },
-);
+const freshStr$ = (taken: string[], i: number): string => {
+  const s: string = starsOf(i);
+  return _Array_contains(s, taken) ? freshStr$(taken, i + 1) : s;
+};
+const freshStr: _Curry<[taken: string[], i: number], string> = _curry(2, freshStr$);
 const ctorNames: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -606,47 +602,43 @@ const boolVals: (heads: MHead[]) => boolean[] = (heads: MHead[]) =>
       }
     }
   }, heads);
-const ctorInfoSuffixed: _Curry<
-  [keys: string[], reg: Registry, n: string],
-  Option<CtorInfo>
-> = _curry(3, (keys: string[], reg: Registry, n: string) =>
+const ctorInfoSuffixed$ = (keys: string[], reg: Registry, n: string): Option<CtorInfo> =>
   ((_v) =>
     _v.length === 0
       ? (None as Option<CtorInfo>)
       : _v.length >= 1
         ? (([k, ...rest]) =>
-            _Str_endsWith(`.${n}`, k) ? _Map_get(k, reg.ctors) : ctorInfoSuffixed(rest, reg, n))(_v)
+            _Str_endsWith(`.${n}`, k) ? _Map_get(k, reg.ctors) : ctorInfoSuffixed$(rest, reg, n))(
+            _v,
+          )
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(keys),
-);
-const ctorInfoOf: _Curry<[reg: Registry, n: string], Option<CtorInfo>> = _curry(
-  2,
-  (reg: Registry, n: string) =>
-    _Option_match(
-      _Map_get(n, reg.ctors),
-      () => ctorInfoSuffixed(_Map_keys(reg.ctors), reg, n),
-      (info) => Some(info) as Option<CtorInfo>,
-    ),
-);
-const arityOfCtor: _Curry<[reg: Registry, n: string], number> = _curry(
-  2,
-  (reg: Registry, n: string) =>
-    _Option_match(
-      ctorInfoOf(reg, n),
-      () => 0,
-      (info) => info.arity,
-    ),
-);
-const ownerOfCtor: _Curry<[reg: Registry, n: string], Option<string>> = _curry(
-  2,
-  (reg: Registry, n: string) =>
-    _Option_match(
-      ctorInfoOf(reg, n),
-      () => None as Option<string>,
-      (info) => Some(info.owner) as Option<string>,
-    ),
-);
+          })())(keys);
+const ctorInfoSuffixed: _Curry<
+  [keys: string[], reg: Registry, n: string],
+  Option<CtorInfo>
+> = _curry(3, ctorInfoSuffixed$);
+const ctorInfoOf$ = (reg: Registry, n: string): Option<CtorInfo> =>
+  _Option_match(
+    _Map_get(n, reg.ctors),
+    () => ctorInfoSuffixed$(_Map_keys(reg.ctors), reg, n),
+    (info) => Some(info) as Option<CtorInfo>,
+  );
+const ctorInfoOf: _Curry<[reg: Registry, n: string], Option<CtorInfo>> = _curry(2, ctorInfoOf$);
+const arityOfCtor$ = (reg: Registry, n: string): number =>
+  _Option_match(
+    ctorInfoOf$(reg, n),
+    () => 0,
+    (info) => info.arity,
+  );
+const arityOfCtor: _Curry<[reg: Registry, n: string], number> = _curry(2, arityOfCtor$);
+const ownerOfCtor$ = (reg: Registry, n: string): Option<string> =>
+  _Option_match(
+    ctorInfoOf$(reg, n),
+    () => None as Option<string>,
+    (info) => Some(info.owner) as Option<string>,
+  );
+const ownerOfCtor: _Curry<[reg: Registry, n: string], Option<string>> = _curry(2, ownerOfCtor$);
 const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[], names: A[]) =>
   reduce(
     _curry(2, (acc: boolean, n: A) => and(acc, _Array_contains(n, names))),
@@ -654,32 +646,34 @@ const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[],
     all,
   ),
 );
+const useful$ = (m: MP[][], width: number, reg: Registry, fuel: number): URes =>
+  fuel <= 0
+    ? (UFuel as URes)
+    : width === 0
+      ? length(m) === 0
+        ? USome([] as MP[], sub(fuel, 1))
+        : UNone(sub(fuel, 1))
+      : length(m) === 0
+        ? USome(mWilds(width), sub(fuel, 1))
+        : usefulSplit$(m, width, reg, sub(fuel, 1));
 const useful: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], URes> = _curry(
   4,
-  (m: MP[][], width: number, reg: Registry, fuel: number) =>
-    fuel <= 0
-      ? (UFuel as URes)
-      : width === 0
-        ? length(m) === 0
-          ? USome([] as MP[], sub(fuel, 1))
-          : UNone(sub(fuel, 1))
-        : length(m) === 0
-          ? USome(mWilds(width), sub(fuel, 1))
-          : usefulSplit(m, width, reg, sub(fuel, 1)),
+  useful$,
 );
+const usefulSplit$ = (m: MP[][], width: number, reg: Registry, fuel: number): URes => {
+  const col: MP[] = colOf(m);
+  const heads: MHead[] = headsOf(col);
+  return _Option_match(
+    _Array_head(heads),
+    () => prependWitness$(MWild as MP, useful$(defaultM(m), sub(width, 1), reg, fuel)),
+    (h0) => usefulHead$(m, col, heads, h0, width, reg, fuel),
+  );
+};
 const usefulSplit: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], URes> = _curry(
   4,
-  (m: MP[][], width: number, reg: Registry, fuel: number) => {
-    const col: MP[] = colOf(m);
-    const heads: MHead[] = headsOf(col);
-    return _Option_match(
-      _Array_head(heads),
-      () => prependWitness(MWild as MP, useful(defaultM(m), sub(width, 1), reg, fuel)),
-      (h0) => usefulHead(m, col, heads, h0, width, reg, fuel),
-    );
-  },
+  usefulSplit$,
 );
-const prependWitness: _Curry<[mp: MP, r: URes], URes> = _curry(2, (mp: MP, r: URes) => {
+const prependWitness$ = (mp: MP, r: URes): URes => {
   const $match = r;
   switch ($match._tag) {
     case "UFuel": {
@@ -697,7 +691,45 @@ const prependWitness: _Curry<[mp: MP, r: URes], URes> = _curry(2, (mp: MP, r: UR
       throw new Error("non-exhaustive match");
     }
   }
-});
+};
+const prependWitness: _Curry<[mp: MP, r: URes], URes> = _curry(2, prependWitness$);
+const tryHeads$ = (
+  m: MP[][],
+  heads: MHead[],
+  arities: number[],
+  labels: string[],
+  width: number,
+  reg: Registry,
+  fuel: number,
+  i: number,
+): URes =>
+  _Option_match(
+    _Array_get(i, heads),
+    () => UNone(fuel),
+    (h) => {
+      const arity: number = _Option_unwrapOr(0, _Array_get(i, arities));
+      const $match = useful$(specializeM$(m, h, arity, labels), sub(arity + width, 1), reg, fuel);
+      switch ($match._tag) {
+        case "UFuel": {
+          return UFuel as URes;
+        }
+        case "UNone": {
+          const { fuel: f2 } = $match;
+          return tryHeads$(m, heads, arities, labels, width, reg, f2, i + 1);
+        }
+        case "USome": {
+          const { row, fuel: f2 } = $match;
+          return USome(
+            _Array_prepend(rebuild$(h, _Array_take(arity, row), labels), _Array_drop(arity, row)),
+            f2,
+          );
+        }
+        default: {
+          throw new Error("non-exhaustive match");
+        }
+      }
+    },
+  );
 const tryHeads: _Curry<
   [
     m: MP[][],
@@ -710,98 +742,68 @@ const tryHeads: _Curry<
     i: number,
   ],
   URes
-> = _curry(
-  8,
-  (
-    m: MP[][],
-    heads: MHead[],
-    arities: number[],
-    labels: string[],
-    width: number,
-    reg: Registry,
-    fuel: number,
-    i: number,
-  ) =>
-    _Option_match(
-      _Array_get(i, heads),
-      () => UNone(fuel),
-      (h) => {
-        const arity: number = _Option_unwrapOr(0, _Array_get(i, arities));
-        const $match = useful(specializeM(m, h, arity, labels), sub(arity + width, 1), reg, fuel);
-        switch ($match._tag) {
-          case "UFuel": {
-            return UFuel as URes;
-          }
-          case "UNone": {
-            const { fuel: f2 } = $match;
-            return tryHeads(m, heads, arities, labels, width, reg, f2, i + 1);
-          }
-          case "USome": {
-            const { row, fuel: f2 } = $match;
-            return USome(
-              _Array_prepend(rebuild(h, _Array_take(arity, row), labels), _Array_drop(arity, row)),
-              f2,
-            );
-          }
-          default: {
-            throw new Error("non-exhaustive match");
-          }
-        }
-      },
-    ),
-);
+> = _curry(8, tryHeads$);
+const usefulHead$ = (
+  m: MP[][],
+  col: MP[],
+  heads: MHead[],
+  h0: MHead,
+  width: number,
+  reg: Registry,
+  fuel: number,
+): URes => {
+  const $match = h0;
+  switch ($match._tag) {
+    case "HTuple": {
+      const { arity } = $match;
+      return tryHeads$(m, [HTuple(arity)], [arity], [] as string[], width, reg, fuel, 0);
+    }
+    case "HRecord": {
+      const labels: string[] = recordLabelsOf(col);
+      return tryHeads$(m, [HRecord as MHead], [length(labels)], labels, width, reg, fuel, 0);
+    }
+    case "HCtor": {
+      return usefulCtor$(m, heads, width, reg, fuel);
+    }
+    case "HBool": {
+      return usefulBool$(m, heads, width, reg, fuel);
+    }
+    case "HArr": {
+      return usefulArr$(m, col, width, reg, fuel);
+    }
+    case "HNum": {
+      return prependWitness$(
+        MNum(freshNum$(takenNums(heads), 0)),
+        useful$(defaultM(m), sub(width, 1), reg, fuel),
+      );
+    }
+    case "HStr": {
+      return prependWitness$(
+        MStr(freshStr$(takenStrs(heads), 0)),
+        useful$(defaultM(m), sub(width, 1), reg, fuel),
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const usefulHead: _Curry<
   [m: MP[][], col: MP[], heads: MHead[], h0: MHead, width: number, reg: Registry, fuel: number],
   URes
-> = _curry(
-  7,
-  (m: MP[][], col: MP[], heads: MHead[], h0: MHead, width: number, reg: Registry, fuel: number) => {
-    const $match = h0;
-    switch ($match._tag) {
-      case "HTuple": {
-        const { arity } = $match;
-        return tryHeads(m, [HTuple(arity)], [arity], [] as string[], width, reg, fuel, 0);
-      }
-      case "HRecord": {
-        const labels: string[] = recordLabelsOf(col);
-        return tryHeads(m, [HRecord as MHead], [length(labels)], labels, width, reg, fuel, 0);
-      }
-      case "HCtor": {
-        return usefulCtor(m, heads, width, reg, fuel);
-      }
-      case "HBool": {
-        return usefulBool(m, heads, width, reg, fuel);
-      }
-      case "HArr": {
-        return usefulArr(m, col, width, reg, fuel);
-      }
-      case "HNum": {
-        return prependWitness(
-          MNum(freshNum(takenNums(heads), 0)),
-          useful(defaultM(m), sub(width, 1), reg, fuel),
-        );
-      }
-      case "HStr": {
-        return prependWitness(
-          MStr(freshStr(takenStrs(heads), 0)),
-          useful(defaultM(m), sub(width, 1), reg, fuel),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
-);
-const usefulCtor: _Curry<
-  [m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number],
-  URes
-> = _curry(5, (m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number) => {
+> = _curry(7, usefulHead$);
+const usefulCtor$ = (
+  m: MP[][],
+  heads: MHead[],
+  width: number,
+  reg: Registry,
+  fuel: number,
+): URes => {
   const names: string[] = ctorNames(heads);
   const ownerOpt: Option<string> = _Option_match(
     _Array_head(names),
     () => None as Option<string>,
-    (n) => ownerOfCtor(reg, n),
+    (n) => ownerOfCtor$(reg, n),
   );
   const all: string[] = _Option_match(
     ownerOpt,
@@ -809,67 +811,80 @@ const usefulCtor: _Curry<
     (o) => _Map_getOr([] as string[], o, reg.types),
   );
   return and(length(all) > 0, allNamesIn(all, names))
-    ? tryHeads(
+    ? tryHeads$(
         m,
         map((n: string) => HCtor(n), all),
-        map((n: string) => arityOfCtor(reg, n), all),
+        map((n: string) => arityOfCtor$(reg, n), all),
         [] as string[],
         width,
         reg,
         fuel,
         0,
       )
-    : prependWitness(
+    : prependWitness$(
         _Option_match(
           _Array_head(filter((n: string) => !_Array_contains(n, names), all)),
           () => MWild as MP,
-          (n) => MCtor(n, mWilds(arityOfCtor(reg, n))),
+          (n) => MCtor(n, mWilds(arityOfCtor$(reg, n))),
         ),
-        useful(defaultM(m), sub(width, 1), reg, fuel),
+        useful$(defaultM(m), sub(width, 1), reg, fuel),
       );
-});
-const usefulBool: _Curry<
+};
+const usefulCtor: _Curry<
   [m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number],
   URes
-> = _curry(5, (m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number) => {
+> = _curry(5, usefulCtor$);
+const usefulBool$ = (
+  m: MP[][],
+  heads: MHead[],
+  width: number,
+  reg: Registry,
+  fuel: number,
+): URes => {
   const vs: boolean[] = boolVals(heads);
   const hasTrue: boolean = _Array_contains(true, vs);
   return and(hasTrue, _Array_contains(false, vs))
-    ? tryHeads(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
-    : prependWitness(MBool(!hasTrue), useful(defaultM(m), sub(width, 1), reg, fuel));
-});
+    ? tryHeads$(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
+    : prependWitness$(MBool(!hasTrue), useful$(defaultM(m), sub(width, 1), reg, fuel));
+};
+const usefulBool: _Curry<
+  [m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number],
+  URes
+> = _curry(5, usefulBool$);
+const usefulArr$ = (m: MP[][], col: MP[], width: number, reg: Registry, fuel: number): URes => {
+  const shape: ArrShape = arrShapeOf(col);
+  return arrComplete(shape)
+    ? ((lens: number[]) =>
+        tryHeads$(
+          m,
+          map((n: number) => HArr(n), lens),
+          lens,
+          [] as string[],
+          width,
+          reg,
+          fuel,
+          0,
+        ))(arrLengths(shape))
+    : prependWitness$(
+        MArr(mWilds(arrMissingLen(shape, 0)), false),
+        useful$(defaultM(m), sub(width, 1), reg, fuel),
+      );
+};
 const usefulArr: _Curry<[m: MP[][], col: MP[], width: number, reg: Registry, fuel: number], URes> =
-  _curry(5, (m: MP[][], col: MP[], width: number, reg: Registry, fuel: number) => {
-    const shape: ArrShape = arrShapeOf(col);
-    return arrComplete(shape)
-      ? ((lens: number[]) =>
-          tryHeads(
-            m,
-            map((n: number) => HArr(n), lens),
-            lens,
-            [] as string[],
-            width,
-            reg,
-            fuel,
-            0,
-          ))(arrLengths(shape))
-      : prependWitness(
-          MArr(mWilds(arrMissingLen(shape, 0)), false),
-          useful(defaultM(m), sub(width, 1), reg, fuel),
-        );
-  });
+  _curry(5, usefulArr$);
+const showFields$ = (labels: string[], pats: MP[], i: number): string[] =>
+  _Option_match(
+    _Array_get(i, labels),
+    () => [] as string[],
+    (l) =>
+      _Array_prepend(
+        `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
+        showFields$(labels, pats, i + 1),
+      ),
+  );
 const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = _curry(
   3,
-  (labels: string[], pats: MP[], i: number) =>
-    _Option_match(
-      _Array_get(i, labels),
-      () => [] as string[],
-      (l) =>
-        _Array_prepend(
-          `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
-          showFields(labels, pats, i + 1),
-        ),
-    ),
+  showFields$,
 );
 /**
  * Render a witness the way the user would have to write it as an arm.
@@ -905,7 +920,7 @@ export const showWitness: (mp: MP) => string = (mp: MP) => {
     }
     case "MRecord": {
       const { labels, pats } = $match;
-      return `{ ${_Str_join(", ", showFields(labels, pats, 0))} }`;
+      return `{ ${_Str_join(", ", showFields$(labels, pats, 0))} }`;
     }
     case "MArr": {
       const { elems, rest } = $match;
@@ -943,30 +958,31 @@ export const isWideWitnessM: (mp: MP) => boolean = (mp: MP) => {
     }
   }
 };
+const checkExhaustiveM$ = (patterns: Pattern[], reg: Registry): ExhaustVerdict => {
+  const rows: MP[][] = _Array_flatMap(
+    (p: Pattern) => map((alt: Pattern) => [toMP(alt)], explodePat(p)),
+    patterns,
+  );
+  const $match = useful$(rows, 1, reg, 20000);
+  switch ($match._tag) {
+    case "UFuel": {
+      return ExFuel as ExhaustVerdict;
+    }
+    case "UNone": {
+      return ExOk as ExhaustVerdict;
+    }
+    case "USome": {
+      const { row } = $match;
+      return ExWitness(_Option_unwrapOr(MWild as MP, _Array_head(row)));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 /**
  * Is this set of (unguarded) arm patterns total? Guarded arms must not be
  * passed — a guard can be false, so such an arm proves nothing.
  */
 export const checkExhaustiveM: _Curry<[patterns: Pattern[], reg: Registry], ExhaustVerdict> =
-  _curry(2, (patterns: Pattern[], reg: Registry) => {
-    const rows: MP[][] = _Array_flatMap(
-      (p: Pattern) => map((alt: Pattern) => [toMP(alt)], explodePat(p)),
-      patterns,
-    );
-    const $match = useful(rows, 1, reg, 20000);
-    switch ($match._tag) {
-      case "UFuel": {
-        return ExFuel as ExhaustVerdict;
-      }
-      case "UNone": {
-        return ExOk as ExhaustVerdict;
-      }
-      case "USome": {
-        const { row } = $match;
-        return ExWitness(_Option_unwrapOr(MWild as MP, _Array_head(row)));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  });
+  _curry(2, checkExhaustiveM$);

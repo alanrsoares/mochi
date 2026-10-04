@@ -54,9 +54,10 @@ test("single-param lambda", () => {
 });
 
 test("multi-param lambda", () => {
-  // Arity ≥ 2 lowers to a `_curry`-wrapped flat function (CRITIQUE §4.4).
+  // Arity ≥ 2 lowers to a `_curry`-wrapped flat function (CRITIQUE §4.4) over
+  // a raw twin that saturated calls reach directly (ADR 0149).
   expect(js("let add = (a, b) => plus(a, b)")).toBe(
-    "const add = _curry(2, (a, b) => plus(a, b));\n",
+    "const add$ = (a, b) => plus(a, b);\nconst add = _curry(2, add$);\n",
   );
 });
 

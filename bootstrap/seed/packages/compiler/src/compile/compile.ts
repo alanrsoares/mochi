@@ -83,38 +83,39 @@ import { namespaces } from "../prelude/prelude.gen.mjs";
 import { namespaceRuntime } from "../prelude/prelude.gen.mjs";
 import { preludeJsDefs } from "../prelude/prelude.gen.mjs";
 import { runtimeDeps } from "../prelude/prelude.gen.mjs";
+const runtimeAnnotation$ = (name: string, arity: number): Option<string> => {
+  const ty: Option<Ty> = _Option_match(
+    _Map_get(name, builtins),
+    () =>
+      reduce(
+        _curry(2, (found, ns: string) => {
+          const members: Map<string, string> = _Option_unwrapOr(
+            new Map<string, string>(),
+            _Map_get(ns, namespaceRuntime),
+          );
+          return reduce(
+            _curry(2, (acc, key: string) =>
+              eq(_Map_get(key, members), Some(name) as Option<string>)
+                ? _Option_flatMap(_Map_get(key), _Map_get(ns, namespaces))
+                : acc,
+            ),
+            found,
+            _Map_keys(members),
+          );
+        }),
+        None,
+        _Map_keys(namespaceRuntime),
+      ),
+    (t) => Some(t),
+  );
+  return _Option_map((t: Ty) => flatHostType(t, arity), ty);
+};
 /**
  * Runtime annotation from the same prelude signatures and printer as host FFI.
  */
 export const runtimeAnnotation: _Curry<[name: string, arity: number], Option<string>> = _curry(
   2,
-  (name: string, arity: number) => {
-    const ty: Option<Ty> = _Option_match(
-      _Map_get(name, builtins),
-      () =>
-        reduce(
-          _curry(2, (found, ns: string) => {
-            const members: Map<string, string> = _Option_unwrapOr(
-              new Map<string, string>(),
-              _Map_get(ns, namespaceRuntime),
-            );
-            return reduce(
-              _curry(2, (acc, key: string) =>
-                eq(_Map_get(key, members), Some(name) as Option<string>)
-                  ? _Option_flatMap(_Map_get(key), _Map_get(ns, namespaces))
-                  : acc,
-              ),
-              found,
-              _Map_keys(members),
-            );
-          }),
-          None,
-          _Map_keys(namespaceRuntime),
-        ),
-      (t) => Some(t),
-    );
-    return _Option_map((t: Ty) => flatHostType(t, arity), ty);
-  },
+  runtimeAnnotation$,
 );
 
 /**
@@ -130,16 +131,14 @@ export const defaultOpts: Opts = {
   plugins: None as Option<HostPlugin[]>,
   dtsTypeNames: new Map<string, string>(),
 };
-const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(
-  2,
-  (s: string, i: number) =>
-    ((_v) =>
-      _v._tag === "Some" && _v.value === " "
-        ? afterBlanks(s, i + 1)
-        : _v._tag === "Some" && _v.value === "\t"
-          ? afterBlanks(s, i + 1)
-          : ((other) => other)(_v))(_Str_get(i, s)),
-);
+const afterBlanks$ = (s: string, i: number): Option<string> =>
+  ((_v) =>
+    _v._tag === "Some" && _v.value === " "
+      ? afterBlanks$(s, i + 1)
+      : _v._tag === "Some" && _v.value === "\t"
+        ? afterBlanks$(s, i + 1)
+        : ((other) => other)(_v))(_Str_get(i, s));
+const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(2, afterBlanks$);
 /**
  * The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
  * that intentionally reaches for host globals opts itself in, so a graph can
@@ -156,30 +155,26 @@ export const openDirective: (src: string) => boolean = (src: string) => {
           ? true
           : _v._tag === "Some" && _v.value === "r"
             ? true
-            : false)(afterBlanks(t, 10)),
+            : false)(afterBlanks$(t, 10)),
   );
 };
+const openMode$ = (src: string, requested: boolean): boolean => or(requested, openDirective(src));
 /**
  * The directive wins over the caller's default; it never turns open off.
  */
-export const openMode: _Curry<[src: string, requested: boolean], boolean> = _curry(
-  2,
-  (src: string, requested: boolean) => or(requested, openDirective(src)),
-);
+export const openMode: _Curry<[src: string, requested: boolean], boolean> = _curry(2, openMode$);
 
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
-const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(
-  2,
-  (kind: string, e: StageErr) => ({
-    kind: kind,
-    message: e.message,
-    start: e.start,
-    end: e.end,
-    help: None as Option<string>,
-    suggestions: noSuggestions,
-  }),
-);
+const stampStage$ = (kind: string, e: StageErr): Stamped => ({
+  kind: kind,
+  message: e.message,
+  start: e.start,
+  end: e.end,
+  help: None as Option<string>,
+  suggestions: noSuggestions,
+});
+const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(2, stampStage$);
 const stampType: <F>(
   e: {
     suggestions: { end: number; replaceWith: string; start: number; title: string }[];
@@ -204,46 +199,91 @@ const stampType: <F>(
   help: e.help,
   suggestions: e.suggestions,
 });
-const typecheckWith: _Curry<
-  [prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(3, (prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>) =>
+const typecheckWith$ = (
+  prog: Stmt[],
+  open: boolean,
+  plugins: Option<HostPlugin[]>,
+): Result<Stmt[], Stamped[]> =>
   _Result_mapErr(
     (es: IErr[]) => map(stampType, es),
     _Result_map(
       (_: Map<string, Scheme>) => prog,
       inferProgramWith(prog, builtins, namespaces, open, plugins),
     ),
-  ),
-);
-const frontend: _Curry<
-  [src: string, plugins: Option<HostPlugin[]>],
+  );
+const typecheckWith: _Curry<
+  [prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>],
   Result<Stmt[], Stamped[]>
-> = _curry(2, (src: string, plugins: Option<HostPlugin[]>) =>
+> = _curry(3, typecheckWith$);
+const frontend$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], Stamped[]> =>
   _Result_match(
     lex(src),
-    (e) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
+    (e) => Err([stampStage$("lex", e)]) as Result<Stmt[], Stamped[]>,
     (tokens) => {
       const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(tokens, plugins);
       return ((_v) =>
         _v.length === 0
           ? _Result_mapErr(
-              (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
+              (es: StageErr[]) => map((e: StageErr) => stampStage$("check", e), es),
               checkAll(parsed.stmts),
             )
           : ((ds) =>
-              Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>)(
+              Err(map((e: StageErr) => stampStage$("parse", e), ds)) as Result<Stmt[], Stamped[]>)(
               _v,
             ))(parsed.diagnostics);
     },
-  ),
-);
+  );
+const frontend: _Curry<
+  [src: string, plugins: Option<HostPlugin[]>],
+  Result<Stmt[], Stamped[]>
+> = _curry(2, frontend$);
+const pipelineWith$ = (
+  src: string,
+  open: boolean,
+  plugins: Option<HostPlugin[]>,
+): Result<Stmt[], Stamped[]> =>
+  _Result_flatMap((stmts) => typecheckWith$(stmts, open, plugins), frontend$(src, plugins));
 const pipelineWith: _Curry<
   [src: string, open: boolean, plugins: Option<HostPlugin[]>],
   Result<Stmt[], Stamped[]>
-> = _curry(3, (src: string, open: boolean, plugins: Option<HostPlugin[]>) =>
-  _Result_flatMap((stmts) => typecheckWith(stmts, open, plugins), frontend(src, plugins)),
-);
+> = _curry(3, pipelineWith$);
+const typedProgramWith$ = (
+  src: string,
+  opts: Opts,
+): Result<
+  [
+    Stmt[],
+    {
+      env: Map<string, Scheme>;
+      types: TypeAt[];
+      aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
+    },
+  ],
+  Stamped[]
+> =>
+  _Result_flatMap(
+    (stmts) =>
+      _Result_mapErr(
+        (es: IErr[]) => map(stampType, es),
+        _Result_map(
+          (r: {
+            env: Map<string, Scheme>;
+            types: TypeAt[];
+            aliases: Map<string, QualAliasInfo>;
+            letParams: TypeAt[];
+          }) => _tuple(stmts, r),
+          inferProgramTypesWith(
+            stmts,
+            builtins,
+            namespaces,
+            openMode$(src, opts.open),
+            opts.plugins,
+          ),
+        ),
+      ),
+    frontend$(src, opts.plugins),
+  );
 /**
  * typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
  * inference, for passes that print declarations (`dts.mochi`) rather than
@@ -263,30 +303,7 @@ export const typedProgramWith: _Curry<
     ],
     Stamped[]
   >
-> = _curry(2, (src: string, opts: Opts) =>
-  _Result_flatMap(
-    (stmts) =>
-      _Result_mapErr(
-        (es: IErr[]) => map(stampType, es),
-        _Result_map(
-          (r: {
-            env: Map<string, Scheme>;
-            types: TypeAt[];
-            aliases: Map<string, QualAliasInfo>;
-            letParams: TypeAt[];
-          }) => _tuple(stmts, r),
-          inferProgramTypesWith(
-            stmts,
-            builtins,
-            namespaces,
-            openMode(src, opts.open),
-            opts.plugins,
-          ),
-        ),
-      ),
-    frontend(src, opts.plugins),
-  ),
-);
+> = _curry(2, typedProgramWith$);
 export const typedProgram: (src: string) => Result<
   [
     Stmt[],
@@ -298,19 +315,20 @@ export const typedProgram: (src: string) => Result<
     },
   ],
   Stamped[]
-> = (src: string) => typedProgramWith(src, defaultOpts);
-const typedQuery: _Curry<
-  [src: string, stmts: Stmt[], opts: Opts],
-  Result<
-    {
-      env: Map<string, Scheme>;
-      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, QualAliasInfo>;
-      letParams: TypeAt[];
-    },
-    Stamped[]
-  >
-> = _curry(3, (src: string, stmts: Stmt[], opts: Opts) =>
+> = (src: string) => typedProgramWith$(src, defaultOpts);
+const typedQuery$ = (
+  src: string,
+  stmts: Stmt[],
+  opts: Opts,
+): Result<
+  {
+    env: Map<string, Scheme>;
+    types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+    aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
+  },
+  Stamped[]
+> =>
   _Result_mapErr(
     (es: IErr[]) => map(stampType, es),
     _Result_map(
@@ -333,10 +351,33 @@ const typedQuery: _Curry<
         aliases: r.aliases,
         letParams: r.letParams,
       }),
-      inferProgramTypesWith(stmts, builtins, namespaces, openMode(src, opts.open), opts.plugins),
+      inferProgramTypesWith(stmts, builtins, namespaces, openMode$(src, opts.open), opts.plugins),
     ),
-  ),
-);
+  );
+const typedQuery: _Curry<
+  [src: string, stmts: Stmt[], opts: Opts],
+  Result<
+    {
+      env: Map<string, Scheme>;
+      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+      aliases: Map<string, QualAliasInfo>;
+      letParams: TypeAt[];
+    },
+    Stamped[]
+  >
+> = _curry(3, typedQuery$);
+const inferTypesWith$ = (
+  src: string,
+  opts: Opts,
+): Result<
+  {
+    env: Map<string, Scheme>;
+    types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+    aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
+  },
+  Stamped[]
+> => _Result_flatMap((stmts) => typedQuery$(src, stmts, opts), frontend$(src, opts.plugins));
 /**
  * inferTypes : string -> Result InferResult Err — strict typed-query seam
  * for host DX. Keeps the recorded span -> type table instead of discarding it.
@@ -352,9 +393,45 @@ export const inferTypesWith: _Curry<
     },
     Stamped[]
   >
-> = _curry(2, (src: string, opts: Opts) =>
-  _Result_flatMap((stmts) => typedQuery(src, stmts, opts), frontend(src, opts.plugins)),
-);
+> = _curry(2, inferTypesWith$);
+const inferTypesRecoveringWith$ = (
+  src: string,
+  opts: Opts,
+): Result<
+  {
+    env: Map<string, Scheme>;
+    types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+    aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
+  },
+  Stamped[]
+> =>
+  _Result_match(
+    lex(src),
+    (e) =>
+      Err([stampStage$("lex", e)]) as Result<
+        {
+          env: Map<string, Scheme>;
+          types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
+          aliases: Map<string, QualAliasInfo>;
+          letParams: TypeAt[];
+        },
+        Stamped[]
+      >,
+    (tokens) => {
+      const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(
+        tokens,
+        opts.plugins,
+      );
+      return _Result_flatMap(
+        (stmts: Stmt[]) => typedQuery$(src, stmts, opts),
+        _Result_mapErr(
+          (es: StageErr[]) => map((e: StageErr) => stampStage$("check", e), es),
+          checkAll(parsed.stmts),
+        ),
+      );
+    },
+  );
 /**
  * The typed query over the statements a recovering parse keeps, its parse
  * diagnostics dropped (ADR 0120). Completion is most wanted mid-edit, when a
@@ -372,34 +449,7 @@ export const inferTypesRecoveringWith: _Curry<
     },
     Stamped[]
   >
-> = _curry(2, (src: string, opts: Opts) =>
-  _Result_match(
-    lex(src),
-    (e) =>
-      Err([stampStage("lex", e)]) as Result<
-        {
-          env: Map<string, Scheme>;
-          types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-          aliases: Map<string, QualAliasInfo>;
-          letParams: TypeAt[];
-        },
-        Stamped[]
-      >,
-    (tokens) => {
-      const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(
-        tokens,
-        opts.plugins,
-      );
-      return _Result_flatMap(
-        (stmts: Stmt[]) => typedQuery(src, stmts, opts),
-        _Result_mapErr(
-          (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
-          checkAll(parsed.stmts),
-        ),
-      );
-    },
-  ),
-);
+> = _curry(2, inferTypesRecoveringWith$);
 export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;
@@ -408,16 +458,22 @@ export const inferTypes: (src: string) => Result<
     letParams: TypeAt[];
   },
   Stamped[]
-> = (src: string) => inferTypesWith(src, defaultOpts);
+> = (src: string) => inferTypesWith$(src, defaultOpts);
+const nominalTypeName$ = (ty: Ty, aliases: Map<string, QualAliasInfo>): Option<string> =>
+  Schemes.nominalTypeName(ty, aliases);
 /**
  * The declared type a recorded type names, for go-to-type (ADR 0119).
  */
 export const nominalTypeName: _Curry<
   [ty: Ty, aliases: Map<string, QualAliasInfo>],
   Option<string>
-> = _curry(2, (ty: Ty, aliases: Map<string, QualAliasInfo>) =>
-  Schemes.nominalTypeName(ty, aliases),
-);
+> = _curry(2, nominalTypeName$);
+const symbolIndexSync$ = (
+  path: string,
+  origins: Origins,
+  prelude: SymPrelude,
+  stmts: Stmt[],
+): SymIndex => indexWith(path, origins, prelude, stmts);
 /**
  * The symbol index (ADR 0118) in the synchronous bundle, which the browser
  * loads too: hover resolves a builtin reference to its prelude docstring
@@ -426,42 +482,39 @@ export const nominalTypeName: _Curry<
 export const symbolIndexSync: _Curry<
   [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
   SymIndex
-> = _curry(4, (path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]) =>
-  indexWith(path, origins, prelude, stmts),
-);
+> = _curry(4, symbolIndexSync$);
+const emitJsWith$ = (stmts: Stmt[], opts: Opts): string =>
+  codegenWith(
+    stmts,
+    new Map<string, string[]>(),
+    opts.runtime,
+    namespaceRuntime,
+    preludeJsDefs,
+    runtimeDeps,
+    { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
+  );
 /**
  * The JS a checked program emits under `opts`. Shared with `dts.mochi`'s
  * `compileTargetsWith`, which prints every target from one inference.
  */
-export const emitJsWith: _Curry<[stmts: Stmt[], opts: Opts], string> = _curry(
-  2,
-  (stmts: Stmt[], opts: Opts) =>
-    codegenWith(
-      stmts,
-      new Map<string, string[]>(),
-      opts.runtime,
-      namespaceRuntime,
-      preludeJsDefs,
-      runtimeDeps,
-      { ...jsGenOpts, docs: opts.docs, moduleExt: opts.moduleExt },
-    ),
-);
+export const emitJsWith: _Curry<[stmts: Stmt[], opts: Opts], string> = _curry(2, emitJsWith$);
+const compileWith$ = (src: string, opts: Opts): Result<string, Stamped[]> =>
+  _Result_map(
+    (prog: Stmt[]) => emitJsWith$(prog, opts),
+    pipelineWith$(src, openMode$(src, opts.open), opts.plugins),
+  );
 /**
  * compileWith : string -> Opts -> Result string Err
  */
 export const compileWith: _Curry<[src: string, opts: Opts], Result<string, Stamped[]>> = _curry(
   2,
-  (src: string, opts: Opts) =>
-    _Result_map(
-      (prog: Stmt[]) => emitJsWith(prog, opts),
-      pipelineWith(src, openMode(src, opts.open), opts.plugins),
-    ),
+  compileWith$,
 );
 /**
  * compile : string -> Result string Err
  */
 export const compile: (src: string) => Result<string, Stamped[]> = (src: string) =>
-  compileWith(src, defaultOpts);
+  compileWith$(src, defaultOpts);
 const noImportedKeys: Map<string, string[]> = new Map<string, string[]>();
 /**
  * The typed TypeScript a single file emits from its inference result `r`.
@@ -506,16 +559,11 @@ export const emitTsWith: <A, B, C, D, E, F, G, H, I, J>(
       bindingHooksFor(opts.plugins),
     ),
 );
-/**
- * compileTs : string -> Result string Err — the SAME railway, but the typed
- * TypeScript backend (ADR 0026 / 0090). Inference runs through
- * `inferProgramTypes` so the emitter gets the span -> type table its
- * annotation hooks are driven from, not just the final env.
- */
-export const compileTsWith: _Curry<
-  [src: string, runtimeImport: string, opts: Opts],
-  Result<string, Stamped[]>
-> = _curry(3, (src: string, runtimeImport: string, opts: Opts) =>
+const compileTsWith$ = (
+  src: string,
+  runtimeImport: string,
+  opts: Opts,
+): Result<string, Stamped[]> =>
   _Result_flatMap(
     (stmts) =>
       _Result_mapErr(
@@ -531,17 +579,26 @@ export const compileTsWith: _Curry<
             stmts,
             builtins,
             namespaces,
-            openMode(src, opts.open),
+            openMode$(src, opts.open),
             opts.plugins,
           ),
         ),
       ),
-    frontend(src, opts.plugins),
-  ),
-);
+    frontend$(src, opts.plugins),
+  );
+/**
+ * compileTs : string -> Result string Err — the SAME railway, but the typed
+ * TypeScript backend (ADR 0026 / 0090). Inference runs through
+ * `inferProgramTypes` so the emitter gets the span -> type table its
+ * annotation hooks are driven from, not just the final env.
+ */
+export const compileTsWith: _Curry<
+  [src: string, runtimeImport: string, opts: Opts],
+  Result<string, Stamped[]>
+> = _curry(3, compileTsWith$);
+const compileTs$ = (src: string, runtimeImport: string): Result<string, Stamped[]> =>
+  compileTsWith$(src, runtimeImport, defaultOpts);
 export const compileTs: _Curry<
   [src: string, runtimeImport: string],
   Result<string, Stamped[]>
-> = _curry(2, (src: string, runtimeImport: string) =>
-  compileTsWith(src, runtimeImport, defaultOpts),
-);
+> = _curry(2, compileTs$);
