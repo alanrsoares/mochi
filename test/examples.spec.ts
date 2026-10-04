@@ -480,6 +480,21 @@ let viaLet = let (${names}) = (10, 20, 30) in ${value}`;
   }
 });
 
+test("saturated calls take the raw twin and evaluate like the curried path", () => {
+  const src = `let fact = (n, acc) => n == 0 ? acc : fact(n - 1, acc * n)
+let sub3 = (a, b, c) => a - b - c
+let shadowed = (sub3, x) => sub3(x, x)
+let result = [fact(5, 1), fact(5)(1), sub3(10, 3, 2), sub3(10)(3, 2), 1->sub3(1, 1), shadowed((p, q) => p + q, 4)]`;
+  const js = compileJs(src);
+  expect(js).toContain("const fact$ = (n, acc) =>");
+  expect(js).toContain("const fact = _curry(2, fact$);");
+  expect(js).toContain("fact$(sub(n, 1), mul(acc, n))");
+  expect(js).toContain("fact$(5, 1)");
+  expect(js).toContain("fact(5)(1)");
+  expect(js).not.toContain("sub3$");
+  expect(compileAndEval(src, "result")).toEqual([120, 120, 5, 5, -1, 8]);
+});
+
 test("single-key styled-cva variants remain precise through component bindings", () => {
   const component = `extern tw : a = "@styled-cva/react" "default"
 let Badge = tw.span("base", { variants: { $tone: { rose: "a" } } })

@@ -484,34 +484,34 @@ const annotSpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) => {
     }
   }
 };
-const typeErr: _Curry<[msg: string, sp: SpanAt], IErr> = _curry(2, (msg: string, sp: SpanAt) => ({
+const typeErr$ = (msg: string, sp: SpanAt): IErr => ({
   message: msg,
   start: sp.start,
   end: sp.end,
   help: None as Option<string>,
   suggestions: noSuggestions,
-}));
-const typeErrHelp: _Curry<[msg: string, sp: SpanAt, help: string], IErr> = _curry(
-  3,
-  (msg: string, sp: SpanAt, help: string) => ({
-    message: msg,
-    start: sp.start,
-    end: sp.end,
-    help: Some(help) as Option<string>,
-    suggestions: noSuggestions,
-  }),
-);
+});
+const typeErr: _Curry<[msg: string, sp: SpanAt], IErr> = _curry(2, typeErr$);
+const typeErrHelp$ = (msg: string, sp: SpanAt, help: string): IErr => ({
+  message: msg,
+  start: sp.start,
+  end: sp.end,
+  help: Some(help) as Option<string>,
+  suggestions: noSuggestions,
+});
+const typeErrHelp: _Curry<[msg: string, sp: SpanAt, help: string], IErr> = _curry(3, typeErrHelp$);
+const typeErrSuggest$ = (msg: string, sp: SpanAt, help: string, hint: string): IErr => ({
+  message: msg,
+  start: sp.start,
+  end: sp.end,
+  help: Some(help) as Option<string>,
+  suggestions: [
+    { title: `Did you mean '${hint}'?`, start: sp.start, end: sp.end, replaceWith: hint },
+  ],
+});
 const typeErrSuggest: _Curry<[msg: string, sp: SpanAt, help: string, hint: string], IErr> = _curry(
   4,
-  (msg: string, sp: SpanAt, help: string, hint: string) => ({
-    message: msg,
-    start: sp.start,
-    end: sp.end,
-    help: Some(help) as Option<string>,
-    suggestions: [
-      { title: `Did you mean '${hint}'?`, start: sp.start, end: sp.end, replaceWith: hint },
-    ],
-  }),
+  typeErrSuggest$,
 );
 const lastSeg: (name: string) => string = (name: string) => {
   const parts: string[] = _Str_split(".", name);
@@ -597,6 +597,33 @@ const insertPrint: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
+const printsFrom$ = (
+  keys: string[],
+  aliases: Map<string, QualAliasInfo>,
+  i: number,
+  acc: { shown: string; name: string }[],
+): { shown: string; name: string }[] =>
+  _Option_match(
+    _Array_get(i, keys),
+    () => acc,
+    (key) =>
+      _Option_match(
+        _Map_get(key, aliases),
+        () => printsFrom$(keys, aliases, i + 1, acc),
+        (info) =>
+          _Option_match(
+            shownOfAlias(info, aliases),
+            () => printsFrom$(keys, aliases, i + 1, acc),
+            (shown) =>
+              printsFrom$(
+                keys,
+                aliases,
+                i + 1,
+                insertPrint({ shown: shown, name: lastSeg(key) }, acc),
+              ),
+          ),
+      ),
+  );
 const printsFrom: _Curry<
   [
     keys: string[],
@@ -605,36 +632,7 @@ const printsFrom: _Curry<
     acc: { shown: string; name: string }[],
   ],
   { shown: string; name: string }[]
-> = _curry(
-  4,
-  (
-    keys: string[],
-    aliases: Map<string, QualAliasInfo>,
-    i: number,
-    acc: { shown: string; name: string }[],
-  ) =>
-    _Option_match(
-      _Array_get(i, keys),
-      () => acc,
-      (key) =>
-        _Option_match(
-          _Map_get(key, aliases),
-          () => printsFrom(keys, aliases, i + 1, acc),
-          (info) =>
-            _Option_match(
-              shownOfAlias(info, aliases),
-              () => printsFrom(keys, aliases, i + 1, acc),
-              (shown) =>
-                printsFrom(
-                  keys,
-                  aliases,
-                  i + 1,
-                  insertPrint({ shown: shown, name: lastSeg(key) }, acc),
-                ),
-            ),
-        ),
-    ),
-);
+> = _curry(4, printsFrom$);
 const applyPrints: <A>(
   msg: string,
   prints: ({ shown: string; name: string } & A)[],
@@ -648,15 +646,38 @@ const applyPrints: <A>(
       (p) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1),
     ),
 );
+const nameAliases$ = (msg: string, aliases: Map<string, QualAliasInfo>): string =>
+  applyPrints(
+    msg,
+    printsFrom$(_Map_keys(aliases), aliases, 0, [] as { shown: string; name: string }[]),
+    0,
+  );
 const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], string> = _curry(
   2,
-  (msg: string, aliases: Map<string, QualAliasInfo>) =>
-    applyPrints(
-      msg,
-      printsFrom(_Map_keys(aliases), aliases, 0, [] as { shown: string; name: string }[]),
-      0,
-    ),
+  nameAliases$,
 );
+const u$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  left: Ty,
+  right: Ty,
+  st: St,
+  sp: SpanAt,
+): Result<St, IErr> =>
+  _Result_match(
+    unify(left, right, st),
+    (e) => Err(typeErr$(nameAliases$(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+    (newSt) => Ok(newSt) as Result<St, IErr>,
+  );
 const u: _Curry<
   [
     ctx: {
@@ -676,31 +697,29 @@ const u: _Curry<
     sp: SpanAt,
   ],
   Result<St, IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    left: Ty,
-    right: Ty,
-    st: St,
-    sp: SpanAt,
-  ) =>
-    _Result_match(
-      unify(left, right, st),
-      (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
-      (newSt) => Ok(newSt) as Result<St, IErr>,
-    ),
-);
+> = _curry(5, u$);
+const checkFits$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  actual: Ty,
+  expected: Ty,
+  st: St,
+  sp: SpanAt,
+): Result<St, IErr> =>
+  _Result_match(
+    fits(actual, expected, st),
+    (e) => Err(typeErr$(nameAliases$(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+    (newSt) => Ok(newSt) as Result<St, IErr>,
+  );
 /**
  * `actual` may be used as `expected` (ADR 0098 optional fields).
  */
@@ -723,31 +742,7 @@ const checkFits: _Curry<
     sp: SpanAt,
   ],
   Result<St, IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    actual: Ty,
-    expected: Ty,
-    st: St,
-    sp: SpanAt,
-  ) =>
-    _Result_match(
-      fits(actual, expected, st),
-      (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
-      (newSt) => Ok(newSt) as Result<St, IErr>,
-    ),
-);
+> = _curry(5, checkFits$);
 const bindParamNamesFrom: <A>(
   names: A[],
   env: Map<A, Scheme>,
@@ -771,31 +766,39 @@ const bindParamNamesFrom: <A>(
       throw new Error("non-exhaustive match");
     }),
 );
-const bindParamFieldsFrom: _Curry<
-  [fields: string[], env: Map<string, Scheme>, row: Row, st: St],
-  [Row, Map<string, Scheme>, St]
-> = _curry(4, (fields: string[], env: Map<string, Scheme>, row: Row, st: St) =>
+const bindParamFieldsFrom$ = (
+  fields: string[],
+  env: Map<string, Scheme>,
+  row: Row,
+  st: St,
+): [Row, Map<string, Scheme>, St] =>
   ((_v) =>
     _v.length === 0
       ? _tuple(row, env, st)
       : _v.length >= 1
         ? (([f, ...rest]) =>
             (([ft, st1]: [Ty, St]) =>
-              bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
+              bindParamFieldsFrom$(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
               freshVar(st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(fields),
-);
-const recordParamNamesFrom: _Curry<
-  [names: string[], spans: SpanAt[], types: Ty[], i: number, st: St],
-  St
-> = _curry(5, (names: string[], spans: SpanAt[], types: Ty[], i: number, st: St) =>
+          })())(fields);
+const bindParamFieldsFrom: _Curry<
+  [fields: string[], env: Map<string, Scheme>, row: Row, st: St],
+  [Row, Map<string, Scheme>, St]
+> = _curry(4, bindParamFieldsFrom$);
+const recordParamNamesFrom$ = (
+  names: string[],
+  spans: SpanAt[],
+  types: Ty[],
+  i: number,
+  st: St,
+): St =>
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some" && _v[2]._tag === "Some"
       ? (([{ value: n }, { value: sp }, { value: t }]) =>
-          recordParamNamesFrom(
+          recordParamNamesFrom$(
             names,
             spans,
             types,
@@ -808,8 +811,11 @@ const recordParamNamesFrom: _Curry<
             Extract<[Option<string>, Option<SpanAt>, Option<Ty>][2], { _tag: "Some" }>,
           ],
         )
-      : st)(_tuple(_Array_get(i, names), _Array_get(i, spans), _Array_get(i, types))),
-);
+      : st)(_tuple(_Array_get(i, names), _Array_get(i, spans), _Array_get(i, types)));
+const recordParamNamesFrom: _Curry<
+  [names: string[], spans: SpanAt[], types: Ty[], i: number, st: St],
+  St
+> = _curry(5, recordParamNamesFrom$);
 const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _curry(
   2,
   <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) =>
@@ -823,10 +829,11 @@ const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _cu
       names,
     ),
 );
-const bindParam: _Curry<
-  [p: LamParam, env: Map<string, Scheme>, st: St],
-  [Ty, Map<string, Scheme>, St]
-> = _curry(3, (p: LamParam, env: Map<string, Scheme>, st: St) => {
+const bindParam$ = (
+  p: LamParam,
+  env: Map<string, Scheme>,
+  st: St,
+): [Ty, Map<string, Scheme>, St] => {
   const $match = p;
   switch ($match._tag) {
     case "LPSpanned": {
@@ -838,21 +845,21 @@ const bindParam: _Curry<
             const { names } = $match$;
             const elems: Ty[] = ((_v) =>
               _v._tag === "TyCon" ? (({ args: ts }) => ts)(_v) : ([] as Ty[]))(t);
-            return _tuple(t, env1, recordParamNamesFrom(names, spans, elems, 0, st1));
+            return _tuple(t, env1, recordParamNamesFrom$(names, spans, elems, 0, st1));
           }
           case "LPRecord": {
             const { fields } = $match$;
             return _tuple(
               t,
               env1,
-              recordParamNamesFrom(fields, spans, envTypesOf(fields, env1), 0, st1),
+              recordParamNamesFrom$(fields, spans, envTypesOf(fields, env1), 0, st1),
             );
           }
           default: {
             return _tuple(t, env1, st1);
           }
         }
-      })(bindParam(inner, env, st));
+      })(bindParam$(inner, env, st));
     }
     case "LPName": {
       const { name } = $match;
@@ -867,7 +874,7 @@ const bindParam: _Curry<
       const { fields } = $match;
       return (([rowBase, st1]: [Row, St]) =>
         (([row, env1, st2]: [Row, Map<string, Scheme>, St]) => _tuple(tRecord(row), env1, st2))(
-          bindParamFieldsFrom(fields, env, rowBase, st1),
+          bindParamFieldsFrom$(fields, env, rowBase, st1),
         ))(freshRowVar(st));
     }
     case "LPLabeled": {
@@ -878,11 +885,16 @@ const bindParam: _Curry<
       throw new Error("non-exhaustive match");
     }
   }
-});
-const bindParamsFrom: _Curry<
-  [params: LamParam[], env: Map<string, Scheme>, st: St],
-  [Ty[], Map<string, Scheme>, St]
-> = _curry(3, (params: LamParam[], env: Map<string, Scheme>, st: St) =>
+};
+const bindParam: _Curry<
+  [p: LamParam, env: Map<string, Scheme>, st: St],
+  [Ty, Map<string, Scheme>, St]
+> = _curry(3, bindParam$);
+const bindParamsFrom$ = (
+  params: LamParam[],
+  env: Map<string, Scheme>,
+  st: St,
+): [Ty[], Map<string, Scheme>, St] =>
   ((_v) =>
     _v.length === 0
       ? _tuple([] as Ty[], env, st)
@@ -890,13 +902,88 @@ const bindParamsFrom: _Curry<
         ? (([p, ...rest]) =>
             (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
               (([restTs, env2, st2]: [Ty[], Map<string, Scheme>, St]) =>
-                _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
-              bindParam(p, env, st),
+                _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom$(rest, env1, st1)))(
+              bindParam$(p, env, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(params),
-);
+          })())(params);
+const bindParamsFrom: _Curry<
+  [params: LamParam[], env: Map<string, Scheme>, st: St],
+  [Ty[], Map<string, Scheme>, St]
+> = _curry(3, bindParamsFrom$);
+const constrainParamAnnotsFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  params: LamParam[],
+  paramTypes: Ty[],
+  vars: Map<string, Ty>,
+  st: St,
+): Result<[Map<string, Ty>, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>)
+      : _v.length >= 1
+        ? (([param, ...rest]) =>
+            ((_v) =>
+              _v.length === 0
+                ? (Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>)
+                : _v.length >= 1
+                  ? (([paramT, ...restTypes]) =>
+                      ((_v) =>
+                        _v._tag === "LPSpanned" &&
+                        _v.param._tag === "LPName" &&
+                        _v.param.annot._tag === "Some"
+                          ? (({
+                              param: {
+                                annot: { value: te },
+                              },
+                            }) =>
+                              (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                                _Result_flatMap(
+                                  (st2) =>
+                                    constrainParamAnnotsFrom$(ctx, rest, restTypes, vars1, st2),
+                                  checkFits$(ctx, paramT, annotT, st1, annotSpan(te)),
+                                ))(
+                                typeExprToType(
+                                  te,
+                                  vars,
+                                  st,
+                                  ctx.aliasMap,
+                                  _Set_fromArray([] as string[]),
+                                ),
+                              ))(
+                              _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
+                                param: Extract<
+                                  Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                                  { _tag: "LPName" }
+                                > & {
+                                  annot: Extract<
+                                    Extract<
+                                      Extract<LamParam, { _tag: "LPSpanned" }>["param"],
+                                      { _tag: "LPName" }
+                                    >["annot"],
+                                    { _tag: "Some" }
+                                  >;
+                                };
+                              },
+                            )
+                          : constrainParamAnnotsFrom$(ctx, rest, restTypes, vars, st))(param))(_v)
+                  : (() => {
+                      throw new Error("non-exhaustive match");
+                    })())(paramTypes))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(params);
 const constrainParamAnnotsFrom: _Curry<
   [
     ctx: {
@@ -916,95 +1003,19 @@ const constrainParamAnnotsFrom: _Curry<
     st: St,
   ],
   Result<[Map<string, Ty>, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    params: LamParam[],
-    paramTypes: Ty[],
-    vars: Map<string, Ty>,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>)
+> = _curry(5, constrainParamAnnotsFrom$);
+const arrowChain$ = (paramTypes: Ty[], resultT: Ty): Ty =>
+  ((_v) =>
+    _v.length === 0
+      ? tArrow(tUnit, resultT)
+      : _v.length === 1
+        ? (([p]) => tArrow(p, resultT))(_v)
         : _v.length >= 1
-          ? (([param, ...rest]) =>
-              ((_v) =>
-                _v.length === 0
-                  ? (Ok(_tuple(vars, st)) as Result<[Map<string, Ty>, St], IErr>)
-                  : _v.length >= 1
-                    ? (([paramT, ...restTypes]) =>
-                        ((_v) =>
-                          _v._tag === "LPSpanned" &&
-                          _v.param._tag === "LPName" &&
-                          _v.param.annot._tag === "Some"
-                            ? (({
-                                param: {
-                                  annot: { value: te },
-                                },
-                              }) =>
-                                (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                                  _Result_flatMap(
-                                    (st2) =>
-                                      constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
-                                    checkFits(ctx, paramT, annotT, st1, annotSpan(te)),
-                                  ))(
-                                  typeExprToType(
-                                    te,
-                                    vars,
-                                    st,
-                                    ctx.aliasMap,
-                                    _Set_fromArray([] as string[]),
-                                  ),
-                                ))(
-                                _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
-                                  param: Extract<
-                                    Extract<LamParam, { _tag: "LPSpanned" }>["param"],
-                                    { _tag: "LPName" }
-                                  > & {
-                                    annot: Extract<
-                                      Extract<
-                                        Extract<LamParam, { _tag: "LPSpanned" }>["param"],
-                                        { _tag: "LPName" }
-                                      >["annot"],
-                                      { _tag: "Some" }
-                                    >;
-                                  };
-                                },
-                              )
-                            : constrainParamAnnotsFrom(ctx, rest, restTypes, vars, st))(param))(_v)
-                    : (() => {
-                        throw new Error("non-exhaustive match");
-                      })())(paramTypes))(_v)
+          ? (([p, ...rest]) => tArrow(p, arrowChain$(rest, resultT)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
-            })())(params),
-);
-const arrowChain: _Curry<[paramTypes: Ty[], resultT: Ty], Ty> = _curry(
-  2,
-  (paramTypes: Ty[], resultT: Ty) =>
-    ((_v) =>
-      _v.length === 0
-        ? tArrow(tUnit, resultT)
-        : _v.length === 1
-          ? (([p]) => tArrow(p, resultT))(_v)
-          : _v.length >= 1
-            ? (([p, ...rest]) => tArrow(p, arrowChain(rest, resultT)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(paramTypes),
-);
+            })())(paramTypes);
+const arrowChain: _Curry<[paramTypes: Ty[], resultT: Ty], Ty> = _curry(2, arrowChain$);
 const ctxWithEnv: <B>(
   ctx: {
     env: Map<string, Scheme>;
@@ -1213,6 +1224,48 @@ const ctxWithLoop: <B, C>(
     scopeNames: ctx.scopeNames,
   }),
 );
+const inferLoopParamsFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  params: LoopParam[],
+  i: number,
+  envAcc: Map<string, Scheme>,
+  frameAcc: Ty[],
+  ownerAcc: Map<string, SpanAt>,
+  st: St,
+): Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr> =>
+  _Option_match(
+    _Array_get(i, params),
+    () =>
+      Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
+        [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
+        IErr
+      >,
+    (p) =>
+      _Result_flatMap(
+        ([t, st1]) =>
+          ((sp: SpanAt) =>
+            inferLoopParamsFrom$(
+              ctx,
+              params,
+              i + 1,
+              _Map_set(p.name, mono(t), envAcc),
+              _Array_append(t, frameAcc),
+              _Map_set(p.name, sp, ownerAcc),
+              noteLet(sp, recordBinder(p.nameSpan, t, "let", p.name, None as Option<string>, st1)),
+            ))(exprSpan(p.init)),
+        inferExpr$(ctx, p.init, st),
+      ),
+  );
 const inferLoopParamsFrom: _Curry<
   [
     ctx: {
@@ -1234,54 +1287,42 @@ const inferLoopParamsFrom: _Curry<
     st: St,
   ],
   Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr>
-> = _curry(
-  7,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    params: LoopParam[],
-    i: number,
-    envAcc: Map<string, Scheme>,
-    frameAcc: Ty[],
-    ownerAcc: Map<string, SpanAt>,
-    st: St,
-  ) =>
-    _Option_match(
-      _Array_get(i, params),
-      () =>
-        Ok(_tuple(frameAcc, envAcc, ownerAcc, st)) as Result<
-          [Ty[], Map<string, Scheme>, Map<string, SpanAt>, St],
-          IErr
-        >,
-      (p) =>
-        _Result_flatMap(
-          ([t, st1]) =>
-            ((sp: SpanAt) =>
-              inferLoopParamsFrom(
-                ctx,
-                params,
-                i + 1,
-                _Map_set(p.name, mono(t), envAcc),
-                _Array_append(t, frameAcc),
-                _Map_set(p.name, sp, ownerAcc),
-                noteLet(
-                  sp,
-                  recordBinder(p.nameSpan, t, "let", p.name, None as Option<string>, st1),
-                ),
-              ))(exprSpan(p.init)),
-          inferExpr(ctx, p.init, st),
-        ),
-    ),
-);
+> = _curry(7, inferLoopParamsFrom$);
+const unifyRecurArgsFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  args: Expr[],
+  frame: Ty[],
+  i: number,
+  st: St,
+): Result<St, IErr> =>
+  _Option_match(
+    _Array_get(i, args),
+    () => Ok(st) as Result<St, IErr>,
+    (a) =>
+      _Result_flatMap(
+        ([at, st1]) =>
+          _Option_match(
+            _Array_get(i, frame),
+            () => unifyRecurArgsFrom$(ctx, args, frame, i + 1, st1),
+            (pt) =>
+              _Result_flatMap(
+                (st2) => unifyRecurArgsFrom$(ctx, args, frame, i + 1, st2),
+                u$(ctx, at, pt, st1, exprSpan(a)),
+              ),
+          ),
+        inferExpr$(ctx, a, st),
+      ),
+  );
 const unifyRecurArgsFrom: _Curry<
   [
     ctx: {
@@ -1301,44 +1342,38 @@ const unifyRecurArgsFrom: _Curry<
     st: St,
   ],
   Result<St, IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    args: Expr[],
-    frame: Ty[],
-    i: number,
-    st: St,
-  ) =>
-    _Option_match(
-      _Array_get(i, args),
-      () => Ok(st) as Result<St, IErr>,
-      (a) =>
-        _Result_flatMap(
-          ([at, st1]) =>
-            _Option_match(
-              _Array_get(i, frame),
-              () => unifyRecurArgsFrom(ctx, args, frame, i + 1, st1),
-              (pt) =>
-                _Result_flatMap(
-                  (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
-                  u(ctx, at, pt, st1, exprSpan(a)),
+> = _curry(5, unifyRecurArgsFrom$);
+const inferRecur$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  args: Expr[],
+  sp: SpanAt,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Err(typeErr$("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>)
+      : _v.length >= 1
+        ? (([frame]) =>
+            _Result_flatMap(
+              (st1) =>
+                (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(
+                  freshVar(st1),
                 ),
-            ),
-          inferExpr(ctx, a, st),
-        ),
-    ),
-);
+              unifyRecurArgsFrom$(ctx, args, frame, 0, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(ctx.loopStack);
 const inferRecur: _Curry<
   [
     ctx: {
@@ -1357,40 +1392,7 @@ const inferRecur: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    args: Expr[],
-    sp: SpanAt,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>)
-        : _v.length >= 1
-          ? (([frame]) =>
-              _Result_flatMap(
-                (st1) =>
-                  (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(
-                    freshVar(st1),
-                  ),
-                unifyRecurArgsFrom(ctx, args, frame, 0, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(ctx.loopStack),
-);
+> = _curry(4, inferRecur$);
 const rowHasOptional: (row: Row) => boolean = (row: Row) => {
   const $match = row;
   switch ($match._tag) {
@@ -1403,7 +1405,7 @@ const rowHasOptional: (row: Row) => boolean = (row: Row) => {
     }
   }
 };
-const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) => {
+const domainNeedsFits$ = (t: Ty, st: St): boolean => {
   const $match = zonk(t, st);
   switch ($match._tag) {
     case "TyRecord": {
@@ -1414,7 +1416,8 @@ const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: 
       return false;
     }
   }
-});
+};
+const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, domainNeedsFits$);
 /**
  * True when every known field is optional. This is what makes `f()` legal:
  * the nullary call applies `{}`, which only `fits` an all-optional domain.
@@ -1431,7 +1434,7 @@ const rowAllOptional: (row: Row) => boolean = (row: Row) => {
     }
   }
 };
-const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: Ty, st: St) => {
+const domainIsOmittableRecord$ = (t: Ty, st: St): boolean => {
   const $match = zonk(t, st);
   switch ($match._tag) {
     case "TyRecord": {
@@ -1442,7 +1445,11 @@ const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(2, (t: 
       return false;
     }
   }
-});
+};
+const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(
+  2,
+  domainIsOmittableRecord$,
+);
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1458,22 +1465,149 @@ const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
     }
   }
 };
-const splitLamParams: _Curry<
-  [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
-  [LamParam[], LamParam[]]
-> = _curry(3, (params: LamParam[], positional: LamParam[], labeled: LamParam[]) =>
+const splitLamParams$ = (
+  params: LamParam[],
+  positional: LamParam[],
+  labeled: LamParam[],
+): [LamParam[], LamParam[]] =>
   ((_v) =>
     _v.length === 0
       ? _tuple(positional, labeled)
       : _v.length >= 1
         ? (([p, ...rest]) =>
             isLabeledParam(p)
-              ? splitLamParams(rest, positional, _Array_append(p, labeled))
-              : splitLamParams(rest, _Array_append(p, positional), labeled))(_v)
+              ? splitLamParams$(rest, positional, _Array_append(p, labeled))
+              : splitLamParams$(rest, _Array_append(p, positional), labeled))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(params),
-);
+          })())(params);
+const splitLamParams: _Curry<
+  [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
+  [LamParam[], LamParam[]]
+> = _curry(3, splitLamParams$);
+const labFieldsFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  labs: LamParam[],
+  env: Map<string, Scheme>,
+  vars: Map<string, Ty>,
+  st: St,
+): Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(
+          _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
+        ) as Result<
+          [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
+          IErr
+        >)
+      : _v.length >= 1
+        ? (([lab, ...rest]) =>
+            ((_v) =>
+              _v._tag === "LPSpanned"
+                ? (({ param: inner }) => labFieldsFrom$(ctx, [inner, ...rest], env, vars, st))(_v)
+                : _v._tag === "LPLabeled"
+                  ? (({ name, annot, optional, defaultValue }) =>
+                      (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+                        _Result_flatMap(
+                          ([fieldT1, st2]) =>
+                            ((bodyT: Ty) =>
+                              ((omittable: boolean) =>
+                                _Result_flatMap(
+                                  ([fields, stN]) =>
+                                    Ok(
+                                      _tuple(
+                                        _Array_prepend(
+                                          {
+                                            name: name,
+                                            fieldType: fieldT1,
+                                            omittable: omittable,
+                                            bodyType: bodyT,
+                                          },
+                                          fields,
+                                        ),
+                                        stN,
+                                      ),
+                                    ) as Result<
+                                      [
+                                        {
+                                          name: string;
+                                          fieldType: Ty;
+                                          omittable: boolean;
+                                          bodyType: Ty;
+                                        }[],
+                                        St,
+                                      ],
+                                      IErr
+                                    >,
+                                  labFieldsFrom$(ctx, rest, env, vars1, st2),
+                                ))(
+                                or(
+                                  optional,
+                                  _Option_match(
+                                    defaultValue,
+                                    () => false,
+                                    () => true,
+                                  ),
+                                ),
+                              ))(
+                              _Option_match(
+                                defaultValue,
+                                () => (optional ? tCon("Option", [fieldT1]) : fieldT1),
+                                () => fieldT1,
+                              ),
+                            ),
+                          _Option_match(
+                            defaultValue,
+                            () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>,
+                            (d) =>
+                              _Result_flatMap(
+                                ([dt, s2]) =>
+                                  _Option_match(
+                                    annot,
+                                    () => {
+                                      const widened: Ty = widenLits(zonk(dt, s2));
+                                      return _Result_flatMap(
+                                        (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
+                                        u$(ctx, fieldT, widened, s2, exprSpan(d)),
+                                      );
+                                    },
+                                    () =>
+                                      _Result_flatMap(
+                                        (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
+                                        checkFits$(ctx, dt, fieldT, s2, exprSpan(d)),
+                                      ),
+                                  ),
+                                inferExpr$(ctxWithEnv(ctx, env), d, st1),
+                              ),
+                          ),
+                        ))(
+                        _Option_match(
+                          annot,
+                          () => (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
+                          (te) =>
+                            typeExprToType(
+                              te,
+                              vars,
+                              st,
+                              ctx.aliasMap,
+                              _Set_fromArray([] as string[]),
+                            ),
+                        ),
+                      ))(_v)
+                  : labFieldsFrom$(ctx, rest, env, vars, st))(lab))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(labs);
 /**
  * One pass per label, threading `st` but NOT `env`: a default is inferred in
  * the positional-only scope, so one label's default cannot read another's.
@@ -1497,132 +1631,7 @@ const labFieldsFrom: _Curry<
     st: St,
   ],
   Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    labs: LamParam[],
-    env: Map<string, Scheme>,
-    vars: Map<string, Ty>,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(
-            _tuple([] as { name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], st),
-          ) as Result<
-            [{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St],
-            IErr
-          >)
-        : _v.length >= 1
-          ? (([lab, ...rest]) =>
-              ((_v) =>
-                _v._tag === "LPSpanned"
-                  ? (({ param: inner }) => labFieldsFrom(ctx, [inner, ...rest], env, vars, st))(_v)
-                  : _v._tag === "LPLabeled"
-                    ? (({ name, annot, optional, defaultValue }) =>
-                        (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                          _Result_flatMap(
-                            ([fieldT1, st2]) =>
-                              ((bodyT: Ty) =>
-                                ((omittable: boolean) =>
-                                  _Result_flatMap(
-                                    ([fields, stN]) =>
-                                      Ok(
-                                        _tuple(
-                                          _Array_prepend(
-                                            {
-                                              name: name,
-                                              fieldType: fieldT1,
-                                              omittable: omittable,
-                                              bodyType: bodyT,
-                                            },
-                                            fields,
-                                          ),
-                                          stN,
-                                        ),
-                                      ) as Result<
-                                        [
-                                          {
-                                            name: string;
-                                            fieldType: Ty;
-                                            omittable: boolean;
-                                            bodyType: Ty;
-                                          }[],
-                                          St,
-                                        ],
-                                        IErr
-                                      >,
-                                    labFieldsFrom(ctx, rest, env, vars1, st2),
-                                  ))(
-                                  or(
-                                    optional,
-                                    _Option_match(
-                                      defaultValue,
-                                      () => false,
-                                      () => true,
-                                    ),
-                                  ),
-                                ))(
-                                _Option_match(
-                                  defaultValue,
-                                  () => (optional ? tCon("Option", [fieldT1]) : fieldT1),
-                                  () => fieldT1,
-                                ),
-                              ),
-                            _Option_match(
-                              defaultValue,
-                              () => Ok(_tuple(fieldT, st1)) as Result<[Ty, St], IErr>,
-                              (d) =>
-                                _Result_flatMap(
-                                  ([dt, s2]) =>
-                                    _Option_match(
-                                      annot,
-                                      () => {
-                                        const widened: Ty = widenLits(zonk(dt, s2));
-                                        return _Result_flatMap(
-                                          (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
-                                          u(ctx, fieldT, widened, s2, exprSpan(d)),
-                                        );
-                                      },
-                                      () =>
-                                        _Result_flatMap(
-                                          (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
-                                          checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
-                                        ),
-                                    ),
-                                  inferExpr(ctxWithEnv(ctx, env), d, st1),
-                                ),
-                            ),
-                          ))(
-                          _Option_match(
-                            annot,
-                            () => (([t, s1]: [Ty, St]) => _tuple(t, vars, s1))(freshVar(st)),
-                            (te) =>
-                              typeExprToType(
-                                te,
-                                vars,
-                                st,
-                                ctx.aliasMap,
-                                _Set_fromArray([] as string[]),
-                              ),
-                          ),
-                        ))(_v)
-                    : labFieldsFrom(ctx, rest, env, vars, st))(lab))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(labs),
-);
+> = _curry(5, labFieldsFrom$);
 const rowOfLabFields: <A>(
   fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[],
 ) => Row = <A>(fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[]) =>
@@ -1704,50 +1713,98 @@ const recordLabParamsFrom: <A>(
               throw new Error("non-exhaustive match");
             })())(labs),
 );
+const recordNameParamsFrom$ = (params: LamParam[], types: Ty[], st: St): St =>
+  ((_v) =>
+    _v[0].length >= 1 &&
+    _v[0][0]._tag === "LPSpanned" &&
+    _v[0][0].param._tag === "LPName" &&
+    _v[0][0].nameSpans.length >= 1 &&
+    _v[1].length >= 1
+      ? (([
+          [
+            {
+              param: { name },
+              nameSpans: [sp],
+            },
+            ...rest
+          ],
+          [t, ...ts],
+        ]) =>
+          recordNameParamsFrom$(
+            rest,
+            ts,
+            recordBinder(sp, t, "parameter", name, None as Option<string>, st),
+          ))(
+          _v as [
+            [
+              Extract<[LamParam[], Ty[]][0][number], { _tag: "LPSpanned" }> & {
+                param: Extract<
+                  Extract<[LamParam[], Ty[]][0][number], { _tag: "LPSpanned" }>["param"],
+                  { _tag: "LPName" }
+                >;
+              },
+              ...[LamParam[], Ty[]][0],
+            ],
+            [LamParam[], Ty[]][1],
+          ],
+        )
+      : _v[0].length >= 1 && _v[1].length >= 1
+        ? (([[, ...rest], [, ...ts]]) => recordNameParamsFrom$(rest, ts, st))(_v)
+        : st)(_tuple(params, types));
 /**
  * Each plain positional name at its span, after the body has constrained it.
  */
 const recordNameParamsFrom: _Curry<[params: LamParam[], types: Ty[], st: St], St> = _curry(
   3,
-  (params: LamParam[], types: Ty[], st: St) =>
-    ((_v) =>
-      _v[0].length >= 1 &&
-      _v[0][0]._tag === "LPSpanned" &&
-      _v[0][0].param._tag === "LPName" &&
-      _v[0][0].nameSpans.length >= 1 &&
-      _v[1].length >= 1
-        ? (([
-            [
-              {
-                param: { name },
-                nameSpans: [sp],
-              },
-              ...rest
-            ],
-            [t, ...ts],
-          ]) =>
-            recordNameParamsFrom(
-              rest,
-              ts,
-              recordBinder(sp, t, "parameter", name, None as Option<string>, st),
-            ))(
-            _v as [
-              [
-                Extract<[LamParam[], Ty[]][0][number], { _tag: "LPSpanned" }> & {
-                  param: Extract<
-                    Extract<[LamParam[], Ty[]][0][number], { _tag: "LPSpanned" }>["param"],
-                    { _tag: "LPName" }
-                  >;
-                },
-                ...[LamParam[], Ty[]][0],
-              ],
-              [LamParam[], Ty[]][1],
-            ],
-          )
-        : _v[0].length >= 1 && _v[1].length >= 1
-          ? (([[, ...rest], [, ...ts]]) => recordNameParamsFrom(rest, ts, st))(_v)
-          : st)(_tuple(params, types)),
+  recordNameParamsFrom$,
 );
+const inferCallArgs$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fnT: Ty,
+  args: Expr[],
+  st: St,
+  callSpan: SpanAt,
+): Result<[Ty, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(fnT, st)) as Result<[Ty, St], IErr>)
+      : _v.length >= 1
+        ? (([arg, ...rest]) =>
+            _Result_flatMap(
+              ([argT, st1]) =>
+                ((_v) =>
+                  _v._tag === "TyFn"
+                    ? (({ from: fromT, to: toT }) =>
+                        domainNeedsFits$(fromT, st1)
+                          ? _Result_flatMap(
+                              (st2) => inferCallArgs$(ctx, toT, rest, st2, callSpan),
+                              checkFits$(ctx, argT, fromT, st1, exprSpan(arg)),
+                            )
+                          : (([resultT, st2]: [Ty, St]) =>
+                              _Result_flatMap(
+                                (st3) => inferCallArgs$(ctx, resultT, rest, st3, callSpan),
+                                u$(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
+                              ))(freshVar(st1)))(_v)
+                    : (([resultT, st2]: [Ty, St]) =>
+                        _Result_flatMap(
+                          (st3) => inferCallArgs$(ctx, resultT, rest, st3, callSpan),
+                          u$(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
+                        ))(freshVar(st1)))(resolve(fnT, st1)),
+              inferExpr$(ctx, arg, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(args);
 const inferCallArgs: _Curry<
   [
     ctx: {
@@ -1767,56 +1824,7 @@ const inferCallArgs: _Curry<
     callSpan: SpanAt,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fnT: Ty,
-    args: Expr[],
-    st: St,
-    callSpan: SpanAt,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple(fnT, st)) as Result<[Ty, St], IErr>)
-        : _v.length >= 1
-          ? (([arg, ...rest]) =>
-              _Result_flatMap(
-                ([argT, st1]) =>
-                  ((_v) =>
-                    _v._tag === "TyFn"
-                      ? (({ from: fromT, to: toT }) =>
-                          domainNeedsFits(fromT, st1)
-                            ? _Result_flatMap(
-                                (st2) => inferCallArgs(ctx, toT, rest, st2, callSpan),
-                                checkFits(ctx, argT, fromT, st1, exprSpan(arg)),
-                              )
-                            : (([resultT, st2]: [Ty, St]) =>
-                                _Result_flatMap(
-                                  (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
-                                  u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
-                                ))(freshVar(st1)))(_v)
-                      : (([resultT, st2]: [Ty, St]) =>
-                          _Result_flatMap(
-                            (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
-                            u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
-                          ))(freshVar(st1)))(resolve(fnT, st1)),
-                inferExpr(ctx, arg, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(args),
-);
+> = _curry(5, inferCallArgs$);
 const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1832,6 +1840,41 @@ const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
     }
   }
 };
+const inferTupleLet$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  param: LamParam,
+  body: Expr,
+  lamSpan: SpanAt,
+  value: Expr,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([valueT, st1]) =>
+      (([paramT, bodyEnv, st2]: [Ty, Map<string, Scheme>, St]) =>
+        _Result_flatMap(
+          (st3) =>
+            _Result_flatMap(
+              ([bodyT, st4]) =>
+                Ok(_tuple(bodyT, recordAt(lamSpan, tArrow(paramT, bodyT), st4))) as Result<
+                  [Ty, St],
+                  IErr
+                >,
+              inferExpr$(ctxWithEnv(ctx, bodyEnv), body, st3),
+            ),
+          u$(ctx, paramT, valueT, st2, exprSpan(value)),
+        ))(bindParam$(param, ctx.env, st1)),
+    inferExpr$(ctx, value, st),
+  );
 const inferTupleLet: _Curry<
   [
     ctx: {
@@ -1852,44 +1895,48 @@ const inferTupleLet: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  6,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    param: LamParam,
-    body: Expr,
-    lamSpan: SpanAt,
-    value: Expr,
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([valueT, st1]) =>
-        (([paramT, bodyEnv, st2]: [Ty, Map<string, Scheme>, St]) =>
-          _Result_flatMap(
-            (st3) =>
-              _Result_flatMap(
-                ([bodyT, st4]) =>
-                  Ok(_tuple(bodyT, recordAt(lamSpan, tArrow(paramT, bodyT), st4))) as Result<
-                    [Ty, St],
-                    IErr
-                  >,
-                inferExpr(ctxWithEnv(ctx, bodyEnv), body, st3),
-              ),
-            u(ctx, paramT, valueT, st2, exprSpan(value)),
-          ))(bindParam(param, ctx.env, st1)),
-      inferExpr(ctx, value, st),
-    ),
-);
+> = _curry(6, inferTupleLet$);
+const inferApplied$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fn: Expr,
+  args: Expr[],
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([fnT, st1]) =>
+      ((_v) =>
+        _v.length === 0
+          ? ((_v) =>
+              _v._tag === "TyFn"
+                ? (({ from: fromT, to: toT }) =>
+                    domainIsOmittableRecord$(fromT, st1)
+                      ? _Result_flatMap(
+                          (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
+                          checkFits$(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
+                        )
+                      : (([resultT, st2]: [Ty, St]) =>
+                          _Result_flatMap(
+                            (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+                            u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
+                          ))(freshVar(st1)))(_v)
+                : (([resultT, st2]: [Ty, St]) =>
+                    _Result_flatMap(
+                      (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+                      u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
+                    ))(freshVar(st1)))(resolve(fnT, st1))
+          : inferCallArgs$(ctx, fnT, args, st1, exprSpan(fn)))(args),
+    inferExpr$(ctx, fn, st),
+  );
 const inferApplied: _Curry<
   [
     ctx: {
@@ -1908,50 +1955,39 @@ const inferApplied: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fn: Expr,
-    args: Expr[],
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([fnT, st1]) =>
-        ((_v) =>
-          _v.length === 0
-            ? ((_v) =>
-                _v._tag === "TyFn"
-                  ? (({ from: fromT, to: toT }) =>
-                      domainIsOmittableRecord(fromT, st1)
-                        ? _Result_flatMap(
-                            (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
-                            checkFits(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
-                          )
-                        : (([resultT, st2]: [Ty, St]) =>
-                            _Result_flatMap(
-                              (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-                              u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
-                            ))(freshVar(st1)))(_v)
-                  : (([resultT, st2]: [Ty, St]) =>
-                      _Result_flatMap(
-                        (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-                        u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
-                      ))(freshVar(st1)))(resolve(fnT, st1))
-            : inferCallArgs(ctx, fnT, args, st1, exprSpan(fn)))(args),
-      inferExpr(ctx, fn, st),
-    ),
-);
+> = _curry(4, inferApplied$);
+const inferNormalCall$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fn: Expr,
+  args: Expr[],
+  st: St,
+): Result<[Ty, St], IErr> =>
+  ((_v) =>
+    _v[0]._tag === "ELambda" && _v[0].params.length === 1 && _v[1].length === 1
+      ? (([
+          {
+            params: [param],
+            body,
+            span: lamSpan,
+          },
+          [value],
+        ]) =>
+          isTupleParam(param)
+            ? inferTupleLet$(ctx, param, body, lamSpan, value, st)
+            : inferApplied$(ctx, fn, args, st))(
+          _v as [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]],
+        )
+      : inferApplied$(ctx, fn, args, st))(_tuple(fn, args));
 const inferNormalCall: _Curry<
   [
     ctx: {
@@ -1970,41 +2006,44 @@ const inferNormalCall: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fn: Expr,
-    args: Expr[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v[0]._tag === "ELambda" && _v[0].params.length === 1 && _v[1].length === 1
-        ? (([
-            {
-              params: [param],
-              body,
-              span: lamSpan,
-            },
-            [value],
-          ]) =>
-            isTupleParam(param)
-              ? inferTupleLet(ctx, param, body, lamSpan, value, st)
-              : inferApplied(ctx, fn, args, st))(
-            _v as [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]],
-          )
-        : inferApplied(ctx, fn, args, st))(_tuple(fn, args)),
-);
+> = _curry(4, inferNormalCall$);
+const inferTernary$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  cond: Expr,
+  thenE: Expr,
+  elseE: Expr,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([condT, st1]) =>
+      _Result_flatMap(
+        (st2) =>
+          _Result_flatMap(
+            ([thenT, st3]) =>
+              _Result_flatMap(
+                ([elseT, st4]) =>
+                  _Result_flatMap(
+                    (st5) => Ok(_tuple(thenT, st5)) as Result<[Ty, St], IErr>,
+                    u$(ctx, thenT, elseT, st4, exprSpan(elseE)),
+                  ),
+                inferExpr$(ctx, elseE, st3),
+              ),
+            inferExpr$(ctx, thenE, st2),
+          ),
+        u$(ctx, condT, tBool, st1, exprSpan(cond)),
+      ),
+    inferExpr$(ctx, cond, st),
+  );
 const inferTernary: _Curry<
   [
     ctx: {
@@ -2024,46 +2063,7 @@ const inferTernary: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    cond: Expr,
-    thenE: Expr,
-    elseE: Expr,
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([condT, st1]) =>
-        _Result_flatMap(
-          (st2) =>
-            _Result_flatMap(
-              ([thenT, st3]) =>
-                _Result_flatMap(
-                  ([elseT, st4]) =>
-                    _Result_flatMap(
-                      (st5) => Ok(_tuple(thenT, st5)) as Result<[Ty, St], IErr>,
-                      u(ctx, thenT, elseT, st4, exprSpan(elseE)),
-                    ),
-                  inferExpr(ctx, elseE, st3),
-                ),
-              inferExpr(ctx, thenE, st2),
-            ),
-          u(ctx, condT, tBool, st1, exprSpan(cond)),
-        ),
-      inferExpr(ctx, cond, st),
-    ),
-);
+> = _curry(5, inferTernary$);
 const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -2080,6 +2080,48 @@ const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) => {
     }
   }
 };
+const inferBindBody$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  param: LamParam,
+  paramSpan: SpanAt,
+  body: Expr,
+  payloadT: Ty,
+  mkBody: (a: Ty) => Ty,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  (([paramT, bodyEnv, st1]: [Ty, Map<string, Scheme>, St]) =>
+    _Result_flatMap(
+      (st2) =>
+        ((stNamed: St) =>
+          _Result_flatMap(
+            ([bodyT, st3]) =>
+              (([resT, st4]: [Ty, St]) => {
+                const wantBody: Ty = mkBody(resT);
+                return _Result_flatMap(
+                  (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
+                  u$(ctx, bodyT, wantBody, st4, exprSpan(body)),
+                );
+              })(freshVar(st3)),
+            inferExpr$(ctxWithEnv(ctx, bodyEnv), body, stNamed),
+          ))(
+          _Option_match(
+            bindNameOf(param),
+            () => st2,
+            (name) => recordBinder(paramSpan, payloadT, "let", name, None as Option<string>, st2),
+          ),
+        ),
+      u$(ctx, paramT, payloadT, st1, paramSpan),
+    ))(bindParam$(param, ctx.env, st));
 const inferBindBody: _Curry<
   [
     ctx: {
@@ -2101,51 +2143,42 @@ const inferBindBody: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  7,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    param: LamParam,
-    paramSpan: SpanAt,
-    body: Expr,
-    payloadT: Ty,
-    mkBody: (a: Ty) => Ty,
-    st: St,
-  ) =>
-    (([paramT, bodyEnv, st1]: [Ty, Map<string, Scheme>, St]) =>
+> = _curry(7, inferBindBody$);
+const inferTwoSlotBind$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  param: LamParam,
+  paramSpan: SpanAt,
+  value: Expr,
+  body: Expr,
+  valT: Ty,
+  ctor: string,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  (([payloadT, st1]: [Ty, St]) =>
+    (([errT, st2]: [Ty, St]) =>
       _Result_flatMap(
-        (st2) =>
-          ((stNamed: St) =>
-            _Result_flatMap(
-              ([bodyT, st3]) =>
-                (([resT, st4]: [Ty, St]) => {
-                  const wantBody: Ty = mkBody(resT);
-                  return _Result_flatMap(
-                    (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
-                    u(ctx, bodyT, wantBody, st4, exprSpan(body)),
-                  );
-                })(freshVar(st3)),
-              inferExpr(ctxWithEnv(ctx, bodyEnv), body, stNamed),
-            ))(
-            _Option_match(
-              bindNameOf(param),
-              () => st2,
-              (name) => recordBinder(paramSpan, payloadT, "let", name, None as Option<string>, st2),
-            ),
+        (st3) =>
+          inferBindBody$(
+            ctx,
+            param,
+            paramSpan,
+            body,
+            payloadT,
+            (resT: Ty) => tCon(ctor, [resT, errT]),
+            st3,
           ),
-        u(ctx, paramT, payloadT, st1, paramSpan),
-      ))(bindParam(param, ctx.env, st)),
-);
+        u$(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
+      ))(freshVar(st1)))(freshVar(st));
 const inferTwoSlotBind: _Curry<
   [
     ctx: {
@@ -2168,44 +2201,73 @@ const inferTwoSlotBind: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  8,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    param: LamParam,
-    paramSpan: SpanAt,
-    value: Expr,
-    body: Expr,
-    valT: Ty,
-    ctor: string,
-    st: St,
-  ) =>
-    (([payloadT, st1]: [Ty, St]) =>
-      (([errT, st2]: [Ty, St]) =>
-        _Result_flatMap(
-          (st3) =>
-            inferBindBody(
-              ctx,
-              param,
-              paramSpan,
-              body,
-              payloadT,
-              (resT: Ty) => tCon(ctor, [resT, errT]),
-              st3,
-            ),
-          u(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
-        ))(freshVar(st1)))(freshVar(st)),
-);
+> = _curry(8, inferTwoSlotBind$);
+const inferQuestionBind$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  bind: Expr,
+  param: LamParam,
+  paramSpan: SpanAt,
+  value: Expr,
+  body: Expr,
+  valT: Ty,
+  st: St,
+): Result<[Ty, St], IErr> => {
+  const $match = resolve(valT, st);
+  switch ($match._tag) {
+    case "TyVar": {
+      const $written = setLetBindMonad(bind, "Result");
+      return inferTwoSlotBind$(ctx, param, paramSpan, value, body, valT, "Result", st);
+    }
+    case "TyCon": {
+      const { name } = $match;
+      return name === "Option"
+        ? (($written) =>
+            (([payloadT, st1]: [Ty, St]) =>
+              _Result_flatMap(
+                (st2) =>
+                  inferBindBody$(
+                    ctx,
+                    param,
+                    paramSpan,
+                    body,
+                    payloadT,
+                    (resT: Ty) => tCon("Option", [resT]),
+                    st2,
+                  ),
+                u$(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
+              ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
+        : name === "Result"
+          ? (($written) =>
+              inferTwoSlotBind$(ctx, param, paramSpan, value, body, valT, "Result", st))(
+              setLetBindMonad(bind, "Result"),
+            )
+          : (Err(
+              typeErr$(
+                `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+                exprSpan(value),
+              ),
+            ) as Result<[Ty, St], IErr>);
+    }
+    default: {
+      return Err(
+        typeErr$(
+          `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
+          exprSpan(value),
+        ),
+      ) as Result<[Ty, St], IErr>;
+    }
+  }
+};
 const inferQuestionBind: _Curry<
   [
     ctx: {
@@ -2228,75 +2290,34 @@ const inferQuestionBind: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  8,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    bind: Expr,
-    param: LamParam,
-    paramSpan: SpanAt,
-    value: Expr,
-    body: Expr,
-    valT: Ty,
-    st: St,
-  ) => {
-    const $match = resolve(valT, st);
-    switch ($match._tag) {
-      case "TyVar": {
-        const $written = setLetBindMonad(bind, "Result");
-        return inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st);
-      }
-      case "TyCon": {
-        const { name } = $match;
-        return name === "Option"
-          ? (($written) =>
-              (([payloadT, st1]: [Ty, St]) =>
-                _Result_flatMap(
-                  (st2) =>
-                    inferBindBody(
-                      ctx,
-                      param,
-                      paramSpan,
-                      body,
-                      payloadT,
-                      (resT: Ty) => tCon("Option", [resT]),
-                      st2,
-                    ),
-                  u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
-                ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
-          : name === "Result"
-            ? (($written) =>
-                inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
-                setLetBindMonad(bind, "Result"),
-              )
-            : (Err(
-                typeErr(
-                  `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-                  exprSpan(value),
-                ),
-              ) as Result<[Ty, St], IErr>);
-      }
-      default: {
-        return Err(
-          typeErr(
-            `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-            exprSpan(value),
-          ),
-        ) as Result<[Ty, St], IErr>;
-      }
-    }
+> = _curry(8, inferQuestionBind$);
+const inferLetBind$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
   },
-);
+  bind: Expr,
+  param: LamParam,
+  paramSpan: SpanAt,
+  monad: string,
+  value: Expr,
+  body: Expr,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([valT, st1]) =>
+      monad === "Task"
+        ? inferTwoSlotBind$(ctx, param, paramSpan, value, body, valT, "Task", st1)
+        : inferQuestionBind$(ctx, bind, param, paramSpan, value, body, valT, st1),
+    inferExpr$(ctx, value, st),
+  );
 const inferLetBind: _Curry<
   [
     ctx: {
@@ -2319,36 +2340,39 @@ const inferLetBind: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  8,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    bind: Expr,
-    param: LamParam,
-    paramSpan: SpanAt,
-    monad: string,
-    value: Expr,
-    body: Expr,
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([valT, st1]) =>
-        monad === "Task"
-          ? inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Task", st1)
-          : inferQuestionBind(ctx, bind, param, paramSpan, value, body, valT, st1),
-      inferExpr(ctx, value, st),
-    ),
-);
+> = _curry(8, inferLetBind$);
+const inferRecordRow$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fields: Field[],
+  st: St,
+): Result<[Row, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], IErr>)
+      : _v.length >= 1
+        ? (([f, ...rest]) =>
+            _Result_flatMap(
+              ([restRow, st1]) =>
+                _Result_flatMap(
+                  ([ft, st2]) =>
+                    Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
+                  inferExpr$(ctx, f.value, st1),
+                ),
+              inferRecordRow$(ctx, rest, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(fields);
 const inferRecordRow: _Curry<
   [
     ctx: {
@@ -2366,42 +2390,8 @@ const inferRecordRow: _Curry<
     st: St,
   ],
   Result<[Row, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fields: Field[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple(RowEmpty as Row, st)) as Result<[Row, St], IErr>)
-        : _v.length >= 1
-          ? (([f, ...rest]) =>
-              _Result_flatMap(
-                ([restRow, st1]) =>
-                  _Result_flatMap(
-                    ([ft, st2]) =>
-                      Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
-                    inferExpr(ctx, f.value, st1),
-                  ),
-                inferRecordRow(ctx, rest, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(fields),
-);
-const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, (row: Row, tail: Row) => {
+> = _curry(3, inferRecordRow$);
+const rWithTail$ = (row: Row, tail: Row): Row => {
   const $match = row;
   switch ($match._tag) {
     case "RowEmpty": {
@@ -2413,29 +2403,31 @@ const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, (row: Row, tail:
     }
     case "RowExtend": {
       const { label, fieldType, optional, rest } = $match;
-      return rField(label, fieldType, rWithTail(rest, tail), optional);
+      return rField(label, fieldType, rWithTail$(rest, tail), optional);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
-});
+};
+const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, rWithTail$);
+const lookupField$ = (row: Row, name: string): Option<[Ty, boolean]> => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return eq(label, name)
+        ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
+        : lookupField$(rest, name);
+    }
+    default: {
+      return None as Option<[Ty, boolean]>;
+    }
+  }
+};
 const lookupField: _Curry<[row: Row, name: string], Option<[Ty, boolean]>> = _curry(
   2,
-  (row: Row, name: string) => {
-    const $match = row;
-    switch ($match._tag) {
-      case "RowExtend": {
-        const { label, fieldType, optional, rest } = $match;
-        return eq(label, name)
-          ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
-          : lookupField(rest, name);
-      }
-      default: {
-        return None as Option<[Ty, boolean]>;
-      }
-    }
-  },
+  lookupField$,
 );
 const rowEndsEmpty: (row: Row) => boolean = (row: Row) => {
   const $match = row;
@@ -2455,6 +2447,54 @@ const rowEndsEmpty: (row: Row) => boolean = (row: Row) => {
     }
   }
 };
+const inferFieldAccess$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  field: Expr,
+  target: Expr,
+  name: string,
+  sp: SpanAt,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([targetT, st1]) =>
+      ((zonked: Ty) =>
+        ((_v) =>
+          _v._tag === "TyRecord"
+            ? (({ row }) =>
+                ((_v) =>
+                  _v._tag === "Some"
+                    ? (({ value: [ft, optional] }) =>
+                        optional
+                          ? (($written) =>
+                              Ok(_tuple(tCon("Option", [ft]), st1)) as Result<[Ty, St], IErr>)(
+                              setFieldOptional(field, true),
+                            )
+                          : (Ok(_tuple(ft, st1)) as Result<[Ty, St], IErr>))(
+                        _v as Extract<Option<[Ty, boolean]>, { _tag: "Some" }>,
+                      )
+                    : _v._tag === "None"
+                      ? rowEndsEmpty(row)
+                        ? (Err(typeErr$(`record missing field '${name}'`, sp)) as Result<
+                            [Ty, St],
+                            IErr
+                          >)
+                        : inferDuckField$(ctx, targetT, name, sp, st1)
+                      : (() => {
+                          throw new Error("non-exhaustive match");
+                        })())(lookupField$(row, name)))(_v)
+            : inferDuckField$(ctx, targetT, name, sp, st1))(zonked))(zonk(targetT, st1)),
+    inferExpr$(ctx, target, st),
+  );
 const inferFieldAccess: _Curry<
   [
     ctx: {
@@ -2475,57 +2515,30 @@ const inferFieldAccess: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  6,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    field: Expr,
-    target: Expr,
-    name: string,
-    sp: SpanAt,
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([targetT, st1]) =>
-        ((zonked: Ty) =>
-          ((_v) =>
-            _v._tag === "TyRecord"
-              ? (({ row }) =>
-                  ((_v) =>
-                    _v._tag === "Some"
-                      ? (({ value: [ft, optional] }) =>
-                          optional
-                            ? (($written) =>
-                                Ok(_tuple(tCon("Option", [ft]), st1)) as Result<[Ty, St], IErr>)(
-                                setFieldOptional(field, true),
-                              )
-                            : (Ok(_tuple(ft, st1)) as Result<[Ty, St], IErr>))(
-                          _v as Extract<Option<[Ty, boolean]>, { _tag: "Some" }>,
-                        )
-                      : _v._tag === "None"
-                        ? rowEndsEmpty(row)
-                          ? (Err(typeErr(`record missing field '${name}'`, sp)) as Result<
-                              [Ty, St],
-                              IErr
-                            >)
-                          : inferDuckField(ctx, targetT, name, sp, st1)
-                        : (() => {
-                            throw new Error("non-exhaustive match");
-                          })())(lookupField(row, name)))(_v)
-              : inferDuckField(ctx, targetT, name, sp, st1))(zonked))(zonk(targetT, st1)),
-      inferExpr(ctx, target, st),
-    ),
-);
+> = _curry(6, inferFieldAccess$);
+const inferDuckField$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  targetT: Ty,
+  name: string,
+  sp: SpanAt,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  (([fieldT, st2]: [Ty, St]) =>
+    (([restRow, st3]: [Row, St]) =>
+      _Result_flatMap(
+        (st4) => Ok(_tuple(fieldT, st4)) as Result<[Ty, St], IErr>,
+        u$(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
+      ))(freshRowVar(st2)))(freshVar(st));
 const inferDuckField: _Curry<
   [
     ctx: {
@@ -2545,32 +2558,30 @@ const inferDuckField: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    targetT: Ty,
-    name: string,
-    sp: SpanAt,
-    st: St,
-  ) =>
-    (([fieldT, st2]: [Ty, St]) =>
-      (([restRow, st3]: [Row, St]) =>
-        _Result_flatMap(
-          (st4) => Ok(_tuple(fieldT, st4)) as Result<[Ty, St], IErr>,
-          u(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
-        ))(freshRowVar(st2)))(freshVar(st)),
-);
+> = _curry(5, inferDuckField$);
+const inferNsField$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  tname: string,
+  name: string,
+  sp: SpanAt,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Option_match(
+    _Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)),
+    () => Err(typeErr$(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
+    (sc) =>
+      (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+  );
 const inferNsField: _Curry<
   [
     ctx: {
@@ -2590,32 +2601,42 @@ const inferNsField: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    tname: string,
-    name: string,
-    sp: SpanAt,
-    st: St,
-  ) =>
-    _Option_match(
-      _Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)),
-      () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
-      (sc) =>
-        (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
-    ),
-);
+> = _curry(5, inferNsField$);
+const inferInterpParts$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  parts: InterpPart[],
+  st: St,
+): Result<St, IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(st) as Result<St, IErr>)
+      : _v.length >= 1 && _v[0]._tag === "IPLit"
+        ? (([, ...rest]) => inferInterpParts$(ctx, rest, st))(
+            _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
+          )
+        : _v.length >= 1 && _v[0]._tag === "IPExpr"
+          ? (([{ expr: ex }, ...rest]) =>
+              _Result_flatMap(
+                ([t, st1]) =>
+                  _Result_flatMap(
+                    (st2) => inferInterpParts$(ctx, rest, st2),
+                    u$(ctx, t, tString, st1, exprSpan(ex)),
+                  ),
+                inferExpr$(ctx, ex, st),
+              ))(_v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]])
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(parts);
 const inferInterpParts: _Curry<
   [
     ctx: {
@@ -2633,44 +2654,39 @@ const inferInterpParts: _Curry<
     st: St,
   ],
   Result<St, IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    parts: InterpPart[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(st) as Result<St, IErr>)
-        : _v.length >= 1 && _v[0]._tag === "IPLit"
-          ? (([, ...rest]) => inferInterpParts(ctx, rest, st))(
-              _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
-            )
-          : _v.length >= 1 && _v[0]._tag === "IPExpr"
-            ? (([{ expr: ex }, ...rest]) =>
+> = _curry(3, inferInterpParts$);
+const inferTupleElems$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  elements: Expr[],
+  st: St,
+): Result<[Ty[], St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], IErr>)
+      : _v.length >= 1
+        ? (([el, ...rest]) =>
+            _Result_flatMap(
+              ([t, st1]) =>
                 _Result_flatMap(
-                  ([t, st1]) =>
-                    _Result_flatMap(
-                      (st2) => inferInterpParts(ctx, rest, st2),
-                      u(ctx, t, tString, st1, exprSpan(ex)),
-                    ),
-                  inferExpr(ctx, ex, st),
-                ))(_v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]])
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(parts),
-);
+                  ([restTs, st2]) =>
+                    Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
+                  inferTupleElems$(ctx, rest, st1),
+                ),
+              inferExpr$(ctx, el, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(elements);
 const inferTupleElems: _Curry<
   [
     ctx: {
@@ -2688,41 +2704,7 @@ const inferTupleElems: _Curry<
     st: St,
   ],
   Result<[Ty[], St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elements: Expr[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple([] as Ty[], st)) as Result<[Ty[], St], IErr>)
-        : _v.length >= 1
-          ? (([el, ...rest]) =>
-              _Result_flatMap(
-                ([t, st1]) =>
-                  _Result_flatMap(
-                    ([restTs, st2]) =>
-                      Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
-                    inferTupleElems(ctx, rest, st1),
-                  ),
-                inferExpr(ctx, el, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(elements),
-);
+> = _curry(3, inferTupleElems$);
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
   const $match = el;
   switch ($match._tag) {
@@ -2739,6 +2721,50 @@ const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
     }
   }
 };
+const inferSeqSlotsElems$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  con: string,
+  elem: Ty,
+  elements: SeqElem[],
+  st: St,
+): Result<St, IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(st) as Result<St, IErr>)
+      : _v.length >= 1
+        ? (([slot, ...rest]) =>
+            ((ex: Expr) =>
+              _Result_flatMap(
+                ([et, st1]) =>
+                  ((want: Ty) =>
+                    _Result_flatMap(
+                      (st2) => inferSeqSlotsElems$(ctx, con, elem, rest, st2),
+                      u$(ctx, want, et, st1, exprSpan(ex)),
+                    ))(
+                    ((_v) =>
+                      _v._tag === "SEExpr"
+                        ? elem
+                        : _v._tag === "SESpread"
+                          ? tCon(con, [elem])
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(slot),
+                  ),
+                inferExpr$(ctx, ex, st),
+              ))(seqElemExpr(slot)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(elements);
 const inferSeqSlotsElems: _Curry<
   [
     ctx: {
@@ -2758,53 +2784,28 @@ const inferSeqSlotsElems: _Curry<
     st: St,
   ],
   Result<St, IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    con: string,
-    elem: Ty,
-    elements: SeqElem[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(st) as Result<St, IErr>)
-        : _v.length >= 1
-          ? (([slot, ...rest]) =>
-              ((ex: Expr) =>
-                _Result_flatMap(
-                  ([et, st1]) =>
-                    ((want: Ty) =>
-                      _Result_flatMap(
-                        (st2) => inferSeqSlotsElems(ctx, con, elem, rest, st2),
-                        u(ctx, want, et, st1, exprSpan(ex)),
-                      ))(
-                      ((_v) =>
-                        _v._tag === "SEExpr"
-                          ? elem
-                          : _v._tag === "SESpread"
-                            ? tCon(con, [elem])
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(slot),
-                    ),
-                  inferExpr(ctx, ex, st),
-                ))(seqElemExpr(slot)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(elements),
-);
+> = _curry(5, inferSeqSlotsElems$);
+const inferSeqSlots$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  con: string,
+  elements: SeqElem[],
+  st: St,
+): Result<[Ty, St], IErr> =>
+  (([elem, st1]: [Ty, St]) =>
+    _Result_flatMap(
+      (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
+      inferSeqSlotsElems$(ctx, con, elem, elements, st1),
+    ))(freshVar(st));
 const inferSeqSlots: _Curry<
   [
     ctx: {
@@ -2823,30 +2824,48 @@ const inferSeqSlots: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    con: string,
-    elements: SeqElem[],
-    st: St,
-  ) =>
-    (([elem, st1]: [Ty, St]) =>
-      _Result_flatMap(
-        (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
-        inferSeqSlotsElems(ctx, con, elem, elements, st1),
-      ))(freshVar(st)),
-);
+> = _curry(4, inferSeqSlots$);
+const inferMapEntries$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  k: Ty,
+  v: Ty,
+  entries: MapEntry[],
+  st: St,
+): Result<St, IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(st) as Result<St, IErr>)
+      : _v.length >= 1
+        ? (([ent, ...rest]) =>
+            _Result_flatMap(
+              ([kt, st1]) =>
+                _Result_flatMap(
+                  (st2) =>
+                    _Result_flatMap(
+                      ([vt, st3]) =>
+                        _Result_flatMap(
+                          (st4) => inferMapEntries$(ctx, k, v, rest, st4),
+                          u$(ctx, v, vt, st3, exprSpan(ent.value)),
+                        ),
+                      inferExpr$(ctx, ent.value, st2),
+                    ),
+                  u$(ctx, k, kt, st1, exprSpan(ent.key)),
+                ),
+              inferExpr$(ctx, ent.key, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(entries);
 const inferMapEntries: _Curry<
   [
     ctx: {
@@ -2866,50 +2885,28 @@ const inferMapEntries: _Curry<
     st: St,
   ],
   Result<St, IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    k: Ty,
-    v: Ty,
-    entries: MapEntry[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(st) as Result<St, IErr>)
-        : _v.length >= 1
-          ? (([ent, ...rest]) =>
-              _Result_flatMap(
-                ([kt, st1]) =>
-                  _Result_flatMap(
-                    (st2) =>
-                      _Result_flatMap(
-                        ([vt, st3]) =>
-                          _Result_flatMap(
-                            (st4) => inferMapEntries(ctx, k, v, rest, st4),
-                            u(ctx, v, vt, st3, exprSpan(ent.value)),
-                          ),
-                        inferExpr(ctx, ent.value, st2),
-                      ),
-                    u(ctx, k, kt, st1, exprSpan(ent.key)),
-                  ),
-                inferExpr(ctx, ent.key, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(entries),
-);
+> = _curry(5, inferMapEntries$);
+const inferMapExpr$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  entries: MapEntry[],
+  st: St,
+): Result<[Ty, St], IErr> =>
+  (([k, st1]: [Ty, St]) =>
+    (([v, st2]: [Ty, St]) =>
+      _Result_flatMap(
+        (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
+        inferMapEntries$(ctx, k, v, entries, st2),
+      ))(freshVar(st1)))(freshVar(st));
 const inferMapExpr: _Curry<
   [
     ctx: {
@@ -2927,30 +2924,7 @@ const inferMapExpr: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    entries: MapEntry[],
-    st: St,
-  ) =>
-    (([k, st1]: [Ty, St]) =>
-      (([v, st2]: [Ty, St]) =>
-        _Result_flatMap(
-          (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
-          inferMapEntries(ctx, k, v, entries, st2),
-        ))(freshVar(st1)))(freshVar(st)),
-);
+> = _curry(3, inferMapExpr$);
 const mergeBindingMapsFrom: <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) => Map<A, B> =
   _curry(3, <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) =>
     match(keys)
@@ -3003,6 +2977,60 @@ const mergeEnvBindings: <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) => Map<A,
   <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
+const inferArms$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  scrutT: Ty,
+  resultT: Ty,
+  arms: MatchArm[],
+  st: St,
+): Result<St, IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(st) as Result<St, IErr>)
+      : _v.length >= 1
+        ? (([arm, ...rest]) =>
+            _Result_flatMap(
+              ([patT, bindings, st1]) =>
+                _Result_flatMap(
+                  (st2) =>
+                    ((armCtx) =>
+                      _Result_flatMap(
+                        (st3) =>
+                          _Result_flatMap(
+                            ([bodyT, st4]) =>
+                              _Result_flatMap(
+                                (st5) => inferArms$(ctx, scrutT, resultT, rest, st5),
+                                u$(ctx, resultT, bodyT, st4, exprSpan(arm.body)),
+                              ),
+                            inferExpr$(armCtx, arm.body, st3),
+                          ),
+                        _Option_match(
+                          arm.guard,
+                          () => Ok(st2) as Result<St, IErr>,
+                          (g) =>
+                            _Result_flatMap(
+                              ([guardT, stg]) => u$(ctx, tBool, guardT, stg, exprSpan(g)),
+                              inferExpr$(armCtx, g, st2),
+                            ),
+                        ),
+                      ))(ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env))),
+                  u$(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
+                ),
+              inferPat$(ctx, arm.pattern, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(arms);
 const inferArms: _Curry<
   [
     ctx: {
@@ -3022,63 +3050,32 @@ const inferArms: _Curry<
     st: St,
   ],
   Result<St, IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    scrutT: Ty,
-    resultT: Ty,
-    arms: MatchArm[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(st) as Result<St, IErr>)
-        : _v.length >= 1
-          ? (([arm, ...rest]) =>
-              _Result_flatMap(
-                ([patT, bindings, st1]) =>
-                  _Result_flatMap(
-                    (st2) =>
-                      ((armCtx) =>
-                        _Result_flatMap(
-                          (st3) =>
-                            _Result_flatMap(
-                              ([bodyT, st4]) =>
-                                _Result_flatMap(
-                                  (st5) => inferArms(ctx, scrutT, resultT, rest, st5),
-                                  u(ctx, resultT, bodyT, st4, exprSpan(arm.body)),
-                                ),
-                              inferExpr(armCtx, arm.body, st3),
-                            ),
-                          _Option_match(
-                            arm.guard,
-                            () => Ok(st2) as Result<St, IErr>,
-                            (g) =>
-                              _Result_flatMap(
-                                ([guardT, stg]) => u(ctx, tBool, guardT, stg, exprSpan(g)),
-                                inferExpr(armCtx, g, st2),
-                              ),
-                          ),
-                        ))(ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env))),
-                    u(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
-                  ),
-                inferPat(ctx, arm.pattern, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(arms),
-);
+> = _curry(5, inferArms$);
+const inferMatch$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  scrutinee: Expr,
+  arms: MatchArm[],
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([scrutT, st1]) =>
+      (([resultT, st2]: [Ty, St]) =>
+        _Result_flatMap(
+          (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
+          inferArms$(ctx, scrutT, resultT, arms, st2),
+        ))(freshVar(st1)),
+    inferExpr$(ctx, scrutinee, st),
+  );
 const inferMatch: _Curry<
   [
     ctx: {
@@ -3097,34 +3094,36 @@ const inferMatch: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    scrutinee: Expr,
-    arms: MatchArm[],
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([scrutT, st1]) =>
-        (([resultT, st2]: [Ty, St]) =>
-          _Result_flatMap(
-            (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-            inferArms(ctx, scrutT, resultT, arms, st2),
-          ))(freshVar(st1)),
-      inferExpr(ctx, scrutinee, st),
-    ),
-);
+> = _curry(4, inferMatch$);
+const inferExpr$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  e: Expr,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  _Result_flatMap(
+    ([t, st1]) =>
+      Ok(
+        _tuple(
+          t,
+          ((_v) =>
+            _v._tag === "EField"
+              ? (({ name, span: sp }) =>
+                  recordBinder(sp, t, "property", name, None as Option<string>, st1))(_v)
+              : recordAt(exprSpan(e), t, st1))(e),
+        ),
+      ) as Result<[Ty, St], IErr>,
+    inferExprRaw$(ctx, e, st),
+  );
 /**
  * Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
  * every expression node's inferred type lands in `st.recorded`, keyed by span,
@@ -3147,38 +3146,387 @@ const inferExpr: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    e: Expr,
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([t, st1]) =>
-        Ok(
-          _tuple(
-            t,
-            ((_v) =>
-              _v._tag === "EField"
-                ? (({ name, span: sp }) =>
-                    recordBinder(sp, t, "property", name, None as Option<string>, st1))(_v)
-                : recordAt(exprSpan(e), t, st1))(e),
-          ),
-        ) as Result<[Ty, St], IErr>,
-      inferExprRaw(ctx, e, st),
-    ),
-);
+> = _curry(3, inferExpr$);
+const inferExprRaw$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  e: Expr,
+  st: St,
+): Result<[Ty, St], IErr> =>
+  ((_v) =>
+    _v._tag === "ENum"
+      ? (Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
+      : _v._tag === "EUnit"
+        ? (Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
+        : _v._tag === "EBool"
+          ? (Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
+          : _v._tag === "EStr"
+            ? (({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)(_v)
+            : _v._tag === "ERef"
+              ? (({ name, span: sp }) =>
+                  _Option_match(
+                    _Map_get(name, ctx.env),
+                    () =>
+                      ctx.open
+                        ? _Set_has(name, ctx.localNames)
+                          ? (Err(
+                              typeErrHelp$(
+                                `'${name}' is not in scope here`,
+                                sp,
+                                "it is bound elsewhere in this file, but not around this use — check the binder's extent",
+                              ),
+                            ) as Result<[Ty, St], IErr>)
+                          : (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
+                              freshVar(st),
+                            )
+                        : _Option_match(
+                            closestName(name, _Map_keys(ctx.env)),
+                            () =>
+                              Err(
+                                typeErrHelp$(
+                                  `unbound variable '${name}'`,
+                                  sp,
+                                  "bind the name before using it, or check the spelling",
+                                ),
+                              ) as Result<[Ty, St], IErr>,
+                            (hint) =>
+                              Err(
+                                typeErrSuggest$(
+                                  `unbound variable '${name}'`,
+                                  sp,
+                                  `did you mean '${hint}'?`,
+                                  hint,
+                                ),
+                              ) as Result<[Ty, St], IErr>,
+                          ),
+                    (sc) =>
+                      (([t, st1]: [Ty, St]) =>
+                        Ok(
+                          _tuple(
+                            t,
+                            _Option_match(
+                              _Map_get(name, ctx.letOwner),
+                              () => st1,
+                              (vsp) => noteUse(vsp, t, st1),
+                            ),
+                          ),
+                        ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+                  ))(_v)
+              : _v._tag === "ELambda"
+                ? (({ params, body }) =>
+                    (([posParams, labParams]: [LamParam[], LamParam[]]) =>
+                      (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
+                        _Result_flatMap(
+                          ([annotVars, st2]) =>
+                            _Result_flatMap(
+                              ([labFields, st3]) =>
+                                ((allTypes: Ty[]) =>
+                                  ((st3Labs: St) =>
+                                    _Result_flatMap(
+                                      ([bodyT, st4]) =>
+                                        Ok(
+                                          _tuple(
+                                            arrowChain$(allTypes, bodyT),
+                                            recordNameParamsFrom$(posParams, paramTypes, st4),
+                                          ),
+                                        ) as Result<[Ty, St], IErr>,
+                                      inferExpr$(
+                                        ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
+                                        body,
+                                        st3Labs,
+                                      ),
+                                    ))(recordLabParamsFrom(labParams, labFields, st3)))(
+                                  ((_v) =>
+                                    _v.length === 0
+                                      ? paramTypes
+                                      : _Array_append(
+                                          tRecord(rowOfLabFields(labFields)),
+                                          paramTypes,
+                                        ))(labParams),
+                                ),
+                              labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2),
+                            ),
+                          constrainParamAnnotsFrom$(
+                            ctx,
+                            posParams,
+                            paramTypes,
+                            new Map<string, Ty>(),
+                            st1,
+                          ),
+                        ))(bindParamsFrom$(posParams, ctx.env, st)))(
+                      splitLamParams$(params, [] as LamParam[], [] as LamParam[]),
+                    ))(_v)
+                : _v._tag === "ELetIn"
+                  ? (({ name, nameSpan, annot, value, body, span: _span }) =>
+                      ((_v) =>
+                        _v._tag === "ELambda"
+                          ? ((lets: Stmt[]) =>
+                              ((idxOf: Map<string, number>) =>
+                                ((tail: Expr) =>
+                                  (([localCtx, localSt, localErrs]: [
+                                    {
+                                      env: Map<string, Scheme>;
+                                      open: boolean;
+                                      ns: Map<string, Map<string, Scheme>>;
+                                      aliasMap: Map<string, QualAliasInfo>;
+                                      plugins: HostPlugin[];
+                                      loopStack: Ty[][];
+                                      letOwner: Map<string, SpanAt>;
+                                      localNames: Set<string>;
+                                      scopeNames: string[];
+                                    },
+                                    St,
+                                    IErr[],
+                                  ]) =>
+                                    _Option_match(
+                                      _Array_get(0, localErrs),
+                                      () => inferExpr$(localCtx, tail, localSt),
+                                      (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
+                                    ))(
+                                    processGroupsFrom$(
+                                      ctx,
+                                      stronglyConnected(adjOf(lets, idxOf)),
+                                      lets,
+                                      st,
+                                      noErrs,
+                                    ),
+                                  ))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e))
+                          : _Result_flatMap(
+                              ([valT, st1]) =>
+                                _Result_flatMap(
+                                  ([pinned, st2]) =>
+                                    ((widen: boolean) =>
+                                      ((sc: Scheme) =>
+                                        ((vsp: SpanAt) =>
+                                          (($ctx) =>
+                                            inferExpr$(
+                                              $ctx,
+                                              body,
+                                              noteLet(
+                                                vsp,
+                                                recordBinder(
+                                                  nameSpan,
+                                                  pinned,
+                                                  "let",
+                                                  name,
+                                                  None as Option<string>,
+                                                  st2,
+                                                ),
+                                              ),
+                                            ))(
+                                            ctxWithLets(
+                                              ctx,
+                                              _Map_set(name, sc, ctx.env),
+                                              _Map_set(name, vsp, ctx.letOwner),
+                                            ),
+                                          ))(exprSpan(value)))(
+                                        generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen),
+                                      ))(
+                                      _Option_match(
+                                        annot,
+                                        () => true,
+                                        () => false,
+                                      ),
+                                    ),
+                                  _Option_match(
+                                    annot,
+                                    () => Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>,
+                                    (te) =>
+                                      (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
+                                        _Result_map(
+                                          (stB: St) => _tuple(at, stB),
+                                          checkFits$(ctx, valT, at, stA, annotSpan(te)),
+                                        ))(
+                                        typeExprToType(
+                                          te,
+                                          new Map<string, Ty>(),
+                                          st1,
+                                          ctx.aliasMap,
+                                          _Set_fromArray([] as string[]),
+                                        ),
+                                      ),
+                                  ),
+                                ),
+                              inferExpr$(ctx, value, st),
+                            ))(value))(_v)
+                  : _v._tag === "ELetBind"
+                    ? (({ param, paramSpan, monad, value, body }) =>
+                        inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st))(_v)
+                    : _v._tag === "ECall"
+                      ? (({ fn, args, origin }) =>
+                          ((api: InferApi) =>
+                            _Result_flatMap(
+                              (claimed) =>
+                                _Option_match(
+                                  claimed,
+                                  () => inferNormalCall$(ctx, fn, args, st),
+                                  (r) => Ok(r) as Result<[Ty, St], IErr>,
+                                ),
+                              runInferCallHooks(
+                                inferCallHooksOf(ctx.plugins),
+                                fn,
+                                args,
+                                origin,
+                                st,
+                                api,
+                              ),
+                            ))({
+                            inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr$(ctx, e, st0)),
+                            unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
+                              u$(ctx, left, right, st0, sp),
+                            ),
+                          }))(_v)
+                      : _v._tag === "EPipe" && _v.fast === true
+                        ? (({ left, right, span: sp }) =>
+                            ((_v) =>
+                              _v._tag === "ECall"
+                                ? (({ fn: rfn, args: rargs, origin }) =>
+                                    inferExpr$(
+                                      ctx,
+                                      Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp),
+                                      st,
+                                    ))(_v)
+                                : inferExpr$(
+                                    ctx,
+                                    Ast.ECall(right, [left], None as Option<string>, sp),
+                                    st,
+                                  ))(right))(_v)
+                        : _v._tag === "EPipe"
+                          ? (({ left, right, span: sp }) =>
+                              inferExpr$(
+                                ctx,
+                                Ast.ECall(right, [left], None as Option<string>, sp),
+                                st,
+                              ))(_v)
+                          : _v._tag === "EDo"
+                            ? (({ exprs }) => inferDo$(ctx, exprs, st))(_v)
+                            : _v._tag === "ETernary"
+                              ? (({ cond, thenE, elseE }) =>
+                                  inferTernary$(ctx, cond, thenE, elseE, st))(_v)
+                              : _v._tag === "ERecord"
+                                ? (({ fields, spread, span: sp }) =>
+                                    _Option_match(
+                                      spread,
+                                      () =>
+                                        _Result_flatMap(
+                                          ([row, st1]) =>
+                                            Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
+                                          inferRecordRow$(ctx, fields, st),
+                                        ),
+                                      (spreadExpr) =>
+                                        _Result_flatMap(
+                                          ([row, st1]) =>
+                                            _Result_flatMap(
+                                              ([baseT, st2]) =>
+                                                (([tailVar, st3]: [Row, St]) =>
+                                                  _Result_flatMap(
+                                                    (st4) =>
+                                                      Ok(_tuple(baseT, st4)) as Result<
+                                                        [Ty, St],
+                                                        IErr
+                                                      >,
+                                                    u$(
+                                                      ctx,
+                                                      baseT,
+                                                      tRecord(rWithTail$(row, tailVar)),
+                                                      st3,
+                                                      sp,
+                                                    ),
+                                                  ))(freshRowVar(st2)),
+                                              inferExpr$(ctx, spreadExpr, st1),
+                                            ),
+                                          inferRecordRow$(ctx, fields, st),
+                                        ),
+                                    ))(_v)
+                                : _v._tag === "EField"
+                                  ? (({ target, name, span: sp }) =>
+                                      ((_v) =>
+                                        _v._tag === "ERef"
+                                          ? (({ name: tname }) =>
+                                              and(
+                                                _Map_has(tname, ctx.ns),
+                                                !_Map_has(tname, ctx.env),
+                                              )
+                                                ? inferNsField$(ctx, tname, name, sp, st)
+                                                : inferFieldAccess$(ctx, e, target, name, sp, st))(
+                                              _v,
+                                            )
+                                          : inferFieldAccess$(ctx, e, target, name, sp, st))(
+                                        target,
+                                      ))(_v)
+                                  : _v._tag === "ETuple"
+                                    ? (({ elements }) =>
+                                        _Result_flatMap(
+                                          ([elems, st1]) =>
+                                            Ok(_tuple(tTuple(elems), st1)) as Result<
+                                              [Ty, St],
+                                              IErr
+                                            >,
+                                          inferTupleElems$(ctx, elements, st),
+                                        ))(_v)
+                                    : _v._tag === "EArr"
+                                      ? (({ elements }) =>
+                                          inferSeqSlots$(ctx, "Array", elements, st))(_v)
+                                      : _v._tag === "EList"
+                                        ? (({ elements }) =>
+                                            inferSeqSlots$(ctx, "List", elements, st))(_v)
+                                        : _v._tag === "ESet"
+                                          ? (({ elements }) =>
+                                              inferSeqSlots$(ctx, "Set", elements, st))(_v)
+                                          : _v._tag === "EMap"
+                                            ? (({ entries }) => inferMapExpr$(ctx, entries, st))(_v)
+                                            : _v._tag === "EMatch"
+                                              ? (({ scrutinee, arms }) =>
+                                                  inferMatch$(ctx, scrutinee, arms, st))(_v)
+                                              : _v._tag === "ELoop"
+                                                ? (({ params, body }) =>
+                                                    _Result_flatMap(
+                                                      ([frame, bodyEnv, bodyOwner, st1]) =>
+                                                        inferExpr$(
+                                                          ctxWithLoop(
+                                                            ctx,
+                                                            bodyEnv,
+                                                            frame,
+                                                            bodyOwner,
+                                                          ),
+                                                          body,
+                                                          st1,
+                                                        ),
+                                                      inferLoopParamsFrom$(
+                                                        ctx,
+                                                        params,
+                                                        0,
+                                                        ctx.env,
+                                                        [] as Ty[],
+                                                        ctx.letOwner,
+                                                        st,
+                                                      ),
+                                                    ))(_v)
+                                                : _v._tag === "ERecur"
+                                                  ? (({ args, span: sp }) =>
+                                                      inferRecur$(ctx, args, sp, st))(_v)
+                                                  : _v._tag === "EInterp"
+                                                    ? (({ parts }) =>
+                                                        _Result_flatMap(
+                                                          (st1) =>
+                                                            Ok(_tuple(tString, st1)) as Result<
+                                                              [Ty, St],
+                                                              IErr
+                                                            >,
+                                                          inferInterpParts$(ctx, parts, st),
+                                                        ))(_v)
+                                                    : (() => {
+                                                        throw new Error("non-exhaustive match");
+                                                      })())(e);
 const inferExprRaw: _Curry<
   [
     ctx: {
@@ -3196,399 +3544,35 @@ const inferExprRaw: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    e: Expr,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v._tag === "ENum"
-        ? (Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
-        : _v._tag === "EUnit"
-          ? (Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
-          : _v._tag === "EBool"
-            ? (Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
-            : _v._tag === "EStr"
-              ? (({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)(_v)
-              : _v._tag === "ERef"
-                ? (({ name, span: sp }) =>
-                    _Option_match(
-                      _Map_get(name, ctx.env),
-                      () =>
-                        ctx.open
-                          ? _Set_has(name, ctx.localNames)
-                            ? (Err(
-                                typeErrHelp(
-                                  `'${name}' is not in scope here`,
-                                  sp,
-                                  "it is bound elsewhere in this file, but not around this use — check the binder's extent",
-                                ),
-                              ) as Result<[Ty, St], IErr>)
-                            : (([t, st1]: [Ty, St]) =>
-                                Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
-                          : _Option_match(
-                              closestName(name, _Map_keys(ctx.env)),
-                              () =>
-                                Err(
-                                  typeErrHelp(
-                                    `unbound variable '${name}'`,
-                                    sp,
-                                    "bind the name before using it, or check the spelling",
-                                  ),
-                                ) as Result<[Ty, St], IErr>,
-                              (hint) =>
-                                Err(
-                                  typeErrSuggest(
-                                    `unbound variable '${name}'`,
-                                    sp,
-                                    `did you mean '${hint}'?`,
-                                    hint,
-                                  ),
-                                ) as Result<[Ty, St], IErr>,
-                            ),
-                      (sc) =>
-                        (([t, st1]: [Ty, St]) =>
-                          Ok(
-                            _tuple(
-                              t,
-                              _Option_match(
-                                _Map_get(name, ctx.letOwner),
-                                () => st1,
-                                (vsp) => noteUse(vsp, t, st1),
-                              ),
-                            ),
-                          ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
-                    ))(_v)
-                : _v._tag === "ELambda"
-                  ? (({ params, body }) =>
-                      (([posParams, labParams]: [LamParam[], LamParam[]]) =>
-                        (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
-                          _Result_flatMap(
-                            ([annotVars, st2]) =>
-                              _Result_flatMap(
-                                ([labFields, st3]) =>
-                                  ((allTypes: Ty[]) =>
-                                    ((st3Labs: St) =>
-                                      _Result_flatMap(
-                                        ([bodyT, st4]) =>
-                                          Ok(
-                                            _tuple(
-                                              arrowChain(allTypes, bodyT),
-                                              recordNameParamsFrom(posParams, paramTypes, st4),
-                                            ),
-                                          ) as Result<[Ty, St], IErr>,
-                                        inferExpr(
-                                          ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
-                                          body,
-                                          st3Labs,
-                                        ),
-                                      ))(recordLabParamsFrom(labParams, labFields, st3)))(
-                                    ((_v) =>
-                                      _v.length === 0
-                                        ? paramTypes
-                                        : _Array_append(
-                                            tRecord(rowOfLabFields(labFields)),
-                                            paramTypes,
-                                          ))(labParams),
-                                  ),
-                                labFieldsFrom(ctx, labParams, bodyEnv, annotVars, st2),
-                              ),
-                            constrainParamAnnotsFrom(
-                              ctx,
-                              posParams,
-                              paramTypes,
-                              new Map<string, Ty>(),
-                              st1,
-                            ),
-                          ))(bindParamsFrom(posParams, ctx.env, st)))(
-                        splitLamParams(params, [] as LamParam[], [] as LamParam[]),
-                      ))(_v)
-                  : _v._tag === "ELetIn"
-                    ? (({ name, nameSpan, annot, value, body, span: _span }) =>
-                        ((_v) =>
-                          _v._tag === "ELambda"
-                            ? ((lets: Stmt[]) =>
-                                ((idxOf: Map<string, number>) =>
-                                  ((tail: Expr) =>
-                                    (([localCtx, localSt, localErrs]: [
-                                      {
-                                        env: Map<string, Scheme>;
-                                        open: boolean;
-                                        ns: Map<string, Map<string, Scheme>>;
-                                        aliasMap: Map<string, QualAliasInfo>;
-                                        plugins: HostPlugin[];
-                                        loopStack: Ty[][];
-                                        letOwner: Map<string, SpanAt>;
-                                        localNames: Set<string>;
-                                        scopeNames: string[];
-                                      },
-                                      St,
-                                      IErr[],
-                                    ]) =>
-                                      _Option_match(
-                                        _Array_get(0, localErrs),
-                                        () => inferExpr(localCtx, tail, localSt),
-                                        (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
-                                      ))(
-                                      processGroupsFrom(
-                                        ctx,
-                                        stronglyConnected(adjOf(lets, idxOf)),
-                                        lets,
-                                        st,
-                                        noErrs,
-                                      ),
-                                    ))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e))
-                            : _Result_flatMap(
-                                ([valT, st1]) =>
-                                  _Result_flatMap(
-                                    ([pinned, st2]) =>
-                                      ((widen: boolean) =>
-                                        ((sc: Scheme) =>
-                                          ((vsp: SpanAt) =>
-                                            (($ctx) =>
-                                              inferExpr(
-                                                $ctx,
-                                                body,
-                                                noteLet(
-                                                  vsp,
-                                                  recordBinder(
-                                                    nameSpan,
-                                                    pinned,
-                                                    "let",
-                                                    name,
-                                                    None as Option<string>,
-                                                    st2,
-                                                  ),
-                                                ),
-                                              ))(
-                                              ctxWithLets(
-                                                ctx,
-                                                _Map_set(name, sc, ctx.env),
-                                                _Map_set(name, vsp, ctx.letOwner),
-                                              ),
-                                            ))(exprSpan(value)))(
-                                          generalizeOver(
-                                            ctx.env,
-                                            ctx.scopeNames,
-                                            pinned,
-                                            st2,
-                                            widen,
-                                          ),
-                                        ))(
-                                        _Option_match(
-                                          annot,
-                                          () => true,
-                                          () => false,
-                                        ),
-                                      ),
-                                    _Option_match(
-                                      annot,
-                                      () => Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>,
-                                      (te) =>
-                                        (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
-                                          _Result_map(
-                                            (stB: St) => _tuple(at, stB),
-                                            checkFits(ctx, valT, at, stA, annotSpan(te)),
-                                          ))(
-                                          typeExprToType(
-                                            te,
-                                            new Map<string, Ty>(),
-                                            st1,
-                                            ctx.aliasMap,
-                                            _Set_fromArray([] as string[]),
-                                          ),
-                                        ),
-                                    ),
-                                  ),
-                                inferExpr(ctx, value, st),
-                              ))(value))(_v)
-                    : _v._tag === "ELetBind"
-                      ? (({ param, paramSpan, monad, value, body }) =>
-                          inferLetBind(ctx, e, param, paramSpan, monad, value, body, st))(_v)
-                      : _v._tag === "ECall"
-                        ? (({ fn, args, origin }) =>
-                            ((api: InferApi) =>
-                              _Result_flatMap(
-                                (claimed) =>
-                                  _Option_match(
-                                    claimed,
-                                    () => inferNormalCall(ctx, fn, args, st),
-                                    (r) => Ok(r) as Result<[Ty, St], IErr>,
-                                  ),
-                                runInferCallHooks(
-                                  inferCallHooksOf(ctx.plugins),
-                                  fn,
-                                  args,
-                                  origin,
-                                  st,
-                                  api,
-                                ),
-                              ))({
-                              inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)),
-                              unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
-                                u(ctx, left, right, st0, sp),
-                              ),
-                            }))(_v)
-                        : _v._tag === "EPipe" && _v.fast === true
-                          ? (({ left, right, span: sp }) =>
-                              ((_v) =>
-                                _v._tag === "ECall"
-                                  ? (({ fn: rfn, args: rargs, origin }) =>
-                                      inferExpr(
-                                        ctx,
-                                        Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp),
-                                        st,
-                                      ))(_v)
-                                  : inferExpr(
-                                      ctx,
-                                      Ast.ECall(right, [left], None as Option<string>, sp),
-                                      st,
-                                    ))(right))(_v)
-                          : _v._tag === "EPipe"
-                            ? (({ left, right, span: sp }) =>
-                                inferExpr(
-                                  ctx,
-                                  Ast.ECall(right, [left], None as Option<string>, sp),
-                                  st,
-                                ))(_v)
-                            : _v._tag === "EDo"
-                              ? (({ exprs }) => inferDo(ctx, exprs, st))(_v)
-                              : _v._tag === "ETernary"
-                                ? (({ cond, thenE, elseE }) =>
-                                    inferTernary(ctx, cond, thenE, elseE, st))(_v)
-                                : _v._tag === "ERecord"
-                                  ? (({ fields, spread, span: sp }) =>
-                                      _Option_match(
-                                        spread,
-                                        () =>
-                                          _Result_flatMap(
-                                            ([row, st1]) =>
-                                              Ok(_tuple(tRecord(row), st1)) as Result<
-                                                [Ty, St],
-                                                IErr
-                                              >,
-                                            inferRecordRow(ctx, fields, st),
-                                          ),
-                                        (spreadExpr) =>
-                                          _Result_flatMap(
-                                            ([row, st1]) =>
-                                              _Result_flatMap(
-                                                ([baseT, st2]) =>
-                                                  (([tailVar, st3]: [Row, St]) =>
-                                                    _Result_flatMap(
-                                                      (st4) =>
-                                                        Ok(_tuple(baseT, st4)) as Result<
-                                                          [Ty, St],
-                                                          IErr
-                                                        >,
-                                                      u(
-                                                        ctx,
-                                                        baseT,
-                                                        tRecord(rWithTail(row, tailVar)),
-                                                        st3,
-                                                        sp,
-                                                      ),
-                                                    ))(freshRowVar(st2)),
-                                                inferExpr(ctx, spreadExpr, st1),
-                                              ),
-                                            inferRecordRow(ctx, fields, st),
-                                          ),
-                                      ))(_v)
-                                  : _v._tag === "EField"
-                                    ? (({ target, name, span: sp }) =>
-                                        ((_v) =>
-                                          _v._tag === "ERef"
-                                            ? (({ name: tname }) =>
-                                                and(
-                                                  _Map_has(tname, ctx.ns),
-                                                  !_Map_has(tname, ctx.env),
-                                                )
-                                                  ? inferNsField(ctx, tname, name, sp, st)
-                                                  : inferFieldAccess(ctx, e, target, name, sp, st))(
-                                                _v,
-                                              )
-                                            : inferFieldAccess(ctx, e, target, name, sp, st))(
-                                          target,
-                                        ))(_v)
-                                    : _v._tag === "ETuple"
-                                      ? (({ elements }) =>
-                                          _Result_flatMap(
-                                            ([elems, st1]) =>
-                                              Ok(_tuple(tTuple(elems), st1)) as Result<
-                                                [Ty, St],
-                                                IErr
-                                              >,
-                                            inferTupleElems(ctx, elements, st),
-                                          ))(_v)
-                                      : _v._tag === "EArr"
-                                        ? (({ elements }) =>
-                                            inferSeqSlots(ctx, "Array", elements, st))(_v)
-                                        : _v._tag === "EList"
-                                          ? (({ elements }) =>
-                                              inferSeqSlots(ctx, "List", elements, st))(_v)
-                                          : _v._tag === "ESet"
-                                            ? (({ elements }) =>
-                                                inferSeqSlots(ctx, "Set", elements, st))(_v)
-                                            : _v._tag === "EMap"
-                                              ? (({ entries }) => inferMapExpr(ctx, entries, st))(
-                                                  _v,
-                                                )
-                                              : _v._tag === "EMatch"
-                                                ? (({ scrutinee, arms }) =>
-                                                    inferMatch(ctx, scrutinee, arms, st))(_v)
-                                                : _v._tag === "ELoop"
-                                                  ? (({ params, body }) =>
-                                                      _Result_flatMap(
-                                                        ([frame, bodyEnv, bodyOwner, st1]) =>
-                                                          inferExpr(
-                                                            ctxWithLoop(
-                                                              ctx,
-                                                              bodyEnv,
-                                                              frame,
-                                                              bodyOwner,
-                                                            ),
-                                                            body,
-                                                            st1,
-                                                          ),
-                                                        inferLoopParamsFrom(
-                                                          ctx,
-                                                          params,
-                                                          0,
-                                                          ctx.env,
-                                                          [] as Ty[],
-                                                          ctx.letOwner,
-                                                          st,
-                                                        ),
-                                                      ))(_v)
-                                                  : _v._tag === "ERecur"
-                                                    ? (({ args, span: sp }) =>
-                                                        inferRecur(ctx, args, sp, st))(_v)
-                                                    : _v._tag === "EInterp"
-                                                      ? (({ parts }) =>
-                                                          _Result_flatMap(
-                                                            (st1) =>
-                                                              Ok(_tuple(tString, st1)) as Result<
-                                                                [Ty, St],
-                                                                IErr
-                                                              >,
-                                                            inferInterpParts(ctx, parts, st),
-                                                          ))(_v)
-                                                      : (() => {
-                                                          throw new Error("non-exhaustive match");
-                                                        })())(e),
-);
+> = _curry(3, inferExprRaw$);
+const inferDo$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  exprs: Expr[],
+  st: St,
+): Result<[Ty, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Err(typeErr$("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>)
+      : _v.length === 1
+        ? (([last]) => inferExpr$(ctx, last, st))(_v)
+        : _v.length >= 1
+          ? (([first, ...rest]) =>
+              _Result_flatMap(([, st1]) => inferDo$(ctx, rest, st1), inferExpr$(ctx, first, st)))(
+              _v,
+            )
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(exprs);
 const inferDo: _Curry<
   [
     ctx: {
@@ -3606,37 +3590,43 @@ const inferDo: _Curry<
     st: St,
   ],
   Result<[Ty, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    exprs: Expr[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>)
-        : _v.length === 1
-          ? (([last]) => inferExpr(ctx, last, st))(_v)
-          : _v.length >= 1
-            ? (([first, ...rest]) =>
-                _Result_flatMap(([, st1]) => inferDo(ctx, rest, st1), inferExpr(ctx, first, st)))(
-                _v,
-              )
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(exprs),
-);
+> = _curry(3, inferDo$);
+const inferPatRecordFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fields: PatField[],
+  row: Row,
+  bindings: Map<string, Ty>,
+  st: St,
+): Result<[Row, Map<string, Ty>, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], IErr>)
+      : _v.length >= 1
+        ? (([f, ...rest]) =>
+            _Result_flatMap(
+              ([subT, subBindings, st1]) =>
+                inferPatRecordFrom$(
+                  ctx,
+                  rest,
+                  rExtend(f.label, subT, row),
+                  mergeBindingMaps(bindings, subBindings),
+                  recordBinder(f.labelSpan, subT, "property", f.label, None as Option<string>, st1),
+                ),
+              inferPat$(ctx, f.pat, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(fields);
 const inferPatRecordFrom: _Curry<
   [
     ctx: {
@@ -3656,52 +3646,28 @@ const inferPatRecordFrom: _Curry<
     st: St,
   ],
   Result<[Row, Map<string, Ty>, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fields: PatField[],
-    row: Row,
-    bindings: Map<string, Ty>,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple(row, bindings, st)) as Result<[Row, Map<string, Ty>, St], IErr>)
-        : _v.length >= 1
-          ? (([f, ...rest]) =>
-              _Result_flatMap(
-                ([subT, subBindings, st1]) =>
-                  inferPatRecordFrom(
-                    ctx,
-                    rest,
-                    rExtend(f.label, subT, row),
-                    mergeBindingMaps(bindings, subBindings),
-                    recordBinder(
-                      f.labelSpan,
-                      subT,
-                      "property",
-                      f.label,
-                      None as Option<string>,
-                      st1,
-                    ),
-                  ),
-                inferPat(ctx, f.pat, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(fields),
-);
+> = _curry(5, inferPatRecordFrom$);
+const inferPatRecord$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fields: PatField[],
+  st: St,
+): Result<[Ty, Map<string, Ty>, St], IErr> =>
+  (([rowBase, st1]: [Row, St]) =>
+    _Result_flatMap(
+      ([row, bindings, st2]) =>
+        Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+      inferPatRecordFrom$(ctx, fields, rowBase, new Map<string, Ty>(), st1),
+    ))(freshRowVar(st));
 const inferPatRecord: _Curry<
   [
     ctx: {
@@ -3719,30 +3685,57 @@ const inferPatRecord: _Curry<
     st: St,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fields: PatField[],
-    st: St,
-  ) =>
-    (([rowBase, st1]: [Row, St]) =>
-      _Result_flatMap(
-        ([row, bindings, st2]) =>
-          Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-        inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st1),
-      ))(freshRowVar(st)),
-);
+> = _curry(3, inferPatRecord$);
+const inferPatCtorArgs$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  ctor: string,
+  curT: Ty,
+  args: Pattern[],
+  st: St,
+  bindings: Map<string, Ty>,
+  sp: SpanAt,
+): Result<[Ty, Map<string, Ty>, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], IErr>)
+      : _v.length >= 1
+        ? (([argPat, ...rest]) =>
+            ((_v) =>
+              _v._tag === "TyFn"
+                ? (({ from: fromT, to: toT }) =>
+                    _Result_flatMap(
+                      ([subT, subBindings, st1]) =>
+                        _Result_flatMap(
+                          (st2) =>
+                            inferPatCtorArgs$(
+                              ctx,
+                              ctor,
+                              toT,
+                              rest,
+                              st2,
+                              mergeBindingMaps(bindings, subBindings),
+                              sp,
+                            ),
+                          u$(ctx, fromT, subT, st1, patSpan(argPat)),
+                        ),
+                      inferPat$(ctx, argPat, st),
+                    ))(_v)
+                : (Err(
+                    typeErr$(`constructor '${ctor}' applied to too many arguments`, sp),
+                  ) as Result<[Ty, Map<string, Ty>, St], IErr>))(resolve(curT, st)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(args);
 const inferPatCtorArgs: _Curry<
   [
     ctx: {
@@ -3764,59 +3757,48 @@ const inferPatCtorArgs: _Curry<
     sp: SpanAt,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  7,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    ctor: string,
-    curT: Ty,
-    args: Pattern[],
-    st: St,
-    bindings: Map<string, Ty>,
-    sp: SpanAt,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple(curT, bindings, st)) as Result<[Ty, Map<string, Ty>, St], IErr>)
-        : _v.length >= 1
-          ? (([argPat, ...rest]) =>
-              ((_v) =>
-                _v._tag === "TyFn"
-                  ? (({ from: fromT, to: toT }) =>
-                      _Result_flatMap(
-                        ([subT, subBindings, st1]) =>
-                          _Result_flatMap(
-                            (st2) =>
-                              inferPatCtorArgs(
-                                ctx,
-                                ctor,
-                                toT,
-                                rest,
-                                st2,
-                                mergeBindingMaps(bindings, subBindings),
-                                sp,
-                              ),
-                            u(ctx, fromT, subT, st1, patSpan(argPat)),
-                          ),
-                        inferPat(ctx, argPat, st),
-                      ))(_v)
-                  : (Err(
-                      typeErr(`constructor '${ctor}' applied to too many arguments`, sp),
-                    ) as Result<[Ty, Map<string, Ty>, St], IErr>))(resolve(curT, st)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(args),
-);
+> = _curry(7, inferPatCtorArgs$);
+const inferPatTupleFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  elems: Pattern[],
+  st: St,
+): Result<[Ty[], Map<string, Ty>, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)) as Result<
+          [Ty[], Map<string, Ty>, St],
+          IErr
+        >)
+      : _v.length >= 1
+        ? (([ep, ...rest]) =>
+            _Result_flatMap(
+              ([t, bindings, st1]) =>
+                _Result_flatMap(
+                  ([restTs, restBindings, st2]) =>
+                    Ok(
+                      _tuple(
+                        _Array_prepend(t, restTs),
+                        mergeBindingMaps(restBindings, bindings),
+                        st2,
+                      ),
+                    ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
+                  inferPatTupleFrom$(ctx, rest, st1),
+                ),
+              inferPat$(ctx, ep, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(elems);
 const inferPatTupleFrom: _Curry<
   [
     ctx: {
@@ -3834,50 +3816,27 @@ const inferPatTupleFrom: _Curry<
     st: St,
   ],
   Result<[Ty[], Map<string, Ty>, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elems: Pattern[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple([] as Ty[], new Map<string, Ty>(), st)) as Result<
-            [Ty[], Map<string, Ty>, St],
-            IErr
-          >)
-        : _v.length >= 1
-          ? (([ep, ...rest]) =>
-              _Result_flatMap(
-                ([t, bindings, st1]) =>
-                  _Result_flatMap(
-                    ([restTs, restBindings, st2]) =>
-                      Ok(
-                        _tuple(
-                          _Array_prepend(t, restTs),
-                          mergeBindingMaps(restBindings, bindings),
-                          st2,
-                        ),
-                      ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
-                    inferPatTupleFrom(ctx, rest, st1),
-                  ),
-                inferPat(ctx, ep, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(elems),
-);
+> = _curry(3, inferPatTupleFrom$);
+const inferPatTuple$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  elems: Pattern[],
+  st: St,
+): Result<[Ty, Map<string, Ty>, St], IErr> =>
+  _Result_flatMap(
+    ([elemTs, bindings, st1]) =>
+      Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+    inferPatTupleFrom$(ctx, elems, st),
+  );
 const inferPatTuple: _Curry<
   [
     ctx: {
@@ -3895,29 +3854,47 @@ const inferPatTuple: _Curry<
     st: St,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elems: Pattern[],
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([elemTs, bindings, st1]) =>
-        Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      inferPatTupleFrom(ctx, elems, st),
-    ),
-);
+> = _curry(3, inferPatTuple$);
+const inferSeqPatElems$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  elem: Ty,
+  elems: Pattern[],
+  st: St,
+): Result<[Map<string, Ty>, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>)
+      : _v.length >= 1
+        ? (([ep, ...rest]) =>
+            _Result_flatMap(
+              ([subT, subBindings, st1]) =>
+                _Result_flatMap(
+                  (st2) =>
+                    _Result_flatMap(
+                      ([restBindings, st3]) =>
+                        Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)) as Result<
+                          [Map<string, Ty>, St],
+                          IErr
+                        >,
+                      inferSeqPatElems$(ctx, elem, rest, st2),
+                    ),
+                  u$(ctx, elem, subT, st1, patSpan(ep)),
+                ),
+              inferPat$(ctx, ep, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(elems);
 const inferSeqPatElems: _Curry<
   [
     ctx: {
@@ -3936,49 +3913,48 @@ const inferSeqPatElems: _Curry<
     st: St,
   ],
   Result<[Map<string, Ty>, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elem: Ty,
-    elems: Pattern[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Ok(_tuple(new Map<string, Ty>(), st)) as Result<[Map<string, Ty>, St], IErr>)
-        : _v.length >= 1
-          ? (([ep, ...rest]) =>
-              _Result_flatMap(
-                ([subT, subBindings, st1]) =>
-                  _Result_flatMap(
-                    (st2) =>
-                      _Result_flatMap(
-                        ([restBindings, st3]) =>
-                          Ok(_tuple(mergeBindingMaps(restBindings, subBindings), st3)) as Result<
-                            [Map<string, Ty>, St],
-                            IErr
-                          >,
-                        inferSeqPatElems(ctx, elem, rest, st2),
-                      ),
-                    u(ctx, elem, subT, st1, patSpan(ep)),
-                  ),
-                inferPat(ctx, ep, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(elems),
-);
+> = _curry(4, inferSeqPatElems$);
+const inferSeqPat$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  con: string,
+  elems: Pattern[],
+  restPat: Option<Pattern>,
+  st: St,
+): Result<[Ty, Map<string, Ty>, St], IErr> =>
+  (([elem, st1]: [Ty, St]) => {
+    const seqT: Ty = tCon(con, [elem]);
+    return _Result_flatMap(
+      ([bindings, st2]) =>
+        _Option_match(
+          restPat,
+          () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+          (r) =>
+            _Result_flatMap(
+              ([subT, subBindings, st3]) =>
+                _Result_flatMap(
+                  (st4) =>
+                    Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)) as Result<
+                      [Ty, Map<string, Ty>, St],
+                      IErr
+                    >,
+                  u$(ctx, subT, seqT, st3, patSpan(r)),
+                ),
+              inferPat$(ctx, r, st2),
+            ),
+        ),
+      inferSeqPatElems$(ctx, elem, elems, st1),
+    );
+  })(freshVar(st));
 const inferSeqPat: _Curry<
   [
     ctx: {
@@ -3998,50 +3974,37 @@ const inferSeqPat: _Curry<
     st: St,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    con: string,
-    elems: Pattern[],
-    restPat: Option<Pattern>,
-    st: St,
-  ) =>
-    (([elem, st1]: [Ty, St]) => {
-      const seqT: Ty = tCon(con, [elem]);
-      return _Result_flatMap(
-        ([bindings, st2]) =>
-          _Option_match(
-            restPat,
-            () => Ok(_tuple(seqT, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-            (r) =>
-              _Result_flatMap(
-                ([subT, subBindings, st3]) =>
-                  _Result_flatMap(
-                    (st4) =>
-                      Ok(_tuple(seqT, mergeBindingMaps(bindings, subBindings), st4)) as Result<
-                        [Ty, Map<string, Ty>, St],
-                        IErr
-                      >,
-                    u(ctx, subT, seqT, st3, patSpan(r)),
-                  ),
-                inferPat(ctx, r, st2),
-              ),
-          ),
-        inferSeqPatElems(ctx, elem, elems, st1),
-      );
-    })(freshVar(st)),
-);
+> = _curry(5, inferSeqPat$);
+const inferPat$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  p: Pattern,
+  st: St,
+): Result<[Ty, Map<string, Ty>, St], IErr> =>
+  _Result_flatMap(
+    ([t, bindings, st1]) =>
+      Ok(
+        _tuple(
+          t,
+          bindings,
+          ((_v) =>
+            _v._tag === "PBind"
+              ? (({ name, span: sp }) =>
+                  recordBinder(sp, t, "parameter", name, None as Option<string>, st1))(_v)
+              : recordAt(patSpan(p), t, st1))(p),
+        ),
+      ) as Result<[Ty, Map<string, Ty>, St], IErr>,
+    inferPatRaw$(ctx, p, st),
+  );
 /**
  * Pattern-side analogue of `inferExpr` — records every pattern node's span
  * and type, so a pattern-bound param can be annotated by span.
@@ -4063,39 +4026,136 @@ const inferPat: _Curry<
     st: St,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    p: Pattern,
-    st: St,
-  ) =>
-    _Result_flatMap(
-      ([t, bindings, st1]) =>
-        Ok(
-          _tuple(
-            t,
-            bindings,
-            ((_v) =>
-              _v._tag === "PBind"
-                ? (({ name, span: sp }) =>
-                    recordBinder(sp, t, "parameter", name, None as Option<string>, st1))(_v)
-                : recordAt(patSpan(p), t, st1))(p),
+> = _curry(3, inferPat$);
+const inferPatRaw$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  p: Pattern,
+  st: St,
+): Result<[Ty, Map<string, Ty>, St], IErr> => {
+  const $match = p;
+  switch ($match._tag) {
+    case "PAs": {
+      const { pat, name, nameSpan } = $match;
+      return _Result_flatMap(
+        ([t, bindings, st1]) =>
+          Ok(
+            _tuple(
+              t,
+              _Map_set(name, t, bindings),
+              recordBinder(nameSpan, t, "parameter", name, None as Option<string>, st1),
+            ),
+          ) as Result<[Ty, Map<string, Ty>, St], IErr>,
+        inferPat$(ctx, pat, st),
+      );
+    }
+    case "PWild": {
+      return (([t, st1]: [Ty, St]) =>
+        Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
+        freshVar(st),
+      );
+    }
+    case "PUnit": {
+      return Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<
+        [Ty, Map<string, Ty>, St],
+        IErr
+      >;
+    }
+    case "PLit": {
+      return Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<
+        [Ty, Map<string, Ty>, St],
+        IErr
+      >;
+    }
+    case "PBool": {
+      return Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<
+        [Ty, Map<string, Ty>, St],
+        IErr
+      >;
+    }
+    case "PStr": {
+      const { value } = $match;
+      return Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
+        [Ty, Map<string, Ty>, St],
+        IErr
+      >;
+    }
+    case "PBind": {
+      const { name } = $match;
+      return (([t, st1]: [Ty, St]) =>
+        Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >)(freshVar(st));
+    }
+    case "PRecord": {
+      const { fields } = $match;
+      return inferPatRecord$(ctx, fields, st);
+    }
+    case "PCtor": {
+      const { ctor, args, ns, span: sp } = $match;
+      return _Option_match(
+        ns,
+        () =>
+          _Option_match(
+            _Map_get(ctor, ctx.env),
+            () =>
+              Err(typeErr$(`unknown constructor '${ctor}'`, sp)) as Result<
+                [Ty, Map<string, Ty>, St],
+                IErr
+              >,
+            (sc) =>
+              (([curT, st1]: [Ty, St]) =>
+                inferPatCtorArgs$(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                instantiate(sc, st),
+              ),
           ),
-        ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      inferPatRaw(ctx, p, st),
-    ),
-);
+        (alias) =>
+          _Option_match(
+            _Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)),
+            () =>
+              Err(typeErr$(`'${alias}' has no member '${ctor}'`, sp)) as Result<
+                [Ty, Map<string, Ty>, St],
+                IErr
+              >,
+            (sc) =>
+              (([curT, st1]: [Ty, St]) =>
+                inferPatCtorArgs$(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                instantiate(sc, st),
+              ),
+          ),
+      );
+    }
+    case "PTuple": {
+      const { elems } = $match;
+      return inferPatTuple$(ctx, elems, st);
+    }
+    case "PArr": {
+      const { elems, rest } = $match;
+      return inferSeqPat$(ctx, "Array", elems, rest, st);
+    }
+    case "PList": {
+      const { elems, rest } = $match;
+      return inferSeqPat$(ctx, "List", elems, rest, st);
+    }
+    case "POr": {
+      const { alts, span: sp } = $match;
+      return inferOrPat$(ctx, alts, sp, st);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const inferPatRaw: _Curry<
   [
     ctx: {
@@ -4113,138 +4173,7 @@ const inferPatRaw: _Curry<
     st: St,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  3,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    p: Pattern,
-    st: St,
-  ) => {
-    const $match = p;
-    switch ($match._tag) {
-      case "PAs": {
-        const { pat, name, nameSpan } = $match;
-        return _Result_flatMap(
-          ([t, bindings, st1]) =>
-            Ok(
-              _tuple(
-                t,
-                _Map_set(name, t, bindings),
-                recordBinder(nameSpan, t, "parameter", name, None as Option<string>, st1),
-              ),
-            ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-          inferPat(ctx, pat, st),
-        );
-      }
-      case "PWild": {
-        return (([t, st1]: [Ty, St]) =>
-          Ok(_tuple(t, new Map<string, Ty>(), st1)) as Result<[Ty, Map<string, Ty>, St], IErr>)(
-          freshVar(st),
-        );
-      }
-      case "PUnit": {
-        return Ok(_tuple(tUnit, new Map<string, Ty>(), st)) as Result<
-          [Ty, Map<string, Ty>, St],
-          IErr
-        >;
-      }
-      case "PLit": {
-        return Ok(_tuple(tNumber, new Map<string, Ty>(), st)) as Result<
-          [Ty, Map<string, Ty>, St],
-          IErr
-        >;
-      }
-      case "PBool": {
-        return Ok(_tuple(tBool, new Map<string, Ty>(), st)) as Result<
-          [Ty, Map<string, Ty>, St],
-          IErr
-        >;
-      }
-      case "PStr": {
-        const { value } = $match;
-        return Ok(_tuple(tLit(value), new Map<string, Ty>(), st)) as Result<
-          [Ty, Map<string, Ty>, St],
-          IErr
-        >;
-      }
-      case "PBind": {
-        const { name } = $match;
-        return (([t, st1]: [Ty, St]) =>
-          Ok(_tuple(t, _Map_set(name, t, new Map<string, Ty>()), st1)) as Result<
-            [Ty, Map<string, Ty>, St],
-            IErr
-          >)(freshVar(st));
-      }
-      case "PRecord": {
-        const { fields } = $match;
-        return inferPatRecord(ctx, fields, st);
-      }
-      case "PCtor": {
-        const { ctor, args, ns, span: sp } = $match;
-        return _Option_match(
-          ns,
-          () =>
-            _Option_match(
-              _Map_get(ctor, ctx.env),
-              () =>
-                Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
-                  [Ty, Map<string, Ty>, St],
-                  IErr
-                >,
-              (sc) =>
-                (([curT, st1]: [Ty, St]) =>
-                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
-                  instantiate(sc, st),
-                ),
-            ),
-          (alias) =>
-            _Option_match(
-              _Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)),
-              () =>
-                Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
-                  [Ty, Map<string, Ty>, St],
-                  IErr
-                >,
-              (sc) =>
-                (([curT, st1]: [Ty, St]) =>
-                  inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
-                  instantiate(sc, st),
-                ),
-            ),
-        );
-      }
-      case "PTuple": {
-        const { elems } = $match;
-        return inferPatTuple(ctx, elems, st);
-      }
-      case "PArr": {
-        const { elems, rest } = $match;
-        return inferSeqPat(ctx, "Array", elems, rest, st);
-      }
-      case "PList": {
-        const { elems, rest } = $match;
-        return inferSeqPat(ctx, "List", elems, rest, st);
-      }
-      case "POr": {
-        const { alts, span: sp } = $match;
-        return inferOrPat(ctx, alts, sp, st);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
-);
+> = _curry(3, inferPatRaw$);
 const unifyOrPatBinding: <B>(
   ctx: {
     env: Map<string, Scheme>;
@@ -4289,7 +4218,7 @@ const unifyOrPatBinding: <B>(
         _Option_match(
           _Map_get(name, altBindings),
           () => Ok(st) as Result<St, IErr>,
-          (ty) => u(ctx, prevT, ty, st, sp),
+          (ty) => u$(ctx, prevT, ty, st, sp),
         ),
     ),
 );
@@ -4347,6 +4276,48 @@ const unifyOrPatBindings: <B>(
         throw new Error("non-exhaustive match");
       }),
 );
+const inferOrPatAlts$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  alts: Pattern[],
+  i: number,
+  t: Ty,
+  bindings: Map<string, Ty>,
+  st: St,
+): Result<St, IErr> =>
+  _Option_match(
+    _Array_get(i, alts),
+    () => Ok(st) as Result<St, IErr>,
+    (alt) =>
+      _Result_flatMap(
+        ([altT, altBindings, st1]) =>
+          _Result_flatMap(
+            (st2) =>
+              _Result_flatMap(
+                (st3) => inferOrPatAlts$(ctx, alts, i + 1, t, bindings, st3),
+                unifyOrPatBindings(
+                  ctx,
+                  _Map_keys(altBindings),
+                  altBindings,
+                  bindings,
+                  st2,
+                  patSpan(alt),
+                ),
+              ),
+            u$(ctx, t, altT, st1, patSpan(alt)),
+          ),
+        inferPat$(ctx, alt, st),
+      ),
+  );
 const inferOrPatAlts: _Curry<
   [
     ctx: {
@@ -4367,51 +4338,42 @@ const inferOrPatAlts: _Curry<
     st: St,
   ],
   Result<St, IErr>
-> = _curry(
-  6,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    alts: Pattern[],
-    i: number,
-    t: Ty,
-    bindings: Map<string, Ty>,
-    st: St,
-  ) =>
-    _Option_match(
-      _Array_get(i, alts),
-      () => Ok(st) as Result<St, IErr>,
-      (alt) =>
-        _Result_flatMap(
-          ([altT, altBindings, st1]) =>
+> = _curry(6, inferOrPatAlts$);
+const inferOrPat$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  alts: Pattern[],
+  sp: SpanAt,
+  st: St,
+): Result<[Ty, Map<string, Ty>, St], IErr> =>
+  ((_v) =>
+    _v.length === 0
+      ? (Err(typeErr$("or-pattern needs at least one alternative", sp)) as Result<
+          [Ty, Map<string, Ty>, St],
+          IErr
+        >)
+      : _v.length >= 1
+        ? (([first, ...rest]) =>
             _Result_flatMap(
-              (st2) =>
+              ([t, bindings, st1]) =>
                 _Result_flatMap(
-                  (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
-                  unifyOrPatBindings(
-                    ctx,
-                    _Map_keys(altBindings),
-                    altBindings,
-                    bindings,
-                    st2,
-                    patSpan(alt),
-                  ),
+                  (st2) => Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
+                  inferOrPatAlts$(ctx, rest, 0, t, bindings, st1),
                 ),
-              u(ctx, t, altT, st1, patSpan(alt)),
-            ),
-          inferPat(ctx, alt, st),
-        ),
-    ),
-);
+              inferPat$(ctx, first, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(alts);
 const inferOrPat: _Curry<
   [
     ctx: {
@@ -4430,45 +4392,7 @@ const inferOrPat: _Curry<
     st: St,
   ],
   Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    alts: Pattern[],
-    sp: SpanAt,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? (Err(typeErr("or-pattern needs at least one alternative", sp)) as Result<
-            [Ty, Map<string, Ty>, St],
-            IErr
-          >)
-        : _v.length >= 1
-          ? (([first, ...rest]) =>
-              _Result_flatMap(
-                ([t, bindings, st1]) =>
-                  _Result_flatMap(
-                    (st2) =>
-                      Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-                    inferOrPatAlts(ctx, rest, 0, t, bindings, st1),
-                  ),
-                inferPat(ctx, first, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(alts),
-);
+> = _curry(4, inferOrPat$);
 const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) =>
   _Option_match(
     rest,
@@ -4533,57 +4457,53 @@ const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: 
       throw new Error("non-exhaustive match");
     }),
 );
-const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curry(
-  2,
-  (p: LamParam, bound: Set<string>) => {
-    const $match = p;
-    switch ($match._tag) {
-      case "LPSpanned": {
-        const { param: inner } = $match;
-        return paramBound(inner, bound);
-      }
-      case "LPName": {
-        const { name } = $match;
-        return _Set_add(name, bound);
-      }
-      case "LPTuple": {
-        const { names } = $match;
-        return addAllFrom(names, bound);
-      }
-      case "LPRecord": {
-        const { fields } = $match;
-        return addAllFrom(fields, bound);
-      }
-      case "LPLabeled": {
-        const { name } = $match;
-        return _Set_add(name, bound);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
+const paramBound$ = (p: LamParam, bound: Set<string>): Set<string> => {
+  const $match = p;
+  switch ($match._tag) {
+    case "LPSpanned": {
+      const { param: inner } = $match;
+      return paramBound$(inner, bound);
     }
-  },
-);
+    case "LPName": {
+      const { name } = $match;
+      return _Set_add(name, bound);
+    }
+    case "LPTuple": {
+      const { names } = $match;
+      return addAllFrom(names, bound);
+    }
+    case "LPRecord": {
+      const { fields } = $match;
+      return addAllFrom(fields, bound);
+    }
+    case "LPLabeled": {
+      const { name } = $match;
+      return _Set_add(name, bound);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curry(2, paramBound$);
+const lambdaBound$ = (params: LamParam[], bound: Set<string>): Set<string> =>
+  ((_v) =>
+    _v.length === 0
+      ? bound
+      : _v.length >= 1
+        ? (([p, ...rest]) => lambdaBound$(rest, paramBound$(p, bound)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(params);
 const lambdaBound: _Curry<[params: LamParam[], bound: Set<string>], Set<string>> = _curry(
   2,
-  (params: LamParam[], bound: Set<string>) =>
-    ((_v) =>
-      _v.length === 0
-        ? bound
-        : _v.length >= 1
-          ? (([p, ...rest]) => lambdaBound(rest, paramBound(p, bound)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(params),
+  lambdaBound$,
 );
-/**
- * A labeled default names the enclosing scope, not the lambda's own params,
- * so its refs are free in the lambda — the SCC needs that edge (ADR 0098 §2).
- */
-const labeledDefaultRefs: _Curry<
-  [params: LamParam[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, (params: LamParam[], bound: Set<string>, acc: Set<string>) =>
+const labeledDefaultRefs$ = (
+  params: LamParam[],
+  bound: Set<string>,
+  acc: Set<string>,
+): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -4591,10 +4511,10 @@ const labeledDefaultRefs: _Curry<
         ? (([p, ...rest]) =>
             ((_v) =>
               _v._tag === "LPSpanned"
-                ? (({ param: inner }) => labeledDefaultRefs([inner, ...rest], bound, acc))(_v)
+                ? (({ param: inner }) => labeledDefaultRefs$([inner, ...rest], bound, acc))(_v)
                 : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some"
                   ? (({ defaultValue: { value: d } }) =>
-                      labeledDefaultRefs(rest, bound, freeRefs(d, bound, acc)))(
+                      labeledDefaultRefs$(rest, bound, freeRefs$(d, bound, acc)))(
                       _v as Extract<LamParam, { _tag: "LPLabeled" }> & {
                         defaultValue: Extract<
                           Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
@@ -4602,11 +4522,18 @@ const labeledDefaultRefs: _Curry<
                         >;
                       },
                     )
-                  : labeledDefaultRefs(rest, bound, acc))(p))(_v)
+                  : labeledDefaultRefs$(rest, bound, acc))(p))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(params),
-);
+          })())(params);
+/**
+ * A labeled default names the enclosing scope, not the lambda's own params,
+ * so its refs are free in the lambda — the SCC needs that edge (ADR 0098 §2).
+ */
+const labeledDefaultRefs: _Curry<
+  [params: LamParam[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, labeledDefaultRefs$);
 const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = _curry(
   2,
   <A, B>(params: ({ name: A } & B)[], bound: Set<A>) =>
@@ -4616,84 +4543,90 @@ const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = 
       params,
     ),
 );
-const loopInitRefsFrom: _Curry<
-  [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(4, (params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>) =>
+const loopInitRefsFrom$ = (
+  params: LoopParam[],
+  i: number,
+  bound: Set<string>,
+  acc: Set<string>,
+): Set<string> =>
   _Option_match(
     _Array_get(i, params),
     () => acc,
-    (p) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)),
-  ),
-);
+    (p) => loopInitRefsFrom$(params, i + 1, bound, freeRefs$(p.init, bound, acc)),
+  );
+const loopInitRefsFrom: _Curry<
+  [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(4, loopInitRefsFrom$);
+const freeRefsList$ = (es: Expr[], bound: Set<string>, acc: Set<string>): Set<string> =>
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([e, ...rest]) => freeRefsList$(rest, bound, freeRefs$(e, bound, acc)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(es);
 const freeRefsList: _Curry<
   [es: Expr[], bound: Set<string>, acc: Set<string>],
   Set<string>
-> = _curry(3, (es: Expr[], bound: Set<string>, acc: Set<string>) =>
+> = _curry(3, freeRefsList$);
+const freeRefsFields$ = (fields: Field[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
       : _v.length >= 1
-        ? (([e, ...rest]) => freeRefsList(rest, bound, freeRefs(e, bound, acc)))(_v)
+        ? (([f, ...rest]) => freeRefsFields$(rest, bound, freeRefs$(f.value, bound, acc)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(es),
-);
+          })())(fields);
 const freeRefsFields: _Curry<
   [fields: Field[], bound: Set<string>, acc: Set<string>],
   Set<string>
-> = _curry(3, (fields: Field[], bound: Set<string>, acc: Set<string>) =>
-  ((_v) =>
-    _v.length === 0
-      ? acc
-      : _v.length >= 1
-        ? (([f, ...rest]) => freeRefsFields(rest, bound, freeRefs(f.value, bound, acc)))(_v)
-        : (() => {
-            throw new Error("non-exhaustive match");
-          })())(fields),
-);
-const freeRefsEntries: _Curry<
-  [entries: MapEntry[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, (entries: MapEntry[], bound: Set<string>, acc: Set<string>) =>
+> = _curry(3, freeRefsFields$);
+const freeRefsEntries$ = (entries: MapEntry[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
       : _v.length >= 1
         ? (([ent, ...rest]) =>
-            freeRefsEntries(
+            freeRefsEntries$(
               rest,
               bound,
-              freeRefs(ent.value, bound, freeRefs(ent.key, bound, acc)),
+              freeRefs$(ent.value, bound, freeRefs$(ent.key, bound, acc)),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(entries),
-);
-const freeRefsInterpParts: _Curry<
-  [parts: InterpPart[], bound: Set<string>, acc: Set<string>],
+          })())(entries);
+const freeRefsEntries: _Curry<
+  [entries: MapEntry[], bound: Set<string>, acc: Set<string>],
   Set<string>
-> = _curry(3, (parts: InterpPart[], bound: Set<string>, acc: Set<string>) =>
+> = _curry(3, freeRefsEntries$);
+const freeRefsInterpParts$ = (
+  parts: InterpPart[],
+  bound: Set<string>,
+  acc: Set<string>,
+): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
       : _v.length >= 1 && _v[0]._tag === "IPLit"
-        ? (([, ...rest]) => freeRefsInterpParts(rest, bound, acc))(
+        ? (([, ...rest]) => freeRefsInterpParts$(rest, bound, acc))(
             _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
           )
         : _v.length >= 1 && _v[0]._tag === "IPExpr"
           ? (([{ expr: ex }, ...rest]) =>
-              freeRefsInterpParts(rest, bound, freeRefs(ex, bound, acc)))(
+              freeRefsInterpParts$(rest, bound, freeRefs$(ex, bound, acc)))(
               _v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]],
             )
           : (() => {
               throw new Error("non-exhaustive match");
-            })())(parts),
-);
-const freeRefsArms: _Curry<
-  [arms: MatchArm[], bound: Set<string>, acc: Set<string>],
+            })())(parts);
+const freeRefsInterpParts: _Curry<
+  [parts: InterpPart[], bound: Set<string>, acc: Set<string>],
   Set<string>
-> = _curry(3, (arms: MatchArm[], bound: Set<string>, acc: Set<string>) =>
+> = _curry(3, freeRefsInterpParts$);
+const freeRefsArms$ = (arms: MatchArm[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -4701,127 +4634,131 @@ const freeRefsArms: _Curry<
         ? (([arm, ...rest]) =>
             ((armBound: Set<string>) =>
               ((acc1: Set<string>) =>
-                freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
+                freeRefsArms$(rest, bound, freeRefs$(arm.body, armBound, acc1)))(
                 _Option_match(
                   arm.guard,
                   () => acc,
-                  (g) => freeRefs(g, armBound, acc),
+                  (g) => freeRefs$(g, armBound, acc),
                 ),
               ))(addAllFrom(patternBinds(arm.pattern), bound)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(arms),
-);
+          })())(arms);
+const freeRefsArms: _Curry<
+  [arms: MatchArm[], bound: Set<string>, acc: Set<string>],
+  Set<string>
+> = _curry(3, freeRefsArms$);
+const freeRefs$ = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return acc;
+    }
+    case "EUnit": {
+      return acc;
+    }
+    case "EBool": {
+      return acc;
+    }
+    case "EStr": {
+      return acc;
+    }
+    case "ERef": {
+      const { name } = $match;
+      return _Set_has(name, bound) ? acc : _Set_add(name, acc);
+    }
+    case "ECall": {
+      const { fn, args } = $match;
+      return freeRefsList$(args, bound, freeRefs$(fn, bound, acc));
+    }
+    case "ELambda": {
+      const { params, body } = $match;
+      return freeRefs$(body, lambdaBound$(params, bound), labeledDefaultRefs$(params, bound, acc));
+    }
+    case "ELetIn": {
+      const { name, value, body } = $match;
+      const valueBound: Set<string> = ((_v) =>
+        _v._tag === "ELambda" ? _Set_add(name, bound) : bound)(value);
+      const acc1: Set<string> = freeRefs$(value, valueBound, acc);
+      return freeRefs$(body, _Set_add(name, bound), acc1);
+    }
+    case "ELetBind": {
+      const { param, value, body } = $match;
+      const acc1: Set<string> = freeRefs$(value, bound, acc);
+      return freeRefs$(body, paramBound$(param, bound), acc1);
+    }
+    case "EPipe": {
+      const { left, right } = $match;
+      return freeRefs$(right, bound, freeRefs$(left, bound, acc));
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return freeRefsList$(exprs, bound, acc);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return freeRefs$(elseE, bound, freeRefs$(thenE, bound, freeRefs$(cond, bound, acc)));
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return freeRefsArms$(arms, bound, freeRefs$(scrutinee, bound, acc));
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return freeRefs$(body, loopBound(params, bound), loopInitRefsFrom$(params, 0, bound, acc));
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return freeRefsList$(args, bound, acc);
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      return freeRefsFields$(
+        fields,
+        bound,
+        _Option_match(
+          spread,
+          () => acc,
+          (s) => freeRefs$(s, bound, acc),
+        ),
+      );
+    }
+    case "EField": {
+      const { target } = $match;
+      return freeRefs$(target, bound, acc);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return freeRefsList$(elements, bound, acc);
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return freeRefsList$(map(seqElemExpr, elements), bound, acc);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return freeRefsList$(map(seqElemExpr, elements), bound, acc);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return freeRefsList$(map(seqElemExpr, elements), bound, acc);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return freeRefsEntries$(entries, bound, acc);
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return freeRefsInterpParts$(parts, bound, acc);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const freeRefs: _Curry<[e: Expr, bound: Set<string>, acc: Set<string>], Set<string>> = _curry(
   3,
-  (e: Expr, bound: Set<string>, acc: Set<string>) => {
-    const $match = e;
-    switch ($match._tag) {
-      case "ENum": {
-        return acc;
-      }
-      case "EUnit": {
-        return acc;
-      }
-      case "EBool": {
-        return acc;
-      }
-      case "EStr": {
-        return acc;
-      }
-      case "ERef": {
-        const { name } = $match;
-        return _Set_has(name, bound) ? acc : _Set_add(name, acc);
-      }
-      case "ECall": {
-        const { fn, args } = $match;
-        return freeRefsList(args, bound, freeRefs(fn, bound, acc));
-      }
-      case "ELambda": {
-        const { params, body } = $match;
-        return freeRefs(body, lambdaBound(params, bound), labeledDefaultRefs(params, bound, acc));
-      }
-      case "ELetIn": {
-        const { name, value, body } = $match;
-        const valueBound: Set<string> = ((_v) =>
-          _v._tag === "ELambda" ? _Set_add(name, bound) : bound)(value);
-        const acc1: Set<string> = freeRefs(value, valueBound, acc);
-        return freeRefs(body, _Set_add(name, bound), acc1);
-      }
-      case "ELetBind": {
-        const { param, value, body } = $match;
-        const acc1: Set<string> = freeRefs(value, bound, acc);
-        return freeRefs(body, paramBound(param, bound), acc1);
-      }
-      case "EPipe": {
-        const { left, right } = $match;
-        return freeRefs(right, bound, freeRefs(left, bound, acc));
-      }
-      case "EDo": {
-        const { exprs } = $match;
-        return freeRefsList(exprs, bound, acc);
-      }
-      case "ETernary": {
-        const { cond, thenE, elseE } = $match;
-        return freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc)));
-      }
-      case "EMatch": {
-        const { scrutinee, arms } = $match;
-        return freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc));
-      }
-      case "ELoop": {
-        const { params, body } = $match;
-        return freeRefs(body, loopBound(params, bound), loopInitRefsFrom(params, 0, bound, acc));
-      }
-      case "ERecur": {
-        const { args } = $match;
-        return freeRefsList(args, bound, acc);
-      }
-      case "ERecord": {
-        const { fields, spread } = $match;
-        return freeRefsFields(
-          fields,
-          bound,
-          _Option_match(
-            spread,
-            () => acc,
-            (s) => freeRefs(s, bound, acc),
-          ),
-        );
-      }
-      case "EField": {
-        const { target } = $match;
-        return freeRefs(target, bound, acc);
-      }
-      case "ETuple": {
-        const { elements } = $match;
-        return freeRefsList(elements, bound, acc);
-      }
-      case "EArr": {
-        const { elements } = $match;
-        return freeRefsList(map(seqElemExpr, elements), bound, acc);
-      }
-      case "EList": {
-        const { elements } = $match;
-        return freeRefsList(map(seqElemExpr, elements), bound, acc);
-      }
-      case "ESet": {
-        const { elements } = $match;
-        return freeRefsList(map(seqElemExpr, elements), bound, acc);
-      }
-      case "EMap": {
-        const { entries } = $match;
-        return freeRefsEntries(entries, bound, acc);
-      }
-      case "EInterp": {
-        const { parts } = $match;
-        return freeRefsInterpParts(parts, bound, acc);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  freeRefs$,
 );
 const seedBuiltinsFrom: <A>(
   keys: A[],
@@ -4973,10 +4910,10 @@ const seedNsImports: <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> = 
   <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) =>
     seedNsImportsFrom(_Map_keys(nsImports), nsImports, ns),
 );
-const aliasMapFrom: _Curry<
-  [stmts: Stmt[], acc: Map<string, QualAliasInfo>],
-  Map<string, QualAliasInfo>
-> = _curry(2, (stmts: Stmt[], acc: Map<string, QualAliasInfo>) =>
+const aliasMapFrom$ = (
+  stmts: Stmt[],
+  acc: Map<string, QualAliasInfo>,
+): Map<string, QualAliasInfo> =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -4985,7 +4922,7 @@ const aliasMapFrom: _Curry<
             ((_v) =>
               _v._tag === "SType" && _v.alias._tag === "Some"
                 ? (({ name, params, alias: { value: fields } }) =>
-                    aliasMapFrom(
+                    aliasMapFrom$(
                       rest,
                       _Map_set(
                         name,
@@ -4999,7 +4936,7 @@ const aliasMapFrom: _Curry<
                   )
                 : _v._tag === "SType" && _v.aliasType._tag === "Some"
                   ? (({ name, params, aliasType: { value: te } }) =>
-                      aliasMapFrom(
+                      aliasMapFrom$(
                         rest,
                         _Map_set(
                           name,
@@ -5018,11 +4955,14 @@ const aliasMapFrom: _Curry<
                         >;
                       },
                     )
-                  : aliasMapFrom(rest, acc))(s))(_v)
+                  : aliasMapFrom$(rest, acc))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(stmts),
-);
+          })())(stmts);
+const aliasMapFrom: _Curry<
+  [stmts: Stmt[], acc: Map<string, QualAliasInfo>],
+  Map<string, QualAliasInfo>
+> = _curry(2, aliasMapFrom$);
 const registerCtorsFrom: <A, B>(
   ctors: ({ fields: CtorField[]; name: A } & B)[],
   typeName: string,
@@ -5057,29 +4997,32 @@ const registerCtorsFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
+const registerUserCtorsFrom$ = (
+  stmts: Stmt[],
+  aliasMap: Map<string, QualAliasInfo>,
+  env: Map<string, Scheme>,
+  st: St,
+): [Map<string, Scheme>, St] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(env, st)
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SType"
+                ? (({ name, params, ctors }) =>
+                    (([env1, st1]: [Map<string, Scheme>, St]) =>
+                      registerUserCtorsFrom$(rest, aliasMap, env1, st1))(
+                      registerCtorsFrom(ctors, name, params, aliasMap, env, st),
+                    ))(_v)
+                : registerUserCtorsFrom$(rest, aliasMap, env, st))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(stmts);
 const registerUserCtorsFrom: _Curry<
   [stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St],
   [Map<string, Scheme>, St]
-> = _curry(
-  4,
-  (stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(env, st)
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              ((_v) =>
-                _v._tag === "SType"
-                  ? (({ name, params, ctors }) =>
-                      (([env1, st1]: [Map<string, Scheme>, St]) =>
-                        registerUserCtorsFrom(rest, aliasMap, env1, st1))(
-                        registerCtorsFrom(ctors, name, params, aliasMap, env, st),
-                      ))(_v)
-                  : registerUserCtorsFrom(rest, aliasMap, env, st))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(stmts),
-);
+> = _curry(4, registerUserCtorsFrom$);
 const registerBuiltinCtorGroup: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
@@ -5159,53 +5102,54 @@ const registerBuiltinCtorsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
+const registerExternsFrom$ = (
+  stmts: Stmt[],
+  aliasMap: Map<string, QualAliasInfo>,
+  env: Map<string, Scheme>,
+  st: St,
+): [Map<string, Scheme>, St] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(env, st)
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SExtern"
+                ? (({ name, nameSpan, params, typeExpr, doc }) =>
+                    (([vars, st0]: [Map<string, Ty>, St]) =>
+                      (([t, , st1]: [Ty, Map<string, Ty>, St]) => {
+                        const sc: Scheme = generalize(env, t, st1, false);
+                        return registerExternsFrom$(
+                          rest,
+                          aliasMap,
+                          _Map_set(name, sc, env),
+                          recordBinder(nameSpan, sc.ty, "extern", name, doc, st1),
+                        );
+                      })(
+                        typeExprToType(
+                          typeExpr,
+                          vars,
+                          st0,
+                          aliasMap,
+                          _Set_fromArray([] as string[]),
+                        ),
+                      ))(
+                      reduce(
+                        _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
+                          (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(freshVar(s)),
+                        ),
+                        _tuple(new Map<string, Ty>(), st),
+                        params,
+                      ),
+                    ))(_v)
+                : registerExternsFrom$(rest, aliasMap, env, st))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(stmts);
 const registerExternsFrom: _Curry<
   [stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St],
   [Map<string, Scheme>, St]
-> = _curry(
-  4,
-  (stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(env, st)
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              ((_v) =>
-                _v._tag === "SExtern"
-                  ? (({ name, nameSpan, params, typeExpr, doc }) =>
-                      (([vars, st0]: [Map<string, Ty>, St]) =>
-                        (([t, , st1]: [Ty, Map<string, Ty>, St]) => {
-                          const sc: Scheme = generalize(env, t, st1, false);
-                          return registerExternsFrom(
-                            rest,
-                            aliasMap,
-                            _Map_set(name, sc, env),
-                            recordBinder(nameSpan, sc.ty, "extern", name, doc, st1),
-                          );
-                        })(
-                          typeExprToType(
-                            typeExpr,
-                            vars,
-                            st0,
-                            aliasMap,
-                            _Set_fromArray([] as string[]),
-                          ),
-                        ))(
-                        reduce(
-                          _curry(2, ([vs, s]: [Map<string, Ty>, St], param: string) =>
-                            (([v, s1]: [Ty, St]) => _tuple(_Map_set(param, v, vs), s1))(
-                              freshVar(s),
-                            ),
-                          ),
-                          _tuple(new Map<string, Ty>(), st),
-                          params,
-                        ),
-                      ))(_v)
-                  : registerExternsFrom(rest, aliasMap, env, st))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(stmts),
-);
+> = _curry(4, registerExternsFrom$);
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
   ((_v) =>
     _v.length === 0
@@ -5256,10 +5200,7 @@ const localTail: (e: Expr) => Expr = (e: Expr) =>
           },
         )
       : e)(e);
-const idxOfFrom: _Curry<
-  [lets: Stmt[], i0: number, acc0: Map<string, number>],
-  Map<string, number>
-> = _curry(3, (lets: Stmt[], i0: number, acc0: Map<string, number>) => {
+const idxOfFrom$ = (lets: Stmt[], i0: number, acc0: Map<string, number>): Map<string, number> => {
   let i: number = i0;
   let acc: Map<string, number> = acc0;
   while (true) {
@@ -5283,9 +5224,13 @@ const idxOfFrom: _Curry<
     }
     return _step.value;
   }
-});
+};
+const idxOfFrom: _Curry<
+  [lets: Stmt[], i0: number, acc0: Map<string, number>],
+  Map<string, number>
+> = _curry(3, idxOfFrom$);
 const idxOfMap: (lets: Stmt[]) => Map<string, number> = (lets: Stmt[]) =>
-  idxOfFrom(lets, 0, new Map<string, number>());
+  idxOfFrom$(lets, 0, new Map<string, number>());
 const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
   2,
   <A>(letStmt: Stmt, idxOf: Map<string, A>) => {
@@ -5301,7 +5246,7 @@ const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
               (j) => [j],
             ),
           _Set_toArray(
-            freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
+            freeRefs$(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
           ),
         );
       }
@@ -5332,10 +5277,11 @@ const groupOfFrom: <A>(idxs: number[], lets: A[]) => A[] = _curry(
               throw new Error("non-exhaustive match");
             })())(idxs),
 );
-const preBindGroupFrom: _Curry<
-  [group: Stmt[], env: Map<string, Scheme>, st: St],
-  [Map<string, Scheme>, St]
-> = _curry(3, (group: Stmt[], env: Map<string, Scheme>, st: St) =>
+const preBindGroupFrom$ = (
+  group: Stmt[],
+  env: Map<string, Scheme>,
+  st: St,
+): [Map<string, Scheme>, St] =>
   ((_v) =>
     _v.length === 0
       ? _tuple(env, st)
@@ -5345,13 +5291,75 @@ const preBindGroupFrom: _Curry<
               _v._tag === "SLet"
                 ? (({ name }) =>
                     (([v, st1]: [Ty, St]) =>
-                      preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)))(_v)
-                : preBindGroupFrom(rest, env, st))(s))(_v)
+                      preBindGroupFrom$(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)))(_v)
+                : preBindGroupFrom$(rest, env, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(group),
-);
+          })())(group);
+const preBindGroupFrom: _Curry<
+  [group: Stmt[], env: Map<string, Scheme>, st: St],
+  [Map<string, Scheme>, St]
+> = _curry(3, preBindGroupFrom$);
 
+const inferMember$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  name: string,
+  annot: Option<TypeExpr>,
+  value: Expr,
+  span: SpanAt,
+  st: St,
+): Result<[Ty, St], MemberErr> =>
+  ((_v) =>
+    _v._tag === "Err"
+      ? (({ error: e }) => Err({ err: e, st: st }) as Result<[Ty, St], MemberErr>)(_v)
+      : _v._tag === "Ok"
+        ? (({ value: [t, st1] }) =>
+            _Option_match(
+              _Map_get(name, ctx.env),
+              () =>
+                Err({
+                  err: typeErr$(`internal: missing self-binding for '${name}'`, span),
+                  st: st1,
+                }) as Result<[Ty, St], MemberErr>,
+              (selfSc) =>
+                _Result_match(
+                  u$(ctx, selfSc.ty, t, st1, span),
+                  (e) => Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>,
+                  (st2) =>
+                    _Option_match(
+                      annot,
+                      () => Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>,
+                      (te) =>
+                        (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
+                          _Result_match(
+                            checkFits$(ctx, t, at, stA, annotSpan(te)),
+                            (e) => Err({ err: e, st: stA }) as Result<[Ty, St], MemberErr>,
+                            (stB) => Ok(_tuple(at, stB)) as Result<[Ty, St], MemberErr>,
+                          ))(
+                          typeExprToType(
+                            te,
+                            new Map<string, Ty>(),
+                            st2,
+                            ctx.aliasMap,
+                            _Set_fromArray([] as string[]),
+                          ),
+                        ),
+                    ),
+                ),
+            ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(inferExpr$(ctx, value, st));
 const inferMember: _Curry<
   [
     ctx: {
@@ -5372,68 +5380,53 @@ const inferMember: _Curry<
     st: St,
   ],
   Result<[Ty, St], MemberErr>
-> = _curry(
-  6,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    name: string,
-    annot: Option<TypeExpr>,
-    value: Expr,
-    span: SpanAt,
-    st: St,
-  ) =>
-    ((_v) =>
-      _v._tag === "Err"
-        ? (({ error: e }) => Err({ err: e, st: st }) as Result<[Ty, St], MemberErr>)(_v)
-        : _v._tag === "Ok"
-          ? (({ value: [t, st1] }) =>
-              _Option_match(
-                _Map_get(name, ctx.env),
-                () =>
-                  Err({
-                    err: typeErr(`internal: missing self-binding for '${name}'`, span),
-                    st: st1,
-                  }) as Result<[Ty, St], MemberErr>,
-                (selfSc) =>
-                  _Result_match(
-                    u(ctx, selfSc.ty, t, st1, span),
-                    (e) => Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>,
-                    (st2) =>
-                      _Option_match(
-                        annot,
-                        () => Ok(_tuple(t, st2)) as Result<[Ty, St], MemberErr>,
-                        (te) =>
-                          (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
-                            _Result_match(
-                              checkFits(ctx, t, at, stA, annotSpan(te)),
-                              (e) => Err({ err: e, st: stA }) as Result<[Ty, St], MemberErr>,
-                              (stB) => Ok(_tuple(at, stB)) as Result<[Ty, St], MemberErr>,
-                            ))(
-                            typeExprToType(
-                              te,
-                              new Map<string, Ty>(),
-                              st2,
-                              ctx.aliasMap,
-                              _Set_fromArray([] as string[]),
-                            ),
-                          ),
-                      ),
-                  ),
-              ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(inferExpr(ctx, value, st)),
-);
+> = _curry(6, inferMember$);
+const inferGroupFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  group: Stmt[],
+  st: St,
+  errs: IErr[],
+): [Map<string, Ty>, St, IErr[]] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(new Map<string, Ty>(), st, errs)
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SLet"
+                ? (({ name, nameSpan, annot, value, doc, span }) =>
+                    ((_v) =>
+                      _v._tag === "Err"
+                        ? (({ error: me }) =>
+                            inferGroupFrom$(ctx, rest, me.st, _Array_append(me.err, errs)))(_v)
+                        : _v._tag === "Ok"
+                          ? (({ value: [pinned, st3] }) =>
+                              ((stNamed: St) =>
+                                (([restTypes, st4, errs1]: [Map<string, Ty>, St, IErr[]]) =>
+                                  _tuple(_Map_set(name, pinned, restTypes), st4, errs1))(
+                                  inferGroupFrom$(ctx, rest, stNamed, errs),
+                                ))(
+                                _Str_startsWith("$", name)
+                                  ? st3
+                                  : recordBinder(nameSpan, pinned, "let", name, doc, st3),
+                              ))(_v as Extract<Result<[Ty, St], MemberErr>, { _tag: "Ok" }>)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(inferMember$(ctx, name, annot, value, span, st)))(_v)
+                : inferGroupFrom$(ctx, rest, st, errs))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(group);
 const inferGroupFrom: _Curry<
   [
     ctx: {
@@ -5452,55 +5445,7 @@ const inferGroupFrom: _Curry<
     errs: IErr[],
   ],
   [Map<string, Ty>, St, IErr[]]
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    group: Stmt[],
-    st: St,
-    errs: IErr[],
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(new Map<string, Ty>(), st, errs)
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              ((_v) =>
-                _v._tag === "SLet"
-                  ? (({ name, nameSpan, annot, value, doc, span }) =>
-                      ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: me }) =>
-                              inferGroupFrom(ctx, rest, me.st, _Array_append(me.err, errs)))(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: [pinned, st3] }) =>
-                                ((stNamed: St) =>
-                                  (([restTypes, st4, errs1]: [Map<string, Ty>, St, IErr[]]) =>
-                                    _tuple(_Map_set(name, pinned, restTypes), st4, errs1))(
-                                    inferGroupFrom(ctx, rest, stNamed, errs),
-                                  ))(
-                                  _Str_startsWith("$", name)
-                                    ? st3
-                                    : recordBinder(nameSpan, pinned, "let", name, doc, st3),
-                                ))(_v as Extract<Result<[Ty, St], MemberErr>, { _tag: "Ok" }>)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(inferMember(ctx, name, annot, value, span, st)))(_v)
-                  : inferGroupFrom(ctx, rest, st, errs))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(group),
-);
+> = _curry(4, inferGroupFrom$);
 const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> = _curry(
   2,
   <A>(group: Stmt[], env: Map<string, A>) =>
@@ -5517,22 +5462,71 @@ const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> =
               throw new Error("non-exhaustive match");
             })())(group),
 );
-const groupNamesFrom: _Curry<[group: Stmt[], acc: string[]], string[]> = _curry(
-  2,
-  (group: Stmt[], acc: string[]) =>
-    ((_v) =>
-      _v.length === 0
-        ? acc
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              ((_v) =>
-                _v._tag === "SLet"
-                  ? (({ name }) => groupNamesFrom(rest, _Array_append(name, acc)))(_v)
-                  : groupNamesFrom(rest, acc))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(group),
-);
+const groupNamesFrom$ = (group: Stmt[], acc: string[]): string[] =>
+  ((_v) =>
+    _v.length === 0
+      ? acc
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SLet"
+                ? (({ name }) => groupNamesFrom$(rest, _Array_append(name, acc)))(_v)
+                : groupNamesFrom$(rest, acc))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(group);
+const groupNamesFrom: _Curry<[group: Stmt[], acc: string[]], string[]> = _curry(2, groupNamesFrom$);
+const generalizeGroupFrom$ = (
+  group: Stmt[],
+  bodyTypes: Map<string, Ty>,
+  preEnv: Map<string, Scheme>,
+  env: Map<string, Scheme>,
+  names: string[],
+  st: St,
+): Map<string, Scheme> =>
+  ((_v) =>
+    _v.length === 0
+      ? env
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SLet"
+                ? (({ name, annot }) =>
+                    _Option_match(
+                      _Map_get(name, bodyTypes),
+                      () =>
+                        generalizeGroupFrom$(
+                          rest,
+                          bodyTypes,
+                          preEnv,
+                          _Option_match(
+                            _Map_get(name, preEnv),
+                            () => env,
+                            (sc) => _Map_set(name, sc, env),
+                          ),
+                          names,
+                          st,
+                        ),
+                      (t) => {
+                        const widen: boolean = _Option_match(
+                          annot,
+                          () => true,
+                          () => false,
+                        );
+                        return generalizeGroupFrom$(
+                          rest,
+                          bodyTypes,
+                          preEnv,
+                          _Map_set(name, generalizeOver(env, names, t, st, widen), env),
+                          names,
+                          st,
+                        );
+                      },
+                    ))(_v)
+                : generalizeGroupFrom$(rest, bodyTypes, preEnv, env, names, st))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(group);
 const generalizeGroupFrom: _Curry<
   [
     group: Stmt[],
@@ -5543,64 +5537,12 @@ const generalizeGroupFrom: _Curry<
     st: St,
   ],
   Map<string, Scheme>
-> = _curry(
-  6,
-  (
-    group: Stmt[],
-    bodyTypes: Map<string, Ty>,
-    preEnv: Map<string, Scheme>,
-    env: Map<string, Scheme>,
-    names: string[],
-    st: St,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? env
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              ((_v) =>
-                _v._tag === "SLet"
-                  ? (({ name, annot }) =>
-                      _Option_match(
-                        _Map_get(name, bodyTypes),
-                        () =>
-                          generalizeGroupFrom(
-                            rest,
-                            bodyTypes,
-                            preEnv,
-                            _Option_match(
-                              _Map_get(name, preEnv),
-                              () => env,
-                              (sc) => _Map_set(name, sc, env),
-                            ),
-                            names,
-                            st,
-                          ),
-                        (t) => {
-                          const widen: boolean = _Option_match(
-                            annot,
-                            () => true,
-                            () => false,
-                          );
-                          return generalizeGroupFrom(
-                            rest,
-                            bodyTypes,
-                            preEnv,
-                            _Map_set(name, generalizeOver(env, names, t, st, widen), env),
-                            names,
-                            st,
-                          );
-                        },
-                      ))(_v)
-                  : generalizeGroupFrom(rest, bodyTypes, preEnv, env, names, st))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(group),
-);
-const noteGroupLets: _Curry<
-  [group: Stmt[], letOwner: Map<string, SpanAt>, st: St],
-  [Map<string, SpanAt>, St]
-> = _curry(3, (group: Stmt[], letOwner: Map<string, SpanAt>, st: St) =>
+> = _curry(6, generalizeGroupFrom$);
+const noteGroupLets$ = (
+  group: Stmt[],
+  letOwner: Map<string, SpanAt>,
+  st: St,
+): [Map<string, SpanAt>, St] =>
   ((_v) =>
     _v.length === 0
       ? _tuple(letOwner, st)
@@ -5610,14 +5552,78 @@ const noteGroupLets: _Curry<
               _v._tag === "SLet" && (({ name, value }) => !_Str_startsWith("$", name))(_v)
                 ? (({ name, value }) =>
                     ((sp: SpanAt) =>
-                      noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
+                      noteGroupLets$(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
                       exprSpan(value),
                     ))(_v)
-                : noteGroupLets(rest, letOwner, st))(s))(_v)
+                : noteGroupLets$(rest, letOwner, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(group),
-);
+          })())(group);
+const noteGroupLets: _Curry<
+  [group: Stmt[], letOwner: Map<string, SpanAt>, st: St],
+  [Map<string, SpanAt>, St]
+> = _curry(3, noteGroupLets$);
+const processGroupsFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  sccs: number[][],
+  lets: Stmt[],
+  st: St,
+  errs: IErr[],
+): [
+  {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  St,
+  IErr[],
+] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(ctx, st, errs)
+      : _v.length >= 1
+        ? (([comp, ...restSccs]) =>
+            ((group: Stmt[]) =>
+              (([preEnv, st1]: [Map<string, Scheme>, St]) => {
+                const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom$(group, [] as string[]));
+                return (([bodyTypes, st2, errs1]: [Map<string, Ty>, St, IErr[]]) => {
+                  const finalEnv: Map<string, Scheme> = generalizeGroupFrom$(
+                    group,
+                    bodyTypes,
+                    preEnv,
+                    dropGroupFrom(group, preEnv),
+                    ctx.scopeNames,
+                    st2,
+                  );
+                  return (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
+                    processGroupsFrom$(
+                      ctxWithLets(ctx, finalEnv, finalOwner),
+                      restSccs,
+                      lets,
+                      st3,
+                      errs1,
+                    ))(noteGroupLets$(group, ctx.letOwner, st2));
+                })(inferGroupFrom$(preCtx, group, st1, errs));
+              })(preBindGroupFrom$(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(sccs);
 const processGroupsFrom: _Curry<
   [
     ctx: {
@@ -5651,56 +5657,49 @@ const processGroupsFrom: _Curry<
     St,
     IErr[],
   ]
-> = _curry(
-  5,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    sccs: number[][],
-    lets: Stmt[],
-    st: St,
-    errs: IErr[],
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(ctx, st, errs)
-        : _v.length >= 1
-          ? (([comp, ...restSccs]) =>
-              ((group: Stmt[]) =>
-                (([preEnv, st1]: [Map<string, Scheme>, St]) => {
-                  const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom(group, [] as string[]));
-                  return (([bodyTypes, st2, errs1]: [Map<string, Ty>, St, IErr[]]) => {
-                    const finalEnv: Map<string, Scheme> = generalizeGroupFrom(
-                      group,
-                      bodyTypes,
-                      preEnv,
-                      dropGroupFrom(group, preEnv),
-                      ctx.scopeNames,
-                      st2,
-                    );
-                    return (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
-                      processGroupsFrom(
-                        ctxWithLets(ctx, finalEnv, finalOwner),
-                        restSccs,
-                        lets,
-                        st3,
-                        errs1,
-                      ))(noteGroupLets(group, ctx.letOwner, st2));
-                  })(inferGroupFrom(preCtx, group, st1, errs));
-                })(preBindGroupFrom(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(sccs),
-);
+> = _curry(5, processGroupsFrom$);
+const inferExprStmtsFrom$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, QualAliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  stmts: Stmt[],
+  st: St,
+  errs: IErr[],
+): [St, IErr[]] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(st, errs)
+      : _v.length >= 1
+        ? (([s, ...rest]) =>
+            ((_v) =>
+              _v._tag === "SExpr"
+                ? (({ value, span }) =>
+                    ((_v) =>
+                      _v._tag === "Err"
+                        ? (({ error: e }) =>
+                            inferExprStmtsFrom$(ctx, rest, st, _Array_append(e, errs)))(_v)
+                        : _v._tag === "Ok"
+                          ? (({ value: [t, st1] }) =>
+                              _Result_match(
+                                u$(ctx, t, tUnit, st1, span),
+                                (e) => inferExprStmtsFrom$(ctx, rest, st1, _Array_append(e, errs)),
+                                (st2) => inferExprStmtsFrom$(ctx, rest, st2, errs),
+                              ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(inferExpr$(ctx, value, st)))(_v)
+                : inferExprStmtsFrom$(ctx, rest, st, errs))(s))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(stmts);
 const inferExprStmtsFrom: _Curry<
   [
     ctx: {
@@ -5719,51 +5718,7 @@ const inferExprStmtsFrom: _Curry<
     errs: IErr[],
   ],
   [St, IErr[]]
-> = _curry(
-  4,
-  (
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    stmts: Stmt[],
-    st: St,
-    errs: IErr[],
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(st, errs)
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              ((_v) =>
-                _v._tag === "SExpr"
-                  ? (({ value, span }) =>
-                      ((_v) =>
-                        _v._tag === "Err"
-                          ? (({ error: e }) =>
-                              inferExprStmtsFrom(ctx, rest, st, _Array_append(e, errs)))(_v)
-                          : _v._tag === "Ok"
-                            ? (({ value: [t, st1] }) =>
-                                _Result_match(
-                                  u(ctx, t, tUnit, st1, span),
-                                  (e) => inferExprStmtsFrom(ctx, rest, st1, _Array_append(e, errs)),
-                                  (st2) => inferExprStmtsFrom(ctx, rest, st2, errs),
-                                ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
-                            : (() => {
-                                throw new Error("non-exhaustive match");
-                              })())(inferExpr(ctx, value, st)))(_v)
-                  : inferExprStmtsFrom(ctx, rest, st, errs))(s))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(stmts),
-);
+> = _curry(4, inferExprStmtsFrom$);
 const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) =>
@@ -6061,22 +6016,45 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => {
   const f: VarSets = freeInType(t);
   return and(_Set_size(f.tv) === 0, _Set_size(f.rv) === 0);
 };
+const allSameConcreteFrom$ = (shown: string, uses: Ty[], i: number): boolean =>
+  _Option_match(
+    _Array_get(i, uses),
+    () => true,
+    (t) =>
+      and(isConcrete(t), eq(showType(t), shown)) ? allSameConcreteFrom$(shown, uses, i + 1) : false,
+  );
 const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
   3,
-  (shown: string, uses: Ty[], i: number) =>
-    _Option_match(
-      _Array_get(i, uses),
-      () => true,
-      (t) =>
-        and(isConcrete(t), eq(showType(t), shown))
-          ? allSameConcreteFrom(shown, uses, i + 1)
-          : false,
-    ),
+  allSameConcreteFrom$,
 );
-const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
-  2,
-  (shown: string, uses: Ty[]) => allSameConcreteFrom(shown, uses, 0),
-);
+const allSameConcrete$ = (shown: string, uses: Ty[]): boolean =>
+  allSameConcreteFrom$(shown, uses, 0);
+const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(2, allSameConcrete$);
+const resolveLetParamsFrom$ = (keys: string[], st: St): TypeAt[] =>
+  ((_v) =>
+    _v.length === 0
+      ? ([] as TypeAt[])
+      : _v.length >= 1
+        ? (([k, ...rest]) =>
+            ((tail) =>
+              ((uses: Ty[]) =>
+                _Option_match(
+                  _Array_get(0, uses),
+                  () => tail,
+                  (first) =>
+                    allSameConcrete$(showType(first), uses)
+                      ? _Option_match(
+                          _Map_get(k, st.letSpans),
+                          () => tail,
+                          (span) => _Array_prepend({ span: span, ty: first, sym: None }, tail),
+                        )
+                      : tail,
+                ))(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
+              resolveLetParamsFrom$(rest, st),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(keys);
 /**
  * Resolve `letParams` for TS emit (ADR 0035): a noted `let` is annotated only
  * when its body instantiated it at ONE fully-concrete type. Uses zonk against
@@ -6085,34 +6063,10 @@ const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(
  */
 const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
   2,
-  (keys: string[], st: St) =>
-    ((_v) =>
-      _v.length === 0
-        ? ([] as TypeAt[])
-        : _v.length >= 1
-          ? (([k, ...rest]) =>
-              ((tail) =>
-                ((uses: Ty[]) =>
-                  _Option_match(
-                    _Array_get(0, uses),
-                    () => tail,
-                    (first) =>
-                      allSameConcrete(showType(first), uses)
-                        ? _Option_match(
-                            _Map_get(k, st.letSpans),
-                            () => tail,
-                            (span) => _Array_prepend({ span: span, ty: first, sym: None }, tail),
-                          )
-                        : tail,
-                  ))(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
-                resolveLetParamsFrom(rest, st),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(keys),
+  resolveLetParamsFrom$,
 );
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
-  resolveLetParamsFrom(_Map_keys(st.letSpans), st);
+  resolveLetParamsFrom$(_Map_keys(st.letSpans), st);
 /**
  * Full inference result — the metadata the TS backend needs on top of `env`
  * (ADR 0090), including `letParams` (ADR 0035).
@@ -6212,7 +6166,7 @@ const runInferImports: <A, B, C>(
       nsImports,
       seedNs(namespaces, env0, st0),
     );
-    const aliasMap: Map<string, QualAliasInfo> = aliasMapFrom(
+    const aliasMap: Map<string, QualAliasInfo> = aliasMapFrom$(
       stmts,
       qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>()),
     );
@@ -6264,8 +6218,8 @@ const runInferImports: <A, B, C>(
                         letParams: TypeAt[];
                       },
                       IErr[]
-                    >))(errs1))(inferExprStmtsFrom(finalCtx, stmts, st4, errs)))(
-            processGroupsFrom(
+                    >))(errs1))(inferExprStmtsFrom$(finalCtx, stmts, st4, errs)))(
+            processGroupsFrom$(
               {
                 env: env4,
                 open: openMode,
@@ -6283,9 +6237,9 @@ const runInferImports: <A, B, C>(
               noErrs,
             ),
           );
-        })(registerExternsFrom(stmts, aliasMap, env2, st2)))(
+        })(registerExternsFrom$(stmts, aliasMap, env2, st2)))(
         registerBuiltinCtorsFrom(builtinDeclsFor(stmts), aliasMap, env1, st1),
-      ))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
+      ))(registerUserCtorsFrom$(stmts, aliasMap, env0, st0));
   },
 );
 /**
@@ -6336,7 +6290,7 @@ export const scopeAliases: <A, B, C>(
         >;
       } & C
     >,
-  ) => aliasMapFrom(stmts, qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>())),
+  ) => aliasMapFrom$(stmts, qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>())),
 );
 /**
  * Env-only view — the shape every existing caller (compile.mochi,
@@ -6409,6 +6363,22 @@ export const inferProgramImports: <A, B, C>(
 );
 
 const emptyQuals: Map<string, QualScope> = new Map<string, QualScope>();
+const inferProgram$ = (
+  stmts: Stmt[],
+  builtins: Map<string, Ty>,
+  namespaces: Map<string, Map<string, Ty>>,
+  openMode: boolean,
+): Result<Map<string, Scheme>, IErr[]> =>
+  inferProgramImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    new Map<string, Scheme>(),
+    new Map<string, Map<string, Scheme>>(),
+    emptyQuals,
+    None as Option<HostPlugin[]>,
+  );
 export const inferProgram: _Curry<
   [
     stmts: Stmt[],
@@ -6417,25 +6387,7 @@ export const inferProgram: _Curry<
     openMode: boolean,
   ],
   Result<Map<string, Scheme>, IErr[]>
-> = _curry(
-  4,
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) =>
-    inferProgramImports(
-      stmts,
-      builtins,
-      namespaces,
-      openMode,
-      new Map<string, Scheme>(),
-      new Map<string, Map<string, Scheme>>(),
-      emptyQuals,
-      None as Option<HostPlugin[]>,
-    ),
-);
+> = _curry(4, inferProgram$);
 /**
  * The imports-aware full result — what the TS GRAPH driver needs (ADR 0090).
  * `inferProgramImports` throws away everything but `env`; a module in a graph
@@ -6507,6 +6459,30 @@ export const inferProgramImportsTypes: <A, B, C>(
   ) =>
     runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
 );
+const inferProgramTypes$ = (
+  stmts: Stmt[],
+  builtins: Map<string, Ty>,
+  namespaces: Map<string, Map<string, Ty>>,
+  openMode: boolean,
+): Result<
+  {
+    env: Map<string, Scheme>;
+    types: TypeAt[];
+    aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
+  },
+  IErr[]
+> =>
+  runInferImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    new Map<string, Scheme>(),
+    new Map<string, Map<string, Scheme>>(),
+    emptyQuals,
+    None as Option<HostPlugin[]>,
+  );
 /**
  * Like `inferProgram`, but also returns the span -> type map and alias scope
  * the TS backend drives annotation from (ADR 0090).
@@ -6527,25 +6503,32 @@ export const inferProgramTypes: _Curry<
     },
     IErr[]
   >
-> = _curry(
-  4,
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-  ) =>
-    runInferImports(
-      stmts,
-      builtins,
-      namespaces,
-      openMode,
-      new Map<string, Scheme>(),
-      new Map<string, Map<string, Scheme>>(),
-      emptyQuals,
-      None as Option<HostPlugin[]>,
-    ),
-);
+> = _curry(4, inferProgramTypes$);
+const inferProgramTypesWith$ = (
+  stmts: Stmt[],
+  builtins: Map<string, Ty>,
+  namespaces: Map<string, Map<string, Ty>>,
+  openMode: boolean,
+  pluginsOpt: Option<HostPlugin[]>,
+): Result<
+  {
+    env: Map<string, Scheme>;
+    types: TypeAt[];
+    aliases: Map<string, QualAliasInfo>;
+    letParams: TypeAt[];
+  },
+  IErr[]
+> =>
+  runInferImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    new Map<string, Scheme>(),
+    new Map<string, Map<string, Scheme>>(),
+    emptyQuals,
+    pluginsOpt,
+  );
 /**
  * `inferProgramTypes` under a host plugin list (ADR 0109).
  */
@@ -6566,26 +6549,24 @@ export const inferProgramTypesWith: _Curry<
     },
     IErr[]
   >
-> = _curry(
-  5,
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-    pluginsOpt: Option<HostPlugin[]>,
-  ) =>
-    runInferImports(
-      stmts,
-      builtins,
-      namespaces,
-      openMode,
-      new Map<string, Scheme>(),
-      new Map<string, Map<string, Scheme>>(),
-      emptyQuals,
-      pluginsOpt,
-    ),
-);
+> = _curry(5, inferProgramTypesWith$);
+const inferProgramWith$ = (
+  stmts: Stmt[],
+  builtins: Map<string, Ty>,
+  namespaces: Map<string, Map<string, Ty>>,
+  openMode: boolean,
+  pluginsOpt: Option<HostPlugin[]>,
+): Result<Map<string, Scheme>, IErr[]> =>
+  inferProgramImports(
+    stmts,
+    builtins,
+    namespaces,
+    openMode,
+    new Map<string, Scheme>(),
+    new Map<string, Map<string, Scheme>>(),
+    emptyQuals,
+    pluginsOpt,
+  );
 export const inferProgramWith: _Curry<
   [
     stmts: Stmt[],
@@ -6595,26 +6576,7 @@ export const inferProgramWith: _Curry<
     pluginsOpt: Option<HostPlugin[]>,
   ],
   Result<Map<string, Scheme>, IErr[]>
-> = _curry(
-  5,
-  (
-    stmts: Stmt[],
-    builtins: Map<string, Ty>,
-    namespaces: Map<string, Map<string, Ty>>,
-    openMode: boolean,
-    pluginsOpt: Option<HostPlugin[]>,
-  ) =>
-    inferProgramImports(
-      stmts,
-      builtins,
-      namespaces,
-      openMode,
-      new Map<string, Scheme>(),
-      new Map<string, Map<string, Scheme>>(),
-      emptyQuals,
-      pluginsOpt,
-    ),
-);
+> = _curry(5, inferProgramWith$);
 const takeScheme: <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(name: A, env: Map<A, B>, acc: Map<A, B>) =>

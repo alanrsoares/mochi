@@ -220,7 +220,7 @@ testEach("codegen emits runtime forms", [
   {
     label: "curried multi-argument lambda",
     src: "let addPair = (a, b) => add(a, b)",
-    want: "const addPair = _curry(2, (a, b) => add(a, b));"
+    want: "const addPair$ = (a, b) => add(a, b);\nconst addPair = _curry(2, addPair$);"
   },
   {
     label: "record update",
@@ -336,7 +336,7 @@ testEach("GenOpts hooks reach their emission site", [
   {
     label: "annotateParams annotates params and scopes generics",
     src: "let addPair = (a, b) => add(a, b)",
-    want: "_curry(2, <A, B>(a: A, b: B) =>"
+    want: "const addPair$ = <A, B>(a: A, b: B) =>"
   },
   {
     label: "annotateEmpty pins an empty map literal",
@@ -375,7 +375,7 @@ testEach("the JS backend leaves every hook slot bare", [
   {
     label: "bare lambda params",
     src: "let addPair = (a, b) => add(a, b)",
-    want: "_curry(2, (a, b) =>"
+    want: "const addPair$ = (a, b) =>"
   },
   { label: "bare empty map", src: "let table = #{}", want: "new Map([])" },
   {
@@ -406,6 +406,112 @@ test("codegen matches codegenWith under the JS options", () =>
     emitted(jsGenOpts, "let addPair = (a, b) => add(a, b)"),
     genSrc("let addPair = (a, b) => add(a, b)") |> Result.unwrapOr("<error>")
   ))
+
+let rawFn = "let f = (a, b) => add(a, b)\n"
+
+testEach("a saturated call to a top-level function takes its raw twin (ADR 0149)", [
+  {
+    label: "exact arity calls the raw twin",
+    src: "${rawFn}let r = f(1, 2)",
+    want: "const r = f$(1, 2);"
+  },
+  {
+    label: "the public binding is _curry over the twin",
+    src: rawFn,
+    want: "const f$ = (a, b) => add(a, b);\nconst f = _curry(2, f$);"
+  },
+  {
+    label: "a partial call stays curried",
+    src: "${rawFn}let r = f(1)",
+    want: "const r = f(1);"
+  },
+  {
+    label: "an over-applied call stays curried",
+    src: "${rawFn}let r = f(1, 2, 3)",
+    want: "const r = f(1, 2, 3);"
+  },
+  {
+    label: "a regrouped call stays curried",
+    src: "${rawFn}let r = f(1)(2)",
+    want: "const r = f(1)(2);"
+  },
+  {
+    label: "a fast pipe is a saturated call",
+    src: "${rawFn}let r = 1->f(2)",
+    want: "const r = f$(1, 2);"
+  },
+  {
+    label: "a name used as a value is the public binding",
+    src: "${rawFn}let g = f",
+    want: "const g = f;"
+  },
+  {
+    label: "a recursive call inside the twin is saturated",
+    src: "let go = (n, acc) => n == 0 ? acc : go(n - 1, acc * n)",
+    want: "go$("
+  }
+], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
+
+testEach("a function with no safe twin keeps the curried path (ADR 0149)", [
+  {
+    label: "a local binder anywhere in the module rebinds the name",
+    src: "${rawFn}let g = f => f\nlet r = f(1, 2)",
+    want: "const r = f(1, 2);"
+  },
+  {
+    label: "a lambda parameter of the same name rebinds it",
+    src: "${rawFn}let g = (f, x) => f(x, x)\nlet r = f(1, 2)",
+    want: "const f = _curry(2, (a, b) =>"
+  },
+  {
+    label: "a labeled group stays on the fill path",
+    src: "let badge = (n, ~tone: string = \"rose\") => tone\nlet r = badge(1)",
+    want: "const badge = _curry(2, "
+  },
+  {
+    label: "arity one needs no twin",
+    src: "let id = a => a\nlet r = id(1)",
+    want: "const r = id(1);"
+  }
+], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
+
+testEach("no twin is emitted where none can be called", [
+  {
+    label: "shadowed name",
+    src: "${rawFn}let g = f => f\nlet r = f(1, 2)",
+    absent: "f$"
+  },
+  {
+    label: "labeled group",
+    src: "let badge = (n, ~tone: string = \"rose\") => tone",
+    absent: "badge$"
+  },
+  { label: "arity one", src: "let id = a => a", absent: "id$" }
+], row =>
+  (emitted(jsGenOpts, row.src) |> Str.contains(row.absent)) == false |> ok)
+
+let flatPipeOpts = { ...jsGenOpts, flattenPipe: true }
+
+test("a flattened pipe appends the piped argument to the saturated call", () =>
+  emitted(flatPipeOpts, "${rawFn}let r = 1 |> f(2)")
+    |> Str.contains("const r = f$(2, 1);")
+    |> ok)
+
+let declineOpts = { ...jsGenOpts, annotateRaw: Some((_n, _v) => None) }
+let returnOpts = {
+  ...jsGenOpts,
+  annotateRaw: Some((_n, _v) => Some(": number"))
+}
+
+test("annotateRaw declining drops the twin", () =>
+  emitted(declineOpts, "${rawFn}let r = f(1, 2)")
+    |> Str.contains("const r = f(1, 2);")
+    |> ok)
+
+test("annotateRaw annotates the twin's return type", () =>
+  emitted(returnOpts, rawFn)
+    |> Str.contains("const f$ = (a, b): number => add(a, b);")
+    |> ok)
 
 testEach("annotateCtor types each factory shape", [
   {

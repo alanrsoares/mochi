@@ -283,7 +283,8 @@ const exportedCtorNames = (js: string): string[] =>
 // emitted module carries the same runtime preamble (`const _curry = …`), so
 // concatenating a dep module with the target would declare those twice. Ctor
 // factories are CapCase and module locals lowerCamel, so this never collides
-// meaningfully — it only removes the duplicate shared preamble.
+// meaningfully — it only removes the duplicate shared preamble. A raw twin
+// (`name$`, ADR 0149) dedupes with its public binding.
 /**
  * Index of the line ending the statement that starts at `i`. Some emitted consts
  * are multi-line match chains and prelude defs like `_curry` are multi-line
@@ -320,7 +321,7 @@ const dedupeConsts = (js: string): string => {
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
     const line = lines[i] ?? "";
-    const name = line.match(/^const (\w+) =/)?.[1];
+    const name = line.match(/^const (\w+\$*) =/)?.[1];
     if (!name) {
       out.push(line);
       i++;
@@ -346,7 +347,7 @@ const ctorDefsOnly = (js: string): string => {
   const lines = js.split("\n");
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
-    const name = (lines[i] ?? "").match(/^const (\w+) =/)?.[1];
+    const name = (lines[i] ?? "").match(/^const (\w+\$*) =/)?.[1];
     const j = name ? endOfStatement(lines, i) : i;
     if (name && /^[A-Z_]/.test(name)) out.push(...lines.slice(i, j + 1));
     i = j + 1;

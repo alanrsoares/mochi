@@ -121,7 +121,7 @@ const diffVarSets: <C, D>(
     b: { rv: Set<number>; tv: Set<number> } & D,
   ) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }),
 );
-export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, (t: Ty, acc: VarSets) => {
+const collect$ = (t: Ty, acc: VarSets): VarSets => {
   const $match = t;
   switch ($match._tag) {
     case "TyVar": {
@@ -130,64 +130,99 @@ export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, (t: Ty,
     }
     case "TyCon": {
       const { args } = $match;
-      return collectArgs(args, acc);
+      return collectArgs$(args, acc);
     }
     case "TyFn": {
       const { from: fromT, to: toT } = $match;
-      return collect(toT, collect(fromT, acc));
+      return collect$(toT, collect$(fromT, acc));
     }
     case "TyRecord": {
       const { row } = $match;
-      return collectRow(row, acc);
+      return collectRow$(row, acc);
     }
     case "TySingleton": {
       return acc;
     }
     case "TyOneOf": {
       const { members } = $match;
-      return collectArgs(members, acc);
+      return collectArgs$(members, acc);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
-});
-const collectArgs: _Curry<[args: Ty[], acc: VarSets], VarSets> = _curry(
-  2,
-  (args: Ty[], acc: VarSets) => collectArgsFrom(args, 0, acc),
-);
+};
+export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, collect$);
+const collectArgs$ = (args: Ty[], acc: VarSets): VarSets => collectArgsFrom$(args, 0, acc);
+const collectArgs: _Curry<[args: Ty[], acc: VarSets], VarSets> = _curry(2, collectArgs$);
+const collectArgsFrom$ = (args: Ty[], i: number, acc: VarSets): VarSets =>
+  _Option_match(
+    _Array_get(i, args),
+    () => acc,
+    (a) => collectArgsFrom$(args, i + 1, collect$(a, acc)),
+  );
 const collectArgsFrom: _Curry<[args: Ty[], i: number, acc: VarSets], VarSets> = _curry(
   3,
-  (args: Ty[], i: number, acc: VarSets) =>
-    _Option_match(
-      _Array_get(i, args),
-      () => acc,
-      (a) => collectArgsFrom(args, i + 1, collect(a, acc)),
-    ),
+  collectArgsFrom$,
 );
-const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(
-  2,
-  (row: Row, acc: VarSets) => {
-    const $match = row;
-    switch ($match._tag) {
-      case "RowVar": {
-        const { id } = $match;
-        return { tv: acc.tv, rv: _Set_add(id, acc.rv) };
-      }
-      case "RowExtend": {
-        const { fieldType, rest } = $match;
-        return collectRow(rest, collect(fieldType, acc));
-      }
-      case "RowEmpty": {
-        return acc;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
+const collectRow$ = (row: Row, acc: VarSets): VarSets => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowVar": {
+      const { id } = $match;
+      return { tv: acc.tv, rv: _Set_add(id, acc.rv) };
     }
-  },
-);
-export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets);
+    case "RowExtend": {
+      const { fieldType, rest } = $match;
+      return collectRow$(rest, collect$(fieldType, acc));
+    }
+    case "RowEmpty": {
+      return acc;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, collectRow$);
+export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect$(t, emptyVarSets);
+const collectFree$ = (t: Ty, bound: VarSets, st: St, acc: VarSets): VarSets => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return _Set_has(id, bound.tv)
+        ? acc
+        : _Option_match(
+            idGet(id, st.tv),
+            () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }),
+            (next) => collectFree$(next, bound, st, acc),
+          );
+    }
+    case "TyCon": {
+      const { args } = $match;
+      return collectFreeArgs$(args, bound, st, acc);
+    }
+    case "TyFn": {
+      const { from: fromT, to: toT } = $match;
+      return collectFree$(toT, bound, st, collectFree$(fromT, bound, st, acc));
+    }
+    case "TyRecord": {
+      const { row } = $match;
+      return collectFreeRow$(row, bound, st, acc);
+    }
+    case "TySingleton": {
+      return acc;
+    }
+    case "TyOneOf": {
+      const { members } = $match;
+      return collectFreeArgs$(members, bound, st, acc);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 /**
  * Free vars of an env type, resolved THROUGH the substitution. An env scheme
  * keeps the var it was built with, and unification may since have pointed that
@@ -199,86 +234,58 @@ export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect(t, emptyVarSets
  */
 const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
-  (t: Ty, bound: VarSets, st: St, acc: VarSets) => {
-    const $match = t;
-    switch ($match._tag) {
-      case "TyVar": {
-        const { id } = $match;
-        return _Set_has(id, bound.tv)
-          ? acc
-          : _Option_match(
-              idGet(id, st.tv),
-              () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }),
-              (next) => collectFree(next, bound, st, acc),
-            );
-      }
-      case "TyCon": {
-        const { args } = $match;
-        return collectFreeArgs(args, bound, st, acc);
-      }
-      case "TyFn": {
-        const { from: fromT, to: toT } = $match;
-        return collectFree(toT, bound, st, collectFree(fromT, bound, st, acc));
-      }
-      case "TyRecord": {
-        const { row } = $match;
-        return collectFreeRow(row, bound, st, acc);
-      }
-      case "TySingleton": {
-        return acc;
-      }
-      case "TyOneOf": {
-        const { members } = $match;
-        return collectFreeArgs(members, bound, st, acc);
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  collectFree$,
 );
+const collectFreeArgs$ = (args: Ty[], bound: VarSets, st: St, acc: VarSets): VarSets =>
+  collectFreeArgsFrom$(args, 0, bound, st, acc);
 const collectFreeArgs: _Curry<[args: Ty[], bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
-  (args: Ty[], bound: VarSets, st: St, acc: VarSets) =>
-    collectFreeArgsFrom(args, 0, bound, st, acc),
+  collectFreeArgs$,
 );
-const collectFreeArgsFrom: _Curry<
-  [args: Ty[], i: number, bound: VarSets, st: St, acc: VarSets],
-  VarSets
-> = _curry(5, (args: Ty[], i: number, bound: VarSets, st: St, acc: VarSets) =>
+const collectFreeArgsFrom$ = (
+  args: Ty[],
+  i: number,
+  bound: VarSets,
+  st: St,
+  acc: VarSets,
+): VarSets =>
   _Option_match(
     _Array_get(i, args),
     () => acc,
-    (a) => collectFreeArgsFrom(args, i + 1, bound, st, collectFree(a, bound, st, acc)),
-  ),
-);
+    (a) => collectFreeArgsFrom$(args, i + 1, bound, st, collectFree$(a, bound, st, acc)),
+  );
+const collectFreeArgsFrom: _Curry<
+  [args: Ty[], i: number, bound: VarSets, st: St, acc: VarSets],
+  VarSets
+> = _curry(5, collectFreeArgsFrom$);
+const collectFreeRow$ = (row: Row, bound: VarSets, st: St, acc: VarSets): VarSets => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowVar": {
+      const { id } = $match;
+      return _Set_has(id, bound.rv)
+        ? acc
+        : _Option_match(
+            idGet(id, st.rv),
+            () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }),
+            (next) => collectFreeRow$(next, bound, st, acc),
+          );
+    }
+    case "RowExtend": {
+      const { fieldType, rest } = $match;
+      return collectFreeRow$(rest, bound, st, collectFree$(fieldType, bound, st, acc));
+    }
+    case "RowEmpty": {
+      return acc;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const collectFreeRow: _Curry<[row: Row, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
   4,
-  (row: Row, bound: VarSets, st: St, acc: VarSets) => {
-    const $match = row;
-    switch ($match._tag) {
-      case "RowVar": {
-        const { id } = $match;
-        return _Set_has(id, bound.rv)
-          ? acc
-          : _Option_match(
-              idGet(id, st.rv),
-              () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }),
-              (next) => collectFreeRow(next, bound, st, acc),
-            );
-      }
-      case "RowExtend": {
-        const { fieldType, rest } = $match;
-        return collectFreeRow(rest, bound, st, collectFree(fieldType, bound, st, acc));
-      }
-      case "RowEmpty": {
-        return acc;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  collectFreeRow$,
 );
 const freeInScheme: <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
@@ -287,7 +294,7 @@ const freeInScheme: <A>(
 ) => VarSets = _curry(
   3,
   <A>(sc: { ty: Ty; rvars: number[]; vars: number[] } & A, st: St, acc: VarSets) =>
-    collectFree(sc.ty, { tv: _Set_fromArray(sc.vars), rv: _Set_fromArray(sc.rvars) }, st, acc),
+    collectFree$(sc.ty, { tv: _Set_fromArray(sc.vars), rv: _Set_fromArray(sc.rvars) }, st, acc),
 );
 const freeInEnvFrom: <A>(
   schemes: ({ ty: Ty; rvars: number[]; vars: number[] } & A)[],
@@ -497,77 +504,79 @@ const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, 
         throw new Error("non-exhaustive match");
       }),
 );
+const instSub$ = (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>): Ty => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return _Map_getOr(t, id, tmap);
+    }
+    case "TyCon": {
+      const { name, args } = $match;
+      return tCon(
+        name,
+        map((a: Ty) => instSub$(a, tmap, rmap), args),
+      );
+    }
+    case "TyFn": {
+      const { from: fromT, to: toT } = $match;
+      return tArrow(instSub$(fromT, tmap, rmap), instSub$(toT, tmap, rmap));
+    }
+    case "TyRecord": {
+      const { row } = $match;
+      return tRecord(instSubRow$(row, tmap, rmap));
+    }
+    case "TySingleton": {
+      const { base, value } = $match;
+      return TySingleton(base, value);
+    }
+    case "TyOneOf": {
+      const { members } = $match;
+      return tUnion(map((m: Ty) => instSub$(m, tmap, rmap), members));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const instSub: _Curry<[t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>], Ty> = _curry(
   3,
-  (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>) => {
-    const $match = t;
-    switch ($match._tag) {
-      case "TyVar": {
-        const { id } = $match;
-        return _Map_getOr(t, id, tmap);
-      }
-      case "TyCon": {
-        const { name, args } = $match;
-        return tCon(
-          name,
-          map((a: Ty) => instSub(a, tmap, rmap), args),
-        );
-      }
-      case "TyFn": {
-        const { from: fromT, to: toT } = $match;
-        return tArrow(instSub(fromT, tmap, rmap), instSub(toT, tmap, rmap));
-      }
-      case "TyRecord": {
-        const { row } = $match;
-        return tRecord(instSubRow(row, tmap, rmap));
-      }
-      case "TySingleton": {
-        const { base, value } = $match;
-        return TySingleton(base, value);
-      }
-      case "TyOneOf": {
-        const { members } = $match;
-        return tUnion(map((m: Ty) => instSub(m, tmap, rmap), members));
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  instSub$,
 );
+const instSubRow$ = (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>): Row => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowVar": {
+      const { id } = $match;
+      return _Map_getOr(row, id, rmap);
+    }
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return rField(
+        label,
+        instSub$(fieldType, tmap, rmap),
+        instSubRow$(rest, tmap, rmap),
+        optional,
+      );
+    }
+    case "RowEmpty": {
+      return row;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>], Row> = _curry(
   3,
-  (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>) => {
-    const $match = row;
-    switch ($match._tag) {
-      case "RowVar": {
-        const { id } = $match;
-        return _Map_getOr(row, id, rmap);
-      }
-      case "RowExtend": {
-        const { label, fieldType, optional, rest } = $match;
-        return rField(
-          label,
-          instSub(fieldType, tmap, rmap),
-          instSubRow(rest, tmap, rmap),
-          optional,
-        );
-      }
-      case "RowEmpty": {
-        return row;
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
+  instSubRow$,
 );
 export const instantiate: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   st: St,
 ) => [Ty, St] = _curry(2, <A>(sc: { vars: number[]; rvars: number[]; ty: Ty } & A, st: St) =>
   (([tmap, st1]: [Map<number, Ty>, St]) =>
-    (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
+    (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub$(sc.ty, tmap, rmap), st2))(
       instRowMapFrom(sc.rvars, new Map<number, Row>(), st1),
     ))(instMapFrom(sc.vars, new Map<number, Ty>(), st)),
 );
@@ -578,6 +587,26 @@ export const isUpperStart: (s: string) => boolean = (s: string) =>
     (c) => and(c >= 65, c <= 90),
   );
 
+const typeExprListToType$ = (
+  tes: TypeExpr[],
+  vars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  expanding: Set<string>,
+): [Ty[], Map<string, Ty>, St] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple([] as Ty[], vars, st)
+      : _v.length >= 1
+        ? (([te, ...rest]) =>
+            (([t, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+              (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, St]) =>
+                _tuple(_Array_prepend(t, restTs), vars2, st2))(
+                typeExprListToType$(rest, vars1, st1, aliases, expanding),
+              ))(typeExprToType$(te, vars, st, aliases, expanding)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(tes);
 export const typeExprListToType: _Curry<
   [
     tes: TypeExpr[],
@@ -587,29 +616,32 @@ export const typeExprListToType: _Curry<
     expanding: Set<string>,
   ],
   [Ty[], Map<string, Ty>, St]
-> = _curry(
-  5,
-  (
-    tes: TypeExpr[],
-    vars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    expanding: Set<string>,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple([] as Ty[], vars, st)
-        : _v.length >= 1
-          ? (([te, ...rest]) =>
-              (([t, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                (([restTs, vars2, st2]: [Ty[], Map<string, Ty>, St]) =>
-                  _tuple(_Array_prepend(t, restTs), vars2, st2))(
-                  typeExprListToType(rest, vars1, st1, aliases, expanding),
-                ))(typeExprToType(te, vars, st, aliases, expanding)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(tes),
-);
+> = _curry(5, typeExprListToType$);
+const typeExprName$ = (
+  name: string,
+  vars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  expanding: Set<string>,
+): [Ty, Map<string, Ty>, St] =>
+  _Array_contains(name, primTypeNames)
+    ? _tuple(primType(name), vars, st)
+    : _Option_match(
+        _Map_get(name, vars),
+        () =>
+          _Option_match(
+            _Map_get(name, aliases),
+            () =>
+              isUpperStart(name)
+                ? _tuple(tPrim(name), vars, st)
+                : (([v, st1]: [Ty, St]) => _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
+            (info) =>
+              (([t, st1]: [Ty, St]) => _tuple(t, vars, st1))(
+                aliasRow$(name, info, [] as Ty[], st, aliases, expanding),
+              ),
+          ),
+        (v) => _tuple(v, vars, st),
+      );
 /**
  * `unit` is an ordinary primitive name (ADR 0054), so `()` in TypeExpr — which the
  * parser lowers to `TyName("unit")` — needs no special case here.
@@ -623,34 +655,80 @@ export const typeExprName: _Curry<
     expanding: Set<string>,
   ],
   [Ty, Map<string, Ty>, St]
-> = _curry(
-  5,
-  (
-    name: string,
-    vars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    expanding: Set<string>,
-  ) =>
-    _Array_contains(name, primTypeNames)
-      ? _tuple(primType(name), vars, st)
-      : _Option_match(
-          _Map_get(name, vars),
-          () =>
-            _Option_match(
-              _Map_get(name, aliases),
-              () =>
-                isUpperStart(name)
-                  ? _tuple(tPrim(name), vars, st)
-                  : (([v, st1]: [Ty, St]) => _tuple(v, _Map_set(name, v, vars), st1))(freshVar(st)),
-              (info) =>
-                (([t, st1]: [Ty, St]) => _tuple(t, vars, st1))(
-                  aliasRow(name, info, [] as Ty[], st, aliases, expanding),
-                ),
+> = _curry(5, typeExprName$);
+const typeExprToType$ = (
+  te: TypeExpr,
+  vars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  expanding: Set<string>,
+): [Ty, Map<string, Ty>, St] => {
+  const $match = te;
+  switch ($match._tag) {
+    case "TyArrow": {
+      const { from: fromTe, to: toTe } = $match;
+      return (([fromT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+        (([toT, vars2, st2]: [Ty, Map<string, Ty>, St]) => _tuple(tArrow(fromT, toT), vars2, st2))(
+          typeExprToType$(toTe, vars1, st1, aliases, expanding),
+        ))(typeExprToType$(fromTe, vars, st, aliases, expanding));
+    }
+    case "TyApp": {
+      const { ctor, args: argTes } = $match;
+      return (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+        _Option_match(
+          _Map_get(ctor, aliases),
+          () => _tuple(tCon(ctor, args), vars1, st1),
+          (info) =>
+            (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
+              aliasRow$(ctor, info, args, st1, aliases, expanding),
             ),
-          (v) => _tuple(v, vars, st),
-        ),
-);
+        ))(typeExprListToType$(argTes, vars, st, aliases, expanding));
+    }
+    case "TyTuple": {
+      const { elems: elemTes } = $match;
+      return (([elems, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+        _tuple(tTuple(elems), vars1, st1))(
+        typeExprListToType$(elemTes, vars, st, aliases, expanding),
+      );
+    }
+    case "TyList": {
+      const { elem: elemTe } = $match;
+      return (([elemT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+        _tuple(tCon("Array", [elemT]), vars1, st1))(
+        typeExprToType$(elemTe, vars, st, aliases, expanding),
+      );
+    }
+    case "TyName": {
+      const { name } = $match;
+      return typeExprName$(name, vars, st, aliases, expanding);
+    }
+    case "TyQual": {
+      const { alias, name, args: argTes } = $match;
+      return (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
+        _Option_match(
+          _Map_get(`${alias}.${name}`, aliases),
+          () => _tuple(tCon(name, args), vars1, st1),
+          (info) =>
+            (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
+              aliasRow$(name, info, args, st1, aliases, expanding),
+            ),
+        ))(typeExprListToType$(argTes, vars, st, aliases, expanding));
+    }
+    case "TyLit": {
+      const { value } = $match;
+      return _tuple(tLit(value), vars, st);
+    }
+    case "TyUnion": {
+      const { members } = $match;
+      return (([ts, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tUnion(ts), vars1, st1))(
+        typeExprListToType$(members, vars, st, aliases, expanding),
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 /**
  * surface type-expr -> HM type. Prim names map to their type; Uppercase names
  * are nullary constructors (unless a transparent alias expands them);
@@ -666,83 +744,7 @@ export const typeExprToType: _Curry<
     expanding: Set<string>,
   ],
   [Ty, Map<string, Ty>, St]
-> = _curry(
-  5,
-  (
-    te: TypeExpr,
-    vars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    expanding: Set<string>,
-  ) => {
-    const $match = te;
-    switch ($match._tag) {
-      case "TyArrow": {
-        const { from: fromTe, to: toTe } = $match;
-        return (([fromT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-          (([toT, vars2, st2]: [Ty, Map<string, Ty>, St]) =>
-            _tuple(tArrow(fromT, toT), vars2, st2))(
-            typeExprToType(toTe, vars1, st1, aliases, expanding),
-          ))(typeExprToType(fromTe, vars, st, aliases, expanding));
-      }
-      case "TyApp": {
-        const { ctor, args: argTes } = $match;
-        return (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
-          _Option_match(
-            _Map_get(ctor, aliases),
-            () => _tuple(tCon(ctor, args), vars1, st1),
-            (info) =>
-              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
-                aliasRow(ctor, info, args, st1, aliases, expanding),
-              ),
-          ))(typeExprListToType(argTes, vars, st, aliases, expanding));
-      }
-      case "TyTuple": {
-        const { elems: elemTes } = $match;
-        return (([elems, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
-          _tuple(tTuple(elems), vars1, st1))(
-          typeExprListToType(elemTes, vars, st, aliases, expanding),
-        );
-      }
-      case "TyList": {
-        const { elem: elemTe } = $match;
-        return (([elemT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-          _tuple(tCon("Array", [elemT]), vars1, st1))(
-          typeExprToType(elemTe, vars, st, aliases, expanding),
-        );
-      }
-      case "TyName": {
-        const { name } = $match;
-        return typeExprName(name, vars, st, aliases, expanding);
-      }
-      case "TyQual": {
-        const { alias, name, args: argTes } = $match;
-        return (([args, vars1, st1]: [Ty[], Map<string, Ty>, St]) =>
-          _Option_match(
-            _Map_get(`${alias}.${name}`, aliases),
-            () => _tuple(tCon(name, args), vars1, st1),
-            (info) =>
-              (([t, st2]: [Ty, St]) => _tuple(t, vars1, st2))(
-                aliasRow(name, info, args, st1, aliases, expanding),
-              ),
-          ))(typeExprListToType(argTes, vars, st, aliases, expanding));
-      }
-      case "TyLit": {
-        const { value } = $match;
-        return _tuple(tLit(value), vars, st);
-      }
-      case "TyUnion": {
-        const { members } = $match;
-        return (([ts, vars1, st1]: [Ty[], Map<string, Ty>, St]) => _tuple(tUnion(ts), vars1, st1))(
-          typeExprListToType(members, vars, st, aliases, expanding),
-        );
-      }
-      default: {
-        throw new Error("non-exhaustive match");
-      }
-    }
-  },
-);
+> = _curry(5, typeExprToType$);
 const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, St] = _curry(
   3,
   <A>(params: A[], args: Ty[], st: St) =>
@@ -773,6 +775,26 @@ const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, S
         throw new Error("non-exhaustive match");
       }),
 );
+const aliasFieldsFrom$ = (
+  fields: AliasField[],
+  vars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  expanding: Set<string>,
+): [Row, St] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(RowEmpty as Row, st)
+      : _v.length >= 1
+        ? (([fld, ...rest]) =>
+            (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
+              (([restRow, st2]: [Row, St]) =>
+                _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
+                aliasFieldsFrom$(rest, vars1, st1, aliases, expanding),
+              ))(typeExprToType$(fld.fieldType, vars, st, aliases, expanding)))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(fields);
 const aliasFieldsFrom: _Curry<
   [
     fields: AliasField[],
@@ -782,29 +804,32 @@ const aliasFieldsFrom: _Curry<
     expanding: Set<string>,
   ],
   [Row, St]
-> = _curry(
-  5,
-  (
-    fields: AliasField[],
-    vars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    expanding: Set<string>,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(RowEmpty as Row, st)
-        : _v.length >= 1
-          ? (([fld, ...rest]) =>
-              (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
-                (([restRow, st2]: [Row, St]) =>
-                  _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
-                  aliasFieldsFrom(rest, vars1, st1, aliases, expanding),
-                ))(typeExprToType(fld.fieldType, vars, st, aliases, expanding)))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(fields),
-);
+> = _curry(5, aliasFieldsFrom$);
+const aliasRow$ = (
+  name: string,
+  info: AliasInfo,
+  args: Ty[],
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  expanding: Set<string>,
+): [Ty, St] =>
+  _Set_has(name, expanding)
+    ? _tuple(tCon(name, args), st)
+    : _Option_match(
+        info.expr,
+        () =>
+          (([local, st1]: [Map<string, Ty>, St]) => {
+            const next: Set<string> = _Set_add(name, expanding);
+            return (([row, st2]: [Row, St]) => _tuple(tRecord(row), st2))(
+              aliasFieldsFrom$(info.fields, local, st1, aliases, next),
+            );
+          })(aliasLocalVarsFrom(info.params, args, st)),
+        (te) =>
+          (([local, st1]: [Map<string, Ty>, St]) =>
+            (([t, , st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
+              typeExprToType$(te, local, st1, aliases, _Set_add(name, expanding)),
+            ))(aliasLocalVarsFrom(info.params, args, st)),
+      );
 /**
  * Expand a record alias to its structural row. `args` binds its type params
  * positionally; params past `args.length` become fresh generic vars.
@@ -822,34 +847,7 @@ export const aliasRow: _Curry<
     expanding: Set<string>,
   ],
   [Ty, St]
-> = _curry(
-  6,
-  (
-    name: string,
-    info: AliasInfo,
-    args: Ty[],
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    expanding: Set<string>,
-  ) =>
-    _Set_has(name, expanding)
-      ? _tuple(tCon(name, args), st)
-      : _Option_match(
-          info.expr,
-          () =>
-            (([local, st1]: [Map<string, Ty>, St]) => {
-              const next: Set<string> = _Set_add(name, expanding);
-              return (([row, st2]: [Row, St]) => _tuple(tRecord(row), st2))(
-                aliasFieldsFrom(info.fields, local, st1, aliases, next),
-              );
-            })(aliasLocalVarsFrom(info.params, args, st)),
-          (te) =>
-            (([local, st1]: [Map<string, Ty>, St]) =>
-              (([t, , st2]: [Ty, Map<string, Ty>, St]) => _tuple(t, st2))(
-                typeExprToType(te, local, st1, aliases, _Set_add(name, expanding)),
-              ))(aliasLocalVarsFrom(info.params, args, st)),
-        ),
-);
+> = _curry(6, aliasRow$);
 const pvarsFrom: <A>(params: A[], st: St) => [Map<A, Ty>, Ty[], St] = _curry(
   2,
   <A>(params: A[], st: St) =>
@@ -871,6 +869,27 @@ const pvarsFrom: <A>(params: A[], st: St) => [Map<A, Ty>, Ty[], St] = _curry(
         throw new Error("non-exhaustive match");
       }),
 );
+const ctorFieldsArrowFrom$ = (
+  fields: CtorField[],
+  pvars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  result: Ty,
+): [Ty, St] =>
+  ((_v) =>
+    _v.length === 0
+      ? _tuple(result, st)
+      : _v.length >= 1
+        ? (([fld, ...rest]) =>
+            (([ft, , st1]: [Ty, Map<string, Ty>, St]) =>
+              (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
+                ctorFieldsArrowFrom$(rest, pvars, st1, aliases, result),
+              ))(
+              typeExprToType$(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[])),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(fields);
 const ctorFieldsArrowFrom: _Curry<
   [
     fields: CtorField[],
@@ -880,30 +899,7 @@ const ctorFieldsArrowFrom: _Curry<
     result: Ty,
   ],
   [Ty, St]
-> = _curry(
-  5,
-  (
-    fields: CtorField[],
-    pvars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    result: Ty,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? _tuple(result, st)
-        : _v.length >= 1
-          ? (([fld, ...rest]) =>
-              (([ft, , st1]: [Ty, Map<string, Ty>, St]) =>
-                (([restT, st2]: [Ty, St]) => _tuple(tArrow(ft, restT), st2))(
-                  ctorFieldsArrowFrom(rest, pvars, st1, aliases, result),
-                ))(
-                typeExprToType(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[])),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(fields),
-);
+> = _curry(5, ctorFieldsArrowFrom$);
 /**
  * A variant's constructors become curried functions into that variant type,
  * polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
@@ -929,21 +925,24 @@ export const ctorScheme: <A>(
     (([pvars, pvarTypes, st1]: [Map<string, Ty>, Ty[], St]) => {
       const result: Ty = tCon(typeName, pvarTypes);
       return (([ty, st2]: [Ty, St]) => {
-        const sets: VarSets = collect(ty, emptyVarSets);
+        const sets: VarSets = collect$(ty, emptyVarSets);
         return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty: ty }, st2);
-      })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
+      })(ctorFieldsArrowFrom$(c.fields, pvars, st1, aliases, result));
     })(pvarsFrom(params, st)),
 );
-const matchTysFrom: _Curry<
-  [tpls: Ty[], actuals: Ty[], params: Set<number>, binds: Map<number, Ty>, i: number],
-  Option<Map<number, Ty>>
-> = _curry(5, (tpls: Ty[], actuals: Ty[], params: Set<number>, binds: Map<number, Ty>, i: number) =>
+const matchTysFrom$ = (
+  tpls: Ty[],
+  actuals: Ty[],
+  params: Set<number>,
+  binds: Map<number, Ty>,
+  i: number,
+): Option<Map<number, Ty>> =>
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some"
       ? (([{ value: tpl }, { value: actual }]) =>
           _Option_flatMap(
-            (b: Map<number, Ty>) => matchTysFrom(tpls, actuals, params, b, i + 1),
-            matchTy(tpl, actual, params, binds),
+            (b: Map<number, Ty>) => matchTysFrom$(tpls, actuals, params, b, i + 1),
+            matchTy$(tpl, actual, params, binds),
           ))(
           _v as [
             Extract<[Option<Ty>, Option<Ty>][0], { _tag: "Some" }>,
@@ -952,15 +951,15 @@ const matchTysFrom: _Curry<
         )
       : (Some(binds) as Option<Map<number, Ty>>))(
     _tuple(_Array_get(i, tpls), _Array_get(i, actuals)),
-  ),
-);
-/**
- * A closed row's fields; `None` for an open one, which never folds.
- */
-const closedFieldsOf: _Curry<
-  [row: Row, acc: { label: string; fieldType: Ty; optional: boolean }[]],
-  Option<{ label: string; fieldType: Ty; optional: boolean }[]>
-> = _curry(2, (row: Row, acc: { label: string; fieldType: Ty; optional: boolean }[]) => {
+  );
+const matchTysFrom: _Curry<
+  [tpls: Ty[], actuals: Ty[], params: Set<number>, binds: Map<number, Ty>, i: number],
+  Option<Map<number, Ty>>
+> = _curry(5, matchTysFrom$);
+const closedFieldsOf$ = (
+  row: Row,
+  acc: { label: string; fieldType: Ty; optional: boolean }[],
+): Option<{ label: string; fieldType: Ty; optional: boolean }[]> => {
   const $match = row;
   switch ($match._tag) {
     case "RowEmpty": {
@@ -971,7 +970,7 @@ const closedFieldsOf: _Curry<
     }
     case "RowExtend": {
       const { label, fieldType, optional, rest } = $match;
-      return closedFieldsOf(
+      return closedFieldsOf$(
         rest,
         _Array_append({ label: label, fieldType: fieldType, optional: optional }, acc),
       );
@@ -980,7 +979,40 @@ const closedFieldsOf: _Curry<
       throw new Error("non-exhaustive match");
     }
   }
-});
+};
+/**
+ * A closed row's fields; `None` for an open one, which never folds.
+ */
+const closedFieldsOf: _Curry<
+  [row: Row, acc: { label: string; fieldType: Ty; optional: boolean }[]],
+  Option<{ label: string; fieldType: Ty; optional: boolean }[]>
+> = _curry(2, closedFieldsOf$);
+const matchFieldsFrom$ = (
+  tpls: { label: string; optional: boolean; fieldType: Ty }[],
+  actuals: { label: string; optional: boolean; fieldType: Ty }[],
+  params: Set<number>,
+  binds: Map<number, Ty>,
+  i: number,
+): Option<Map<number, Ty>> =>
+  _Option_match(
+    _Array_get(i, tpls),
+    () => Some(binds) as Option<Map<number, Ty>>,
+    (t) =>
+      _Option_match(
+        _Array_find(
+          (a: { label: string; optional: boolean; fieldType: Ty }) => eq(a.label, t.label),
+          actuals,
+        ),
+        () => None as Option<Map<number, Ty>>,
+        (a) =>
+          eq(a.optional, t.optional)
+            ? _Option_flatMap(
+                (b: Map<number, Ty>) => matchFieldsFrom$(tpls, actuals, params, b, i + 1),
+                matchTy$(t.fieldType, a.fieldType, params, binds),
+              )
+            : (None as Option<Map<number, Ty>>),
+      ),
+  );
 const matchFieldsFrom: _Curry<
   [
     tpls: { label: string; optional: boolean; fieldType: Ty }[],
@@ -990,43 +1022,13 @@ const matchFieldsFrom: _Curry<
     i: number,
   ],
   Option<Map<number, Ty>>
-> = _curry(
-  5,
-  (
-    tpls: { label: string; optional: boolean; fieldType: Ty }[],
-    actuals: { label: string; optional: boolean; fieldType: Ty }[],
-    params: Set<number>,
-    binds: Map<number, Ty>,
-    i: number,
-  ) =>
-    _Option_match(
-      _Array_get(i, tpls),
-      () => Some(binds) as Option<Map<number, Ty>>,
-      (t) =>
-        _Option_match(
-          _Array_find(
-            (a: { label: string; optional: boolean; fieldType: Ty }) => eq(a.label, t.label),
-            actuals,
-          ),
-          () => None as Option<Map<number, Ty>>,
-          (a) =>
-            eq(a.optional, t.optional)
-              ? _Option_flatMap(
-                  (b: Map<number, Ty>) => matchFieldsFrom(tpls, actuals, params, b, i + 1),
-                  matchTy(t.fieldType, a.fieldType, params, binds),
-                )
-              : (None as Option<Map<number, Ty>>),
-        ),
-    ),
-);
-/**
- * Does `actual` fit the template `tpl`? A var in `params` binds, and a repeat
- * must agree; a record matches only closed, with the same labels.
- */
-const matchTy: _Curry<
-  [tpl: Ty, actual: Ty, params: Set<number>, binds: Map<number, Ty>],
-  Option<Map<number, Ty>>
-> = _curry(4, (tpl: Ty, actual: Ty, params: Set<number>, binds: Map<number, Ty>) =>
+> = _curry(5, matchFieldsFrom$);
+const matchTy$ = (
+  tpl: Ty,
+  actual: Ty,
+  params: Set<number>,
+  binds: Map<number, Ty>,
+): Option<Map<number, Ty>> =>
   ((_v) =>
     _v[0]._tag === "TyVar" &&
     (([{ id }]) => _Set_has(id, params))(
@@ -1054,7 +1056,7 @@ const matchTy: _Curry<
         : _v[0]._tag === "TyCon" && _v[1]._tag === "TyCon"
           ? (([{ name: n, args: targs }, { name: m, args: aargs }]) =>
               and(eq(n, m), eq(length(targs), length(aargs)))
-                ? matchTysFrom(targs, aargs, params, binds, 0)
+                ? matchTysFrom$(targs, aargs, params, binds, 0)
                 : (None as Option<Map<number, Ty>>))(
               _v as [
                 Extract<[Ty, Ty][0], { _tag: "TyCon" }>,
@@ -1064,8 +1066,8 @@ const matchTy: _Curry<
           : _v[0]._tag === "TyFn" && _v[1]._tag === "TyFn"
             ? (([{ from: tf, to: tt }, { from: af, to: at }]) =>
                 _Option_flatMap(
-                  (b: Map<number, Ty>) => matchTy(tt, at, params, b),
-                  matchTy(tf, af, params, binds),
+                  (b: Map<number, Ty>) => matchTy$(tt, at, params, b),
+                  matchTy$(tf, af, params, binds),
                 ))(
                 _v as [
                   Extract<[Ty, Ty][0], { _tag: "TyFn" }>,
@@ -1078,7 +1080,7 @@ const matchTy: _Curry<
                     _v[0]._tag === "Some" && _v[1]._tag === "Some"
                       ? (([{ value: tfs }, { value: afs }]) =>
                           eq(length(tfs), length(afs))
-                            ? matchFieldsFrom(tfs, afs, params, binds, 0)
+                            ? matchFieldsFrom$(tfs, afs, params, binds, 0)
                             : (None as Option<Map<number, Ty>>))(
                           _v as [
                             Extract<
@@ -1099,11 +1101,11 @@ const matchTy: _Curry<
                         )
                       : (None as Option<Map<number, Ty>>))(
                     _tuple(
-                      closedFieldsOf(
+                      closedFieldsOf$(
                         trow,
                         [] as { label: string; fieldType: Ty; optional: boolean }[],
                       ),
-                      closedFieldsOf(
+                      closedFieldsOf$(
                         arow,
                         [] as { label: string; fieldType: Ty; optional: boolean }[],
                       ),
@@ -1128,24 +1130,34 @@ const matchTy: _Curry<
                   ? eq(Types.showType(tpl), Types.showType(actual))
                     ? (Some(binds) as Option<Map<number, Ty>>)
                     : (None as Option<Map<number, Ty>>)
-                  : (None as Option<Map<number, Ty>>))(_tuple(tpl, actual)),
-);
+                  : (None as Option<Map<number, Ty>>))(_tuple(tpl, actual));
+/**
+ * Does `actual` fit the template `tpl`? A var in `params` binds, and a repeat
+ * must agree; a record matches only closed, with the same labels.
+ */
+const matchTy: _Curry<
+  [tpl: Ty, actual: Ty, params: Set<number>, binds: Map<number, Ty>],
+  Option<Map<number, Ty>>
+> = _curry(4, matchTy$);
+const templateRowFrom$ = (
+  fields: AliasField[],
+  vars: Map<string, Ty>,
+  aliases: Map<string, AliasInfo>,
+  i: number,
+): Row =>
+  _Option_match(
+    _Array_get(i, fields),
+    () => RowEmpty as Row,
+    (f) =>
+      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
+        RowExtend(f.name, t, f.optional, templateRowFrom$(fields, vars, aliases, i + 1)))(
+        typeExprToType$(f.fieldType, vars, Types.mkSt(0), aliases, _Set_fromArray([] as string[])),
+      ),
+  );
 const templateRowFrom: _Curry<
   [fields: AliasField[], vars: Map<string, Ty>, aliases: Map<string, AliasInfo>, i: number],
   Row
-> = _curry(
-  4,
-  (fields: AliasField[], vars: Map<string, Ty>, aliases: Map<string, AliasInfo>, i: number) =>
-    _Option_match(
-      _Array_get(i, fields),
-      () => RowEmpty as Row,
-      (f) =>
-        (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-          RowExtend(f.name, t, f.optional, templateRowFrom(fields, vars, aliases, i + 1)))(
-          typeExprToType(f.fieldType, vars, Types.mkSt(0), aliases, _Set_fromArray([] as string[])),
-        ),
-    ),
-);
+> = _curry(4, templateRowFrom$);
 /**
  * Template ids sit far below the inferrer's (which start at 1000), so a
  * template var never collides with a var of the type it is matched against.
@@ -1159,24 +1171,24 @@ const templateVars: <A>(params: A[]) => [Map<A, Ty>, number[]] = <A>(params: A[]
     _tuple(new Map<A, Ty>(), [] as number[]),
     params,
   );
-const allBound: _Curry<[ids: number[], binds: Map<number, Ty>], boolean> = _curry(
-  2,
-  (ids: number[], binds: Map<number, Ty>) =>
-    length(filter((id: number) => !_Map_has(id, binds), ids)) === 0,
-);
+const allBound$ = (ids: number[], binds: Map<number, Ty>): boolean =>
+  length(filter((id: number) => !_Map_has(id, binds), ids)) === 0;
+const allBound: _Curry<[ids: number[], binds: Map<number, Ty>], boolean> = _curry(2, allBound$);
 const bareAliasName: (key: string) => string = (key: string) => {
   const parts: string[] = _Str_split(".", key);
   return _Option_unwrapOr(key, _Array_get(length(parts) - 1, parts));
 };
-const foldingAliasFrom: _Curry<
-  [t: Ty, keys: string[], aliases: Map<string, AliasInfo>, i: number],
-  Option<string>
-> = _curry(4, (t: Ty, keys: string[], aliases: Map<string, AliasInfo>, i: number) =>
+const foldingAliasFrom$ = (
+  t: Ty,
+  keys: string[],
+  aliases: Map<string, AliasInfo>,
+  i: number,
+): Option<string> =>
   _Option_match(
     _Array_get(i, keys),
     () => None as Option<string>,
     (key) => {
-      const next: () => Option<string> = () => foldingAliasFrom(t, keys, aliases, i + 1);
+      const next: () => Option<string> = () => foldingAliasFrom$(t, keys, aliases, i + 1);
       return _Option_match(
         _Map_get(key, aliases),
         () => next(),
@@ -1185,20 +1197,39 @@ const foldingAliasFrom: _Curry<
             info.expr,
             () =>
               (([vars, ids]: [Map<string, Ty>, number[]]) => {
-                const tpl: Ty = TyRecord(templateRowFrom(info.fields, vars, aliases, 0));
+                const tpl: Ty = TyRecord(templateRowFrom$(info.fields, vars, aliases, 0));
                 return _Option_match(
-                  matchTy(tpl, t, _Set_fromArray(ids), new Map<number, Ty>()),
+                  matchTy$(tpl, t, _Set_fromArray(ids), new Map<number, Ty>()),
                   () => next(),
                   (binds) =>
-                    allBound(ids, binds) ? (Some(bareAliasName(key)) as Option<string>) : next(),
+                    allBound$(ids, binds) ? (Some(bareAliasName(key)) as Option<string>) : next(),
                 );
               })(templateVars(info.params)),
             () => next(),
           ),
       );
     },
-  ),
-);
+  );
+const foldingAliasFrom: _Curry<
+  [t: Ty, keys: string[], aliases: Map<string, AliasInfo>, i: number],
+  Option<string>
+> = _curry(4, foldingAliasFrom$);
+const nominalTypeName$ = (t: Ty, aliases: Map<string, AliasInfo>): Option<string> => {
+  const $match = widenLits(t);
+  switch ($match._tag) {
+    case "TyCon": {
+      const { name } = $match;
+      return isUpperStart(name) ? (Some(name) as Option<string>) : (None as Option<string>);
+    }
+    case "TyRecord": {
+      const { row } = $match;
+      return foldingAliasFrom$(TyRecord(row), _Map_keys(aliases), aliases, 0);
+    }
+    default: {
+      return None as Option<string>;
+    }
+  }
+};
 /**
  * The declared type a recorded type names, for go-to-type: a capitalised
  * constructor head, or the first record alias (in declaration order) whose
@@ -1208,45 +1239,32 @@ const foldingAliasFrom: _Curry<
 export const nominalTypeName: _Curry<
   [t: Ty, aliases: Map<string, AliasInfo>],
   Option<string>
-> = _curry(2, (t: Ty, aliases: Map<string, AliasInfo>) => {
-  const $match = widenLits(t);
-  switch ($match._tag) {
-    case "TyCon": {
-      const { name } = $match;
-      return isUpperStart(name) ? (Some(name) as Option<string>) : (None as Option<string>);
-    }
-    case "TyRecord": {
-      const { row } = $match;
-      return foldingAliasFrom(TyRecord(row), _Map_keys(aliases), aliases, 0);
-    }
-    default: {
-      return None as Option<string>;
-    }
-  }
-});
+> = _curry(2, nominalTypeName$);
 
-const foldTemplatesFrom: _Curry<
-  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: FoldTemplate[]],
-  FoldTemplate[]
-> = _curry(4, (keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: FoldTemplate[]) =>
+const foldTemplatesFrom$ = (
+  keys: string[],
+  aliases: Map<string, AliasInfo>,
+  i: number,
+  acc: FoldTemplate[],
+): FoldTemplate[] =>
   _Option_match(
     _Array_get(i, keys),
     () => acc,
     (key) =>
       _Option_match(
         _Map_get(key, aliases),
-        () => foldTemplatesFrom(keys, aliases, i + 1, acc),
+        () => foldTemplatesFrom$(keys, aliases, i + 1, acc),
         (info) =>
           (([_vars, ids]: [Map<string, Ty>, number[]]) => {
             const name: string = bareAliasName(key);
             return (([tpl, _st]: [Ty, St]) =>
-              foldTemplatesFrom(
+              foldTemplatesFrom$(
                 keys,
                 aliases,
                 i + 1,
                 _Array_append({ name: name, ids: ids, tpl: tpl }, acc),
               ))(
-              aliasRow(
+              aliasRow$(
                 name,
                 info,
                 map((id: number) => TyVar(id), ids),
@@ -1257,8 +1275,30 @@ const foldTemplatesFrom: _Curry<
             );
           })(templateVars(info.params)),
       ),
-  ),
-);
+  );
+const foldTemplatesFrom: _Curry<
+  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: FoldTemplate[]],
+  FoldTemplate[]
+> = _curry(4, foldTemplatesFrom$);
+const foldHeadFrom$ = (t: Ty, tpls: FoldTemplate[], i: number): Option<[string, Ty[]]> =>
+  _Option_match(
+    _Array_get(i, tpls),
+    () => None as Option<[string, Ty[]]>,
+    (a) =>
+      _Option_match(
+        matchTy$(a.tpl, t, _Set_fromArray(a.ids), new Map<number, Ty>()),
+        () => foldHeadFrom$(t, tpls, i + 1),
+        (binds) =>
+          allBound$(a.ids, binds)
+            ? (Some(
+                _tuple(
+                  a.name,
+                  map((id: number) => _Map_getOr(t, id, binds), a.ids),
+                ),
+              ) as Option<[string, Ty[]]>)
+            : foldHeadFrom$(t, tpls, i + 1),
+      ),
+  );
 /**
  * The first template (declaration order) `t` fits, as the alias name and its
  * arguments. A phantom param cannot be read off `t`, so that alias is skipped.
@@ -1266,88 +1306,67 @@ const foldTemplatesFrom: _Curry<
 const foldHeadFrom: _Curry<
   [t: Ty, tpls: FoldTemplate[], i: number],
   Option<[string, Ty[]]>
-> = _curry(3, (t: Ty, tpls: FoldTemplate[], i: number) =>
-  _Option_match(
-    _Array_get(i, tpls),
-    () => None as Option<[string, Ty[]]>,
-    (a) =>
-      _Option_match(
-        matchTy(a.tpl, t, _Set_fromArray(a.ids), new Map<number, Ty>()),
-        () => foldHeadFrom(t, tpls, i + 1),
-        (binds) =>
-          allBound(a.ids, binds)
-            ? (Some(
-                _tuple(
-                  a.name,
-                  map((id: number) => _Map_getOr(t, id, binds), a.ids),
-                ),
-              ) as Option<[string, Ty[]]>)
-            : foldHeadFrom(t, tpls, i + 1),
-      ),
-  ),
-);
+> = _curry(3, foldHeadFrom$);
+const foldWith$ = (t: Ty, tpls: FoldTemplate[]): Ty =>
+  ((_v) =>
+    _v._tag === "Some"
+      ? (({ value: [name, args] }) =>
+          tCon(
+            name,
+            map((a: Ty) => foldWith$(a, tpls), args),
+          ))(_v as Extract<Option<[string, Ty[]]>, { _tag: "Some" }>)
+      : _v._tag === "None"
+        ? ((_v) =>
+            _v._tag === "TyCon"
+              ? (({ name, args }) =>
+                  tCon(
+                    name,
+                    map((a: Ty) => foldWith$(a, tpls), args),
+                  ))(_v)
+              : _v._tag === "TyFn"
+                ? (({ from: fromT, to: toT }) =>
+                    tArrow(foldWith$(fromT, tpls), foldWith$(toT, tpls)))(_v)
+                : _v._tag === "TyRecord"
+                  ? (({ row }) => tRecord(foldRowWith$(row, tpls)))(_v)
+                  : _v._tag === "TyOneOf"
+                    ? (({ members }) => tUnion(map((m: Ty) => foldWith$(m, tpls), members)))(_v)
+                    : t)(t)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(foldHeadFrom$(t, tpls, 0));
 /**
  * Top-down: a node is tried whole first, then its children fold too.
  */
-const foldWith: _Curry<[t: Ty, tpls: FoldTemplate[]], Ty> = _curry(
-  2,
-  (t: Ty, tpls: FoldTemplate[]) =>
-    ((_v) =>
-      _v._tag === "Some"
-        ? (({ value: [name, args] }) =>
-            tCon(
-              name,
-              map((a: Ty) => foldWith(a, tpls), args),
-            ))(_v as Extract<Option<[string, Ty[]]>, { _tag: "Some" }>)
-        : _v._tag === "None"
-          ? ((_v) =>
-              _v._tag === "TyCon"
-                ? (({ name, args }) =>
-                    tCon(
-                      name,
-                      map((a: Ty) => foldWith(a, tpls), args),
-                    ))(_v)
-                : _v._tag === "TyFn"
-                  ? (({ from: fromT, to: toT }) =>
-                      tArrow(foldWith(fromT, tpls), foldWith(toT, tpls)))(_v)
-                  : _v._tag === "TyRecord"
-                    ? (({ row }) => tRecord(foldRowWith(row, tpls)))(_v)
-                    : _v._tag === "TyOneOf"
-                      ? (({ members }) => tUnion(map((m: Ty) => foldWith(m, tpls), members)))(_v)
-                      : t)(t)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(foldHeadFrom(t, tpls, 0)),
-);
-const foldRowWith: _Curry<[row: Row, tpls: FoldTemplate[]], Row> = _curry(
-  2,
-  (row: Row, tpls: FoldTemplate[]) => {
-    const $match = row;
-    switch ($match._tag) {
-      case "RowExtend": {
-        const { label, fieldType, optional, rest } = $match;
-        return RowExtend(label, foldWith(fieldType, tpls), optional, foldRowWith(rest, tpls));
-      }
-      default: {
-        return row;
-      }
+const foldWith: _Curry<[t: Ty, tpls: FoldTemplate[]], Ty> = _curry(2, foldWith$);
+const foldRowWith$ = (row: Row, tpls: FoldTemplate[]): Row => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return RowExtend(label, foldWith$(fieldType, tpls), optional, foldRowWith$(rest, tpls));
     }
-  },
-);
+    default: {
+      return row;
+    }
+  }
+};
+const foldRowWith: _Curry<[row: Row, tpls: FoldTemplate[]], Row> = _curry(2, foldRowWith$);
+const foldAliases$ = (t: Ty, aliases: Map<string, AliasInfo>): Ty =>
+  foldAliasesAt$(t, _Map_keys(aliases), aliases);
 /**
  * `t` with every node that fits an alias rewritten to `Name<args>`. Fold
  * before widening literals, as hover does: a literal fits no primitive.
  */
 export const foldAliases: _Curry<[t: Ty, aliases: Map<string, AliasInfo>], Ty> = _curry(
   2,
-  (t: Ty, aliases: Map<string, AliasInfo>) => foldAliasesAt(t, _Map_keys(aliases), aliases),
+  foldAliases$,
 );
+const foldAliasesAt$ = (t: Ty, keys: string[], aliases: Map<string, AliasInfo>): Ty =>
+  foldWith$(t, foldTemplatesFrom$(keys, aliases, 0, [] as FoldTemplate[]));
 /**
  * `foldAliases` over only the aliases `keys` names, tried in that order. The
  * `.d.ts` writer passes the file's own aliases in declaration order, so a
  * dependency's alias stays structural (ADR 0092).
  */
 export const foldAliasesAt: _Curry<[t: Ty, keys: string[], aliases: Map<string, AliasInfo>], Ty> =
-  _curry(3, (t: Ty, keys: string[], aliases: Map<string, AliasInfo>) =>
-    foldWith(t, foldTemplatesFrom(keys, aliases, 0, [] as FoldTemplate[])),
-  );
+  _curry(3, foldAliasesAt$);

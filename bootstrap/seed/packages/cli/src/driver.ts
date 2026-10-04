@@ -84,16 +84,17 @@ export const fmtText: (path: string) => Result<string, string> = (path: string) 
     (src) => _Result_mapErr((e: StageErr) => formatError(path, src, e), formatSrc(src)),
     readFile(path),
   );
+const fmtOne$ = (path: string, write: boolean): Result<string, string> =>
+  _Result_flatMap(
+    (out) =>
+      write
+        ? _Result_map((p: string) => print(`wrote ${p}`), writeFile(path, out))
+        : (Ok(emit(out)) as Result<string, string>),
+    fmtText(path),
+  );
 export const fmtOne: _Curry<[path: string, write: boolean], Result<string, string>> = _curry(
   2,
-  (path: string, write: boolean) =>
-    _Result_flatMap(
-      (out) =>
-        write
-          ? _Result_map((p: string) => print(`wrote ${p}`), writeFile(path, out))
-          : (Ok(emit(out)) as Result<string, string>),
-      fmtText(path),
-    ),
+  fmtOne$,
 );
 export const buildOne: (path: string) => Result<string, string> = (path: string) =>
   _Result_flatMap(
@@ -104,10 +105,7 @@ export const buildOne: (path: string) => Result<string, string> = (path: string)
       ),
     readFile(path),
   );
-export const buildOneTs: _Curry<
-  [path: string, runtimeImport: string],
-  Result<string, string>
-> = _curry(2, (path: string, runtimeImport: string) =>
+const buildOneTs$ = (path: string, runtimeImport: string): Result<string, string> =>
   _Result_flatMap(
     (src) =>
       _Result_flatMap(
@@ -118,12 +116,12 @@ export const buildOneTs: _Curry<
         ),
       ),
     readFile(path),
-  ),
-);
-export const buildOneDts: _Curry<
+  );
+export const buildOneTs: _Curry<
   [path: string, runtimeImport: string],
   Result<string, string>
-> = _curry(2, (path: string, runtimeImport: string) =>
+> = _curry(2, buildOneTs$);
+const buildOneDts$ = (path: string, runtimeImport: string): Result<string, string> =>
   _Result_flatMap(
     (src) =>
       _Result_flatMap(
@@ -134,8 +132,11 @@ export const buildOneDts: _Curry<
         ),
       ),
     readFile(path),
-  ),
-);
+  );
+export const buildOneDts: _Curry<
+  [path: string, runtimeImport: string],
+  Result<string, string>
+> = _curry(2, buildOneDts$);
 export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result<string, string> = <
   A,
 >(
@@ -170,15 +171,13 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
     return _step.value;
   }
 };
-const tsWritePath: _Curry<[path: string, body: string], string> = _curry(
-  2,
-  (path: string, body: string) =>
-    _Str_endsWith(".mochi", path)
-      ? _Str_startsWith("/** @jsx h */", body)
-        ? `${_Str_slice(0, _Str_length(path) - 6, path)}.tsx`
-        : tsOutPath(path)
-      : path,
-);
+const tsWritePath$ = (path: string, body: string): string =>
+  _Str_endsWith(".mochi", path)
+    ? _Str_startsWith("/** @jsx h */", body)
+      ? `${_Str_slice(0, _Str_length(path) - 6, path)}.tsx`
+      : tsOutPath(path)
+    : path;
+const tsWritePath: _Curry<[path: string, body: string], string> = _curry(2, tsWritePath$);
 export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Result<string, string> =
   <A>(outs: ({ path: string; js: string } & A)[]) => {
     let remaining = outs;
@@ -192,7 +191,7 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
           (_v) => _v.length >= 1,
           ([o, ...rest]) =>
             _Result_match(
-              writeFile(tsWritePath(o.path, o.js), o.js),
+              writeFile(tsWritePath$(o.path, o.js), o.js),
               (e) => _done(Err(e) as Result<string, string>),
               (w) => {
                 const _printed = print(`  wrote ${w}`);
@@ -210,15 +209,15 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
       return _step.value;
     }
   };
-export const buildMultiTs: _Curry<
-  [entry: string, runtimeImport: string],
-  Result<string, string>
-> = _curry(2, (entry: string, runtimeImport: string) =>
+const buildMultiTs$ = (entry: string, runtimeImport: string): Result<string, string> =>
   _Result_flatMap(
     writeAllTs,
     _Result_mapErr(formatModuleErrors, buildModulesTs(entry, runtimeImport)),
-  ),
-);
+  );
+export const buildMultiTs: _Curry<
+  [entry: string, runtimeImport: string],
+  Result<string, string>
+> = _curry(2, buildMultiTs$);
 export const buildMulti: (entry: string) => Result<string, string> = (entry: string) =>
   _Result_flatMap(writeAll, _Result_mapErr(formatModuleErrors, buildModules(entry)));
 /**
@@ -240,7 +239,7 @@ const _runEntry = isCliEntry(undefined)
                 () => die("usage: mochic fmt [--write] <file.mochi>"),
                 (path) =>
                   _Result_match(
-                    fmtOne(path, write),
+                    fmtOne$(path, write),
                     (msg) => die(msg),
                     () => "",
                   ),
@@ -255,7 +254,7 @@ const _runEntry = isCliEntry(undefined)
                 () => die("usage: mochic ts <file.mochi>"),
                 (path) =>
                   _Result_match(
-                    buildOneTs(path, "@mochi/runtime"),
+                    buildOneTs$(path, "@mochi/runtime"),
                     (msg) => die(msg),
                     (out) => print(`wrote ${out}`),
                   ),
@@ -266,7 +265,7 @@ const _runEntry = isCliEntry(undefined)
                   () => die("usage: mochic dts <file.mochi>"),
                   (path) =>
                     _Result_match(
-                      buildOneDts(path, "@mochi/runtime"),
+                      buildOneDts$(path, "@mochi/runtime"),
                       (msg) => die(msg),
                       (out) => print(`wrote ${out}`),
                     ),
@@ -281,7 +280,7 @@ const _runEntry = isCliEntry(undefined)
                             () => die("usage: mochic build --emit=ts <entry.mochi>"),
                             (entry) =>
                               _Result_match(
-                                buildMultiTs(entry, "@mochi/runtime"),
+                                buildMultiTs$(entry, "@mochi/runtime"),
                                 (msg) => die(msg),
                                 () => print("build ok"),
                               ),

@@ -76,86 +76,82 @@ const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
     }
   },
 );
+const visitNeighbors$ = (v: number, ws: number[], adj: number[][], st: TSt): TSt => {
+  let remaining: number[] = ws;
+  let current: TSt = st;
+  while (true) {
+    const _step = ((_v) =>
+      _v.length === 0
+        ? _done(current)
+        : _v.length >= 1
+          ? (([w, ...rest]) =>
+              hasIndex(w, current)
+                ? _Set_has(w, current.onStack)
+                  ? _recur(rest, {
+                      ...current,
+                      low: _Map_set(v, min(lowOfV(v, current), indexOfV(w, current)), current.low),
+                    })
+                  : _recur(rest, current)
+                : ((next: TSt) =>
+                    _recur(rest, {
+                      ...next,
+                      low: _Map_set(v, min(lowOfV(v, next), lowOfV(w, next)), next.low),
+                    }))(connect$(w, adj, current)))(_v)
+          : (() => {
+              throw new Error("non-exhaustive match");
+            })())(remaining);
+    if (_step._tag === "recur") {
+      [remaining, current] = _step.args;
+      continue;
+    }
+    return _step.value;
+  }
+};
 const visitNeighbors: _Curry<[v: number, ws: number[], adj: number[][], st: TSt], TSt> = _curry(
   4,
-  (v: number, ws: number[], adj: number[][], st: TSt) => {
-    let remaining: number[] = ws;
-    let current: TSt = st;
-    while (true) {
-      const _step = ((_v) =>
-        _v.length === 0
-          ? _done(current)
-          : _v.length >= 1
-            ? (([w, ...rest]) =>
-                hasIndex(w, current)
-                  ? _Set_has(w, current.onStack)
-                    ? _recur(rest, {
-                        ...current,
-                        low: _Map_set(
-                          v,
-                          min(lowOfV(v, current), indexOfV(w, current)),
-                          current.low,
-                        ),
-                      })
-                    : _recur(rest, current)
-                  : ((next: TSt) =>
-                      _recur(rest, {
-                        ...next,
-                        low: _Map_set(v, min(lowOfV(v, next), lowOfV(w, next)), next.low),
-                      }))(connect(w, adj, current)))(_v)
-            : (() => {
-                throw new Error("non-exhaustive match");
-              })())(remaining);
-      if (_step._tag === "recur") {
-        [remaining, current] = _step.args;
+  visitNeighbors$,
+);
+const connect$ = (v: number, adj: number[][], st: TSt): TSt => {
+  const st1: TSt = {
+    ...st,
+    index: _Map_set(v, st.counter, st.index),
+    low: _Map_set(v, st.counter, st.low),
+    onStack: _Set_add(v, st.onStack),
+    stack: _Array_append(v, st.stack),
+    counter: st.counter + 1,
+  };
+  const st2: TSt = visitNeighbors$(v, neighborsOf(v, adj), adj, st1);
+  return eq(lowOfV(v, st2), indexOfV(v, st2))
+    ? ((start: number) =>
+        ((comp: number[]) => ({
+          ...st2,
+          onStack: _Set_diff(st2.onStack, _Set_fromArray(comp)),
+          stack: _Array_take(start, st2.stack),
+          sccs: _Array_append(comp, st2.sccs),
+        }))(_Array_drop(start, st2.stack)))(indexOfFrom(v, st2.stack, 0))
+    : st2;
+};
+const connect: _Curry<[v: number, adj: number[][], st: TSt], TSt> = _curry(3, connect$);
+const connectAllFrom$ = (i: number, n: number, adj: number[][], st: TSt): TSt => {
+  let j: number = i;
+  let current: TSt = st;
+  while (true) {
+    if (j >= n) {
+      return current;
+    } else {
+      {
+        const $recur0: number = j + 1;
+        const $recur1: TSt = hasIndex(j, current) ? current : connect$(j, adj, current);
+        j = $recur0;
+        current = $recur1;
         continue;
       }
-      return _step.value;
     }
-  },
-);
-const connect: _Curry<[v: number, adj: number[][], st: TSt], TSt> = _curry(
-  3,
-  (v: number, adj: number[][], st: TSt) => {
-    const st1: TSt = {
-      ...st,
-      index: _Map_set(v, st.counter, st.index),
-      low: _Map_set(v, st.counter, st.low),
-      onStack: _Set_add(v, st.onStack),
-      stack: _Array_append(v, st.stack),
-      counter: st.counter + 1,
-    };
-    const st2: TSt = visitNeighbors(v, neighborsOf(v, adj), adj, st1);
-    return eq(lowOfV(v, st2), indexOfV(v, st2))
-      ? ((start: number) =>
-          ((comp: number[]) => ({
-            ...st2,
-            onStack: _Set_diff(st2.onStack, _Set_fromArray(comp)),
-            stack: _Array_take(start, st2.stack),
-            sccs: _Array_append(comp, st2.sccs),
-          }))(_Array_drop(start, st2.stack)))(indexOfFrom(v, st2.stack, 0))
-      : st2;
-  },
-);
+  }
+};
 const connectAllFrom: _Curry<[i: number, n: number, adj: number[][], st: TSt], TSt> = _curry(
   4,
-  (i: number, n: number, adj: number[][], st: TSt) => {
-    let j: number = i;
-    let current: TSt = st;
-    while (true) {
-      if (j >= n) {
-        return current;
-      } else {
-        {
-          const $recur0: number = j + 1;
-          const $recur1: TSt = hasIndex(j, current) ? current : connect(j, adj, current);
-          j = $recur0;
-          current = $recur1;
-          continue;
-        }
-      }
-    }
-  },
+  connectAllFrom$,
 );
 export const stronglyConnected: (adj: number[][]) => number[][] = (adj: number[][]) => {
   const n: number = length(adj);
@@ -167,5 +163,5 @@ export const stronglyConnected: (adj: number[][]) => number[][] = (adj: number[]
     counter: 0,
     sccs: [],
   };
-  return connectAllFrom(0, n, adj, initSt).sccs;
+  return connectAllFrom$(0, n, adj, initSt).sccs;
 };

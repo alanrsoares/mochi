@@ -460,6 +460,24 @@ export let bindingTsType = (sc, value, recs, bindingHooks) => switch runBindingH
   | None => coreBindingTsType(sc, value, recs)
 }
 
+/// The RETURN type of a MONOMORPHIC top-level function's raw twin (ADR 0149);
+/// `None` declines the twin. Annotated on the arrow, so a self-recursive arrow
+/// is no implicit-any cycle (TS7023). A generic binding declines: its explicit
+/// return type exposes `Result<unknown, E>` inference gaps in `_Result_match`
+/// chains that the `_curry` wrapper's inferred return used to hide.
+let rawReturnTs = (sc, value, recs) =>
+  let rendered = schemeRender(sc, recs) in
+    rendered.head == ""
+      ? let (_params, ret) = flatParamsFrom(
+        sc.ty,
+        value,
+        rendered.env,
+        0,
+        []
+      ) in
+        Some(": ${ret}")
+      : None
+
 let coreBindingTsType = (sc, value, recs) =>
   let rendered = schemeRender(sc, recs) in
     switch value {
@@ -1015,6 +1033,16 @@ export let tsGenOpts = (stmts, env, types, letParams, aliases: Map<string, Alias
               Map.get(spanKey(exprSpan(value)), letParamAt)
                 |> Option.flatMap(t => emptyCollTs(t, recsEnv(recs)))
                 |> Option.map(ts => ": ${ts}")
+          }),
+      annotateRaw: Some((name, value) =>
+        Str.startsWith("$", name)
+          ? None
+          : switch value {
+            | Ast.ELambda(_, _, _) => switch Map.get(name, env) {
+                | Some(sc) => rawReturnTs(sc, value, recs)
+                | None => None
+              }
+            | _ => None
           }),
       annotateCtor: Some((s, c) => switch s {
         | Ast.SType(name, _, params, _, _, _, _, _, _) => Some(

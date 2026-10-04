@@ -61,6 +61,7 @@ type CtorLike = { name: string, fields: [CtorFieldLike], span: Ast.Span }
 
 type GenOpts = {
   annotateLet: Option<string -> Ast.Expr -> Option<string>>,
+  annotateRaw: Option<string -> Ast.Expr -> Option<string>>,
   annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs>>,
   annotateParams: Option<Ast.Span -> number -> ParamAnnots>,
   annotateEmpty: Option<Ast.Expr -> Option<string>>,
@@ -86,6 +87,7 @@ type GCtx = {
   customCtorKeys: Map<string, [string]>,
   ns: Map<string, Map<string, string>>,
   annotateLet: Option<string -> Ast.Expr -> Option<string>>,
+  annotateRaw: Option<string -> Ast.Expr -> Option<string>>,
   annotateCtor: Option<Ast.Stmt -> CtorLike -> Option<CtorFactoryTs>>,
   annotateParams: Option<Ast.Span -> number -> ParamAnnots>,
   annotateEmpty: Option<Ast.Expr -> Option<string>>,
@@ -97,6 +99,8 @@ type GCtx = {
   preserveInfix: bool,
   preserveJsx: bool,
   moduleExt: string,
+  rawNames: Map<string, string>,
+  rawArity: Map<string, number>,
   valueRefs: Set<string>,
   userNames: Set<string>,
   docs: bool
@@ -107,6 +111,7 @@ type GCtx = {
 /// bare `None`s to `Option<unknown>` (ADR 0044).
 export let jsGenOpts : GenOpts = {
   annotateLet: None,
+  annotateRaw: None,
   annotateCtor: None,
   annotateParams: None,
   annotateEmpty: None,
@@ -445,6 +450,34 @@ let tsxCall = (ctx: GCtx, fn, args, origin) =>
       | _ => None
     }
 
+/// The arrow for a lambda, collapsed over its curried spine, and its collapsed
+/// arity. Shared by the `_curry`-wrapped expression form and a top-level raw
+/// twin (ADR 0149).
+let genArrow = (ctx: GCtx, params, body, sp, ret) =>
+  let (cparams, cbody, fills) = collapseLambda(params, body) in
+  let bound = fillNames(fills, paramNameSet(cparams, 0, Set.fromArray([]))) in
+  // TS backend: annotate each param from the lambda's inferred curried type
+  // (ADR 0028), else strict tsc infers `any`. `sp` is the OUTER (un-collapsed)
+  // lambda's span, which carries the full `A -> B -> …` type; the hook peels
+  // it per collapsed param. A generic binding's value lambda also scopes its
+  // letters on the arrow here (ADR 0032) so its params can name them.
+  let annots = paramAnnotsFor(ctx.annotateParams, sp, Array.length(cparams)) in
+    (
+      "${annots.generics}(${Str.join(", ", annotatedParams(cparams, annots.params, 0))})${ret} => ${ctx->genLambdaBodyIn(cbody, bound, ctx->genFillDecls(fills))}",
+      Array.length(cparams)
+    )
+
+/// The callee text for a call with `argc` arguments: the raw twin when the
+/// callee is a top-level function of exactly that arity (ADR 0149), else the
+/// ordinary callee.
+let genCalleeFor = (ctx: GCtx, fn, argc) => switch fn {
+  | Ast.ERef(name, _) => switch (Map.get(name, ctx.rawArity), Map.get(name, ctx.rawNames)) {
+      | (Some(n), Some(raw)) when n == argc => raw
+      | _ => ctx->genCallee(fn)
+    }
+  | _ => ctx->genCallee(fn)
+}
+
 let genExpr = (ctx: GCtx, e) => switch e {
   | Ast.ENum(_, raw, _) => raw
   | Ast.EUnit(_) => "undefined"
@@ -467,31 +500,19 @@ let genExpr = (ctx: GCtx, e) => switch e {
       | Some(jsx) => jsx
       | None => switch ctx->tsInfix(fn, args) {
           | Some(infix) => infix
-          | None => let inner = "${ctx->genCallee(fn)}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
+          | None => let inner = "${ctx->genCalleeFor(fn, Array.length(args))}(${Str.join(", ", args |> map(a => ctx->genExpr(a)))})" in
               castOr(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None)
         }
     }
-  | Ast.ELambda(params, body, sp) => let (cparams, cbody, fills) = collapseLambda(
+  | Ast.ELambda(params, body, sp) => let (arrow, arity) = ctx->genArrow(
       params,
-      body
-    ) in
-    let bound = fillNames(fills, paramNameSet(cparams, 0, Set.fromArray([]))) in
-    // TS backend: annotate each param from the lambda's inferred curried type
-    // (ADR 0028), else strict tsc infers `any`. `sp` is the OUTER (un-collapsed)
-    // lambda's span, which carries the full `A -> B -> …` type; the hook peels
-    // it per collapsed param. A generic binding's value lambda also scopes its
-    // letters on the arrow here (ADR 0032) so its params can name them.
-    let annots = paramAnnotsFor(
-      ctx.annotateParams,
+      body,
       sp,
-      Array.length(cparams)
+      ""
     ) in
-    let arrow = "${annots.generics}(${Str.join(", ", annotatedParams(cparams, annots.params, 0))}) => ${ctx->genLambdaBodyIn(cbody, bound, ctx->genFillDecls(fills))}" in
       // Curried type, JS impl: arity >= 2 lowers to a `_curry`-wrapped
       // function so any call grouping works (CRITIQUE §4.4). Arity 1 needs none.
-      Array.length(cparams) >= 2
-        ? "_curry(${show(Array.length(cparams))}, ${arrow})"
-        : arrow
+      arity >= 2 ? "_curry(${show(arity)}, ${arrow})" : arrow
   | Ast.ELetIn(name, _, _, value, body, _) =>
     // let x = v in b -> an IIFE binding x: `((x) => b)(v)`. Non-recursive, so
     // plain arg-application is enough; nested let-ins chain as curried IIFEs.
@@ -525,7 +546,7 @@ let genExpr = (ctx: GCtx, e) => switch e {
         // call APPENDS the argument — `a |> f(x)` -> `f(x, a)` — so tsc infers the
         // type arguments once; otherwise it stays curried as `f(x)(a)`.
         switch right {
-          | Ast.ECall(rfn, rargs, _, _) when ctx.flattenPipe => "${ctx->genCallee(rfn)}(${Str.join(", ", Array.append(left, rargs) |> map(a => ctx->genExpr(a)))})"
+          | Ast.ECall(rfn, rargs, _, _) when ctx.flattenPipe => "${ctx->genCalleeFor(rfn, Array.length(rargs) + 1)}(${Str.join(", ", Array.append(left, rargs) |> map(a => ctx->genExpr(a)))})"
           | _ => "${ctx->genCallee(right)}(${ctx->genExpr(left)})"
         }
   | Ast.EDo(exprs, _) => ctx->genDo(exprs)
@@ -1881,6 +1902,43 @@ export let jsDoc = docOpt => switch docOpt {
       "/**\n${Str.join("\n", lines)}\n */\n"
 }
 
+/// Arity of a top-level `let` that gets a raw twin (ADR 0149): a lambda whose
+/// collapsed spine has >= 2 plain params, bound under a name no local binder
+/// reuses anywhere in the module (so a call by that name is always this one).
+let rawArityOf = (locals, s) => switch s {
+  | Ast.SLet(name, _, _, Ast.ELambda(params, body, _), _, _, _) when !Str.startsWith("$", name) && !Set.has(name, locals) => let (cparams, _, fills) = collapseLambda(
+      params,
+      body
+    ) in
+      Array.length(cparams) >= 2 && Array.length(fills) == 0
+        ? Some(Array.length(cparams))
+        : None
+  | _ => None
+}
+
+/// The backend may decline a twin: the JS backend has no `annotateRaw` hook
+/// and takes every eligible function; the TS backend's hook answers `None` for
+/// a binding it cannot annotate strict-clean.
+let rawTwinAllowed = (ctx: GCtx, name, value) => switch ctx.annotateRaw {
+  | None => true
+  | Some(h) => Option.isSome(h(name, value))
+}
+
+/// Register a raw twin for every eligible top-level function. The raw name
+/// goes through `tempName`, so it cannot capture a bound name or value ref.
+let withRawTwins = (ctx: GCtx, locals, stmts, i) => switch Array.get(i, stmts) {
+  | None => ctx
+  | Some(s) => switch (s, rawArityOf(locals, s)) {
+      | (Ast.SLet(name, _, _, value, _, _, _), Some(n)) when ctx->rawTwinAllowed(name, value) => let next = {
+          ...ctx,
+          rawNames: Map.set(name, ctx->tempName("${name}$"), ctx.rawNames),
+          rawArity: Map.set(name, n, ctx.rawArity)
+        } in
+          next->withRawTwins(locals, stmts, i + 1)
+      | _ => ctx->withRawTwins(locals, stmts, i + 1)
+    }
+}
+
 let genStmt = (ctx: GCtx, s) => switch s {
   | Ast.SError(sp) =>
     // Unreachable by construction: the railway stops on parse diagnostics, so a
@@ -1909,8 +1967,22 @@ let genStmt = (ctx: GCtx, s) => switch s {
       name
     ) in // never export destructure temps
     let docComment = ctx.docs && !Str.startsWith("$", name) ? jsDoc(doc) : "" in
-      // TS backend annotates; the JS backend leaves the binding bare.
-      "${docComment}${doExport ? "export " : ""}const ${name}${Option.unwrapOr("", hook2(ctx.annotateLet, name, value))} = ${ctx->genExpr(value)};"
+    // TS backend annotates; the JS backend leaves the binding bare.
+    let annot = Option.unwrapOr("", hook2(ctx.annotateLet, name, value)) in
+    let head = "${docComment}${doExport ? "export " : ""}const ${name}${annot} = " in
+      switch (Map.get(name, ctx.rawNames), value) {
+        | (Some(raw), Ast.ELambda(params, body, sp)) =>
+          // Raw twin (ADR 0149): the arrow lives under `raw`, the public binding
+          // is `_curry` over it, so saturated calls skip the curry dispatch.
+          let (arrow, arity) = ctx->genArrow(
+            params,
+            body,
+            sp,
+            Option.unwrapOr("", hook2(ctx.annotateRaw, name, value))
+          ) in
+            "const ${raw} = ${arrow};\n${head}_curry(${show(arity)}, ${raw});"
+        | _ => "${head}${ctx->genExpr(value)};"
+      }
   | Ast.SExpr(value, _) => "${ctx->genExpr(value)};"
 }
 
@@ -2310,6 +2382,7 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     customCtorKeys: keys0,
     ns,
     annotateLet: opts.annotateLet,
+    annotateRaw: opts.annotateRaw,
     annotateCtor: opts.annotateCtor,
     annotateParams: opts.annotateParams,
     annotateEmpty: opts.annotateEmpty,
@@ -2321,6 +2394,8 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     preserveInfix: opts.preserveInfix,
     preserveJsx: opts.preserveJsx,
     moduleExt: opts.moduleExt,
+    rawNames: #{},
+    rawArity: #{},
     valueRefs: Set.fromArray([]),
     userNames: Set.union(
       boundNames(Set.fromArray([]), stmts),
@@ -2335,7 +2410,11 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     boundNames(valueRefs, stmts),
     localBinderNames(stmts)
   ) in
-  let ctx = { ...ctx0, valueRefs, userNames } in
+  let ctx = {
+    ...ctx0,
+    valueRefs,
+    userNames
+  }->withRawTwins(localBinderNames(stmts), stmts, 0) in
   let needsMatch = someOf(
     s => switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => ctx->usesMatchLib(value)
@@ -2364,6 +2443,7 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     customCtorKeys: keys0,
     ns,
     annotateLet: None,
+    annotateRaw: None,
     annotateCtor: None,
     annotateParams: None,
     annotateEmpty: None,
@@ -2375,6 +2455,8 @@ export let runtimeDepNames = (stmts, imported, ns, jsDefs, runtimeDeps) =>
     preserveInfix: false,
     preserveJsx: false,
     moduleExt: ".js",
+    rawNames: #{},
+    rawArity: #{},
     valueRefs: Set.fromArray([]),
     userNames: Set.union(
       boundNames(Set.fromArray([]), stmts),
