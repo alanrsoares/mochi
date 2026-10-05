@@ -104,6 +104,12 @@
       "expect": "multiple-check-errors.expect.json"
     },
     {
+      "id": "eq-lazy-list",
+      "kind": "diagnostic",
+      "source": "eq-lazy-list.mochi",
+      "expect": "eq-lazy-list.expect.json"
+    },
+    {
       "id": "multiple-type-errors",
       "kind": "diagnostic",
       "source": "multiple-type-errors.mochi",

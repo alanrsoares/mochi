@@ -696,6 +696,64 @@ let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch a
       }
 }
 
+// ADR 0138 gate 2: `==` / `compare` walk their operands structurally and throw
+// on a lazy `List`, so a resolved `List` the walk can reach is a type error.
+// Functions compare by reference and `Map` keys / `Set` elements by host
+// identity, so neither is walked. A still-open variable is assumed eligible
+// until the scheme-level obligation lands.
+let isBuiltinCall = (ctx: Ctx<a>, name) =>
+  Map.has(name, ctx.letOwner) == false && Set.has(name, ctx.localNames) == false
+
+// `compare` sorts `Map` keys and `Set` elements structurally, so it walks them;
+// `==` keeps them on host identity.
+let reachesList = (sorted, t) => switch t {
+  | TyCon("List", _) => true
+  | TyCon("Map", [k, v]) => sorted && reachesList(
+      sorted,
+      k
+    ) || reachesList(sorted, v)
+  | TyCon("Set", targs) => sorted && Array.length(
+      Array.filter(a => reachesList(sorted, a), targs)
+    ) > 0
+  | TyCon(_, targs) => Array.length(
+      Array.filter(a => reachesList(sorted, a), targs)
+    ) > 0
+  | TyRecord(row) => rowReachesList(sorted, row)
+  | _ => false
+}
+
+let rowReachesList = (sorted, row) => switch row {
+  | RowExtend(_, ft, _, rest) => reachesList(
+      sorted,
+      ft
+    ) || rowReachesList(sorted, rest)
+  | _ => false
+}
+
+let checkEqEligible = (ctx: Ctx<a>, fn, fnT, st: Types.St) => switch fn {
+  | Ast.ERef(name, _) => name == "eq" || name == "compare" && isBuiltinCall(
+      ctx,
+      name
+    )
+      ? switch resolve(fnT, st) {
+        | TyFn(operandT, _) => reachesList(
+            name == "compare",
+            zonk(operandT, st)
+          )
+            ? Err(
+              typeErrHelp(
+                "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+                exprSpan(fn),
+                "force it first with `List.toArray`"
+              )
+            )
+            : Ok(())
+        | _ => Ok(())
+      }
+      : Ok(())
+  | _ => Ok(())
+}
+
 let isTupleParam = p => switch p {
   | Ast.LPSpanned(inner, _) => isTupleParam(inner)
   | Ast.LPTuple(_) => true
@@ -741,7 +799,13 @@ let inferApplied = (ctx: Ctx<a>, fn, args, st: Types.St) =>
             let? st3 = ctx->u(fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)) in
               Ok((resultT, st3))
         }
-      | _ => ctx->inferCallArgs(fnT, args, st1, exprSpan(fn))
+      | _ => let? (resultT, st2) = ctx->inferCallArgs(
+          fnT,
+          args,
+          st1,
+          exprSpan(fn)
+        ) in
+          ctx->checkEqEligible(fn, fnT, st2) |> Result.map(_ => (resultT, st2))
     }
 
 let inferNormalCall = (ctx: Ctx<a>, fn, args, st: Types.St) => switch (fn, args) {

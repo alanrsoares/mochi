@@ -1819,6 +1819,129 @@ const inferCallArgs: _Curry<
   ],
   Result<[Ty, St], IErr>
 > = _curry(5, inferCallArgs$);
+const isBuiltinCall$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, AliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  name: string,
+): boolean => and(_Map_has(name, ctx.letOwner) === false, _Set_has(name, ctx.localNames) === false);
+const isBuiltinCall: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, AliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    name: string,
+  ],
+  boolean
+> = _curry(2, isBuiltinCall$);
+const reachesList$ = (sorted: boolean, t: Ty): boolean =>
+  ((_v) =>
+    _v._tag === "TyCon" && _v.name === "List"
+      ? true
+      : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2
+        ? (({ args: [k, v] }) => or(and(sorted, reachesList$(sorted, k)), reachesList$(sorted, v)))(
+            _v as Extract<Ty, { _tag: "TyCon" }>,
+          )
+        : _v._tag === "TyCon" && _v.name === "Set"
+          ? (({ args: targs }) =>
+              and(sorted, length(filter((a: Ty) => reachesList$(sorted, a), targs)) > 0))(_v)
+          : _v._tag === "TyCon"
+            ? (({ args: targs }) => length(filter((a: Ty) => reachesList$(sorted, a), targs)) > 0)(
+                _v,
+              )
+            : _v._tag === "TyRecord"
+              ? (({ row }) => rowReachesList$(sorted, row))(_v)
+              : false)(t);
+const reachesList: _Curry<[sorted: boolean, t: Ty], boolean> = _curry(2, reachesList$);
+const rowReachesList$ = (sorted: boolean, row: Row): boolean => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { fieldType: ft, rest } = $match;
+      return or(reachesList$(sorted, ft), rowReachesList$(sorted, rest));
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const rowReachesList: _Curry<[sorted: boolean, row: Row], boolean> = _curry(2, rowReachesList$);
+const checkEqEligible$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, AliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fn: Expr,
+  fnT: Ty,
+  st: St,
+): Result<undefined, IErr> => {
+  const $match = fn;
+  switch ($match._tag) {
+    case "ERef": {
+      const { name } = $match;
+      return and(or(name === "eq", name === "compare"), isBuiltinCall$(ctx, name))
+        ? ((_v) =>
+            _v._tag === "TyFn"
+              ? (({ from: operandT }) =>
+                  reachesList$(name === "compare", zonk(operandT, st))
+                    ? (Err(
+                        typeErrHelp$(
+                          "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+                          exprSpan(fn),
+                          "force it first with `List.toArray`",
+                        ),
+                      ) as Result<undefined, IErr>)
+                    : (Ok(undefined) as Result<undefined, IErr>))(_v)
+              : (Ok(undefined) as Result<undefined, IErr>))(resolve(fnT, st))
+        : (Ok(undefined) as Result<undefined, IErr>);
+    }
+    default: {
+      return Ok(undefined) as Result<undefined, IErr>;
+    }
+  }
+};
+const checkEqEligible: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, AliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    fn: Expr,
+    fnT: Ty,
+    st: St,
+  ],
+  Result<undefined, IErr>
+> = _curry(4, checkEqEligible$);
 const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1928,7 +2051,14 @@ const inferApplied$ = (
                       (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
                       u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                     ))(freshVar(st1)))(resolve(fnT, st1))
-          : inferCallArgs$(ctx, fnT, args, st1, exprSpan(fn)))(args),
+          : _Result_flatMap(
+              ([resultT, st2]) =>
+                _Result_map(
+                  (_: undefined) => _tuple(resultT, st2),
+                  checkEqEligible$(ctx, fn, fnT, st2),
+                ),
+              inferCallArgs$(ctx, fnT, args, st1, exprSpan(fn)),
+            ))(args),
     inferExpr$(ctx, fn, st),
   );
 const inferApplied: _Curry<

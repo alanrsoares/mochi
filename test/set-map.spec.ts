@@ -175,9 +175,38 @@ test("show on Map/Set round-trips the surface `#{...}` form", () => {
   expect(run("let a = show(Set.fromArray([1, 2]))", "a")).not.toContain("[object");
 });
 
-test("eq/compare on a lazy List throw rather than silently lying", () => {
-  expect(() => run("let a = eq(@{1, 2}, @{1, 2})", "a")).toThrow(/List/);
-  expect(() => run("let a = compare(@{1, 2}, @{1, 2})", "a")).toThrow(/List/);
+test("eq/compare on a resolved lazy List is a compile-time error (ADR 0138)", () => {
+  for (const src of ["let a = eq(@{1, 2}, @{1, 2})", "let a = compare(@{1, 2}, @{1, 2})"]) {
+    expect(() => compileJs(src, { stripImports: true, runtime: true })).toThrow();
+  }
+});
+
+test("a local binder named eq/compare is not the prelude gate (ADR 0138)", () => {
+  expect(
+    run(
+      "let f = (compare, l: List<number>) => compare(l, l)\nlet a = f((x, y) => true, @{1})",
+      "a",
+    ),
+  ).toBe(true);
+});
+
+test("compare also walks Map keys and Set elements (ADR 0138)", () => {
+  expect(() =>
+    compileJs("let a = compare(#{ @{1}: 1 }, #{ @{1}: 1 })", { stripImports: true, runtime: true }),
+  ).toThrow();
+  expect(() =>
+    compileJs("let a = #{ @{1}: 1 } == #{ @{1}: 1 }", { stripImports: true, runtime: true }),
+  ).not.toThrow();
+});
+
+// Stage 1 only sees resolved types: a generic wrapper still reaches the runtime guard.
+test("eq/compare on a lazy List behind a generic wrapper throw rather than silently lying", () => {
+  expect(() => run("let same = (x, y) => eq(x, y)\nlet a = same(@{1, 2}, @{1, 2})", "a")).toThrow(
+    /List/,
+  );
+  expect(() =>
+    run("let cmp = (x, y) => compare(x, y)\nlet a = cmp(@{1, 2}, @{1, 2})", "a"),
+  ).toThrow(/List/);
 });
 
 test("show on a lazy List does not force it — renders the `<List>` marker", () => {
