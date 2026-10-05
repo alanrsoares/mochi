@@ -24,7 +24,7 @@ export type Row =
   | { _tag: "RowExtend"; label: string; fieldType: Ty; optional: boolean; rest: Row };
 export type SpanAt = { start: number; end: number };
 export type BinderSym = { kind: string; name: string; doc: Option<string> };
-export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type AliasField = {
   name: string;
   nameSpan: Span;
@@ -312,7 +312,7 @@ export type SeedCompile = {
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -328,7 +328,7 @@ export type SeedCompile = {
       {
         env: Map<string, Scheme>;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
       },
       Stamped[]
@@ -340,13 +340,13 @@ export type SeedCompile = {
       {
         env: Map<string, Scheme>;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
       },
       Stamped[]
     >
   >;
-  nominalTypeName: HostFn<[ty: Ty, aliases: Map<string, QualAliasInfo>], Option<string>>;
+  nominalTypeName: HostFn<[ty: Ty, aliases: Map<string, AliasInfo>], Option<string>>;
   symbolIndexSync: HostFn<
     [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
     SymIndex

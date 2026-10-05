@@ -5,7 +5,6 @@ import type { Doc } from "../../doc/doc";
 import type { FormatApi } from "../../format/format-api";
 import type { Ctx } from "../../format/format";
 
-export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type Hint = { title: string; start: number; end: number; replaceWith: string };
 export type BoundErr = {
   message: string;
@@ -105,7 +104,6 @@ import {
   TId,
   TEof,
 } from "../../lexer/lexer";
-
 const jxTokName: (t: Tok) => string = (t: Tok) => {
   const $match = t;
   switch ($match._tag) {
@@ -151,18 +149,29 @@ const jxTokName: (t: Tok) => string = (t: Tok) => {
   }
 };
 const jxEofTok = { tok: TEof as Tok, start: 0, end: 0, doc: None };
-const jxTokAt$ = (toks: LocTok[], i: number): LocTok =>
+const jxTokAt$ = (
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+  i: number,
+): { tok: Tok; start: number; end: number; doc: Option<string> } =>
   _Option_unwrapOr(jxEofTok, _Array_get(i, toks));
-const jxTokAt: _Curry<[toks: LocTok[], i: number], LocTok> = _curry(2, jxTokAt$);
+const jxTokAt: _Curry<
+  [toks: { tok: Tok; start: number; end: number; doc: Option<string> }[], i: number],
+  { tok: Tok; start: number; end: number; doc: Option<string> }
+> = _curry(2, jxTokAt$);
 const jxSpanOf: <C>(lt: { end: number; start: number } & C) => SpanAt = <C>(
   lt: { end: number; start: number } & C,
 ) => ({ start: lt.start, end: lt.end });
-const jxToEnd: <C>(start: { start: number } & C, toks: LocTok[], pos: number) => SpanAt = _curry(
+const jxToEnd: <C>(
+  start: { start: number } & C,
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+  pos: number,
+) => SpanAt = _curry(
   3,
-  <C>(start: { start: number } & C, toks: LocTok[], pos: number) => ({
-    start: start.start,
-    end: jxTokAt$(toks, pos - 1).end,
-  }),
+  <C>(
+    start: { start: number } & C,
+    toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+    pos: number,
+  ) => ({ start: start.start, end: jxTokAt$(toks, pos - 1).end }),
 );
 const jxErrAt: <A, B, C, D, E>(
   message: A,
@@ -174,7 +183,7 @@ const jxErrAt: <A, B, C, D, E>(
 );
 const jxExpectTok$ = (
   t: Tok,
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
 ): Result<number, { message: string; start: number; end: number }> => {
   const lt = jxTokAt$(toks, pos);
@@ -183,11 +192,11 @@ const jxExpectTok$ = (
     : jxErrAt(`expected ${jxTokName(t)}, got ${jxTokName(lt.tok)}`, lt);
 };
 const jxExpectTok: _Curry<
-  [t: Tok, toks: LocTok[], pos: number],
+  [t: Tok, toks: { tok: Tok; start: number; end: number; doc: Option<string> }[], pos: number],
   Result<number, { message: string; start: number; end: number }>
 > = _curry(3, jxExpectTok$);
 const jxExpectId$ = (
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
 ): Result<[Name, number], { message: string; start: number; end: number }> => {
   const lt = jxTokAt$(toks, pos);
@@ -207,7 +216,7 @@ const jxExpectId$ = (
   }
 };
 const jxExpectId: _Curry<
-  [toks: LocTok[], pos: number],
+  [toks: { tok: Tok; start: number; end: number; doc: Option<string> }[], pos: number],
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, jxExpectId$);
 /**
@@ -251,7 +260,7 @@ const jxKeywordText: (t: Tok) => Option<string> = (t: Tok) => {
   }
 };
 const jxExpectLabel$ = (
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
 ): Result<[Name, number], { message: string; start: number; end: number }> => {
   const lt = jxTokAt$(toks, pos);
@@ -271,10 +280,14 @@ const jxExpectLabel$ = (
  * there is no pun to reject.
  */
 const jxExpectLabel: _Curry<
-  [toks: LocTok[], pos: number],
+  [toks: { tok: Tok; start: number; end: number; doc: Option<string> }[], pos: number],
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, jxExpectLabel$);
-const jxAttrNameFrom$ = (toks: LocTok[], pos: number, acc: Name): [Name, number] => {
+const jxAttrNameFrom$ = (
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+  pos: number,
+  acc: Name,
+): [Name, number] => {
   const minusTok = jxTokAt$(toks, pos);
   const partTok = jxTokAt$(toks, pos + 1);
   return and(
@@ -306,12 +319,12 @@ const jxAttrNameFrom$ = (toks: LocTok[], pos: number, acc: Name): [Name, number]
  * only while the tokens are ADJACENT, or `<div id - x="1">` would silently
  * become `id-x`.
  */
-const jxAttrNameFrom: _Curry<[toks: LocTok[], pos: number, acc: Name], [Name, number]> = _curry(
-  3,
-  jxAttrNameFrom$,
-);
+const jxAttrNameFrom: _Curry<
+  [toks: { tok: Tok; start: number; end: number; doc: Option<string> }[], pos: number, acc: Name],
+  [Name, number]
+> = _curry(3, jxAttrNameFrom$);
 const jxExpectAttrName$ = (
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
 ): Result<[Name, number], { message: string; start: number; end: number }> =>
   _Result_map(
@@ -322,7 +335,7 @@ const jxExpectAttrName$ = (
  * `jxExpectLabel` plus any adjacent `-part` continuations.
  */
 const jxExpectAttrName: _Curry<
-  [toks: LocTok[], pos: number],
+  [toks: { tok: Tok; start: number; end: number; doc: Option<string> }[], pos: number],
   Result<[Name, number], { message: string; start: number; end: number }>
 > = _curry(2, jxExpectAttrName$);
 const jxIsUpper: (s: string) => boolean = (s: string) =>
@@ -433,7 +446,7 @@ const makeJsxCall: <B>(
   spreadOpt: Option<Expr>,
   children: SeqElem[],
   startTok: { end: number; start: number } & B,
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   endPos: number,
 ) => Expr = _curry(
   7,
@@ -443,7 +456,7 @@ const makeJsxCall: <B>(
     spreadOpt: Option<Expr>,
     children: SeqElem[],
     startTok: { end: number; start: number } & B,
-    toks: LocTok[],
+    toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     endPos: number,
   ) => {
     const fullSpan: SpanAt = jxToEnd(jxSpanOf(startTok), toks, endPos);
@@ -459,12 +472,12 @@ const makeJsxCall: <B>(
   },
 );
 const parseJsxAttributes$ = (
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
   fieldsAcc: Field[],
   spreadAcc: Option<Expr>,
   parseExpr: (
-    a: LocTok[],
+    a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     b: number,
   ) => Result<[Expr, number], { message: string; start: number; end: number }>,
 ): Result<[Field[], Option<Expr>, number], { message: string; start: number; end: number }> => {
@@ -540,12 +553,12 @@ const parseJsxAttributes$ = (
 };
 const parseJsxAttributes: _Curry<
   [
-    toks: LocTok[],
+    toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     pos: number,
     fieldsAcc: Field[],
     spreadAcc: Option<Expr>,
     parseExpr: (
-      a: LocTok[],
+      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ],
@@ -553,11 +566,11 @@ const parseJsxAttributes: _Curry<
 > = _curry(5, parseJsxAttributes$);
 const parseJsxChildren$ = (
   expectedTag: string,
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
   acc: SeqElem[],
   parseExpr: (
-    a: LocTok[],
+    a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     b: number,
   ) => Result<[Expr, number], { message: string; start: number; end: number }>,
 ): Result<[SeqElem[], number], { message: string; start: number; end: number }> => {
@@ -675,21 +688,21 @@ const parseJsxChildren$ = (
 const parseJsxChildren: _Curry<
   [
     expectedTag: string,
-    toks: LocTok[],
+    toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     pos: number,
     acc: SeqElem[],
     parseExpr: (
-      a: LocTok[],
+      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ],
   Result<[SeqElem[], number], { message: string; start: number; end: number }>
 > = _curry(5, parseJsxChildren$);
 const parseJsx$ = (
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
   parseExpr: (
-    a: LocTok[],
+    a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     b: number,
   ) => Result<[Expr, number], { message: string; start: number; end: number }>,
 ): Result<[Expr, number], { message: string; start: number; end: number }> => {
@@ -778,20 +791,20 @@ const parseJsx$ = (
 };
 const parseJsx: _Curry<
   [
-    toks: LocTok[],
+    toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     pos: number,
     parseExpr: (
-      a: LocTok[],
+      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ],
   Result<[Expr, number], { message: string; start: number; end: number }>
 > = _curry(3, parseJsx$);
 const parseJsxAtom$ = (
-  toks: LocTok[],
+  toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
   pos: number,
   parseExpr: (
-    a: LocTok[],
+    a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     b: number,
   ) => Result<[Expr, number], { message: string; start: number; end: number }>,
 ): Result<Option<[Expr, number]>, { message: string; start: number; end: number }> =>
@@ -809,10 +822,10 @@ const parseJsxAtom$ = (
  */
 export const parseJsxAtom: _Curry<
   [
-    toks: LocTok[],
+    toks: { tok: Tok; start: number; end: number; doc: Option<string> }[],
     pos: number,
     parseExpr: (
-      a: LocTok[],
+      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
       b: number,
     ) => Result<[Expr, number], { message: string; start: number; end: number }>,
   ],

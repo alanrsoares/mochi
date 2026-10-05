@@ -163,7 +163,7 @@ export let patSpan = p => switch p {
 // --- inference-time error + context. unify.ts's span-less TypeErr becomes a
 // spanned IErr only at the `u()` seam below (mirrors src/infer.ts's `u`) ---
 
-type Suggestion = {
+export type Suggestion = {
   title: string,
   start: number,
   end: number,
@@ -1785,7 +1785,7 @@ let aliasMapFrom = (stmts, acc) => switch stmts {
     }
 }
 
-let registerCtorsFrom = (ctors, typeName, params, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch ctors {
+let registerCtorsFrom = (ctors, typeName, params, aliasMap: Map<string, Schemes.AliasInfo>, env, st: Types.St) => switch ctors {
   | [] => (env, st)
   | [c, ...rest] => let (sc, st1) = ctorScheme(
       typeName,
@@ -1804,7 +1804,7 @@ let registerCtorsFrom = (ctors, typeName, params, aliasMap: Map<string, QualAlia
       )
 }
 // constructors first, so `let`s (in any order after their type) can use them
-let registerUserCtorsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch stmts {
+let registerUserCtorsFrom = (stmts, aliasMap: Map<string, Schemes.AliasInfo>, env, st: Types.St) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
       | Ast.SType(name, _, params, ctors, _, _, _, _, _) => let (env1, st1) = registerCtorsFrom(
@@ -1820,7 +1820,7 @@ let registerUserCtorsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, s
     }
 }
 
-let registerBuiltinCtorGroup = (ctors, typeName, params, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch ctors {
+let registerBuiltinCtorGroup = (ctors, typeName, params, aliasMap: Map<string, Schemes.AliasInfo>, env, st: Types.St) => switch ctors {
   | [] => (env, st)
   | [c, ...rest] => Map.has(c.name, env)
       ? registerBuiltinCtorGroup(rest, typeName, params, aliasMap, env, st)
@@ -1837,7 +1837,7 @@ let registerBuiltinCtorGroup = (ctors, typeName, params, aliasMap: Map<string, Q
 // unless the program already declared its own type of that name — a user
 // redeclaration wins, so `Map.get : ... -> Option v` and a hand-written
 // Some/None still type-check against whichever one is in scope.
-let registerBuiltinCtorsFrom = (decls, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch decls {
+let registerBuiltinCtorsFrom = (decls, aliasMap: Map<string, Schemes.AliasInfo>, env, st: Types.St) => switch decls {
   | [] => (env, st)
   | [d, ...rest] => let (env1, st1) = registerBuiltinCtorGroup(
       d.ctors,
@@ -1852,7 +1852,7 @@ let registerBuiltinCtorsFrom = (decls, aliasMap: Map<string, QualAliasInfo>, env
 
 // externs next — their declared type is authoritative; generalize so a
 // polymorphic signature (e.g. `a -> a`) instantiates fresh at each use site.
-let registerExternsFrom = (stmts, aliasMap: Map<string, QualAliasInfo>, env, st: Types.St) => switch stmts {
+let registerExternsFrom = (stmts, aliasMap: Map<string, Schemes.AliasInfo>, env, st: Types.St) => switch stmts {
   | [] => (env, st)
   | [s, ...rest] => switch s {
       | Ast.SExtern(name, nameSpan, params, typeExpr, _, _, _, _, doc, _) => let (vars, st0) = Array.reduce(
@@ -2393,13 +2393,7 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 // empty map (ADR 0044) — an unannotated `#{}` generalizes and leaves the
 // emitted TS a `Map<string, unknown>`. Structural, so module.mochi's richer
 // `{ types, aliases }` scope still fits.
-type QualAliasInfo = {
-  params: [string],
-  fields: [Ast.AliasField],
-  expr: Option<Ast.TypeExpr>
-}
-
-type QualScope = { aliases: Map<string, QualAliasInfo> }
+type QualScope = { aliases: Map<string, Schemes.AliasInfo> }
 
 /// The API an `inferCall` plugin hook is handed (ADR 0011 6).
 type InferApi = {
@@ -2462,7 +2456,7 @@ type Ctx<p> = {
   env: Map<string, Schemes.Scheme>,
   open: bool,
   ns: Map<string, Map<string, Schemes.Scheme>>,
-  aliasMap: Map<string, QualAliasInfo>,
+  aliasMap: Map<string, Schemes.AliasInfo>,
   plugins: [Plugin<p>],
   loopStack: [[Types.Ty]],
   letOwner: Map<string, Ast.Span>,

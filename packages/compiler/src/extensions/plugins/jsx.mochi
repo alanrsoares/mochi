@@ -49,13 +49,6 @@ import {
   TEof
 } from "../../lexer/lexer.mochi"
 
-type LocTok = {
-  tok: Lexer.Tok,
-  start: number,
-  end: number,
-  doc: Option<string>
-}
-
 let jxTokName = t => switch t {
   | TEq => "eq"
   | TLbrace => "lbrace"

@@ -274,7 +274,10 @@ export let isUpperStart = s => switch Str.codeAt(0, s) {
   | None => false
 }
 
-type AliasInfo = {
+/// A declared type alias: its parameters, plus EITHER a record body (`fields`)
+/// or a transparent template (`expr`). Shared by inference, the TS printer and
+/// `.d.ts` emit (records expand, so structural identity is what matters, ADR 0044).
+export type AliasInfo = {
   params: [string],
   fields: [Ast.AliasField],
   expr: Option<Ast.TypeExpr>

@@ -19,6 +19,7 @@ import {
 } from "../infer/infer.mochi"
 import { codegenWith, jsGenOpts } from "../codegen/codegen.mochi"
 import * as Infer from "../infer/infer.mochi"
+import * as Compile from "../compile/compile.mochi"
 import { emitTsModuleWith, externModuleDts } from "../codegen/typescript.mochi"
 import { showType, tVar } from "../infer/types.mochi"
 import { widenLits } from "../infer/schemes.mochi"
@@ -61,19 +62,7 @@ export let symbolIndex = (path, origins, prelude, stmts) =>
 /// A module's export sites, the `origins` an importer's `symbolIndex` takes.
 export let exportedOrigins = (path, stmts) => originsOf(path, stmts)
 
-// Caller knobs, structurally identical to compile.mochi's `Opts` (ADR 0005),
-// so they unify across the module boundary without a type import.
-type Opts = {
-  open: bool,
-  runtime: bool,
-  docs: bool,
-  moduleExt: string,
-  strictEntry: bool,
-  plugins: Option<[Infer.HostPlugin]>,
-  dtsTypeNames: Map<string, string>
-}
-
-let defaultOpts : Opts = {
+let defaultOpts : Compile.Opts = {
   open: false,
   runtime: true,
   docs: true,
@@ -444,10 +433,10 @@ let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.
 // caller's flag verbatim, so an editor can still flag a typo in a file that
 // opted into host globals — `dx/diagnostics.ts` passes `open: false` there for
 // exactly this reason, while `mochi build` leaves the directive in charge.
-let openFor = (loaded: Loaded, isEntry, opts: Opts) =>
+let openFor = (loaded: Loaded, isEntry, opts: Compile.Opts) =>
   isEntry && opts.strictEntry ? opts.open : openMode(loaded.src, opts.open)
 
-let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
+let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
   | Err(e) => Err([atPath("check", loaded.path, e)])
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err([atPath("check", loaded.path, e)])
@@ -504,7 +493,7 @@ let compileAll = (ctx, graph, opts) => switch graph {
 /// compileGraph : [Loaded] -> Result [ModuleOutput] [MErr]
 /// Spelled out (not point-free `compileAll(ctx0)`): the TS backend types a
 /// multi-param function uncurried, so a partial application is a tsc error.
-export let compileGraphWith = (graph, opts: Opts) =>
+export let compileGraphWith = (graph, opts: Compile.Opts) =>
   compileAll(
     {
       exportsByPath: #{},
@@ -647,7 +636,7 @@ export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
 
 /// recoverGraphFrom : RecoveryGraphState -> [Loaded] -> RecoveryGraphState
 /// Advance a graph recovery state by a dependency-ordered suffix.
-export let recoverGraphFromWith = (state, graph, opts: Opts) =>
+export let recoverGraphFromWith = (state, graph, opts: Compile.Opts) =>
   state.ctx->compileAllRecovering(graph, state.errors, opts)
 
 export let recoverGraphFrom = (state, graph) =>
@@ -659,11 +648,11 @@ export let recoverGraphFrom = (state, graph) =>
 // slice a host can cache per module, and any dependency closure can be rebuilt
 // by merging its members' slices, whatever order the entry walked them in.
 
-/// recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Opts -> RecoveryGraphState
+/// recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Compile.Opts -> RecoveryGraphState
 /// Recover one module on top of a state that already holds its dependencies.
 /// A host stepping module by module says which one is the entry: a one-module
 /// suffix cannot tell, and `strictEntry` judges only the entry strictly.
-export let recoverModuleWith = (state: RecoveryGraphState, loaded: Loaded, isEntry, opts: Opts) =>
+export let recoverModuleWith = (state: RecoveryGraphState, loaded: Loaded, isEntry, opts: Compile.Opts) =>
   state.ctx->recoverOne(loaded, isEntry, state.errors, opts)
 
 // `m` with every key but `key` removed, so the result keeps `m`'s own type.
@@ -705,7 +694,7 @@ export let mergeRecoveryStates = (a: RecoveryGraphState, b: RecoveryGraphState) 
 
 /// Recovery graph driver: keeps checking after failures and gives downstream
 /// imports a polymorphic placeholder rather than an unbound-name cascade.
-export let compileGraphRecoveringWith = (graph, opts: Opts) =>
+export let compileGraphRecoveringWith = (graph, opts: Compile.Opts) =>
   let state = freshRecoveryGraphState()->recoverGraphFromWith(graph, opts) in
     { outputs: state.ctx.outputs, errors: state.errors }
 
@@ -717,7 +706,7 @@ export let compileGraphRecovering = graph =>
 // without paying for code generation or reconstructing the import environment
 // in the TypeScript host. Keep every module's recorded spans together with the
 // alias scope accumulated through its dependencies.
-let inferOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let inferOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
@@ -796,7 +785,7 @@ export let freshInferGraphState = () =>
 /// inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
 /// Advance an existing dependency-ordered graph state. The host may retain a
 /// state at a shared dependency prefix, then infer only a sibling entry tail.
-export let inferGraphTypesFromWith = (state, graph, opts: Opts) =>
+export let inferGraphTypesFromWith = (state, graph, opts: Compile.Opts) =>
   state->inferAll(graph, opts)
 
 export let inferGraphTypesFrom = (state, graph) =>
@@ -830,7 +819,7 @@ export let mergeInferStates = (a, b) =>
 /// inferGraphTypes : [Loaded] -> Result [{ path, types, aliases }] MErr
 /// Infer every dependency-ordered module with the exact import environment its
 /// emitter would use. This is the bootstrap graph typed-query boundary.
-export let inferGraphTypesWith = (graph, opts: Opts) =>
+export let inferGraphTypesWith = (graph, opts: Compile.Opts) =>
   let? state = freshInferGraphState()->inferGraphTypesFromWith(graph, opts) in
     Ok(state.outputs)
 
@@ -840,7 +829,7 @@ export let inferGraphTypes = graph => graph->inferGraphTypesWith(defaultOpts)
 /// Resolve the graph, collect every recoverable module diagnostic, then emit.
 /// Graph-load failures are singular but normalize to `[MErr]` at this public
 /// boundary, matching the single-file compiler railway.
-export let buildModulesWith = (entry, opts: Opts) => switch entry->loadGraphWith(opts.plugins) {
+export let buildModulesWith = (entry, opts: Compile.Opts) => switch entry->loadGraphWith(opts.plugins) {
   | Err(e) => Err([e])
   | Ok(graph) => let recovered = graph->compileGraphRecoveringWith(opts) in
       Array.length(recovered.errors) == 0
@@ -1057,7 +1046,7 @@ let externBindingsInto = (stmts, path, env, acc) =>
 // Compile one module to typed TS: the same resolve/check/infer prefix as
 // `compileOne`, then emit, then prepend the `import type` lines the emitted text
 // turned out to need.
-let compileOneTs = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let compileOneTs = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
@@ -1162,7 +1151,7 @@ let compileAllTs = (ctx, graph, opts) => switch graph {
 /// Emit the whole ordered graph as typed TypeScript (ADR 0090). Outputs are the
 /// `.mochi` module paths (the writer swaps the extension) followed by the extern
 /// sidecars, which already carry their own `.d.ts` / `.d.mts` extension.
-export let compileGraphTsWith = (graph, runtimeImport, opts: Opts) =>
+export let compileGraphTsWith = (graph, runtimeImport, opts: Compile.Opts) =>
   let noted = typeOwnerOf(graph) in
     compileAllTs(
       {
@@ -1187,7 +1176,7 @@ export let compileGraphTs = (graph, runtimeImport) =>
 // Walk the graph exactly as inference does, so a module's imports, registry and
 // qualified type scopes are in place, and emit `.d.ts` for ONE target path. The
 // dependencies are inferred, not emitted — `.d.ts` is a per-file question.
-let dtsOne = (ctx, loaded, opts: Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let dtsOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
   | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
@@ -1250,7 +1239,7 @@ let dtsAll = (ctx, graph, opts) => switch graph {
 
 /// emitDtsForFile : string -> string -> Result string MErr — `.d.ts` for one
 /// file, typed through its own import graph so `Alias.T` resolves (ADR 0046).
-export let emitDtsForFileWith = (entry, runtimeImport, opts: Opts) =>
+export let emitDtsForFileWith = (entry, runtimeImport, opts: Compile.Opts) =>
   let? graph = entry->loadGraphWith(opts.plugins) in
     dtsAll(
       {
@@ -1273,7 +1262,7 @@ export let emitDtsForFile = (entry, runtimeImport) =>
 /// buildModulesTs : string -> string -> Result [ModuleOutput] [MErr]
 /// Typed graph emit shares the recovery preflight with JS graph emit, so both
 /// CLI targets render the same complete diagnostic set.
-export let buildModulesTsWith = (entry, runtimeImport, opts: Opts) => switch entry->loadGraphWith(opts.plugins) {
+export let buildModulesTsWith = (entry, runtimeImport, opts: Compile.Opts) => switch entry->loadGraphWith(opts.plugins) {
   | Err(e) => Err([e])
   | Ok(graph) =>
     // The preflight runs the JS rail, whose `openFor` hands the ENTRY `opts.open`

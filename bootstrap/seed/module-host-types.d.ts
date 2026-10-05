@@ -273,9 +273,9 @@ export type AliasField = {
   spread: boolean;
 };
 export type Name = { name: string; span: Span };
-export type RecoveryAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
-export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, RecoveryAliasInfo> };
+export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type CtorInfo = { owner: string; arity: number };
 export type RecoveryGraphState = { ctx: RecoveryCtx; errors: MErr[] };
@@ -341,7 +341,7 @@ export type SeedModule = {
     {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, RecoveryAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       imports: Map<string, Scheme>;
       quals: Map<string, RecoveryQualScope>;
     }[],
@@ -364,11 +364,11 @@ export type SeedModule = {
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, RecoveryAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         imports: Map<string, Scheme>;
         quals: Map<string, RecoveryQualScope>;
       }[];
-      aliases: Map<string, RecoveryAliasInfo>;
+      aliases: Map<string, AliasInfo>;
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
     opts: Opts,
@@ -381,11 +381,11 @@ export type SeedModule = {
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, RecoveryAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         imports: Map<string, Scheme>;
         quals: Map<string, RecoveryQualScope>;
       }[];
-      aliases: Map<string, RecoveryAliasInfo>;
+      aliases: Map<string, AliasInfo>;
     },
     MErr
   >;

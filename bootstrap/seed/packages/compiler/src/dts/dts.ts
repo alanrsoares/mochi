@@ -3,15 +3,9 @@ import type { AliasField, Ctor, CtorField, Expr, Span, Stmt, TypeExpr } from "..
 import type { Row, St, Ty, TypeAt } from "../infer/types";
 import type { Doc } from "../doc/doc";
 import type { FormatApi } from "../format/format-api";
-import type { Scheme } from "../infer/schemes";
+import type { AliasInfo, Scheme } from "../infer/schemes";
 import type { IErr, InferApi, TsApi } from "../infer/infer";
 import type { StageErr, Stamped } from "../compile/compile";
-
-/**
- * A declared alias as inference records it; a local copy of schemes.mochi's,
- * so the two unify structurally (ADR 0044).
- */
-export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -86,6 +80,7 @@ import {
 } from "../infer/types";
 import { jsDoc } from "../codegen/codegen";
 import { foldAliasesAt } from "../infer/schemes";
+import * as Schemes from "../infer/schemes";
 import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "../compile/compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensions";
 const writtenQualsIn$ = (
@@ -482,7 +477,6 @@ const typeDeclsFrom: _Curry<
   ],
   string[]
 > = _curry(6, typeDeclsFrom$);
-
 const localAliasKeys$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
   ((_v) =>
     _v._tag === "None"

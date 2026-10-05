@@ -1,4 +1,4 @@
-import type { LocTok, QualAliasInfo, TsApi } from "../infer/infer";
+import type { LocTok, TsApi } from "../infer/infer";
 import type {
   AliasField,
   Ctor,
@@ -16,16 +16,9 @@ import type {
   TypeExpr,
 } from "../ast/ast";
 import type { Row, SpanAt, St, Ty } from "../infer/types";
+import type { AliasInfo } from "../infer/schemes";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "../dts/ts-types";
-
-/**
- * A declared type alias as the printer reads it: its parameters, plus EITHER a
- * record body (`fields`) or a transparent template (`expr`). Declared here as
- * well as in schemes.mochi rather than shared through an import — a local
- * record alias expands, so both copies unify structurally (ADR 0044).
- */
-export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -93,6 +86,7 @@ import {
 } from "@mochi/compiler/runtime";
 
 import * as Ast from "../ast/ast";
+import * as Schemes from "../infer/schemes";
 import {
   mkSt,
   freshVar,
@@ -909,7 +903,6 @@ const curriedOverloads$ = (head: string, params: string[], ret: string): string 
  */
 export const curriedOverloads: _Curry<[head: string, params: string[], ret: string], string> =
   _curry(3, curriedOverloads$);
-
 const curriedFnType$ = (params: string[], ret: string): string =>
   length(params) <= 1
     ? `(${_Str_join(", ", params)}) => ${ret}`

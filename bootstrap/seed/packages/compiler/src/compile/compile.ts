@@ -1,7 +1,7 @@
 import type { Stmt } from "../ast/ast";
 import type { BinderSym, SpanAt, Ty, TypeAt } from "../infer/types";
-import type { Scheme } from "../infer/schemes";
-import type { HostPlugin, IErr, QualAliasInfo } from "../infer/infer";
+import type { AliasInfo, Scheme } from "../infer/schemes";
+import type { HostPlugin, IErr, Suggestion } from "../infer/infer";
 import type { Origins, SymIndex, SymPrelude } from "../check/symbols";
 
 /**
@@ -26,7 +26,6 @@ export type Opts = {
   plugins: Option<HostPlugin[]>;
   dtsTypeNames: Map<string, string>;
 };
-export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
 export type StageErr = { message: string; start: number; end: number };
 export type Stamped = {
   kind: string;
@@ -164,7 +163,6 @@ const openMode$ = (src: string, requested: boolean): boolean => or(requested, op
  * The directive wins over the caller's default; it never turns open off.
  */
 export const openMode: _Curry<[src: string, requested: boolean], boolean> = _curry(2, openMode$);
-
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
 const stampStage$ = (kind: string, e: StageErr): Stamped => ({
@@ -257,7 +255,7 @@ const typedProgramWith$ = (
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
   ],
@@ -271,7 +269,7 @@ const typedProgramWith$ = (
           (r: {
             env: Map<string, Scheme>;
             types: TypeAt[];
-            aliases: Map<string, QualAliasInfo>;
+            aliases: Map<string, AliasInfo>;
             letParams: TypeAt[];
           }) => _tuple(stmts, r),
           inferProgramTypesWith(
@@ -298,7 +296,7 @@ export const typedProgramWith: _Curry<
       {
         env: Map<string, Scheme>;
         types: TypeAt[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
       },
     ],
@@ -311,7 +309,7 @@ export const typedProgram: (src: string) => Result<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
   ],
@@ -325,7 +323,7 @@ const typedQuery$ = (
   {
     env: Map<string, Scheme>;
     types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   Stamped[]
@@ -335,7 +333,7 @@ const typedQuery$ = (
     _Result_map(
       (r: {
         letParams: TypeAt[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         types: TypeAt[];
         env: Map<string, Scheme>;
       }) => ({
@@ -361,7 +359,7 @@ const typedQuery: _Curry<
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -374,7 +372,7 @@ const inferTypesWith$ = (
   {
     env: Map<string, Scheme>;
     types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   Stamped[]
@@ -389,7 +387,7 @@ export const inferTypesWith: _Curry<
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -402,7 +400,7 @@ const inferTypesRecoveringWith$ = (
   {
     env: Map<string, Scheme>;
     types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   Stamped[]
@@ -414,7 +412,7 @@ const inferTypesRecoveringWith$ = (
         {
           env: Map<string, Scheme>;
           types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-          aliases: Map<string, QualAliasInfo>;
+          aliases: Map<string, AliasInfo>;
           letParams: TypeAt[];
         },
         Stamped[]
@@ -445,7 +443,7 @@ export const inferTypesRecoveringWith: _Curry<
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -455,18 +453,18 @@ export const inferTypes: (src: string) => Result<
   {
     env: Map<string, Scheme>;
     types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   Stamped[]
 > = (src: string) => inferTypesWith$(src, defaultOpts);
-const nominalTypeName$ = (ty: Ty, aliases: Map<string, QualAliasInfo>): Option<string> =>
+const nominalTypeName$ = (ty: Ty, aliases: Map<string, AliasInfo>): Option<string> =>
   Schemes.nominalTypeName(ty, aliases);
 /**
  * The declared type a recorded type names, for go-to-type (ADR 0119).
  */
 export const nominalTypeName: _Curry<
-  [ty: Ty, aliases: Map<string, QualAliasInfo>],
+  [ty: Ty, aliases: Map<string, AliasInfo>],
   Option<string>
 > = _curry(2, nominalTypeName$);
 const symbolIndexSync$ = (
@@ -527,7 +525,7 @@ export const emitTsWith: <A, B, C, D, E, F, G, H, I, J>(
     env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>;
     types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[];
     letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
   } & J,
   runtimeImport: string,
   opts: Opts,
@@ -539,7 +537,7 @@ export const emitTsWith: <A, B, C, D, E, F, G, H, I, J>(
       env: Map<string, { ty: Ty; vars: number[]; rvars: number[] } & E>;
       types: ({ span: { start: A; end: B } & F; ty: Ty } & G)[];
       letParams: ({ span: { start: C; end: D } & H; ty: Ty } & I)[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
     } & J,
     runtimeImport: string,
     opts: Opts,
@@ -574,7 +572,7 @@ const compileTsWith$ = (
             env: Map<string, Scheme>;
             types: TypeAt[];
             letParams: TypeAt[];
-            aliases: Map<string, QualAliasInfo>;
+            aliases: Map<string, AliasInfo>;
           }) => emitTsWith(stmts, r, runtimeImport, opts),
           inferProgramTypesWith(
             stmts,

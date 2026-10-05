@@ -239,7 +239,12 @@ let mkTok = (tok, start, stop, doc) => switch doc {
 // largest first — a binary counter. Pushing a token merges equal runs, so each
 // token is copied O(log n) times; appending to one flat array copies it O(n)
 // times, which made lexing quadratic (~117M element copies on parser.mochi).
-type LocTok = { tok: Tok, start: number, end: number, doc: Option<string> }
+export type LocTok = {
+  tok: Tok,
+  start: number,
+  end: number,
+  doc: Option<string>
+}
 
 let pushRun = (run: [LocTok], buf: [[LocTok]]) =>
   let n = Array.length(buf) in

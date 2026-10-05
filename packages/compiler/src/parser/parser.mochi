@@ -78,12 +78,6 @@ import {
   TId,
   TEof
 } from "../lexer/lexer.mochi"
-type LocTok = {
-  tok: Lexer.Tok,
-  start: number,
-  end: number,
-  doc: Option<string>
-}
 type PErr = { message: string, start: number, end: number }
 
 // --- the AST (mirrors src/ast.ts; `kind` strings become constructors) ---
