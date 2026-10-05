@@ -17,3 +17,4 @@ A bare `_` argument in the call on the right of `|>` or `->` marks the slot the 
 - No parser, AST or seed-shape change; only the infer/codegen lowering.
 - Only a top-level `_` argument counts; nested `_` is not a placeholder. Several `_` all receive the piped value.
 - `_` is not a value elsewhere (unbound variable), so no existing program changes meaning.
+- A piped value that is not a plain reference or literal is bound once to a synthetic `$pipe` temp before the call, so several `_` never re-evaluate it and it still runs before the other arguments. Atomic values are substituted directly.
