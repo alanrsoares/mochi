@@ -1,4 +1,4 @@
-import type { Ctor, CtorField, Stmt } from "./ast";
+import type { Ctor, CtorField, Stmt, TypeExpr } from "./ast";
 import type { SpanAt } from "../infer/types";
 
 export type CtorInfo = { owner: string; arity: number };
@@ -61,51 +61,33 @@ export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] =
   fields: ({ name: Option<string> } & A)[],
 ) => keysOfFrom(fields, 0);
 const builtinSpan: SpanAt = { start: 0, end: 0 };
+const builtinCtor$ = (
+  name: string,
+  fields: { fieldType: TypeExpr; name: Option<string> }[],
+): Ctor => ({ name: name, fields: fields, tagKey: "_tag", tagLit: name, span: builtinSpan });
+const builtinCtor: _Curry<
+  [name: string, fields: { fieldType: TypeExpr; name: Option<string> }[]],
+  Ctor
+> = _curry(2, builtinCtor$);
+const valueField$ = (label: string, ty: string): CtorField[] => [
+  { name: Some(label), fieldType: Ast.TyName(ty, builtinSpan) },
+];
+const valueField: _Curry<[label: string, ty: string], CtorField[]> = _curry(2, valueField$);
 export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
   {
     name: "Option",
     params: ["a"],
     ctors: [
-      {
-        name: "Some",
-        tagKey: "_tag",
-        tagLit: "Some",
-        fields: [
-          { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
-        ],
-        span: builtinSpan,
-      },
-      {
-        name: "None",
-        fields: [] as CtorField[],
-        tagKey: "_tag",
-        tagLit: "None",
-        span: builtinSpan,
-      },
+      builtinCtor$("Some", valueField$("value", "a")),
+      builtinCtor$("None", [] as CtorField[]),
     ],
   },
   {
     name: "Result",
     params: ["a", "e"],
     ctors: [
-      {
-        name: "Ok",
-        tagKey: "_tag",
-        tagLit: "Ok",
-        fields: [
-          { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
-        ],
-        span: builtinSpan,
-      },
-      {
-        name: "Err",
-        tagKey: "_tag",
-        tagLit: "Err",
-        fields: [
-          { name: Some("error") as Option<string>, fieldType: Ast.TyName("e", builtinSpan) },
-        ],
-        span: builtinSpan,
-      },
+      builtinCtor$("Ok", valueField$("value", "a")),
+      builtinCtor$("Err", valueField$("error", "e")),
     ],
   },
 ];

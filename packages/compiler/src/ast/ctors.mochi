@@ -48,51 +48,25 @@ export let keysOf = fields => fields->keysOfFrom(0)
 // carries no decl-level table); every consumer derives its projection —
 // registry arity, ctor schemes, runtime keys — from this array.
 let builtinSpan = { start: 0, end: 0 }
+let builtinCtor = (name, fields) =>
+  { name, fields, tagKey: "_tag", tagLit: name, span: builtinSpan }
+let valueField = (label, ty) =>
+  [{ name: Some(label), fieldType: Ast.TyName(ty, builtinSpan) }]
 export let builtinTypeDecls = [
   {
     name: "Option",
     params: ["a"],
     ctors: [
-      {
-        name: "Some",
-        tagKey: "_tag",
-        tagLit: "Some",
-        fields: [
-          { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
-        ],
-        span: builtinSpan
-      },
-      {
-        name: "None",
-        fields: [],
-        tagKey: "_tag",
-        tagLit: "None",
-        span: builtinSpan
-      }
+      builtinCtor("Some", valueField("value", "a")),
+      builtinCtor("None", [])
     ]
   },
   {
     name: "Result",
     params: ["a", "e"],
     ctors: [
-      {
-        name: "Ok",
-        tagKey: "_tag",
-        tagLit: "Ok",
-        fields: [
-          { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
-        ],
-        span: builtinSpan
-      },
-      {
-        name: "Err",
-        tagKey: "_tag",
-        tagLit: "Err",
-        fields: [
-          { name: Some("error"), fieldType: Ast.TyName("e", builtinSpan) }
-        ],
-        span: builtinSpan
-      }
+      builtinCtor("Ok", valueField("value", "a")),
+      builtinCtor("Err", valueField("error", "e"))
     ]
   }
 ]
@@ -201,11 +175,8 @@ export let exportedRegistry = stmts => stmts->exportedRegLoop(0, emptyRegistry)
 
 // --- ctor keys (codegen's projection: runtime destructure keys) ---
 
-// A ctor with a custom discriminant (ADR 0156) publishes `[key, literal]` under
-// `@tag:<ctor>` in the same registry, so every consumer of the field keys —
-// imports included — sees it with no extra plumbing. `@` cannot start an
-// identifier, so the entry never collides with a ctor. Default ctors carry no
-// entry (and clear a stale one), so unannotated code emits exactly as before.
+// A custom discriminant (ADR 0156) rides in the key registry as `[key, lit]` under
+// `@tag:<ctor>` (`@` cannot start an identifier); defaults add no entry.
 export let tagEntryOf = name => "@tag:${name}"
 
 let withTag = (m: Map<string, [string]>, name: string, tagKey: string, tagLit: string) =>

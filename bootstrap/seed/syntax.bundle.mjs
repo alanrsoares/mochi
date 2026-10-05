@@ -7873,7 +7873,11 @@ var primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
 var keysOfFrom = _curry8(2, (fields, i) => _Option_match7(_Array_get6(i, fields), () => [], (f) => _Array_prepend2(_Option_unwrapOr4(`_${show3(i)}`, f.name), keysOfFrom(fields, i + 1))));
 var keysOf = (fields) => keysOfFrom(fields, 0);
 var builtinSpan = { start: 0, end: 0 };
-var builtinTypeDecls = [{ name: "Option", params: ["a"], ctors: [{ name: "Some", tagKey: "_tag", tagLit: "Some", fields: [{ name: Some7("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "None", fields: [], tagKey: "_tag", tagLit: "None", span: builtinSpan }] }, { name: "Result", params: ["a", "e"], ctors: [{ name: "Ok", tagKey: "_tag", tagLit: "Ok", fields: [{ name: Some7("value"), fieldType: TyName("a", builtinSpan) }], span: builtinSpan }, { name: "Err", tagKey: "_tag", tagLit: "Err", fields: [{ name: Some7("error"), fieldType: TyName("e", builtinSpan) }], span: builtinSpan }] }];
+var builtinCtor$ = (name, fields) => ({ name, fields, tagKey: "_tag", tagLit: name, span: builtinSpan });
+var builtinCtor = _curry8(2, builtinCtor$);
+var valueField$ = (label, ty) => [{ name: Some7(label), fieldType: TyName(ty, builtinSpan) }];
+var valueField = _curry8(2, valueField$);
+var builtinTypeDecls = [{ name: "Option", params: ["a"], ctors: [builtinCtor$("Some", valueField$("value", "a")), builtinCtor$("None", [])] }, { name: "Result", params: ["a", "e"], ctors: [builtinCtor$("Ok", valueField$("value", "a")), builtinCtor$("Err", valueField$("error", "e"))] }];
 var declaresType$ = (stmts, i, name) => ((_v) => _v._tag === "None" ? false : _v._tag === "Some" && _v.value._tag === "SType" ? (({ value: { name: n } }) => eq5(n, name) ? true : declaresType$(stmts, i + 1, name))(_v) : _v._tag === "Some" ? declaresType$(stmts, i + 1, name) : (() => {
   throw new Error("non-exhaustive match");
 })())(_Array_get6(i, stmts));
