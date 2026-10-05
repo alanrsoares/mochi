@@ -111,6 +111,8 @@ an optional field is expected; the reverse is not
 ([ADR 0098](adr/0098-optional-record-fields-and-labeled-props.md) §1). JS emit
 leaves the field absent at runtime.
 
+A record alias can build on another with `...`: `type B = { ...A, extra: string }` has every field of `A` plus `extra`, and a field written later with the same name replaces the spread one. `A` may be applied (`...P<T>`) or qualified (`...M.A`) ([ADR 0154](adr/0154-record-type-spread.md)).
+
 ```mochi
 type Props = { id?: string, n: number }
 let ok : Props = { n: 1 }

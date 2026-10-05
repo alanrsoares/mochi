@@ -204,3 +204,13 @@ test("dropping a Key arm in the snake dispatch is a non-exhaustive error", async
   expect(msgs).toContain("non-exhaustive");
   expect(msgs).toContain("MoveLeft");
 });
+
+test("record type spread resolves an imported alias", async () => {
+  const dep = "export type A = { id: number, name: string }";
+  const ok =
+    'import * as M from "./ast.mochi"\ntype B = { ...M.A, extra: string }\nlet b: B = { id: 1, name: "a", extra: "e" }';
+  const bad =
+    'import * as M from "./ast.mochi"\ntype B = { ...M.A, extra: string }\nlet b: B = { name: "a", extra: "e" }';
+  expect(await moduleDiagnostics(ENTRY, ok, memRead({ [DEP]: dep }))).toHaveLength(0);
+  expect(await moduleDiagnostics(ENTRY, bad, memRead({ [DEP]: dep }))).toHaveLength(1);
+});

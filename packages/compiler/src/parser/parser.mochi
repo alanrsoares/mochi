@@ -1514,13 +1514,37 @@ let ctorsLoop = (toks, pos, acc) =>
 
 // `expectLabel`: a record type must be able to describe a host shape whose field
 // is spelled like a mochi keyword — `{ type: string }` (ADR 0077).
+//
+// `...A` splices another record alias's fields in (ADR 0154): the entry carries
+// the aliased type and no name, and a later field of the same name wins.
 let parseAliasField = (toks, pos) =>
-  let? (nm, p) = expectLabel(toks, pos) in
-  let optional = tokAt(toks, p).tok == TQuestion in
-  let p1 = optional ? p + 1 : p in
-  let? p2 = expectTok(TColon, toks, p1) in
-  let? (t, p3) = parseTypeExpr(toks, p2) in
-    Ok(({ name: nm.name, nameSpan: nm.span, fieldType: t, optional }, p3))
+  tokAt(toks, pos).tok == TSpread
+    ? let? (t, p) = parseTypeApp(toks, pos + 1) in
+      Ok((
+        {
+          name: "",
+          nameSpan: tySpan(t),
+          fieldType: t,
+          optional: false,
+          spread: true
+        },
+        p
+      ))
+    : let? (nm, p) = expectLabel(toks, pos) in
+    let optional = tokAt(toks, p).tok == TQuestion in
+    let p1 = optional ? p + 1 : p in
+    let? p2 = expectTok(TColon, toks, p1) in
+    let? (t, p3) = parseTypeExpr(toks, p2) in
+      Ok((
+        {
+          name: nm.name,
+          nameSpan: nm.span,
+          fieldType: t,
+          optional,
+          spread: false
+        },
+        p3
+      ))
 
 // The `{ x: T, y: U }` body of a transparent record alias.
 let parseAliasBody = (toks, pos) =>

@@ -26,13 +26,15 @@ let spanFields = [
     name: "start",
     nameSpan: sp,
     fieldType: Ast.TyName("number", sp),
-    optional: false
+    optional: false,
+    spread: false
   },
   {
     name: "end",
     nameSpan: sp,
     fieldType: Ast.TyName("number", sp),
-    optional: false
+    optional: false,
+    spread: false
   }
 ]
 let spanAlias = { params: [], fields: spanFields, expr: None }

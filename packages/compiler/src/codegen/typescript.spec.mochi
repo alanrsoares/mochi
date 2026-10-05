@@ -104,13 +104,15 @@ test("a record alias renders structurally", () =>
           name: "x",
           nameSpan: sp,
           fieldType: Ast.TyName("number", sp),
-          optional: false
+          optional: false,
+          spread: false
         },
         {
           name: "y",
           nameSpan: sp,
           fieldType: Ast.TyName("number", sp),
-          optional: false
+          optional: false,
+          spread: false
         }
       ],
       #{},
@@ -129,7 +131,8 @@ test("an optional alias field renders with ?", () =>
           name: "id",
           nameSpan: sp,
           fieldType: Ast.TyName("string", sp),
-          optional: true
+          optional: true,
+          spread: false
         }
       ],
       #{},
@@ -563,13 +566,15 @@ test("recordAliasIndex keys a nullary record alias by sorted shape", () =>
               name: "start",
               nameSpan: sp,
               fieldType: Ast.TyName("number", sp),
-              optional: false
+              optional: false,
+              spread: false
             },
             {
               name: "end",
               nameSpan: sp,
               fieldType: Ast.TyName("number", sp),
-              optional: false
+              optional: false,
+              spread: false
             }
           ],
           expr: None
@@ -591,7 +596,8 @@ test("recordAliasIndex skips a parameterised alias", () =>
               name: "value",
               nameSpan: sp,
               fieldType: Ast.TyName("a", sp),
-              optional: false
+              optional: false,
+              spread: false
             }
           ],
           expr: None
@@ -608,13 +614,15 @@ let spanAliases = #{
         name: "start",
         nameSpan: sp,
         fieldType: Ast.TyName("number", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "end",
         nameSpan: sp,
         fieldType: Ast.TyName("number", sp),
-        optional: false
+        optional: false,
+        spread: false
       }
     ],
     expr: None
@@ -626,7 +634,8 @@ let spanAliases = #{
         name: "value",
         nameSpan: sp,
         fieldType: Ast.TyName("a", sp),
-        optional: false
+        optional: false,
+        spread: false
       }
     ],
     expr: None
@@ -663,25 +672,29 @@ test("a parameterised local homonym does not print a dep's nullary name", () =>
         name: "tok",
         nameSpan: sp,
         fieldType: Ast.TyName("string", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "start",
         nameSpan: sp,
         fieldType: Ast.TyName("number", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "end",
         nameSpan: sp,
         fieldType: Ast.TyName("number", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "doc",
         nameSpan: sp,
         fieldType: Ast.TyApp("Option", [Ast.TyName("string", sp)], sp),
-        optional: false
+        optional: false,
+        spread: false
       }
     ],
     expr: None
@@ -738,19 +751,22 @@ test("a unique alias keeps a shape a duplicate name would blank", () =>
         name: "name",
         nameSpan: sp,
         fieldType: Ast.TyName("string", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "fieldType",
         nameSpan: sp,
         fieldType: Ast.TyName("TypeExpr", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "optional",
         nameSpan: sp,
         fieldType: Ast.TyName("bool", sp),
-        optional: false
+        optional: false,
+        spread: false
       }
     ],
     expr: None
@@ -763,19 +779,22 @@ test("a unique alias keeps a shape a duplicate name would blank", () =>
           name: "params",
           nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
-          optional: false
+          optional: false,
+          spread: false
         },
         {
           name: "fields",
           nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
-          optional: false
+          optional: false,
+          spread: false
         },
         {
           name: "expr",
           nameSpan: sp,
           fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
-          optional: false
+          optional: false,
+          spread: false
         }
       ],
       expr: None
@@ -812,19 +831,22 @@ test("the module that declares the duplicate alias still prints it", () =>
         name: "name",
         nameSpan: sp,
         fieldType: Ast.TyName("string", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "fieldType",
         nameSpan: sp,
         fieldType: Ast.TyName("TypeExpr", sp),
-        optional: false
+        optional: false,
+        spread: false
       },
       {
         name: "optional",
         nameSpan: sp,
         fieldType: Ast.TyName("bool", sp),
-        optional: false
+        optional: false,
+        spread: false
       }
     ],
     expr: None
@@ -837,19 +859,22 @@ test("the module that declares the duplicate alias still prints it", () =>
           name: "params",
           nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName("string", sp), sp),
-          optional: false
+          optional: false,
+          spread: false
         },
         {
           name: "fields",
           nameSpan: sp,
           fieldType: Ast.TyList(Ast.TyName(elem, sp), sp),
-          optional: false
+          optional: false,
+          spread: false
         },
         {
           name: "expr",
           nameSpan: sp,
           fieldType: Ast.TyApp("Option", [Ast.TyName("TypeExpr", sp)], sp),
-          optional: false
+          optional: false,
+          spread: false
         }
       ],
       expr: None

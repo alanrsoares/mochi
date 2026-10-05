@@ -1845,7 +1845,9 @@ let exprRawOf = (cts, e) => switch e {
 // --- statements --------------------------------------------------------------
 
 let aliasFieldText = (f: Ast.AliasField) =>
-  "${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}"
+  f.spread
+    ? "...${showTypeExpr(f.fieldType)}"
+    : "${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}"
 
 let ctorArms = (cts: Ctx, ctors, i) => switch Array.get(i, ctors) {
   | None => []

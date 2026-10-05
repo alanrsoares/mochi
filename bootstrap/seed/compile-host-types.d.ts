@@ -25,7 +25,13 @@ export type Row =
 export type SpanAt = { start: number; end: number };
 export type BinderSym = { kind: string; name: string; doc: Option<string> };
 export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
-export type AliasField = { name: string; nameSpan: Span; fieldType: TypeExpr; optional: boolean };
+export type AliasField = {
+  name: string;
+  nameSpan: Span;
+  fieldType: TypeExpr;
+  optional: boolean;
+  spread: boolean;
+};
 export type Span = { start: number; end: number };
 export type TypeExpr =
   | { _tag: "TyName"; name: string; span: Span }

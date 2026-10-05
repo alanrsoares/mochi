@@ -108,7 +108,7 @@ import {
   RowExtend,
   isUnit,
 } from "../infer/types";
-import { typeExprToType, collect, emptyVarSets } from "../infer/schemes";
+import { typeExprToType, collect, emptyVarSets, spreadRowInto } from "../infer/schemes";
 import { builtinTypeDecls, keysOf } from "../ast/ctors";
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "../infer/infer";
@@ -292,10 +292,12 @@ const aliasFieldsFrom$ = (
     _Array_get(i, fields),
     () => [] as string[],
     (f) =>
-      _Array_prepend(
-        `${f.name}${f.optional ? "?" : ""}: ${fieldTs$(f.fieldType, params, aliases, recs)}`,
-        aliasFieldsFrom$(fields, params, aliases, recs, i + 1),
-      ),
+      f.spread
+        ? aliasFieldsFrom$(fields, params, aliases, recs, i + 1)
+        : _Array_prepend(
+            `${f.name}${f.optional ? "?" : ""}: ${fieldTs$(f.fieldType, params, aliases, recs)}`,
+            aliasFieldsFrom$(fields, params, aliases, recs, i + 1),
+          ),
   );
 const aliasFieldsFrom: _Curry<
   [
@@ -307,6 +309,116 @@ const aliasFieldsFrom: _Curry<
   ],
   string[]
 > = _curry(5, aliasFieldsFrom$);
+const spreadLabelsOf$ = (
+  te: TypeExpr,
+  params: string[],
+  aliases: Map<string, AliasInfo>,
+): string[] =>
+  (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => {
+    const $match = t;
+    switch ($match._tag) {
+      case "TyRecord": {
+        const { row } = $match;
+        return rowLabelsOf$(row, [] as string[]);
+      }
+      default: {
+        return [] as string[];
+      }
+    }
+  })(
+    typeExprToType(
+      te,
+      paramVarsFrom(params, 0),
+      mkSt(length(params)),
+      aliases,
+      _Set_fromArray([] as string[]),
+    ),
+  );
+/**
+ * Labels a `...A` spread brings in — its record row's, as inference sees them.
+ */
+const spreadLabelsOf: _Curry<
+  [te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>],
+  string[]
+> = _curry(3, spreadLabelsOf$);
+const rowLabelsOf$ = (row: Row, acc: string[]): string[] => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { label: l, rest } = $match;
+      return rowLabelsOf$(rest, _Array_append(l, acc));
+    }
+    default: {
+      return acc;
+    }
+  }
+};
+const rowLabelsOf: _Curry<[row: Row, acc: string[]], string[]> = _curry(2, rowLabelsOf$);
+const laterLabelsFrom$ = (
+  fields: AliasField[],
+  params: string[],
+  aliases: Map<string, AliasInfo>,
+  i: number,
+): string[] =>
+  _Option_match(
+    _Array_get(i, fields),
+    () => [] as string[],
+    (f) =>
+      _Array_concat(
+        f.spread ? spreadLabelsOf$(f.fieldType, params, aliases) : [f.name],
+        laterLabelsFrom$(fields, params, aliases, i + 1),
+      ),
+  );
+/**
+ * Labels written after spread `i` — they override it (ADR 0154), so the TS
+ * intersection must not also demand the spread's own, possibly differing, type.
+ */
+const laterLabelsFrom: _Curry<
+  [fields: AliasField[], params: string[], aliases: Map<string, AliasInfo>, i: number],
+  string[]
+> = _curry(4, laterLabelsFrom$);
+const spreadPartsFrom$ = (
+  fields: AliasField[],
+  params: string[],
+  aliases: Map<string, AliasInfo>,
+  recs: Map<string, string>,
+  i: number,
+): string[] =>
+  _Option_match(
+    _Array_get(i, fields),
+    () => [] as string[],
+    (f) => {
+      const rest: string[] = spreadPartsFrom$(fields, params, aliases, recs, i + 1);
+      return f.spread
+        ? ((own: string) =>
+            ((shadowed: string[]) =>
+              _Array_prepend(
+                length(shadowed) === 0
+                  ? own
+                  : `Omit<${own}, ${_Str_join(
+                      " | ",
+                      map((l: string) => `"${l}"`, shadowed),
+                    )}>`,
+                rest,
+              ))(
+              filter(
+                (l: string) => _Array_contains(l, laterLabelsFrom$(fields, params, aliases, i + 1)),
+                spreadLabelsOf$(f.fieldType, params, aliases),
+              ),
+            ))(fieldTs$(f.fieldType, params, aliases, recs))
+        : rest;
+    },
+  );
+const spreadPartsFrom: _Curry<
+  [
+    fields: AliasField[],
+    params: string[],
+    aliases: Map<string, AliasInfo>,
+    recs: Map<string, string>,
+    i: number,
+  ],
+  string[]
+> = _curry(5, spreadPartsFrom$);
 const recordAliasDecl$ = (
   name: string,
   params: string[],
@@ -316,13 +428,19 @@ const recordAliasDecl$ = (
 ): string => {
   const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
   const body: string[] = aliasFieldsFrom$(fields, params, aliases, recs, 0);
-  return length(body) === 0
-    ? `export type ${head} = {};`
-    : `export type ${head} = { ${_Str_join("; ", body)} };`;
+  const spreads: string[] = spreadPartsFrom$(fields, params, aliases, recs, 0);
+  const own: string[] =
+    length(body) === 0
+      ? length(spreads) === 0
+        ? ["{}"]
+        : ([] as string[])
+      : [`{ ${_Str_join("; ", body)} }`];
+  return `export type ${head} = ${_Str_join(" & ", _Array_concat(spreads, own))};`;
 };
 /**
  * A record alias (`type Point = { x: number, y: number }`) -> an exported
- * object type. Structural, so it renders through the same `tsOf` encoder.
+ * object type. Structural, so it renders through the same `tsOf` encoder. A
+ * `...A` spread becomes an intersection member ahead of the object literal.
  */
 export const recordAliasDecl: _Curry<
   [
@@ -1192,7 +1310,9 @@ const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: n
     () => RowEmpty as Row,
     (f) =>
       (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-        RowExtend(f.name, t, f.optional, aliasRowOf$(fields, aliases, i + 1)))(
+        f.spread
+          ? spreadRowInto(t, aliasRowOf$(fields, aliases, i + 1))
+          : RowExtend(f.name, t, f.optional, aliasRowOf$(fields, aliases, i + 1)))(
         typeExprToType(
           f.fieldType,
           new Map<string, Ty>(),

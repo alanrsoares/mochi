@@ -87,7 +87,13 @@ export type TypeExpr =
   | { _tag: "TyUnion"; members: TypeExpr[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
 export type Ctor = { name: string; fields: CtorField[]; span: Span };
-export type AliasField = { name: string; nameSpan: Span; fieldType: TypeExpr; optional: boolean };
+export type AliasField = {
+  name: string;
+  nameSpan: Span;
+  fieldType: TypeExpr;
+  optional: boolean;
+  spread: boolean;
+};
 export type Stmt =
   | {
       _tag: "SLet";

@@ -80,7 +80,8 @@ let boxAlias = {
       name: "value",
       nameSpan: sp,
       fieldType: Ast.TyName("a", sp),
-      optional: false
+      optional: false,
+      spread: false
     }
   ],
   expr: None

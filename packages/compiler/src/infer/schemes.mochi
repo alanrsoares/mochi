@@ -437,6 +437,25 @@ let aliasLocalVarsFrom = (params, args, st: Types.St) => switch params {
     }
 }
 
+let rowHasLabel = (label, row) => switch row {
+  | RowExtend(l, _, _, rest) => l == label || rowHasLabel(label, rest)
+  | _ => false
+}
+
+/// `...A` (ADR 0154): put a spread record's fields ahead of `rest`, dropping
+/// any a later field of the same name overrides. A non-record spread (an open
+/// row, a variant, an unknown name) contributes nothing.
+export let spreadRowInto = (spread, rest) => switch spread {
+  | TyRecord(row) => spreadFieldsInto(row, rest)
+  | _ => rest
+}
+let spreadFieldsInto = (row, rest) => switch row {
+  | RowExtend(l, t, o, tail) => rowHasLabel(l, rest)
+      ? spreadFieldsInto(tail, rest)
+      : RowExtend(l, t, o, spreadFieldsInto(tail, rest))
+  | _ => rest
+}
+
 let aliasFieldsFrom = (fields: [Ast.AliasField], vars, st: Types.St, aliases: Map<string, AliasInfo>, expanding) => switch fields {
   | [] => (RowEmpty, st)
   | [fld, ...rest] => let (ft, vars1, st1) = typeExprToType(
@@ -453,7 +472,9 @@ let aliasFieldsFrom = (fields: [Ast.AliasField], vars, st: Types.St, aliases: Ma
       aliases,
       expanding
     ) in
-      (rField(fld.name, ft, restRow, fld.optional), st2)
+      fld.spread
+        ? (spreadRowInto(ft, restRow), st2)
+        : (rField(fld.name, ft, restRow, fld.optional), st2)
 }
 
 /// Expand a record alias to its structural row. `args` binds its type params
@@ -597,12 +618,14 @@ let templateRowFrom = (fields: [Ast.AliasField], vars, aliases: Map<string, Alia
       aliases,
       Set.fromArray([])
     ) in
-      RowExtend(
-        f.name,
-        t,
-        f.optional,
-        templateRowFrom(fields, vars, aliases, i + 1)
-      )
+      f.spread
+        ? spreadRowInto(t, templateRowFrom(fields, vars, aliases, i + 1))
+        : RowExtend(
+          f.name,
+          t,
+          f.optional,
+          templateRowFrom(fields, vars, aliases, i + 1)
+        )
 }
 
 /// Template ids sit far below the inferrer's (which start at 1000), so a

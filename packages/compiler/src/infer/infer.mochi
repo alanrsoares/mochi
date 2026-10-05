@@ -2220,7 +2220,8 @@ let qualifyField = (fld, alias, from) =>
     name: fld.name,
     nameSpan: fld.nameSpan,
     fieldType: qualifyTe(fld.fieldType, alias, from),
-    optional: fld.optional
+    optional: fld.optional,
+    spread: fld.spread
   }
 
 let qualifyInfo = (info, alias, from) =>
@@ -2402,7 +2403,8 @@ type QualAliasField = {
   name: string,
   nameSpan: Ast.Span,
   fieldType: Ast.TypeExpr,
-  optional: bool
+  optional: bool,
+  spread: bool
 }
 
 type QualAliasInfo = {

@@ -424,6 +424,7 @@ const qualScopeOf: <A, B, C>(
         {
           expr: Option<TypeExpr>;
           fields: ({
+            spread: boolean;
             optional: boolean;
             fieldType: TypeExpr;
             nameSpan: SpanAt;
@@ -446,6 +447,7 @@ const qualScopeOf: <A, B, C>(
           {
             expr: Option<TypeExpr>;
             fields: ({
+              spread: boolean;
               optional: boolean;
               fieldType: TypeExpr;
               nameSpan: SpanAt;
@@ -1981,6 +1983,7 @@ const addDupMarkers: <A, B, E>(
                     name: string;
                     nameSpan: { end: number; start: number };
                     optional: boolean;
+                    spread: boolean;
                   }[],
                   expr: None,
                 },
