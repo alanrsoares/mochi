@@ -78,6 +78,8 @@ import {
   _compareRecords,
   _compareSortedKeys,
   _curry,
+  _keyOf,
+  _setAdd,
   add,
   and,
   compare,

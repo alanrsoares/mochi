@@ -36,6 +36,8 @@ export const UNTYPED_BY_HM: readonly string[] = [
   "_curry",
   "_dictFrom",
   "_dictHas",
+  "_keyOf",
+  "_setAdd",
   "_Dict_empty",
 ];
 

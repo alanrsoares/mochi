@@ -44,6 +44,8 @@ import {
   _Str_codeAt,
   _Str_split,
   _curry,
+  _keyOf,
+  _setAdd,
   _tuple,
   add,
   and,

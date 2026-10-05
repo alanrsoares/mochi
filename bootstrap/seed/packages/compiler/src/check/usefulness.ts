@@ -60,6 +60,7 @@ import {
   _Str_endsWith,
   _Str_join,
   _curry,
+  _keyOf,
   add,
   and,
   eq,

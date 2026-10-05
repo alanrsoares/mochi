@@ -58,6 +58,7 @@ import {
   _Str_startsWith,
   _Str_trim,
   _curry,
+  _keyOf,
   _tuple,
   and,
   eq,

@@ -21,6 +21,7 @@ import {
   _Result_map,
   _curry,
   _done,
+  _keyOf,
   _recur,
   eq,
   filter,
