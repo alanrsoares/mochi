@@ -318,6 +318,7 @@ Combinators are data-last under `Task.*` and compose with `|>`
 | `Task.match` | `(A -> C) -> (E -> C) -> Task<A, E> -> Task<C, F>` | fold both tracks, stays a `Task` |
 | `Task.delay` | `number -> A -> Task<A, E>` | sleep then yield (`_curry`-safe) |
 | `Task.run` | `Task<A, E> -> Promise<Result<A, E>>` | kick-off at the JS edge |
+| `Task.runWith` | `AbortSignal -> Task<A, E> -> Promise<Result<A, E>>` | kick-off with a cancellation signal (ADR 0155) |
 | `Task.all` | `[Task<A, E>] -> Task<[A], E>` | fan-out, fail-fast, input-ordered |
 | `Task.race` | `[Task<A, E>] -> Task<A, E>` | first to **settle** (`Ok` or `Err`) |
 | `Task.traverse` | `(A -> Task<B, E>) -> [A] -> Task<[B], E>` | `all` after `map` (`_curry`-safe) |
@@ -341,10 +342,11 @@ runs that end to end against a failing host: string failures map onto a domain
 `ApiError`, a 404 is recovered, and an unreachable host still settles as `Err`.
 
 Fan-out is [ADR 0074](adr/0074-task-fan-out.md). `Task.all` settles `Err` on the *first*
-error rather than waiting for the rest, and results keep **input** order. mochi has no
-cancellation, so tasks still in flight are **abandoned**: their host effects run to
-completion and their results are dropped — if a failure must stop later writes, the
-program has to arrange that itself. `Task.race` races *settlement*, so the first `Err`
+error rather than waiting for the rest, and results keep **input** order. Cancellation is
+cooperative ([ADR 0155](adr/0155-task-cooperative-cancellation.md)): `Task.all`/`race` abort
+their children's `AbortSignal` when they settle, and `Task.runWith(signal)` supplies one. A
+host effect that ignores the signal is still **abandoned**: it runs to completion and its
+result is dropped. `Task.race` races *settlement*, so the first `Err`
 wins as readily as the first `Ok`, and `race([])` never settles (like `Promise.race([])`).
 Combining tasks needs one error type: `mapErr` first.
 

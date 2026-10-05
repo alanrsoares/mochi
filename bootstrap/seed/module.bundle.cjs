@@ -21100,6 +21100,51 @@ var _namespaces = {
         ]
       }
     },
+    runWith: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "AbortSignal",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Task",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            },
+            {
+              _tag: "TyVar",
+              id: 2
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Promise",
+          args: [
+            {
+              _tag: "TyCon",
+              name: "Result",
+              args: [
+                {
+                  _tag: "TyVar",
+                  id: 0
+                },
+                {
+                  _tag: "TyVar",
+                  id: 2
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
     all: {
       _tag: "TyFn",
       from: {
@@ -21694,6 +21739,7 @@ var _namespaceRuntime = {
     match: "_Task_match",
     delay: "_Task_delay",
     run: "_Task_run",
+    runWith: "_Task_runWith",
     all: "_Task_all",
     race: "_Task_race",
     traverse: "_Task_traverse"
@@ -22243,15 +22289,24 @@ var _preludeJsDefs = {
 };`,
   _Task_of: "const _Task_of = (x) => () => Promise.resolve(Ok(x));",
   _Task_fail: "const _Task_fail = (e) => () => Promise.resolve(Err(e));",
-  _Task_map: 'const _Task_map = _curry(2, (f, t) => () => t().then((r) => r._tag === "Ok" ? Ok(f(r.value)) : r));',
-  _Task_mapErr: 'const _Task_mapErr = _curry(2, (f, t) => () => t().then((r) => r._tag === "Err" ? Err(f(r.error)) : r));',
-  _Task_andThen: 'const _Task_andThen = _curry(2, (f, t) => () => t().then((r) => r._tag === "Ok" ? f(r.value)() : r));',
-  _Task_recover: 'const _Task_recover = _curry(2, (f, t) => () => t().then((r) => r._tag === "Err" ? f(r.error)() : r));',
+  _Task_map: 'const _Task_map = _curry(2, (f, t) => (signal) => t(signal).then((r) => r._tag === "Ok" ? Ok(f(r.value)) : r));',
+  _Task_mapErr: 'const _Task_mapErr = _curry(2, (f, t) => (signal) => t(signal).then((r) => r._tag === "Err" ? Err(f(r.error)) : r));',
+  _Task_andThen: 'const _Task_andThen = _curry(2, (f, t) => (signal) => t(signal).then((r) => r._tag === "Ok" ? f(r.value)(signal) : r));',
+  _Task_recover: 'const _Task_recover = _curry(2, (f, t) => (signal) => t(signal).then((r) => r._tag === "Err" ? f(r.error)(signal) : r));',
   _Task_fromResult: "const _Task_fromResult = (r) => () => Promise.resolve(r);",
-  _Task_match: 'const _Task_match = _curry(3, (onOk, onErr, t) => () => t().then((r) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))));',
-  _Task_delay: "const _Task_delay = _curry(2, (ms, x) => () => new Promise((res) => setTimeout(() => res(Ok(x)), ms)));",
+  _Task_match: 'const _Task_match = _curry(3, (onOk, onErr, t) => (signal) => t(signal).then((r) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))));',
+  _Task_delay: `const _Task_delay = _curry(2, (ms, x) => (signal) => new Promise((res) => {
+  if (signal?.aborted)
+    return;
+  const id = setTimeout(() => res(Ok(x)), ms);
+  signal?.addEventListener("abort", () => clearTimeout(id), { once: true });
+}));`,
   _Task_run: "const _Task_run = (t) => t();",
-  _Task_all: `const _Task_all = (ts) => () => new Promise((res) => {
+  _Task_all: `const _Task_all = (ts) => (signal) => new Promise((res) => {
+  const ctl = new AbortController;
+  if (signal?.aborted)
+    ctl.abort();
+  signal?.addEventListener("abort", () => ctl.abort(), { once: true });
   const out = new Array(ts.length);
   let left = ts.length;
   let settled = false;
@@ -22260,11 +22315,12 @@ var _preludeJsDefs = {
     return;
   }
   ts.forEach((t, i) => {
-    t().then((r) => {
+    t(ctl.signal).then((r) => {
       if (settled)
         return;
       if (r._tag === "Err") {
         settled = true;
+        ctl.abort();
         res(r);
         return;
       }
@@ -22277,17 +22333,23 @@ var _preludeJsDefs = {
     });
   });
 });`,
-  _Task_race: `const _Task_race = (ts) => () => new Promise((res) => {
+  _Task_race: `const _Task_race = (ts) => (signal) => new Promise((res) => {
+  const ctl = new AbortController;
+  if (signal?.aborted)
+    ctl.abort();
+  signal?.addEventListener("abort", () => ctl.abort(), { once: true });
   let settled = false;
   ts.forEach((t) => {
-    t().then((r) => {
+    t(ctl.signal).then((r) => {
       if (settled)
         return;
       settled = true;
+      ctl.abort();
       res(r);
     });
   });
 });`,
+  _Task_runWith: "const _Task_runWith = _curry(2, (signal, t) => t(signal));",
   _Task_traverse: "const _Task_traverse = _curry(2, (f, xs) => _Task_all(xs.map(f)));"
 };
 var _runtimeDeps = {
@@ -22690,6 +22752,9 @@ var _runtimeDeps = {
   ],
   _Task_all: [
     "Ok"
+  ],
+  _Task_runWith: [
+    "_curry"
   ],
   _Task_traverse: [
     "_curry",
