@@ -837,3 +837,28 @@ export type Point = { x: number, y: number }`;
   expect(targets.dts).toContain("/**\n * Add two integers.\n */\nexport declare const addInt");
   expect(targets.dts).toContain("/**\n * Point in 2D space.\n */\nexport type Point =");
 });
+
+test("Map/Set resolve composite keys structurally (ADR 0152)", () => {
+  const src = `let m = Map.empty |> Map.set((1, 2), "a") |> Map.set((1, 2), "b") |> Map.set((3, 4), "c")
+let s = Set.fromArray([[1], [1], [2]]) |> Set.add([2]) |> Set.add([3])
+let out = (
+  Map.size(m),
+  Map.get((1, 2), m),
+  Map.getOr("z", (9, 9), m),
+  Map.has((3, 4), Map.delete((3, 4), m)),
+  Set.size(s),
+  Set.has([3], s),
+  Set.size(Set.union(s, Set.fromArray([[1], [7]]))),
+  Set.size(Set.diff(s, Set.fromArray([[1]])))
+)`;
+  expect(compileAndEval(src, "out")).toEqual([
+    2,
+    { _tag: "Some", value: "b" },
+    "z",
+    false,
+    3,
+    true,
+    4,
+    2,
+  ]);
+});

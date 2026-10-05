@@ -22,7 +22,10 @@ import {
   _Set_add,
   _Set_fromArray,
   _curry,
+  _keyOf,
+  _setAdd,
   add,
+  eq,
 } from "@mochi/compiler/runtime";
 
 import { match } from "@onrails/pattern";

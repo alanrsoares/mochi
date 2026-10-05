@@ -14518,35 +14518,60 @@ var _preludeJsDefs = {
   for (const x of xs)
     yield* f(x);
 }));`,
-  _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(x));",
-  _Set_add: "const _Set_add = _curry(2, (x, s) => new Set(s).add(x));",
+  _keyOf: `const _keyOf = (c, k) => {
+  if (k === null || typeof k !== "object" || c.has(k))
+    return k;
+  for (const x of c.keys())
+    if (eq(k, x))
+      return x;
+  return k;
+};`,
+  _setAdd: "const _setAdd = (s, x) => s.add(_keyOf(s, x));",
+  _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(_keyOf(s, x)));",
+  _Set_add: "const _Set_add = _curry(2, (x, s) => _setAdd(new Set(s), x));",
   _Set_delete: `const _Set_delete = _curry(2, (x, s) => {
   const n = new Set(s);
-  n.delete(x);
+  n.delete(_keyOf(s, x));
   return n;
 });`,
   _Set_size: "const _Set_size = (s) => s.size;",
   _Set_toArray: "const _Set_toArray = (s) => [...s];",
-  _Set_fromArray: "const _Set_fromArray = (xs) => new Set(xs);",
-  _Set_union: "const _Set_union = _curry(2, (a, b) => new Set([...a, ...b]));",
-  _Set_intersect: "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(x))));",
-  _Set_diff: "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(x))));",
-  _Map_has: "const _Map_has = _curry(2, (k, m) => m.has(k));",
-  _Map_getOr: "const _Map_getOr = _curry(3, (d, k, m) => m.has(k) ? m.get(k) : d);",
+  _Set_fromArray: `const _Set_fromArray = (xs) => {
+  const n = new Set;
+  for (const x of xs)
+    _setAdd(n, x);
+  return n;
+};`,
+  _Set_union: `const _Set_union = _curry(2, (a, b) => {
+  const n = new Set(a);
+  for (const x of b)
+    _setAdd(n, x);
+  return n;
+});`,
+  _Set_intersect: "const _Set_intersect = _curry(2, (a, b) => new Set([...a].filter((x) => b.has(_keyOf(b, x)))));",
+  _Set_diff: "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(_keyOf(b, x)))));",
+  _Map_has: "const _Map_has = _curry(2, (k, m) => m.has(_keyOf(m, k)));",
+  _Map_getOr: `const _Map_getOr = _curry(3, (d, k, m) => {
+  const key = _keyOf(m, k);
+  return m.has(key) ? m.get(key) : d;
+});`,
   _Map_set: `const _Map_set = _curry(3, (k, v, m) => {
   const n = new Map(m);
-  n.set(k, v);
+  n.set(_keyOf(m, k), v);
   return n;
 });`,
   _Map_delete: `const _Map_delete = _curry(2, (k, m) => {
   const n = new Map(m);
-  n.delete(k);
+  n.delete(_keyOf(m, k));
   return n;
 });`,
   _Map_size: "const _Map_size = (m) => m.size;",
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
-  _Map_get: "const _Map_get = _curry(2, (k, m) => m.has(k) ? Some(m.get(k)) : None);",
+  _Map_get: `const _Map_get = _curry(2, (k, m) => {
+  const key = _keyOf(m, k);
+  return m.has(key) ? Some(m.get(key)) : None;
+});`,
   _dictFrom: `const _dictFrom = (entries) => {
   const d = Object.create(null);
   for (const [k, v] of entries)
@@ -14839,40 +14864,60 @@ var _runtimeDeps = {
     "_list",
     "_curry"
   ],
+  _keyOf: [
+    "eq"
+  ],
+  _setAdd: [
+    "_keyOf"
+  ],
   _Set_has: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Set_add: [
-    "_curry"
+    "_curry",
+    "_setAdd"
   ],
   _Set_delete: [
-    "_curry"
+    "_curry",
+    "_keyOf"
+  ],
+  _Set_fromArray: [
+    "_setAdd"
   ],
   _Set_union: [
-    "_curry"
+    "_curry",
+    "_setAdd"
   ],
   _Set_intersect: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Set_diff: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Map_has: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Map_getOr: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Map_set: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Map_delete: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _Map_get: [
     "_curry",
     "Some",
-    "None"
+    "None",
+    "_keyOf"
   ],
   _Dict_has: [
     "_curry",

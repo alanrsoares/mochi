@@ -85,6 +85,7 @@ import {
   _Result_match,
   _Str_join,
   _curry,
+  _keyOf,
   _tuple,
   and,
   eq,

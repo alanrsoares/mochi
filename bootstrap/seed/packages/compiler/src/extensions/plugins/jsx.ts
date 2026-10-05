@@ -43,6 +43,7 @@ import {
   _Str_split,
   _Str_startsWith,
   _curry,
+  _keyOf,
   _tuple,
   and,
   eq,

@@ -13,8 +13,12 @@ import {
   _Dict_remove,
   _Dict_set,
   _Dict_size,
+  _Map_get,
+  _Map_set,
   _Option_match,
   _Result_match,
+  _Set_fromArray,
+  _Set_size,
   add,
   compare,
   eq,
@@ -310,4 +314,20 @@ test("Dict ops are immutable and prototype-safe", () => {
 test("show renders Dicts as plain data, never as variants", () => {
   expect(show(_Dict_empty)).toBe("{}");
   expect(show(_Dict_set("_tag", "x", _Dict_empty))).toBe('{ _tag: "x" }');
+});
+
+test("Map/Set treat eq object keys as one key; primitives and identity unchanged", () => {
+  fc.assert(
+    fc.property(fc.array(fc.tuple(fc.integer(), fc.integer())), (pairs) => {
+      const distinct = new Set(pairs.map(([a, b]) => `${a},${b}`)).size;
+      expect(_Set_size(_Set_fromArray(pairs.map(([a, b]) => [a, b])))).toBe(distinct);
+      const m = pairs.reduce(
+        (acc: Map<number[], number>, [a, b], i) => _Map_set([a, b], i, acc),
+        new Map(),
+      );
+      expect(m.size).toBe(distinct);
+      for (const [a, b] of pairs) expect(_Map_get([a, b], m)._tag).toBe("Some");
+    }),
+  );
+  expect(_Set_size(_Set_fromArray([1, 1, 2]))).toBe(2);
 });

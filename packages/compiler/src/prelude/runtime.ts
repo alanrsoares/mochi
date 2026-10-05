@@ -520,43 +520,62 @@ export const _List_flatMap: {
     for (const x of xs) yield* f(x);
   }),
 );
+// Structural keys (ADR 0152): primitives keep native SameValueZero lookup; an
+// object key resolves to the stored key it `eq`s (linear scan), else itself.
+export const _keyOf = (c: any, k: any): any => {
+  if (k === null || typeof k !== "object" || c.has(k)) return k;
+  for (const x of c.keys()) if (eq(k, x)) return x;
+  return k;
+};
+export const _setAdd = (s: Set<any>, x: any): Set<any> => s.add(_keyOf(s, x));
 export const _Set_has: { <A>(a: A): (b: Set<A>) => boolean; <A>(a: A, b: Set<A>): boolean } =
-  _curry(2, (x: any, s: any) => s.has(x));
+  _curry(2, (x: any, s: any) => s.has(_keyOf(s, x)));
 export const _Set_add: { <A>(a: A): (b: Set<A>) => Set<A>; <A>(a: A, b: Set<A>): Set<A> } = _curry(
   2,
-  (x: any, s: any) => new Set(s).add(x),
+  (x: any, s: any) => _setAdd(new Set(s), x),
 );
 export const _Set_delete: { <A>(a: A): (b: Set<A>) => Set<A>; <A>(a: A, b: Set<A>): Set<A> } =
   _curry(2, (x: any, s: any) => {
     const n = new Set(s);
-    n.delete(x);
+    n.delete(_keyOf(s, x));
     return n;
   });
 export const _Set_size: <A>(a: Set<A>) => number = (s: any) => s.size;
 export const _Set_toArray: <A>(a: Set<A>) => A[] = (s: any) => [...s];
-export const _Set_fromArray: <A>(a: A[]) => Set<A> = (xs: any) => new Set(xs);
+export const _Set_fromArray: <A>(a: A[]) => Set<A> = (xs: any) => {
+  const n = new Set<any>();
+  for (const x of xs) _setAdd(n, x);
+  return n;
+};
 export const _Set_union: {
   <A>(a: Set<A>): (b: Set<A>) => Set<A>;
   <A>(a: Set<A>, b: Set<A>): Set<A>;
-} = _curry(2, (a: any, b: any) => new Set([...a, ...b]));
+} = _curry(2, (a: any, b: any) => {
+  const n = new Set<any>(a);
+  for (const x of b) _setAdd(n, x);
+  return n;
+});
 export const _Set_intersect: {
   <A>(a: Set<A>): (b: Set<A>) => Set<A>;
   <A>(a: Set<A>, b: Set<A>): Set<A>;
-} = _curry(2, (a: any, b: any) => new Set([...a].filter((x: any) => b.has(x))));
+} = _curry(2, (a: any, b: any) => new Set([...a].filter((x: any) => b.has(_keyOf(b, x)))));
 export const _Set_diff: {
   <A>(a: Set<A>): (b: Set<A>) => Set<A>;
   <A>(a: Set<A>, b: Set<A>): Set<A>;
-} = _curry(2, (a: any, b: any) => new Set([...a].filter((x: any) => !b.has(x))));
+} = _curry(2, (a: any, b: any) => new Set([...a].filter((x: any) => !b.has(_keyOf(b, x)))));
 export const _Map_has: {
   <A, B>(a: A): (b: Map<A, B>) => boolean;
   <A, B>(a: A, b: Map<A, B>): boolean;
-} = _curry(2, (k: any, m: any) => m.has(k));
+} = _curry(2, (k: any, m: any) => m.has(_keyOf(m, k)));
 export const _Map_getOr: {
   <A, B>(a: A): (b: B) => (c: Map<B, A>) => A;
   <A, B>(a: A): (b: B, c: Map<B, A>) => A;
   <A, B>(a: A, b: B): (c: Map<B, A>) => A;
   <A, B>(a: A, b: B, c: Map<B, A>): A;
-} = _curry(3, (d: any, k: any, m: any) => (m.has(k) ? m.get(k) : d));
+} = _curry(3, (d: any, k: any, m: any) => {
+  const key = _keyOf(m, k);
+  return m.has(key) ? m.get(key) : d;
+});
 export const _Map_set: {
   <A, B>(a: A): (b: B) => (c: Map<A, B>) => Map<A, B>;
   <A, B>(a: A): (b: B, c: Map<A, B>) => Map<A, B>;
@@ -564,7 +583,7 @@ export const _Map_set: {
   <A, B>(a: A, b: B, c: Map<A, B>): Map<A, B>;
 } = _curry(3, (k: any, v: any, m: any) => {
   const n = new Map(m);
-  n.set(k, v);
+  n.set(_keyOf(m, k), v);
   return n;
 });
 export const _Map_delete: {
@@ -572,7 +591,7 @@ export const _Map_delete: {
   <A, B>(a: A, b: Map<A, B>): Map<A, B>;
 } = _curry(2, (k: any, m: any) => {
   const n = new Map(m);
-  n.delete(k);
+  n.delete(_keyOf(m, k));
   return n;
 });
 export const _Map_size: <A, B>(a: Map<A, B>) => number = (m: any) => m.size;
@@ -581,7 +600,10 @@ export const _Map_values: <A, B>(a: Map<A, B>) => B[] = (m: any) => [...m.values
 export const _Map_get: {
   <A, B>(a: A): (b: Map<A, B>) => Option<B>;
   <A, B>(a: A, b: Map<A, B>): Option<B>;
-} = _curry(2, (k: any, m: any) => (m.has(k) ? Some(m.get(k)) : None));
+} = _curry(2, (k: any, m: any) => {
+  const key = _keyOf(m, k);
+  return m.has(key) ? Some(m.get(key)) : None;
+});
 export const _dictFrom = <A>(entries: Iterable<readonly [string, A]>): Record<string, A> => {
   const d: Record<string, A> = Object.create(null);
   for (const [k, v] of entries) d[k] = v;

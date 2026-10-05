@@ -48,6 +48,8 @@ import {
   _compareRecords,
   _compareSortedKeys,
   _curry,
+  _keyOf,
+  _setAdd,
   _tuple,
   add,
   and,

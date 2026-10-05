@@ -44,6 +44,8 @@ import {
   _Str_slice,
   _Str_startsWith,
   _curry,
+  _keyOf,
+  _setAdd,
   add,
   and,
   gt,
