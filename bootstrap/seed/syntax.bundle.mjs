@@ -7863,10 +7863,10 @@ var jsxPlugin = { name: "jsx", parse: Some6(parseJsxAtom), inferCall: Some6(infe
 import { Err as Err5, None as None9, Ok as Ok5, Some as Some9, _Array_get as _Array_get8, _Option_match as _Option_match9, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _curry as _curry10, _tuple as _tuple6, and as and8, eq as eq7, length as length7 } from "@mochi/compiler/runtime";
 import { match as match4 } from "@onrails/pattern";
 
-import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get4, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_match as _Option_match8, _Option_unwrapOr as _Option_unwrapOr5, _Set_add, _Set_diff, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt3, _Str_split as _Str_split4, _curry as _curry9, _tuple as _tuple5, and as and7, eq as eq6, filter as filter2, length as length6, map as map4, or as or6, reduce as reduce2 } from "@mochi/compiler/runtime";
+import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get4, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_match as _Option_match8, _Option_unwrapOr as _Option_unwrapOr5, _Set_add, _Set_diff, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt3, _Str_split as _Str_split5, _curry as _curry9, _tuple as _tuple5, and as and7, eq as eq6, filter as filter2, length as length6, map as map4, or as or6, reduce as reduce2 } from "@mochi/compiler/runtime";
 import { match as match3 } from "@onrails/pattern";
 
-import { Err as Err4, Ok as Ok4, Some as Some7, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Map_delete, _Map_get as _Map_get3, _Map_has, _Map_set as _Map_set2, _Option_match as _Option_match7, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _curry as _curry8, _done as _done4, _recur as _recur4, _tuple as _tuple4, and as and6, eq as eq5, filter, length as length5, map as map3, show as show3 } from "@mochi/compiler/runtime";
+import { Err as Err4, Ok as Ok4, Some as Some7, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Map_delete, _Map_get as _Map_get3, _Map_has, _Map_set as _Map_set2, _Option_match as _Option_match7, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _Str_split as _Str_split4, _curry as _curry8, _done as _done4, _recur as _recur4, _tuple as _tuple4, and as and6, eq as eq5, filter, length as length5, map as map3, show as show3 } from "@mochi/compiler/runtime";
 import { match as match2 } from "@onrails/pattern";
 var emptyRegistry = { ctors: new Map, types: new Map };
 var primTypeNames = ["number", "int", "float", "string", "bool", "unit"];
@@ -7910,7 +7910,10 @@ var tagEntryOf = (name) => `@tag:${name}`;
 var withTag$ = (m, name, tagKey, tagLit) => and6(tagKey === "_tag", eq5(tagLit, name)) ? _Map_delete(tagEntryOf(name), m) : _Map_set2(tagEntryOf(name), [tagKey, tagLit], m);
 var withTag = _curry8(4, withTag$);
 var ctorKeysInto = _curry8(3, (ctors, i, m) => match2(_Array_get6(i, ctors)).with({ _tag: "None" }, () => m).with((_v) => _v._tag === "Some", ({ value: { name, fields, tagKey, tagLit } }) => ctorKeysInto(ctors, i + 1, withTag$(_Map_set2(name, keysOf(fields), m), name, tagKey, tagLit))).exhaustive());
-var tagOf$ = (keys, ctor) => ((_v) => _v._tag === "Some" && _v.value.length === 2 ? (({ value: [key, lit] }) => _tuple4(key, lit))(_v) : _tuple4("_tag", ctor))(_Map_get3(tagEntryOf(ctor), keys));
+var ctorKeyOf$ = (ctor, ns) => _Option_match7(ns, () => ctor, (alias) => `${alias}.${ctor}`);
+var ctorKeyOf = _curry8(2, ctorKeyOf$);
+var bareCtor = (ctor) => ((_v) => _v.length === 2 ? (([, name]) => name)(_v) : ctor)(_Str_split4(".", ctor));
+var tagOf$ = (keys, ctor) => ((_v) => _v._tag === "Some" && _v.value.length === 2 ? (({ value: [key, lit] }) => _tuple4(key, lit))(_v) : _tuple4("_tag", bareCtor(ctor)))(_Map_get3(tagEntryOf(ctor), keys));
 var tagOf = _curry8(2, tagOf$);
 var ctorKeysFrom$ = (stmts, i, m) => ((_v) => _v._tag === "None" ? m : _v._tag === "Some" && _v.value._tag === "SType" ? (({ value: { ctors } }) => ctorKeysFrom$(stmts, i + 1, ctorKeysInto(ctors, 0, m)))(_v) : _v._tag === "Some" ? ctorKeysFrom$(stmts, i + 1, m) : (() => {
   throw new Error("non-exhaustive match");
@@ -8301,7 +8304,7 @@ var templateVars = (params) => reduce2(_curry9(2, ([vs, ids], p) => {
 var allBound$ = (ids, binds) => length6(filter2((id) => !_Map_has2(id, binds), ids)) === 0;
 var allBound = _curry9(2, allBound$);
 var bareAliasName = (key) => {
-  const parts = _Str_split4(".", key);
+  const parts = _Str_split5(".", key);
   return _Option_unwrapOr5(key, _Array_get7(length6(parts) - 1, parts));
 };
 var foldingAliasFrom$ = (t, keys, aliases, i) => _Option_match8(_Array_get7(i, keys), () => None8, (key) => {
@@ -9850,7 +9853,7 @@ var parseWith = _curry12(2, (toks, pluginsOpt) => {
   const r = parseRecovering(toks, pluginsOpt);
   return _Option_match11(_Array_get10(0, r.diagnostics), () => Ok7(r.stmts), (d) => Err7(d));
 });
-import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_prepend as _Array_prepend5, _Array_sortBy, _Array_take as _Array_take2, _Map_delete as _Map_delete2, _Map_get as _Map_get5, _Map_keys as _Map_keys4, _Map_set as _Map_set4, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome3, _Option_match as _Option_match12, _Option_unwrapOr as _Option_unwrapOr7, _Set_fromArray as _Set_fromArray3, _Set_has as _Set_has3, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt5, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split5, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry14, _tuple as _tuple8, and as and10, concat, eq as eq10, filter as filter4, floor as floor3, length as length11, map as map8, or as or8, reduce as reduce3, show as show5 } from "@mochi/compiler/runtime";
+import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_prepend as _Array_prepend5, _Array_sortBy, _Array_take as _Array_take2, _Map_delete as _Map_delete2, _Map_get as _Map_get5, _Map_keys as _Map_keys4, _Map_set as _Map_set4, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome3, _Option_match as _Option_match12, _Option_unwrapOr as _Option_unwrapOr7, _Set_fromArray as _Set_fromArray3, _Set_has as _Set_has3, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt5, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry14, _tuple as _tuple8, and as and10, concat, eq as eq10, filter as filter4, floor as floor3, length as length11, map as map8, or as or8, reduce as reduce3, show as show5 } from "@mochi/compiler/runtime";
 
 import { _Str_chars, _Str_join as _Str_join4, _curry as _curry13, length as length10, map as map7 } from "@mochi/compiler/runtime";
 var escChar2 = (c) => ((_v) => _v === "\\" ? "\\\\" : _v === '"' ? "\\\"" : _v === `
@@ -16572,7 +16575,7 @@ var inErrorSpanFrom$ = (stmts, i, c) => ((_v) => _v._tag === "None" ? false : _v
 var inErrorSpanFrom = _curry14(3, inErrorSpanFrom$);
 var inErrorSpan$ = (stmts, c) => inErrorSpanFrom$(stmts, 0, c);
 var inErrorSpan = _curry14(2, inErrorSpan$);
-var hasOpenDirective = (src) => _Option_match12(_Array_get11(0, _Str_split5(`
+var hasOpenDirective = (src) => _Option_match12(_Array_get11(0, _Str_split6(`
 `, _Str_trim(src))), () => false, (first) => _Str_trim(first) === '"use open"');
 var formatProgram$ = (stmts, src) => {
   const hooks = formatHooksFor(None12);

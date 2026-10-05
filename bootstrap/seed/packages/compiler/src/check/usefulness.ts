@@ -52,6 +52,7 @@ import {
   _Str_concat,
   _Str_endsWith,
   _Str_join,
+  _Str_split,
   _curry,
   _keyOf,
   add,
@@ -170,8 +171,15 @@ const toMP: (p: Pattern) => MP = (p: Pattern) => {
       return MTuple(map(toMP, elems));
     }
     case "PCtor": {
-      const { ctor: name, args } = $match;
-      return MCtor(name, map(toMP, args));
+      const { ctor: name, args, ns } = $match;
+      return MCtor(
+        _Option_match(
+          ns,
+          () => name,
+          (alias) => `${alias}.${name}`,
+        ),
+        map(toMP, args),
+      );
     }
     case "PRecord": {
       const { fields } = $match;
@@ -621,6 +629,8 @@ const ctorInfoSuffixed: _Curry<
   ],
   Option<{ owner: string; arity: number }>
 > = _curry(3, ctorInfoSuffixed$);
+const qualifierOf: (n: string) => string = (n: string) =>
+  ((_v) => (_v.length === 2 ? (([alias]) => `${alias}.`)(_v) : ""))(_Str_split(".", n));
 const ctorInfoOf$ = (
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
@@ -863,10 +873,15 @@ const usefulCtor$ = (
     () => None as Option<string>,
     (n) => ownerOfCtor$(reg, n),
   );
+  const q: string = _Option_match(
+    _Array_head(names),
+    () => "",
+    (n) => qualifierOf(n),
+  );
   const all: string[] = _Option_match(
     ownerOpt,
     () => [] as string[],
-    (o) => _Map_getOr([] as string[], o, reg.types),
+    (o) => map((n: string) => `${q}${n}`, _Map_getOr([] as string[], o, reg.types)),
   );
   return and(length(all) > 0, allNamesIn(all, names))
     ? tryHeads$(

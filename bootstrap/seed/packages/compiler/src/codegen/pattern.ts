@@ -27,7 +27,7 @@ import {
 
 import * as Ast from "../ast/ast";
 import { jsStringLit, litValue } from "./literals";
-import { tagOf } from "../ast/ctors";
+import { tagOf, ctorKeyOf } from "../ast/ctors";
 const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
   3,
   <A>(f: (a: A) => boolean, xs: A[], i: number) =>
@@ -121,8 +121,8 @@ const patSlot$ = (ctorKeys: Map<string, string[]>, p: Pattern): string => {
       return "";
     }
     case "PCtor": {
-      const { ctor, args } = $match;
-      const entries: string[] = pctorEntries$(ctorKeys, ctor, args, 0);
+      const { ctor, args, ns } = $match;
+      const entries: string[] = pctorEntries$(ctorKeys, ctorKeyOf(ctor, ns), args, 0);
       return length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`;
     }
     case "PRecord": {
@@ -274,12 +274,13 @@ const patConds$ = (ctorKeys: Map<string, string[]>, p: Pattern, path: string): s
       return [`${path} === ${litValue(p)}`];
     }
     case "PCtor": {
-      const { ctor, args } = $match;
+      const { ctor, args, ns } = $match;
+      const ck: string = ctorKeyOf(ctor, ns);
       return (([key, lit]: [string, string]) =>
         _Array_prepend(
           `${path}.${key} === ${jsStringLit(lit)}`,
-          pctorConds$(ctorKeys, ctor, args, 0, path),
-        ))(tagOf(ctorKeys, ctor));
+          pctorConds$(ctorKeys, ck, args, 0, path),
+        ))(tagOf(ctorKeys, ck));
     }
     case "PRecord": {
       const { fields } = $match;
@@ -503,13 +504,14 @@ const patTarget$ = (ctorKeys: Map<string, string[]>, p: Pattern, base: string): 
       return patTarget$(ctorKeys, pat, base);
     }
     case "PCtor": {
-      const { ctor, args } = $match;
+      const { ctor, args, ns } = $match;
+      const ck: string = ctorKeyOf(ctor, ns);
       return (([key, lit]: [string, string]) => {
         const member: string = `Extract<${base}, { ${key}: ${jsStringLit(lit)} }>`;
-        const keys: string[] = _Option_unwrapOr([] as string[], _Map_get(ctor, ctorKeys));
+        const keys: string[] = _Option_unwrapOr([] as string[], _Map_get(ck, ctorKeys));
         const refines: string[] = ctorRefines$(ctorKeys, args, keys, member, 0);
         return length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`;
-      })(tagOf(ctorKeys, ctor));
+      })(tagOf(ctorKeys, ck));
     }
     case "PRecord": {
       const { fields } = $match;

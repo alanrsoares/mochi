@@ -172,7 +172,7 @@ import * as Ast from "../ast/ast";
 import { patSlot, patConds, patTarget } from "./pattern";
 import { jsStringLit, litValue } from "./literals";
 import { localBinderNames } from "../infer/local-names";
-import { keysOf, ctorKeysFromStmts, tagOf, seedBuiltinCtorKeys } from "../ast/ctors";
+import { keysOf, ctorKeysFromStmts, tagOf, ctorKeyOf, seedBuiltinCtorKeys } from "../ast/ctors";
 
 /**
  * The JS backend's knobs: no annotation, no rewriting, `.js` siblings.
@@ -2139,10 +2139,10 @@ const genFunctionCases$ = (ctx: GCtx, arms: MatchArm[], root: string): string =>
     map((a: MatchArm) => {
       const label: string = ((_v) =>
         _v._tag === "PCtor"
-          ? (({ ctor: name }) =>
-              (([, lit]: [string, string]) => `case ${jsStringLit(lit)}:`)(tagOf(ctx.keys, name)))(
-              _v,
-            )
+          ? (({ ctor: name, ns }) =>
+              (([, lit]: [string, string]) => `case ${jsStringLit(lit)}:`)(
+                tagOf(ctx.keys, ctorKeyOf(name, ns)),
+              ))(_v)
           : "default:")(a.pattern);
       const slot: string = patSlot(ctx.keys, a.pattern);
       const bind: string = slot === "" ? "" : `const ${slot} = ${root}; `;
@@ -2171,9 +2171,8 @@ const switchKey: <A>(ctx: GCtx, arms: ({ pattern: Pattern } & A)[]) => string = 
         ([a, ...rest]) =>
           ((_v) =>
             _v._tag === "PCtor"
-              ? (({ ctor: name }) => (([key, ,]: [string, string]) => key)(tagOf(ctx.keys, name)))(
-                  _v,
-                )
+              ? (({ ctor: name, ns }) =>
+                  (([key, ,]: [string, string]) => key)(tagOf(ctx.keys, ctorKeyOf(name, ns))))(_v)
               : switchKey(ctx, rest))(a.pattern),
       )
       .otherwise(() => {
@@ -3116,17 +3115,19 @@ const genWithArm$ = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): s
         : genGuardArm$(ctx, p, body, None as Option<Expr>, base);
     }
     case "PCtor": {
-      const { ctor, args } = $match;
+      const { ctor: ctor0, args, ns } = $match;
       return allOf(isFlatSub, args)
-        ? (([binds, litFields]: [string[], string[]]) =>
-            (([key, lit]: [string, string]) => {
-              const patObj: string = _Str_join(
-                ", ",
-                _Array_prepend(`${key}: ${jsStringLit(lit)}`, litFields),
-              );
-              const param: string = length(binds) === 0 ? "()" : `({ ${_Str_join(", ", binds)} })`;
-              return `.with({ ${patObj} }, ${param} => ${genLambdaBody$(ctx, body)})`;
-            })(tagOf(ctx.keys, ctor)))(ctorArgParts$(ctx, ctor, args, 0))
+        ? ((ctor: string) =>
+            (([binds, litFields]: [string[], string[]]) =>
+              (([key, lit]: [string, string]) => {
+                const patObj: string = _Str_join(
+                  ", ",
+                  _Array_prepend(`${key}: ${jsStringLit(lit)}`, litFields),
+                );
+                const param: string =
+                  length(binds) === 0 ? "()" : `({ ${_Str_join(", ", binds)} })`;
+                return `.with({ ${patObj} }, ${param} => ${genLambdaBody$(ctx, body)})`;
+              })(tagOf(ctx.keys, ctor)))(ctorArgParts$(ctx, ctor, args, 0)))(ctorKeyOf(ctor0, ns))
         : genGuardArm$(ctx, p, body, None as Option<Expr>, base);
     }
     default: {

@@ -79,7 +79,10 @@ let toMP = p => switch p {
   | Ast.PBool(v, _) => MBool(v)
   | Ast.PStr(v, _) => MStr(v)
   | Ast.PTuple(elems, _) => MTuple(elems |> map(toMP))
-  | Ast.PCtor(name, args, _, _) => MCtor(name, args |> map(toMP))
+  | Ast.PCtor(name, args, ns, _) => MCtor(
+      switch ns { | Some(alias) => "${alias}.${name}" | None => name },
+      args |> map(toMP)
+    )
   | Ast.PRecord(fields, _) => MRecord(
       fields |> map(f => f.label),
       fields |> map(f => toMP(f.pat))
@@ -300,6 +303,13 @@ let ctorInfoSuffixed = (keys, reg: Ctors.Registry, n) => switch keys {
       : ctorInfoSuffixed(rest, reg, n)
 }
 
+// `S.` for an `import * as S` ctor name, "" for a bare one — the sibling
+// ctors of the same type live under the same qualifier (ADR 0082).
+let qualifierOf = n => switch Str.split(".", n) {
+  | [alias, _] => "${alias}."
+  | _ => ""
+}
+
 let ctorInfoOf = (reg: Ctors.Registry, n) => switch Map.get(n, reg.ctors) {
   | Some(info) => Some(info)
   | None => ctorInfoSuffixed(Map.keys(reg.ctors), reg, n)
@@ -407,9 +417,13 @@ let usefulCtor = (m, heads, width, reg: Ctors.Registry, fuel) =>
     | None => None
     | Some(n) => ownerOfCtor(reg, n)
   } in
+  let q = switch Array.head(names) {
+    | Some(n) => qualifierOf(n)
+    | None => ""
+  } in
   let all = switch ownerOpt {
     | None => []
-    | Some(o) => Map.getOr([], o, reg.types)
+    | Some(o) => Map.getOr([], o, reg.types) |> map(n => "${q}${n}")
   } in
     Array.length(all) > 0 && allNamesIn(all, names)
       ? tryHeads(
