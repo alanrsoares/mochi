@@ -437,7 +437,7 @@ let aliasLocalVarsFrom = (params, args, st: Types.St) => switch params {
     }
 }
 
-let rowHasLabel = (label, row) => switch row {
+export let rowHasLabel = (label, row) => switch row {
   | RowExtend(l, _, _, rest) => l == label || rowHasLabel(label, rest)
   | _ => false
 }
@@ -474,6 +474,8 @@ let aliasFieldsFrom = (fields: [Ast.AliasField], vars, st: Types.St, aliases: Ma
     ) in
       fld.spread
         ? (spreadRowInto(ft, restRow), st2)
+        : rowHasLabel(fld.name, restRow)
+        ? (restRow, st2)
         : (rField(fld.name, ft, restRow, fld.optional), st2)
 }
 
@@ -620,6 +622,8 @@ let templateRowFrom = (fields: [Ast.AliasField], vars, aliases: Map<string, Alia
     ) in
       f.spread
         ? spreadRowInto(t, templateRowFrom(fields, vars, aliases, i + 1))
+        : rowHasLabel(f.name, templateRowFrom(fields, vars, aliases, i + 1))
+        ? templateRowFrom(fields, vars, aliases, i + 1)
         : RowExtend(
           f.name,
           t,

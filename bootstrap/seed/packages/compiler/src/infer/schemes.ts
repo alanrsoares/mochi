@@ -790,7 +790,7 @@ const rowHasLabel$ = (label: string, row: Row): boolean => {
     }
   }
 };
-const rowHasLabel: _Curry<[label: string, row: Row], boolean> = _curry(2, rowHasLabel$);
+export const rowHasLabel: _Curry<[label: string, row: Row], boolean> = _curry(2, rowHasLabel$);
 const spreadRowInto$ = (spread: Ty, rest: Row): Row => {
   const $match = spread;
   switch ($match._tag) {
@@ -840,7 +840,9 @@ const aliasFieldsFrom$ = (
               (([restRow, st2]: [Row, St]) =>
                 fld.spread
                   ? _tuple(spreadRowInto$(ft, restRow), st2)
-                  : _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
+                  : rowHasLabel$(fld.name, restRow)
+                    ? _tuple(restRow, st2)
+                    : _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
                 aliasFieldsFrom$(rest, vars1, st1, aliases, expanding),
               ))(typeExprToType$(fld.fieldType, vars, st, aliases, expanding)))(_v)
         : (() => {
@@ -1203,7 +1205,9 @@ const templateRowFrom$ = (
       (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
         f.spread
           ? spreadRowInto$(t, templateRowFrom$(fields, vars, aliases, i + 1))
-          : RowExtend(f.name, t, f.optional, templateRowFrom$(fields, vars, aliases, i + 1)))(
+          : rowHasLabel$(f.name, templateRowFrom$(fields, vars, aliases, i + 1))
+            ? templateRowFrom$(fields, vars, aliases, i + 1)
+            : RowExtend(f.name, t, f.optional, templateRowFrom$(fields, vars, aliases, i + 1)))(
         typeExprToType$(f.fieldType, vars, Types.mkSt(0), aliases, _Set_fromArray([] as string[])),
       ),
   );

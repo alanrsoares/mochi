@@ -13,8 +13,8 @@ forced copying every field of `A`, so the two drifted apart.
 
 A record alias body accepts `...T` entries beside `name: type` fields. `T` is a
 record alias, applied (`P<T>`) or qualified (`M.A`). Its fields are spliced in at
-that position; a field written later with the same name wins, as in an object
-literal.
+that position; the later of two same-named entries wins, as in an object literal — a field
+after a spread overrides it, and a spread after a field overrides that field.
 
 - Parser: `AliasField` gains `spread: bool`; a spread entry has no name and holds
   the spread type in `fieldType`. The formatter prints it back as `...T`.

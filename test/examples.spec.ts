@@ -900,4 +900,11 @@ test("record type spread is typed: missing and overridden fields are checked", (
   expect(
     isErr(compile(`${head}type C = { ...A, name: bool }\nlet c: C = { id: 1, name: true }`)),
   ).toBe(false);
+  // a spread written after a field overrides it, so the spread's type wins
+  const later = `${head}type D = { name: bool, ...A }\n`;
+  expect(isErr(compile(`${later}let d: D = { id: 1, name: "s" }`))).toBe(false);
+  expect(isErr(compile(`${later}let d: D = { id: 1, name: true }`))).toBe(true);
+  expect(unwrapOk(compileTargets(later, { runtime: false })).ts).toContain(
+    "export type D = { id: number; name: string };",
+  );
 });

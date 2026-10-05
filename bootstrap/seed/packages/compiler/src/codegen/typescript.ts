@@ -108,7 +108,13 @@ import {
   RowExtend,
   isUnit,
 } from "../infer/types";
-import { typeExprToType, collect, emptyVarSets, spreadRowInto } from "../infer/schemes";
+import {
+  typeExprToType,
+  collect,
+  emptyVarSets,
+  spreadRowInto,
+  rowHasLabel,
+} from "../infer/schemes";
 import { builtinTypeDecls, keysOf } from "../ast/ctors";
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "../infer/infer";
@@ -292,7 +298,7 @@ const aliasFieldsFrom$ = (
     _Array_get(i, fields),
     () => [] as string[],
     (f) =>
-      f.spread
+      or(f.spread, _Array_contains(f.name, laterSpreadLabelsFrom$(fields, params, aliases, i + 1)))
         ? aliasFieldsFrom$(fields, params, aliases, recs, i + 1)
         : _Array_prepend(
             `${f.name}${f.optional ? "?" : ""}: ${fieldTs$(f.fieldType, params, aliases, recs)}`,
@@ -377,6 +383,29 @@ const laterLabelsFrom: _Curry<
   [fields: AliasField[], params: string[], aliases: Map<string, AliasInfo>, i: number],
   string[]
 > = _curry(4, laterLabelsFrom$);
+const laterSpreadLabelsFrom$ = (
+  fields: AliasField[],
+  params: string[],
+  aliases: Map<string, AliasInfo>,
+  i: number,
+): string[] =>
+  _Option_match(
+    _Array_get(i, fields),
+    () => [] as string[],
+    (f) =>
+      _Array_concat(
+        f.spread ? spreadLabelsOf$(f.fieldType, params, aliases) : ([] as string[]),
+        laterSpreadLabelsFrom$(fields, params, aliases, i + 1),
+      ),
+  );
+/**
+ * Labels brought in by spreads written after position `i` — they override an
+ * earlier own field of the same name.
+ */
+const laterSpreadLabelsFrom: _Curry<
+  [fields: AliasField[], params: string[], aliases: Map<string, AliasInfo>, i: number],
+  string[]
+> = _curry(4, laterSpreadLabelsFrom$);
 const spreadPartsFrom$ = (
   fields: AliasField[],
   params: string[],
@@ -1312,7 +1341,9 @@ const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: n
       (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
         f.spread
           ? spreadRowInto(t, aliasRowOf$(fields, aliases, i + 1))
-          : RowExtend(f.name, t, f.optional, aliasRowOf$(fields, aliases, i + 1)))(
+          : rowHasLabel(f.name, aliasRowOf$(fields, aliases, i + 1))
+            ? aliasRowOf$(fields, aliases, i + 1)
+            : RowExtend(f.name, t, f.optional, aliasRowOf$(fields, aliases, i + 1)))(
         typeExprToType(
           f.fieldType,
           new Map<string, Ty>(),

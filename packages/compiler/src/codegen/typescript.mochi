@@ -31,7 +31,8 @@ import {
   typeExprToType,
   collect,
   emptyVarSets,
-  spreadRowInto
+  spreadRowInto,
+  rowHasLabel
 } from "../infer/schemes.mochi"
 import { builtinTypeDecls, keysOf } from "../ast/ctors.mochi"
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
@@ -126,7 +127,10 @@ export let typeDecl = (name, params, ctors: [Ast.Ctor], aliases: Map<string, Ali
 
 let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
   | None => []
-  | Some(f) => f.spread
+  | Some(f) => f.spread || Array.contains(
+      f.name,
+      laterSpreadLabelsFrom(fields, params, aliases, i + 1)
+    )
       ? aliasFieldsFrom(fields, params, aliases, recs, i + 1)
       : Array.prepend(
         "${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}",
@@ -157,6 +161,16 @@ let laterLabelsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, Al
   | Some(f) => Array.concat(
       f.spread ? spreadLabelsOf(f.fieldType, params, aliases) : [f.name],
       laterLabelsFrom(fields, params, aliases, i + 1)
+    )
+}
+
+/// Labels brought in by spreads written after position `i` — they override an
+/// earlier own field of the same name.
+let laterSpreadLabelsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => Array.concat(
+      f.spread ? spreadLabelsOf(f.fieldType, params, aliases) : [],
+      laterSpreadLabelsFrom(fields, params, aliases, i + 1)
     )
 }
 
@@ -673,6 +687,8 @@ let aliasRowOf = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, i) 
     ) in
       f.spread
         ? spreadRowInto(t, aliasRowOf(fields, aliases, i + 1))
+        : rowHasLabel(f.name, aliasRowOf(fields, aliases, i + 1))
+        ? aliasRowOf(fields, aliases, i + 1)
         : RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1))
 }
 
