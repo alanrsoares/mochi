@@ -205,6 +205,7 @@ import {
   and,
   eq,
   filter,
+  gt,
   length,
   map,
   not,
@@ -3396,7 +3397,7 @@ const inferExprRaw$ = (
                       : _v._tag === "EPipe" &&
                           _v.right._tag === "ECall" &&
                           (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) =>
-                            length(filter(isPipeHole, rargs)) === 1)(
+                            length(filter(isPipeHole, rargs)) > 0)(
                             _v as Extract<Expr, { _tag: "EPipe" }> & {
                               right: Extract<
                                 Extract<Expr, { _tag: "EPipe" }>["right"],
