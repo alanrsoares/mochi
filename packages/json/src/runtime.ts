@@ -13,10 +13,15 @@ export type Json =
 
 const JNull: Json = { _tag: "JNull" };
 
+const finite = (n: number): number => {
+  if (!Number.isFinite(n)) throw new RangeError(`non-finite number: ${n}`);
+  return n;
+};
+
 const fromHost = (v: unknown): Json => {
   if (v === null) return JNull;
   if (typeof v === "boolean") return { _tag: "JBool", value: v };
-  if (typeof v === "number") return { _tag: "JNum", value: v };
+  if (typeof v === "number") return { _tag: "JNum", value: finite(v) };
   if (typeof v === "string") return { _tag: "JStr", value: v };
   if (Array.isArray(v)) return { _tag: "JArr", items: v.map(fromHost) };
   const fields: Record<string, Json> = Object.create(null);
@@ -28,8 +33,9 @@ const toHost = (j: Json): unknown => {
   switch (j._tag) {
     case "JNull":
       return null;
-    case "JBool":
     case "JNum":
+      return finite(j.value);
+    case "JBool":
     case "JStr":
       return j.value;
     case "JArr":
@@ -56,4 +62,10 @@ export const parse = (text: string): Result<Json, string> => {
   }
 };
 
-export const stringify = (j: Json): string => JSON.stringify(toHost(j));
+export const stringify = (j: Json): Result<string, string> => {
+  try {
+    return { _tag: "Ok", value: JSON.stringify(toHost(j)) };
+  } catch (e) {
+    return { _tag: "Err", error: e instanceof Error ? e.message : String(e) };
+  }
+};

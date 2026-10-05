@@ -36,6 +36,8 @@ describe("parse", () => {
         field("tags", v) |> Option.flatMap(index(2)) |> assertEq(Some(JNull));
         field("missing", v) |> assertEq(None)
       });
+  test("overflowing number is an Err value", () =>
+    parse("1e400") |> isErr |> ok);
   test("invalid text is an Err value", () => parse("{oops") |> isErr |> ok);
   test("__proto__ is an ordinary key", () =>
     field("__proto__", unwrap(parse("{\"__proto__\":1}")))
@@ -43,13 +45,15 @@ describe("parse", () => {
 })
 
 describe("stringify", () => {
-  test("round-trips", () => stringify(unwrap(parse(doc))) |> assertEq(doc));
+  test("round-trips", () => stringify(unwrap(parse(doc))) |> assertEq(Ok(doc)));
   test("builds from ctors", () =>
-    stringify(JArr([JStr("a"), JNum(1), JNull])) |> assertEq("[\"a\",1,null]"))
+    stringify(JArr([JStr("a"), JNum(1), JNull]))
+      |> assertEq(Ok("[\"a\",1,null]")));
+  test("non-finite JNum is an Err", () => stringify(JNum(1 / 0)) |> isErr |> ok)
 })
 
 check("string round-trips as JStr", text, s =>
   stringify(JStr(s))
-    |> parse
+    |> Result.flatMap(parse)
     |> Result.map(j => j == JStr(s))
     |> assertEq(Ok(true)))

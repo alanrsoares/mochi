@@ -21,6 +21,7 @@ import {
   map,
   None,
   Some,
+  show,
 } from "@mochi/compiler/runtime";
 import fc from "fast-check";
 
@@ -304,4 +305,9 @@ test("Dict ops are immutable and prototype-safe", () => {
   );
   expect(_Dict_get("__proto__", _Dict_empty)).toEqual(None);
   expect(_Dict_get("constructor", _Dict_set("x", 1, _Dict_empty))).toEqual(None);
+});
+
+test("show renders Dicts as plain data, never as variants", () => {
+  expect(show(_Dict_empty)).toBe("{}");
+  expect(show(_Dict_set("_tag", "x", _Dict_empty))).toBe('{ _tag: "x" }');
 });

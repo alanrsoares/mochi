@@ -1,5 +1,5 @@
 /// First-class JSON AST. Objects are `Dict<Json>` (ADR 0150). Parsing is a
-/// host call that returns `Err(message)` on bad input; accessors return `Option`.
+/// host call that returns `Err(message)` on bad input (and on non-finite numbers, both ways); accessors return `Option`.
 
 export type Json =
   | JNull
@@ -10,7 +10,7 @@ export type Json =
   | JObj(fields: Dict<Json>)
 
 export extern parse : string -> Result<Json, string> = "@mochi/json/runtime" "parse"
-export extern stringify : Json -> string = "@mochi/json/runtime" "stringify"
+export extern stringify : Json -> Result<string, string> = "@mochi/json/runtime" "stringify"
 
 export let field = (key: string, json: Json) => switch json {
   | JObj(fields) => Dict.get(key, fields)

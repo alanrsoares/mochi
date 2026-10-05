@@ -337,13 +337,17 @@ export const show: <A>(a: A) => string = (x: any) => {
     return `#{${[...x.entries()].map((e: any) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;
   if (x instanceof Set) return `#{${[...x].map(show).join(", ")}}`;
   if (typeof x[Symbol.iterator] === "function") return "<List>";
-  if (typeof x._tag === "string") {
+  // Null-prototype objects are `Dict`s (ADR 0150): a `_tag` key is plain data.
+  const dict = Object.getPrototypeOf(x) === null;
+  if (!dict && typeof x._tag === "string") {
     const ks = Object.keys(x).filter((k: any) => k !== "_tag");
     return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k: any) => show(x[k])).join(", ")})`;
   }
   const ks = Object.keys(x);
   return ks.length === 0
-    ? String(x)
+    ? dict
+      ? "{}"
+      : String(x)
     : `{ ${ks.map((k: any) => `${k}: ${show(x[k])}`).join(", ")} }`;
 };
 export const ignore: <A>(a: A) => undefined = (_x: any) => undefined;
