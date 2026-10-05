@@ -22021,7 +22021,10 @@ var _preludeJsDefs = {
 };`,
   _setAdd: "const _setAdd = (s, x) => s.add(_keyOf(s, x));",
   _Set_has: "const _Set_has = _curry(2, (x, s) => s.has(_keyOf(s, x)));",
-  _Set_add: "const _Set_add = _curry(2, (x, s) => _setAdd(new Set(s), x));",
+  _Set_add: `const _Set_add = _curry(2, (x, s) => {
+  const k = _keyOf(s, x);
+  return s.has(k) ? s : new Set(s).add(k);
+});`,
   _Set_delete: `const _Set_delete = _curry(2, (x, s) => {
   const n = new Set(s);
   n.delete(_keyOf(s, x));
@@ -22049,9 +22052,10 @@ var _preludeJsDefs = {
   return m.has(key) ? m.get(key) : d;
 });`,
   _Map_set: `const _Map_set = _curry(3, (k, v, m) => {
-  const n = new Map(m);
-  n.set(_keyOf(m, k), v);
-  return n;
+  const key = _keyOf(m, k);
+  if (m.has(key) && Object.is(m.get(key), v))
+    return m;
+  return new Map(m).set(key, v);
 });`,
   _Map_delete: `const _Map_delete = _curry(2, (k, m) => {
   const n = new Map(m);
@@ -22370,7 +22374,7 @@ var _runtimeDeps = {
   ],
   _Set_add: [
     "_curry",
-    "_setAdd"
+    "_keyOf"
   ],
   _Set_delete: [
     "_curry",
