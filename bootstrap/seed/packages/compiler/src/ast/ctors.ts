@@ -21,6 +21,7 @@ import {
   _Option_unwrapOr,
   _Result_flatMap,
   _Result_map,
+  _Str_split,
   _curry,
   _done,
   _keyOf,
@@ -355,13 +356,26 @@ const ctorKeysInto: <A, B>(
       )
       .exhaustive(),
 );
+const ctorKeyOf$ = (ctor: string, ns: Option<string>): string =>
+  _Option_match(
+    ns,
+    () => ctor,
+    (alias) => `${alias}.${ctor}`,
+  );
+/**
+ * A ctor's registry key: bare `Click`, or `E.Click` through `import * as E`
+ * (ADR 0082) — the qualified form keeps it distinct from a local `Click`.
+ */
+export const ctorKeyOf: _Curry<[ctor: string, ns: Option<string>], string> = _curry(2, ctorKeyOf$);
+const bareCtor: (ctor: string) => string = (ctor: string) =>
+  ((_v) => (_v.length === 2 ? (([, name]) => name)(_v) : ctor))(_Str_split(".", ctor));
 const tagOf$ = (keys: Map<string, string[]>, ctor: string): [string, string] =>
   ((_v) =>
     _v._tag === "Some" && _v.value.length === 2
       ? (({ value: [key, lit] }) => _tuple(key, lit))(
           _v as Extract<Option<string[]>, { _tag: "Some" }>,
         )
-      : _tuple("_tag", ctor))(_Map_get(tagEntryOf(ctor), keys));
+      : _tuple("_tag", bareCtor(ctor)))(_Map_get(tagEntryOf(ctor), keys));
 /**
  * A ctor's runtime discriminant `(key, literal)` — `("_tag", name)` unless
  * `@tag`/`@as` overrode it. The one lookup codegen and the TS backend share.

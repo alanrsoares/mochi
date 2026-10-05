@@ -12,6 +12,7 @@ import {
   keysOf,
   ctorKeysFromStmts,
   tagOf,
+  ctorKeyOf,
   seedBuiltinCtorKeys
 } from "../ast/ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -1186,7 +1187,9 @@ let genFunctionCases = (ctx: GCtx, arms, root) =>
     arms
       |> map(a =>
         let label = switch a.pattern {
-          | Ast.PCtor(name, _, _, _) => let (_, lit) = ctx.keys->tagOf(name) in
+          | Ast.PCtor(name, _, ns, _) => let (_, lit) = ctx.keys->tagOf(
+              ctorKeyOf(name, ns)
+            ) in
               "case ${jsStringLit(lit)}:"
           | _ => "default:"
         } in
@@ -1201,7 +1204,10 @@ let genFunctionCases = (ctx: GCtx, arms, root) =>
 let switchKey = (ctx: GCtx, arms) => switch arms {
   | [] => "_tag"
   | [a, ...rest] => switch a.pattern {
-      | Ast.PCtor(name, _, _, _) => let (key, _) = ctx.keys->tagOf(name) in key
+      | Ast.PCtor(name, _, ns, _) => let (key, _) = ctx.keys->tagOf(
+          ctorKeyOf(name, ns)
+        ) in
+          key
       | _ => ctx->switchKey(rest)
     }
 }
@@ -1762,10 +1768,11 @@ let genWithArm = (ctx: GCtx, p, body, base) => switch p {
       let slot = ctx.keys->patSlot(p) in
         ".with({ ${Str.join(", ", lits)} }, ${slot == "" ? "()" : "(${slot})"} => ${ctx->genLambdaBody(body)})"
       : ctx->genGuardArm(p, body, None, base)
-  | Ast.PCtor(ctor, args, _, _) =>
+  | Ast.PCtor(ctor0, args, ns, _) =>
     // pctor flat fast path keeps readable matcher-object form.
     allOf(isFlatSub, args)
-      ? let (binds, litFields) = ctx->ctorArgParts(ctor, args, 0) in
+      ? let ctor = ctorKeyOf(ctor0, ns) in
+      let (binds, litFields) = ctx->ctorArgParts(ctor, args, 0) in
       let (key, lit) = ctx.keys->tagOf(ctor) in
       let patObj = Str.join(
         ", ",

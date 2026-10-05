@@ -151,6 +151,31 @@ export let out = [d(E.Click(5, 6)), d(E.Key("k")), d(E.Idle)]
   }
 });
 
+test("a local ctor sharing a name with a namespace-imported one keeps its own keys and discriminant", async () => {
+  const dir = mkdtempSync(join(repoRoot(import.meta.url), "test", ".variant-tag-"));
+  try {
+    writeFileSync(
+      join(dir, "ev.mochi"),
+      `@tag("type")\nexport type Ev = @as("click") Click(x: number) | Idle\n`,
+    );
+    writeFileSync(
+      join(dir, "main.mochi"),
+      `import * as E from "./ev.mochi"
+type L = Click(y: number) | Other
+let d = e => switch e { | E.Click(x) => x | E.Idle => 2 }
+let l = v => switch v { | Click(y) => y | Other => 0 }
+let nested = (o: Option<E.Ev>) => switch o { | Some(E.Click(x)) => x | _ => 0 - 1 }
+export let out = [d(E.Click(5)), d(E.Idle), l(Click(7)), l(Other), nested(Some(E.Click(9))), nested(None)]
+`,
+    );
+    execFileSync("bun", [CLI, "build", join(dir, "main.mochi")], { cwd: root });
+    const main = await import(join(dir, "main.js"));
+    expect(main.out).toEqual([5, 2, 7, 0, 9, -1]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("compare and show treat a custom-tagged value as a plain record", () => {
   const src = `${tagged(false)}let r = [show(Click(1, 2)), show(compare(Key("a"), Key("b"))), show(Click(1, 2) == Click(1, 2)), show(Click(1, 2) == Click(1, 3))]`;
   expect(compileAndEval(src, "r")).toEqual([

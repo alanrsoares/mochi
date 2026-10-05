@@ -576,6 +576,36 @@ const prefixCtorsInto: <A>(
               throw new Error("non-exhaustive match");
             })())(keys),
 );
+const prefixKeysInto$ = (
+  names: string[],
+  alias: string,
+  from: Map<string, string[]>,
+  into: Map<string, string[]>,
+): Map<string, string[]> =>
+  ((_v) =>
+    _v.length === 0
+      ? into
+      : _v.length >= 1
+        ? (([k, ...rest]) =>
+            ((q: string) =>
+              ((withKeys: Map<string, string[]>) =>
+                prefixKeysInto$(
+                  rest,
+                  alias,
+                  from,
+                  _Option_match(
+                    _Map_get(tagEntryOf(k), from),
+                    () => withKeys,
+                    (t) => _Map_set(tagEntryOf(q), t, withKeys),
+                  ),
+                ))(_Map_set(q, _Map_getOr([] as string[], k, from), into)))(`${alias}.${k}`))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(names);
+const prefixKeysInto: _Curry<
+  [names: string[], alias: string, from: Map<string, string[]>, into: Map<string, string[]>],
+  Map<string, string[]>
+> = _curry(4, prefixKeysInto$);
 const resolveNames: <D, E, F, G, H, I, J, K>(
   names: ({ name: string; span: { end: number; start: number } & H } & I)[],
   from: string,
@@ -763,7 +793,12 @@ const resolveImportsFrom: <B, C>(
                               ),
                               types: mergeMap(depReg.types, res.reg.types),
                             },
-                            keys: mergeMap(depKeys, res.keys),
+                            keys: prefixKeysInto$(
+                              filter((k: string) => !_Str_startsWith("@", k), _Map_keys(depKeys)),
+                              alias.name,
+                              depKeys,
+                              res.keys,
+                            ),
                             quals: _Option_match(
                               _Map_get(dp, ctx.qualsByPath),
                               () => res.quals,

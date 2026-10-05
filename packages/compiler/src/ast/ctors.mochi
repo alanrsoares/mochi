@@ -192,11 +192,24 @@ let ctorKeysInto = (ctors, i, m: Map<string, [string]>) => switch ctors |> Array
     )
 }
 
+/// A ctor's registry key: bare `Click`, or `E.Click` through `import * as E`
+/// (ADR 0082) — the qualified form keeps it distinct from a local `Click`.
+export let ctorKeyOf = (ctor: string, ns: Option<string>) => switch ns {
+  | Some(alias) => "${alias}.${ctor}"
+  | None => ctor
+}
+
+// `Click` out of a registry key `E.Click` — the literal never carries the alias.
+let bareCtor = (ctor: string) => switch Str.split(".", ctor) {
+  | [_, name] => name
+  | _ => ctor
+}
+
 /// A ctor's runtime discriminant `(key, literal)` — `("_tag", name)` unless
 /// `@tag`/`@as` overrode it. The one lookup codegen and the TS backend share.
 export let tagOf = (keys: Map<string, [string]>, ctor: string) => switch Map.get(tagEntryOf(ctor), keys) {
   | Some([key, lit]) => (key, lit)
-  | _ => ("_tag", ctor)
+  | _ => ("_tag", bareCtor(ctor))
 }
 
 // Every declared ctor's keys (user decls override imported seed keys).
