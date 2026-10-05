@@ -139,6 +139,7 @@ let shapeType = (t, vars) => switch widenLits(t) {
         | _ => "${inner}[]"
       }
   | TyCon("List", [elem]) => "Iterable<${shapeType(elem, vars)}>"
+  | TyCon("Dict", [elem]) => "Record<string, ${shapeType(elem, vars)}>"
   | TyCon("Task", [value, error]) => "() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>"
   | TyCon("tuple", elems) => "[${shapeJoined(elems, vars)}]"
   | TyCon(name, args) => Array.length(args) == 0
@@ -237,6 +238,7 @@ let tsOfRaw = (t, env: TsEnv) => switch t {
         | _ => "${inner}[]"
       }
   | TyCon("List", [elem]) => "Iterable<${tsOfRaw(elem, env)}>"
+  | TyCon("Dict", [elem]) => "Record<string, ${tsOfRaw(elem, env)}>"
   | TyCon("Task", [value, error]) => "() => Promise<Result<${tsOfRaw(value, env)}, ${tsOfRaw(error, env)}>>"
   | TyCon("tuple", elems) => "[${namesOf(elems, env)}]"
   | TyCon(name, args) => nominal(name, args, env)

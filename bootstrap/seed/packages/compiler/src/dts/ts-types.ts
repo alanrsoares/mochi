@@ -255,34 +255,38 @@ const shapeType$ = (t: Ty, vars: Map<number, string>): string =>
           ? (({ args: [elem] }) => `Iterable<${shapeType$(elem, vars)}>`)(
               _v as Extract<Ty, { _tag: "TyCon" }>,
             )
-          : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
-            ? (({ args: [value, error] }) =>
-                `() => Promise<Result<${shapeType$(value, vars)}, ${shapeType$(error, vars)}>>`)(
+          : _v._tag === "TyCon" && _v.name === "Dict" && _v.args.length === 1
+            ? (({ args: [elem] }) => `Record<string, ${shapeType$(elem, vars)}>`)(
                 _v as Extract<Ty, { _tag: "TyCon" }>,
               )
-            : _v._tag === "TyCon" && _v.name === "tuple"
-              ? (({ args: elems }) => `[${shapeJoined$(elems, vars)}]`)(_v)
-              : _v._tag === "TyCon"
-                ? (({ name, args }) =>
-                    length(args) === 0
-                      ? primitiveTs(name)
-                      : `${name}<${shapeJoined$(args, vars)}>`)(_v)
-                : _v._tag === "TyOneOf"
-                  ? (({ members }) =>
-                      _Str_join(
-                        " | ",
-                        map(
-                          (m: Ty) =>
-                            ((_v) =>
-                              _v._tag === "TySingleton" && _v.base === "string"
-                                ? (({ value }) => `"${value}"`)(_v)
-                                : _v._tag === "TySingleton"
-                                  ? (({ value }) => value)(_v)
-                                  : shapeType$(m, vars))(m),
-                          members,
-                        ),
-                      ))(_v)
-                  : tsOf$(t, plainEnv(vars)))(widenLits(t));
+            : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
+              ? (({ args: [value, error] }) =>
+                  `() => Promise<Result<${shapeType$(value, vars)}, ${shapeType$(error, vars)}>>`)(
+                  _v as Extract<Ty, { _tag: "TyCon" }>,
+                )
+              : _v._tag === "TyCon" && _v.name === "tuple"
+                ? (({ args: elems }) => `[${shapeJoined$(elems, vars)}]`)(_v)
+                : _v._tag === "TyCon"
+                  ? (({ name, args }) =>
+                      length(args) === 0
+                        ? primitiveTs(name)
+                        : `${name}<${shapeJoined$(args, vars)}>`)(_v)
+                  : _v._tag === "TyOneOf"
+                    ? (({ members }) =>
+                        _Str_join(
+                          " | ",
+                          map(
+                            (m: Ty) =>
+                              ((_v) =>
+                                _v._tag === "TySingleton" && _v.base === "string"
+                                  ? (({ value }) => `"${value}"`)(_v)
+                                  : _v._tag === "TySingleton"
+                                    ? (({ value }) => value)(_v)
+                                    : shapeType$(m, vars))(m),
+                            members,
+                          ),
+                        ))(_v)
+                    : tsOf$(t, plainEnv(vars)))(widenLits(t));
 /**
  * Type text for a shape key. Same spelling as `tsOf` with an empty index,
  * except a closed record's fields are sorted at every depth.
@@ -406,32 +410,36 @@ const tsOfRaw$ = (t: Ty, env: TsEnv): string =>
           ? (({ args: [elem] }) => `Iterable<${tsOfRaw$(elem, env)}>`)(
               _v as Extract<Ty, { _tag: "TyCon" }>,
             )
-          : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
-            ? (({ args: [value, error] }) =>
-                `() => Promise<Result<${tsOfRaw$(value, env)}, ${tsOfRaw$(error, env)}>>`)(
+          : _v._tag === "TyCon" && _v.name === "Dict" && _v.args.length === 1
+            ? (({ args: [elem] }) => `Record<string, ${tsOfRaw$(elem, env)}>`)(
                 _v as Extract<Ty, { _tag: "TyCon" }>,
               )
-            : _v._tag === "TyCon" && _v.name === "tuple"
-              ? (({ args: elems }) => `[${namesOf$(elems, env)}]`)(_v)
-              : _v._tag === "TyCon"
-                ? (({ name, args }) => nominal$(name, args, env))(_v)
-                : _v._tag === "TyFn"
-                  ? (({ from: fromT, to: toT }) => tsArrow$(fromT, toT, env))(_v)
-                  : _v._tag === "TyRecord"
-                    ? (({ row }) => tsRow$(row, env))(_v)
-                    : _v._tag === "TySingleton" && _v.base === "string"
-                      ? (({ value }) => `"${value}"`)(_v)
-                      : _v._tag === "TySingleton"
-                        ? (({ value }) => value)(_v)
-                        : _v._tag === "TyOneOf"
-                          ? (({ members }) =>
-                              _Str_join(
-                                " | ",
-                                map((m: Ty) => tsOfRaw$(m, env), members),
-                              ))(_v)
-                          : (() => {
-                              throw new Error("non-exhaustive match");
-                            })())(t);
+            : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
+              ? (({ args: [value, error] }) =>
+                  `() => Promise<Result<${tsOfRaw$(value, env)}, ${tsOfRaw$(error, env)}>>`)(
+                  _v as Extract<Ty, { _tag: "TyCon" }>,
+                )
+              : _v._tag === "TyCon" && _v.name === "tuple"
+                ? (({ args: elems }) => `[${namesOf$(elems, env)}]`)(_v)
+                : _v._tag === "TyCon"
+                  ? (({ name, args }) => nominal$(name, args, env))(_v)
+                  : _v._tag === "TyFn"
+                    ? (({ from: fromT, to: toT }) => tsArrow$(fromT, toT, env))(_v)
+                    : _v._tag === "TyRecord"
+                      ? (({ row }) => tsRow$(row, env))(_v)
+                      : _v._tag === "TySingleton" && _v.base === "string"
+                        ? (({ value }) => `"${value}"`)(_v)
+                        : _v._tag === "TySingleton"
+                          ? (({ value }) => value)(_v)
+                          : _v._tag === "TyOneOf"
+                            ? (({ members }) =>
+                                _Str_join(
+                                  " | ",
+                                  map((m: Ty) => tsOfRaw$(m, env), members),
+                                ))(_v)
+                            : (() => {
+                                throw new Error("non-exhaustive match");
+                              })())(t);
 const tsOfRaw: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, tsOfRaw$);
 /**
  * A scheme variable prints as `A`, `B`, … then `T26`. A nominal type named

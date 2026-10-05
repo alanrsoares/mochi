@@ -6,6 +6,13 @@ import { expect, test } from "bun:test";
 import {
   _Array_dedupeBy,
   _curry,
+  _Dict_empty,
+  _Dict_entries,
+  _Dict_fromEntries,
+  _Dict_get,
+  _Dict_remove,
+  _Dict_set,
+  _Dict_size,
   _Option_match,
   _Result_match,
   add,
@@ -274,4 +281,27 @@ test("dedupeBy visits present slots once and observes projection mutations", () 
     }, xs),
   ).toEqual([1, 2]);
   expect(visited).toEqual([1, 2, 1]);
+});
+
+test("Dict ops are immutable and prototype-safe", () => {
+  fc.assert(
+    fc.property(
+      fc.array(fc.tuple(fc.string(), fc.integer())),
+      fc.string(),
+      fc.integer(),
+      (es, k, v) => {
+        const d = _Dict_fromEntries(es);
+        const before = _Dict_entries(d);
+        const d2 = _Dict_set(k, v, d);
+        expect(_Dict_entries(d)).toEqual(before);
+        expect(_Dict_get(k, d2)).toEqual(Some(v));
+        const d3 = _Dict_remove(k, d2);
+        expect(_Dict_get(k, d3)).toEqual(None);
+        expect(_Dict_size(d3)).toBe(_Dict_size(d) - (before.some(([x]) => x === k) ? 1 : 0));
+        expect(eq(_Dict_fromEntries(_Dict_entries(d2)), d2)).toBe(true);
+      },
+    ),
+  );
+  expect(_Dict_get("__proto__", _Dict_empty)).toEqual(None);
+  expect(_Dict_get("constructor", _Dict_set("x", 1, _Dict_empty))).toEqual(None);
 });

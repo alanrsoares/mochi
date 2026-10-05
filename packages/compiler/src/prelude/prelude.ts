@@ -24,6 +24,8 @@ const arr = (t: Type): Type => tCon("Array", [t]);
 const list = (t: Type): Type => tCon("List", [t]);
 const set = (t: Type): Type => tCon("Set", [t]);
 const mapT = (k: Type, v: Type): Type => tCon("Map", [k, v]);
+const dictT = (v: Type): Type => tCon("Dict", [v]);
+const pair = (x: Type, y: Type): Type => tCon("tuple", [x, y]);
 const opt = (t: Type): Type => tCon("Option", [t]);
 const res = (t: Type, e: Type): Type => tCon("Result", [t, e]);
 const task = (t: Type, e: Type): Type => tCon("Task", [t, e]);
@@ -189,6 +191,22 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     get: tArrow(a, tArrow(mapT(a, b), opt(b))), // k -> Map k v -> Option v
     empty: mapT(a, b), // Map k v — same runtime as `#{}`
   },
+  // Dict ops — immutable string-keyed dictionary (ADR 0150). Plain null-prototype
+  // object at runtime, so JSON/headers/env cross the host boundary unconverted.
+  Dict: {
+    empty: dictT(a), // Dict a
+    has: tArrow(tString, tArrow(dictT(a), tBool)), // string -> Dict a -> bool
+    get: tArrow(tString, tArrow(dictT(a), opt(a))), // string -> Dict a -> Option a
+    getOr: tArrow(a, tArrow(tString, tArrow(dictT(a), a))), // a -> string -> Dict a -> a
+    set: tArrow(tString, tArrow(a, tArrow(dictT(a), dictT(a)))), // string -> a -> Dict a -> Dict a
+    remove: tArrow(tString, tArrow(dictT(a), dictT(a))), // string -> Dict a -> Dict a
+    size: tArrow(dictT(a), tNumber), // Dict a -> number
+    keys: tArrow(dictT(a), arr(tString)), // Dict a -> [string]
+    values: tArrow(dictT(a), arr(a)), // Dict a -> [a]
+    entries: tArrow(dictT(a), arr(pair(tString, a))), // Dict a -> [(string, a)]
+    fromEntries: tArrow(arr(pair(tString, a)), dictT(a)), // [(string, a)] -> Dict a
+    map: tArrow(tArrow(a, b), tArrow(dictT(a), dictT(b))), // (a -> b) -> Dict a -> Dict b
+  },
   // Option combinators — data-last (Option comes final) for `|>` chains.
   // The ctors (Some/None) stay unqualified builtins; only the combinators are
   // namespaced. `contains` uses structural eq.
@@ -310,6 +328,20 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     keys: "_Map_keys",
     values: "_Map_values",
     get: "_Map_get",
+  },
+  Dict: {
+    empty: "_Dict_empty",
+    has: "_Dict_has",
+    get: "_Dict_get",
+    getOr: "_Dict_getOr",
+    set: "_Dict_set",
+    remove: "_Dict_remove",
+    size: "_Dict_size",
+    keys: "_Dict_keys",
+    values: "_Dict_values",
+    entries: "_Dict_entries",
+    fromEntries: "_Dict_fromEntries",
+    map: "_Dict_map",
   },
   Option: {
     map: "_Option_map",

@@ -784,7 +784,10 @@ const isArrowT: (t: Ty) => boolean = (t: Ty) => {
   }
 };
 const isCollection: (name: string) => boolean = (name: string) =>
-  or(or(or(name === "Array", name === "List"), name === "Set"), name === "Map");
+  or(
+    or(or(or(name === "Array", name === "List"), name === "Set"), name === "Map"),
+    name === "Dict",
+  );
 const isTupleT: (t: Ty) => boolean = (t: Ty) => {
   const $match = t;
   switch ($match._tag) {

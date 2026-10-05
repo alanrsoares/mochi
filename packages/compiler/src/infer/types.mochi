@@ -420,7 +420,7 @@ let rowVarOccursInType = (id, t, st: St) => switch resolve(t, st) {
 let isArrowT = t => switch t { | TyFn(_, _) => true | _ => false }
 
 let isCollection = name =>
-  name == "Array" || name == "List" || name == "Set" || name == "Map"
+  name == "Array" || name == "List" || name == "Set" || name == "Map" || name == "Dict"
 
 let isTupleT = t => switch t { | TyCon(name, _) => name == TUPLE | _ => false }
 
