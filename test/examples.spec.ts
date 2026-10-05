@@ -865,6 +865,8 @@ let out = (
 
 test("pipe placeholder fills the marked argument (ADR 0153)", () => {
   const src = `let f3 = (a, b, c) => a * 100 + b * 10 + c
-let out = [5 |> f3(1, _, 3), 5 -> f3(1, _, 3), 5 |> f3(_, 2, 3), 5 |> f3(_, _, 3)]`;
-  expect(compileAndEval(src, "out")).toEqual([153, 153, 523, 553]);
+let out = [5 |> f3(1, _, 3), 5 -> f3(1, _, 3), 5 |> f3(_, 2, 3), 5 |> f3(_, _, 3), (2 + 3) |> f3(_, _, 0)]`;
+  expect(compileAndEval(src, "out")).toEqual([153, 153, 523, 553, 550]);
+  // a non-atomic piped value is bound once, not copied into every `_`
+  expect(compileJs(src)).toContain("$pipe");
 });

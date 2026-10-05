@@ -13141,12 +13141,34 @@ var hasPipeHole = (right) => {
     }
   }
 };
+var isPipeAtom = (e) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 var fillPipeHole$ = (left, right, sp) => {
   const $match = right;
   switch ($match._tag) {
     case "ECall": {
       const { fn: rfn, args: rargs, origin } = $match;
-      return ECall(rfn, map9((a) => isPipeHole(a) ? left : a, rargs), origin, sp);
+      const v = isPipeAtom(left) ? left : ERef("$pipe", sp);
+      const call = ECall(rfn, map9((a) => isPipeHole(a) ? v : a, rargs), origin, sp);
+      return isPipeAtom(left) ? call : ELetIn("$pipe", sp, None16, left, call, sp);
     }
     default: {
       return right;
@@ -14302,12 +14324,34 @@ var hasPipeHole2 = (right) => {
     }
   }
 };
+var isPipeAtom2 = (e) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 var fillPipeHole$2 = (left, right, sp) => {
   const $match = right;
   switch ($match._tag) {
     case "ECall": {
       const { fn: rfn, args: rargs, origin } = $match;
-      return ECall(rfn, map12((a) => isPipeHole2(a) ? left : a, rargs), origin, sp);
+      const v = isPipeAtom2(left) ? left : ERef("$pipe", sp);
+      const call = ECall(rfn, map12((a) => isPipeHole2(a) ? v : a, rargs), origin, sp);
+      return isPipeAtom2(left) ? call : ELetIn("$pipe", sp, None18, left, call, sp);
     }
     default: {
       return right;

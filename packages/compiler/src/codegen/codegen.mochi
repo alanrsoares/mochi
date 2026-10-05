@@ -487,13 +487,27 @@ let hasPipeHole = right => switch right {
   | _ => false
 }
 
+// `left` is evaluated once, before the call's arguments: anything but a plain
+// reference is bound to `$pipe` first, then every `_` reads that binding.
+let isPipeAtom = e => switch e {
+  | Ast.ERef(_, _) => true
+  | Ast.ENum(_, _, _) => true
+  | Ast.EStr(_, _) => true
+  | Ast.EBool(_, _) => true
+  | _ => false
+}
+
 let fillPipeHole = (left, right, sp) => switch right {
-  | Ast.ECall(rfn, rargs, origin, _) => Ast.ECall(
+  | Ast.ECall(rfn, rargs, origin, _) => let v = isPipeAtom(left)
+      ? left
+      : Ast.ERef("$pipe", sp) in
+    let call = Ast.ECall(
       rfn,
-      rargs |> map(a => isPipeHole(a) ? left : a),
+      rargs |> map(a => isPipeHole(a) ? v : a),
       origin,
       sp
-    )
+    ) in
+      isPipeAtom(left) ? call : Ast.ELetIn("$pipe", sp, None, left, call, sp)
   | _ => right
 }
 

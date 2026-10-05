@@ -870,17 +870,41 @@ const hasPipeHole: (right: Expr) => boolean = (right: Expr) => {
     }
   }
 };
+const isPipeAtom: (e: Expr) => boolean = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
 const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
   const $match = right;
   switch ($match._tag) {
     case "ECall": {
       const { fn: rfn, args: rargs, origin } = $match;
-      return Ast.ECall(
+      const v: Expr = isPipeAtom(left) ? left : Ast.ERef("$pipe", sp);
+      const call: Expr = Ast.ECall(
         rfn,
-        map((a: Expr) => (isPipeHole(a) ? left : a), rargs),
+        map((a: Expr) => (isPipeHole(a) ? v : a), rargs),
         origin,
         sp,
       );
+      return isPipeAtom(left)
+        ? call
+        : Ast.ELetIn("$pipe", sp, None as Option<TypeExpr>, left, call, sp);
     }
     default: {
       return right;
