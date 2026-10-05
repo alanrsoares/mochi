@@ -36,6 +36,14 @@ let steps = (values: [Result<number, string>]) => loop (remaining = values) { sw
   | [r, ...rest] => switch r { | Err(e) => Err(e) | Ok(n) => let used = n + 1 in recur(rest) }
 } }
 let chosen = (result(Ok(2)), option(Some(3)), generic(Ok(4)), genericOption(Some(5)))`,
+  customDiscriminant: `
+@tag("type")
+type Ev = | @as("click") Click(x: number, y: number) | @as("key") Key(k: string) | Idle
+let describe = (e: Ev) => switch e { | Click(x, y) => x + y | Key(k) => Str.length(k) | Idle => 0 }
+let nested = (o: Option<Ev>) => switch o { | Some(Click(x, _)) => x | Some(Key(_)) => 1 | Some(Idle) => 2 | None => 3 }
+let guarded = (e: Ev) => switch e { | Click(x, _) when x > 5 => 1 | Click(_, _) => 2 | _ => 3 }
+let isIdle = (e: Ev) => e == Idle
+let values = (describe(Click(1, 2)), nested(Some(Key("k"))), guarded(Idle), isIdle(Key("a")))`,
   structuralOrdering: `
 type Entry = | Box(number) | Named(value: number)
 type Row = { value?: number }

@@ -325,7 +325,7 @@ const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Regis
 );
 export const exportedRegistry: (stmts: Stmt[]) => Registry = (stmts: Stmt[]) =>
   exportedRegLoop$(stmts, 0, emptyRegistry);
-const tagEntryOf: (name: string) => string = (name: string) => `@tag:${name}`;
+export const tagEntryOf: (name: string) => string = (name: string) => `@tag:${name}`;
 const withTag$ = (
   m: Map<string, string[]>,
   name: string,

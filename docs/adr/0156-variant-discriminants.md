@@ -42,3 +42,5 @@ export type Ev =
 - Runtime `show` and `==` treat a custom-tagged value as a plain record (the discriminant is a normal
   field). Equality is unchanged in outcome; `show` prints the record form.
 - `@as` alone changes only the literal and keeps the `_tag` key.
+- `compare` and `==` also see a custom-tagged value as a plain record; `compare` orders by field values, not by constructor order.
+- A named import carries the constructor's `@tag:` registry entry with its field keys (namespace imports merge the whole registry), so an importer lowers patterns and `==` with the same discriminant.

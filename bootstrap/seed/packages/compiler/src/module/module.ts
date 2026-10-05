@@ -91,7 +91,7 @@ import { match } from "@onrails/pattern";
 import { lex } from "../lexer/lexer";
 import { parseWith } from "../parser/parser";
 import { checkAllWith, checkWith } from "../check/check";
-import { exportedRegistry, exportedCtorKeys } from "../ast/ctors";
+import { exportedRegistry, exportedCtorKeys, tagEntryOf } from "../ast/ctors";
 import {
   inferProgramImports,
   inferProgramImportsTypes,
@@ -429,38 +429,52 @@ const qualScopeOf: <A, B>(
     >,
   ) => ({ types: exportedTypeNames(stmts), aliases: scopeAliases(stmts, quals) }),
 );
-const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
-  name: A,
-  info: { owner: B } & H,
-  depReg: { types: Map<B, C> } & I,
-  depKeys: Map<A, D>,
+const withTagEntry$ = (
+  name: string,
+  depKeys: Map<string, string[]>,
+  keys: Map<string, string[]>,
+): Map<string, string[]> =>
+  _Option_match(
+    _Map_get(tagEntryOf(name), depKeys),
+    () => keys,
+    (t) => _Map_set(tagEntryOf(name), t, keys),
+  );
+const withTagEntry: _Curry<
+  [name: string, depKeys: Map<string, string[]>, keys: Map<string, string[]>],
+  Map<string, string[]>
+> = _curry(3, withTagEntry$);
+const withNamedCtor: <A, B, C, D, E, F, G, H, I>(
+  name: string,
+  info: { owner: A } & F,
+  depReg: { types: Map<A, B> } & G,
+  depKeys: Map<string, string[]>,
   res: {
-    quals: E;
-    keys: Map<A, D>;
-    reg: { types: Map<B, C>; ctors: Map<A, { owner: B } & H> } & J;
-    nsImports: F;
-    imports: G;
-  } & K,
+    quals: C;
+    keys: Map<string, string[]>;
+    reg: { types: Map<A, B>; ctors: Map<string, { owner: A } & F> } & H;
+    nsImports: D;
+    imports: E;
+  } & I,
 ) => {
-  imports: G;
-  nsImports: F;
-  reg: { ctors: Map<A, { owner: B } & H>; types: Map<B, C> };
-  keys: Map<A, D>;
-  quals: E;
+  imports: E;
+  nsImports: D;
+  reg: { ctors: Map<string, { owner: A } & F>; types: Map<A, B> };
+  keys: Map<string, string[]>;
+  quals: C;
 } = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I, J, K>(
-    name: A,
-    info: { owner: B } & H,
-    depReg: { types: Map<B, C> } & I,
-    depKeys: Map<A, D>,
+  <A, B, C, D, E, F, G, H, I>(
+    name: string,
+    info: { owner: A } & F,
+    depReg: { types: Map<A, B> } & G,
+    depKeys: Map<string, string[]>,
     res: {
-      quals: E;
-      keys: Map<A, D>;
-      reg: { types: Map<B, C>; ctors: Map<A, { owner: B } & H> } & J;
-      nsImports: F;
-      imports: G;
-    } & K,
+      quals: C;
+      keys: Map<string, string[]>;
+      reg: { types: Map<A, B>; ctors: Map<string, { owner: A } & F> } & H;
+      nsImports: D;
+      imports: E;
+    } & I,
   ) => ({
     imports: res.imports,
     nsImports: res.nsImports,
@@ -475,45 +489,45 @@ const withNamedCtor: <A, B, C, D, E, F, G, H, I, J, K>(
     keys: _Option_match(
       _Map_get(name, depKeys),
       () => res.keys,
-      (ks) => _Map_set(name, ks, res.keys),
+      (ks) => withTagEntry$(name, depKeys, _Map_set(name, ks, res.keys)),
     ),
     quals: res.quals,
   }),
 );
-const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
+const takeNamedCtor: <C, D, E, F, G, H, I, J>(
   name: string,
-  span: { end: number; start: number } & I,
-  depReg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> } & K,
-  depKeys: Map<string, E>,
+  span: { end: number; start: number } & H,
+  depReg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> } & J,
+  depKeys: Map<string, string[]>,
   res: {
-    reg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> };
-    quals: F;
-    keys: Map<string, E>;
-    nsImports: G;
-    imports: H;
+    reg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> };
+    quals: E;
+    keys: Map<string, string[]>;
+    nsImports: F;
+    imports: G;
   },
 ) => Result<
   {
-    reg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> };
-    quals: F;
-    keys: Map<string, E>;
-    nsImports: G;
-    imports: H;
+    reg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> };
+    quals: E;
+    keys: Map<string, string[]>;
+    nsImports: F;
+    imports: G;
   },
   MErr
 > = _curry(
   5,
-  <C, D, E, F, G, H, I, J, K>(
+  <C, D, E, F, G, H, I, J>(
     name: string,
-    span: { end: number; start: number } & I,
-    depReg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> } & K,
-    depKeys: Map<string, E>,
+    span: { end: number; start: number } & H,
+    depReg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> } & J,
+    depKeys: Map<string, string[]>,
     res: {
-      reg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> };
-      quals: F;
-      keys: Map<string, E>;
-      nsImports: G;
-      imports: H;
+      reg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> };
+      quals: E;
+      keys: Map<string, string[]>;
+      nsImports: F;
+      imports: G;
     },
   ) =>
     _Option_match(
@@ -562,42 +576,42 @@ const prefixCtorsInto: <A>(
               throw new Error("non-exhaustive match");
             })())(keys),
 );
-const resolveNames: <D, E, F, G, H, I, J, K, L>(
-  names: ({ name: string; span: { end: number; start: number } & I } & J)[],
+const resolveNames: <D, E, F, G, H, I, J, K>(
+  names: ({ name: string; span: { end: number; start: number } & H } & I)[],
   from: string,
   depExports: Map<string, Scheme>,
-  depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
-  depKeys: Map<string, F>,
+  depReg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> } & K,
+  depKeys: Map<string, string[]>,
   res: {
-    quals: G;
-    keys: Map<string, F>;
-    reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
-    nsImports: H;
+    quals: F;
+    keys: Map<string, string[]>;
+    reg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> };
+    nsImports: G;
     imports: Map<string, Scheme>;
   },
   recovering: boolean,
 ) => Result<
   {
-    quals: G;
-    keys: Map<string, F>;
-    reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
-    nsImports: H;
+    quals: F;
+    keys: Map<string, string[]>;
+    reg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> };
+    nsImports: G;
     imports: Map<string, Scheme>;
   },
   MErr
 > = _curry(
   7,
-  <D, E, F, G, H, I, J, K, L>(
-    names: ({ name: string; span: { end: number; start: number } & I } & J)[],
+  <D, E, F, G, H, I, J, K>(
+    names: ({ name: string; span: { end: number; start: number } & H } & I)[],
     from: string,
     depExports: Map<string, Scheme>,
-    depReg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> } & L,
-    depKeys: Map<string, F>,
+    depReg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> } & K,
+    depKeys: Map<string, string[]>,
     res: {
-      quals: G;
-      keys: Map<string, F>;
-      reg: { ctors: Map<string, { owner: D } & K>; types: Map<D, E> };
-      nsImports: H;
+      quals: F;
+      keys: Map<string, string[]>;
+      reg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> };
+      nsImports: G;
       imports: Map<string, Scheme>;
     },
     recovering: boolean,
@@ -653,19 +667,19 @@ const resolveNames: <D, E, F, G, H, I, J, K, L>(
         throw new Error("non-exhaustive match");
       }),
 );
-const resolveImportsFrom: <B, C, D>(
+const resolveImportsFrom: <B, C>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
-    keysByPath: Map<string, Map<string, B>>;
-    qualsByPath: Map<string, C>;
-  } & D,
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<string, B>;
+  } & C,
   stmts: Stmt[],
   i: number,
   path: string,
   res: {
-    quals: Map<string, C>;
-    keys: Map<string, B>;
+    quals: Map<string, B>;
+    keys: Map<string, string[]>;
     reg: Registry;
     nsImports: Map<string, Map<string, Scheme>>;
     imports: Map<string, Scheme>;
@@ -673,8 +687,8 @@ const resolveImportsFrom: <B, C, D>(
   recovering: boolean,
 ) => Result<
   {
-    quals: Map<string, C>;
-    keys: Map<string, B>;
+    quals: Map<string, B>;
+    keys: Map<string, string[]>;
     reg: Registry;
     nsImports: Map<string, Map<string, Scheme>>;
     imports: Map<string, Scheme>;
@@ -682,19 +696,19 @@ const resolveImportsFrom: <B, C, D>(
   MErr
 > = _curry(
   6,
-  <B, C, D>(
+  <B, C>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
-      keysByPath: Map<string, Map<string, B>>;
-      qualsByPath: Map<string, C>;
-    } & D,
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<string, B>;
+    } & C,
     stmts: Stmt[],
     i: number,
     path: string,
     res: {
-      quals: Map<string, C>;
-      keys: Map<string, B>;
+      quals: Map<string, B>;
+      keys: Map<string, string[]>;
       reg: Registry;
       nsImports: Map<string, Map<string, Scheme>>;
       imports: Map<string, Scheme>;
@@ -709,12 +723,12 @@ const resolveImportsFrom: <B, C, D>(
               ((dp: string) =>
                 ((depExports) =>
                   ((depReg: Registry) =>
-                    ((depKeys) =>
+                    ((depKeys: Map<string, string[]>) =>
                       _Result_match(
                         resolveNames(names, from, depExports, depReg, depKeys, res, recovering),
                         (e) => Err(e),
                         (res1) => resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
-                      ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                      ))(_Map_getOr(new Map<string, string[]>(), dp, ctx.keysByPath)))(
                     _Map_getOr(emptyReg, dp, ctx.regByPath),
                   ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
                 resolveImport(path, from),
@@ -731,7 +745,7 @@ const resolveImportsFrom: <B, C, D>(
                 ((dp: string) =>
                   ((depExports) =>
                     ((depReg: Registry) =>
-                      ((depKeys) =>
+                      ((depKeys: Map<string, string[]>) =>
                         resolveImportsFrom(
                           ctx,
                           stmts,
@@ -757,7 +771,7 @@ const resolveImportsFrom: <B, C, D>(
                             ),
                           },
                           recovering,
-                        ))(_Map_getOr(new Map<string, B>(), dp, ctx.keysByPath)))(
+                        ))(_Map_getOr(new Map<string, string[]>(), dp, ctx.keysByPath)))(
                       _Map_getOr(emptyReg, dp, ctx.regByPath),
                     ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
                   resolveImport(path, from),
@@ -952,23 +966,23 @@ const depsPublished: <A, B>(
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts)),
 );
-const checkErrorsRecovering: <B, C, D>(
+const checkErrorsRecovering: <B, C>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
-    keysByPath: Map<string, Map<string, B>>;
-    qualsByPath: Map<string, { types: Set<string> } & C>;
-  } & D,
+    keysByPath: Map<string, Map<string, string[]>>;
+    qualsByPath: Map<string, { types: Set<string> } & B>;
+  } & C,
   loaded: Loaded,
 ) => MErr[] = _curry(
   2,
-  <B, C, D>(
+  <B, C>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
-      keysByPath: Map<string, Map<string, B>>;
-      qualsByPath: Map<string, { types: Set<string> } & C>;
-    } & D,
+      keysByPath: Map<string, Map<string, string[]>>;
+      qualsByPath: Map<string, { types: Set<string> } & B>;
+    } & C,
     loaded: Loaded,
   ) => {
     const importErrors: MErr[] = depsPublished(ctx, loaded.stmts, 0, loaded.path)
@@ -982,8 +996,8 @@ const checkErrorsRecovering: <B, C, D>(
               imports: new Map<string, Scheme>(),
               nsImports: new Map<string, Map<string, Scheme>>(),
               reg: emptyReg,
-              keys: new Map<string, B>(),
-              quals: new Map<string, { types: Set<string> } & C>(),
+              keys: new Map<string, string[]>(),
+              quals: new Map<string, { types: Set<string> } & B>(),
             },
             false,
           ),
@@ -1001,8 +1015,8 @@ const checkErrorsRecovering: <B, C, D>(
           imports: new Map<string, Scheme>(),
           nsImports: new Map<string, Map<string, Scheme>>(),
           reg: emptyReg,
-          keys: new Map<string, B>(),
-          quals: new Map<string, { types: Set<string> } & C>(),
+          keys: new Map<string, string[]>(),
+          quals: new Map<string, { types: Set<string> } & B>(),
         },
         true,
       ),

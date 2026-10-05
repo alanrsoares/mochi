@@ -206,7 +206,7 @@ export let exportedRegistry = stmts => stmts->exportedRegLoop(0, emptyRegistry)
 // imports included — sees it with no extra plumbing. `@` cannot start an
 // identifier, so the entry never collides with a ctor. Default ctors carry no
 // entry (and clear a stale one), so unannotated code emits exactly as before.
-let tagEntryOf = name => "@tag:${name}"
+export let tagEntryOf = name => "@tag:${name}"
 
 let withTag = (m: Map<string, [string]>, name: string, tagKey: string, tagLit: string) =>
   tagKey == "_tag" && tagLit == name

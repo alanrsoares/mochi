@@ -2,10 +2,16 @@
 // `@as("v")` on a ctor override the runtime `{ _tag: "Ctor" }` shape so mochi can
 // construct and match TypeScript discriminated unions such as `{ type: "click" }`.
 import { expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { codegenTs, compile, emitDts } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
-import { compileAndEval } from "@mochi/test-support";
+import { compileAndEval, repoRoot } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
+
+const root = repoRoot(import.meta.url);
+const CLI = join(root, "packages/cli/src/cli.ts");
 
 const EV = `type Ev =
   | @as("click") Click(x: number, y: number)
@@ -108,4 +114,49 @@ test("@tag must precede a variant type", () => {
 test("@{ ... } still parses as a lazy list statement", () => {
   // Parses (the failure is a type error: a bare list is not a unit statement).
   expect(unwrapErr(compile("@{1, 2}"))[0]?.kind).toBe("type");
+});
+
+// ---- cross-module ----------------------------------------------------------
+
+const DEP = `@tag("type")\nexport ${EV}`;
+
+test("an importer matches, builds and compares an imported tagged variant", async () => {
+  const dir = mkdtempSync(join(repoRoot(import.meta.url), "test", ".variant-tag-"));
+  try {
+    writeFileSync(join(dir, "ev.mochi"), DEP);
+    writeFileSync(
+      join(dir, "main.mochi"),
+      `import { Click, Key, Idle } from "./ev.mochi"
+let describe = e => switch e { | Click(x, y) => "c\${show(x + y)}" | Key(k) => k | Idle => "idle" }
+let nested = (o: Option<Ev>) => switch o { | Some(Click(x, _)) => x | _ => 0 - 1 }
+let guarded = e => switch e { | Click(x, _) when x > 5 => "big" | _ => "other" }
+export let out = [describe(Click(1, 2)), describe(Key("a")), describe(Idle), show(Idle == Idle), show(nested(Some(Click(7, 8)))), show(nested(None)), guarded(Click(9, 0)), guarded(Idle)]
+`,
+    );
+    writeFileSync(
+      join(dir, "ns.mochi"),
+      `import * as E from "./ev.mochi"
+let d = e => switch e { | E.Click(x, _) => x | E.Key(_) => 1 | E.Idle => 2 }
+export let out = [d(E.Click(5, 6)), d(E.Key("k")), d(E.Idle)]
+`,
+    );
+    for (const entry of ["main", "ns"])
+      execFileSync("bun", [CLI, "build", join(dir, `${entry}.mochi`)], { cwd: root });
+    const main = await import(join(dir, "main.js"));
+    const ns = await import(join(dir, "ns.js"));
+    expect(main.out).toEqual(["c3", "a", "idle", "true", "7", "-1", "big", "other"]);
+    expect(ns.out).toEqual([5, 1, 2]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("compare and show treat a custom-tagged value as a plain record", () => {
+  const src = `${tagged(false)}let r = [show(Click(1, 2)), show(compare(Key("a"), Key("b"))), show(Click(1, 2) == Click(1, 2)), show(Click(1, 2) == Click(1, 3))]`;
+  expect(compileAndEval(src, "r")).toEqual([
+    '{ type: "click", x: 1, y: 2 }',
+    "-1",
+    "true",
+    "false",
+  ]);
 });
