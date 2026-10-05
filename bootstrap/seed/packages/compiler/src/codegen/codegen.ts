@@ -856,225 +856,278 @@ const genCalleeFor$ = (ctx: GCtx, fn: Expr, argc: number): string => {
  * ordinary callee.
  */
 const genCalleeFor: _Curry<[ctx: GCtx, fn: Expr, argc: number], string> = _curry(3, genCalleeFor$);
-const genExpr$ = (ctx: GCtx, e: Expr): string => {
-  const $match = e;
-  switch ($match._tag) {
-    case "ENum": {
-      const { raw } = $match;
-      return raw;
-    }
-    case "EUnit": {
-      return "undefined";
-    }
-    case "EBool": {
-      const { value } = $match;
-      return value ? "true" : "false";
-    }
-    case "EStr": {
-      const { value } = $match;
-      return jsStringLit(value);
-    }
-    case "ERef": {
-      const { name } = $match;
-      return castOr$(
-        name,
-        isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
-      );
-    }
-    case "ECall": {
-      const { fn, args, origin } = $match;
-      return _Option_match(
-        tsxCall$(ctx, fn, args, origin),
-        () =>
-          _Option_match(
-            tsInfix$(ctx, fn, args),
-            () => {
-              const inner: string = `${genCalleeFor$(ctx, fn, length(args))}(${_Str_join(
-                ", ",
-                map((a: Expr) => genExpr$(ctx, a), args),
-              )})`;
-              return castOr$(
-                inner,
-                isCtorRef(fn) ? hook1(ctx.annotateCall, e) : (None as Option<string>),
-              );
-            },
-            (infix) => infix,
-          ),
-        (jsx) => jsx,
-      );
-    }
-    case "ELambda": {
-      const { params, body, span: sp } = $match;
-      return (([arrow, arity]: [string, number]) =>
-        arity >= 2 ? `_curry(${show(arity)}, ${arrow})` : arrow)(
-        genArrow$(ctx, params, body, sp, ""),
-      );
-    }
-    case "ELetIn": {
-      const { name, value, body } = $match;
-      const param: string = suffixOr$(name, hook1(ctx.annotateLetin, value));
-      return `((${param}) => ${genLambdaBody$(ctx, body)})(${genExpr$(ctx, value)})`;
-    }
-    case "ELetBind": {
-      const { param, monad, value, body } = $match;
-      const rt: string = bindRuntime(monad);
-      const f: string = `(${genParam(param)}) => ${genLambdaBody$(ctx, body)}`;
-      const v: string = genExpr$(ctx, value);
-      return ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`;
-    }
-    case "EPipe": {
-      const { left, right, fast, span: sp } = $match;
-      return fast
-        ? ((_v) =>
-            _v._tag === "ECall"
-              ? (({ fn: rfn, args: rargs, origin }) =>
-                  genExpr$(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)))(_v)
-              : genExpr$(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))(right)
-        : ((_v) =>
-            _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v)
-              ? (({ fn: rfn, args: rargs }) =>
-                  `${genCalleeFor$(ctx, rfn, length(rargs) + 1)}(${_Str_join(
-                    ", ",
-                    map((a: Expr) => genExpr$(ctx, a), _Array_append(left, rargs)),
-                  )})`)(_v)
-              : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
-    }
-    case "EDo": {
-      const { exprs } = $match;
-      return genDo$(ctx, exprs);
-    }
-    case "ETernary": {
-      const { cond, thenE, elseE } = $match;
-      return `(${genExpr$(ctx, cond)} ? ${genExpr$(ctx, thenE)} : ${genExpr$(ctx, elseE)})`;
-    }
-    case "EMatch": {
-      const { scrutinee, arms } = $match;
-      return genMatch$(ctx, scrutinee, arms);
-    }
-    case "ELoop": {
-      const { params, body } = $match;
-      return `(() => { ${genLoopBlock$(ctx, params, body)} })()`;
-    }
-    case "ERecur": {
-      const { args } = $match;
-      return `_recur(${_Str_join(
-        ", ",
-        map((a: Expr) => genExpr$(ctx, a), args),
-      )})`;
-    }
-    case "ERecord": {
-      const { fields, spread } = $match;
-      const fieldStrs: string = _Str_join(
-        ", ",
-        map(
-          (f: Field) =>
-            `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr$(ctx, f.value)}`,
-          fields,
-        ),
-      );
-      return _Option_match(
-        spread,
-        () => (length(fields) === 0 ? "{}" : `{ ${fieldStrs} }`),
-        (s) => {
-          const spreadStr: string = `...${genExpr$(ctx, s)}`;
-          return length(fields) === 0 ? `{ ${spreadStr} }` : `{ ${spreadStr}, ${fieldStrs} }`;
-        },
-      );
-    }
-    case "EField": {
-      const { target, name, optional } = $match;
-      return _Option_match(
-        emptyNsEmit$(target, name, hook1(ctx.annotateEmpty, e)),
-        () =>
-          _Option_match(
-            nsRuntimeId$(ctx, target, name),
-            () => {
-              const member: string = `${genMember$(ctx, target)}.${name}`;
-              return optional
-                ? ((tagType: string) =>
-                    `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(
-                    _Option_isSome(ctx.guardBaseType) ? " as const" : "",
-                  )
-                : member;
-            },
-            (rt) => rt,
-          ),
-        (js) => js,
-      );
-    }
-    case "ETuple": {
-      const { elements } = $match;
-      const elems: string = _Str_join(
-        ", ",
-        map((el: Expr) => genExpr$(ctx, el), elements),
-      );
-      return ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
-    }
-    case "EArr": {
-      const { elements } = $match;
-      const body: string = `[${_Str_join(
-        ", ",
-        map((el: SeqElem) => genSeqSlot$(ctx, el), elements),
-      )}]`;
-      return castOr$(
-        body,
-        length(elements) === 0 ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
-      );
-    }
-    case "EList": {
-      const { elements } = $match;
-      return genList$(ctx, elements);
-    }
-    case "ESet": {
-      const { elements } = $match;
-      return `new Set([${_Str_join(
-        ", ",
-        map((el: SeqElem) => genSeqSlot$(ctx, el), elements),
-      )}])`;
-    }
-    case "EMap": {
-      const { entries } = $match;
-      return _Option_match(
-        length(entries) === 0 ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
-        () =>
-          `new Map([${_Str_join(
-            ", ",
-            map(
-              (en: MapEntry) => `[${genExpr$(ctx, en.key)}, ${genExpr$(ctx, en.value)}]`,
-              entries,
-            ),
-          )}])`,
-        (t) => `new ${t}()`,
-      );
-    }
-    case "EInterp": {
-      const { parts } = $match;
-      const body: string = _Str_join(
-        "",
-        map((p: InterpPart) => {
-          const $match$ = p;
-          switch ($match$._tag) {
-            case "IPLit": {
-              const { value } = $match$;
-              return escapeTemplateLiteral(value);
-            }
-            case "IPExpr": {
-              const { expr: ex } = $match$;
-              return `\${${genExpr$(ctx, ex)}}`;
-            }
-            default: {
-              throw new Error("non-exhaustive match");
-            }
-          }
-        }, parts),
-      );
-      return `\`${body}\``;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
+const isPipeHole: (a: Expr) => boolean = (a: Expr) =>
+  ((_v) => (_v._tag === "ERef" && _v.name === "_" ? true : false))(a);
+const genExpr$ = (ctx: GCtx, e: Expr): string =>
+  ((_v) =>
+    _v._tag === "ENum"
+      ? (({ raw }) => raw)(_v)
+      : _v._tag === "EUnit"
+        ? "undefined"
+        : _v._tag === "EBool"
+          ? (({ value }) => (value ? "true" : "false"))(_v)
+          : _v._tag === "EStr"
+            ? (({ value }) => jsStringLit(value))(_v)
+            : _v._tag === "ERef"
+              ? (({ name }) =>
+                  castOr$(
+                    name,
+                    isNullaryCtor(name, ctx.keys)
+                      ? hook1(ctx.annotateEmpty, e)
+                      : (None as Option<string>),
+                  ))(_v)
+              : _v._tag === "ECall"
+                ? (({ fn, args, origin }) =>
+                    _Option_match(
+                      tsxCall$(ctx, fn, args, origin),
+                      () =>
+                        _Option_match(
+                          tsInfix$(ctx, fn, args),
+                          () => {
+                            const inner: string = `${genCalleeFor$(ctx, fn, length(args))}(${_Str_join(
+                              ", ",
+                              map((a: Expr) => genExpr$(ctx, a), args),
+                            )})`;
+                            return castOr$(
+                              inner,
+                              isCtorRef(fn) ? hook1(ctx.annotateCall, e) : (None as Option<string>),
+                            );
+                          },
+                          (infix) => infix,
+                        ),
+                      (jsx) => jsx,
+                    ))(_v)
+                : _v._tag === "ELambda"
+                  ? (({ params, body, span: sp }) =>
+                      (([arrow, arity]: [string, number]) =>
+                        arity >= 2 ? `_curry(${show(arity)}, ${arrow})` : arrow)(
+                        genArrow$(ctx, params, body, sp, ""),
+                      ))(_v)
+                  : _v._tag === "ELetIn"
+                    ? (({ name, value, body }) =>
+                        ((param: string) =>
+                          `((${param}) => ${genLambdaBody$(ctx, body)})(${genExpr$(ctx, value)})`)(
+                          suffixOr$(name, hook1(ctx.annotateLetin, value)),
+                        ))(_v)
+                    : _v._tag === "ELetBind"
+                      ? (({ param, monad, value, body }) =>
+                          ((rt: string) =>
+                            ((f: string) =>
+                              ((v: string) =>
+                                ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`)(
+                                genExpr$(ctx, value),
+                              ))(`(${genParam(param)}) => ${genLambdaBody$(ctx, body)}`))(
+                            bindRuntime(monad),
+                          ))(_v)
+                      : _v._tag === "EPipe" &&
+                          _v.right._tag === "ECall" &&
+                          (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) =>
+                            someOf(isPipeHole, rargs))(
+                            _v as Extract<Expr, { _tag: "EPipe" }> & {
+                              right: Extract<
+                                Extract<Expr, { _tag: "EPipe" }>["right"],
+                                { _tag: "ECall" }
+                              >;
+                            },
+                          )
+                        ? (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) =>
+                            genExpr$(
+                              ctx,
+                              Ast.ECall(
+                                rfn,
+                                map((a: Expr) => (isPipeHole(a) ? left : a), rargs),
+                                origin,
+                                sp,
+                              ),
+                            ))(
+                            _v as Extract<Expr, { _tag: "EPipe" }> & {
+                              right: Extract<
+                                Extract<Expr, { _tag: "EPipe" }>["right"],
+                                { _tag: "ECall" }
+                              >;
+                            },
+                          )
+                        : _v._tag === "EPipe"
+                          ? (({ left, right, fast, span: sp }) =>
+                              fast
+                                ? ((_v) =>
+                                    _v._tag === "ECall"
+                                      ? (({ fn: rfn, args: rargs, origin }) =>
+                                          genExpr$(
+                                            ctx,
+                                            Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp),
+                                          ))(_v)
+                                      : genExpr$(
+                                          ctx,
+                                          Ast.ECall(right, [left], None as Option<string>, sp),
+                                        ))(right)
+                                : ((_v) =>
+                                    _v._tag === "ECall" &&
+                                    (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v)
+                                      ? (({ fn: rfn, args: rargs }) =>
+                                          `${genCalleeFor$(ctx, rfn, length(rargs) + 1)}(${_Str_join(
+                                            ", ",
+                                            map(
+                                              (a: Expr) => genExpr$(ctx, a),
+                                              _Array_append(left, rargs),
+                                            ),
+                                          )})`)(_v)
+                                      : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(
+                                    right,
+                                  ))(_v)
+                          : _v._tag === "EDo"
+                            ? (({ exprs }) => genDo$(ctx, exprs))(_v)
+                            : _v._tag === "ETernary"
+                              ? (({ cond, thenE, elseE }) =>
+                                  `(${genExpr$(ctx, cond)} ? ${genExpr$(ctx, thenE)} : ${genExpr$(ctx, elseE)})`)(
+                                  _v,
+                                )
+                              : _v._tag === "EMatch"
+                                ? (({ scrutinee, arms }) => genMatch$(ctx, scrutinee, arms))(_v)
+                                : _v._tag === "ELoop"
+                                  ? (({ params, body }) =>
+                                      `(() => { ${genLoopBlock$(ctx, params, body)} })()`)(_v)
+                                  : _v._tag === "ERecur"
+                                    ? (({ args }) =>
+                                        `_recur(${_Str_join(
+                                          ", ",
+                                          map((a: Expr) => genExpr$(ctx, a), args),
+                                        )})`)(_v)
+                                    : _v._tag === "ERecord"
+                                      ? (({ fields, spread }) =>
+                                          ((fieldStrs: string) =>
+                                            _Option_match(
+                                              spread,
+                                              () =>
+                                                length(fields) === 0 ? "{}" : `{ ${fieldStrs} }`,
+                                              (s) => {
+                                                const spreadStr: string = `...${genExpr$(ctx, s)}`;
+                                                return length(fields) === 0
+                                                  ? `{ ${spreadStr} }`
+                                                  : `{ ${spreadStr}, ${fieldStrs} }`;
+                                              },
+                                            ))(
+                                            _Str_join(
+                                              ", ",
+                                              map(
+                                                (f: Field) =>
+                                                  `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr$(ctx, f.value)}`,
+                                                fields,
+                                              ),
+                                            ),
+                                          ))(_v)
+                                      : _v._tag === "EField"
+                                        ? (({ target, name, optional }) =>
+                                            _Option_match(
+                                              emptyNsEmit$(
+                                                target,
+                                                name,
+                                                hook1(ctx.annotateEmpty, e),
+                                              ),
+                                              () =>
+                                                _Option_match(
+                                                  nsRuntimeId$(ctx, target, name),
+                                                  () => {
+                                                    const member: string = `${genMember$(ctx, target)}.${name}`;
+                                                    return optional
+                                                      ? ((tagType: string) =>
+                                                          `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(
+                                                          _Option_isSome(ctx.guardBaseType)
+                                                            ? " as const"
+                                                            : "",
+                                                        )
+                                                      : member;
+                                                  },
+                                                  (rt) => rt,
+                                                ),
+                                              (js) => js,
+                                            ))(_v)
+                                        : _v._tag === "ETuple"
+                                          ? (({ elements }) =>
+                                              ((elems: string) =>
+                                                ctx.tupleHelper
+                                                  ? `_tuple(${elems})`
+                                                  : `[${elems}]`)(
+                                                _Str_join(
+                                                  ", ",
+                                                  map((el: Expr) => genExpr$(ctx, el), elements),
+                                                ),
+                                              ))(_v)
+                                          : _v._tag === "EArr"
+                                            ? (({ elements }) =>
+                                                ((body: string) =>
+                                                  castOr$(
+                                                    body,
+                                                    length(elements) === 0
+                                                      ? hook1(ctx.annotateEmpty, e)
+                                                      : (None as Option<string>),
+                                                  ))(
+                                                  `[${_Str_join(
+                                                    ", ",
+                                                    map(
+                                                      (el: SeqElem) => genSeqSlot$(ctx, el),
+                                                      elements,
+                                                    ),
+                                                  )}]`,
+                                                ))(_v)
+                                            : _v._tag === "EList"
+                                              ? (({ elements }) => genList$(ctx, elements))(_v)
+                                              : _v._tag === "ESet"
+                                                ? (({ elements }) =>
+                                                    `new Set([${_Str_join(
+                                                      ", ",
+                                                      map(
+                                                        (el: SeqElem) => genSeqSlot$(ctx, el),
+                                                        elements,
+                                                      ),
+                                                    )}])`)(_v)
+                                                : _v._tag === "EMap"
+                                                  ? (({ entries }) =>
+                                                      _Option_match(
+                                                        length(entries) === 0
+                                                          ? hook1(ctx.annotateEmpty, e)
+                                                          : (None as Option<string>),
+                                                        () =>
+                                                          `new Map([${_Str_join(
+                                                            ", ",
+                                                            map(
+                                                              (en: MapEntry) =>
+                                                                `[${genExpr$(ctx, en.key)}, ${genExpr$(ctx, en.value)}]`,
+                                                              entries,
+                                                            ),
+                                                          )}])`,
+                                                        (t) => `new ${t}()`,
+                                                      ))(_v)
+                                                  : _v._tag === "EInterp"
+                                                    ? (({ parts }) =>
+                                                        ((body: string) => `\`${body}\``)(
+                                                          _Str_join(
+                                                            "",
+                                                            map((p: InterpPart) => {
+                                                              const $match = p;
+                                                              switch ($match._tag) {
+                                                                case "IPLit": {
+                                                                  const { value } = $match;
+                                                                  return escapeTemplateLiteral(
+                                                                    value,
+                                                                  );
+                                                                }
+                                                                case "IPExpr": {
+                                                                  const { expr: ex } = $match;
+                                                                  return `\${${genExpr$(ctx, ex)}}`;
+                                                                }
+                                                                default: {
+                                                                  throw new Error(
+                                                                    "non-exhaustive match",
+                                                                  );
+                                                                }
+                                                              }
+                                                            }, parts),
+                                                          ),
+                                                        ))(_v)
+                                                    : (() => {
+                                                        throw new Error("non-exhaustive match");
+                                                      })())(e);
 const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genExpr$);
 const genDo$ = (ctx: GCtx, exprs: Expr[]): string => `(() => { ${genDoSteps$(ctx, exprs)} })()`;
 const genDo: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(2, genDo$);

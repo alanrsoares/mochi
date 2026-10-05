@@ -28,6 +28,8 @@ Fast pipe `->` inserts the value into a call's first argument and requires a cal
 on its right. Use `5 |> (+ 3)` for an operator section or `5 |> double` for a
 function value; `5 -> (+ 3)` and `5 -> double` are rejected.
 
+A bare `_` argument marks where the piped value goes: `5 |> f(a, _, b)` and `5 -> f(a, _, b)` are `f(a, 5, b)` ([ADR 0153](adr/0153-pipe-placeholder.md)).
+
 Use `do { … }` to sequence expressions and return the final one. An arrow body
 can omit `do`, which keeps callback-heavy code compact:
 

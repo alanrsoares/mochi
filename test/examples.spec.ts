@@ -862,3 +862,9 @@ let out = (
     2,
   ]);
 });
+
+test("pipe placeholder fills the marked argument (ADR 0153)", () => {
+  const src = `let f3 = (a, b, c) => a * 100 + b * 10 + c
+let out = [5 |> f3(1, _, 3), 5 -> f3(1, _, 3), 5 |> f3(_, 2, 3)]`;
+  expect(compileAndEval(src, "out")).toEqual([153, 153, 523]);
+});

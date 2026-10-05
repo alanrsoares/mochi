@@ -189,6 +189,7 @@ What else was on the table and why not.
 | [0150](0150-dict-string-keyed-dictionary.md) | `Dict<a>`: uniform string-keyed dictionary | Accepted |
 | [0151](0151-json-ast-package.md) | `@mochi/json`: first-class `Json` AST | Accepted |
 | [0152](0152-structural-map-set-keys.md) | Structural keys for `Map` and `Set` | Accepted |
+| [0153](0153-pipe-placeholder.md) | Pipe placeholder `_` | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was

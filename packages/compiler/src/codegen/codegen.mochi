@@ -478,6 +478,10 @@ let genCalleeFor = (ctx: GCtx, fn, argc) => switch fn {
   | _ => ctx->genCallee(fn)
 }
 
+// Pipe placeholder (ADR 0153): `a |> f(x, _, y)` / `a -> f(x, _, y)` is
+// `f(x, a, y)`. infer.mochi repeats this lowering — keep the two in step.
+let isPipeHole = a => switch a { | Ast.ERef("_", _) => true | _ => false }
+
 let genExpr = (ctx: GCtx, e) => switch e {
   | Ast.ENum(_, raw, _) => raw
   | Ast.EUnit(_) => "undefined"
@@ -531,6 +535,9 @@ let genExpr = (ctx: GCtx, e) => switch e {
     let f = "(${genParam(param)}) => ${ctx->genLambdaBody(body)}" in
     let v = ctx->genExpr(value) in
       ctx.flattenPipe ? "${rt}(${f}, ${v})" : "${rt}(${f})(${v})"
+  | Ast.EPipe(left, Ast.ECall(rfn, rargs, origin, _), _, sp) when someOf(isPipeHole, rargs) => ctx->genExpr(
+      Ast.ECall(rfn, rargs |> map(a => isPipeHole(a) ? left : a), origin, sp)
+    )
   | Ast.EPipe(left, right, fast, sp) =>
     // A fast pipe IS a call (ADR 0069) — lower it and take the ordinary call
     // path, so argument order lives in `Ast.pipeCall` alone.
