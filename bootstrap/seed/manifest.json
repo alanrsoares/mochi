@@ -1,13 +1,13 @@
 {
-  "sourceRevision": "d78a06c2d2fc9d764112cd010e6effbf125b1272",
+  "sourceRevision": "f76aaa2ee630eaa813b9a71b857d541ce1d4b7c2",
   "emitted": {
     "compile-host-types.d.ts": "d84cf260942361a1b54df24a6b7b5713ced9f8070814971f846ea9daf64e1736",
-    "compile.bundle.cjs": "ed0bc11d4af2b1a6c60138c2dfe426973370c10568566f188b2b4b02057f0ecf",
+    "compile.bundle.cjs": "0bfdd3959c4ce7a08949f3cec6a4467664669ad878fe6e507beb2b12eb7a5833",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "577c991c07d78b82a5af38c82555ad68443f563e57f990b36c6689b78e71e548",
+    "compile.bundle.mjs": "abeff5dba369f4ad1591856d1edbff3db8ce67a7f070b5131359678287407f34",
     "host-types.d.ts": "f9f5d71728ae71ba92a886ec36afee3269e17060dde4710e2940751a5c5b7af2",
     "module-host-types.d.ts": "85244ce26d8d7da704456f3f11012128c6bce62f4e76a0111cc2f5012c24e622",
-    "module.bundle.cjs": "12b9ca1ba668aabeb0d2991e66e4b9a6600908b68065e8753ce5946d70032e82",
+    "module.bundle.cjs": "4f0878d10bfaba1207f3497e24fa67c7a86cc313ffa7a7d6f949a43bc226d6c5",
     "packages/cli/src/driver.ts": "ed3ba54da4f334787243d2e3c2dcfc8ee79494797123d2b161d170540e836a2d",
     "packages/compiler/src/ast/ast.ts": "0f00140ed1d1b9e389db398827ef6d0d6c6b457c1e6b0ba2613ccc78d7ee2c00",
     "packages/compiler/src/ast/ctors.ts": "39688db49110c00e7441bef30c135fa33bc01888345c5ee7a2bf606433d31429",
@@ -43,18 +43,18 @@
     "packages/compiler/src/module/module.ts": "f5d662115b93e23148b12e202f510a964381f3fa29ea23d131a845d7cb800f0a",
     "packages/compiler/src/parser/parser.ts": "04f8bde85bc5f3052eb3e92e5e7a1b7be4d191d13b1d816148b4b9b0fe8db50e",
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
-    "packages/compiler/src/prelude/prelude.gen.mjs": "04d626a6569da30ff988c51f15a9a693d2ecfa0370eb8e927004ff7996b5af1c",
+    "packages/compiler/src/prelude/prelude.gen.mjs": "84815e512354cf54a146dba3fc703d544a22ff3639e3cc964482517b826a301a",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "ee9e2f63e3a08aa2f05f7066255e59f50befe22339637112815309907ab4ceca"
+    "syntax.bundle.mjs": "29c1b017bc8ba3dfbf8a5fda1103878264a12dfc22558a938a186b1514df5ce8"
   },
   "files": {
     "compile-host-types.d.ts": "02607f980a4f79b638bca14a9b3e0af89b98632e48c2a08a4c7f248f03eb812a",
-    "compile.bundle.cjs": "ed0bc11d4af2b1a6c60138c2dfe426973370c10568566f188b2b4b02057f0ecf",
+    "compile.bundle.cjs": "0bfdd3959c4ce7a08949f3cec6a4467664669ad878fe6e507beb2b12eb7a5833",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "577c991c07d78b82a5af38c82555ad68443f563e57f990b36c6689b78e71e548",
+    "compile.bundle.mjs": "abeff5dba369f4ad1591856d1edbff3db8ce67a7f070b5131359678287407f34",
     "host-types.d.ts": "8730b0ddbd2f35d986f49403fb22cd6637e727e5e5492d040f0a2d37066c7a6d",
     "module-host-types.d.ts": "931129d3e4060890f220df4c535e459bf3bdb53485c8978dce5196b4dc75f0de",
-    "module.bundle.cjs": "12b9ca1ba668aabeb0d2991e66e4b9a6600908b68065e8753ce5946d70032e82",
+    "module.bundle.cjs": "4f0878d10bfaba1207f3497e24fa67c7a86cc313ffa7a7d6f949a43bc226d6c5",
     "packages/cli/src/driver.ts": "6429a13f1979362ddcbc2ca04c1f1b8599e85ab71adabfee98ae84b13f474d26",
     "packages/compiler/src/ast/ast.ts": "bd8d3b03ed8909174f5679da6e103643022275a0916d269bacda4ba5e85b5b02",
     "packages/compiler/src/ast/ctors.ts": "2690d99fba762b5e86a1118cbff144e0bbca1864df85c5c0e3ea53ea44fbf854",
@@ -90,8 +90,8 @@
     "packages/compiler/src/module/module.ts": "62116e8aa7f7f39b6f94b95076de9109d631bc44543459b510ab9f657bfd393a",
     "packages/compiler/src/parser/parser.ts": "269defab983c8ee6082d3808df7c79eca4312e7a6fbf8e1796171ab405d7fb3e",
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
-    "packages/compiler/src/prelude/prelude.gen.mjs": "42cf5d05603aa06ed97e5755d489c2a22fc341d73333d686c3266a76e0fca67f",
+    "packages/compiler/src/prelude/prelude.gen.mjs": "293e8e3f2a8979adbac0cd58bf82a84766f37a6b66e7c64f88b8e2e1e2f09257",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "ee9e2f63e3a08aa2f05f7066255e59f50befe22339637112815309907ab4ceca"
+    "syntax.bundle.mjs": "29c1b017bc8ba3dfbf8a5fda1103878264a12dfc22558a938a186b1514df5ce8"
   }
 }

@@ -212,3 +212,56 @@ test("eq/compare on a lazy List behind a generic wrapper throw rather than silen
 test("show on a lazy List does not force it — renders the `<List>` marker", () => {
   expect(run("let a = show(@{1, 2})", "a")).toBe("<List>");
 });
+
+// ---- Task cancellation (ADR 0155) -------------------------------------------
+
+test("Task.race aborts the losers' signal; Task.runWith threads the caller's", async () => {
+  const mk = run('let build = (ext) => Task.race([Task.delay(5, "fast"), ext])', "build") as (
+    t: (s?: AbortSignal) => Promise<unknown>,
+  ) => (s?: AbortSignal) => Promise<unknown>;
+  const seen: AbortSignal[] = [];
+  const slow = (s?: AbortSignal) => {
+    seen.push(s!);
+    return new Promise<never>(() => {});
+  };
+  expect(await mk(slow)()).toEqual({ _tag: "Ok", value: "fast" });
+  expect(seen[0]?.aborted).toBe(true);
+
+  const parent = new AbortController();
+  const seen2: AbortSignal[] = [];
+  const hang = (s?: AbortSignal) => {
+    seen2.push(s!);
+    return new Promise<never>(() => {});
+  };
+  void mk(hang)(parent.signal);
+  expect(seen2[0]?.aborted).toBe(false);
+  parent.abort();
+  expect(seen2[0]?.aborted).toBe(true);
+});
+
+test("Task.all aborts siblings on the first Err; Task.delay clears its timer on abort", async () => {
+  const all = run('let build = (ext) => Task.all([Task.fail("boom"), ext])', "build") as (
+    t: (s?: AbortSignal) => Promise<unknown>,
+  ) => (s?: AbortSignal) => Promise<unknown>;
+  const seen: AbortSignal[] = [];
+  const out = await all((s) => {
+    seen.push(s!);
+    return new Promise<never>(() => {});
+  })();
+  expect(out).toEqual({ _tag: "Err", error: "boom" });
+  expect(seen[0]?.aborted).toBe(true);
+
+  const delay = run("let t = Task.delay(20, 1)", "t") as (s?: AbortSignal) => Promise<unknown>;
+  const ctl = new AbortController();
+  let settled = false;
+  void delay(ctl.signal).then(() => {
+    settled = true;
+  });
+  ctl.abort();
+  await new Promise((r) => setTimeout(r, 40));
+  expect(settled).toBe(false);
+});
+
+test("Task.runWith types as AbortSignal -> Task -> Promise (ADR 0155)", () => {
+  expect(typeOf("let r = Task.runWith", "r")).toContain("AbortSignal");
+});

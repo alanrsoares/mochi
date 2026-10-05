@@ -30,6 +30,7 @@ const opt = (t: Type): Type => tCon("Option", [t]);
 const res = (t: Type, e: Type): Type => tCon("Result", [t, e]);
 const task = (t: Type, e: Type): Type => tCon("Task", [t, e]);
 const promise = (t: Type): Type => tCon("Promise", [t]);
+const abortSignal: Type = tCon("AbortSignal", []);
 
 /**
  * Builtin variant types — seeded when a program doesn't declare the same name.
@@ -244,6 +245,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     match: tArrow(tArrow(a, b), tArrow(tArrow(c, b), tArrow(task(a, c), task(b, d)))), // (a -> f) -> (e -> f) -> Task a e -> Task f g  (terminal fold, stays a Task per ADR 0006)
     delay: tArrow(tNumber, tArrow(a, task(a, c))), // number -> a -> Task a e  (_curry; ADR 0005)
     run: tArrow(task(a, c), promise(res(a, c))), // Task a e -> Promise (Result a e)  (only kick-off)
+    runWith: tArrow(abortSignal, tArrow(task(a, c), promise(res(a, c)))), // AbortSignal -> Task a e -> Promise (Result a e)  (ADR 0155)
     // Fan-out (ADR 0074): fail-fast, input-ordered, in-flight tasks abandoned.
     all: tArrow(arr(task(a, c)), task(arr(a), c)), // [Task a e] -> Task [a] e
     race: tArrow(arr(task(a, c)), task(a, c)), // [Task a e] -> Task a e  (first to SETTLE)
@@ -373,6 +375,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     match: "_Task_match",
     delay: "_Task_delay",
     run: "_Task_run",
+    runWith: "_Task_runWith",
     all: "_Task_all",
     race: "_Task_race",
     traverse: "_Task_traverse",

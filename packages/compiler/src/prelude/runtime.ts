@@ -863,14 +863,16 @@ export const _Task_map: {
   <A, B, C>(a: (a: A) => B, b: () => Promise<Result<A, C>>): () => Promise<Result<B, C>>;
 } = _curry(
   2,
-  (f: any, t: any) => () => t().then((r: any) => (r._tag === "Ok" ? Ok(f(r.value)) : r)),
+  (f: any, t: any) => (signal?: any) =>
+    t(signal).then((r: any) => (r._tag === "Ok" ? Ok(f(r.value)) : r)),
 );
 export const _Task_mapErr: {
   <A, B, C>(a: (a: A) => B): (b: () => Promise<Result<C, A>>) => () => Promise<Result<C, B>>;
   <A, B, C>(a: (a: A) => B, b: () => Promise<Result<C, A>>): () => Promise<Result<C, B>>;
 } = _curry(
   2,
-  (f: any, t: any) => () => t().then((r: any) => (r._tag === "Err" ? Err(f(r.error)) : r)),
+  (f: any, t: any) => (signal?: any) =>
+    t(signal).then((r: any) => (r._tag === "Err" ? Err(f(r.error)) : r)),
 );
 export const _Task_andThen: {
   <A, B, C>(
@@ -880,7 +882,11 @@ export const _Task_andThen: {
     a: (a: A) => () => Promise<Result<B, C>>,
     b: () => Promise<Result<A, C>>,
   ): () => Promise<Result<B, C>>;
-} = _curry(2, (f: any, t: any) => () => t().then((r: any) => (r._tag === "Ok" ? f(r.value)() : r)));
+} = _curry(
+  2,
+  (f: any, t: any) => (signal?: any) =>
+    t(signal).then((r: any) => (r._tag === "Ok" ? f(r.value)(signal) : r)),
+);
 export const _Task_recover: {
   <A, B, C>(
     a: (a: A) => () => Promise<Result<B, C>>,
@@ -891,7 +897,8 @@ export const _Task_recover: {
   ): () => Promise<Result<B, C>>;
 } = _curry(
   2,
-  (f: any, t: any) => () => t().then((r: any) => (r._tag === "Err" ? f(r.error)() : r)),
+  (f: any, t: any) => (signal?: any) =>
+    t(signal).then((r: any) => (r._tag === "Err" ? f(r.error)(signal) : r)),
 );
 export const _Task_fromResult: <A, B>(a: Result<A, B>) => () => Promise<Result<A, B>> =
   (r: any) => () =>
@@ -914,23 +921,33 @@ export const _Task_match: {
   ): () => Promise<Result<B, D>>;
 } = _curry(
   3,
-  (onOk: any, onErr: any, t: any) => () =>
-    t().then((r: any) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))),
+  (onOk: any, onErr: any, t: any) => (signal?: any) =>
+    t(signal).then((r: any) => Ok(r._tag === "Ok" ? onOk(r.value) : onErr(r.error))),
 );
 export const _Task_delay: {
   <A, B>(a: number): (b: A) => () => Promise<Result<A, B>>;
   <A, B>(a: number, b: A): () => Promise<Result<A, B>>;
 } = _curry(
   2,
-  (ms: any, x: any) => () => new Promise((res: any) => setTimeout(() => res(Ok(x)), ms)),
+  (ms: any, x: any) => (signal?: any) =>
+    // An aborted delay never settles, like the abandoned arms it serves.
+    new Promise((res: any) => {
+      if (signal?.aborted) return;
+      const id = setTimeout(() => res(Ok(x)), ms);
+      signal?.addEventListener("abort", () => clearTimeout(id), { once: true });
+    }),
 );
 export const _Task_run: <A, B>(a: () => Promise<Result<A, B>>) => Promise<Result<A, B>> = (
   t: any,
 ) => t();
 export const _Task_all: <A, B>(
   a: (() => Promise<Result<A, B>>)[],
-) => () => Promise<Result<A[], B>> = (ts: any) => () =>
+) => () => Promise<Result<A[], B>> = (ts: any) => (signal?: any) =>
   new Promise((res: any) => {
+    // Children run under a linked signal, aborted once the fan-out settles.
+    const ctl = new AbortController();
+    if (signal?.aborted) ctl.abort();
+    signal?.addEventListener("abort", () => ctl.abort(), { once: true });
     const out = new Array(ts.length);
     let left = ts.length;
     let settled = false;
@@ -939,10 +956,11 @@ export const _Task_all: <A, B>(
       return;
     }
     ts.forEach((t: any, i: any) => {
-      void t().then((r: any) => {
+      void t(ctl.signal).then((r: any) => {
         if (settled) return;
         if (r._tag === "Err") {
           settled = true;
+          ctl.abort();
           res(r);
           return;
         }
@@ -956,17 +974,25 @@ export const _Task_all: <A, B>(
     });
   });
 export const _Task_race: <A, B>(a: (() => Promise<Result<A, B>>)[]) => () => Promise<Result<A, B>> =
-  (ts: any) => () =>
+  (ts: any) => (signal?: any) =>
     new Promise((res: any) => {
+      const ctl = new AbortController();
+      if (signal?.aborted) ctl.abort();
+      signal?.addEventListener("abort", () => ctl.abort(), { once: true });
       let settled = false;
       ts.forEach((t: any) => {
-        void t().then((r: any) => {
+        void t(ctl.signal).then((r: any) => {
           if (settled) return;
           settled = true;
+          ctl.abort();
           res(r);
         });
       });
     });
+export const _Task_runWith: {
+  <A, B>(a: AbortSignal): (b: () => Promise<Result<A, B>>) => Promise<Result<A, B>>;
+  <A, B>(a: AbortSignal, b: () => Promise<Result<A, B>>): Promise<Result<A, B>>;
+} = _curry(2, (signal: any, t: any) => t(signal));
 export const _Task_traverse: {
   <A, B, C>(a: (a: A) => () => Promise<Result<B, C>>): (b: A[]) => () => Promise<Result<B[], C>>;
   <A, B, C>(a: (a: A) => () => Promise<Result<B, C>>, b: A[]): () => Promise<Result<B[], C>>;
