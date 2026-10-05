@@ -17,11 +17,10 @@ import type {
   TypeExpr,
 } from "../ast/ast";
 import type { SpanAt } from "../infer/types";
+import type { Registry } from "../module/module";
 import type { PErr } from "../parser/parser";
 
 export type CErr = { message: string; start: number; end: number };
-export type CtorInfo = { owner: string; arity: number };
-export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type SeqCheck = { _tag: "SeqNotSeq" } | { _tag: "SeqTotal" } | { _tag: "SeqFail"; e: PErr };
 export type QualScope = { types: Set<string> };
 export type LoopFrame = { arity: number; names: Set<string> };
@@ -969,7 +968,7 @@ const matrixVerdict: <A, D, E>(
   leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
   ownerOpt: Option<string>,
   mSpan: { end: number; start: number } & E,
-  reg: Registry,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
 ) => Option<PErr> = _curry(
   5,
   <A, D, E>(
@@ -977,7 +976,7 @@ const matrixVerdict: <A, D, E>(
     leaves: ({ pattern: Pattern; guard: Option<A> } & D)[],
     ownerOpt: Option<string>,
     mSpan: { end: number; start: number } & E,
-    reg: Registry,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   ) => {
     const $match = checkExhaustiveM(unguardedPatterns(arms), reg);
     switch ($match._tag) {
@@ -1029,10 +1028,14 @@ const leavesOfArm: <A, B>(
 const checkMatch: <A>(
   arms: MatchArm[],
   mSpan: { end: number; start: number } & A,
-  reg: Registry,
+  reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
 ) => Option<PErr> = _curry(
   3,
-  <A>(arms: MatchArm[], mSpan: { end: number; start: number } & A, reg: Registry) =>
+  <A>(
+    arms: MatchArm[],
+    mSpan: { end: number; start: number } & A,
+    reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
+  ) =>
     _Option_match(
       firstSome((a: MatchArm) => checkPattern(a.pattern, reg, true), arms),
       () => {
@@ -1090,7 +1093,10 @@ const checkMatch: <A>(
       (e) => Some(e) as Option<PErr>,
     ),
 );
-const checkExpr$ = (e: Expr, reg: Registry): Option<PErr> => {
+const checkExpr$ = (
+  e: Expr,
+  reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
+): Option<PErr> => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -1277,8 +1283,17 @@ const checkExpr$ = (e: Expr, reg: Registry): Option<PErr> => {
     }
   }
 };
-const checkExpr: _Curry<[e: Expr, reg: Registry], Option<PErr>> = _curry(2, checkExpr$);
-const checkExprs$ = (e: Expr, reg: Registry): PErr[] => {
+const checkExpr: _Curry<
+  [
+    e: Expr,
+    reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
+  ],
+  Option<PErr>
+> = _curry(2, checkExpr$);
+const checkExprs$ = (
+  e: Expr,
+  reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
+): PErr[] => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -1463,7 +1478,13 @@ const checkExprs$ = (e: Expr, reg: Registry): PErr[] => {
     }
   }
 };
-const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, checkExprs$);
+const checkExprs: _Curry<
+  [
+    e: Expr,
+    reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
+  ],
+  PErr[]
+> = _curry(2, checkExprs$);
 const reservedNames: string[] = [
   "Array",
   "List",
@@ -3114,13 +3135,19 @@ const mergeMissing: <A, B>(keys: A[], from: Map<A, B>, into: Map<A, B>) => Map<A
  */
 export const checkWith: <A, B>(
   stmts: Stmt[],
-  imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
+  imported: {
+    types: Map<string, string[]>;
+    ctors: Map<string, { owner: string; arity: number }>;
+  } & A,
   quals: Map<string, { types: Set<string> } & B>,
 ) => Result<Stmt[], PErr> = _curry(
   3,
   <A, B>(
     stmts: Stmt[],
-    imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
+    imported: {
+      types: Map<string, string[]>;
+      ctors: Map<string, { owner: string; arity: number }>;
+    } & A,
     quals: Map<string, { types: Set<string> } & B>,
   ) =>
     _Option_match(
@@ -3140,7 +3167,10 @@ export const checkWith: <A, B>(
                       () =>
                         _Result_flatMap(
                           (reg0) =>
-                            ((reg: Registry) =>
+                            ((reg: {
+                              ctors: Map<string, { owner: string; arity: number }>;
+                              types: Map<string, string[]>;
+                            }) =>
                               _Option_match(
                                 firstSome((s: Stmt) => {
                                   const $match = s;
@@ -3188,7 +3218,10 @@ export const checkWith: <A, B>(
 export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
   checkWith(
     stmts,
-    { ctors: new Map<string, CtorInfo>(), types: new Map<string, string[]>() },
+    {
+      ctors: new Map<string, { owner: string; arity: number }>(),
+      types: new Map<string, string[]>(),
+    },
     emptyQuals,
   );
 /**
@@ -3198,13 +3231,19 @@ export const check: (stmts: Stmt[]) => Result<Stmt[], PErr> = (stmts: Stmt[]) =>
  */
 export const checkAllWith: <A, B>(
   stmts: Stmt[],
-  imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
+  imported: {
+    types: Map<string, string[]>;
+    ctors: Map<string, { owner: string; arity: number }>;
+  } & A,
   quals: Map<string, { types: Set<string> } & B>,
 ) => Result<Stmt[], PErr[]> = _curry(
   3,
   <A, B>(
     stmts: Stmt[],
-    imported: { types: Map<string, string[]>; ctors: Map<string, CtorInfo> } & A,
+    imported: {
+      types: Map<string, string[]>;
+      ctors: Map<string, { owner: string; arity: number }>;
+    } & A,
     quals: Map<string, { types: Set<string> } & B>,
   ) =>
     _Result_match(
@@ -3223,7 +3262,10 @@ export const checkAllWith: <A, B>(
           : (Err(errors) as Result<Stmt[], PErr[]>);
       },
       (reg0) => {
-        const reg: Registry = {
+        const reg: {
+          ctors: Map<string, { owner: string; arity: number }>;
+          types: Map<string, string[]>;
+        } = {
           ctors: mergeMissing(_Map_keys(imported.ctors), imported.ctors, reg0.ctors),
           types: mergeMissing(_Map_keys(imported.types), imported.types, reg0.types),
         };
@@ -3259,6 +3301,9 @@ export const checkAllWith: <A, B>(
 export const checkAll: (stmts: Stmt[]) => Result<Stmt[], PErr[]> = (stmts: Stmt[]) =>
   checkAllWith(
     stmts,
-    { ctors: new Map<string, CtorInfo>(), types: new Map<string, string[]>() },
+    {
+      ctors: new Map<string, { owner: string; arity: number }>(),
+      types: new Map<string, string[]>(),
+    },
     emptyQuals,
   );

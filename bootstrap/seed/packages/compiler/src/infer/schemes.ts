@@ -1092,7 +1092,7 @@ const matchTy$ = (
             _Map_get(id, binds),
             () => Some(_Map_set(id, actual, binds)) as Option<Map<number, Ty>>,
             (prev) =>
-              eq(Types.showType(prev), Types.showType(actual))
+              eq(prev, actual)
                 ? (Some(binds) as Option<Map<number, Ty>>)
                 : (None as Option<Map<number, Ty>>),
           ))(_v as [Extract<[Ty, Ty][0], { _tag: "TyVar" }>, [Ty, Ty][1]])
@@ -1180,7 +1180,7 @@ const matchTy$ = (
                     ],
                   )
                 : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf"
-                  ? eq(Types.showType(tpl), Types.showType(actual))
+                  ? eq(tpl, actual)
                     ? (Some(binds) as Option<Map<number, Ty>>)
                     : (None as Option<Map<number, Ty>>)
                   : (None as Option<Map<number, Ty>>))(_tuple(tpl, actual));
