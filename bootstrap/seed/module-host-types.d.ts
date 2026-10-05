@@ -261,7 +261,13 @@ export type Stmt =
   | { _tag: "SImportNs"; alias: Name; from: string; span: Span }
   | { _tag: "SExpr"; value: Expr; span: Span }
   | { _tag: "SError"; span: Span };
-export type Ctor = { name: string; fields: CtorField[]; span: Span };
+export type Ctor = {
+  name: string;
+  fields: CtorField[];
+  tagKey: string;
+  tagLit: string;
+  span: Span;
+};
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
 export type AliasField = {
   name: string;

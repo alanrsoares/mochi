@@ -199,6 +199,8 @@ let qualifyCtor = (c: Ast.Ctor, qualify) =>
   {
     name: c.name,
     fields: c.fields |> map(f => qualifyField(f, qualify)),
+    tagKey: c.tagKey,
+    tagLit: c.tagLit,
     span: c.span
   }
 

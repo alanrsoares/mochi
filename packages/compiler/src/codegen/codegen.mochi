@@ -11,6 +11,7 @@ import { localBinderNames } from "../infer/local-names.mochi"
 import {
   keysOf,
   ctorKeysFromStmts,
+  tagOf,
   seedBuiltinCtorKeys
 } from "../ast/ctors.mochi"
 // One chunk of a "…${a}…" interpolation (ADR 0023): a literal run, or a
@@ -57,7 +58,13 @@ type ParamAnnots = { generics: string, params: [Option<string>] }
 /// locally and still unify structurally with the real AST values.
 type CtorFieldLike = { name: Option<string>, fieldType: Ast.TypeExpr }
 
-type CtorLike = { name: string, fields: [CtorFieldLike], span: Ast.Span }
+type CtorLike = {
+  name: string,
+  fields: [CtorFieldLike],
+  tagKey: string,
+  tagLit: string,
+  span: Ast.Span
+}
 
 type GenOpts = {
   annotateLet: Option<string -> Ast.Expr -> Option<string>>,
@@ -344,12 +351,14 @@ let isPrimLit = e => switch e {
 /// (ADR 0115): against a primitive literal it is `===`, and against a nullary
 /// ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
 let eqTest = (ctx: GCtx, left, right, op) => switch (left, right) {
-  | (_, Ast.ERef(c, _)) when isNullaryCtor(c, ctx.keys) => Some(
-      "(${ctx->genMember(left)}._tag ${op} \"${c}\")"
-    )
-  | (Ast.ERef(c, _), _) when isNullaryCtor(c, ctx.keys) => Some(
-      "(${ctx->genMember(right)}._tag ${op} \"${c}\")"
-    )
+  | (_, Ast.ERef(c, _)) when isNullaryCtor(c, ctx.keys) => let (key, lit) = ctx.keys->tagOf(
+      c
+    ) in
+      Some("(${ctx->genMember(left)}.${key} ${op} ${jsStringLit(lit)})")
+  | (Ast.ERef(c, _), _) when isNullaryCtor(c, ctx.keys) => let (key, lit) = ctx.keys->tagOf(
+      c
+    ) in
+      Some("(${ctx->genMember(right)}.${key} ${op} ${jsStringLit(lit)})")
   | _ => isPrimLit(left) || isPrimLit(right)
       ? Some("(${ctx->genExpr(left)} ${op} ${ctx->genExpr(right)})")
       : None
@@ -1177,7 +1186,8 @@ let genFunctionCases = (ctx: GCtx, arms, root) =>
     arms
       |> map(a =>
         let label = switch a.pattern {
-          | Ast.PCtor(name, _, _, _) => "case ${jsStringLit(name)}:"
+          | Ast.PCtor(name, _, _, _) => let (_, lit) = ctx.keys->tagOf(name) in
+              "case ${jsStringLit(lit)}:"
           | _ => "default:"
         } in
         let slot = ctx.keys->patSlot(a.pattern) in
@@ -1186,13 +1196,23 @@ let genFunctionCases = (ctx: GCtx, arms, root) =>
           "${label} { ${bind}${ctx->genFunctionTail(a.body, bound)} }")
   )
 
+/// The discriminant key a ctor `switch` reads: every arm names a ctor of one
+/// type (ADR 0156), so the first ctor arm decides.
+let switchKey = (ctx: GCtx, arms) => switch arms {
+  | [] => "_tag"
+  | [a, ...rest] => switch a.pattern {
+      | Ast.PCtor(name, _, _, _) => let (key, _) = ctx.keys->tagOf(name) in key
+      | _ => ctx->switchKey(rest)
+    }
+}
+
 let genFunctionMatch = (ctx: GCtx, scrutinee, arms) =>
   let root = ctx->tempName("$match") in
   let nestedCtx = { ...ctx, userNames: Set.add(root, ctx.userNames) } in
   let fallback = someOf(a => isCatchAll(a.pattern), arms)
     ? ""
     : "default: { throw new Error(\"non-exhaustive match\"); }" in
-    "const ${root} = ${ctx->genExpr(scrutinee)}; switch (${root}._tag) { ${nestedCtx->genFunctionCases(arms, root)} ${fallback} }"
+    "const ${root} = ${ctx->genExpr(scrutinee)}; switch (${root}.${ctx->switchKey(arms)}) { ${nestedCtx->genFunctionCases(arms, root)} ${fallback} }"
 
 // ---- match -------------------------------------------------------------------
 // A match lowers to a ternary chain over its scrutinee (ADR 0113). The TS
@@ -1746,9 +1766,10 @@ let genWithArm = (ctx: GCtx, p, body, base) => switch p {
     // pctor flat fast path keeps readable matcher-object form.
     allOf(isFlatSub, args)
       ? let (binds, litFields) = ctx->ctorArgParts(ctor, args, 0) in
+      let (key, lit) = ctx.keys->tagOf(ctor) in
       let patObj = Str.join(
         ", ",
-        Array.prepend("_tag: ${jsStringLit(ctor)}", litFields)
+        Array.prepend("${key}: ${jsStringLit(lit)}", litFields)
       ) in
       let param = Array.length(binds) == 0
         ? "()"
@@ -1775,18 +1796,18 @@ let typedCtorParams = (keys, paramTypes, i) => switch Array.get(i, keys) {
 }
 
 let genCtor = (c, ts) =>
-  let tag = jsStringLit(c.name) in
+  let tag = jsStringLit(c.tagLit) in
     Array.length(c.fields) == 0
       ? switch ts {
         | Some(t) =>
           // Annotate the nullary const so `_tag` stays the literal (`"Leaf"`)
           // instead of widening to `string` — else it will not match the union.
-          "const ${c.name}: ${t.retMono} = { _tag: ${tag} };"
-        | None => "const ${c.name} = { _tag: ${tag} };"
+          "const ${c.name}: ${t.retMono} = { ${c.tagKey}: ${tag} };"
+        | None => "const ${c.name} = { ${c.tagKey}: ${tag} };"
       }
       : let keys = keysOf(c.fields) in
       let params = Str.join(", ", keys) in
-      let impl = "(${params}) => ({ _tag: ${tag}, ${params} })" in
+      let impl = "(${params}) => ({ ${c.tagKey}: ${tag}, ${params} })" in
         Array.length(c.fields) >= 2
           ?
             // Multi-field: curried so partial application works (CRITIQUE
@@ -1801,7 +1822,7 @@ let genCtor = (c, ts) =>
           :
             // Single-field: a typed arrow scopes its own generics.
             switch ts {
-              | Some(t) => "const ${c.name} = ${t.generics}(${Str.join(", ", typedCtorParams(keys, t.paramTypes, 0))}): ${t.ret} => ({ _tag: ${tag}, ${params} });"
+              | Some(t) => "const ${c.name} = ${t.generics}(${Str.join(", ", typedCtorParams(keys, t.paramTypes, 0))}): ${t.ret} => ({ ${c.tagKey}: ${tag}, ${params} });"
               | None => "const ${c.name} = ${impl};"
             }
 

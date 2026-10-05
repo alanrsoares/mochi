@@ -99,7 +99,7 @@ let ctorFieldsFrom = (fields: [Ast.CtorField], keys, params, aliases: Map<string
     )
 }
 
-/// One ctor's runtime shape: the `_tag` discriminant plus its fields.
+/// One ctor's runtime shape: its discriminant (`_tag` unless `@tag`/`@as`, ADR 0156) plus its fields.
 let ctorVariant = (c: Ast.Ctor, params, aliases: Map<string, Schemes.AliasInfo>, recs) =>
   let fields = ctorFieldsFrom(
     c.fields,
@@ -110,8 +110,8 @@ let ctorVariant = (c: Ast.Ctor, params, aliases: Map<string, Schemes.AliasInfo>,
     0
   ) in
     Array.length(fields) == 0
-      ? "{ _tag: \"${c.name}\" }"
-      : "{ _tag: \"${c.name}\"; ${Str.join("; ", fields)} }"
+      ? "{ ${c.tagKey}: \"${c.tagLit}\" }"
+      : "{ ${c.tagKey}: \"${c.tagLit}\"; ${Str.join("; ", fields)} }"
 
 let ctorVariantsFrom = (ctors: [Ast.Ctor], params, aliases: Map<string, Schemes.AliasInfo>, recs, i) => switch Array.get(i, ctors) {
   | None => []

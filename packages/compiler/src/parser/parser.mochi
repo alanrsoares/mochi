@@ -1490,16 +1490,45 @@ let parseCtorField = (toks, pos) =>
       : parseTypeExpr(toks, pos)
         |> Result.map(((t, p)) => ({ name: None, fieldType: t }, p))
 
+// `@name("literal")` — the one attribute shape (ADR 0156): `@tag("k")` before a
+// variant type, `@as("v")` before one of its constructors. `as` is not a
+// keyword, so both names lex as plain identifiers after `@`.
+let parseAttr = (name, toks, pos) =>
+  let? p = expectTok(TAt, toks, pos) in
+  let? (id, p1) = expectId(toks, p) in
+    id.name != name
+      ? errAt("expected `@${name}`, found `@${id.name}`", tokAt(toks, p))
+      : let? p2 = expectTok(TLparen, toks, p1) in
+      let? (lit, p3) = expectStr(toks, p2) in
+      let? p4 = expectTok(TRparen, toks, p3) in Ok((lit, p4))
+
 // `span` covers the constructor itself, so a comment written between two
 // constructors anchors to the one it precedes instead of migrating to the next
-// statement (the formatter's comment table keys on spans).
+// statement (the formatter's comment table keys on spans). An `@as("v")` prefix
+// overrides the runtime discriminant literal (ADR 0156); `@tag` on the enclosing
+// type overrides the key afterwards.
 let parseCtor = (toks, pos) =>
-  let? (nm, p) = expectId(toks, pos) in
+  let tagged = tokAt(toks, pos).tok == TAt in
+  let? (lit, p0) = tagged ? parseAttr("as", toks, pos) : Ok(("", pos)) in
+  let? (nm, p) = expectId(toks, p0) in
+  let tagLit = tagged ? lit : nm.name in
     tokAt(toks, p).tok == TLparen
       ? let? (fields, p2) = listUntil(TRparen, parseCtorField, toks, p + 1) in
       let? p3 = expectTok(TRparen, toks, p2) in
-        Ok(({ name: nm.name, fields, span: toEnd(nm.span, toks, p3) }, p3))
-      : Ok(({ name: nm.name, fields: [], span: nm.span }, p))
+        Ok((
+          {
+            name: nm.name,
+            fields,
+            tagKey: "_tag",
+            tagLit,
+            span: toEnd(nm.span, toks, p3)
+          },
+          p3
+        ))
+      : Ok((
+        { name: nm.name, fields: [], tagKey: "_tag", tagLit, span: nm.span },
+        p
+      ))
 
 let ctorsLoop = (toks, pos, acc) =>
   let? (c, p) = toks->parseCtor(pos) in
@@ -1868,6 +1897,40 @@ let parseExprStmt = (toks, pos, tmp, hooks) =>
   let p2 = tokAt(toks, p).tok == TSemi ? p + 1 : p in
     Ok(([Ast.SExpr(value, toEnd(spanOf(start), toks, p))], p2, tmp))
 
+/// Applies `@tag("key")` to the variant type it precedes (ADR 0156), growing the
+/// statement to cover the attribute. Anything else after `@tag` is an error.
+let applyTag = (key, doc, lt, stmts) => switch stmts {
+  | [Ast.SType(name, nameSpan, params, ctors, alias, aliasType, exported, d, span), ...rest] => Array.length(
+      ctors
+    ) == 0
+      ? errAt("`@tag` applies to a variant type", lt)
+      : Ok(
+        Array.prepend(
+          Ast.SType(
+            name,
+            nameSpan,
+            params,
+            ctors
+              |> map(c =>
+                {
+                  name: c.name,
+                  fields: c.fields,
+                  tagKey: key,
+                  tagLit: c.tagLit,
+                  span: c.span
+                }),
+            alias,
+            aliasType,
+            exported,
+            Option.isSome(doc) ? doc : d,
+            spanning(spanOf(lt), span)
+          ),
+          rest
+        )
+      )
+  | _ => errAt("`@tag` must precede a variant type", lt)
+}
+
 // A statement can desugar to several (record destructure); the leading `///`
 // doc block rides on the first token and attaches to every produced `let`.
 let parseStmt = (toks, pos, tmp, hooks) =>
@@ -1876,6 +1939,15 @@ let parseStmt = (toks, pos, tmp, hooks) =>
     switch lt.tok {
       | TImport => parseImport(toks, pos)
           |> Result.map(((s, p)) => ([s], p, tmp))
+      | TAt => switch tokAt(toks, pos + 1).tok {
+          | TId("tag") =>
+            // `@tag(…)` is an attribute; `@{…}`/`@[…]` stay a lazy-list expression.
+            let? (key, p) = parseAttr("tag", toks, pos) in
+            let? (stmts, p2, tmp2) = parseStmt(toks, p, tmp, hooks) in
+              applyTag(key, doc, lt, stmts)
+                |> Result.map(out => (out, p2, tmp2))
+          | _ => toks->parseExprStmt(pos, tmp, hooks)
+        }
       | TExport => let exportSp = spanOf(lt) in
           switch tokAt(toks, pos + 1).tok {
             | TType => toks->parseType(pos + 1)

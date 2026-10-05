@@ -55,12 +55,20 @@ export let builtinTypeDecls = [
     ctors: [
       {
         name: "Some",
+        tagKey: "_tag",
+        tagLit: "Some",
         fields: [
           { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
         ],
         span: builtinSpan
       },
-      { name: "None", fields: [], span: builtinSpan }
+      {
+        name: "None",
+        fields: [],
+        tagKey: "_tag",
+        tagLit: "None",
+        span: builtinSpan
+      }
     ]
   },
   {
@@ -69,6 +77,8 @@ export let builtinTypeDecls = [
     ctors: [
       {
         name: "Ok",
+        tagKey: "_tag",
+        tagLit: "Ok",
         fields: [
           { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
         ],
@@ -76,6 +86,8 @@ export let builtinTypeDecls = [
       },
       {
         name: "Err",
+        tagKey: "_tag",
+        tagLit: "Err",
         fields: [
           { name: Some("error"), fieldType: Ast.TyName("e", builtinSpan) }
         ],
@@ -189,12 +201,31 @@ export let exportedRegistry = stmts => stmts->exportedRegLoop(0, emptyRegistry)
 
 // --- ctor keys (codegen's projection: runtime destructure keys) ---
 
-let ctorKeysInto = (ctors, i, m) => switch ctors |> Array.get(i) {
+// A ctor with a custom discriminant (ADR 0156) publishes `[key, literal]` under
+// `@tag:<ctor>` in the same registry, so every consumer of the field keys —
+// imports included — sees it with no extra plumbing. `@` cannot start an
+// identifier, so the entry never collides with a ctor. Default ctors carry no
+// entry (and clear a stale one), so unannotated code emits exactly as before.
+let tagEntryOf = name => "@tag:${name}"
+
+let withTag = (m: Map<string, [string]>, name: string, tagKey: string, tagLit: string) =>
+  tagKey == "_tag" && tagLit == name
+    ? Map.delete(tagEntryOf(name), m)
+    : Map.set(tagEntryOf(name), [tagKey, tagLit], m)
+
+let ctorKeysInto = (ctors, i, m: Map<string, [string]>) => switch ctors |> Array.get(i) {
   | None => m
-  | Some({ name, fields }) => ctors->ctorKeysInto(
+  | Some({ name, fields, tagKey, tagLit }) => ctors->ctorKeysInto(
       i + 1,
-      m |> Map.set(name, fields->keysOf())
+      withTag(Map.set(name, fields->keysOf(), m), name, tagKey, tagLit)
     )
+}
+
+/// A ctor's runtime discriminant `(key, literal)` — `("_tag", name)` unless
+/// `@tag`/`@as` overrode it. The one lookup codegen and the TS backend share.
+export let tagOf = (keys: Map<string, [string]>, ctor: string) => switch Map.get(tagEntryOf(ctor), keys) {
+  | Some([key, lit]) => (key, lit)
+  | _ => ("_tag", ctor)
 }
 
 // Every declared ctor's keys (user decls override imported seed keys).

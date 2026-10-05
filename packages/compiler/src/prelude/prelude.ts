@@ -43,16 +43,34 @@ export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }
     name: "Option",
     params: ["a"],
     ctors: [
-      { name: "Some", fields: [{ name: "value", type: tn("a") }], span: { start: 0, end: 0 } },
-      { name: "None", fields: [], span: { start: 0, end: 0 } },
+      {
+        name: "Some",
+        fields: [{ name: "value", type: tn("a") }],
+        tagKey: "_tag",
+        tagLit: "Some",
+        span: { start: 0, end: 0 },
+      },
+      { name: "None", fields: [], tagKey: "_tag", tagLit: "None", span: { start: 0, end: 0 } },
     ],
   },
   {
     name: "Result",
     params: ["a", "e"],
     ctors: [
-      { name: "Ok", fields: [{ name: "value", type: tn("a") }], span: { start: 0, end: 0 } },
-      { name: "Err", fields: [{ name: "error", type: tn("e") }], span: { start: 0, end: 0 } },
+      {
+        name: "Ok",
+        fields: [{ name: "value", type: tn("a") }],
+        tagKey: "_tag",
+        tagLit: "Ok",
+        span: { start: 0, end: 0 },
+      },
+      {
+        name: "Err",
+        fields: [{ name: "error", type: tn("e") }],
+        tagKey: "_tag",
+        tagLit: "Err",
+        span: { start: 0, end: 0 },
+      },
     ],
   },
 ];

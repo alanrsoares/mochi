@@ -222,11 +222,11 @@ const ctorVariant$ = (
 ): string => {
   const fields: string[] = ctorFieldsFrom$(c.fields, keysOf(c.fields), params, aliases, recs, 0);
   return length(fields) === 0
-    ? `{ _tag: "${c.name}" }`
-    : `{ _tag: "${c.name}"; ${_Str_join("; ", fields)} }`;
+    ? `{ ${c.tagKey}: "${c.tagLit}" }`
+    : `{ ${c.tagKey}: "${c.tagLit}"; ${_Str_join("; ", fields)} }`;
 };
 /**
- * One ctor's runtime shape: the `_tag` discriminant plus its fields.
+ * One ctor's runtime shape: its discriminant (`_tag` unless `@tag`/`@as`, ADR 0156) plus its fields.
  */
 const ctorVariant: _Curry<
   [c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],

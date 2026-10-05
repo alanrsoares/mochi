@@ -68,6 +68,8 @@ test("generalization preserves a singleton literal union", () =>
 test("ctorScheme makes a polymorphic curried constructor", () =>
   let ctor = {
     name: "Some",
+    tagKey: "_tag",
+    tagLit: "Some",
     fields: [{ name: Some("value"), fieldType: Ast.TyName("a", sp) }]
   } in
   let (sc, _) = ctorScheme("Option", ["a"], ctor, mkSt(0), #{}) in

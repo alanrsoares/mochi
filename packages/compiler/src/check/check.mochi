@@ -13,7 +13,7 @@
 //   `SeqCheck` variant — a union beats null-vs-undefined encoding.
 
 import * as Ast from "../ast/ast.mochi"
-import { buildRegistry, primTypeNames } from "../ast/ctors.mochi"
+import { buildRegistry, primTypeNames, keysOf } from "../ast/ctors.mochi"
 import {
   checkExhaustiveM,
   isWideWitnessM,
@@ -1108,6 +1108,79 @@ let checkCtorFieldVarsAll = stmts =>
     stmts
   )
 
+// --- custom discriminants (ADR 0156) ---
+
+// A `@tag` key is emitted bare (`{ type: … }`, `x.type`), so it must be a plain
+// identifier; no regex in the prelude, so scan the characters.
+let identChar = (c, first) =>
+  c == "_" || c == "$" || Str.toLower(
+    c
+  ) != Str.toUpper(c) || (!first && Str.contains(c, "0123456789"))
+
+let identFrom = (s, i) =>
+  i >= Str.length(s)
+    ? true
+    : identChar(
+      Option.unwrapOr("", Str.get(i, s)),
+      i == 0
+    ) && identFrom(s, i + 1)
+
+// Two ctors of one type sharing a literal would make `switch` arms unreachable.
+let dupTags = (ctors, seen: Set<string>) => switch ctors {
+  | [] => []
+  | [c, ...rest] => Set.has(c.tagLit, seen)
+      ? [
+        checkErr(
+          "duplicate discriminant \"${c.tagLit}\" — constructor '${c.name}' reuses it",
+          c.span
+        ),
+        ...dupTags(rest, seen)
+      ]
+      : dupTags(rest, Set.add(c.tagLit, seen))
+}
+
+let ctorTagErrs = (name, nameSpan, ctors) => switch Array.get(0, ctors) {
+  | None => []
+  | Some(first) => [
+      ...first.tagKey == "_tag" || identFrom(first.tagKey, 0)
+        ? []
+        : [
+          checkErr(
+            "`@tag(\"${first.tagKey}\")` on '${name}' is not a valid property name",
+            nameSpan
+          )
+        ],
+      ...Array.flatMap(
+        c =>
+          Array.contains(first.tagKey, keysOf(c.fields))
+            ? [
+              checkErr(
+                "constructor '${c.name}' has a field named '${first.tagKey}', which is also `${name}`'s discriminant",
+                c.span
+              )
+            ]
+            : [],
+        ctors
+      ),
+      ...dupTags(ctors, Set.fromArray([]))
+    ]
+}
+
+let checkCtorTagsAll = stmts =>
+  Array.flatMap(
+    s => switch s {
+      | Ast.SType(name, nameSpan, _, ctors, _, _, _, _, _) => ctorTagErrs(
+          name,
+          nameSpan,
+          ctors
+        )
+      | _ => []
+    },
+    stmts
+  )
+
+let checkCtorTags = stmts => Array.get(0, checkCtorTagsAll(stmts))
+
 // --- qualified type names (C5 slice d, ADR 0046) ---
 
 // Every `Alias.Name` written inside a type expression, applied args included.
@@ -1677,7 +1750,7 @@ export let checkWith = (stmts, imported, quals) => switch checkReservedNames(stm
   | Some(e) => Err(e)
   | None => switch checkReservedWords(stmts) {
       | Some(e) => Err(e)
-      | None => switch checkCtorFieldVars(stmts) {
+      | None => switch checkCtorFieldVars(stmts) |> Option.orElse(checkCtorTags(stmts)) {
           | Some(e) => Err(e)
           | None => switch checkQualifiedTypeNames(stmts, quals) {
               | Some(e) => Err(e)
@@ -1717,6 +1790,7 @@ export let checkAllWith = (stmts, imported, quals) => switch buildRegistry(stmts
       ...checkReservedNamesAll(stmts),
       ...checkReservedWordsAll(stmts),
       ...checkCtorFieldVarsAll(stmts),
+      ...checkCtorTagsAll(stmts),
       ...checkQualifiedTypeNamesAll(stmts, quals),
       ...checkLoopsAll(stmts),
       e
@@ -1730,6 +1804,7 @@ export let checkAllWith = (stmts, imported, quals) => switch buildRegistry(stmts
       ...checkReservedNamesAll(stmts),
       ...checkReservedWordsAll(stmts),
       ...checkCtorFieldVarsAll(stmts),
+      ...checkCtorTagsAll(stmts),
       ...checkQualifiedTypeNamesAll(stmts, quals),
       ...checkLoopsAll(stmts),
       ...Array.flatMap(
