@@ -1,6 +1,6 @@
 import type { TypeExpr } from "./ast";
 
-import { _Str_chars, _Str_join, _curry, length, map } from "@mochi/compiler/runtime";
+import { _Str_chars, _Str_join, _curry, _keyOf, length, map } from "@mochi/compiler/runtime";
 
 import * as Ast from "./ast";
 const escChar: (c: string) => string = (c: string) =>

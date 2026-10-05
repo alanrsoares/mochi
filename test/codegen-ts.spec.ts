@@ -145,7 +145,7 @@ test("runtime-equivalent numeric calls re-fold to TS operators", () => {
 test("structural equality remains a runtime call", () => {
   const out = ts("let same = (a, b) => eq(a, b)");
   expect(out).toContain("eq(a, b)");
-  expect(out).toContain('import { _curry, eq } from "@mochi/runtime";');
+  expect(out).toContain('import { _curry, _keyOf, eq } from "@mochi/runtime";');
 });
 
 // ADR 0115: only where structural `eq` and `===` agree exactly.

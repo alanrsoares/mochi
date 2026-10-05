@@ -21472,7 +21472,8 @@ var _preludeJsDefs = {
     if (x.size !== y.size)
       return false;
     for (const [k, v] of x) {
-      if (!y.has(k) || !eq(v, y.get(k)))
+      const key = _keyOf(y, k);
+      if (!y.has(key) || !eq(v, y.get(key)))
         return false;
     }
     return true;
@@ -21483,7 +21484,7 @@ var _preludeJsDefs = {
     if (x.size !== y.size)
       return false;
     for (const v of x)
-      if (!y.has(v))
+      if (!y.has(_keyOf(y, v)))
         return false;
     return true;
   }
@@ -21537,7 +21538,7 @@ var _preludeJsDefs = {
 };`,
   _compareRecords: `const _compareRecords = (x, y) => {
   const keysX = Object.keys(x), keysY = Object.keys(y);
-  const tx = keysX.includes("_tag") ? x._tag : undefined, ty = keysY.includes("_tag") ? y._tag : undefined;
+  const tx = Object.getPrototypeOf(x) !== null && keysX.includes("_tag") ? x._tag : undefined, ty = Object.getPrototypeOf(y) !== null && keysY.includes("_tag") ? y._tag : undefined;
   const tagged = typeof tx === "string", otherTagged = typeof ty === "string";
   if (tagged !== otherTagged)
     return tagged ? -1 : 1;
@@ -21955,7 +21956,8 @@ var _runtimeDeps = {
     "_List_concat"
   ],
   eq: [
-    "_curry"
+    "_curry",
+    "_keyOf"
   ],
   _compareSortedKeys: [
     "_compareFieldNames"

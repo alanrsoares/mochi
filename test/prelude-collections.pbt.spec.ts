@@ -34,11 +34,15 @@ const rowFixture = fc.record(
     b: fc.array(fc.integer(), { maxLength: 6 }),
     child: fc.record({ z: fc.integer() }),
   },
-  { requiredKeys: ["b", "child"] },
+  { requiredKeys: ["b", "child"], noNullPrototype: true },
 );
 const variantFixture = fc.oneof(
-  fc.record({ _tag: fc.constant("Leaf"), _0: fc.integer() }),
-  fc.record({ _tag: fc.constant("Branch"), left: rowFixture, right: rowFixture }),
+  // Null-prototype objects are `Dict`s (ADR 0150), never variants.
+  fc.record({ _tag: fc.constant("Leaf"), _0: fc.integer() }, { noNullPrototype: true }),
+  fc.record(
+    { _tag: fc.constant("Branch"), left: rowFixture, right: rowFixture },
+    { noNullPrototype: true },
+  ),
 );
 const wideRecordFixture = fc.dictionary(fc.string({ maxLength: 10 }), fc.integer(), {
   minKeys: 17,
