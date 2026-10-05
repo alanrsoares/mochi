@@ -105,9 +105,19 @@ let ctorField = (f: Ast.CtorField) => switch f.name {
 }
 
 export let ctorText = (c: Ast.Ctor) =>
-  Array.length(c.fields) == 0
-    ? c.name
-    : "${c.name}(${commaJoin(ctorField, c.fields)})"
+  let attr = c.tagLit == c.name ? "" : "@as(${strLit(c.tagLit)}) " in
+    Array.length(c.fields) == 0
+      ? "${attr}${c.name}"
+      : "${attr}${c.name}(${commaJoin(ctorField, c.fields)})"
+
+/// `@tag("k")` line preceding a variant type whose discriminant key is custom
+/// (ADR 0156). The parser stamps the key on every ctor, so the first decides.
+let tagLine = ctors => switch Array.get(0, ctors) {
+  | Some(c) => c.tagKey == "_tag"
+      ? []
+      : [txt("@tag(\"${c.tagKey}\")"), hardline]
+  | None => []
+}
 
 let generics = params =>
   Array.length(params) == 0 ? "" : "<${Str.join(", ", params)}>"
@@ -1940,10 +1950,13 @@ let stmtDoc = (cts: Ctx, stmts, i, src) => switch Array.get(i, stmts) {
         }
       | Ast.SType(name, _, params, ctors, alias, aliasType, exported, _, _) => {
           doc: cat(
-            [
-              txt(expPrefix(exported)),
-              cts->typeStmtD(name, params, ctors, alias, aliasType)
-            ]
+            Array.concat(
+              tagLine(ctors),
+              [
+                txt(expPrefix(exported)),
+                cts->typeStmtD(name, params, ctors, alias, aliasType)
+              ]
+            )
           ),
           consumed: 1
         }

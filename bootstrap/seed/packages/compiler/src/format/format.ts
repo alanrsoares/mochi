@@ -257,8 +257,24 @@ const ctorField: (f: CtorField) => string = (f: CtorField) =>
     () => showTypeExpr(f.fieldType),
     (name) => `${name}: ${showTypeExpr(f.fieldType)}`,
   );
-export const ctorText: (c: Ctor) => string = (c: Ctor) =>
-  length(c.fields) === 0 ? c.name : `${c.name}(${commaJoin(ctorField, c.fields)})`;
+export const ctorText: (c: Ctor) => string = (c: Ctor) => {
+  const attr: string = eq(c.tagLit, c.name) ? "" : `@as(${strLit(c.tagLit)}) `;
+  return length(c.fields) === 0
+    ? `${attr}${c.name}`
+    : `${attr}${c.name}(${commaJoin(ctorField, c.fields)})`;
+};
+/**
+ * `@tag("k")` line preceding a variant type whose discriminant key is custom
+ * (ADR 0156). The parser stamps the key on every ctor, so the first decides.
+ */
+const tagLine: <A>(ctors: ({ tagKey: string } & A)[]) => Doc[] = <A>(
+  ctors: ({ tagKey: string } & A)[],
+) =>
+  _Option_match(
+    _Array_get(0, ctors),
+    () => [] as Doc[],
+    (c) => (c.tagKey === "_tag" ? ([] as Doc[]) : [txt(`@tag("${c.tagKey}")`), hardline]),
+  );
 const generics: (params: string[]) => string = (params: string[]) =>
   length(params) === 0 ? "" : `<${_Str_join(", ", params)}>`;
 /**
@@ -3155,10 +3171,12 @@ const stmtDoc$ = (cts: Ctx, stmts: Stmt[], i: number, src: string): StmtDoc =>
         case "SType": {
           const { name, params, ctors, alias, aliasType, exported } = $match;
           return {
-            doc: cat([
-              txt(expPrefix(exported)),
-              typeStmtD$(cts, name, params, ctors, alias, aliasType),
-            ]),
+            doc: cat(
+              _Array_concat(tagLine(ctors), [
+                txt(expPrefix(exported)),
+                typeStmtD$(cts, name, params, ctors, alias, aliasType),
+              ]),
+            ),
             consumed: 1,
           };
         }

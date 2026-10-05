@@ -4,6 +4,7 @@
 // and every or-pattern alternative has aligned binding positions.
 import * as Ast from "../ast/ast.mochi"
 import { jsStringLit, litValue } from "./literals.mochi"
+import { tagOf } from "../ast/ctors.mochi"
 
 let someOfFrom = (f, xs, i) => switch Array.get(i, xs) {
   | None => false
@@ -128,10 +129,11 @@ export let patConds = (ctorKeys: Map<string, [string]>, p, path) => switch p {
   | Ast.PLit(_, _, _) => ["${path} === ${litValue(p)}"]
   | Ast.PBool(_, _) => ["${path} === ${litValue(p)}"]
   | Ast.PStr(_, _) => ["${path} === ${litValue(p)}"]
-  | Ast.PCtor(ctor, args, _, _) => Array.prepend(
-      "${path}._tag === ${jsStringLit(ctor)}",
-      ctorKeys->pctorConds(ctor, args, 0, path)
-    )
+  | Ast.PCtor(ctor, args, _, _) => let (key, lit) = ctorKeys->tagOf(ctor) in
+      Array.prepend(
+        "${path}.${key} === ${jsStringLit(lit)}",
+        ctorKeys->pctorConds(ctor, args, 0, path)
+      )
   | Ast.PRecord(fields, _) => ctorKeys->precordConds(fields, 0, path)
   | Ast.PTuple(elems, _) =>
     // No length guard — tuple arity is guaranteed by the type.
@@ -231,7 +233,8 @@ let arrRefines = (ctorKeys: Map<string, [string]>, elems, elemBase, i) => switch
 /// keeps the base — per-alternative narrowing would need a union target.
 export let patTarget = (ctorKeys: Map<string, [string]>, p, base) => switch p {
   | Ast.PAs(pat, _, _, _) => ctorKeys->patTarget(pat, base)
-  | Ast.PCtor(ctor, args, _, _) => let member = "Extract<${base}, { _tag: ${jsStringLit(ctor)} }>" in
+  | Ast.PCtor(ctor, args, _, _) => let (key, lit) = ctorKeys->tagOf(ctor) in
+    let member = "Extract<${base}, { ${key}: ${jsStringLit(lit)} }>" in
     let keys = Option.unwrapOr([], Map.get(ctor, ctorKeys)) in
     let refines = ctorKeys->ctorRefines(args, keys, member, 0) in
       Array.length(refines) == 0

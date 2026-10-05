@@ -385,6 +385,8 @@ const qualifyField: _Curry<[f: CtorField, qualify: Map<string, string>], CtorFie
 const qualifyCtor$ = (c: Ctor, qualify: Map<string, string>): Ctor => ({
   name: c.name,
   fields: map((f: CtorField) => qualifyField$(f, qualify), c.fields),
+  tagKey: c.tagKey,
+  tagLit: c.tagLit,
   span: c.span,
 });
 const qualifyCtor: _Curry<[c: Ctor, qualify: Map<string, string>], Ctor> = _curry(2, qualifyCtor$);

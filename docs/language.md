@@ -96,6 +96,16 @@ type Shape = | Circle(float) | Rect(float, float)
 type Result<A, E> = | Ok(value: A) | Err(error: E)
 ```
 
+Variants compile to `{ _tag: "Ctor", … }`. To match or build a TypeScript discriminated union,
+override the discriminant: `@tag("key")` before the type sets the key, `@as("lit")` before a
+constructor sets its literal ([ADR 0156](adr/0156-variant-discriminants.md)):
+
+```mochi
+@tag("type")
+type Ev = | @as("click") Click(x: number, y: number) | @as("key") Key(k: string)
+// { type: "click"; x: number; y: number } | { type: "key"; k: string }
+```
+
 **Records** are transparent structural rows — no nominal identity, no runtime tag. A
 named alias folds back in hover and `.d.ts`; duck typing falls out of row polymorphism:
 

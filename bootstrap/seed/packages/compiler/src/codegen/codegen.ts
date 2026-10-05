@@ -40,7 +40,13 @@ export type ParamAnnots = { generics: string; params: Option<string>[] };
  * locally and still unify structurally with the real AST values.
  */
 export type CtorFieldLike = { name: Option<string>; fieldType: TypeExpr };
-export type CtorLike = { name: string; fields: CtorField[]; span: SpanAt };
+export type CtorLike = {
+  name: string;
+  fields: CtorField[];
+  tagKey: string;
+  tagLit: string;
+  span: SpanAt;
+};
 export type GenOpts = {
   annotateLet: Option<(a: string, b: Expr) => Option<string>>;
   annotateRaw: Option<(a: string, b: Expr) => Option<string>>;
@@ -166,7 +172,7 @@ import * as Ast from "../ast/ast";
 import { patSlot, patConds, patTarget } from "./pattern";
 import { jsStringLit, litValue } from "./literals";
 import { localBinderNames } from "../infer/local-names";
-import { keysOf, ctorKeysFromStmts, seedBuiltinCtorKeys } from "../ast/ctors";
+import { keysOf, ctorKeysFromStmts, tagOf, seedBuiltinCtorKeys } from "../ast/ctors";
 
 /**
  * The JS backend's knobs: no annotation, no rewriting, `.js` siblings.
@@ -575,15 +581,19 @@ const eqTest$ = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string>
       _v as [[Expr, Expr][0], Extract<[Expr, Expr][1], { _tag: "ERef" }>],
     )
       ? (([, { name: c }]) =>
-          Some(`(${genMember$(ctx, left)}._tag ${op} "${c}")`) as Option<string>)(
-          _v as [[Expr, Expr][0], Extract<[Expr, Expr][1], { _tag: "ERef" }>],
-        )
+          (([key, lit]: [string, string]) =>
+            Some(`(${genMember$(ctx, left)}.${key} ${op} ${jsStringLit(lit)})`) as Option<string>)(
+            tagOf(ctx.keys, c),
+          ))(_v as [[Expr, Expr][0], Extract<[Expr, Expr][1], { _tag: "ERef" }>])
       : _v[0]._tag === "ERef" &&
           (([{ name: c }]) => isNullaryCtor(c, ctx.keys))(
             _v as [Extract<[Expr, Expr][0], { _tag: "ERef" }>, [Expr, Expr][1]],
           )
         ? (([{ name: c }]) =>
-            Some(`(${genMember$(ctx, right)}._tag ${op} "${c}")`) as Option<string>)(
+            (([key, lit]: [string, string]) =>
+              Some(
+                `(${genMember$(ctx, right)}.${key} ${op} ${jsStringLit(lit)})`,
+              ) as Option<string>)(tagOf(ctx.keys, c)))(
             _v as [Extract<[Expr, Expr][0], { _tag: "ERef" }>, [Expr, Expr][1]],
           )
         : or(isPrimLit(left), isPrimLit(right))
@@ -2128,9 +2138,12 @@ const genFunctionCases$ = (ctx: GCtx, arms: MatchArm[], root: string): string =>
     " ",
     map((a: MatchArm) => {
       const label: string = ((_v) =>
-        _v._tag === "PCtor" ? (({ ctor: name }) => `case ${jsStringLit(name)}:`)(_v) : "default:")(
-        a.pattern,
-      );
+        _v._tag === "PCtor"
+          ? (({ ctor: name }) =>
+              (([, lit]: [string, string]) => `case ${jsStringLit(lit)}:`)(tagOf(ctx.keys, name)))(
+              _v,
+            )
+          : "default:")(a.pattern);
       const slot: string = patSlot(ctx.keys, a.pattern);
       const bind: string = slot === "" ? "" : `const ${slot} = ${root}; `;
       const bound: Set<string> = _Set_fromArray(functionPatternNames(a.pattern));
@@ -2141,13 +2154,39 @@ const genFunctionCases: _Curry<[ctx: GCtx, arms: MatchArm[], root: string], stri
   3,
   genFunctionCases$,
 );
+/**
+ * The discriminant key a ctor `switch` reads: every arm names a ctor of one
+ * type (ADR 0156), so the first ctor arm decides.
+ */
+const switchKey: <A>(ctx: GCtx, arms: ({ pattern: Pattern } & A)[]) => string = _curry(
+  2,
+  <A>(ctx: GCtx, arms: ({ pattern: Pattern } & A)[]) =>
+    match(arms)
+      .with(
+        (_v) => _v.length === 0,
+        () => "_tag",
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([a, ...rest]) =>
+          ((_v) =>
+            _v._tag === "PCtor"
+              ? (({ ctor: name }) => (([key, ,]: [string, string]) => key)(tagOf(ctx.keys, name)))(
+                  _v,
+                )
+              : switchKey(ctx, rest))(a.pattern),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
 const genFunctionMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string => {
   const root: string = tempName$(ctx, "$match");
   const nestedCtx: GCtx = { ...ctx, userNames: _Set_add(root, ctx.userNames) };
   const fallback: string = someOf((a: MatchArm) => isCatchAll(a.pattern), arms)
     ? ""
     : 'default: { throw new Error("non-exhaustive match"); }';
-  return `const ${root} = ${genExpr$(ctx, scrutinee)}; switch (${root}._tag) { ${genFunctionCases$(nestedCtx, arms, root)} ${fallback} }`;
+  return `const ${root} = ${genExpr$(ctx, scrutinee)}; switch (${root}.${switchKey(ctx, arms)}) { ${genFunctionCases$(nestedCtx, arms, root)} ${fallback} }`;
 };
 const genFunctionMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
   3,
@@ -3079,14 +3118,15 @@ const genWithArm$ = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): s
     case "PCtor": {
       const { ctor, args } = $match;
       return allOf(isFlatSub, args)
-        ? (([binds, litFields]: [string[], string[]]) => {
-            const patObj: string = _Str_join(
-              ", ",
-              _Array_prepend(`_tag: ${jsStringLit(ctor)}`, litFields),
-            );
-            const param: string = length(binds) === 0 ? "()" : `({ ${_Str_join(", ", binds)} })`;
-            return `.with({ ${patObj} }, ${param} => ${genLambdaBody$(ctx, body)})`;
-          })(ctorArgParts$(ctx, ctor, args, 0))
+        ? (([binds, litFields]: [string[], string[]]) =>
+            (([key, lit]: [string, string]) => {
+              const patObj: string = _Str_join(
+                ", ",
+                _Array_prepend(`${key}: ${jsStringLit(lit)}`, litFields),
+              );
+              const param: string = length(binds) === 0 ? "()" : `({ ${_Str_join(", ", binds)} })`;
+              return `.with({ ${patObj} }, ${param} => ${genLambdaBody$(ctx, body)})`;
+            })(tagOf(ctx.keys, ctor)))(ctorArgParts$(ctx, ctor, args, 0))
         : genGuardArm$(ctx, p, body, None as Option<Expr>, base);
     }
     default: {
@@ -3114,20 +3154,25 @@ const typedCtorParams: _Curry<[keys: string[], paramTypes: string[], i: number],
   typedCtorParams$,
 );
 const genCtor: <A, B, C>(
-  c: { name: string; fields: ({ name: Option<string> } & A)[] } & B,
+  c: { tagLit: string; fields: ({ name: Option<string> } & A)[]; name: string; tagKey: string } & B,
   ts: Option<{ retMono: string; generics: string; paramTypes: string[]; ret: string } & C>,
 ) => string = _curry(
   2,
   <A, B, C>(
-    c: { name: string; fields: ({ name: Option<string> } & A)[] } & B,
+    c: {
+      tagLit: string;
+      fields: ({ name: Option<string> } & A)[];
+      name: string;
+      tagKey: string;
+    } & B,
     ts: Option<{ retMono: string; generics: string; paramTypes: string[]; ret: string } & C>,
   ) => {
-    const tag: string = jsStringLit(c.name);
+    const tag: string = jsStringLit(c.tagLit);
     return length(c.fields) === 0
       ? _Option_match(
           ts,
-          () => `const ${c.name} = { _tag: ${tag} };`,
-          (t) => `const ${c.name}: ${t.retMono} = { _tag: ${tag} };`,
+          () => `const ${c.name} = { ${c.tagKey}: ${tag} };`,
+          (t) => `const ${c.name}: ${t.retMono} = { ${c.tagKey}: ${tag} };`,
         )
       : ((keys: string[]) =>
           ((params: string) =>
@@ -3144,19 +3189,29 @@ const genCtor: <A, B, C>(
                     ts,
                     () => `const ${c.name} = ${impl};`,
                     (t) =>
-                      `const ${c.name} = ${t.generics}(${_Str_join(", ", typedCtorParams$(keys, t.paramTypes, 0))}): ${t.ret} => ({ _tag: ${tag}, ${params} });`,
-                  ))(`(${params}) => ({ _tag: ${tag}, ${params} })`))(_Str_join(", ", keys)))(
-          keysOf(c.fields),
-        );
+                      `const ${c.name} = ${t.generics}(${_Str_join(", ", typedCtorParams$(keys, t.paramTypes, 0))}): ${t.ret} => ({ ${c.tagKey}: ${tag}, ${params} });`,
+                  ))(`(${params}) => ({ ${c.tagKey}: ${tag}, ${params} })`))(
+            _Str_join(", ", keys),
+          ))(keysOf(c.fields));
   },
 );
 const genCtorsFrom: <A, B, C, D>(
   s: A,
-  ctors: ({ name: string; fields: ({ name: Option<string> } & B)[] } & C)[],
+  ctors: ({
+    name: string;
+    tagLit: string;
+    fields: ({ name: Option<string> } & B)[];
+    tagKey: string;
+  } & C)[],
   h: Option<
     (
       a: A,
-      b: { name: string; fields: ({ name: Option<string> } & B)[] } & C,
+      b: {
+        name: string;
+        tagLit: string;
+        fields: ({ name: Option<string> } & B)[];
+        tagKey: string;
+      } & C,
     ) => Option<{ retMono: string; generics: string; paramTypes: string[]; ret: string } & D>
   >,
   refs: Set<string>,
@@ -3166,11 +3221,21 @@ const genCtorsFrom: <A, B, C, D>(
   6,
   <A, B, C, D>(
     s: A,
-    ctors: ({ name: string; fields: ({ name: Option<string> } & B)[] } & C)[],
+    ctors: ({
+      name: string;
+      tagLit: string;
+      fields: ({ name: Option<string> } & B)[];
+      tagKey: string;
+    } & C)[],
     h: Option<
       (
         a: A,
-        b: { name: string; fields: ({ name: Option<string> } & B)[] } & C,
+        b: {
+          name: string;
+          tagLit: string;
+          fields: ({ name: Option<string> } & B)[];
+          tagKey: string;
+        } & C,
       ) => Option<{ retMono: string; generics: string; paramTypes: string[]; ret: string } & D>
     >,
     refs: Set<string>,

@@ -44,6 +44,7 @@ import {
   _Array_get,
   _Array_prepend,
   _Option_exists,
+  _Option_isSome,
   _Option_match,
   _Option_unwrapOr,
   _Result_flatMap,
@@ -3631,27 +3632,78 @@ const parseCtorField: _Curry<
   [toks: LocTok[], pos: number],
   Result<[CtorField, number], PErr>
 > = _curry(2, parseCtorField$);
-const parseCtor$ = (toks: LocTok[], pos: number): Result<[Ctor, number], PErr> =>
+const parseAttr$ = (name: string, toks: LocTok[], pos: number): Result<[string, number], PErr> =>
   _Result_flatMap(
-    ([nm, p]) =>
-      tokAt$(toks, p).tok._tag === "TLparen"
-        ? _Result_flatMap(
-            ([fields, p2]) =>
-              _Result_flatMap(
-                (p3) =>
-                  Ok(
-                    _tuple({ name: nm.name, fields: fields, span: toEnd(nm.span, toks, p3) }, p3),
-                  ) as Result<[Ctor, number], PErr>,
-                expectTok$(TRparen as Tok, toks, p2),
+    (p) =>
+      _Result_flatMap(
+        ([id, p1]) =>
+          !eq(id.name, name)
+            ? errAt(`expected \`@${name}\`, found \`@${id.name}\``, tokAt$(toks, p))
+            : _Result_flatMap(
+                (p2) =>
+                  _Result_flatMap(
+                    ([lit, p3]) =>
+                      _Result_flatMap(
+                        (p4) => Ok(_tuple(lit, p4)) as Result<[string, number], PErr>,
+                        expectTok$(TRparen as Tok, toks, p3),
+                      ),
+                    expectStr$(toks, p2),
+                  ),
+                expectTok$(TLparen as Tok, toks, p1),
               ),
-            listUntil(TRparen as Tok, parseCtorField, toks, p + 1),
-          )
-        : (Ok(_tuple({ name: nm.name, fields: [] as CtorField[], span: nm.span }, p)) as Result<
-            [Ctor, number],
-            PErr
-          >),
-    expectId$(toks, pos),
+        expectId$(toks, p),
+      ),
+    expectTok$(TAt as Tok, toks, pos),
   );
+const parseAttr: _Curry<
+  [name: string, toks: LocTok[], pos: number],
+  Result<[string, number], PErr>
+> = _curry(3, parseAttr$);
+const parseCtor$ = (toks: LocTok[], pos: number): Result<[Ctor, number], PErr> => {
+  const tagged: boolean = tokAt$(toks, pos).tok._tag === "TAt";
+  return _Result_flatMap(
+    ([lit, p0]) =>
+      _Result_flatMap(
+        ([nm, p]) =>
+          ((tagLit: string) =>
+            tokAt$(toks, p).tok._tag === "TLparen"
+              ? _Result_flatMap(
+                  ([fields, p2]) =>
+                    _Result_flatMap(
+                      (p3) =>
+                        Ok(
+                          _tuple(
+                            {
+                              name: nm.name,
+                              fields: fields,
+                              tagKey: "_tag",
+                              tagLit: tagLit,
+                              span: toEnd(nm.span, toks, p3),
+                            },
+                            p3,
+                          ),
+                        ) as Result<[Ctor, number], PErr>,
+                      expectTok$(TRparen as Tok, toks, p2),
+                    ),
+                  listUntil(TRparen as Tok, parseCtorField, toks, p + 1),
+                )
+              : (Ok(
+                  _tuple(
+                    {
+                      name: nm.name,
+                      fields: [] as CtorField[],
+                      tagKey: "_tag",
+                      tagLit: tagLit,
+                      span: nm.span,
+                    },
+                    p,
+                  ),
+                ) as Result<[Ctor, number], PErr>))(tagged ? lit : nm.name),
+        expectId$(toks, p0),
+      ),
+    tagged ? parseAttr$("as", toks, pos) : (Ok(_tuple("", pos)) as Result<[string, number], PErr>),
+  );
+};
 const parseCtor: _Curry<[toks: LocTok[], pos: number], Result<[Ctor, number], PErr>> = _curry(
   2,
   parseCtor$,
@@ -4328,6 +4380,53 @@ const parseExprStmt: <B>(
     );
   },
 );
+/**
+ * Applies `@tag("key")` to the variant type it precedes (ADR 0156), growing the
+ * statement to cover the attribute. Anything else after `@tag` is an error.
+ */
+const applyTag: <B>(
+  key: string,
+  doc: Option<string>,
+  lt: { end: number; start: number } & B,
+  stmts: Stmt[],
+) => Result<Stmt[], PErr> = _curry(
+  4,
+  <B>(key: string, doc: Option<string>, lt: { end: number; start: number } & B, stmts: Stmt[]) =>
+    ((_v) =>
+      _v.length >= 1 && _v[0]._tag === "SType"
+        ? (([
+            { name, nameSpan, params, ctors, alias, aliasType, exported, doc: d, span },
+            ...rest
+          ]) =>
+            length(ctors) === 0
+              ? errAt("`@tag` applies to a variant type", lt)
+              : Ok(
+                  _Array_prepend(
+                    Ast.SType(
+                      name,
+                      nameSpan,
+                      params,
+                      map(
+                        (c: Ctor) => ({
+                          name: c.name,
+                          fields: c.fields,
+                          tagKey: key,
+                          tagLit: c.tagLit,
+                          span: c.span,
+                        }),
+                        ctors,
+                      ),
+                      alias,
+                      aliasType,
+                      exported,
+                      _Option_isSome(doc) ? doc : d,
+                      spanning(spanOf(lt), span),
+                    ),
+                    rest,
+                  ),
+                ))(_v as [Extract<Stmt[][number], { _tag: "SType" }>, ...Stmt[]])
+        : errAt("`@tag` must precede a variant type", lt))(stmts),
+);
 const parseStmt$ = (
   toks: LocTok[],
   pos: number,
@@ -4344,6 +4443,23 @@ const parseStmt$ = (
   switch ($match._tag) {
     case "TImport": {
       return _Result_map(([s, p]: [Stmt, number]) => _tuple([s], p, tmp), parseImport$(toks, pos));
+    }
+    case "TAt": {
+      return ((_v) =>
+        _v._tag === "TId" && _v.value === "tag"
+          ? _Result_flatMap(
+              ([key, p]) =>
+                _Result_flatMap(
+                  ([stmts, p2, tmp2]) =>
+                    _Result_map(
+                      (out: Stmt[]) => _tuple(out, p2, tmp2),
+                      applyTag(key, doc, lt, stmts),
+                    ),
+                  parseStmt$(toks, p, tmp, hooks),
+                ),
+              parseAttr$("tag", toks, pos),
+            )
+          : parseExprStmt(toks, pos, tmp, hooks))(tokAt$(toks, pos + 1).tok);
     }
     case "TExport": {
       const exportSp: SpanAt = spanOf(lt);

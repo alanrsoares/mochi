@@ -1,4 +1,4 @@
-import type { Ctor, CtorField, Stmt } from "./ast";
+import type { Ctor, CtorField, Stmt, TypeExpr } from "./ast";
 import type { SpanAt } from "../infer/types";
 
 export type CtorInfo = { owner: string; arity: number };
@@ -13,6 +13,8 @@ import {
   Some,
   _Array_get,
   _Array_prepend,
+  _Map_delete,
+  _Map_get,
   _Map_has,
   _Map_set,
   _Option_match,
@@ -23,6 +25,8 @@ import {
   _done,
   _keyOf,
   _recur,
+  _tuple,
+  and,
   eq,
   filter,
   length,
@@ -57,39 +61,33 @@ export const keysOf: <A>(fields: ({ name: Option<string> } & A)[]) => string[] =
   fields: ({ name: Option<string> } & A)[],
 ) => keysOfFrom(fields, 0);
 const builtinSpan: SpanAt = { start: 0, end: 0 };
+const builtinCtor$ = (
+  name: string,
+  fields: { fieldType: TypeExpr; name: Option<string> }[],
+): Ctor => ({ name: name, fields: fields, tagKey: "_tag", tagLit: name, span: builtinSpan });
+const builtinCtor: _Curry<
+  [name: string, fields: { fieldType: TypeExpr; name: Option<string> }[]],
+  Ctor
+> = _curry(2, builtinCtor$);
+const valueField$ = (label: string, ty: string): CtorField[] => [
+  { name: Some(label), fieldType: Ast.TyName(ty, builtinSpan) },
+];
+const valueField: _Curry<[label: string, ty: string], CtorField[]> = _curry(2, valueField$);
 export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
   {
     name: "Option",
     params: ["a"],
     ctors: [
-      {
-        name: "Some",
-        fields: [
-          { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
-        ],
-        span: builtinSpan,
-      },
-      { name: "None", fields: [] as CtorField[], span: builtinSpan },
+      builtinCtor$("Some", valueField$("value", "a")),
+      builtinCtor$("None", [] as CtorField[]),
     ],
   },
   {
     name: "Result",
     params: ["a", "e"],
     ctors: [
-      {
-        name: "Ok",
-        fields: [
-          { name: Some("value") as Option<string>, fieldType: Ast.TyName("a", builtinSpan) },
-        ],
-        span: builtinSpan,
-      },
-      {
-        name: "Err",
-        fields: [
-          { name: Some("error") as Option<string>, fieldType: Ast.TyName("e", builtinSpan) },
-        ],
-        span: builtinSpan,
-      },
+      builtinCtor$("Ok", valueField$("value", "a")),
+      builtinCtor$("Err", valueField$("error", "e")),
     ],
   },
 ];
@@ -309,25 +307,68 @@ const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Regis
 );
 export const exportedRegistry: (stmts: Stmt[]) => Registry = (stmts: Stmt[]) =>
   exportedRegLoop$(stmts, 0, emptyRegistry);
-const ctorKeysInto: <A, B, C>(
-  ctors: ({ fields: ({ name: Option<string> } & B)[]; name: A } & C)[],
+export const tagEntryOf: (name: string) => string = (name: string) => `@tag:${name}`;
+const withTag$ = (
+  m: Map<string, string[]>,
+  name: string,
+  tagKey: string,
+  tagLit: string,
+): Map<string, string[]> =>
+  and(tagKey === "_tag", eq(tagLit, name))
+    ? _Map_delete(tagEntryOf(name), m)
+    : _Map_set(tagEntryOf(name), [tagKey, tagLit], m);
+const withTag: _Curry<
+  [m: Map<string, string[]>, name: string, tagKey: string, tagLit: string],
+  Map<string, string[]>
+> = _curry(4, withTag$);
+const ctorKeysInto: <A, B>(
+  ctors: ({
+    tagLit: string;
+    tagKey: string;
+    fields: ({ name: Option<string> } & A)[];
+    name: string;
+  } & B)[],
   i: number,
-  m: Map<A, string[]>,
-) => Map<A, string[]> = _curry(
+  m: Map<string, string[]>,
+) => Map<string, string[]> = _curry(
   3,
-  <A, B, C>(
-    ctors: ({ fields: ({ name: Option<string> } & B)[]; name: A } & C)[],
+  <A, B>(
+    ctors: ({
+      tagLit: string;
+      tagKey: string;
+      fields: ({ name: Option<string> } & A)[];
+      name: string;
+    } & B)[],
     i: number,
-    m: Map<A, string[]>,
+    m: Map<string, string[]>,
   ) =>
     match(_Array_get(i, ctors))
       .with({ _tag: "None" }, () => m)
       .with(
         (_v) => _v._tag === "Some",
-        ({ value: { name, fields } }) =>
-          ctorKeysInto(ctors, i + 1, _Map_set(name, keysOf(fields), m)),
+        ({ value: { name, fields, tagKey, tagLit } }) =>
+          ctorKeysInto(
+            ctors,
+            i + 1,
+            withTag$(_Map_set(name, keysOf(fields), m), name, tagKey, tagLit),
+          ),
       )
       .exhaustive(),
+);
+const tagOf$ = (keys: Map<string, string[]>, ctor: string): [string, string] =>
+  ((_v) =>
+    _v._tag === "Some" && _v.value.length === 2
+      ? (({ value: [key, lit] }) => _tuple(key, lit))(
+          _v as Extract<Option<string[]>, { _tag: "Some" }>,
+        )
+      : _tuple("_tag", ctor))(_Map_get(tagEntryOf(ctor), keys));
+/**
+ * A ctor's runtime discriminant `(key, literal)` — `("_tag", name)` unless
+ * `@tag`/`@as` overrode it. The one lookup codegen and the TS backend share.
+ */
+export const tagOf: _Curry<[keys: Map<string, string[]>, ctor: string], [string, string]> = _curry(
+  2,
+  tagOf$,
 );
 const ctorKeysFrom$ = (stmts: Stmt[], i: number, m: Map<string, string[]>): Map<string, string[]> =>
   ((_v) =>

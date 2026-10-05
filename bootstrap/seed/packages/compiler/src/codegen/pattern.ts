@@ -27,6 +27,7 @@ import {
 
 import * as Ast from "../ast/ast";
 import { jsStringLit, litValue } from "./literals";
+import { tagOf } from "../ast/ctors";
 const someOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
   3,
   <A>(f: (a: A) => boolean, xs: A[], i: number) =>
@@ -274,10 +275,11 @@ const patConds$ = (ctorKeys: Map<string, string[]>, p: Pattern, path: string): s
     }
     case "PCtor": {
       const { ctor, args } = $match;
-      return _Array_prepend(
-        `${path}._tag === ${jsStringLit(ctor)}`,
-        pctorConds$(ctorKeys, ctor, args, 0, path),
-      );
+      return (([key, lit]: [string, string]) =>
+        _Array_prepend(
+          `${path}.${key} === ${jsStringLit(lit)}`,
+          pctorConds$(ctorKeys, ctor, args, 0, path),
+        ))(tagOf(ctorKeys, ctor));
     }
     case "PRecord": {
       const { fields } = $match;
@@ -502,10 +504,12 @@ const patTarget$ = (ctorKeys: Map<string, string[]>, p: Pattern, base: string): 
     }
     case "PCtor": {
       const { ctor, args } = $match;
-      const member: string = `Extract<${base}, { _tag: ${jsStringLit(ctor)} }>`;
-      const keys: string[] = _Option_unwrapOr([] as string[], _Map_get(ctor, ctorKeys));
-      const refines: string[] = ctorRefines$(ctorKeys, args, keys, member, 0);
-      return length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`;
+      return (([key, lit]: [string, string]) => {
+        const member: string = `Extract<${base}, { ${key}: ${jsStringLit(lit)} }>`;
+        const keys: string[] = _Option_unwrapOr([] as string[], _Map_get(ctor, ctorKeys));
+        const refines: string[] = ctorRefines$(ctorKeys, args, keys, member, 0);
+        return length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`;
+      })(tagOf(ctorKeys, ctor));
     }
     case "PRecord": {
       const { fields } = $match;

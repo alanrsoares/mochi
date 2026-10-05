@@ -53,7 +53,12 @@ import {
   _Set_fromArray,
   _Set_has,
   _Str_codeAt,
+  _Str_contains,
+  _Str_get,
   _Str_join,
+  _Str_length,
+  _Str_toLower,
+  _Str_toUpper,
   _curry,
   _keyOf,
   _setAdd,
@@ -74,7 +79,7 @@ import {
 import { match } from "@onrails/pattern";
 
 import * as Ast from "../ast/ast";
-import { buildRegistry, primTypeNames } from "../ast/ctors";
+import { buildRegistry, primTypeNames, keysOf } from "../ast/ctors";
 import {
   checkExhaustiveM,
   isWideWitnessM,
@@ -2118,6 +2123,122 @@ const checkCtorFieldVarsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
       }
     }
   }, stmts);
+const identChar$ = (c: string, first: boolean): boolean =>
+  or(
+    or(or(c === "_", c === "$"), !eq(_Str_toLower(c), _Str_toUpper(c))),
+    and(!first, _Str_contains(c, "0123456789")),
+  );
+const identChar: _Curry<[c: string, first: boolean], boolean> = _curry(2, identChar$);
+const identFrom$ = (s: string, i: number): boolean =>
+  i >= _Str_length(s)
+    ? true
+    : and(identChar$(_Option_unwrapOr("", _Str_get(i, s)), i === 0), identFrom$(s, i + 1));
+const identFrom: _Curry<[s: string, i: number], boolean> = _curry(2, identFrom$);
+const dupTags: <C, D>(
+  ctors: ({ tagLit: string; name: string; span: { end: number; start: number } & C } & D)[],
+  seen: Set<string>,
+) => PErr[] = _curry(
+  2,
+  <C, D>(
+    ctors: ({ tagLit: string; name: string; span: { end: number; start: number } & C } & D)[],
+    seen: Set<string>,
+  ) =>
+    match(ctors)
+      .with(
+        (_v) => _v.length === 0,
+        () => [] as PErr[],
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([c, ...rest]) =>
+          _Set_has(c.tagLit, seen)
+            ? [
+                checkErr(
+                  `duplicate discriminant "${c.tagLit}" — constructor '${c.name}' reuses it`,
+                  c.span,
+                ),
+                ...dupTags(rest, seen),
+              ]
+            : dupTags(rest, _Set_add(c.tagLit, seen)),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const ctorTagErrs: <C, D, E, F>(
+  name: string,
+  nameSpan: { end: number; start: number } & C,
+  ctors: ({
+    tagKey: string;
+    fields: ({ name: Option<string> } & D)[];
+    name: string;
+    span: { end: number; start: number } & E;
+    tagLit: string;
+  } & F)[],
+) => PErr[] = _curry(
+  3,
+  <C, D, E, F>(
+    name: string,
+    nameSpan: { end: number; start: number } & C,
+    ctors: ({
+      tagKey: string;
+      fields: ({ name: Option<string> } & D)[];
+      name: string;
+      span: { end: number; start: number } & E;
+      tagLit: string;
+    } & F)[],
+  ) =>
+    _Option_match(
+      _Array_get(0, ctors),
+      () => [] as PErr[],
+      (first) => [
+        ...(or(first.tagKey === "_tag", identFrom$(first.tagKey, 0))
+          ? ([] as PErr[])
+          : [
+              checkErr(
+                `\`@tag("${first.tagKey}")\` on '${name}' is not a valid property name`,
+                nameSpan,
+              ),
+            ]),
+        ..._Array_flatMap(
+          (
+            c: {
+              fields: ({ name: Option<string> } & D)[];
+              name: string;
+              span: { end: number; start: number } & E;
+              tagKey: string;
+              tagLit: string;
+            } & F,
+          ) =>
+            _Array_contains(first.tagKey, keysOf(c.fields))
+              ? [
+                  checkErr(
+                    `constructor '${c.name}' has a field named '${first.tagKey}', which is also \`${name}\`'s discriminant`,
+                    c.span,
+                  ),
+                ]
+              : ([] as PErr[]),
+          ctors,
+        ),
+        ...dupTags(ctors, _Set_fromArray([] as string[])),
+      ],
+    ),
+);
+const checkCtorTagsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
+  _Array_flatMap((s: Stmt) => {
+    const $match = s;
+    switch ($match._tag) {
+      case "SType": {
+        const { name, nameSpan, ctors } = $match;
+        return ctorTagErrs(name, nameSpan, ctors);
+      }
+      default: {
+        return [] as PErr[];
+      }
+    }
+  }, stmts);
+const checkCtorTags: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
+  _Array_get(0, checkCtorTagsAll(stmts));
 const qualRefsFrom: (
   te: TypeExpr,
 ) => { alias: string; name: string; nameSpan: SpanAt; qualSpan: SpanAt }[] = (te: TypeExpr) => {
@@ -3157,7 +3278,7 @@ export const checkWith: <A, B>(
           checkReservedWords(stmts),
           () =>
             _Option_match(
-              checkCtorFieldVars(stmts),
+              _Option_orElse(checkCtorTags(stmts), checkCtorFieldVars(stmts)),
               () =>
                 _Option_match(
                   checkQualifiedTypeNames(stmts, quals),
@@ -3253,6 +3374,7 @@ export const checkAllWith: <A, B>(
           ...checkReservedNamesAll(stmts),
           ...checkReservedWordsAll(stmts),
           ...checkCtorFieldVarsAll(stmts),
+          ...checkCtorTagsAll(stmts),
           ...checkQualifiedTypeNamesAll(stmts, quals),
           ...checkLoopsAll(stmts),
           e,
@@ -3273,6 +3395,7 @@ export const checkAllWith: <A, B>(
           ...checkReservedNamesAll(stmts),
           ...checkReservedWordsAll(stmts),
           ...checkCtorFieldVarsAll(stmts),
+          ...checkCtorTagsAll(stmts),
           ...checkQualifiedTypeNamesAll(stmts, quals),
           ...checkLoopsAll(stmts),
           ..._Array_flatMap((stmt: Stmt) => {

@@ -10,7 +10,11 @@
 import { lex } from "../lexer/lexer.mochi"
 import { parseWith } from "../parser/parser.mochi"
 import { checkAllWith, checkWith } from "../check/check.mochi"
-import { exportedRegistry, exportedCtorKeys } from "../ast/ctors.mochi"
+import {
+  exportedRegistry,
+  exportedCtorKeys,
+  tagEntryOf
+} from "../ast/ctors.mochi"
 import {
   inferProgramImports,
   inferProgramImportsTypes,
@@ -277,6 +281,12 @@ let qualScopeOf = (stmts, quals) =>
 // Seed one named constructor into the importer. Sibling ctors stay out of the
 // ctor map; the owning type's full list still lands so exhaustiveness is sound.
 // A second Empty from a different owner is duplicate constructor (ADR 0082).
+// A custom discriminant (ADR 0156) travels with its ctor's field keys.
+let withTagEntry = (name, depKeys: Map<string, [string]>, keys: Map<string, [string]>) => switch Map.get(tagEntryOf(name), depKeys) {
+  | Some(t) => Map.set(tagEntryOf(name), t, keys)
+  | None => keys
+}
+
 let withNamedCtor = (name, info, depReg, depKeys, res) =>
   {
     imports: res.imports,
@@ -289,7 +299,7 @@ let withNamedCtor = (name, info, depReg, depKeys, res) =>
       }
     },
     keys: switch depKeys |> Map.get(name) {
-      | Some(ks) => res.keys |> Map.set(name, ks)
+      | Some(ks) => withTagEntry(name, depKeys, res.keys |> Map.set(name, ks))
       | None => res.keys
     },
     quals: res.quals

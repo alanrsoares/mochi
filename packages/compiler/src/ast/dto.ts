@@ -180,7 +180,13 @@ export type PatField = { label: string; labelSpan: Span; pat: Pattern };
  *
  * The type is a `TypeExpr`, so payloads can be lists, applied types, arrows, and tuples (`ECall(fn: Expr, args: [Expr])`) — see ADR 0015.
  */
-export type Ctor = { name: string; fields: CtorField[]; span: Span };
+export type Ctor = {
+  name: string;
+  fields: CtorField[];
+  tagKey: string;
+  tagLit: string;
+  span: Span;
+};
 export type CtorField = { name: string | null; type: TypeExpr };
 
 /** One field of a transparent record-type alias: `type Point = { x: number, y: a }`. The field type is a full `TypeExpr` (like a `CtorField`'s), so aliases can carry generics and applied/nested types. */

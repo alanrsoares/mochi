@@ -108,7 +108,15 @@ export type TypeExpr =
   | TyUnion(members: [TypeExpr], span: Span)
 
 export type CtorField = { name: Option<string>, fieldType: TypeExpr }
-export type Ctor = { name: string, fields: [CtorField], span: Span }
+/// `tagKey`/`tagLit` are the runtime discriminant property and its literal for this
+/// ctor (ADR 0156): `_tag`/the ctor name unless `@tag("k")` / `@as("v")` override.
+export type Ctor = {
+  name: string,
+  fields: [CtorField],
+  tagKey: string,
+  tagLit: string,
+  span: Span
+}
 export type AliasField = {
   name: string,
   nameSpan: Span,

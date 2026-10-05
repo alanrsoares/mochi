@@ -48,39 +48,25 @@ export let keysOf = fields => fields->keysOfFrom(0)
 // carries no decl-level table); every consumer derives its projection —
 // registry arity, ctor schemes, runtime keys — from this array.
 let builtinSpan = { start: 0, end: 0 }
+let builtinCtor = (name, fields) =>
+  { name, fields, tagKey: "_tag", tagLit: name, span: builtinSpan }
+let valueField = (label, ty) =>
+  [{ name: Some(label), fieldType: Ast.TyName(ty, builtinSpan) }]
 export let builtinTypeDecls = [
   {
     name: "Option",
     params: ["a"],
     ctors: [
-      {
-        name: "Some",
-        fields: [
-          { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
-        ],
-        span: builtinSpan
-      },
-      { name: "None", fields: [], span: builtinSpan }
+      builtinCtor("Some", valueField("value", "a")),
+      builtinCtor("None", [])
     ]
   },
   {
     name: "Result",
     params: ["a", "e"],
     ctors: [
-      {
-        name: "Ok",
-        fields: [
-          { name: Some("value"), fieldType: Ast.TyName("a", builtinSpan) }
-        ],
-        span: builtinSpan
-      },
-      {
-        name: "Err",
-        fields: [
-          { name: Some("error"), fieldType: Ast.TyName("e", builtinSpan) }
-        ],
-        span: builtinSpan
-      }
+      builtinCtor("Ok", valueField("value", "a")),
+      builtinCtor("Err", valueField("error", "e"))
     ]
   }
 ]
@@ -189,12 +175,28 @@ export let exportedRegistry = stmts => stmts->exportedRegLoop(0, emptyRegistry)
 
 // --- ctor keys (codegen's projection: runtime destructure keys) ---
 
-let ctorKeysInto = (ctors, i, m) => switch ctors |> Array.get(i) {
+// A custom discriminant (ADR 0156) rides in the key registry as `[key, lit]` under
+// `@tag:<ctor>` (`@` cannot start an identifier); defaults add no entry.
+export let tagEntryOf = name => "@tag:${name}"
+
+let withTag = (m: Map<string, [string]>, name: string, tagKey: string, tagLit: string) =>
+  tagKey == "_tag" && tagLit == name
+    ? Map.delete(tagEntryOf(name), m)
+    : Map.set(tagEntryOf(name), [tagKey, tagLit], m)
+
+let ctorKeysInto = (ctors, i, m: Map<string, [string]>) => switch ctors |> Array.get(i) {
   | None => m
-  | Some({ name, fields }) => ctors->ctorKeysInto(
+  | Some({ name, fields, tagKey, tagLit }) => ctors->ctorKeysInto(
       i + 1,
-      m |> Map.set(name, fields->keysOf())
+      withTag(Map.set(name, fields->keysOf(), m), name, tagKey, tagLit)
     )
+}
+
+/// A ctor's runtime discriminant `(key, literal)` — `("_tag", name)` unless
+/// `@tag`/`@as` overrode it. The one lookup codegen and the TS backend share.
+export let tagOf = (keys: Map<string, [string]>, ctor: string) => switch Map.get(tagEntryOf(ctor), keys) {
+  | Some([key, lit]) => (key, lit)
+  | _ => ("_tag", ctor)
 }
 
 // Every declared ctor's keys (user decls override imported seed keys).
