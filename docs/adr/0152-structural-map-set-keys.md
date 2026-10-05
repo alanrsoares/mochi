@@ -30,3 +30,8 @@ No type, parser or codegen change; the fix is runtime-only.
 - `#{}` literals and maps built by JS code are not normalised on construction;
   later `Map.*`/`Set.*` calls still match against stored keys by `eq`.
 - Mutating a stored key after insertion is unsupported (as with any hashed key).
+- `eq` on `Map`/`Set` pairs keys through the same `_keyOf` resolution, so `==` agrees
+  with `Map.get`/`Set.has` for composite keys.
+- `compare` treats null-prototype objects (`Dict`s, ADR 0150) as plain data: a
+  `_tag` key is not a variant tag, matching `show`. Property fixtures that build
+  variants must not generate null-prototype objects.

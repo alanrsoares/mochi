@@ -52,6 +52,7 @@ import {
   _Str_codeAt,
   _curry,
   _done,
+  _keyOf,
   _recur,
   _tuple,
   add,

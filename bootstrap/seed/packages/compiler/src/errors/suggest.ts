@@ -11,6 +11,7 @@ import {
   _Str_length,
   _Str_startsWith,
   _curry,
+  _keyOf,
   _tuple,
   and,
   eq,

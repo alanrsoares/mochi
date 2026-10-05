@@ -331,3 +331,15 @@ test("Map/Set treat eq object keys as one key; primitives and identity unchanged
   );
   expect(_Set_size(_Set_fromArray([1, 1, 2]))).toBe(2);
 });
+
+test("compare treats a Dict _tag key as data; eq on Map/Set is structural", () => {
+  const tagged: Record<string, string> = _Dict_set("_tag", "z", _Dict_empty);
+  const upper: Record<string, string> = _Dict_set("A", "1", _Dict_empty);
+  // As data "_tag" sorts after "A"; a variant-style compare would put it first.
+  expect(compare(tagged, upper)).toBe(1);
+  expect(compare(_Dict_set("_tag", "b", tagged), _Dict_set("_tag", "a", tagged))).toBe(1);
+  expect(eq(new Map([[[1, 2], "a"]]), new Map([[[1, 2], "a"]]))).toBe(true);
+  expect(eq(new Map([[[1, 2], "a"]]), new Map([[[1, 3], "a"]]))).toBe(false);
+  expect(eq(new Set([[1], [2]]), new Set([[2], [1]]))).toBe(true);
+  expect(eq(new Set([[1]]), new Set([[2]]))).toBe(false);
+});

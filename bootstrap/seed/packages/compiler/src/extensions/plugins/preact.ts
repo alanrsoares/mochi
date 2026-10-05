@@ -14,6 +14,7 @@ import {
   _Result_flatMap,
   _Result_map,
   _curry,
+  _keyOf,
   _tuple,
   and,
   eq,

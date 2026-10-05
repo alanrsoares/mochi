@@ -157,14 +157,15 @@ export const eq: { <A>(a: A): (b: A) => boolean; <A>(a: A, b: A): boolean } = _c
       if (!(x instanceof Map) || !(y instanceof Map)) return false;
       if (x.size !== y.size) return false;
       for (const [k, v] of x) {
-        if (!y.has(k) || !eq(v, y.get(k))) return false;
+        const key = _keyOf(y, k);
+        if (!y.has(key) || !eq(v, y.get(key))) return false;
       }
       return true;
     }
     if (x instanceof Set || y instanceof Set) {
       if (!(x instanceof Set) || !(y instanceof Set)) return false;
       if (x.size !== y.size) return false;
-      for (const v of x) if (!y.has(v)) return false;
+      for (const v of x) if (!y.has(_keyOf(y, v))) return false;
       return true;
     }
     if (typeof x[Symbol.iterator] === "function" || typeof y[Symbol.iterator] === "function")
@@ -235,8 +236,9 @@ export const _compareFirstKey: (keys: readonly string[], tagged: boolean) => str
 export const _compareRecords: (a: object, b: object) => number = (x: any, y: any) => {
   const keysX = Object.keys(x),
     keysY = Object.keys(y);
-  const tx = keysX.includes("_tag") ? x._tag : undefined,
-    ty = keysY.includes("_tag") ? y._tag : undefined;
+  // Null-prototype objects are `Dict`s (ADR 0150): a `_tag` key is plain data.
+  const tx = Object.getPrototypeOf(x) !== null && keysX.includes("_tag") ? x._tag : undefined,
+    ty = Object.getPrototypeOf(y) !== null && keysY.includes("_tag") ? y._tag : undefined;
   const tagged = typeof tx === "string",
     otherTagged = typeof ty === "string";
   if (tagged !== otherTagged) return tagged ? -1 : 1;
