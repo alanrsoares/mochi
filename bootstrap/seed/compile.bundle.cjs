@@ -12989,33 +12989,35 @@ var inferCallArgs$ = (ctx, fnT, args, st, callSpan) => ((_v) => _v.length === 0 
   throw new Error("non-exhaustive match");
 })())(args);
 var inferCallArgs = _curry17(5, inferCallArgs$);
-var isEqLikeCall$ = (ctx, fn) => {
-  const $match = fn;
-  switch ($match._tag) {
-    case "ERef": {
-      const { name } = $match;
-      return and11(or9(name === "eq", name === "compare"), _Map_has5(name, ctx.letOwner) === false);
-    }
-    default: {
-      return false;
-    }
-  }
-};
-var isEqLikeCall = _curry17(2, isEqLikeCall$);
-var reachesList = (t) => ((_v) => _v._tag === "TyCon" && _v.name === "List" ? true : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2 ? (({ args: [, v] }) => reachesList(v))(_v) : _v._tag === "TyCon" && _v.name === "Set" ? false : _v._tag === "TyCon" ? (({ args: targs }) => length13(filter6(reachesList, targs)) > 0)(_v) : _v._tag === "TyRecord" ? (({ row }) => rowReachesList(row))(_v) : false)(t);
-var rowReachesList = (row) => {
+var isBuiltinCall$ = (ctx, name) => and11(_Map_has5(name, ctx.letOwner) === false, _Set_has5(name, ctx.localNames) === false);
+var isBuiltinCall = _curry17(2, isBuiltinCall$);
+var reachesList$ = (sorted, t) => ((_v) => _v._tag === "TyCon" && _v.name === "List" ? true : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2 ? (({ args: [k, v] }) => or9(and11(sorted, reachesList$(sorted, k)), reachesList$(sorted, v)))(_v) : _v._tag === "TyCon" && _v.name === "Set" ? (({ args: targs }) => and11(sorted, length13(filter6((a) => reachesList$(sorted, a), targs)) > 0))(_v) : _v._tag === "TyCon" ? (({ args: targs }) => length13(filter6((a) => reachesList$(sorted, a), targs)) > 0)(_v) : _v._tag === "TyRecord" ? (({ row }) => rowReachesList$(sorted, row))(_v) : false)(t);
+var reachesList = _curry17(2, reachesList$);
+var rowReachesList$ = (sorted, row) => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { fieldType: ft, rest } = $match;
-      return or9(reachesList(ft), rowReachesList(rest));
+      return or9(reachesList$(sorted, ft), rowReachesList$(sorted, rest));
     }
     default: {
       return false;
     }
   }
 };
-var checkEqEligible$ = (ctx, fn, fnT, st) => isEqLikeCall$(ctx, fn) ? ((_v) => _v._tag === "TyFn" ? (({ from: operandT }) => reachesList(zonk(operandT, st)) ? Err9(typeErrHelp$("cannot compare a lazy List: `==` and `compare` walk their operands structurally", exprSpan3(fn), "force it first with `List.toArray`")) : Ok9(undefined))(_v) : Ok9(undefined))(resolve(fnT, st)) : Ok9(undefined);
+var rowReachesList = _curry17(2, rowReachesList$);
+var checkEqEligible$ = (ctx, fn, fnT, st) => {
+  const $match = fn;
+  switch ($match._tag) {
+    case "ERef": {
+      const { name } = $match;
+      return and11(or9(name === "eq", name === "compare"), isBuiltinCall$(ctx, name)) ? ((_v) => _v._tag === "TyFn" ? (({ from: operandT }) => reachesList$(name === "compare", zonk(operandT, st)) ? Err9(typeErrHelp$("cannot compare a lazy List: `==` and `compare` walk their operands structurally", exprSpan3(fn), "force it first with `List.toArray`")) : Ok9(undefined))(_v) : Ok9(undefined))(resolve(fnT, st)) : Ok9(undefined);
+    }
+    default: {
+      return Ok9(undefined);
+    }
+  }
+};
 var checkEqEligible = _curry17(4, checkEqEligible$);
 var isTupleParam = (p) => {
   const $match = p;

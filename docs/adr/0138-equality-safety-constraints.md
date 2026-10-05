@@ -3,7 +3,7 @@
 - **Status:** Accepted (stage 1 shipped; scheme obligations pending)
 - **Date:** 2026-10-02
 - **Source:** `.scratch/issues-syntax-and-codegen-traps.md`, `packages/compiler/src/prelude/runtime.ts` (`eq`, `compare`), ADR 0084
-- **Would amend:** ADR 0084's lazy-List exception policy; no behavior change ships with this proposal.
+- **Would amend:** ADR 0084's lazy-List exception policy; stage 1 (resolved types only) ships; the scheme obligations are still a proposal and change no behavior yet.
 
 ## Context
 
@@ -62,3 +62,5 @@ host-supplied values.
 ## Stage 1 — shipped
 
 `==` and `compare` reject a resolved type that reaches a `List` by the walk above, at the call. Still-open variables and rows are assumed eligible, and variant payloads are not yet inspected. Guard: ADR 0105 case `eq-lazy-list`. Stage 2 (scheme obligations, exports, `.d.ts` doc line, variants) is the remaining work on #164.
+
+Stage 1 refinements: the gate skips a name bound locally anywhere in the module (a conservative stand-in for real binding identity; the runtime guard still covers it), and `compare` also walks `Map` keys and `Set` elements, since it sorts them structurally, while `==` keeps them on host identity.

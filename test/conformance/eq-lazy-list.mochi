@@ -2,3 +2,4 @@ let ok = [1] == [1]
 let bad = @{1} == @{1}
 let bad2 = compare({ l: @{1} }, { l: @{2} })
 let okMap = #{ 1: 2 } == #{ 1: 2 }
+let bad3 = compare(#{ @{1}: 1 }, #{ @{1}: 1 })

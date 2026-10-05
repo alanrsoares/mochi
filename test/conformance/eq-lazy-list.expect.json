@@ -1,14 +1,1 @@
-[
-  {
-    "kind": "type",
-    "message": "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
-    "start": 35,
-    "end": 37
-  },
-  {
-    "kind": "type",
-    "message": "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
-    "start": 54,
-    "end": 61
-  }
-]
+[{"kind":"type","message":"cannot compare a lazy List: `==` and `compare` walk their operands structurally","start":35,"end":37},{"kind":"type","message":"cannot compare a lazy List: `==` and `compare` walk their operands structurally","start":54,"end":61},{"kind":"type","message":"cannot compare a lazy List: `==` and `compare` walk their operands structurally","start":134,"end":141}]

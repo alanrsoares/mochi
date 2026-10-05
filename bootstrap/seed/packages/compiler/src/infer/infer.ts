@@ -1819,7 +1819,7 @@ const inferCallArgs: _Curry<
   ],
   Result<[Ty, St], IErr>
 > = _curry(5, inferCallArgs$);
-const isEqLikeCall$ = (
+const isBuiltinCall$ = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1831,20 +1831,9 @@ const isEqLikeCall$ = (
     localNames: Set<string>;
     scopeNames: string[];
   },
-  fn: Expr,
-): boolean => {
-  const $match = fn;
-  switch ($match._tag) {
-    case "ERef": {
-      const { name } = $match;
-      return and(or(name === "eq", name === "compare"), _Map_has(name, ctx.letOwner) === false);
-    }
-    default: {
-      return false;
-    }
-  }
-};
-const isEqLikeCall: _Curry<
+  name: string,
+): boolean => and(_Map_has(name, ctx.letOwner) === false, _Set_has(name, ctx.localNames) === false);
+const isBuiltinCall: _Curry<
   [
     ctx: {
       env: Map<string, Scheme>;
@@ -1857,35 +1846,42 @@ const isEqLikeCall: _Curry<
       localNames: Set<string>;
       scopeNames: string[];
     },
-    fn: Expr,
+    name: string,
   ],
   boolean
-> = _curry(2, isEqLikeCall$);
-const reachesList: (t: Ty) => boolean = (t: Ty) =>
+> = _curry(2, isBuiltinCall$);
+const reachesList$ = (sorted: boolean, t: Ty): boolean =>
   ((_v) =>
     _v._tag === "TyCon" && _v.name === "List"
       ? true
       : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2
-        ? (({ args: [, v] }) => reachesList(v))(_v as Extract<Ty, { _tag: "TyCon" }>)
+        ? (({ args: [k, v] }) => or(and(sorted, reachesList$(sorted, k)), reachesList$(sorted, v)))(
+            _v as Extract<Ty, { _tag: "TyCon" }>,
+          )
         : _v._tag === "TyCon" && _v.name === "Set"
-          ? false
+          ? (({ args: targs }) =>
+              and(sorted, length(filter((a: Ty) => reachesList$(sorted, a), targs)) > 0))(_v)
           : _v._tag === "TyCon"
-            ? (({ args: targs }) => length(filter(reachesList, targs)) > 0)(_v)
+            ? (({ args: targs }) => length(filter((a: Ty) => reachesList$(sorted, a), targs)) > 0)(
+                _v,
+              )
             : _v._tag === "TyRecord"
-              ? (({ row }) => rowReachesList(row))(_v)
+              ? (({ row }) => rowReachesList$(sorted, row))(_v)
               : false)(t);
-const rowReachesList: (row: Row) => boolean = (row: Row) => {
+const reachesList: _Curry<[sorted: boolean, t: Ty], boolean> = _curry(2, reachesList$);
+const rowReachesList$ = (sorted: boolean, row: Row): boolean => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { fieldType: ft, rest } = $match;
-      return or(reachesList(ft), rowReachesList(rest));
+      return or(reachesList$(sorted, ft), rowReachesList$(sorted, rest));
     }
     default: {
       return false;
     }
   }
 };
+const rowReachesList: _Curry<[sorted: boolean, row: Row], boolean> = _curry(2, rowReachesList$);
 const checkEqEligible$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1901,22 +1897,32 @@ const checkEqEligible$ = (
   fn: Expr,
   fnT: Ty,
   st: St,
-): Result<undefined, IErr> =>
-  isEqLikeCall$(ctx, fn)
-    ? ((_v) =>
-        _v._tag === "TyFn"
-          ? (({ from: operandT }) =>
-              reachesList(zonk(operandT, st))
-                ? (Err(
-                    typeErrHelp$(
-                      "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
-                      exprSpan(fn),
-                      "force it first with `List.toArray`",
-                    ),
-                  ) as Result<undefined, IErr>)
-                : (Ok(undefined) as Result<undefined, IErr>))(_v)
-          : (Ok(undefined) as Result<undefined, IErr>))(resolve(fnT, st))
-    : (Ok(undefined) as Result<undefined, IErr>);
+): Result<undefined, IErr> => {
+  const $match = fn;
+  switch ($match._tag) {
+    case "ERef": {
+      const { name } = $match;
+      return and(or(name === "eq", name === "compare"), isBuiltinCall$(ctx, name))
+        ? ((_v) =>
+            _v._tag === "TyFn"
+              ? (({ from: operandT }) =>
+                  reachesList$(name === "compare", zonk(operandT, st))
+                    ? (Err(
+                        typeErrHelp$(
+                          "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+                          exprSpan(fn),
+                          "force it first with `List.toArray`",
+                        ),
+                      ) as Result<undefined, IErr>)
+                    : (Ok(undefined) as Result<undefined, IErr>))(_v)
+              : (Ok(undefined) as Result<undefined, IErr>))(resolve(fnT, st))
+        : (Ok(undefined) as Result<undefined, IErr>);
+    }
+    default: {
+      return Ok(undefined) as Result<undefined, IErr>;
+    }
+  }
+};
 const checkEqEligible: _Curry<
   [
     ctx: {
