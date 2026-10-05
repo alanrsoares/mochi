@@ -583,9 +583,7 @@ let matchFieldsFrom = (tpls, actuals, params, binds: Map<number, Types.Ty>, i) =
 /// must agree; a record matches only closed, with the same labels.
 let matchTy = (tpl, actual, params, binds: Map<number, Types.Ty>) => switch (tpl, actual) {
   | (TyVar(id), _) when Set.has(id, params) => switch Map.get(id, binds) {
-      | Some(prev) => Types.showType(prev) == Types.showType(actual)
-          ? Some(binds)
-          : None
+      | Some(prev) => prev == actual ? Some(binds) : None
       | None => Some(Map.set(id, actual, binds))
     }
   | (TyVar(a), TyVar(b)) => a == b ? Some(binds) : None
@@ -605,9 +603,7 @@ let matchTy = (tpl, actual, params, binds: Map<number, Types.Ty>) => switch (tpl
   | (TySingleton(tb, tv), TySingleton(ab, av)) => tb == ab && tv == av
       ? Some(binds)
       : None
-  | (TyOneOf(_), TyOneOf(_)) => Types.showType(tpl) == Types.showType(actual)
-      ? Some(binds)
-      : None
+  | (TyOneOf(_), TyOneOf(_)) => tpl == actual ? Some(binds) : None
   | _ => None
 }
 

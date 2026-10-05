@@ -26,13 +26,6 @@ export type ExhaustVerdict =
   | { _tag: "ExOk" }
   | { _tag: "ExWitness"; witness: MP }
   | { _tag: "ExFuel" };
-/**
- * The ctor registry as usefulness reads it. Declared here rather than imported
- * from check.mochi, which imports THIS module — a local record alias expands,
- * so it still unifies structurally with the caller's registry (ADR 0044).
- */
-export type CtorInfo = { owner: string; arity: number };
-export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type ArrShape = { fixed: number[]; restFrom: Option<number> };
 
 import type { Option, _Curry } from "@mochi/compiler/runtime";
@@ -77,6 +70,7 @@ import {
 } from "@mochi/compiler/runtime";
 
 import * as Ast from "../ast/ast";
+import * as Ctors from "../ast/ctors";
 const MWild: MP = { _tag: "MWild" };
 const MCtor = _curry(2, (name, args) => ({ _tag: "MCtor", name, args })) as (
   name: string,
@@ -603,10 +597,14 @@ const boolVals: (heads: MHead[]) => boolean[] = (heads: MHead[]) =>
       }
     }
   }, heads);
-const ctorInfoSuffixed$ = (keys: string[], reg: Registry, n: string): Option<CtorInfo> =>
+const ctorInfoSuffixed$ = (
+  keys: string[],
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  n: string,
+): Option<{ owner: string; arity: number }> =>
   ((_v) =>
     _v.length === 0
-      ? (None as Option<CtorInfo>)
+      ? (None as Option<{ owner: string; arity: number }>)
       : _v.length >= 1
         ? (([k, ...rest]) =>
             _Str_endsWith(`.${n}`, k) ? _Map_get(k, reg.ctors) : ctorInfoSuffixed$(rest, reg, n))(
@@ -616,30 +614,61 @@ const ctorInfoSuffixed$ = (keys: string[], reg: Registry, n: string): Option<Cto
             throw new Error("non-exhaustive match");
           })())(keys);
 const ctorInfoSuffixed: _Curry<
-  [keys: string[], reg: Registry, n: string],
-  Option<CtorInfo>
+  [
+    keys: string[],
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    n: string,
+  ],
+  Option<{ owner: string; arity: number }>
 > = _curry(3, ctorInfoSuffixed$);
-const ctorInfoOf$ = (reg: Registry, n: string): Option<CtorInfo> =>
+const ctorInfoOf$ = (
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  n: string,
+): Option<{ owner: string; arity: number }> =>
   _Option_match(
     _Map_get(n, reg.ctors),
     () => ctorInfoSuffixed$(_Map_keys(reg.ctors), reg, n),
-    (info) => Some(info) as Option<CtorInfo>,
+    (info) => Some(info) as Option<{ owner: string; arity: number }>,
   );
-const ctorInfoOf: _Curry<[reg: Registry, n: string], Option<CtorInfo>> = _curry(2, ctorInfoOf$);
-const arityOfCtor$ = (reg: Registry, n: string): number =>
+const ctorInfoOf: _Curry<
+  [
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    n: string,
+  ],
+  Option<{ owner: string; arity: number }>
+> = _curry(2, ctorInfoOf$);
+const arityOfCtor$ = (
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  n: string,
+): number =>
   _Option_match(
     ctorInfoOf$(reg, n),
     () => 0,
     (info) => info.arity,
   );
-const arityOfCtor: _Curry<[reg: Registry, n: string], number> = _curry(2, arityOfCtor$);
-const ownerOfCtor$ = (reg: Registry, n: string): Option<string> =>
+const arityOfCtor: _Curry<
+  [
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    n: string,
+  ],
+  number
+> = _curry(2, arityOfCtor$);
+const ownerOfCtor$ = (
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  n: string,
+): Option<string> =>
   _Option_match(
     ctorInfoOf$(reg, n),
     () => None as Option<string>,
     (info) => Some(info.owner) as Option<string>,
   );
-const ownerOfCtor: _Curry<[reg: Registry, n: string], Option<string>> = _curry(2, ownerOfCtor$);
+const ownerOfCtor: _Curry<
+  [
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    n: string,
+  ],
+  Option<string>
+> = _curry(2, ownerOfCtor$);
 const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[], names: A[]) =>
   reduce(
     _curry(2, (acc: boolean, n: A) => and(acc, _Array_contains(n, names))),
@@ -647,7 +676,12 @@ const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[],
     all,
   ),
 );
-const useful$ = (m: MP[][], width: number, reg: Registry, fuel: number): URes =>
+const useful$ = (
+  m: MP[][],
+  width: number,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  fuel: number,
+): URes =>
   fuel <= 0
     ? (UFuel as URes)
     : width === 0
@@ -657,11 +691,21 @@ const useful$ = (m: MP[][], width: number, reg: Registry, fuel: number): URes =>
       : length(m) === 0
         ? USome(mWilds(width), sub(fuel, 1))
         : usefulSplit$(m, width, reg, sub(fuel, 1));
-const useful: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], URes> = _curry(
-  4,
-  useful$,
-);
-const usefulSplit$ = (m: MP[][], width: number, reg: Registry, fuel: number): URes => {
+const useful: _Curry<
+  [
+    m: MP[][],
+    width: number,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    fuel: number,
+  ],
+  URes
+> = _curry(4, useful$);
+const usefulSplit$ = (
+  m: MP[][],
+  width: number,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  fuel: number,
+): URes => {
   const col: MP[] = colOf(m);
   const heads: MHead[] = headsOf(col);
   return _Option_match(
@@ -670,10 +714,15 @@ const usefulSplit$ = (m: MP[][], width: number, reg: Registry, fuel: number): UR
     (h0) => usefulHead$(m, col, heads, h0, width, reg, fuel),
   );
 };
-const usefulSplit: _Curry<[m: MP[][], width: number, reg: Registry, fuel: number], URes> = _curry(
-  4,
-  usefulSplit$,
-);
+const usefulSplit: _Curry<
+  [
+    m: MP[][],
+    width: number,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    fuel: number,
+  ],
+  URes
+> = _curry(4, usefulSplit$);
 const prependWitness$ = (mp: MP, r: URes): URes => {
   const $match = r;
   switch ($match._tag) {
@@ -700,7 +749,7 @@ const tryHeads$ = (
   arities: number[],
   labels: string[],
   width: number,
-  reg: Registry,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   fuel: number,
   i: number,
 ): URes =>
@@ -738,7 +787,7 @@ const tryHeads: _Curry<
     arities: number[],
     labels: string[],
     width: number,
-    reg: Registry,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
     fuel: number,
     i: number,
   ],
@@ -750,7 +799,7 @@ const usefulHead$ = (
   heads: MHead[],
   h0: MHead,
   width: number,
-  reg: Registry,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   fuel: number,
 ): URes => {
   const $match = h0;
@@ -790,14 +839,22 @@ const usefulHead$ = (
   }
 };
 const usefulHead: _Curry<
-  [m: MP[][], col: MP[], heads: MHead[], h0: MHead, width: number, reg: Registry, fuel: number],
+  [
+    m: MP[][],
+    col: MP[],
+    heads: MHead[],
+    h0: MHead,
+    width: number,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    fuel: number,
+  ],
   URes
 > = _curry(7, usefulHead$);
 const usefulCtor$ = (
   m: MP[][],
   heads: MHead[],
   width: number,
-  reg: Registry,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   fuel: number,
 ): URes => {
   const names: string[] = ctorNames(heads);
@@ -832,14 +889,20 @@ const usefulCtor$ = (
       );
 };
 const usefulCtor: _Curry<
-  [m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number],
+  [
+    m: MP[][],
+    heads: MHead[],
+    width: number,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    fuel: number,
+  ],
   URes
 > = _curry(5, usefulCtor$);
 const usefulBool$ = (
   m: MP[][],
   heads: MHead[],
   width: number,
-  reg: Registry,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   fuel: number,
 ): URes => {
   const vs: boolean[] = boolVals(heads);
@@ -849,10 +912,22 @@ const usefulBool$ = (
     : prependWitness$(MBool(!hasTrue), useful$(defaultM(m), sub(width, 1), reg, fuel));
 };
 const usefulBool: _Curry<
-  [m: MP[][], heads: MHead[], width: number, reg: Registry, fuel: number],
+  [
+    m: MP[][],
+    heads: MHead[],
+    width: number,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    fuel: number,
+  ],
   URes
 > = _curry(5, usefulBool$);
-const usefulArr$ = (m: MP[][], col: MP[], width: number, reg: Registry, fuel: number): URes => {
+const usefulArr$ = (
+  m: MP[][],
+  col: MP[],
+  width: number,
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  fuel: number,
+): URes => {
   const shape: ArrShape = arrShapeOf(col);
   return arrComplete(shape)
     ? ((lens: number[]) =>
@@ -871,8 +946,16 @@ const usefulArr$ = (m: MP[][], col: MP[], width: number, reg: Registry, fuel: nu
         useful$(defaultM(m), sub(width, 1), reg, fuel),
       );
 };
-const usefulArr: _Curry<[m: MP[][], col: MP[], width: number, reg: Registry, fuel: number], URes> =
-  _curry(5, usefulArr$);
+const usefulArr: _Curry<
+  [
+    m: MP[][],
+    col: MP[],
+    width: number,
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+    fuel: number,
+  ],
+  URes
+> = _curry(5, usefulArr$);
 const showFields$ = (labels: string[], pats: MP[], i: number): string[] =>
   _Option_match(
     _Array_get(i, labels),
@@ -959,7 +1042,10 @@ export const isWideWitnessM: (mp: MP) => boolean = (mp: MP) => {
     }
   }
 };
-const checkExhaustiveM$ = (patterns: Pattern[], reg: Registry): ExhaustVerdict => {
+const checkExhaustiveM$ = (
+  patterns: Pattern[],
+  reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+): ExhaustVerdict => {
   const rows: MP[][] = _Array_flatMap(
     (p: Pattern) => map((alt: Pattern) => [toMP(alt)], explodePat(p)),
     patterns,
@@ -985,5 +1071,10 @@ const checkExhaustiveM$ = (patterns: Pattern[], reg: Registry): ExhaustVerdict =
  * Is this set of (unguarded) arm patterns total? Guarded arms must not be
  * passed — a guard can be false, so such an arm proves nothing.
  */
-export const checkExhaustiveM: _Curry<[patterns: Pattern[], reg: Registry], ExhaustVerdict> =
-  _curry(2, checkExhaustiveM$);
+export const checkExhaustiveM: _Curry<
+  [
+    patterns: Pattern[],
+    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
+  ],
+  ExhaustVerdict
+> = _curry(2, checkExhaustiveM$);
