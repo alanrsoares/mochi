@@ -1,4 +1,4 @@
-import type { Tok } from "../lexer/lexer";
+import type { LocTok } from "../lexer/lexer";
 import type { Expr } from "../ast/ast";
 import type { Row, SpanAt, St, Ty } from "../infer/types";
 import type { Doc } from "../doc/doc";
@@ -82,10 +82,10 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -118,10 +118,10 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      a: LocTok[],
       b: number,
       c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+        a: LocTok[],
         b: number,
       ) => Result<[Expr, number], { message: string; start: number; end: number }>,
     ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -154,10 +154,10 @@ export const resolvePluginsDefault: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -360,10 +360,10 @@ export const formatHooksFor: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -398,10 +398,10 @@ export const formatHooksFor: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -450,10 +450,10 @@ export const dtsHooksFor: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -488,10 +488,10 @@ export const dtsHooksFor: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -629,10 +629,10 @@ export const bindingHooksFor: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>
@@ -671,10 +671,10 @@ export const bindingHooksFor: <B, C, D, E, F>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
           c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
           ) => Result<[Expr, number], { message: string; start: number; end: number }>,
         ) => Result<Option<[Expr, number]>, { message: string; start: number; end: number }>

@@ -295,7 +295,7 @@ writeFileSync(
       },
       {
         file: "packages/compiler/src/infer/infer.ts",
-        names: ["HostPlugin", "IErr", "InferApi", "LocTok", "TsApi"],
+        names: ["HostPlugin", "IErr", "HookTok", "InferApi", "TsApi"],
       },
       { file: "packages/compiler/src/lexer/lexer.ts", names: ["Tok"] },
       { file: "packages/compiler/src/infer/types.ts", names: ["Row", "St", "Ty"] },

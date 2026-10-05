@@ -1,4 +1,4 @@
-import type { LocTok, TsApi } from "../infer/infer";
+import type { LocTok } from "../lexer/lexer";
 import type {
   AliasField,
   Ctor,
@@ -17,6 +17,7 @@ import type {
 } from "../ast/ast";
 import type { Row, SpanAt, St, Ty } from "../infer/types";
 import type { AliasInfo } from "../infer/schemes";
+import type { TsApi } from "../infer/infer";
 import type { CtorFactoryTs, GenOpts, ParamAnnots } from "./codegen";
 import type { TsEnv } from "../dts/ts-types";
 

@@ -1,4 +1,4 @@
-import type { Tok } from "../lexer/lexer";
+import type { LocTok } from "../lexer/lexer";
 import type { AliasField, Ctor, CtorField, Expr, Span, Stmt, TypeExpr } from "../ast/ast";
 import type { Row, St, Ty, TypeAt } from "../infer/types";
 import type { Doc } from "../doc/doc";
@@ -971,12 +971,9 @@ const emitDtsTextWith$ = (
         name: string;
         parse: Option<
           (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], StageErr>,
+            c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
           ) => Result<Option<[Expr, number]>, StageErr>
         >;
         inferCall: Option<
@@ -1039,12 +1036,9 @@ export const emitDtsTextWith: _Curry<
           name: string;
           parse: Option<
             (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+              a: LocTok[],
               b: number,
-              c: (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], StageErr>,
+              c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
             ) => Result<Option<[Expr, number]>, StageErr>
           >;
           inferCall: Option<
@@ -1087,12 +1081,9 @@ const compileTargetsWith$ = (
         name: string;
         parse: Option<
           (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], StageErr>,
+            c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
           ) => Result<Option<[Expr, number]>, StageErr>
         >;
         inferCall: Option<
@@ -1159,12 +1150,9 @@ export const compileTargetsWith: _Curry<
           name: string;
           parse: Option<
             (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+              a: LocTok[],
               b: number,
-              c: (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], StageErr>,
+              c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
             ) => Result<Option<[Expr, number]>, StageErr>
           >;
           inferCall: Option<

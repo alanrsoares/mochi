@@ -2405,7 +2405,7 @@ type InferApi = {
 /// `tok` stays a type parameter — that keeps the record nameable here without
 /// importing parser.mochi (which declares the real `Tok`) just to spell it.
 /// Structural, so it still unifies with the parser's own `LocTok`.
-type LocTok<t> = { tok: t, start: number, end: number, doc: Option<string> }
+type HookTok<t> = { tok: t, start: number, end: number, doc: Option<string> }
 
 /// Parse-hook failure. Not `IErr`: parse has no help or suggestions, and an
 /// inline record is not a legal type argument here.
@@ -2426,7 +2426,7 @@ type TsApi = {
 /// an opaque brand, not a transparent type.
 type Plugin<t> = {
   name: string,
-  parse: Option<[LocTok<t>] -> number -> ([LocTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)>, HookErr>>,
+  parse: Option<[HookTok<t>] -> number -> ([HookTok<t>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)>, HookErr>>,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)>, IErr>>,
   format: Option<Ast.Expr -> Option<Ast.Expr>>,
   formatDoc: Option<Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc>>,
@@ -2439,7 +2439,7 @@ type Plugin<t> = {
 /// because only a parameterless alias folds to its name in the TS backend.
 export type HostPlugin = {
   name: string,
-  parse: Option<[LocTok<Lexer.Tok>] -> number -> ([LocTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)>, HookErr>>,
+  parse: Option<[HookTok<Lexer.Tok>] -> number -> ([HookTok<Lexer.Tok>] -> number -> Result<(Ast.Expr, number), HookErr>) -> Result<Option<(Ast.Expr, number)>, HookErr>>,
   inferCall: Option<Ast.Expr -> [Ast.Expr] -> Option<string> -> Types.St -> InferApi -> Result<Option<(Types.Ty, Types.St)>, IErr>>,
   format: Option<Ast.Expr -> Option<Ast.Expr>>,
   formatDoc: Option<Ast.Expr -> Fmt.FormatApi -> Option<Layout.Doc>>,

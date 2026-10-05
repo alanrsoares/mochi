@@ -1,4 +1,4 @@
-import type { Tok } from "../lexer/lexer";
+import type { LocTok, Tok } from "../lexer/lexer";
 import type {
   AliasField,
   CtorField,
@@ -51,7 +51,7 @@ export type InferApi = {
  * importing parser.mochi (which declares the real `Tok`) just to spell it.
  * Structural, so it still unifies with the parser's own `LocTok`.
  */
-export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
+export type HookTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
 /**
  * Parse-hook failure. Not `IErr`: parse has no help or suggestions, and an
  * inline record is not a legal type argument here.
@@ -99,12 +99,9 @@ export type HostPlugin = {
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      a: LocTok[],
       b: number,
-      c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-        b: number,
-      ) => Result<[Expr, number], PErr>,
+      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>
   >;
   inferCall: Option<
@@ -6063,12 +6060,9 @@ const runInferImports: <A, B>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
+          c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
         ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<

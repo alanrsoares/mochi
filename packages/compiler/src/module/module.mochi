@@ -941,7 +941,7 @@ let typeOwnerOf = graph =>
       { owner: #{}, dups: Set.fromArray([]), dupNames: [] }
     )
 
-/// A bare name declared in two modules (`LocTok` in parser and `LocTok<t>` in
+/// A bare name declared in two modules (`LocTok` in lexer and `HookTok<t>` in
 /// infer) must not be the fold target outside the module whose own alias is
 /// the nullary record. The import table keeps one owner, and it may be the
 /// parameterised declaration.

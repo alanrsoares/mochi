@@ -1,7 +1,8 @@
-import type { HostPlugin, IErr, LocTok, Plugin } from "../infer/infer";
+import type { LocTok } from "../lexer/lexer";
 import type { AliasField, Stmt, TypeExpr } from "../ast/ast";
 import type { BinderSym, SpanAt, Ty, TypeAt } from "../infer/types";
 import type { AliasInfo, Scheme } from "../infer/schemes";
+import type { HookTok, HostPlugin, IErr, Plugin } from "../infer/infer";
 import type { Occurrence, Origins, SymIndex, SymPrelude } from "../check/symbols";
 import type { Opts, StageErr, Stamped } from "../compile/compile";
 
@@ -1900,7 +1901,7 @@ const typeOwnerOf: <A, B>(
     graph,
   );
 /**
- * A bare name declared in two modules (`LocTok` in parser and `LocTok<t>` in
+ * A bare name declared in two modules (`LocTok` in lexer and `HookTok<t>` in
  * infer) must not be the fold target outside the module whose own alias is
  * the nullary record. The import table keeps one owner, and it may be the
  * parameterised declaration.
