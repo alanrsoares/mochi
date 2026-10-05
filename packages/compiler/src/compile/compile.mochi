@@ -62,7 +62,7 @@ export let runtimeAnnotation = (name, arity) =>
 /// make the flag mean "ignore the directive", which no caller wants.
 /// `plugins` is the host's plugin list (ADR 0109): None = builtins (JSX on),
 /// Some([]) = hard opt-out, Some(ps) = builtins then `ps`.
-type Opts = {
+export type Opts = {
   open: bool,
   runtime: bool,
   docs: bool,
@@ -112,13 +112,7 @@ export let openMode = (src, requested) => requested || openDirective(src)
 // Type-check gate: inference under `open`, program passed through unchanged.
 // One diagnostic shape for every stage. Lex/parse/check carry no help or
 // suggestions; infer fills those. `kind` is what the host maps onto Diagnostic.
-type Suggestion = {
-  title: string,
-  start: number,
-  end: number,
-  replaceWith: string
-}
-let noSuggestions : [Suggestion] = []
+let noSuggestions : [Infer.Suggestion] = []
 type StageErr = { message: string, start: number, end: number }
 type Stamped = {
   kind: string,
@@ -126,7 +120,7 @@ type Stamped = {
   start: number,
   end: number,
   help: Option<string>,
-  suggestions: [Suggestion]
+  suggestions: [Infer.Suggestion]
 }
 let stampStage : string -> StageErr -> Stamped = (kind, e) =>
   {

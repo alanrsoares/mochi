@@ -1,17 +1,11 @@
-import type { Tok } from "../lexer/lexer";
+import type { LocTok } from "../lexer/lexer";
 import type { AliasField, Ctor, CtorField, Expr, Span, Stmt, TypeExpr } from "../ast/ast";
 import type { Row, St, Ty, TypeAt } from "../infer/types";
 import type { Doc } from "../doc/doc";
 import type { FormatApi } from "../format/format-api";
-import type { Scheme } from "../infer/schemes";
+import type { AliasInfo, Scheme } from "../infer/schemes";
 import type { IErr, InferApi, TsApi } from "../infer/infer";
 import type { StageErr, Stamped } from "../compile/compile";
-
-/**
- * A declared alias as inference records it; a local copy of schemes.mochi's,
- * so the two unify structurally (ADR 0044).
- */
-export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
 
@@ -86,6 +80,7 @@ import {
 } from "../infer/types";
 import { jsDoc } from "../codegen/codegen";
 import { foldAliasesAt } from "../infer/schemes";
+import * as Schemes from "../infer/schemes";
 import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "../compile/compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensions";
 const writtenQualsIn$ = (
@@ -482,7 +477,6 @@ const typeDeclsFrom: _Curry<
   ],
   string[]
 > = _curry(6, typeDeclsFrom$);
-
 const localAliasKeys$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
   ((_v) =>
     _v._tag === "None"
@@ -977,12 +971,9 @@ const emitDtsTextWith$ = (
         name: string;
         parse: Option<
           (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], StageErr>,
+            c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
           ) => Result<Option<[Expr, number]>, StageErr>
         >;
         inferCall: Option<
@@ -1045,12 +1036,9 @@ export const emitDtsTextWith: _Curry<
           name: string;
           parse: Option<
             (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+              a: LocTok[],
               b: number,
-              c: (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], StageErr>,
+              c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
             ) => Result<Option<[Expr, number]>, StageErr>
           >;
           inferCall: Option<
@@ -1093,12 +1081,9 @@ const compileTargetsWith$ = (
         name: string;
         parse: Option<
           (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+            a: LocTok[],
             b: number,
-            c: (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-              b: number,
-            ) => Result<[Expr, number], StageErr>,
+            c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
           ) => Result<Option<[Expr, number]>, StageErr>
         >;
         inferCall: Option<
@@ -1165,12 +1150,9 @@ export const compileTargetsWith: _Curry<
           name: string;
           parse: Option<
             (
-              a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+              a: LocTok[],
               b: number,
-              c: (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                b: number,
-              ) => Result<[Expr, number], StageErr>,
+              c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
             ) => Result<Option<[Expr, number]>, StageErr>
           >;
           inferCall: Option<

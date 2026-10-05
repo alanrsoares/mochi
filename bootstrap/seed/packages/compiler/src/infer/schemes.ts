@@ -9,6 +9,11 @@ import type { Row, St, Ty } from "./types";
  */
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
 export type VarSets = { tv: Set<number>; rv: Set<number> };
+/**
+ * A declared type alias: its parameters, plus EITHER a record body (`fields`)
+ * or a transparent template (`expr`). Shared by inference, the TS printer and
+ * `.d.ts` emit (records expand, so structural identity is what matters, ADR 0044).
+ */
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 /**
  * One alias's display template: its expansion with each type param held by

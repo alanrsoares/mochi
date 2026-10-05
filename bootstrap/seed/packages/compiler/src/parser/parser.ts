@@ -1,4 +1,4 @@
-import type { Tok } from "../lexer/lexer";
+import type { LocTok, Tok } from "../lexer/lexer";
 import type {
   AliasField,
   Ctor,
@@ -24,7 +24,6 @@ import type { FormatApi } from "../format/format-api";
 import type { BoundErr } from "../extensions/plugins/jsx";
 import type { Plugin } from "../infer/infer";
 
-export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type PErr = { message: string; start: number; end: number };
 /**
  * One slot in `f(…)`: a positional expression, or `~name` / `~name = e`.

@@ -1,4 +1,4 @@
-import type { Tok } from "../lexer/lexer";
+import type { LocTok, Tok } from "../lexer/lexer";
 import type {
   AliasField,
   CtorField,
@@ -18,7 +18,7 @@ import type {
 import type { Row, SpanAt, St, Ty, TypeAt } from "./types";
 import type { Doc } from "../doc/doc";
 import type { FormatApi } from "../format/format-api";
-import type { Scheme, VarSets } from "./schemes";
+import type { AliasInfo, Scheme, VarSets } from "./schemes";
 import type { PErr } from "../parser/parser";
 import type { TSt } from "./scc";
 
@@ -37,8 +37,7 @@ export type IErr = {
  * state back is the same thing, done functionally.
  */
 export type MemberErr = { err: IErr; st: St };
-export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
-export type QualScope = { aliases: Map<string, QualAliasInfo> };
+export type QualScope = { aliases: Map<string, AliasInfo> };
 /**
  * The API an `inferCall` plugin hook is handed (ADR 0011 6).
  */
@@ -52,7 +51,7 @@ export type InferApi = {
  * importing parser.mochi (which declares the real `Tok`) just to spell it.
  * Structural, so it still unifies with the parser's own `LocTok`.
  */
-export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
+export type HookTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
 /**
  * Parse-hook failure. Not `IErr`: parse has no help or suggestions, and an
  * inline record is not a legal type argument here.
@@ -100,12 +99,9 @@ export type HostPlugin = {
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      a: LocTok[],
       b: number,
-      c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-        b: number,
-      ) => Result<[Expr, number], PErr>,
+      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>
   >;
   inferCall: Option<
@@ -127,7 +123,7 @@ export type Ctx<A> = {
   env: Map<string, Scheme>;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, QualAliasInfo>;
+  aliasMap: Map<string, AliasInfo>;
   plugins: {
     name: string;
     parse: Option<
@@ -517,13 +513,13 @@ const lastSeg: (name: string) => string = (name: string) => {
 };
 const aliasRowFrom: <A>(
   fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & A)[],
-  aliases: Map<string, QualAliasInfo>,
+  aliases: Map<string, AliasInfo>,
   i: number,
 ) => Row = _curry(
   3,
   <A>(
     fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & A)[],
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
     i: number,
   ) =>
     _Option_match(
@@ -548,7 +544,7 @@ const shownOfAlias: <A, B, C, D>(
     expr: Option<B>;
     fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & C)[];
   } & D,
-  aliases: Map<string, QualAliasInfo>,
+  aliases: Map<string, AliasInfo>,
 ) => Option<string> = _curry(
   2,
   <A, B, C, D>(
@@ -557,7 +553,7 @@ const shownOfAlias: <A, B, C, D>(
       expr: Option<B>;
       fields: ({ fieldType: TypeExpr; name: string; optional: boolean } & C)[];
     } & D,
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
   ) =>
     length(info.params) !== 0
       ? (None as Option<string>)
@@ -597,7 +593,7 @@ const insertPrint: <A>(
 );
 const printsFrom$ = (
   keys: string[],
-  aliases: Map<string, QualAliasInfo>,
+  aliases: Map<string, AliasInfo>,
   i: number,
   acc: { shown: string; name: string }[],
 ): { shown: string; name: string }[] =>
@@ -625,7 +621,7 @@ const printsFrom$ = (
 const printsFrom: _Curry<
   [
     keys: string[],
-    aliases: Map<string, QualAliasInfo>,
+    aliases: Map<string, AliasInfo>,
     i: number,
     acc: { shown: string; name: string }[],
   ],
@@ -644,13 +640,13 @@ const applyPrints: <A>(
       (p) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1),
     ),
 );
-const nameAliases$ = (msg: string, aliases: Map<string, QualAliasInfo>): string =>
+const nameAliases$ = (msg: string, aliases: Map<string, AliasInfo>): string =>
   applyPrints(
     msg,
     printsFrom$(_Map_keys(aliases), aliases, 0, [] as { shown: string; name: string }[]),
     0,
   );
-const nameAliases: _Curry<[msg: string, aliases: Map<string, QualAliasInfo>], string> = _curry(
+const nameAliases: _Curry<[msg: string, aliases: Map<string, AliasInfo>], string> = _curry(
   2,
   nameAliases$,
 );
@@ -659,7 +655,7 @@ const u$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -682,7 +678,7 @@ const u: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -701,7 +697,7 @@ const checkFits$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -727,7 +723,7 @@ const checkFits: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -915,7 +911,7 @@ const constrainParamAnnotsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -988,7 +984,7 @@ const constrainParamAnnotsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1019,7 +1015,7 @@ const ctxWithEnv: <B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1031,7 +1027,7 @@ const ctxWithEnv: <B>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, QualAliasInfo>;
+  aliasMap: Map<string, AliasInfo>;
   plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
@@ -1044,7 +1040,7 @@ const ctxWithEnv: <B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1069,7 +1065,7 @@ const ctxWithGroup: <B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1082,7 +1078,7 @@ const ctxWithGroup: <B>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, QualAliasInfo>;
+  aliasMap: Map<string, AliasInfo>;
   plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: Map<string, SpanAt>;
@@ -1095,7 +1091,7 @@ const ctxWithGroup: <B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1121,7 +1117,7 @@ const ctxWithLets: <B, C>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1134,7 +1130,7 @@ const ctxWithLets: <B, C>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, QualAliasInfo>;
+  aliasMap: Map<string, AliasInfo>;
   plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: C;
@@ -1147,7 +1143,7 @@ const ctxWithLets: <B, C>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1173,7 +1169,7 @@ const ctxWithLoop: <B, C>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1187,7 +1183,7 @@ const ctxWithLoop: <B, C>(
   env: B;
   open: boolean;
   ns: Map<string, Map<string, Scheme>>;
-  aliasMap: Map<string, QualAliasInfo>;
+  aliasMap: Map<string, AliasInfo>;
   plugins: HostPlugin[];
   loopStack: Ty[][];
   letOwner: C;
@@ -1200,7 +1196,7 @@ const ctxWithLoop: <B, C>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1227,7 +1223,7 @@ const inferLoopParamsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1270,7 +1266,7 @@ const inferLoopParamsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1291,7 +1287,7 @@ const unifyRecurArgsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1327,7 +1323,7 @@ const unifyRecurArgsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1346,7 +1342,7 @@ const inferRecur$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1378,7 +1374,7 @@ const inferRecur: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1488,7 +1484,7 @@ const labFieldsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1616,7 +1612,7 @@ const labFieldsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1761,7 +1757,7 @@ const inferCallArgs$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1809,7 +1805,7 @@ const inferCallArgs: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1843,7 +1839,7 @@ const inferTupleLet$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1879,7 +1875,7 @@ const inferTupleLet: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1899,7 +1895,7 @@ const inferApplied$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1941,7 +1937,7 @@ const inferApplied: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -1959,7 +1955,7 @@ const inferNormalCall$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -1992,7 +1988,7 @@ const inferNormalCall: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2010,7 +2006,7 @@ const inferTernary$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2048,7 +2044,7 @@ const inferTernary: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2083,7 +2079,7 @@ const inferBindBody$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2126,7 +2122,7 @@ const inferBindBody: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2147,7 +2143,7 @@ const inferTwoSlotBind$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2183,7 +2179,7 @@ const inferTwoSlotBind: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2205,7 +2201,7 @@ const inferQuestionBind$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2272,7 +2268,7 @@ const inferQuestionBind: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2294,7 +2290,7 @@ const inferLetBind$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2322,7 +2318,7 @@ const inferLetBind: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2344,7 +2340,7 @@ const inferRecordRow$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2377,7 +2373,7 @@ const inferRecordRow: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2450,7 +2446,7 @@ const inferFieldAccess$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2499,7 +2495,7 @@ const inferFieldAccess: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2519,7 +2515,7 @@ const inferDuckField$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2543,7 +2539,7 @@ const inferDuckField: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2562,7 +2558,7 @@ const inferNsField$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2586,7 +2582,7 @@ const inferNsField: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2605,7 +2601,7 @@ const inferInterpParts$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2641,7 +2637,7 @@ const inferInterpParts: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2658,7 +2654,7 @@ const inferTupleElems$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2691,7 +2687,7 @@ const inferTupleElems: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2724,7 +2720,7 @@ const inferSeqSlotsElems$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2769,7 +2765,7 @@ const inferSeqSlotsElems: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2788,7 +2784,7 @@ const inferSeqSlots$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2810,7 +2806,7 @@ const inferSeqSlots: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2828,7 +2824,7 @@ const inferMapEntries$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2870,7 +2866,7 @@ const inferMapEntries: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2889,7 +2885,7 @@ const inferMapExpr$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -2911,7 +2907,7 @@ const inferMapExpr: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -2980,7 +2976,7 @@ const inferArms$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3035,7 +3031,7 @@ const inferArms: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3110,7 +3106,7 @@ const inferMatch$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3136,7 +3132,7 @@ const inferMatch: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3154,7 +3150,7 @@ const inferExpr$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3189,7 +3185,7 @@ const inferExpr: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3206,7 +3202,7 @@ const inferExprRaw$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3329,7 +3325,7 @@ const inferExprRaw$ = (
               env: Map<string, Scheme>;
               open: boolean;
               ns: Map<string, Map<string, Scheme>>;
-              aliasMap: Map<string, QualAliasInfo>;
+              aliasMap: Map<string, AliasInfo>;
               plugins: HostPlugin[];
               loopStack: Ty[][];
               letOwner: Map<string, SpanAt>;
@@ -3550,7 +3546,7 @@ const inferExprRaw: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3567,7 +3563,7 @@ const inferDo$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3596,7 +3592,7 @@ const inferDo: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3613,7 +3609,7 @@ const inferPatRecordFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3650,7 +3646,7 @@ const inferPatRecordFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3669,7 +3665,7 @@ const inferPatRecord$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3691,7 +3687,7 @@ const inferPatRecord: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3708,7 +3704,7 @@ const inferPatCtorArgs$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3759,7 +3755,7 @@ const inferPatCtorArgs: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3780,7 +3776,7 @@ const inferPatTupleFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3822,7 +3818,7 @@ const inferPatTupleFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3839,7 +3835,7 @@ const inferPatTuple$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3860,7 +3856,7 @@ const inferPatTuple: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3877,7 +3873,7 @@ const inferSeqPatElems$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3918,7 +3914,7 @@ const inferSeqPatElems: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3936,7 +3932,7 @@ const inferSeqPat$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -3978,7 +3974,7 @@ const inferSeqPat: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -3997,7 +3993,7 @@ const inferPat$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4032,7 +4028,7 @@ const inferPat: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4049,7 +4045,7 @@ const inferPatRaw$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4179,7 +4175,7 @@ const inferPatRaw: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4196,7 +4192,7 @@ const unifyOrPatBinding: <B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4215,7 +4211,7 @@ const unifyOrPatBinding: <B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4244,7 +4240,7 @@ const unifyOrPatBindings: <B>(
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4263,7 +4259,7 @@ const unifyOrPatBindings: <B>(
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4298,7 +4294,7 @@ const inferOrPatAlts$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4341,7 +4337,7 @@ const inferOrPatAlts: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4361,7 +4357,7 @@ const inferOrPat$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -4397,7 +4393,7 @@ const inferOrPat: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -4927,10 +4923,7 @@ const seedNsImports: <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> = 
   <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) =>
     seedNsImportsFrom(_Map_keys(nsImports), nsImports, ns),
 );
-const aliasMapFrom$ = (
-  stmts: Stmt[],
-  acc: Map<string, QualAliasInfo>,
-): Map<string, QualAliasInfo> =>
+const aliasMapFrom$ = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, AliasInfo> =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -4977,14 +4970,14 @@ const aliasMapFrom$ = (
             throw new Error("non-exhaustive match");
           })())(stmts);
 const aliasMapFrom: _Curry<
-  [stmts: Stmt[], acc: Map<string, QualAliasInfo>],
-  Map<string, QualAliasInfo>
+  [stmts: Stmt[], acc: Map<string, AliasInfo>],
+  Map<string, AliasInfo>
 > = _curry(2, aliasMapFrom$);
 const registerCtorsFrom: <A, B>(
   ctors: ({ fields: CtorField[]; name: A } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<string, QualAliasInfo>,
+  aliasMap: Map<string, AliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
@@ -4993,7 +4986,7 @@ const registerCtorsFrom: <A, B>(
     ctors: ({ fields: CtorField[]; name: A } & B)[],
     typeName: string,
     params: string[],
-    aliasMap: Map<string, QualAliasInfo>,
+    aliasMap: Map<string, AliasInfo>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -5016,7 +5009,7 @@ const registerCtorsFrom: <A, B>(
 );
 const registerUserCtorsFrom$ = (
   stmts: Stmt[],
-  aliasMap: Map<string, QualAliasInfo>,
+  aliasMap: Map<string, AliasInfo>,
   env: Map<string, Scheme>,
   st: St,
 ): [Map<string, Scheme>, St] =>
@@ -5037,14 +5030,14 @@ const registerUserCtorsFrom$ = (
             throw new Error("non-exhaustive match");
           })())(stmts);
 const registerUserCtorsFrom: _Curry<
-  [stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St],
+  [stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St],
   [Map<string, Scheme>, St]
 > = _curry(4, registerUserCtorsFrom$);
 const registerBuiltinCtorGroup: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
   params: string[],
-  aliasMap: Map<string, QualAliasInfo>,
+  aliasMap: Map<string, AliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
@@ -5053,7 +5046,7 @@ const registerBuiltinCtorGroup: <A, B>(
     ctors: ({ name: A; fields: CtorField[] } & B)[],
     typeName: string,
     params: string[],
-    aliasMap: Map<string, QualAliasInfo>,
+    aliasMap: Map<string, AliasInfo>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -5087,7 +5080,7 @@ const registerBuiltinCtorsFrom: <A, B, C>(
     name: string;
     params: string[];
   } & C)[],
-  aliasMap: Map<string, QualAliasInfo>,
+  aliasMap: Map<string, AliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
@@ -5098,7 +5091,7 @@ const registerBuiltinCtorsFrom: <A, B, C>(
       name: string;
       params: string[];
     } & C)[],
-    aliasMap: Map<string, QualAliasInfo>,
+    aliasMap: Map<string, AliasInfo>,
     env: Map<A, Scheme>,
     st: St,
   ) =>
@@ -5121,7 +5114,7 @@ const registerBuiltinCtorsFrom: <A, B, C>(
 );
 const registerExternsFrom$ = (
   stmts: Stmt[],
-  aliasMap: Map<string, QualAliasInfo>,
+  aliasMap: Map<string, AliasInfo>,
   env: Map<string, Scheme>,
   st: St,
 ): [Map<string, Scheme>, St] =>
@@ -5164,7 +5157,7 @@ const registerExternsFrom$ = (
             throw new Error("non-exhaustive match");
           })())(stmts);
 const registerExternsFrom: _Curry<
-  [stmts: Stmt[], aliasMap: Map<string, QualAliasInfo>, env: Map<string, Scheme>, st: St],
+  [stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St],
   [Map<string, Scheme>, St]
 > = _curry(4, registerExternsFrom$);
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
@@ -5323,7 +5316,7 @@ const inferMember$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5383,7 +5376,7 @@ const inferMember: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5403,7 +5396,7 @@ const inferGroupFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5450,7 +5443,7 @@ const inferGroupFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5585,7 +5578,7 @@ const processGroupsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5601,7 +5594,7 @@ const processGroupsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5647,7 +5640,7 @@ const processGroupsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5664,7 +5657,7 @@ const processGroupsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -5680,7 +5673,7 @@ const inferExprStmtsFrom$ = (
     env: Map<string, Scheme>;
     open: boolean;
     ns: Map<string, Map<string, Scheme>>;
-    aliasMap: Map<string, QualAliasInfo>;
+    aliasMap: Map<string, AliasInfo>;
     plugins: HostPlugin[];
     loopStack: Ty[][];
     letOwner: Map<string, SpanAt>;
@@ -5723,7 +5716,7 @@ const inferExprStmtsFrom: _Curry<
       env: Map<string, Scheme>;
       open: boolean;
       ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, QualAliasInfo>;
+      aliasMap: Map<string, AliasInfo>;
       plugins: HostPlugin[];
       loopStack: Ty[][];
       letOwner: Map<string, SpanAt>;
@@ -6039,7 +6032,7 @@ const runInferImports: <A, B>(
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   IErr[]
@@ -6067,12 +6060,9 @@ const runInferImports: <A, B>(
       name: string;
       parse: Option<
         (
-          a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+          a: LocTok[],
           b: number,
-          c: (
-            a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-            b: number,
-          ) => Result<[Expr, number], PErr>,
+          c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
         ) => Result<Option<[Expr, number]>, PErr>
       >;
       inferCall: Option<
@@ -6095,9 +6085,9 @@ const runInferImports: <A, B>(
       nsImports,
       seedNs(namespaces, env0, st0),
     );
-    const aliasMap: Map<string, QualAliasInfo> = aliasMapFrom$(
+    const aliasMap: Map<string, AliasInfo> = aliasMapFrom$(
       stmts,
-      qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>()),
+      qualAliasSeed(stmts, quals, new Map<string, AliasInfo>()),
     );
     return (([env1, st1]: [Map<string, Scheme>, St]) =>
       (([env2, st2]: [Map<string, Scheme>, St]) =>
@@ -6112,7 +6102,7 @@ const runInferImports: <A, B>(
               env: Map<string, Scheme>;
               open: boolean;
               ns: Map<string, Map<string, Scheme>>;
-              aliasMap: Map<string, QualAliasInfo>;
+              aliasMap: Map<string, AliasInfo>;
               plugins: HostPlugin[];
               loopStack: Ty[][];
               letOwner: Map<string, SpanAt>;
@@ -6134,7 +6124,7 @@ const runInferImports: <A, B>(
                       {
                         env: Map<string, Scheme>;
                         types: TypeAt[];
-                        aliases: Map<string, QualAliasInfo>;
+                        aliases: Map<string, AliasInfo>;
                         letParams: TypeAt[];
                       },
                       IErr[]
@@ -6143,7 +6133,7 @@ const runInferImports: <A, B>(
                       {
                         env: Map<string, Scheme>;
                         types: TypeAt[];
-                        aliases: Map<string, QualAliasInfo>;
+                        aliases: Map<string, AliasInfo>;
                         letParams: TypeAt[];
                       },
                       IErr[]
@@ -6185,7 +6175,7 @@ export const scopeAliases: <A, B>(
       aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A>;
     } & B
   >,
-) => Map<string, QualAliasInfo> = _curry(
+) => Map<string, AliasInfo> = _curry(
   2,
   <A, B>(
     stmts: Stmt[],
@@ -6198,7 +6188,7 @@ export const scopeAliases: <A, B>(
         >;
       } & B
     >,
-  ) => aliasMapFrom$(stmts, qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>())),
+  ) => aliasMapFrom$(stmts, qualAliasSeed(stmts, quals, new Map<string, AliasInfo>())),
 );
 /**
  * Env-only view — the shape every existing caller (compile.mochi,
@@ -6242,7 +6232,7 @@ export const inferProgramImports: <A, B>(
       (r: {
         env: Map<string, Scheme>;
         types: TypeAt[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
       }) => r.env,
       runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
@@ -6299,7 +6289,7 @@ export const inferProgramImportsTypes: <A, B>(
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   IErr[]
@@ -6334,7 +6324,7 @@ const inferProgramTypes$ = (
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   IErr[]
@@ -6364,7 +6354,7 @@ export const inferProgramTypes: _Curry<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     IErr[]
@@ -6380,7 +6370,7 @@ const inferProgramTypesWith$ = (
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
-    aliases: Map<string, QualAliasInfo>;
+    aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
   },
   IErr[]
@@ -6410,7 +6400,7 @@ export const inferProgramTypesWith: _Curry<
     {
       env: Map<string, Scheme>;
       types: TypeAt[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     IErr[]

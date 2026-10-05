@@ -36,6 +36,7 @@ import {
 } from "../infer/types.mochi"
 import { jsDoc } from "../codegen/codegen.mochi"
 import { foldAliasesAt } from "../infer/schemes.mochi"
+import * as Schemes from "../infer/schemes.mochi"
 import {
   defaultOpts,
   emitJsWith,
@@ -248,14 +249,6 @@ let typeDeclsFrom = (stmts, aliases, recs, qualify, docs, i) => switch Array.get
   | Some(_) => typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1)
 }
 
-/// A declared alias as inference records it; a local copy of schemes.mochi's,
-/// so the two unify structurally (ADR 0044).
-type AliasInfo = {
-  params: [string],
-  fields: [Ast.AliasField],
-  expr: Option<Ast.TypeExpr>
-}
-
 /// The file's own aliases (record and expression forms), in declaration order
 /// — the order `foldAliasesAt` tries them, as src/dts/dts.ts folds with the
 /// inference result's local alias list.
@@ -276,7 +269,7 @@ let localAliasKeys = (stmts, i, acc) => switch Array.get(i, stmts) {
 /// A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead; it
 /// sees the unfolded type. The fallback folds every local alias the type fits
 /// (`{ value: number }` -> `Box<number>`), parametric ones included.
-let bindingDeclsFrom = (stmts, env, aliases: Map<string, AliasInfo>, keys, recs, qualify, docs, dtsHooks, bindingHooks, i) => switch Array.get(i, stmts) {
+let bindingDeclsFrom = (stmts, env, aliases: Map<string, Schemes.AliasInfo>, keys, recs, qualify, docs, dtsHooks, bindingHooks, i) => switch Array.get(i, stmts) {
   | None => []
   | Some(Ast.SLet(name, _, _, value, _, doc, _)) => let rest = bindingDeclsFrom(
       stmts,

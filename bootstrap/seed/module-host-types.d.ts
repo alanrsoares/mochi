@@ -14,12 +14,9 @@ export type HostPlugin = {
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      a: LocTok[],
       b: number,
-      c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-        b: number,
-      ) => Result<[Expr, number], PErr>,
+      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>
   >;
   inferCall: Option<
@@ -30,6 +27,7 @@ export type HostPlugin = {
   dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
+export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type Tok =
   | { _tag: "TLet" }
   | { _tag: "TType" }
@@ -273,9 +271,9 @@ export type AliasField = {
   spread: boolean;
 };
 export type Name = { name: string; span: Span };
-export type RecoveryAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
-export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, RecoveryAliasInfo> };
+export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type CtorInfo = { owner: string; arity: number };
 export type RecoveryGraphState = { ctx: RecoveryCtx; errors: MErr[] };
@@ -341,7 +339,7 @@ export type SeedModule = {
     {
       path: string;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, RecoveryAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       imports: Map<string, Scheme>;
       quals: Map<string, RecoveryQualScope>;
     }[],
@@ -364,11 +362,11 @@ export type SeedModule = {
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, RecoveryAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         imports: Map<string, Scheme>;
         quals: Map<string, RecoveryQualScope>;
       }[];
-      aliases: Map<string, RecoveryAliasInfo>;
+      aliases: Map<string, AliasInfo>;
     },
     graph: ({ stmts: Stmt[]; path: string; src: string } & A)[],
     opts: Opts,
@@ -381,11 +379,11 @@ export type SeedModule = {
       outputs: {
         path: string;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, RecoveryAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         imports: Map<string, Scheme>;
         quals: Map<string, RecoveryQualScope>;
       }[];
-      aliases: Map<string, RecoveryAliasInfo>;
+      aliases: Map<string, AliasInfo>;
     },
     MErr
   >;

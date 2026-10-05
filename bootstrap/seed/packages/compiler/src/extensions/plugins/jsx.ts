@@ -1,11 +1,10 @@
-import type { Tok } from "../../lexer/lexer";
+import type { LocTok, Tok } from "../../lexer/lexer";
 import type { Expr, Field, Name, SeqElem } from "../../ast/ast";
 import type { Row, SpanAt, St, Ty } from "../../infer/types";
 import type { Doc } from "../../doc/doc";
 import type { FormatApi } from "../../format/format-api";
 import type { Ctx } from "../../format/format";
 
-export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type Hint = { title: string; start: number; end: number; replaceWith: string };
 export type BoundErr = {
   message: string;
@@ -105,7 +104,6 @@ import {
   TId,
   TEof,
 } from "../../lexer/lexer";
-
 const jxTokName: (t: Tok) => string = (t: Tok) => {
   const $match = t;
   switch ($match._tag) {

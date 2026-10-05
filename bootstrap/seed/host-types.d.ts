@@ -137,12 +137,9 @@ export type HostPlugin = {
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      a: LocTok[],
       b: number,
-      c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-        b: number,
-      ) => Result<[Expr, number], PErr>,
+      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>
   >;
   inferCall: Option<
@@ -153,6 +150,7 @@ export type HostPlugin = {
   dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
+export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type Tok =
   | { _tag: "TLet" }
   | { _tag: "TType" }
@@ -260,7 +258,7 @@ export type Doc =
   | { _tag: "DLineSuffix"; doc: Doc }
   | { _tag: "DBreakParent" };
 export type TsApi = { tsType: (a: Ty) => string; aliasOf: (a: Row) => Option<string> };
-export type LocTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
+export type HookTok<A> = { tok: A; start: number; end: number; doc: Option<string> };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type SeedTypeCtors = {
   tCon: _Curry<[name: string, args: Ty[]], Ty>;

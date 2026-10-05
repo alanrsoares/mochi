@@ -24,7 +24,7 @@ export type Row =
   | { _tag: "RowExtend"; label: string; fieldType: Ty; optional: boolean; rest: Row };
 export type SpanAt = { start: number; end: number };
 export type BinderSym = { kind: string; name: string; doc: Option<string> };
-export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
+export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type AliasField = {
   name: string;
   nameSpan: Span;
@@ -56,12 +56,9 @@ export type HostPlugin = {
   name: string;
   parse: Option<
     (
-      a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+      a: LocTok[],
       b: number,
-      c: (
-        a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-        b: number,
-      ) => Result<[Expr, number], PErr>,
+      c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>
   >;
   inferCall: Option<
@@ -72,6 +69,7 @@ export type HostPlugin = {
   dtsBinding: Option<(a: string, b: Expr, c: Ty, d: TsApi) => Option<string>>;
   bindingType: Option<(a: Expr, b: Ty, c: TsApi) => Option<string>>;
 };
+export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 export type Tok =
   | { _tag: "TLet" }
   | { _tag: "TType" }
@@ -312,7 +310,7 @@ export type SeedCompile = {
     {
       env: Map<string, Scheme>;
       types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, QualAliasInfo>;
+      aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
     },
     Stamped[]
@@ -328,7 +326,7 @@ export type SeedCompile = {
       {
         env: Map<string, Scheme>;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
       },
       Stamped[]
@@ -340,13 +338,13 @@ export type SeedCompile = {
       {
         env: Map<string, Scheme>;
         types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-        aliases: Map<string, QualAliasInfo>;
+        aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
       },
       Stamped[]
     >
   >;
-  nominalTypeName: HostFn<[ty: Ty, aliases: Map<string, QualAliasInfo>], Option<string>>;
+  nominalTypeName: HostFn<[ty: Ty, aliases: Map<string, AliasInfo>], Option<string>>;
   symbolIndexSync: HostFn<
     [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
     SymIndex
@@ -363,12 +361,9 @@ export type SeedCompile = {
             name: string;
             parse: Option<
               (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                a: LocTok[],
                 b: number,
-                c: (
-                  a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                  b: number,
-                ) => Result<[Expr, number], StageErr>,
+                c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
               ) => Result<Option<[Expr, number]>, StageErr>
             >;
             inferCall: Option<
@@ -406,12 +401,9 @@ export type SeedCompile = {
             name: string;
             parse: Option<
               (
-                a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
+                a: LocTok[],
                 b: number,
-                c: (
-                  a: { tok: Tok; start: number; end: number; doc: Option<string> }[],
-                  b: number,
-                ) => Result<[Expr, number], StageErr>,
+                c: (a: LocTok[], b: number) => Result<[Expr, number], StageErr>,
               ) => Result<Option<[Expr, number]>, StageErr>
             >;
             inferCall: Option<
