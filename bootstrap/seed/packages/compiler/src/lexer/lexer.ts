@@ -82,17 +82,20 @@ import {
   _Option_match,
   _Option_unwrapOr,
   _Result_match,
-  _Str_codeAt,
+  _Set_fromArray,
+  _Set_has,
   _Str_fromCode,
   _Str_get,
   _Str_join,
   _Str_length,
   _Str_slice,
+  _Str_split,
   _Str_toNumber,
   _curry,
   _done,
   _keyOf,
   _recur,
+  _setAdd,
   and,
   eq,
   length,
@@ -167,15 +170,12 @@ const Trailing = (stop: number): Comment => ({ _tag: "Trailing", stop });
 const cr: string = _Str_fromCode(13);
 const isSpace: (c: string) => boolean = (c: string) =>
   or(c === " ", or(c === "\t", or(c === "\n", eq(c, cr))));
-const inRange$ = (lo: number, hi: number, n: number): boolean => and(n >= lo, n <= hi);
-const inRange: _Curry<[lo: number, hi: number, n: number], boolean> = _curry(3, inRange$);
-const isDigit: (c: string) => boolean = (c: string) =>
-  _Option_exists(inRange(48, 57), _Str_codeAt(0, c));
-const isIdStart: (c: string) => boolean = (c: string) =>
-  _Option_exists(
-    (n: number) => or(inRange$(65, 90, n), or(inRange$(97, 122, n), or(n === 95, n === 36))),
-    _Str_codeAt(0, c),
-  );
+const digitChars: Set<string> = _Set_fromArray(_Str_split("", "0123456789"));
+const idStartChars: Set<string> = _Set_fromArray(
+  _Str_split("", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$"),
+);
+const isDigit: (c: string) => boolean = (c: string) => _Set_has(c, digitChars);
+const isIdStart: (c: string) => boolean = (c: string) => _Set_has(c, idStartChars);
 const isIdChar: (c: string) => boolean = (c: string) => or(isIdStart(c), isDigit(c));
 const isNumChar: (c: string) => boolean = (c: string) => or(isDigit(c), c === ".");
 const keywordTok: (word: string) => Option<Tok> = (word: string) =>
