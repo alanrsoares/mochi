@@ -1,0 +1,48 @@
+/// First-class JSON AST. Objects are `Dict<Json>` (ADR 0150). Parsing is a
+/// host call that returns `Err(message)` on bad input; accessors return `Option`.
+
+export type Json =
+  | JNull
+  | JBool(value: bool)
+  | JNum(value: number)
+  | JStr(value: string)
+  | JArr(items: [Json])
+  | JObj(fields: Dict<Json>)
+
+export extern parse : string -> Result<Json, string> = "@mochi/json/runtime" "parse"
+export extern stringify : Json -> string = "@mochi/json/runtime" "stringify"
+
+export let field = (key: string, json: Json) => switch json {
+  | JObj(fields) => Dict.get(key, fields)
+  | _ => None
+}
+
+export let index = (i: number, json: Json) => switch json {
+  | JArr(items) => Array.get(i, items)
+  | _ => None
+}
+
+export let asString = (json: Json) => switch json {
+  | JStr(s) => Some(s)
+  | _ => None
+}
+
+export let asNumber = (json: Json) => switch json {
+  | JNum(n) => Some(n)
+  | _ => None
+}
+
+export let asBool = (json: Json) => switch json {
+  | JBool(b) => Some(b)
+  | _ => None
+}
+
+export let asArray = (json: Json) => switch json {
+  | JArr(items) => Some(items)
+  | _ => None
+}
+
+export let asObject = (json: Json) => switch json {
+  | JObj(fields) => Some(fields)
+  | _ => None
+}
