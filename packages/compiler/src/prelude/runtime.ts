@@ -534,7 +534,12 @@ export const _Set_has: { <A>(a: A): (b: Set<A>) => boolean; <A>(a: A, b: Set<A>)
   _curry(2, (x: any, s: any) => s.has(_keyOf(s, x)));
 export const _Set_add: { <A>(a: A): (b: Set<A>) => Set<A>; <A>(a: A, b: Set<A>): Set<A> } = _curry(
   2,
-  (x: any, s: any) => _setAdd(new Set(s), x),
+  // Sets are persistent values, so an add that changes nothing can hand back
+  // the same set instead of copying it (accumulators mostly re-add members).
+  (x: any, s: any) => {
+    const k = _keyOf(s, x);
+    return s.has(k) ? s : new Set(s).add(k);
+  },
 );
 export const _Set_delete: { <A>(a: A): (b: Set<A>) => Set<A>; <A>(a: A, b: Set<A>): Set<A> } =
   _curry(2, (x: any, s: any) => {
@@ -584,9 +589,9 @@ export const _Map_set: {
   <A, B>(a: A, b: B): (c: Map<A, B>) => Map<A, B>;
   <A, B>(a: A, b: B, c: Map<A, B>): Map<A, B>;
 } = _curry(3, (k: any, v: any, m: any) => {
-  const n = new Map(m);
-  n.set(_keyOf(m, k), v);
-  return n;
+  const key = _keyOf(m, k);
+  if (m.has(key) && Object.is(m.get(key), v)) return m;
+  return new Map(m).set(key, v);
 });
 export const _Map_delete: {
   <A, B>(a: A): (b: Map<A, B>) => Map<A, B>;

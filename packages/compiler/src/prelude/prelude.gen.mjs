@@ -4389,7 +4389,7 @@ const _preludeJsDefs = {
   "_keyOf": "const _keyOf = (c, k) => {\n  if (k === null || typeof k !== \"object\" || c.has(k))\n    return k;\n  for (const x of c.keys())\n    if (eq(k, x))\n      return x;\n  return k;\n};",
   "_setAdd": "const _setAdd = (s, x) => s.add(_keyOf(s, x));",
   "_Set_has": "const _Set_has = _curry(2, (x, s) => s.has(_keyOf(s, x)));",
-  "_Set_add": "const _Set_add = _curry(2, (x, s) => _setAdd(new Set(s), x));",
+  "_Set_add": "const _Set_add = _curry(2, (x, s) => {\n  const k = _keyOf(s, x);\n  return s.has(k) ? s : new Set(s).add(k);\n});",
   "_Set_delete": "const _Set_delete = _curry(2, (x, s) => {\n  const n = new Set(s);\n  n.delete(_keyOf(s, x));\n  return n;\n});",
   "_Set_size": "const _Set_size = (s) => s.size;",
   "_Set_toArray": "const _Set_toArray = (s) => [...s];",
@@ -4399,7 +4399,7 @@ const _preludeJsDefs = {
   "_Set_diff": "const _Set_diff = _curry(2, (a, b) => new Set([...a].filter((x) => !b.has(_keyOf(b, x)))));",
   "_Map_has": "const _Map_has = _curry(2, (k, m) => m.has(_keyOf(m, k)));",
   "_Map_getOr": "const _Map_getOr = _curry(3, (d, k, m) => {\n  const key = _keyOf(m, k);\n  return m.has(key) ? m.get(key) : d;\n});",
-  "_Map_set": "const _Map_set = _curry(3, (k, v, m) => {\n  const n = new Map(m);\n  n.set(_keyOf(m, k), v);\n  return n;\n});",
+  "_Map_set": "const _Map_set = _curry(3, (k, v, m) => {\n  const key = _keyOf(m, k);\n  if (m.has(key) && Object.is(m.get(key), v))\n    return m;\n  return new Map(m).set(key, v);\n});",
   "_Map_delete": "const _Map_delete = _curry(2, (k, m) => {\n  const n = new Map(m);\n  n.delete(_keyOf(m, k));\n  return n;\n});",
   "_Map_size": "const _Map_size = (m) => m.size;",
   "_Map_keys": "const _Map_keys = (m) => [...m.keys()];",
@@ -4629,7 +4629,7 @@ const _runtimeDeps = {
   ],
   "_Set_add": [
     "_curry",
-    "_setAdd"
+    "_keyOf"
   ],
   "_Set_delete": [
     "_curry",
