@@ -23,7 +23,8 @@ export type Json =
 - `parse : string -> Result<Json, string>` — host `JSON.parse`; a syntax error is
   an `Err(message)` value, never a throw. Objects become null-prototype `Dict`s,
   so `__proto__` is an ordinary key.
-- `stringify : Json -> string`.
+- `stringify : Json -> Result<string, string>`. Non-finite numbers are rejected
+  in both `parse` (e.g. `1e400`) and `stringify`: JSON cannot represent them.
 - Option-returning accessors: `field`, `index`, `asString`, `asNumber`,
   `asBool`, `asArray`, `asObject`.
 
