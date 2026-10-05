@@ -204,6 +204,8 @@ import {
   add,
   and,
   eq,
+  filter,
+  gt,
   length,
   map,
   not,
@@ -3053,6 +3055,62 @@ const inferArms: _Curry<
   ],
   Result<St, IErr>
 > = _curry(5, inferArms$);
+const isPipeHole: (a: Expr) => boolean = (a: Expr) =>
+  ((_v) => (_v._tag === "ERef" && _v.name === "_" ? true : false))(a);
+const hasPipeHole: (right: Expr) => boolean = (right: Expr) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { args: rargs } = $match;
+      return length(filter(isPipeHole, rargs)) > 0;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const isPipeAtom: (e: Expr) => boolean = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn: rfn, args: rargs, origin } = $match;
+      const v: Expr = isPipeAtom(left) ? left : Ast.ERef("$pipe", sp);
+      const call: Expr = Ast.ECall(
+        rfn,
+        map((a: Expr) => (isPipeHole(a) ? v : a), rargs),
+        origin,
+        sp,
+      );
+      return isPipeAtom(left)
+        ? call
+        : Ast.ELetIn("$pipe", sp, None as Option<TypeExpr>, left, call, sp);
+    }
+    default: {
+      return right;
+    }
+  }
+};
+const fillPipeHole: _Curry<[left: Expr, right: Expr, sp: SpanAt], Expr> = _curry(3, fillPipeHole$);
 const inferMatch$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3163,372 +3221,335 @@ const inferExprRaw$ = (
   },
   e: Expr,
   st: St,
-): Result<[Ty, St], IErr> =>
-  ((_v) =>
-    _v._tag === "ENum"
-      ? (Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>)
-      : _v._tag === "EUnit"
-        ? (Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>)
-        : _v._tag === "EBool"
-          ? (Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>)
-          : _v._tag === "EStr"
-            ? (({ value }) => Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>)(_v)
-            : _v._tag === "ERef"
-              ? (({ name, span: sp }) =>
-                  _Option_match(
-                    _Map_get(name, ctx.env),
-                    () =>
-                      ctx.open
-                        ? _Set_has(name, ctx.localNames)
-                          ? (Err(
-                              typeErrHelp$(
-                                `'${name}' is not in scope here`,
-                                sp,
-                                "it is bound elsewhere in this file, but not around this use — check the binder's extent",
+): Result<[Ty, St], IErr> => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return Ok(_tuple(tNumber, st)) as Result<[Ty, St], IErr>;
+    }
+    case "EUnit": {
+      return Ok(_tuple(tUnit, st)) as Result<[Ty, St], IErr>;
+    }
+    case "EBool": {
+      return Ok(_tuple(tBool, st)) as Result<[Ty, St], IErr>;
+    }
+    case "EStr": {
+      const { value } = $match;
+      return Ok(_tuple(tLit(value), st)) as Result<[Ty, St], IErr>;
+    }
+    case "ERef": {
+      const { name, span: sp } = $match;
+      return _Option_match(
+        _Map_get(name, ctx.env),
+        () =>
+          ctx.open
+            ? _Set_has(name, ctx.localNames)
+              ? (Err(
+                  typeErrHelp$(
+                    `'${name}' is not in scope here`,
+                    sp,
+                    "it is bound elsewhere in this file, but not around this use — check the binder's extent",
+                  ),
+                ) as Result<[Ty, St], IErr>)
+              : (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(freshVar(st))
+            : _Option_match(
+                closestName(name, _Map_keys(ctx.env)),
+                () =>
+                  Err(
+                    typeErrHelp$(
+                      `unbound variable '${name}'`,
+                      sp,
+                      "bind the name before using it, or check the spelling",
+                    ),
+                  ) as Result<[Ty, St], IErr>,
+                (hint) =>
+                  Err(
+                    typeErrSuggest$(
+                      `unbound variable '${name}'`,
+                      sp,
+                      `did you mean '${hint}'?`,
+                      hint,
+                    ),
+                  ) as Result<[Ty, St], IErr>,
+              ),
+        (sc) =>
+          (([t, st1]: [Ty, St]) =>
+            Ok(
+              _tuple(
+                t,
+                _Option_match(
+                  _Map_get(name, ctx.letOwner),
+                  () => st1,
+                  (vsp) => noteUse(vsp, t, st1),
+                ),
+              ),
+            ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
+      );
+    }
+    case "ELambda": {
+      const { params, body } = $match;
+      return (([posParams, labParams]: [LamParam[], LamParam[]]) =>
+        (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
+          _Result_flatMap(
+            ([annotVars, st2]) =>
+              _Result_flatMap(
+                ([labFields, st3]) =>
+                  ((allTypes: Ty[]) =>
+                    ((st3Labs: St) =>
+                      _Result_flatMap(
+                        ([bodyT, st4]) =>
+                          Ok(
+                            _tuple(
+                              arrowChain$(allTypes, bodyT),
+                              recordNameParamsFrom$(posParams, paramTypes, st4),
+                            ),
+                          ) as Result<[Ty, St], IErr>,
+                        inferExpr$(
+                          ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
+                          body,
+                          st3Labs,
+                        ),
+                      ))(recordLabParamsFrom(labParams, labFields, st3)))(
+                    ((_v) =>
+                      _v.length === 0
+                        ? paramTypes
+                        : _Array_append(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams),
+                  ),
+                labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2),
+              ),
+            constrainParamAnnotsFrom$(ctx, posParams, paramTypes, new Map<string, Ty>(), st1),
+          ))(bindParamsFrom$(posParams, ctx.env, st)))(
+        splitLamParams$(params, [] as LamParam[], [] as LamParam[]),
+      );
+    }
+    case "ELetIn": {
+      const { name, nameSpan, annot, value, body, span: _span } = $match;
+      const $match$ = value;
+      switch ($match$._tag) {
+        case "ELambda": {
+          const lets: Stmt[] = localLetsFrom(e);
+          const idxOf: Map<string, number> = idxOfMap(lets);
+          const tail: Expr = localTail(e);
+          return (([localCtx, localSt, localErrs]: [
+            {
+              env: Map<string, Scheme>;
+              open: boolean;
+              ns: Map<string, Map<string, Scheme>>;
+              aliasMap: Map<string, QualAliasInfo>;
+              plugins: HostPlugin[];
+              loopStack: Ty[][];
+              letOwner: Map<string, SpanAt>;
+              localNames: Set<string>;
+              scopeNames: string[];
+            },
+            St,
+            IErr[],
+          ]) =>
+            _Option_match(
+              _Array_get(0, localErrs),
+              () => inferExpr$(localCtx, tail, localSt),
+              (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
+            ))(processGroupsFrom$(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs));
+        }
+        default: {
+          return _Result_flatMap(
+            ([valT, st1]) =>
+              _Result_flatMap(
+                ([pinned, st2]) =>
+                  ((widen: boolean) =>
+                    ((sc: Scheme) =>
+                      ((vsp: SpanAt) =>
+                        (($ctx) =>
+                          inferExpr$(
+                            $ctx,
+                            body,
+                            noteLet(
+                              vsp,
+                              recordBinder(
+                                nameSpan,
+                                pinned,
+                                "let",
+                                name,
+                                None as Option<string>,
+                                st2,
                               ),
-                            ) as Result<[Ty, St], IErr>)
-                          : (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(
-                              freshVar(st),
-                            )
-                        : _Option_match(
-                            closestName(name, _Map_keys(ctx.env)),
-                            () =>
-                              Err(
-                                typeErrHelp$(
-                                  `unbound variable '${name}'`,
-                                  sp,
-                                  "bind the name before using it, or check the spelling",
-                                ),
-                              ) as Result<[Ty, St], IErr>,
-                            (hint) =>
-                              Err(
-                                typeErrSuggest$(
-                                  `unbound variable '${name}'`,
-                                  sp,
-                                  `did you mean '${hint}'?`,
-                                  hint,
-                                ),
-                              ) as Result<[Ty, St], IErr>,
-                          ),
-                    (sc) =>
-                      (([t, st1]: [Ty, St]) =>
-                        Ok(
-                          _tuple(
-                            t,
-                            _Option_match(
-                              _Map_get(name, ctx.letOwner),
-                              () => st1,
-                              (vsp) => noteUse(vsp, t, st1),
                             ),
-                          ),
-                        ) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
-                  ))(_v)
-              : _v._tag === "ELambda"
-                ? (({ params, body }) =>
-                    (([posParams, labParams]: [LamParam[], LamParam[]]) =>
-                      (([paramTypes, bodyEnv, st1]: [Ty[], Map<string, Scheme>, St]) =>
-                        _Result_flatMap(
-                          ([annotVars, st2]) =>
-                            _Result_flatMap(
-                              ([labFields, st3]) =>
-                                ((allTypes: Ty[]) =>
-                                  ((st3Labs: St) =>
-                                    _Result_flatMap(
-                                      ([bodyT, st4]) =>
-                                        Ok(
-                                          _tuple(
-                                            arrowChain$(allTypes, bodyT),
-                                            recordNameParamsFrom$(posParams, paramTypes, st4),
-                                          ),
-                                        ) as Result<[Ty, St], IErr>,
-                                      inferExpr$(
-                                        ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
-                                        body,
-                                        st3Labs,
-                                      ),
-                                    ))(recordLabParamsFrom(labParams, labFields, st3)))(
-                                  ((_v) =>
-                                    _v.length === 0
-                                      ? paramTypes
-                                      : _Array_append(
-                                          tRecord(rowOfLabFields(labFields)),
-                                          paramTypes,
-                                        ))(labParams),
-                                ),
-                              labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2),
-                            ),
-                          constrainParamAnnotsFrom$(
+                          ))(
+                          ctxWithLets(
                             ctx,
-                            posParams,
-                            paramTypes,
-                            new Map<string, Ty>(),
-                            st1,
+                            _Map_set(name, sc, ctx.env),
+                            _Map_set(name, vsp, ctx.letOwner),
                           ),
-                        ))(bindParamsFrom$(posParams, ctx.env, st)))(
-                      splitLamParams$(params, [] as LamParam[], [] as LamParam[]),
-                    ))(_v)
-                : _v._tag === "ELetIn"
-                  ? (({ name, nameSpan, annot, value, body, span: _span }) =>
-                      ((_v) =>
-                        _v._tag === "ELambda"
-                          ? ((lets: Stmt[]) =>
-                              ((idxOf: Map<string, number>) =>
-                                ((tail: Expr) =>
-                                  (([localCtx, localSt, localErrs]: [
-                                    {
-                                      env: Map<string, Scheme>;
-                                      open: boolean;
-                                      ns: Map<string, Map<string, Scheme>>;
-                                      aliasMap: Map<string, QualAliasInfo>;
-                                      plugins: HostPlugin[];
-                                      loopStack: Ty[][];
-                                      letOwner: Map<string, SpanAt>;
-                                      localNames: Set<string>;
-                                      scopeNames: string[];
-                                    },
-                                    St,
-                                    IErr[],
-                                  ]) =>
-                                    _Option_match(
-                                      _Array_get(0, localErrs),
-                                      () => inferExpr$(localCtx, tail, localSt),
-                                      (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
-                                    ))(
-                                    processGroupsFrom$(
-                                      ctx,
-                                      stronglyConnected(adjOf(lets, idxOf)),
-                                      lets,
-                                      st,
-                                      noErrs,
-                                    ),
-                                  ))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e))
-                          : _Result_flatMap(
-                              ([valT, st1]) =>
-                                _Result_flatMap(
-                                  ([pinned, st2]) =>
-                                    ((widen: boolean) =>
-                                      ((sc: Scheme) =>
-                                        ((vsp: SpanAt) =>
-                                          (($ctx) =>
-                                            inferExpr$(
-                                              $ctx,
-                                              body,
-                                              noteLet(
-                                                vsp,
-                                                recordBinder(
-                                                  nameSpan,
-                                                  pinned,
-                                                  "let",
-                                                  name,
-                                                  None as Option<string>,
-                                                  st2,
-                                                ),
-                                              ),
-                                            ))(
-                                            ctxWithLets(
-                                              ctx,
-                                              _Map_set(name, sc, ctx.env),
-                                              _Map_set(name, vsp, ctx.letOwner),
-                                            ),
-                                          ))(exprSpan(value)))(
-                                        generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen),
-                                      ))(
-                                      _Option_match(
-                                        annot,
-                                        () => true,
-                                        () => false,
-                                      ),
-                                    ),
-                                  _Option_match(
-                                    annot,
-                                    () => Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>,
-                                    (te) =>
-                                      (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
-                                        _Result_map(
-                                          (stB: St) => _tuple(at, stB),
-                                          checkFits$(ctx, valT, at, stA, annotSpan(te)),
-                                        ))(
-                                        typeExprToType(
-                                          te,
-                                          new Map<string, Ty>(),
-                                          st1,
-                                          ctx.aliasMap,
-                                          _Set_fromArray([] as string[]),
-                                        ),
-                                      ),
-                                  ),
-                                ),
-                              inferExpr$(ctx, value, st),
-                            ))(value))(_v)
-                  : _v._tag === "ELetBind"
-                    ? (({ param, paramSpan, monad, value, body }) =>
-                        inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st))(_v)
-                    : _v._tag === "ECall"
-                      ? (({ fn, args, origin }) =>
-                          ((api: InferApi) =>
-                            _Result_flatMap(
-                              (claimed) =>
-                                _Option_match(
-                                  claimed,
-                                  () => inferNormalCall$(ctx, fn, args, st),
-                                  (r) => Ok(r) as Result<[Ty, St], IErr>,
-                                ),
-                              runInferCallHooks(
-                                inferCallHooksOf(ctx.plugins),
-                                fn,
-                                args,
-                                origin,
-                                st,
-                                api,
-                              ),
-                            ))({
-                            inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr$(ctx, e, st0)),
-                            unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
-                              u$(ctx, left, right, st0, sp),
-                            ),
-                          }))(_v)
-                      : _v._tag === "EPipe" && _v.fast === true
-                        ? (({ left, right, span: sp }) =>
-                            ((_v) =>
-                              _v._tag === "ECall"
-                                ? (({ fn: rfn, args: rargs, origin }) =>
-                                    inferExpr$(
-                                      ctx,
-                                      Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp),
-                                      st,
-                                    ))(_v)
-                                : inferExpr$(
-                                    ctx,
-                                    Ast.ECall(right, [left], None as Option<string>, sp),
-                                    st,
-                                  ))(right))(_v)
-                        : _v._tag === "EPipe"
-                          ? (({ left, right, span: sp }) =>
-                              inferExpr$(
-                                ctx,
-                                Ast.ECall(right, [left], None as Option<string>, sp),
-                                st,
-                              ))(_v)
-                          : _v._tag === "EDo"
-                            ? (({ exprs }) => inferDo$(ctx, exprs, st))(_v)
-                            : _v._tag === "ETernary"
-                              ? (({ cond, thenE, elseE }) =>
-                                  inferTernary$(ctx, cond, thenE, elseE, st))(_v)
-                              : _v._tag === "ERecord"
-                                ? (({ fields, spread, span: sp }) =>
-                                    _Option_match(
-                                      spread,
-                                      () =>
-                                        _Result_flatMap(
-                                          ([row, st1]) =>
-                                            Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
-                                          inferRecordRow$(ctx, fields, st),
-                                        ),
-                                      (spreadExpr) =>
-                                        _Result_flatMap(
-                                          ([row, st1]) =>
-                                            _Result_flatMap(
-                                              ([baseT, st2]) =>
-                                                (([tailVar, st3]: [Row, St]) =>
-                                                  _Result_flatMap(
-                                                    (st4) =>
-                                                      Ok(_tuple(baseT, st4)) as Result<
-                                                        [Ty, St],
-                                                        IErr
-                                                      >,
-                                                    u$(
-                                                      ctx,
-                                                      baseT,
-                                                      tRecord(rWithTail$(row, tailVar)),
-                                                      st3,
-                                                      sp,
-                                                    ),
-                                                  ))(freshRowVar(st2)),
-                                              inferExpr$(ctx, spreadExpr, st1),
-                                            ),
-                                          inferRecordRow$(ctx, fields, st),
-                                        ),
-                                    ))(_v)
-                                : _v._tag === "EField"
-                                  ? (({ target, name, span: sp }) =>
-                                      ((_v) =>
-                                        _v._tag === "ERef"
-                                          ? (({ name: tname }) =>
-                                              and(
-                                                _Map_has(tname, ctx.ns),
-                                                !_Map_has(tname, ctx.env),
-                                              )
-                                                ? inferNsField$(ctx, tname, name, sp, st)
-                                                : inferFieldAccess$(ctx, e, target, name, sp, st))(
-                                              _v,
-                                            )
-                                          : inferFieldAccess$(ctx, e, target, name, sp, st))(
-                                        target,
-                                      ))(_v)
-                                  : _v._tag === "ETuple"
-                                    ? (({ elements }) =>
-                                        _Result_flatMap(
-                                          ([elems, st1]) =>
-                                            Ok(_tuple(tTuple(elems), st1)) as Result<
-                                              [Ty, St],
-                                              IErr
-                                            >,
-                                          inferTupleElems$(ctx, elements, st),
-                                        ))(_v)
-                                    : _v._tag === "EArr"
-                                      ? (({ elements }) =>
-                                          inferSeqSlots$(ctx, "Array", elements, st))(_v)
-                                      : _v._tag === "EList"
-                                        ? (({ elements }) =>
-                                            inferSeqSlots$(ctx, "List", elements, st))(_v)
-                                        : _v._tag === "ESet"
-                                          ? (({ elements }) =>
-                                              inferSeqSlots$(ctx, "Set", elements, st))(_v)
-                                          : _v._tag === "EMap"
-                                            ? (({ entries }) => inferMapExpr$(ctx, entries, st))(_v)
-                                            : _v._tag === "EMatch"
-                                              ? (({ scrutinee, arms }) =>
-                                                  inferMatch$(ctx, scrutinee, arms, st))(_v)
-                                              : _v._tag === "ELoop"
-                                                ? (({ params, body }) =>
-                                                    _Result_flatMap(
-                                                      ([frame, bodyEnv, bodyOwner, st1]) =>
-                                                        inferExpr$(
-                                                          ctxWithLoop(
-                                                            ctx,
-                                                            bodyEnv,
-                                                            frame,
-                                                            bodyOwner,
-                                                          ),
-                                                          body,
-                                                          st1,
-                                                        ),
-                                                      inferLoopParamsFrom$(
-                                                        ctx,
-                                                        params,
-                                                        0,
-                                                        ctx.env,
-                                                        [] as Ty[],
-                                                        ctx.letOwner,
-                                                        st,
-                                                      ),
-                                                    ))(_v)
-                                                : _v._tag === "ERecur"
-                                                  ? (({ args, span: sp }) =>
-                                                      inferRecur$(ctx, args, sp, st))(_v)
-                                                  : _v._tag === "EInterp"
-                                                    ? (({ parts }) =>
-                                                        _Result_flatMap(
-                                                          (st1) =>
-                                                            Ok(_tuple(tString, st1)) as Result<
-                                                              [Ty, St],
-                                                              IErr
-                                                            >,
-                                                          inferInterpParts$(ctx, parts, st),
-                                                        ))(_v)
-                                                    : (() => {
-                                                        throw new Error("non-exhaustive match");
-                                                      })())(e);
+                        ))(exprSpan(value)))(
+                      generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen),
+                    ))(
+                    _Option_match(
+                      annot,
+                      () => true,
+                      () => false,
+                    ),
+                  ),
+                _Option_match(
+                  annot,
+                  () => Ok(_tuple(valT, st1)) as Result<[Ty, St], IErr>,
+                  (te) =>
+                    (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
+                      _Result_map(
+                        (stB: St) => _tuple(at, stB),
+                        checkFits$(ctx, valT, at, stA, annotSpan(te)),
+                      ))(
+                      typeExprToType(
+                        te,
+                        new Map<string, Ty>(),
+                        st1,
+                        ctx.aliasMap,
+                        _Set_fromArray([] as string[]),
+                      ),
+                    ),
+                ),
+              ),
+            inferExpr$(ctx, value, st),
+          );
+        }
+      }
+    }
+    case "ELetBind": {
+      const { param, paramSpan, monad, value, body } = $match;
+      return inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st);
+    }
+    case "ECall": {
+      const { fn, args, origin } = $match;
+      const api: InferApi = {
+        inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr$(ctx, e, st0)),
+        unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
+          u$(ctx, left, right, st0, sp),
+        ),
+      };
+      return _Result_flatMap(
+        (claimed) =>
+          _Option_match(
+            claimed,
+            () => inferNormalCall$(ctx, fn, args, st),
+            (r) => Ok(r) as Result<[Ty, St], IErr>,
+          ),
+        runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
+      );
+    }
+    case "EPipe": {
+      const { left, right, fast, span: sp } = $match;
+      return inferExpr$(
+        ctx,
+        hasPipeHole(right)
+          ? fillPipeHole$(left, right, sp)
+          : fast
+            ? ((_v) =>
+                _v._tag === "ECall"
+                  ? (({ fn: rfn, args: rargs, origin }) =>
+                      Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp))(_v)
+                  : Ast.ECall(right, [left], None as Option<string>, sp))(right)
+            : Ast.ECall(right, [left], None as Option<string>, sp),
+        st,
+      );
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return inferDo$(ctx, exprs, st);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return inferTernary$(ctx, cond, thenE, elseE, st);
+    }
+    case "ERecord": {
+      const { fields, spread, span: sp } = $match;
+      return _Option_match(
+        spread,
+        () =>
+          _Result_flatMap(
+            ([row, st1]) => Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
+            inferRecordRow$(ctx, fields, st),
+          ),
+        (spreadExpr) =>
+          _Result_flatMap(
+            ([row, st1]) =>
+              _Result_flatMap(
+                ([baseT, st2]) =>
+                  (([tailVar, st3]: [Row, St]) =>
+                    _Result_flatMap(
+                      (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], IErr>,
+                      u$(ctx, baseT, tRecord(rWithTail$(row, tailVar)), st3, sp),
+                    ))(freshRowVar(st2)),
+                inferExpr$(ctx, spreadExpr, st1),
+              ),
+            inferRecordRow$(ctx, fields, st),
+          ),
+      );
+    }
+    case "EField": {
+      const { target, name, span: sp } = $match;
+      const $match$ = target;
+      switch ($match$._tag) {
+        case "ERef": {
+          const { name: tname } = $match$;
+          return and(_Map_has(tname, ctx.ns), !_Map_has(tname, ctx.env))
+            ? inferNsField$(ctx, tname, name, sp, st)
+            : inferFieldAccess$(ctx, e, target, name, sp, st);
+        }
+        default: {
+          return inferFieldAccess$(ctx, e, target, name, sp, st);
+        }
+      }
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Result_flatMap(
+        ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)) as Result<[Ty, St], IErr>,
+        inferTupleElems$(ctx, elements, st),
+      );
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "Array", elements, st);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "List", elements, st);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "Set", elements, st);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return inferMapExpr$(ctx, entries, st);
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return inferMatch$(ctx, scrutinee, arms, st);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return _Result_flatMap(
+        ([frame, bodyEnv, bodyOwner, st1]) =>
+          inferExpr$(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1),
+        inferLoopParamsFrom$(ctx, params, 0, ctx.env, [] as Ty[], ctx.letOwner, st),
+      );
+    }
+    case "ERecur": {
+      const { args, span: sp } = $match;
+      return inferRecur$(ctx, args, sp, st);
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Result_flatMap(
+        (st1) => Ok(_tuple(tString, st1)) as Result<[Ty, St], IErr>,
+        inferInterpParts$(ctx, parts, st),
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const inferExprRaw: _Curry<
   [
     ctx: {

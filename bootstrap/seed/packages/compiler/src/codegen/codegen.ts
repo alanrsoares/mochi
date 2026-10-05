@@ -856,6 +856,62 @@ const genCalleeFor$ = (ctx: GCtx, fn: Expr, argc: number): string => {
  * ordinary callee.
  */
 const genCalleeFor: _Curry<[ctx: GCtx, fn: Expr, argc: number], string> = _curry(3, genCalleeFor$);
+const isPipeHole: (a: Expr) => boolean = (a: Expr) =>
+  ((_v) => (_v._tag === "ERef" && _v.name === "_" ? true : false))(a);
+const hasPipeHole: (right: Expr) => boolean = (right: Expr) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { args: rargs } = $match;
+      return someOf(isPipeHole, rargs);
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const isPipeAtom: (e: Expr) => boolean = (e: Expr) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn: rfn, args: rargs, origin } = $match;
+      const v: Expr = isPipeAtom(left) ? left : Ast.ERef("$pipe", sp);
+      const call: Expr = Ast.ECall(
+        rfn,
+        map((a: Expr) => (isPipeHole(a) ? v : a), rargs),
+        origin,
+        sp,
+      );
+      return isPipeAtom(left)
+        ? call
+        : Ast.ELetIn("$pipe", sp, None as Option<TypeExpr>, left, call, sp);
+    }
+    default: {
+      return right;
+    }
+  }
+};
+const fillPipeHole: _Curry<[left: Expr, right: Expr, sp: SpanAt], Expr> = _curry(3, fillPipeHole$);
 const genExpr$ = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
@@ -924,20 +980,22 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
     }
     case "EPipe": {
       const { left, right, fast, span: sp } = $match;
-      return fast
-        ? ((_v) =>
-            _v._tag === "ECall"
-              ? (({ fn: rfn, args: rargs, origin }) =>
-                  genExpr$(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)))(_v)
-              : genExpr$(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))(right)
-        : ((_v) =>
-            _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v)
-              ? (({ fn: rfn, args: rargs }) =>
-                  `${genCalleeFor$(ctx, rfn, length(rargs) + 1)}(${_Str_join(
-                    ", ",
-                    map((a: Expr) => genExpr$(ctx, a), _Array_append(left, rargs)),
-                  )})`)(_v)
-              : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
+      return hasPipeHole(right)
+        ? genExpr$(ctx, fillPipeHole$(left, right, sp))
+        : fast
+          ? ((_v) =>
+              _v._tag === "ECall"
+                ? (({ fn: rfn, args: rargs, origin }) =>
+                    genExpr$(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)))(_v)
+                : genExpr$(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))(right)
+          : ((_v) =>
+              _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v)
+                ? (({ fn: rfn, args: rargs }) =>
+                    `${genCalleeFor$(ctx, rfn, length(rargs) + 1)}(${_Str_join(
+                      ", ",
+                      map((a: Expr) => genExpr$(ctx, a), _Array_append(left, rargs)),
+                    )})`)(_v)
+                : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
     }
     case "EDo": {
       const { exprs } = $match;

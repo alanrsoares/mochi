@@ -12235,7 +12235,7 @@ var checkAllWith = _curry14(3, (stmts, imported, quals) => _Result_match4(buildR
 }));
 var checkAll = (stmts) => checkAllWith(stmts, { ctors: new Map, types: new Map }, emptyQuals);
 
-import { Err as Err9, None as None16, Ok as Ok9, Some as Some16, _Array_append as _Array_append12, _Array_concat as _Array_concat7, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap5, _Array_get as _Array_get15, _Array_head as _Array_head4, _Array_prepend as _Array_prepend6, _Map_delete, _Map_get as _Map_get6, _Map_getOr as _Map_getOr6, _Map_has as _Map_has5, _Map_keys as _Map_keys6, _Map_set as _Map_set6, _Option_map, _Option_match as _Option_match16, _Option_unwrapOr as _Option_unwrapOr9, _Result_flatMap as _Result_flatMap7, _Result_map as _Result_map6, _Result_match as _Result_match5, _Set_add as _Set_add5, _Set_fromArray as _Set_fromArray5, _Set_has as _Set_has4, _Set_size as _Set_size2, _Set_toArray as _Set_toArray2, _Str_length as _Str_length5, _Str_replace, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith3, _curry as _curry17, _done as _done7, _recur as _recur7, _tuple as _tuple8, and as and11, eq as eq14, length as length13, map as map9, or as or8, reduce as reduce4 } from "@mochi/compiler/runtime";
+import { Err as Err9, None as None16, Ok as Ok9, Some as Some16, _Array_append as _Array_append12, _Array_concat as _Array_concat7, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap5, _Array_get as _Array_get15, _Array_head as _Array_head4, _Array_prepend as _Array_prepend6, _Map_delete, _Map_get as _Map_get6, _Map_getOr as _Map_getOr6, _Map_has as _Map_has5, _Map_keys as _Map_keys6, _Map_set as _Map_set6, _Option_map, _Option_match as _Option_match16, _Option_unwrapOr as _Option_unwrapOr9, _Result_flatMap as _Result_flatMap7, _Result_map as _Result_map6, _Result_match as _Result_match5, _Set_add as _Set_add5, _Set_fromArray as _Set_fromArray5, _Set_has as _Set_has4, _Set_size as _Set_size2, _Set_toArray as _Set_toArray2, _Str_length as _Str_length5, _Str_replace, _Str_split as _Str_split4, _Str_startsWith as _Str_startsWith3, _curry as _curry17, _done as _done7, _recur as _recur7, _tuple as _tuple8, and as and11, eq as eq14, filter as filter6, length as length13, map as map9, or as or8, reduce as reduce4 } from "@mochi/compiler/runtime";
 import { match as match8 } from "@onrails/pattern";
 
 import { _Array_get as _Array_get13, _Option_match as _Option_match14, _Set_add as _Set_add3, _Set_fromArray as _Set_fromArray3, _curry as _curry15 } from "@mochi/compiler/runtime";
@@ -13124,13 +13124,176 @@ var inferArms$ = (ctx, scrutT, resultT, arms, st) => ((_v) => _v.length === 0 ? 
   throw new Error("non-exhaustive match");
 })())(arms);
 var inferArms = _curry17(5, inferArms$);
+var isPipeHole = (a) => ((_v) => _v._tag === "ERef" && _v.name === "_" ? true : false)(a);
+var hasPipeHole = (right) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { args: rargs } = $match;
+      return length13(filter6(isPipeHole, rargs)) > 0;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var isPipeAtom = (e) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var fillPipeHole$ = (left, right, sp) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn: rfn, args: rargs, origin } = $match;
+      const v = isPipeAtom(left) ? left : ERef("$pipe", sp);
+      const call = ECall(rfn, map9((a) => isPipeHole(a) ? v : a, rargs), origin, sp);
+      return isPipeAtom(left) ? call : ELetIn("$pipe", sp, None16, left, call, sp);
+    }
+    default: {
+      return right;
+    }
+  }
+};
+var fillPipeHole = _curry17(3, fillPipeHole$);
 var inferMatch$ = (ctx, scrutinee, arms, st) => _Result_flatMap7(([scrutT, st1]) => (([resultT, st2]) => _Result_flatMap7((st3) => Ok9(_tuple8(resultT, st3)), inferArms$(ctx, scrutT, resultT, arms, st2)))(freshVar(st1)), inferExpr$(ctx, scrutinee, st));
 var inferMatch = _curry17(4, inferMatch$);
 var inferExpr$ = (ctx, e, st) => _Result_flatMap7(([t, st1]) => Ok9(_tuple8(t, ((_v) => _v._tag === "EField" ? (({ name, span: sp }) => recordBinder(sp, t, "property", name, None16, st1))(_v) : recordAt(exprSpan3(e), t, st1))(e))), inferExprRaw$(ctx, e, st));
 var inferExpr = _curry17(3, inferExpr$);
-var inferExprRaw$ = (ctx, e, st) => ((_v) => _v._tag === "ENum" ? Ok9(_tuple8(tNumber, st)) : _v._tag === "EUnit" ? Ok9(_tuple8(tUnit, st)) : _v._tag === "EBool" ? Ok9(_tuple8(tBool, st)) : _v._tag === "EStr" ? (({ value }) => Ok9(_tuple8(tLit(value), st)))(_v) : _v._tag === "ERef" ? (({ name, span: sp }) => _Option_match16(_Map_get6(name, ctx.env), () => ctx.open ? _Set_has4(name, ctx.localNames) ? Err9(typeErrHelp$(`'${name}' is not in scope here`, sp, "it is bound elsewhere in this file, but not around this use — check the binder's extent")) : (([t, st1]) => Ok9(_tuple8(t, st1)))(freshVar(st)) : _Option_match16(closestName(name, _Map_keys6(ctx.env)), () => Err9(typeErrHelp$(`unbound variable '${name}'`, sp, "bind the name before using it, or check the spelling")), (hint) => Err9(typeErrSuggest$(`unbound variable '${name}'`, sp, `did you mean '${hint}'?`, hint))), (sc) => (([t, st1]) => Ok9(_tuple8(t, _Option_match16(_Map_get6(name, ctx.letOwner), () => st1, (vsp) => noteUse(vsp, t, st1)))))(instantiate(sc, st))))(_v) : _v._tag === "ELambda" ? (({ params, body }) => (([posParams, labParams]) => (([paramTypes, bodyEnv, st1]) => _Result_flatMap7(([annotVars, st2]) => _Result_flatMap7(([labFields, st3]) => ((allTypes) => ((st3Labs) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(arrowChain$(allTypes, bodyT), recordNameParamsFrom$(posParams, paramTypes, st4))), inferExpr$(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3Labs)))(recordLabParamsFrom(labParams, labFields, st3)))(((_v) => _v.length === 0 ? paramTypes : _Array_append12(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams)), labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2)), constrainParamAnnotsFrom$(ctx, posParams, paramTypes, new Map, st1)))(bindParamsFrom$(posParams, ctx.env, st)))(splitLamParams$(params, [], [])))(_v) : _v._tag === "ELetIn" ? (({ name, nameSpan, annot, value, body, span: _span }) => ((_v) => _v._tag === "ELambda" ? ((lets) => ((idxOf) => ((tail) => (([localCtx, localSt, localErrs]) => _Option_match16(_Array_get15(0, localErrs), () => inferExpr$(localCtx, tail, localSt), (firstErr) => Err9(firstErr)))(processGroupsFrom$(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs)))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e)) : _Result_flatMap7(([valT, st1]) => _Result_flatMap7(([pinned, st2]) => ((widen) => ((sc) => ((vsp) => (($ctx) => inferExpr$($ctx, body, noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None16, st2))))(ctxWithLets(ctx, _Map_set6(name, sc, ctx.env), _Map_set6(name, vsp, ctx.letOwner))))(exprSpan3(value)))(generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen)))(_Option_match16(annot, () => true, () => false)), _Option_match16(annot, () => Ok9(_tuple8(valT, st1)), (te) => (([at, , stA]) => _Result_map6((stB) => _tuple8(at, stB), checkFits$(ctx, valT, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st1, ctx.aliasMap, _Set_fromArray5([]))))), inferExpr$(ctx, value, st)))(value))(_v) : _v._tag === "ELetBind" ? (({ param, paramSpan, monad, value, body }) => inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st))(_v) : _v._tag === "ECall" ? (({ fn, args, origin }) => ((api) => _Result_flatMap7((claimed) => _Option_match16(claimed, () => inferNormalCall$(ctx, fn, args, st), (r) => Ok9(r)), runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api)))({ inferExpr: _curry17(2, (e, st0) => inferExpr$(ctx, e, st0)), unify: _curry17(4, (left, right, st0, sp) => u$(ctx, left, right, st0, sp)) }))(_v) : _v._tag === "EPipe" && _v.fast === true ? (({ left, right, span: sp }) => ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => inferExpr$(ctx, ECall(rfn, _Array_prepend6(left, rargs), origin, sp), st))(_v) : inferExpr$(ctx, ECall(right, [left], None16, sp), st))(right))(_v) : _v._tag === "EPipe" ? (({ left, right, span: sp }) => inferExpr$(ctx, ECall(right, [left], None16, sp), st))(_v) : _v._tag === "EDo" ? (({ exprs }) => inferDo$(ctx, exprs, st))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => inferTernary$(ctx, cond, thenE, elseE, st))(_v) : _v._tag === "ERecord" ? (({ fields, spread, span: sp }) => _Option_match16(spread, () => _Result_flatMap7(([row, st1]) => Ok9(_tuple8(tRecord(row), st1)), inferRecordRow$(ctx, fields, st)), (spreadExpr) => _Result_flatMap7(([row, st1]) => _Result_flatMap7(([baseT, st2]) => (([tailVar, st3]) => _Result_flatMap7((st4) => Ok9(_tuple8(baseT, st4)), u$(ctx, baseT, tRecord(rWithTail$(row, tailVar)), st3, sp)))(freshRowVar(st2)), inferExpr$(ctx, spreadExpr, st1)), inferRecordRow$(ctx, fields, st))))(_v) : _v._tag === "EField" ? (({ target, name, span: sp }) => ((_v) => _v._tag === "ERef" ? (({ name: tname }) => and11(_Map_has5(tname, ctx.ns), !_Map_has5(tname, ctx.env)) ? inferNsField$(ctx, tname, name, sp, st) : inferFieldAccess$(ctx, e, target, name, sp, st))(_v) : inferFieldAccess$(ctx, e, target, name, sp, st))(target))(_v) : _v._tag === "ETuple" ? (({ elements }) => _Result_flatMap7(([elems, st1]) => Ok9(_tuple8(tTuple(elems), st1)), inferTupleElems$(ctx, elements, st)))(_v) : _v._tag === "EArr" ? (({ elements }) => inferSeqSlots$(ctx, "Array", elements, st))(_v) : _v._tag === "EList" ? (({ elements }) => inferSeqSlots$(ctx, "List", elements, st))(_v) : _v._tag === "ESet" ? (({ elements }) => inferSeqSlots$(ctx, "Set", elements, st))(_v) : _v._tag === "EMap" ? (({ entries }) => inferMapExpr$(ctx, entries, st))(_v) : _v._tag === "EMatch" ? (({ scrutinee, arms }) => inferMatch$(ctx, scrutinee, arms, st))(_v) : _v._tag === "ELoop" ? (({ params, body }) => _Result_flatMap7(([frame, bodyEnv, bodyOwner, st1]) => inferExpr$(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1), inferLoopParamsFrom$(ctx, params, 0, ctx.env, [], ctx.letOwner, st)))(_v) : _v._tag === "ERecur" ? (({ args, span: sp }) => inferRecur$(ctx, args, sp, st))(_v) : _v._tag === "EInterp" ? (({ parts }) => _Result_flatMap7((st1) => Ok9(_tuple8(tString, st1)), inferInterpParts$(ctx, parts, st)))(_v) : (() => {
-  throw new Error("non-exhaustive match");
-})())(e);
+var inferExprRaw$ = (ctx, e, st) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return Ok9(_tuple8(tNumber, st));
+    }
+    case "EUnit": {
+      return Ok9(_tuple8(tUnit, st));
+    }
+    case "EBool": {
+      return Ok9(_tuple8(tBool, st));
+    }
+    case "EStr": {
+      const { value } = $match;
+      return Ok9(_tuple8(tLit(value), st));
+    }
+    case "ERef": {
+      const { name, span: sp } = $match;
+      return _Option_match16(_Map_get6(name, ctx.env), () => ctx.open ? _Set_has4(name, ctx.localNames) ? Err9(typeErrHelp$(`'${name}' is not in scope here`, sp, "it is bound elsewhere in this file, but not around this use — check the binder's extent")) : (([t, st1]) => Ok9(_tuple8(t, st1)))(freshVar(st)) : _Option_match16(closestName(name, _Map_keys6(ctx.env)), () => Err9(typeErrHelp$(`unbound variable '${name}'`, sp, "bind the name before using it, or check the spelling")), (hint) => Err9(typeErrSuggest$(`unbound variable '${name}'`, sp, `did you mean '${hint}'?`, hint))), (sc) => (([t, st1]) => Ok9(_tuple8(t, _Option_match16(_Map_get6(name, ctx.letOwner), () => st1, (vsp) => noteUse(vsp, t, st1)))))(instantiate(sc, st)));
+    }
+    case "ELambda": {
+      const { params, body } = $match;
+      return (([posParams, labParams]) => (([paramTypes, bodyEnv, st1]) => _Result_flatMap7(([annotVars, st2]) => _Result_flatMap7(([labFields, st3]) => ((allTypes) => ((st3Labs) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(arrowChain$(allTypes, bodyT), recordNameParamsFrom$(posParams, paramTypes, st4))), inferExpr$(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3Labs)))(recordLabParamsFrom(labParams, labFields, st3)))(((_v) => _v.length === 0 ? paramTypes : _Array_append12(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams)), labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2)), constrainParamAnnotsFrom$(ctx, posParams, paramTypes, new Map, st1)))(bindParamsFrom$(posParams, ctx.env, st)))(splitLamParams$(params, [], []));
+    }
+    case "ELetIn": {
+      const { name, nameSpan, annot, value, body, span: _span } = $match;
+      const $match$ = value;
+      switch ($match$._tag) {
+        case "ELambda": {
+          const lets = localLetsFrom(e);
+          const idxOf = idxOfMap(lets);
+          const tail = localTail(e);
+          return (([localCtx, localSt, localErrs]) => _Option_match16(_Array_get15(0, localErrs), () => inferExpr$(localCtx, tail, localSt), (firstErr) => Err9(firstErr)))(processGroupsFrom$(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs));
+        }
+        default: {
+          return _Result_flatMap7(([valT, st1]) => _Result_flatMap7(([pinned, st2]) => ((widen) => ((sc) => ((vsp) => (($ctx) => inferExpr$($ctx, body, noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None16, st2))))(ctxWithLets(ctx, _Map_set6(name, sc, ctx.env), _Map_set6(name, vsp, ctx.letOwner))))(exprSpan3(value)))(generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen)))(_Option_match16(annot, () => true, () => false)), _Option_match16(annot, () => Ok9(_tuple8(valT, st1)), (te) => (([at, , stA]) => _Result_map6((stB) => _tuple8(at, stB), checkFits$(ctx, valT, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st1, ctx.aliasMap, _Set_fromArray5([]))))), inferExpr$(ctx, value, st));
+        }
+      }
+    }
+    case "ELetBind": {
+      const { param, paramSpan, monad, value, body } = $match;
+      return inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st);
+    }
+    case "ECall": {
+      const { fn, args, origin } = $match;
+      const api = { inferExpr: _curry17(2, (e, st0) => inferExpr$(ctx, e, st0)), unify: _curry17(4, (left, right, st0, sp) => u$(ctx, left, right, st0, sp)) };
+      return _Result_flatMap7((claimed) => _Option_match16(claimed, () => inferNormalCall$(ctx, fn, args, st), (r) => Ok9(r)), runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api));
+    }
+    case "EPipe": {
+      const { left, right, fast, span: sp } = $match;
+      return inferExpr$(ctx, hasPipeHole(right) ? fillPipeHole$(left, right, sp) : fast ? ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => ECall(rfn, _Array_prepend6(left, rargs), origin, sp))(_v) : ECall(right, [left], None16, sp))(right) : ECall(right, [left], None16, sp), st);
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return inferDo$(ctx, exprs, st);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return inferTernary$(ctx, cond, thenE, elseE, st);
+    }
+    case "ERecord": {
+      const { fields, spread, span: sp } = $match;
+      return _Option_match16(spread, () => _Result_flatMap7(([row, st1]) => Ok9(_tuple8(tRecord(row), st1)), inferRecordRow$(ctx, fields, st)), (spreadExpr) => _Result_flatMap7(([row, st1]) => _Result_flatMap7(([baseT, st2]) => (([tailVar, st3]) => _Result_flatMap7((st4) => Ok9(_tuple8(baseT, st4)), u$(ctx, baseT, tRecord(rWithTail$(row, tailVar)), st3, sp)))(freshRowVar(st2)), inferExpr$(ctx, spreadExpr, st1)), inferRecordRow$(ctx, fields, st)));
+    }
+    case "EField": {
+      const { target, name, span: sp } = $match;
+      const $match$ = target;
+      switch ($match$._tag) {
+        case "ERef": {
+          const { name: tname } = $match$;
+          return and11(_Map_has5(tname, ctx.ns), !_Map_has5(tname, ctx.env)) ? inferNsField$(ctx, tname, name, sp, st) : inferFieldAccess$(ctx, e, target, name, sp, st);
+        }
+        default: {
+          return inferFieldAccess$(ctx, e, target, name, sp, st);
+        }
+      }
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Result_flatMap7(([elems, st1]) => Ok9(_tuple8(tTuple(elems), st1)), inferTupleElems$(ctx, elements, st));
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "Array", elements, st);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "List", elements, st);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "Set", elements, st);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return inferMapExpr$(ctx, entries, st);
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return inferMatch$(ctx, scrutinee, arms, st);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return _Result_flatMap7(([frame, bodyEnv, bodyOwner, st1]) => inferExpr$(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1), inferLoopParamsFrom$(ctx, params, 0, ctx.env, [], ctx.letOwner, st));
+    }
+    case "ERecur": {
+      const { args, span: sp } = $match;
+      return inferRecur$(ctx, args, sp, st);
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Result_flatMap7((st1) => Ok9(_tuple8(tString, st1)), inferInterpParts$(ctx, parts, st));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 var inferExprRaw = _curry17(3, inferExprRaw$);
 var inferDo$ = (ctx, exprs, st) => ((_v) => _v.length === 0 ? Err9(typeErr$("internal: empty do block", { start: 0, end: 0 })) : _v.length === 1 ? (([last]) => inferExpr$(ctx, last, st))(_v) : _v.length >= 1 ? (([first, ...rest]) => _Result_flatMap7(([, st1]) => inferDo$(ctx, rest, st1), inferExpr$(ctx, first, st)))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -13688,7 +13851,7 @@ var exportedSchemesFrom = _curry17(4, (stmts, i0, env, acc0) => {
 });
 var exportedSchemes = _curry17(2, (stmts, env) => exportedSchemesFrom(stmts, 0, env, new Map));
 
-import { None as None18, Some as Some18, _Array_append as _Array_append14, _Array_concat as _Array_concat9, _Array_flatMap as _Array_flatMap6, _Array_get as _Array_get17, _Array_prepend as _Array_prepend8, _Map_get as _Map_get8, _Map_getOr as _Map_getOr7, _Map_has as _Map_has6, _Map_keys as _Map_keys7, _Map_set as _Map_set7, _Option_contains as _Option_contains3, _Option_exists as _Option_exists4, _Option_isNone as _Option_isNone2, _Option_isSome as _Option_isSome5, _Option_match as _Option_match18, _Option_unwrapOr as _Option_unwrapOr11, _Set_add as _Set_add6, _Set_fromArray as _Set_fromArray6, _Set_has as _Set_has5, _Set_size as _Set_size3, _Set_toArray as _Set_toArray3, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt7, _Str_concat as _Str_concat2, _Str_endsWith as _Str_endsWith2, _Str_join as _Str_join8, _Str_length as _Str_length6, _Str_replace as _Str_replace2, _Str_slice as _Str_slice3, _Str_split as _Str_split5, _Str_startsWith as _Str_startsWith4, _curry as _curry20, _done as _done8, _recur as _recur8, _tuple as _tuple9, and as and12, concat, eq as eq16, filter as filter6, length as length15, map as map12, or as or10, reduce as reduce5, show as show8 } from "@mochi/compiler/runtime";
+import { None as None18, Some as Some18, _Array_append as _Array_append14, _Array_concat as _Array_concat9, _Array_flatMap as _Array_flatMap6, _Array_get as _Array_get17, _Array_prepend as _Array_prepend8, _Map_get as _Map_get8, _Map_getOr as _Map_getOr7, _Map_has as _Map_has6, _Map_keys as _Map_keys7, _Map_set as _Map_set7, _Option_contains as _Option_contains3, _Option_exists as _Option_exists4, _Option_isNone as _Option_isNone2, _Option_isSome as _Option_isSome5, _Option_match as _Option_match18, _Option_unwrapOr as _Option_unwrapOr11, _Set_add as _Set_add6, _Set_fromArray as _Set_fromArray6, _Set_has as _Set_has5, _Set_size as _Set_size3, _Set_toArray as _Set_toArray3, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt7, _Str_concat as _Str_concat2, _Str_endsWith as _Str_endsWith2, _Str_join as _Str_join8, _Str_length as _Str_length6, _Str_replace as _Str_replace2, _Str_slice as _Str_slice3, _Str_split as _Str_split5, _Str_startsWith as _Str_startsWith4, _curry as _curry20, _done as _done8, _recur as _recur8, _tuple as _tuple9, and as and12, concat, eq as eq16, filter as filter7, length as length15, map as map12, or as or10, reduce as reduce5, show as show8 } from "@mochi/compiler/runtime";
 import { match as match9 } from "@onrails/pattern";
 
 import { None as None17, Some as Some17, _Array_append as _Array_append13, _Array_concat as _Array_concat8, _Array_get as _Array_get16, _Array_head as _Array_head5, _Array_prepend as _Array_prepend7, _Map_get as _Map_get7, _Option_isSome as _Option_isSome4, _Option_match as _Option_match17, _Option_unwrapOr as _Option_unwrapOr10, _Str_join as _Str_join7, _curry as _curry19, eq as eq15, length as length14, map as map11, or as or9, show as show7 } from "@mochi/compiler/runtime";
@@ -14144,6 +14307,54 @@ var genCalleeFor$ = (ctx, fn, argc) => {
   }
 };
 var genCalleeFor = _curry20(3, genCalleeFor$);
+var isPipeHole2 = (a) => ((_v) => _v._tag === "ERef" && _v.name === "_" ? true : false)(a);
+var hasPipeHole2 = (right) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { args: rargs } = $match;
+      return someOf4(isPipeHole2, rargs);
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var isPipeAtom2 = (e) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ERef": {
+      return true;
+    }
+    case "ENum": {
+      return true;
+    }
+    case "EStr": {
+      return true;
+    }
+    case "EBool": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var fillPipeHole$2 = (left, right, sp) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn: rfn, args: rargs, origin } = $match;
+      const v = isPipeAtom2(left) ? left : ERef("$pipe", sp);
+      const call = ECall(rfn, map12((a) => isPipeHole2(a) ? v : a, rargs), origin, sp);
+      return isPipeAtom2(left) ? call : ELetIn("$pipe", sp, None18, left, call, sp);
+    }
+    default: {
+      return right;
+    }
+  }
+};
+var fillPipeHole2 = _curry20(3, fillPipeHole$2);
 var genExpr$ = (ctx, e) => {
   const $match = e;
   switch ($match._tag) {
@@ -14191,7 +14402,7 @@ var genExpr$ = (ctx, e) => {
     }
     case "EPipe": {
       const { left, right, fast, span: sp } = $match;
-      return fast ? ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => genExpr$(ctx, ECall(rfn, _Array_prepend8(left, rargs), origin, sp)))(_v) : genExpr$(ctx, ECall(right, [left], None18, sp)))(right) : ((_v) => _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v) ? (({ fn: rfn, args: rargs }) => `${genCalleeFor$(ctx, rfn, length15(rargs) + 1)}(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), _Array_append14(left, rargs)))})`)(_v) : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
+      return hasPipeHole2(right) ? genExpr$(ctx, fillPipeHole$2(left, right, sp)) : fast ? ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => genExpr$(ctx, ECall(rfn, _Array_prepend8(left, rargs), origin, sp)))(_v) : genExpr$(ctx, ECall(right, [left], None18, sp)))(right) : ((_v) => _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v) ? (({ fn: rfn, args: rargs }) => `${genCalleeFor$(ctx, rfn, length15(rargs) + 1)}(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), _Array_append14(left, rargs)))})`)(_v) : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
     }
     case "EDo": {
       const { exprs } = $match;
@@ -15671,7 +15882,7 @@ var exprRefs$ = (ctx, e, acc) => {
   }
 };
 var exprRefs = _curry20(3, exprRefs$);
-var boundNamesFrom$ = (valueRefs, stmts, i, acc) => _Option_match18(_Array_get17(i, stmts), () => acc, (s) => boundNamesFrom$(valueRefs, stmts, i + 1, ((_v) => _v._tag === "SLet" ? (({ name }) => _Set_add6(name, acc))(_v) : _v._tag === "SExtern" ? (({ name }) => _Set_add6(name, acc))(_v) : _v._tag === "SType" ? (({ ctors, exported }) => _Set_union(acc, _Set_fromArray6(map12((c) => c.name, filter6((c) => or10(exported, _Set_has5(c.name, valueRefs)), ctors)))))(_v) : _v._tag === "SImport" ? (({ names }) => _Set_union(acc, _Set_fromArray6(map12((n) => n.name, names))))(_v) : _v._tag === "SImportNs" ? (({ alias }) => _Set_add6(alias.name, acc))(_v) : _v._tag === "SError" ? acc : _v._tag === "SExpr" ? acc : (() => {
+var boundNamesFrom$ = (valueRefs, stmts, i, acc) => _Option_match18(_Array_get17(i, stmts), () => acc, (s) => boundNamesFrom$(valueRefs, stmts, i + 1, ((_v) => _v._tag === "SLet" ? (({ name }) => _Set_add6(name, acc))(_v) : _v._tag === "SExtern" ? (({ name }) => _Set_add6(name, acc))(_v) : _v._tag === "SType" ? (({ ctors, exported }) => _Set_union(acc, _Set_fromArray6(map12((c) => c.name, filter7((c) => or10(exported, _Set_has5(c.name, valueRefs)), ctors)))))(_v) : _v._tag === "SImport" ? (({ names }) => _Set_union(acc, _Set_fromArray6(map12((n) => n.name, names))))(_v) : _v._tag === "SImportNs" ? (({ alias }) => _Set_add6(alias.name, acc))(_v) : _v._tag === "SError" ? acc : _v._tag === "SExpr" ? acc : (() => {
   throw new Error("non-exhaustive match");
 })())(s)));
 var boundNamesFrom = _curry20(4, boundNamesFrom$);
@@ -15715,7 +15926,7 @@ var runtimeRefNames = _curry20(4, (ctx, stmts, jsDefs, runtimeDeps) => {
   const refs0 = collectRefsFrom$(ctx, stmts, 0, _Set_fromArray6([]));
   const refs = closeRefsFrom(_Set_toArray3(refs0), 0, refs0, runtimeDeps);
   const bound = boundNames$(ctx.valueRefs, stmts);
-  return filter6((n) => and12(_Set_has5(n, refs), !_Set_has5(n, bound)), _Map_keys7(jsDefs));
+  return filter7((n) => and12(_Set_has5(n, refs), !_Set_has5(n, bound)), _Map_keys7(jsDefs));
 });
 var preludePreamble$ = (ctx, stmts, jsDefs, runtimeDeps) => {
   const names = runtimeRefNames(ctx, stmts, jsDefs, runtimeDeps);
@@ -15770,9 +15981,9 @@ var runtimeDepNames = _curry20(5, (stmts, imported, ns, jsDefs, runtimeDeps) => 
 var codegen$ = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) => codegenWith(stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts);
 var codegen = _curry20(6, codegen$);
 
-import { None as None20, Some as Some20, _Array_append as _Array_append16, _Array_concat as _Array_concat11, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get19, _Array_prepend as _Array_prepend10, _Array_reverse, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take4, _Map_delete as _Map_delete3, _Map_get as _Map_get10, _Map_keys as _Map_keys9, _Map_set as _Map_set9, _Map_size as _Map_size2, _Map_values as _Map_values3, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome6, _Option_map as _Option_map3, _Option_match as _Option_match20, _Option_unwrapOr as _Option_unwrapOr13, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join10, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith6, _curry as _curry22, _tuple as _tuple11, and as and14, concat as concat2, eq as eq18, filter as filter8, length as length17, map as map14, or as or12, reduce as reduce6, show as show10 } from "@mochi/compiler/runtime";
+import { None as None20, Some as Some20, _Array_append as _Array_append16, _Array_concat as _Array_concat11, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get19, _Array_prepend as _Array_prepend10, _Array_reverse, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take4, _Map_delete as _Map_delete3, _Map_get as _Map_get10, _Map_keys as _Map_keys9, _Map_set as _Map_set9, _Map_size as _Map_size2, _Map_values as _Map_values3, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome6, _Option_map as _Option_map3, _Option_match as _Option_match20, _Option_unwrapOr as _Option_unwrapOr13, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_contains as _Str_contains2, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join10, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith6, _curry as _curry22, _tuple as _tuple11, and as and14, concat as concat2, eq as eq18, filter as filter9, length as length17, map as map14, or as or12, reduce as reduce6, show as show10 } from "@mochi/compiler/runtime";
 
-import { None as None19, Some as Some19, _Array_append as _Array_append15, _Array_concat as _Array_concat10, _Array_get as _Array_get18, _Array_prepend as _Array_prepend9, _Array_sort, _Map_delete as _Map_delete2, _Map_get as _Map_get9, _Map_has as _Map_has7, _Map_keys as _Map_keys8, _Map_set as _Map_set8, _Map_size, _Option_flatMap as _Option_flatMap2, _Option_map as _Option_map2, _Option_match as _Option_match19, _Option_unwrapOr as _Option_unwrapOr12, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray7, _Set_has as _Set_has6, _Str_codeAt as _Str_codeAt8, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join9, _Str_length as _Str_length7, _Str_slice as _Str_slice4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry21, _tuple as _tuple10, and as and13, eq as eq17, filter as filter7, length as length16, map as map13, or as or11, show as show9 } from "@mochi/compiler/runtime";
+import { None as None19, Some as Some19, _Array_append as _Array_append15, _Array_concat as _Array_concat10, _Array_get as _Array_get18, _Array_prepend as _Array_prepend9, _Array_sort, _Map_delete as _Map_delete2, _Map_get as _Map_get9, _Map_has as _Map_has7, _Map_keys as _Map_keys8, _Map_set as _Map_set8, _Map_size, _Option_flatMap as _Option_flatMap2, _Option_map as _Option_map2, _Option_match as _Option_match19, _Option_unwrapOr as _Option_unwrapOr12, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray7, _Set_has as _Set_has6, _Str_codeAt as _Str_codeAt8, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join9, _Str_length as _Str_length7, _Str_slice as _Str_slice4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry21, _tuple as _tuple10, and as and13, eq as eq17, filter as filter8, length as length16, map as map13, or as or11, show as show9 } from "@mochi/compiler/runtime";
 var tsEnv$ = (vars, recs) => ({ vars, recs });
 var tsEnv = _curry21(2, tsEnv$);
 var noVars = new Map;
@@ -15966,7 +16177,7 @@ var pinInTy = _curry21(3, (t, env, st) => {
 var pinAliasVars = _curry21(2, (t, env) => pinInTy(t, env, emptyPins).pins);
 var overlayPins = _curry21(4, (ids, pins, names, i) => _Option_match19(_Array_get18(i, ids), () => names, (id) => _Option_match19(_Map_get9(id, pins), () => overlayPins(ids, pins, names, i + 1), (concrete) => overlayPins(ids, pins, _Map_set8(id, concrete, names), i + 1))));
 var headLetters = _curry21(2, (names, pins) => {
-  const letters = map13((id) => _Option_unwrapOr12("", _Map_get9(id, names)), filter7((id) => !_Map_has7(id, pins), _Map_keys8(names)));
+  const letters = map13((id) => _Option_unwrapOr12("", _Map_get9(id, names)), filter8((id) => !_Map_has7(id, pins), _Map_keys8(names)));
   return length16(letters) === 0 ? "" : `<${_Str_join9(", ", letters)}>`;
 });
 var schemeRender = _curry21(2, (sc, recs) => {
@@ -16501,12 +16712,12 @@ var emitTsModuleWith = _curry22(13, (stmts, env, types, letParams, aliases, impo
 
 ` : ""}${_Str_join10(`
 
-`, filter8((part) => part !== "", [_Str_join10(`
+`, filter9((part) => part !== "", [_Str_join10(`
 `, header), _Str_join10(`
 `, importLines), typeImportLine, runtimeLine, body]))}`, `
 `))(length17(typeDeps) === 0 ? "" : `import type { ${_Str_join10(", ", _Array_sort2(typeDeps))} } from "${runtimeImport}";`))(_Array_concat11(_Str_contains2("_Curry<", `${_Str_join10(`
 `, header)}
-${body}`) ? ["_Curry"] : [], builtinTypeNamesFor$(declared, wanted, body, 0))))(typeHeader))(length17(deps) === 0 ? "" : `import { ${_Str_join10(", ", _Array_sort2(deps))} } from "${runtimeImport}";`))(filter8((d) => or12(and14(and14(and14(and14(and14(and14(and14(and14(and14(d !== "add", d !== "sub"), d !== "mul"), d !== "div"), d !== "lt"), d !== "lte"), d !== "gt"), d !== "gte"), d !== "eq"), d !== "not"), _Str_contains2(d, body)), deps));
+${body}`) ? ["_Curry"] : [], builtinTypeNamesFor$(declared, wanted, body, 0))))(typeHeader))(length17(deps) === 0 ? "" : `import { ${_Str_join10(", ", _Array_sort2(deps))} } from "${runtimeImport}";`))(filter9((d) => or12(and14(and14(and14(and14(and14(and14(and14(and14(and14(d !== "add", d !== "sub"), d !== "mul"), d !== "div"), d !== "lt"), d !== "lte"), d !== "gt"), d !== "gte"), d !== "eq"), d !== "not"), _Str_contains2(d, body)), deps));
 });
 var emitTsModule = _curry22(11, (stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport) => emitTsModuleWith(stmts, env, types, letParams, aliases, imported, importLines, ns, jsDefs, runtimeDeps, runtimeImport, true, bindingHooksFor(None20)));
 var freeIdsIn$ = (t, acc) => {
@@ -16596,11 +16807,11 @@ var externDecl = (e) => {
 var externModuleDts = _curry22(2, (externs, aliases) => {
   const wanted = reduce6(_curry22(2, (acc, e) => consInTy$(e.scheme.ty, acc)), _Set_fromArray8([]), externs);
   return concat2(_Str_join10(`
-`, _Array_concat11(map14((bt) => typeDecl$(bt.name, bt.params, bt.ctors, aliases, new Map), filter8((bt) => _Set_has7(bt.name, wanted), builtinTypeDecls)), map14(externDecl, _Array_dedupeBy((e) => e.imported, externs)))), `
+`, _Array_concat11(map14((bt) => typeDecl$(bt.name, bt.params, bt.ctors, aliases, new Map), filter9((bt) => _Set_has7(bt.name, wanted), builtinTypeDecls)), map14(externDecl, _Array_dedupeBy((e) => e.imported, externs)))), `
 `);
 });
 
-import { None as None21, Some as Some21, _Array_append as _Array_append17, _Array_concat as _Array_concat12, _Array_contains as _Array_contains5, _Array_flatMap as _Array_flatMap7, _Array_get as _Array_get20, _Map_get as _Map_get11, _Map_keys as _Map_keys10, _Map_set as _Map_set10, _Map_size as _Map_size3, _Option_match as _Option_match21, _Str_codeAt as _Str_codeAt9, _Str_length as _Str_length8, _Str_startsWith as _Str_startsWith7, _curry as _curry23, _tuple as _tuple12, and as and15, eq as eq19, filter as filter9, map as map15, or as or13, reduce as reduce7 } from "@mochi/compiler/runtime";
+import { None as None21, Some as Some21, _Array_append as _Array_append17, _Array_concat as _Array_concat12, _Array_contains as _Array_contains5, _Array_flatMap as _Array_flatMap7, _Array_get as _Array_get20, _Map_get as _Map_get11, _Map_keys as _Map_keys10, _Map_set as _Map_set10, _Map_size as _Map_size3, _Option_match as _Option_match21, _Str_codeAt as _Str_codeAt9, _Str_length as _Str_length8, _Str_startsWith as _Str_startsWith7, _curry as _curry23, _tuple as _tuple12, and as and15, eq as eq19, filter as filter10, map as map15, or as or13, reduce as reduce7 } from "@mochi/compiler/runtime";
 import { match as match10 } from "@onrails/pattern";
 var emptyOrigins = { values: new Map, types: new Map, ctors: new Map };
 var occ$ = (name, space, def, span, role) => ({ name, space, defPath: def.path, defStart: def.start, defEnd: def.end, start: span.start, end: span.end, role });

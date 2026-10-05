@@ -478,6 +478,39 @@ let genCalleeFor = (ctx: GCtx, fn, argc) => switch fn {
   | _ => ctx->genCallee(fn)
 }
 
+// Pipe placeholder (ADR 0153): `a |> f(x, _, y)` / `a -> f(x, _, y)` is
+// `f(x, a, y)`. infer.mochi repeats this lowering — keep the two in step.
+let isPipeHole = a => switch a { | Ast.ERef("_", _) => true | _ => false }
+
+let hasPipeHole = right => switch right {
+  | Ast.ECall(_, rargs, _, _) => someOf(isPipeHole, rargs)
+  | _ => false
+}
+
+// `left` is evaluated once, before the call's arguments: anything but a plain
+// reference is bound to `$pipe` first, then every `_` reads that binding.
+let isPipeAtom = e => switch e {
+  | Ast.ERef(_, _) => true
+  | Ast.ENum(_, _, _) => true
+  | Ast.EStr(_, _) => true
+  | Ast.EBool(_, _) => true
+  | _ => false
+}
+
+let fillPipeHole = (left, right, sp) => switch right {
+  | Ast.ECall(rfn, rargs, origin, _) => let v = isPipeAtom(left)
+      ? left
+      : Ast.ERef("$pipe", sp) in
+    let call = Ast.ECall(
+      rfn,
+      rargs |> map(a => isPipeHole(a) ? v : a),
+      origin,
+      sp
+    ) in
+      isPipeAtom(left) ? call : Ast.ELetIn("$pipe", sp, None, left, call, sp)
+  | _ => right
+}
+
 let genExpr = (ctx: GCtx, e) => switch e {
   | Ast.ENum(_, raw, _) => raw
   | Ast.EUnit(_) => "undefined"
@@ -534,7 +567,9 @@ let genExpr = (ctx: GCtx, e) => switch e {
   | Ast.EPipe(left, right, fast, sp) =>
     // A fast pipe IS a call (ADR 0069) — lower it and take the ordinary call
     // path, so argument order lives in `Ast.pipeCall` alone.
-    fast
+    hasPipeHole(right)
+      ? ctx->genExpr(fillPipeHole(left, right, sp))
+      : fast
       ? switch right {
         | Ast.ECall(rfn, rargs, origin, _) => ctx->genExpr(
             Ast.ECall(rfn, Array.prepend(left, rargs), origin, sp)

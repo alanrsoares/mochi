@@ -1009,6 +1009,42 @@ let inferArms = (ctx: Ctx<a>, scrutT, resultT, arms, st: Types.St) => switch arm
     let? st5 = ctx->u(resultT, bodyT, st4, exprSpan(arm.body)) in
       ctx->inferArms(scrutT, resultT, rest, st5)
 }
+// Pipe placeholder (ADR 0153): `a |> f(x, _, y)` / `a -> f(x, _, y)` is
+// `f(x, a, y)`. Every top-level `_` argument is filled;
+// codegen.mochi repeats this lowering — keep the two in step.
+let isPipeHole = a => switch a { | Ast.ERef("_", _) => true | _ => false }
+
+let hasPipeHole = right => switch right {
+  | Ast.ECall(_, rargs, _, _) => Array.length(
+      Array.filter(isPipeHole, rargs)
+    ) > 0
+  | _ => false
+}
+
+// `left` is evaluated once, before the call's arguments: anything but a plain
+// reference is bound to `$pipe` first, then every `_` reads that binding.
+let isPipeAtom = e => switch e {
+  | Ast.ERef(_, _) => true
+  | Ast.ENum(_, _, _) => true
+  | Ast.EStr(_, _) => true
+  | Ast.EBool(_, _) => true
+  | _ => false
+}
+
+let fillPipeHole = (left, right, sp) => switch right {
+  | Ast.ECall(rfn, rargs, origin, _) => let v = isPipeAtom(left)
+      ? left
+      : Ast.ERef("$pipe", sp) in
+    let call = Ast.ECall(
+      rfn,
+      rargs |> map(a => isPipeHole(a) ? v : a),
+      origin,
+      sp
+    ) in
+      isPipeAtom(left) ? call : Ast.ELetIn("$pipe", sp, None, left, call, sp)
+  | _ => right
+}
+
 let inferMatch = (ctx: Ctx<a>, scrutinee, arms, st: Types.St) =>
   let? (scrutT, st1) = ctx->inferExpr(scrutinee, st) in
   let (resultT, st2) = freshVar(st1) in
@@ -1178,19 +1214,25 @@ let inferExprRaw = (ctx: Ctx<a>, e, st: Types.St) => switch e {
         | Some(r) => Ok(r)
         | None => ctx->inferNormalCall(fn, args, st)
       }
-  | Ast.EPipe(left, right, true, sp) =>
+  | Ast.EPipe(left, right, fast, sp) =>
     // `a |> f` is `f(a)`; the fast pipe PREPENDS into the call on its right, so
-    // `a -> f(b)` is `f(a, b)` (ADR 0069). codegen.mochi repeats this lowering —
-    // keep the two argument orders in step.
-    switch right {
-      | Ast.ECall(rfn, rargs, origin, _) => ctx->inferExpr(
-          Ast.ECall(rfn, Array.prepend(left, rargs), origin, sp),
-          st
-        )
-      | _ => ctx->inferExpr(Ast.ECall(right, [left], None, sp), st)
-    }
-  | Ast.EPipe(left, right, _, sp) => ctx->inferExpr(
-      Ast.ECall(right, [left], None, sp),
+    // `a -> f(b)` is `f(a, b)` (ADR 0069); a `_` argument takes the value in
+    // place (ADR 0153). codegen.mochi repeats this lowering — keep the two
+    // argument orders in step.
+    ctx->inferExpr(
+      hasPipeHole(right)
+        ? fillPipeHole(left, right, sp)
+        : fast
+        ? switch right {
+          | Ast.ECall(rfn, rargs, origin, _) => Ast.ECall(
+              rfn,
+              Array.prepend(left, rargs),
+              origin,
+              sp
+            )
+          | _ => Ast.ECall(right, [left], None, sp)
+        }
+        : Ast.ECall(right, [left], None, sp),
       st
     )
   | Ast.EDo(exprs, _) => ctx->inferDo(exprs, st)
