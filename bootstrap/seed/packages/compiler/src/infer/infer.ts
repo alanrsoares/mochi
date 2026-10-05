@@ -1819,6 +1819,123 @@ const inferCallArgs: _Curry<
   ],
   Result<[Ty, St], IErr>
 > = _curry(5, inferCallArgs$);
+const isEqLikeCall$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, AliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fn: Expr,
+): boolean => {
+  const $match = fn;
+  switch ($match._tag) {
+    case "ERef": {
+      const { name } = $match;
+      return and(or(name === "eq", name === "compare"), _Map_has(name, ctx.letOwner) === false);
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const isEqLikeCall: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, AliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    fn: Expr,
+  ],
+  boolean
+> = _curry(2, isEqLikeCall$);
+const reachesList: (t: Ty) => boolean = (t: Ty) =>
+  ((_v) =>
+    _v._tag === "TyCon" && _v.name === "List"
+      ? true
+      : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2
+        ? (({ args: [, v] }) => reachesList(v))(_v as Extract<Ty, { _tag: "TyCon" }>)
+        : _v._tag === "TyCon" && _v.name === "Set"
+          ? false
+          : _v._tag === "TyCon"
+            ? (({ args: targs }) => length(filter(reachesList, targs)) > 0)(_v)
+            : _v._tag === "TyRecord"
+              ? (({ row }) => rowReachesList(row))(_v)
+              : false)(t);
+const rowReachesList: (row: Row) => boolean = (row: Row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { fieldType: ft, rest } = $match;
+      return or(reachesList(ft), rowReachesList(rest));
+    }
+    default: {
+      return false;
+    }
+  }
+};
+const checkEqEligible$ = (
+  ctx: {
+    env: Map<string, Scheme>;
+    open: boolean;
+    ns: Map<string, Map<string, Scheme>>;
+    aliasMap: Map<string, AliasInfo>;
+    plugins: HostPlugin[];
+    loopStack: Ty[][];
+    letOwner: Map<string, SpanAt>;
+    localNames: Set<string>;
+    scopeNames: string[];
+  },
+  fn: Expr,
+  fnT: Ty,
+  st: St,
+): Result<undefined, IErr> =>
+  isEqLikeCall$(ctx, fn)
+    ? ((_v) =>
+        _v._tag === "TyFn"
+          ? (({ from: operandT }) =>
+              reachesList(zonk(operandT, st))
+                ? (Err(
+                    typeErrHelp$(
+                      "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+                      exprSpan(fn),
+                      "force it first with `List.toArray`",
+                    ),
+                  ) as Result<undefined, IErr>)
+                : (Ok(undefined) as Result<undefined, IErr>))(_v)
+          : (Ok(undefined) as Result<undefined, IErr>))(resolve(fnT, st))
+    : (Ok(undefined) as Result<undefined, IErr>);
+const checkEqEligible: _Curry<
+  [
+    ctx: {
+      env: Map<string, Scheme>;
+      open: boolean;
+      ns: Map<string, Map<string, Scheme>>;
+      aliasMap: Map<string, AliasInfo>;
+      plugins: HostPlugin[];
+      loopStack: Ty[][];
+      letOwner: Map<string, SpanAt>;
+      localNames: Set<string>;
+      scopeNames: string[];
+    },
+    fn: Expr,
+    fnT: Ty,
+    st: St,
+  ],
+  Result<undefined, IErr>
+> = _curry(4, checkEqEligible$);
 const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1928,7 +2045,14 @@ const inferApplied$ = (
                       (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
                       u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                     ))(freshVar(st1)))(resolve(fnT, st1))
-          : inferCallArgs$(ctx, fnT, args, st1, exprSpan(fn)))(args),
+          : _Result_flatMap(
+              ([resultT, st2]) =>
+                _Result_map(
+                  (_: undefined) => _tuple(resultT, st2),
+                  checkEqEligible$(ctx, fn, fnT, st2),
+                ),
+              inferCallArgs$(ctx, fnT, args, st1, exprSpan(fn)),
+            ))(args),
     inferExpr$(ctx, fn, st),
   );
 const inferApplied: _Curry<

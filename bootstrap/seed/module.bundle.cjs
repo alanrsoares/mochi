@@ -12992,6 +12992,34 @@ var inferCallArgs$ = (ctx, fnT, args, st, callSpan) => ((_v) => _v.length === 0 
   throw new Error("non-exhaustive match");
 })())(args);
 var inferCallArgs = _curry17(5, inferCallArgs$);
+var isEqLikeCall$ = (ctx, fn) => {
+  const $match = fn;
+  switch ($match._tag) {
+    case "ERef": {
+      const { name } = $match;
+      return and11(or9(name === "eq", name === "compare"), _Map_has5(name, ctx.letOwner) === false);
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var isEqLikeCall = _curry17(2, isEqLikeCall$);
+var reachesList = (t) => ((_v) => _v._tag === "TyCon" && _v.name === "List" ? true : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2 ? (({ args: [, v] }) => reachesList(v))(_v) : _v._tag === "TyCon" && _v.name === "Set" ? false : _v._tag === "TyCon" ? (({ args: targs }) => length13(filter6(reachesList, targs)) > 0)(_v) : _v._tag === "TyRecord" ? (({ row }) => rowReachesList(row))(_v) : false)(t);
+var rowReachesList = (row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { fieldType: ft, rest } = $match;
+      return or9(reachesList(ft), rowReachesList(rest));
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var checkEqEligible$ = (ctx, fn, fnT, st) => isEqLikeCall$(ctx, fn) ? ((_v) => _v._tag === "TyFn" ? (({ from: operandT }) => reachesList(zonk(operandT, st)) ? Err9(typeErrHelp$("cannot compare a lazy List: `==` and `compare` walk their operands structurally", exprSpan3(fn), "force it first with `List.toArray`")) : Ok9(undefined))(_v) : Ok9(undefined))(resolve(fnT, st)) : Ok9(undefined);
+var checkEqEligible = _curry17(4, checkEqEligible$);
 var isTupleParam = (p) => {
   const $match = p;
   switch ($match._tag) {
@@ -13009,7 +13037,7 @@ var isTupleParam = (p) => {
 };
 var inferTupleLet$ = (ctx, param, body, lamSpan, value, st) => _Result_flatMap7(([valueT, st1]) => (([paramT, bodyEnv, st2]) => _Result_flatMap7((st3) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(bodyT, recordAt(lamSpan, tArrow(paramT, bodyT), st4))), inferExpr$(ctxWithEnv(ctx, bodyEnv), body, st3)), u$(ctx, paramT, valueT, st2, exprSpan3(value))))(bindParam$(param, ctx.env, st1)), inferExpr$(ctx, value, st));
 var inferTupleLet = _curry17(6, inferTupleLet$);
-var inferApplied$ = (ctx, fn, args, st) => _Result_flatMap7(([fnT, st1]) => ((_v) => _v.length === 0 ? ((_v) => _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => domainIsOmittableRecord$(fromT, st1) ? _Result_flatMap7((st2) => Ok9(_tuple8(toT, st2)), checkFits$(ctx, tRecord(RowEmpty), fromT, st1, exprSpan3(fn))) : (([resultT, st2]) => _Result_flatMap7((st3) => Ok9(_tuple8(resultT, st3)), u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan3(fn))))(freshVar(st1)))(_v) : (([resultT, st2]) => _Result_flatMap7((st3) => Ok9(_tuple8(resultT, st3)), u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan3(fn))))(freshVar(st1)))(resolve(fnT, st1)) : inferCallArgs$(ctx, fnT, args, st1, exprSpan3(fn)))(args), inferExpr$(ctx, fn, st));
+var inferApplied$ = (ctx, fn, args, st) => _Result_flatMap7(([fnT, st1]) => ((_v) => _v.length === 0 ? ((_v) => _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => domainIsOmittableRecord$(fromT, st1) ? _Result_flatMap7((st2) => Ok9(_tuple8(toT, st2)), checkFits$(ctx, tRecord(RowEmpty), fromT, st1, exprSpan3(fn))) : (([resultT, st2]) => _Result_flatMap7((st3) => Ok9(_tuple8(resultT, st3)), u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan3(fn))))(freshVar(st1)))(_v) : (([resultT, st2]) => _Result_flatMap7((st3) => Ok9(_tuple8(resultT, st3)), u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan3(fn))))(freshVar(st1)))(resolve(fnT, st1)) : _Result_flatMap7(([resultT, st2]) => _Result_map6((_) => _tuple8(resultT, st2), checkEqEligible$(ctx, fn, fnT, st2)), inferCallArgs$(ctx, fnT, args, st1, exprSpan3(fn))))(args), inferExpr$(ctx, fn, st));
 var inferApplied = _curry17(4, inferApplied$);
 var inferNormalCall$ = (ctx, fn, args, st) => ((_v) => _v[0]._tag === "ELambda" && _v[0].params.length === 1 && _v[1].length === 1 ? (([{ params: [param], body, span: lamSpan }, [value]]) => isTupleParam(param) ? inferTupleLet$(ctx, param, body, lamSpan, value, st) : inferApplied$(ctx, fn, args, st))(_v) : inferApplied$(ctx, fn, args, st))(_tuple8(fn, args));
 var inferNormalCall = _curry17(4, inferNormalCall$);
