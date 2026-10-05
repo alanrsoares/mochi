@@ -437,6 +437,25 @@ let aliasLocalVarsFrom = (params, args, st: Types.St) => switch params {
     }
 }
 
+export let rowHasLabel = (label, row) => switch row {
+  | RowExtend(l, _, _, rest) => l == label || rowHasLabel(label, rest)
+  | _ => false
+}
+
+/// `...A` (ADR 0154): put a spread record's fields ahead of `rest`, dropping
+/// any a later field of the same name overrides. A non-record spread (an open
+/// row, a variant, an unknown name) contributes nothing.
+export let spreadRowInto = (spread, rest) => switch spread {
+  | TyRecord(row) => spreadFieldsInto(row, rest)
+  | _ => rest
+}
+let spreadFieldsInto = (row, rest) => switch row {
+  | RowExtend(l, t, o, tail) => rowHasLabel(l, rest)
+      ? spreadFieldsInto(tail, rest)
+      : RowExtend(l, t, o, spreadFieldsInto(tail, rest))
+  | _ => rest
+}
+
 let aliasFieldsFrom = (fields: [Ast.AliasField], vars, st: Types.St, aliases: Map<string, AliasInfo>, expanding) => switch fields {
   | [] => (RowEmpty, st)
   | [fld, ...rest] => let (ft, vars1, st1) = typeExprToType(
@@ -453,7 +472,11 @@ let aliasFieldsFrom = (fields: [Ast.AliasField], vars, st: Types.St, aliases: Ma
       aliases,
       expanding
     ) in
-      (rField(fld.name, ft, restRow, fld.optional), st2)
+      fld.spread
+        ? (spreadRowInto(ft, restRow), st2)
+        : rowHasLabel(fld.name, restRow)
+        ? (restRow, st2)
+        : (rField(fld.name, ft, restRow, fld.optional), st2)
 }
 
 /// Expand a record alias to its structural row. `args` binds its type params
@@ -560,9 +583,7 @@ let matchFieldsFrom = (tpls, actuals, params, binds: Map<number, Types.Ty>, i) =
 /// must agree; a record matches only closed, with the same labels.
 let matchTy = (tpl, actual, params, binds: Map<number, Types.Ty>) => switch (tpl, actual) {
   | (TyVar(id), _) when Set.has(id, params) => switch Map.get(id, binds) {
-      | Some(prev) => Types.showType(prev) == Types.showType(actual)
-          ? Some(binds)
-          : None
+      | Some(prev) => prev == actual ? Some(binds) : None
       | None => Some(Map.set(id, actual, binds))
     }
   | (TyVar(a), TyVar(b)) => a == b ? Some(binds) : None
@@ -582,9 +603,7 @@ let matchTy = (tpl, actual, params, binds: Map<number, Types.Ty>) => switch (tpl
   | (TySingleton(tb, tv), TySingleton(ab, av)) => tb == ab && tv == av
       ? Some(binds)
       : None
-  | (TyOneOf(_), TyOneOf(_)) => Types.showType(tpl) == Types.showType(actual)
-      ? Some(binds)
-      : None
+  | (TyOneOf(_), TyOneOf(_)) => tpl == actual ? Some(binds) : None
   | _ => None
 }
 
@@ -597,12 +616,12 @@ let templateRowFrom = (fields: [Ast.AliasField], vars, aliases: Map<string, Alia
       aliases,
       Set.fromArray([])
     ) in
-      RowExtend(
-        f.name,
-        t,
-        f.optional,
-        templateRowFrom(fields, vars, aliases, i + 1)
-      )
+    let rest = templateRowFrom(fields, vars, aliases, i + 1) in
+      f.spread
+        ? spreadRowInto(t, rest)
+        : rowHasLabel(f.name, rest)
+        ? rest
+        : RowExtend(f.name, t, f.optional, rest)
 }
 
 /// Template ids sit far below the inferrer's (which start at 1000), so a

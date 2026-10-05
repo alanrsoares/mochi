@@ -2216,12 +2216,7 @@ let qualifyTe = (te, alias, from) => switch te {
 }
 
 let qualifyField = (fld, alias, from) =>
-  {
-    name: fld.name,
-    nameSpan: fld.nameSpan,
-    fieldType: qualifyTe(fld.fieldType, alias, from),
-    optional: fld.optional
-  }
+  { ...fld, fieldType: qualifyTe(fld.fieldType, alias, from) }
 
 let qualifyInfo = (info, alias, from) =>
   {
@@ -2398,16 +2393,9 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
 // empty map (ADR 0044) — an unannotated `#{}` generalizes and leaves the
 // emitted TS a `Map<string, unknown>`. Structural, so module.mochi's richer
 // `{ types, aliases }` scope still fits.
-type QualAliasField = {
-  name: string,
-  nameSpan: Ast.Span,
-  fieldType: Ast.TypeExpr,
-  optional: bool
-}
-
 type QualAliasInfo = {
   params: [string],
-  fields: [QualAliasField],
+  fields: [Ast.AliasField],
   expr: Option<Ast.TypeExpr>
 }
 

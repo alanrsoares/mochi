@@ -206,7 +206,8 @@ let qualifyAliasField = (f: Ast.AliasField, qualify) =>
     name: f.name,
     nameSpan: f.nameSpan,
     fieldType: qualifyTe(f.fieldType, qualify),
-    optional: f.optional
+    optional: f.optional,
+    spread: f.spread
   }
 
 /// One `export`ed declaration per `type` statement. `typescript`'s own walker

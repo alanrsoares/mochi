@@ -31,8 +31,6 @@ import {
 // --- errors + registry ---
 
 type CErr = { message: string, start: number, end: number }
-type CtorInfo = { owner: string, arity: number }
-type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
 let checkErr = (message, sp) => { message, start: sp.start, end: sp.end }
 

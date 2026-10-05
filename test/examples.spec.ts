@@ -870,3 +870,41 @@ let out = [5 |> f3(1, _, 3), 5 -> f3(1, _, 3), 5 |> f3(_, 2, 3), 5 |> f3(_, _, 3
   // a non-atomic piped value is bound once, not copied into every `_`
   expect(compileJs(src)).toContain("$pipe");
 });
+
+test("record type spread splices alias fields; later field wins (ADR 0154)", () => {
+  const src = `type A = { id: number, name: string }
+type B = { ...A, extra: string }
+type C = { ...A, name: bool }
+type P<T> = { v: T }
+type Q<T> = { ...P<T>, n: number }
+let b : B = { id: 1, name: "a", extra: "e" }
+let c : C = { id: 1, name: true }
+let q : Q<string> = { v: "x", n: 2 }
+let out = (b.id, b.extra, c.name, q.v, q.n)`;
+  expect(compileAndEval(src, "out")).toEqual([1, "e", true, "x", 2]);
+  const emitted = unwrapOk(compileTargets(src, { runtime: false }));
+  expect(emitted.ts).toContain("export type B = A & { extra: string };");
+  // an override must not also demand the spread's own, differing, field type
+  expect(emitted.ts).toContain('export type C = Omit<A, "name"> & { name: boolean };');
+  expect(emitted.ts).toContain("export type Q<A> = { v: A } & { n: number };");
+});
+
+test("record type spread is typed: missing and overridden fields are checked", () => {
+  const head = "type A = { id: number, name: string }\n";
+  expect(
+    isErr(compile(`${head}type B = { ...A, extra: string }\nlet b: B = { name: "a", extra: "e" }`)),
+  ).toBe(true);
+  expect(
+    isErr(compile(`${head}type C = { ...A, name: bool }\nlet c: C = { id: 1, name: "s" }`)),
+  ).toBe(true);
+  expect(
+    isErr(compile(`${head}type C = { ...A, name: bool }\nlet c: C = { id: 1, name: true }`)),
+  ).toBe(false);
+  // a spread written after a field overrides it, so the spread's type wins
+  const later = `${head}type D = { name: bool, ...A }\n`;
+  expect(isErr(compile(`${later}let d: D = { id: 1, name: "s" }`))).toBe(false);
+  expect(isErr(compile(`${later}let d: D = { id: 1, name: true }`))).toBe(true);
+  expect(unwrapOk(compileTargets(later, { runtime: false })).ts).toContain(
+    "export type D = { id: number; name: string };",
+  );
+});

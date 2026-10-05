@@ -3671,26 +3671,43 @@ const ctorsLoop: _Curry<
   Result<[Ctor[], number], PErr>
 > = _curry(3, ctorsLoop$);
 const parseAliasField$ = (toks: LocTok[], pos: number): Result<[AliasField, number], PErr> =>
-  _Result_flatMap(
-    ([nm, p]) =>
-      ((optional: boolean) =>
-        ((p1: number) =>
-          _Result_flatMap(
-            (p2) =>
+  tokAt$(toks, pos).tok._tag === "TSpread"
+    ? _Result_flatMap(
+        ([t, p]) =>
+          Ok(
+            _tuple(
+              { name: "", nameSpan: tySpan(t), fieldType: t, optional: false, spread: true },
+              p,
+            ),
+          ) as Result<[AliasField, number], PErr>,
+        parseTypeApp$(toks, pos + 1),
+      )
+    : _Result_flatMap(
+        ([nm, p]) =>
+          ((optional: boolean) =>
+            ((p1: number) =>
               _Result_flatMap(
-                ([t, p3]) =>
-                  Ok(
-                    _tuple(
-                      { name: nm.name, nameSpan: nm.span, fieldType: t, optional: optional },
-                      p3,
-                    ),
-                  ) as Result<[AliasField, number], PErr>,
-                parseTypeExpr$(toks, p2),
-              ),
-            expectTok$(TColon as Tok, toks, p1),
-          ))(optional ? p + 1 : p))(tokAt$(toks, p).tok._tag === "TQuestion"),
-    expectLabel$(toks, pos),
-  );
+                (p2) =>
+                  _Result_flatMap(
+                    ([t, p3]) =>
+                      Ok(
+                        _tuple(
+                          {
+                            name: nm.name,
+                            nameSpan: nm.span,
+                            fieldType: t,
+                            optional: optional,
+                            spread: false,
+                          },
+                          p3,
+                        ),
+                      ) as Result<[AliasField, number], PErr>,
+                    parseTypeExpr$(toks, p2),
+                  ),
+                expectTok$(TColon as Tok, toks, p1),
+              ))(optional ? p + 1 : p))(tokAt$(toks, p).tok._tag === "TQuestion"),
+        expectLabel$(toks, pos),
+      );
 const parseAliasField: _Curry<
   [toks: LocTok[], pos: number],
   Result<[AliasField, number], PErr>

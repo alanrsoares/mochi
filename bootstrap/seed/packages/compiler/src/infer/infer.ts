@@ -37,12 +37,6 @@ export type IErr = {
  * state back is the same thing, done functionally.
  */
 export type MemberErr = { err: IErr; st: St };
-export type QualAliasField = {
-  name: string;
-  nameSpan: SpanAt;
-  fieldType: TypeExpr;
-  optional: boolean;
-};
 export type QualAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type QualScope = { aliases: Map<string, QualAliasInfo> };
 /**
@@ -5828,201 +5822,134 @@ const qualifyTe: <A>(te: TypeExpr, alias: string, from: Map<string, A>) => TypeE
     }
   },
 );
-const qualifyField: <D, E>(
-  fld: {
-    optional: boolean;
-    fieldType: TypeExpr;
-    nameSpan: { end: number; start: number };
-    name: string;
-  } & E,
+const qualifyField: <A, B>(
+  fld: { fieldType: TypeExpr } & B,
   alias: string,
-  from: Map<string, D>,
-) => AliasField = _curry(
+  from: Map<string, A>,
+) => { fieldType: TypeExpr } & B = _curry(
   3,
-  <D, E>(
-    fld: {
-      optional: boolean;
-      fieldType: TypeExpr;
-      nameSpan: { end: number; start: number };
-      name: string;
-    } & E,
-    alias: string,
-    from: Map<string, D>,
-  ) => ({
-    name: fld.name,
-    nameSpan: fld.nameSpan,
+  <A, B>(fld: { fieldType: TypeExpr } & B, alias: string, from: Map<string, A>) => ({
+    ...fld,
     fieldType: qualifyTe(fld.fieldType, alias, from),
-    optional: fld.optional,
   }),
 );
-const qualifyInfo: <E, F, G>(
-  info: {
-    expr: Option<TypeExpr>;
-    fields: ({
-      optional: boolean;
-      fieldType: TypeExpr;
-      nameSpan: { end: number; start: number };
-      name: string;
-    } & F)[];
-    params: string[];
-  } & G,
+const qualifyInfo: <A, B, C, D>(
+  info: { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr } & C)[]; params: A } & D,
   alias: string,
-  from: Map<string, E>,
-) => QualAliasInfo = _curry(
+  from: Map<string, B>,
+) => { params: A; fields: ({ fieldType: TypeExpr } & C)[]; expr: Option<TypeExpr> } = _curry(
   3,
-  <E, F, G>(
-    info: {
-      expr: Option<TypeExpr>;
-      fields: ({
-        optional: boolean;
-        fieldType: TypeExpr;
-        nameSpan: { end: number; start: number };
-        name: string;
-      } & F)[];
-      params: string[];
-    } & G,
+  <A, B, C, D>(
+    info: { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr } & C)[]; params: A } & D,
     alias: string,
-    from: Map<string, E>,
+    from: Map<string, B>,
   ) => ({
     params: info.params,
-    fields: map(
-      (
-        f: {
-          optional: boolean;
-          fieldType: TypeExpr;
-          nameSpan: { end: number; start: number };
-          name: string;
-        } & F,
-      ) => qualifyField(f, alias, from),
-      info.fields,
-    ),
+    fields: map((f: { fieldType: TypeExpr } & C) => qualifyField(f, alias, from), info.fields),
     expr: _Option_map((te: TypeExpr) => qualifyTe(te, alias, from), info.expr),
   }),
 );
-const qualAliasSeedFrom: <E, F>(
+const qualAliasSeedFrom: <A, B, C>(
   names: string[],
   alias: string,
   from: Map<
     string,
-    {
-      expr: Option<TypeExpr>;
-      fields: ({
-        optional: boolean;
-        fieldType: TypeExpr;
-        nameSpan: { end: number; start: number };
-        name: string;
-      } & E)[];
-      params: string[];
-    } & F
+    { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr } & B)[]; params: A } & C
   >,
-  acc: Map<string, QualAliasInfo>,
-) => Map<string, QualAliasInfo> = _curry(
-  4,
-  <E, F>(
-    names: string[],
-    alias: string,
-    from: Map<
-      string,
-      {
-        expr: Option<TypeExpr>;
-        fields: ({
-          optional: boolean;
-          fieldType: TypeExpr;
-          nameSpan: { end: number; start: number };
-          name: string;
-        } & E)[];
-        params: string[];
-      } & F
-    >,
-    acc: Map<string, QualAliasInfo>,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? acc
-        : _v.length >= 1
-          ? (([n, ...rest]) =>
-              qualAliasSeedFrom(
-                rest,
-                alias,
-                from,
-                _Option_match(
-                  _Map_get(n, from),
-                  () => acc,
-                  (info) => _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc),
-                ),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(names),
-);
-const qualAliasSeed: <E, F, G>(
+  acc: Map<string, { params: A; fields: ({ fieldType: TypeExpr } & B)[]; expr: Option<TypeExpr> }>,
+) => Map<string, { params: A; fields: ({ fieldType: TypeExpr } & B)[]; expr: Option<TypeExpr> }> =
+  _curry(
+    4,
+    <A, B, C>(
+      names: string[],
+      alias: string,
+      from: Map<
+        string,
+        { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr } & B)[]; params: A } & C
+      >,
+      acc: Map<
+        string,
+        { params: A; fields: ({ fieldType: TypeExpr } & B)[]; expr: Option<TypeExpr> }
+      >,
+    ) =>
+      ((_v) =>
+        _v.length === 0
+          ? acc
+          : _v.length >= 1
+            ? (([n, ...rest]) =>
+                qualAliasSeedFrom(
+                  rest,
+                  alias,
+                  from,
+                  _Option_match(
+                    _Map_get(n, from),
+                    () => acc,
+                    (info) => _Map_set(`${alias}.${n}`, qualifyInfo(info, alias, from), acc),
+                  ),
+                ))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(names),
+  );
+const qualAliasSeed: <A, B, C, D>(
   stmts: Stmt[],
   quals: Map<
     string,
     {
       aliases: Map<
         string,
-        {
-          expr: Option<TypeExpr>;
-          fields: ({
-            optional: boolean;
-            fieldType: TypeExpr;
-            nameSpan: { end: number; start: number };
-            name: string;
-          } & E)[];
-          params: string[];
-        } & F
+        { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr } & B)[]; params: A } & C
       >;
-    } & G
+    } & D
   >,
-  acc: Map<string, QualAliasInfo>,
-) => Map<string, QualAliasInfo> = _curry(
-  3,
-  <E, F, G>(
-    stmts: Stmt[],
-    quals: Map<
-      string,
-      {
-        aliases: Map<
-          string,
-          {
-            expr: Option<TypeExpr>;
-            fields: ({
-              optional: boolean;
-              fieldType: TypeExpr;
-              nameSpan: { end: number; start: number };
-              name: string;
-            } & E)[];
-            params: string[];
-          } & F
-        >;
-      } & G
-    >,
-    acc: Map<string, QualAliasInfo>,
-  ) =>
-    ((_v) =>
-      _v.length === 0
-        ? acc
-        : _v.length >= 1
-          ? (([s, ...rest]) =>
-              qualAliasSeed(
-                rest,
-                quals,
-                ((_v) =>
-                  _v._tag === "SImportNs"
-                    ? (({ alias }) =>
-                        _Option_match(
-                          _Map_get(alias.name, quals),
-                          () => acc,
-                          (dep) =>
-                            qualAliasSeedFrom(_Map_keys(dep.aliases), alias.name, dep.aliases, acc),
-                        ))(_v)
-                    : acc)(s),
-              ))(_v)
-          : (() => {
-              throw new Error("non-exhaustive match");
-            })())(stmts),
-);
+  acc: Map<string, { params: A; fields: ({ fieldType: TypeExpr } & B)[]; expr: Option<TypeExpr> }>,
+) => Map<string, { params: A; fields: ({ fieldType: TypeExpr } & B)[]; expr: Option<TypeExpr> }> =
+  _curry(
+    3,
+    <A, B, C, D>(
+      stmts: Stmt[],
+      quals: Map<
+        string,
+        {
+          aliases: Map<
+            string,
+            { expr: Option<TypeExpr>; fields: ({ fieldType: TypeExpr } & B)[]; params: A } & C
+          >;
+        } & D
+      >,
+      acc: Map<
+        string,
+        { params: A; fields: ({ fieldType: TypeExpr } & B)[]; expr: Option<TypeExpr> }
+      >,
+    ) =>
+      ((_v) =>
+        _v.length === 0
+          ? acc
+          : _v.length >= 1
+            ? (([s, ...rest]) =>
+                qualAliasSeed(
+                  rest,
+                  quals,
+                  ((_v) =>
+                    _v._tag === "SImportNs"
+                      ? (({ alias }) =>
+                          _Option_match(
+                            _Map_get(alias.name, quals),
+                            () => acc,
+                            (dep) =>
+                              qualAliasSeedFrom(
+                                _Map_keys(dep.aliases),
+                                alias.name,
+                                dep.aliases,
+                                acc,
+                              ),
+                          ))(_v)
+                      : acc)(s),
+                ))(_v)
+            : (() => {
+                throw new Error("non-exhaustive match");
+              })())(stmts),
+  );
 /**
  * Zonk every recorded node type against the FINAL state and restore source
  * order (`recordAt` prepends). Mirrors src/infer.ts: types are only resolved
@@ -6094,7 +6021,7 @@ const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
  * Full inference result — the metadata the TS backend needs on top of `env`
  * (ADR 0090), including `letParams` (ADR 0035).
  */
-const runInferImports: <A, B, C>(
+const runInferImports: <A, B>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
@@ -6104,20 +6031,8 @@ const runInferImports: <A, B, C>(
   quals: Map<
     string,
     {
-      aliases: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          fields: ({
-            optional: boolean;
-            fieldType: TypeExpr;
-            nameSpan: SpanAt;
-            name: string;
-          } & A)[];
-          params: string[];
-        } & B
-      >;
-    } & C
+      aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A>;
+    } & B
   >,
   pluginsOpt: Option<HostPlugin[]>,
 ) => Result<
@@ -6130,7 +6045,7 @@ const runInferImports: <A, B, C>(
   IErr[]
 > = _curry(
   8,
-  <A, B, C>(
+  <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
@@ -6142,18 +6057,9 @@ const runInferImports: <A, B, C>(
       {
         aliases: Map<
           string,
-          {
-            expr: Option<TypeExpr>;
-            fields: ({
-              optional: boolean;
-              fieldType: TypeExpr;
-              nameSpan: SpanAt;
-              name: string;
-            } & A)[];
-            params: string[];
-          } & B
+          { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A
         >;
-      } & C
+      } & B
     >,
     pluginsOpt: Option<HostPlugin[]>,
   ) => {
@@ -6271,47 +6177,26 @@ const runInferImports: <A, B, C>(
  * importer seeds from THIS map rather than the dep's declarations alone, so a
  * qualified name inside a dep's alias still expands (`Infer.Types.St`).
  */
-export const scopeAliases: <A, B, C>(
+export const scopeAliases: <A, B>(
   stmts: Stmt[],
   quals: Map<
     string,
     {
-      aliases: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          fields: ({
-            optional: boolean;
-            fieldType: TypeExpr;
-            nameSpan: SpanAt;
-            name: string;
-          } & A)[];
-          params: string[];
-        } & B
-      >;
-    } & C
+      aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A>;
+    } & B
   >,
 ) => Map<string, QualAliasInfo> = _curry(
   2,
-  <A, B, C>(
+  <A, B>(
     stmts: Stmt[],
     quals: Map<
       string,
       {
         aliases: Map<
           string,
-          {
-            expr: Option<TypeExpr>;
-            fields: ({
-              optional: boolean;
-              fieldType: TypeExpr;
-              nameSpan: SpanAt;
-              name: string;
-            } & A)[];
-            params: string[];
-          } & B
+          { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A
         >;
-      } & C
+      } & B
     >,
   ) => aliasMapFrom$(stmts, qualAliasSeed(stmts, quals, new Map<string, QualAliasInfo>())),
 );
@@ -6319,7 +6204,7 @@ export const scopeAliases: <A, B, C>(
  * Env-only view — the shape every existing caller (compile.mochi,
  * module.mochi) and the host façades expect.
  */
-export const inferProgramImports: <A, B, C>(
+export const inferProgramImports: <A, B>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
@@ -6329,25 +6214,13 @@ export const inferProgramImports: <A, B, C>(
   quals: Map<
     string,
     {
-      aliases: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          fields: ({
-            optional: boolean;
-            fieldType: TypeExpr;
-            nameSpan: SpanAt;
-            name: string;
-          } & A)[];
-          params: string[];
-        } & B
-      >;
-    } & C
+      aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A>;
+    } & B
   >,
   pluginsOpt: Option<HostPlugin[]>,
 ) => Result<Map<string, Scheme>, IErr[]> = _curry(
   8,
-  <A, B, C>(
+  <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
@@ -6359,18 +6232,9 @@ export const inferProgramImports: <A, B, C>(
       {
         aliases: Map<
           string,
-          {
-            expr: Option<TypeExpr>;
-            fields: ({
-              optional: boolean;
-              fieldType: TypeExpr;
-              nameSpan: SpanAt;
-              name: string;
-            } & A)[];
-            params: string[];
-          } & B
+          { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A
         >;
-      } & C
+      } & B
     >,
     pluginsOpt: Option<HostPlugin[]>,
   ) =>
@@ -6417,7 +6281,7 @@ export const inferProgram: _Curry<
  * still has to annotate from its span -> type table, so the driver calls this
  * instead and reads `env` off the record itself.
  */
-export const inferProgramImportsTypes: <A, B, C>(
+export const inferProgramImportsTypes: <A, B>(
   stmts: Stmt[],
   builtins: Map<string, Ty>,
   namespaces: Map<string, Map<string, Ty>>,
@@ -6427,20 +6291,8 @@ export const inferProgramImportsTypes: <A, B, C>(
   quals: Map<
     string,
     {
-      aliases: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          fields: ({
-            optional: boolean;
-            fieldType: TypeExpr;
-            nameSpan: SpanAt;
-            name: string;
-          } & A)[];
-          params: string[];
-        } & B
-      >;
-    } & C
+      aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A>;
+    } & B
   >,
   pluginsOpt: Option<HostPlugin[]>,
 ) => Result<
@@ -6453,7 +6305,7 @@ export const inferProgramImportsTypes: <A, B, C>(
   IErr[]
 > = _curry(
   8,
-  <A, B, C>(
+  <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
     namespaces: Map<string, Map<string, Ty>>,
@@ -6465,18 +6317,9 @@ export const inferProgramImportsTypes: <A, B, C>(
       {
         aliases: Map<
           string,
-          {
-            expr: Option<TypeExpr>;
-            fields: ({
-              optional: boolean;
-              fieldType: TypeExpr;
-              nameSpan: SpanAt;
-              name: string;
-            } & A)[];
-            params: string[];
-          } & B
+          { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A
         >;
-      } & C
+      } & B
     >,
     pluginsOpt: Option<HostPlugin[]>,
   ) =>

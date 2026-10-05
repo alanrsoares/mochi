@@ -141,7 +141,9 @@ export const renderHoverTypeDecl = (stmt: TypeStmt): string => {
     stmt.alias._tag === "Some"
       ? recordDoc(
           stmt.alias.value.map((field) =>
-            seq(txt(`${field.name}: `), typeExprDoc(field.fieldType)),
+            field.spread
+              ? seq(txt("..."), typeExprDoc(field.fieldType))
+              : seq(txt(`${field.name}: `), typeExprDoc(field.fieldType)),
           ),
         )
       : stmt.aliasType._tag === "Some"

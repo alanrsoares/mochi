@@ -113,7 +113,8 @@ export type AliasField = {
   name: string,
   nameSpan: Span,
   fieldType: TypeExpr,
-  optional: bool
+  optional: bool,
+  spread: bool
 }
 
 export type Stmt =

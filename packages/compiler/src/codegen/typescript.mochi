@@ -27,7 +27,13 @@ import {
   RowExtend,
   isUnit
 } from "../infer/types.mochi"
-import { typeExprToType, collect, emptyVarSets } from "../infer/schemes.mochi"
+import {
+  typeExprToType,
+  collect,
+  emptyVarSets,
+  spreadRowInto,
+  rowHasLabel
+} from "../infer/schemes.mochi"
 import { builtinTypeDecls, keysOf } from "../ast/ctors.mochi"
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
 import { inferProgramTypes, exprSpan } from "../infer/infer.mochi"
@@ -121,20 +127,89 @@ export let typeDecl = (name, params, ctors: [Ast.Ctor], aliases: Map<string, Ali
 
 let aliasFieldsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
   | None => []
-  | Some(f) => Array.prepend(
-      "${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}",
-      aliasFieldsFrom(fields, params, aliases, recs, i + 1)
+  | Some(f) => f.spread || Array.contains(
+      f.name,
+      laterSpreadLabelsFrom(fields, params, aliases, i + 1)
+    )
+      ? aliasFieldsFrom(fields, params, aliases, recs, i + 1)
+      : Array.prepend(
+        "${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}",
+        aliasFieldsFrom(fields, params, aliases, recs, i + 1)
+      )
+}
+
+/// Labels a `...A` spread brings in — its record row's, as inference sees them.
+let spreadLabelsOf = (te, params, aliases: Map<string, AliasInfo>) =>
+  let (t, _vars, _st) = typeExprToType(
+    te,
+    paramVarsFrom(params, 0),
+    mkSt(Array.length(params)),
+    aliases,
+    Set.fromArray([])
+  ) in
+    switch t { | TyRecord(row) => rowLabelsOf(row, []) | _ => [] }
+
+let rowLabelsOf = (row, acc) => switch row {
+  | RowExtend(l, _, _, rest) => rowLabelsOf(rest, Array.append(l, acc))
+  | _ => acc
+}
+
+/// Labels written after spread `i` — they override it (ADR 0154), so the TS
+/// intersection must not also demand the spread's own, possibly differing, type.
+let laterLabelsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => Array.concat(
+      f.spread ? spreadLabelsOf(f.fieldType, params, aliases) : [f.name],
+      laterLabelsFrom(fields, params, aliases, i + 1)
     )
 }
 
+/// Labels brought in by spreads written after position `i` — they override an
+/// earlier own field of the same name.
+let laterSpreadLabelsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => Array.concat(
+      f.spread ? spreadLabelsOf(f.fieldType, params, aliases) : [],
+      laterSpreadLabelsFrom(fields, params, aliases, i + 1)
+    )
+}
+
+let spreadPartsFrom = (fields: [Ast.AliasField], params, aliases: Map<string, AliasInfo>, recs, i) => switch Array.get(i, fields) {
+  | None => []
+  | Some(f) => let rest = spreadPartsFrom(
+      fields,
+      params,
+      aliases,
+      recs,
+      i + 1
+    ) in
+      f.spread
+        ? let own = fieldTs(f.fieldType, params, aliases, recs) in
+        let shadowed = Array.filter(
+          l =>
+            Array.contains(l, laterLabelsFrom(fields, params, aliases, i + 1)),
+          spreadLabelsOf(f.fieldType, params, aliases)
+        ) in
+          Array.prepend(
+            Array.length(shadowed) == 0
+              ? own
+              : "Omit<${own}, ${Str.join(" | ", map(l => "\"${l}\"", shadowed))}>",
+            rest
+          )
+        : rest
+}
+
 /// A record alias (`type Point = { x: number, y: number }`) -> an exported
-/// object type. Structural, so it renders through the same `tsOf` encoder.
+/// object type. Structural, so it renders through the same `tsOf` encoder. A
+/// `...A` spread becomes an intersection member ahead of the object literal.
 export let recordAliasDecl = (name, params, fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, recs) =>
   let head = "${name}${genericHead(params, 0, [])}" in
   let body = aliasFieldsFrom(fields, params, aliases, recs, 0) in
-    Array.length(body) == 0
-      ? "export type ${head} = {};"
-      : "export type ${head} = { ${Str.join("; ", body)} };"
+  let spreads = spreadPartsFrom(fields, params, aliases, recs, 0) in
+  let own = Array.length(body) == 0
+    ? Array.length(spreads) == 0 ? ["{}"] : []
+    : ["{ ${Str.join("; ", body)} }"] in
+    "export type ${head} = ${Str.join(" & ", Array.concat(spreads, own))};"
 
 /// A transparent type alias (`type Id = number`) -> the aliased type directly.
 export let aliasTsDecl = (name, params, template, aliases: Map<string, AliasInfo>, recs) =>
@@ -610,7 +685,12 @@ let aliasRowOf = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, i) 
       aliases,
       Set.fromArray([])
     ) in
-      RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1))
+    let rest = aliasRowOf(fields, aliases, i + 1) in
+      f.spread
+        ? spreadRowInto(t, rest)
+        : rowHasLabel(f.name, rest)
+        ? rest
+        : RowExtend(f.name, t, f.optional, rest)
 }
 
 let aliasShapeKey = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>) =>

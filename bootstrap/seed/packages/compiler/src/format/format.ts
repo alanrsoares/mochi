@@ -3013,7 +3013,9 @@ const exprRawOf$ = (cts: Ctx, e: Expr): Doc => {
 };
 const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, exprRawOf$);
 const aliasFieldText: (f: AliasField) => string = (f: AliasField) =>
-  `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
+  f.spread
+    ? `...${showTypeExpr(f.fieldType)}`
+    : `${f.name}${f.optional ? "?" : ""}: ${showTypeExpr(f.fieldType)}`;
 const ctorArms$ = (cts: Ctx, ctors: Ctor[], i: number): Doc[] =>
   _Option_match(
     _Array_get(i, ctors),

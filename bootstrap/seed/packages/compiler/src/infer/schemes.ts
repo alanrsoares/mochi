@@ -55,6 +55,7 @@ import {
   lte,
   map,
   not,
+  or,
   reduce,
   sub,
 } from "@mochi/compiler/runtime";
@@ -777,6 +778,52 @@ const aliasLocalVarsFrom: <A>(params: A[], args: Ty[], st: St) => [Map<A, Ty>, S
         throw new Error("non-exhaustive match");
       }),
 );
+const rowHasLabel$ = (label: string, row: Row): boolean => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { label: l, rest } = $match;
+      return or(eq(l, label), rowHasLabel$(label, rest));
+    }
+    default: {
+      return false;
+    }
+  }
+};
+export const rowHasLabel: _Curry<[label: string, row: Row], boolean> = _curry(2, rowHasLabel$);
+const spreadRowInto$ = (spread: Ty, rest: Row): Row => {
+  const $match = spread;
+  switch ($match._tag) {
+    case "TyRecord": {
+      const { row } = $match;
+      return spreadFieldsInto$(row, rest);
+    }
+    default: {
+      return rest;
+    }
+  }
+};
+/**
+ * `...A` (ADR 0154): put a spread record's fields ahead of `rest`, dropping
+ * any a later field of the same name overrides. A non-record spread (an open
+ * row, a variant, an unknown name) contributes nothing.
+ */
+export const spreadRowInto: _Curry<[spread: Ty, rest: Row], Row> = _curry(2, spreadRowInto$);
+const spreadFieldsInto$ = (row: Row, rest: Row): Row => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { label: l, fieldType: t, optional: o, rest: tail } = $match;
+      return rowHasLabel$(l, rest)
+        ? spreadFieldsInto$(tail, rest)
+        : RowExtend(l, t, o, spreadFieldsInto$(tail, rest));
+    }
+    default: {
+      return rest;
+    }
+  }
+};
+const spreadFieldsInto: _Curry<[row: Row, rest: Row], Row> = _curry(2, spreadFieldsInto$);
 const aliasFieldsFrom$ = (
   fields: AliasField[],
   vars: Map<string, Ty>,
@@ -791,7 +838,11 @@ const aliasFieldsFrom$ = (
         ? (([fld, ...rest]) =>
             (([ft, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
               (([restRow, st2]: [Row, St]) =>
-                _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
+                fld.spread
+                  ? _tuple(spreadRowInto$(ft, restRow), st2)
+                  : rowHasLabel$(fld.name, restRow)
+                    ? _tuple(restRow, st2)
+                    : _tuple(rField(fld.name, ft, restRow, fld.optional), st2))(
                 aliasFieldsFrom$(rest, vars1, st1, aliases, expanding),
               ))(typeExprToType$(fld.fieldType, vars, st, aliases, expanding)))(_v)
         : (() => {
@@ -1041,7 +1092,7 @@ const matchTy$ = (
             _Map_get(id, binds),
             () => Some(_Map_set(id, actual, binds)) as Option<Map<number, Ty>>,
             (prev) =>
-              eq(Types.showType(prev), Types.showType(actual))
+              eq(prev, actual)
                 ? (Some(binds) as Option<Map<number, Ty>>)
                 : (None as Option<Map<number, Ty>>),
           ))(_v as [Extract<[Ty, Ty][0], { _tag: "TyVar" }>, [Ty, Ty][1]])
@@ -1129,7 +1180,7 @@ const matchTy$ = (
                     ],
                   )
                 : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf"
-                  ? eq(Types.showType(tpl), Types.showType(actual))
+                  ? eq(tpl, actual)
                     ? (Some(binds) as Option<Map<number, Ty>>)
                     : (None as Option<Map<number, Ty>>)
                   : (None as Option<Map<number, Ty>>))(_tuple(tpl, actual));
@@ -1151,8 +1202,14 @@ const templateRowFrom$ = (
     _Array_get(i, fields),
     () => RowEmpty as Row,
     (f) =>
-      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-        RowExtend(f.name, t, f.optional, templateRowFrom$(fields, vars, aliases, i + 1)))(
+      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => {
+        const rest: Row = templateRowFrom$(fields, vars, aliases, i + 1);
+        return f.spread
+          ? spreadRowInto$(t, rest)
+          : rowHasLabel$(f.name, rest)
+            ? rest
+            : RowExtend(f.name, t, f.optional, rest);
+      })(
         typeExprToType$(f.fieldType, vars, Types.mkSt(0), aliases, _Set_fromArray([] as string[])),
       ),
   );

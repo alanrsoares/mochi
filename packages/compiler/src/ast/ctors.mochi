@@ -12,10 +12,13 @@
 
 import * as Ast from "./ast.mochi"
 
-// --- shared shapes (structural; consumers re-declare, never import) ---
+// --- shared shapes (checker and usefulness import these) ---
 
-type CtorInfo = { owner: string, arity: number }
-type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
+export type CtorInfo = { owner: string, arity: number }
+export type Registry = {
+  ctors: Map<string, CtorInfo>,
+  types: Map<string, [string]>
+}
 
 let emptyRegistry : Registry = { ctors: #{}, types: #{} }
 

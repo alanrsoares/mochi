@@ -125,7 +125,13 @@ export type Stmt =
   | { _tag: "SError"; span: Span };
 export type Ctor = { name: string; fields: CtorField[]; span: Span };
 export type CtorField = { name: Option<string>; fieldType: TypeExpr };
-export type AliasField = { name: string; nameSpan: Span; fieldType: TypeExpr; optional: boolean };
+export type AliasField = {
+  name: string;
+  nameSpan: Span;
+  fieldType: TypeExpr;
+  optional: boolean;
+  spread: boolean;
+};
 export type Name = { name: string; span: Span };
 export type HostPlugin = {
   name: string;

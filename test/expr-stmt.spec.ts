@@ -37,3 +37,8 @@ test("a do-block whose last expr is unit is a legal statement", () => {
 test("formatter prints expression statements without let _ =", () => {
   expect(fmt("ignore(1)\nignore(2)")).toBe("ignore(1)\nignore(2)\n");
 });
+
+test("record type spread formats and round-trips", () => {
+  const src = "type A = { id: number }\ntype B = { ...A, extra: string }\n";
+  expect(fmt(src)).toBe(src);
+});

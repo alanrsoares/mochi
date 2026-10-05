@@ -414,47 +414,26 @@ const aliasesOf: (stmts: Stmt[]) => Map<string, RecoveryAliasInfo> = (stmts: Stm
     new Map<string, RecoveryAliasInfo>(),
     stmts,
   );
-const qualScopeOf: <A, B, C>(
+const qualScopeOf: <A, B>(
   stmts: Stmt[],
   quals: Map<
     string,
     {
-      aliases: Map<
-        string,
-        {
-          expr: Option<TypeExpr>;
-          fields: ({
-            optional: boolean;
-            fieldType: TypeExpr;
-            nameSpan: SpanAt;
-            name: string;
-          } & A)[];
-          params: string[];
-        } & B
-      >;
-    } & C
+      aliases: Map<string, { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A>;
+    } & B
   >,
 ) => RecoveryQualScope = _curry(
   2,
-  <A, B, C>(
+  <A, B>(
     stmts: Stmt[],
     quals: Map<
       string,
       {
         aliases: Map<
           string,
-          {
-            expr: Option<TypeExpr>;
-            fields: ({
-              optional: boolean;
-              fieldType: TypeExpr;
-              nameSpan: SpanAt;
-              name: string;
-            } & A)[];
-            params: string[];
-          } & B
+          { expr: Option<TypeExpr>; fields: AliasField[]; params: string[] } & A
         >;
-      } & C
+      } & B
     >,
   ) => ({ types: exportedTypeNames(stmts), aliases: scopeAliases(stmts, quals) }),
 );
@@ -1981,6 +1960,7 @@ const addDupMarkers: <A, B, E>(
                     name: string;
                     nameSpan: { end: number; start: number };
                     optional: boolean;
+                    spread: boolean;
                   }[],
                   expr: None,
                 },
