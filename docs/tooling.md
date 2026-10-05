@@ -88,7 +88,7 @@ cores with another.
 ## Benchmarks
 
 ```bash
-bun run bench                     # every suite: loop, fmt, fmt:repo, compile (best of 8)
+bun run bench                     # every suite: loop, fmt, fmt:repo, single, compile (best of 8)
 bun run bench compile --runs 3    # one suite, fewer runs
 bun run bench --save main         # write .cache/bench/main.json
 bun run bench --compare main      # Δ of each case's best against that baseline
