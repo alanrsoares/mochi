@@ -160,3 +160,16 @@ test("compare and show treat a custom-tagged value as a plain record", () => {
     "false",
   ]);
 });
+
+test("a quote or backslash in @as is escaped in JS, TS, .d.ts and the formatter", () => {
+  const src = 'export type T = @as("a\\"b") A | @as("c\\\\d") B\n';
+  expect(compileAndEval(`${src.replace("export ", "")}let r = [A, B]`, "r")).toEqual([
+    { _tag: 'a"b' },
+    { _tag: "c\\d" },
+  ]);
+  expect(unwrapOk(codegenTs(src))).toContain('{ _tag: "a\\"b" }');
+  expect(unwrapOk(emitDts(src))).toContain('{ _tag: "c\\\\d" }');
+  const out = unwrapOk(format(src));
+  expect(out).toContain('@as("a\\"b") A');
+  expect(unwrapOk(format(out))).toBe(out);
+});

@@ -111,6 +111,7 @@ import {
   rowHasLabel,
 } from "../infer/schemes";
 import { builtinTypeDecls, keysOf } from "../ast/ctors";
+import { jsStringLit } from "./literals";
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen";
 import { inferProgramTypes, exprSpan } from "../infer/infer";
 import { bindingHooksFor, runBindingHooks } from "../extensions/extensions";
@@ -222,8 +223,8 @@ const ctorVariant$ = (
 ): string => {
   const fields: string[] = ctorFieldsFrom$(c.fields, keysOf(c.fields), params, aliases, recs, 0);
   return length(fields) === 0
-    ? `{ ${c.tagKey}: "${c.tagLit}" }`
-    : `{ ${c.tagKey}: "${c.tagLit}"; ${_Str_join("; ", fields)} }`;
+    ? `{ ${c.tagKey}: ${jsStringLit(c.tagLit)} }`
+    : `{ ${c.tagKey}: ${jsStringLit(c.tagLit)}; ${_Str_join("; ", fields)} }`;
 };
 /**
  * One ctor's runtime shape: its discriminant (`_tag` unless `@tag`/`@as`, ADR 0156) plus its fields.

@@ -258,7 +258,7 @@ const ctorField: (f: CtorField) => string = (f: CtorField) =>
     (name) => `${name}: ${showTypeExpr(f.fieldType)}`,
   );
 export const ctorText: (c: Ctor) => string = (c: Ctor) => {
-  const attr: string = eq(c.tagLit, c.name) ? "" : `@as("${c.tagLit}") `;
+  const attr: string = eq(c.tagLit, c.name) ? "" : `@as(${strLit(c.tagLit)}) `;
   return length(c.fields) === 0
     ? `${attr}${c.name}`
     : `${attr}${c.name}(${commaJoin(ctorField, c.fields)})`;

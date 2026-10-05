@@ -105,7 +105,7 @@ let ctorField = (f: Ast.CtorField) => switch f.name {
 }
 
 export let ctorText = (c: Ast.Ctor) =>
-  let attr = c.tagLit == c.name ? "" : "@as(\"${c.tagLit}\") " in
+  let attr = c.tagLit == c.name ? "" : "@as(${strLit(c.tagLit)}) " in
     Array.length(c.fields) == 0
       ? "${attr}${c.name}"
       : "${attr}${c.name}(${commaJoin(ctorField, c.fields)})"

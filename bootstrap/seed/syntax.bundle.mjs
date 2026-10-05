@@ -15352,7 +15352,7 @@ var pattern = (p) => {
 };
 var ctorField = (f) => _Option_match12(f.name, () => showTypeExpr(f.fieldType), (name) => `${name}: ${showTypeExpr(f.fieldType)}`);
 var ctorText = (c) => {
-  const attr = eq10(c.tagLit, c.name) ? "" : `@as("${c.tagLit}") `;
+  const attr = eq10(c.tagLit, c.name) ? "" : `@as(${strLit2(c.tagLit)}) `;
   return length11(c.fields) === 0 ? `${attr}${c.name}` : `${attr}${c.name}(${commaJoin(ctorField, c.fields)})`;
 };
 var tagLine = (ctors) => _Option_match12(_Array_get11(0, ctors), () => [], (c) => c.tagKey === "_tag" ? [] : [txt(`@tag("${c.tagKey}")`), hardline]);

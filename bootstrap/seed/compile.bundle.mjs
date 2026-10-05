@@ -16315,7 +16315,7 @@ var ctorFieldsFrom$ = (fields, keys, params, aliases, recs, i) => _Option_match2
 var ctorFieldsFrom = _curry22(6, ctorFieldsFrom$);
 var ctorVariant$ = (c, params, aliases, recs) => {
   const fields = ctorFieldsFrom$(c.fields, keysOf(c.fields), params, aliases, recs, 0);
-  return length17(fields) === 0 ? `{ ${c.tagKey}: "${c.tagLit}" }` : `{ ${c.tagKey}: "${c.tagLit}"; ${_Str_join10("; ", fields)} }`;
+  return length17(fields) === 0 ? `{ ${c.tagKey}: ${jsStringLit(c.tagLit)} }` : `{ ${c.tagKey}: ${jsStringLit(c.tagLit)}; ${_Str_join10("; ", fields)} }`;
 };
 var ctorVariant = _curry22(4, ctorVariant$);
 var ctorVariantsFrom$ = (ctors, params, aliases, recs, i) => _Option_match20(_Array_get19(i, ctors), () => [], (c) => _Array_prepend10(`  | ${ctorVariant$(c, params, aliases, recs)}`, ctorVariantsFrom$(ctors, params, aliases, recs, i + 1)));

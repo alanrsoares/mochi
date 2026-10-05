@@ -36,6 +36,7 @@ import {
   rowHasLabel
 } from "../infer/schemes.mochi"
 import { builtinTypeDecls, keysOf } from "../ast/ctors.mochi"
+import { jsStringLit } from "./literals.mochi"
 import { codegenWith, jsDoc, jsGenOpts, runtimeDepNames } from "./codegen.mochi"
 import { inferProgramTypes, exprSpan } from "../infer/infer.mochi"
 import {
@@ -110,8 +111,8 @@ let ctorVariant = (c: Ast.Ctor, params, aliases: Map<string, Schemes.AliasInfo>,
     0
   ) in
     Array.length(fields) == 0
-      ? "{ ${c.tagKey}: \"${c.tagLit}\" }"
-      : "{ ${c.tagKey}: \"${c.tagLit}\"; ${Str.join("; ", fields)} }"
+      ? "{ ${c.tagKey}: ${jsStringLit(c.tagLit)} }"
+      : "{ ${c.tagKey}: ${jsStringLit(c.tagLit)}; ${Str.join("; ", fields)} }"
 
 let ctorVariantsFrom = (ctors: [Ast.Ctor], params, aliases: Map<string, Schemes.AliasInfo>, recs, i) => switch Array.get(i, ctors) {
   | None => []

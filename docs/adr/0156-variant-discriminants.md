@@ -44,3 +44,4 @@ export type Ev =
 - `@as` alone changes only the literal and keeps the `_tag` key.
 - `compare` and `==` also see a custom-tagged value as a plain record; `compare` orders by field values, not by constructor order.
 - A named import carries the constructor's `@tag:` registry entry with its field keys (namespace imports merge the whole registry), so an importer lowers patterns and `==` with the same discriminant.
+- Constructor metadata is keyed by bare name, as the field keys already are (ADR 0082). A local constructor with the same name as a namespace-imported one (`E.Click` vs `Click`) shadows its discriminant as well as its field keys; the checker still tells them apart. Qualified registry keys would fix both and are out of scope here.

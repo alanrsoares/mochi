@@ -1,13 +1,13 @@
 {
-  "sourceRevision": "70940fde69a60716cac81a86b243b7d8652a1285",
+  "sourceRevision": "5e85ef591071eb79211ae8cdf3292acdab7e33a8",
   "emitted": {
     "compile-host-types.d.ts": "21f9f3bc45e807777ebb616375663558ad729906f802c4f937f619babb652a05",
-    "compile.bundle.cjs": "14d0343c1da0f4710bdaa83a518d1dbecbd990843174592d3d64bcbf301153fd",
+    "compile.bundle.cjs": "57b9c2b5295ac4e639854a4f75feead30466498d2d7f0152b9253f463cfb14fb",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "4add38c8f569d4ca8bc0986ea11d5875e0cb1af8776a6a302549107dd736070c",
+    "compile.bundle.mjs": "d8d961a41a1a9ea02e6c1a357e8d3e4af485fe72c700a6278173140e82d1ab1e",
     "host-types.d.ts": "a3a23ca4b1908f05d99ec6a5a787b2b0fceff235a7f0a494fa786c20fd87b58f",
     "module-host-types.d.ts": "ab88c673320fac00e8a87ccb435e5e533f650b636147ec06de35905b4675da2c",
-    "module.bundle.cjs": "b048a9c6c225d12b3c73f430bb31dce7a6e4fa4e6333595569dacd9a29e91b79",
+    "module.bundle.cjs": "9cf16fc24a269e219d30d65378c8452cf50ed574e693d58f0a59547ac4a8ab7f",
     "packages/cli/src/driver.ts": "ed3ba54da4f334787243d2e3c2dcfc8ee79494797123d2b161d170540e836a2d",
     "packages/compiler/src/ast/ast.ts": "e4517c145609bd4e29551c6449f16a7665187155f892c251f2a7ab6986317363",
     "packages/compiler/src/ast/ctors.ts": "37f3f908472c216fe93e5d12120dfe69bc49cd6070d62921f0cc9be9d98aaeec",
@@ -18,7 +18,7 @@
     "packages/compiler/src/codegen/codegen.ts": "203f4bb4109f25f1709bfa85f7785e6fd024d1b66660a006f298f369480d99a3",
     "packages/compiler/src/codegen/literals.ts": "6d9c48b025f349801fe1ad56607d4eee4a6afed5ea75a5bcde91e1899932b0c9",
     "packages/compiler/src/codegen/pattern.ts": "1237b01d8302223b89b0e7bb028260954d2c4e91172050f06cb751be1ef38d49",
-    "packages/compiler/src/codegen/typescript.ts": "06436eab5576375a41b1f918456ac18690e7ae1bcdd2a3435b2b9c8fe5e5362b",
+    "packages/compiler/src/codegen/typescript.ts": "e8f377c5049ee9fcf7e958753aca96622fe6165839e8db0625ff5a93ec06cac5",
     "packages/compiler/src/compile/compile.ts": "28429889f86ca1d1487f4f108f3e3413d838cadaffc3f4eeedccddb5e33bcf81",
     "packages/compiler/src/doc/doc.ts": "2fc7a753e25beccb7496e18a62df6279c780b50bd6fa1da6b62b2cbae1fd16a4",
     "packages/compiler/src/dts/dts.ts": "425fd29b944dafdc8266b077d71be7358da54ac1b8ea6ef54c926afef88a28ee",
@@ -30,7 +30,7 @@
     "packages/compiler/src/extensions/plugins/jsx.ts": "e3c427dfcd86e84be7e667fb10df3f1b4f9028d4b1c8524d9c2ce51521c48034",
     "packages/compiler/src/extensions/plugins/preact.ts": "c2b773c09f6fae29fe133bf9be8dd08f92a867c6efe872b31deeac182fc360e2",
     "packages/compiler/src/format/format-api.ts": "3cecba7c3e9e0a2efbee8c79d5e1ae5446471c9a5152d49061c0997a5a808080",
-    "packages/compiler/src/format/format.ts": "385d68dbbfcba5a4ae5ede1a0dcdf88f6df5d608addbf7988e7cbb62cb40a862",
+    "packages/compiler/src/format/format.ts": "9ed6dc5829e1e042f9865583355e021038fec40752679ebad885c63bf1a27e18",
     "packages/compiler/src/infer/infer.ts": "921ef26267be088c6526afc14ec6c3e11b95f59655febd8c94fea6d3abfd5685",
     "packages/compiler/src/infer/local-names.ts": "15bc5e0155e0e4ba1cf76d8309d54ef985e22855de43619a52c079255a07fbec",
     "packages/compiler/src/infer/scc.ts": "de797e90a38e68d6d1c4dba28078471258d01af248cf445845ba3ab3885c5ba4",
@@ -45,16 +45,16 @@
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
     "packages/compiler/src/prelude/prelude.gen.mjs": "84815e512354cf54a146dba3fc703d544a22ff3639e3cc964482517b826a301a",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "af4610932762b6802403d75ecfd3e62010c209a62e35e4a8b3fb37395583de0e"
+    "syntax.bundle.mjs": "3a77ef6c60cc26b0750eb5d452a3003359ea74a95346a0921a3b598d76318400"
   },
   "files": {
     "compile-host-types.d.ts": "40682d1a0de5dbef4d1aa01619b9ed9c3e1cd8d5ea32d41b77149e82c6baef10",
-    "compile.bundle.cjs": "14d0343c1da0f4710bdaa83a518d1dbecbd990843174592d3d64bcbf301153fd",
+    "compile.bundle.cjs": "57b9c2b5295ac4e639854a4f75feead30466498d2d7f0152b9253f463cfb14fb",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "4add38c8f569d4ca8bc0986ea11d5875e0cb1af8776a6a302549107dd736070c",
+    "compile.bundle.mjs": "d8d961a41a1a9ea02e6c1a357e8d3e4af485fe72c700a6278173140e82d1ab1e",
     "host-types.d.ts": "206a6aa1ed387e66be24b977b94e3241eca9f324d8e65644da21f59f1a605256",
     "module-host-types.d.ts": "6a03469faa1485978aa9a301eca28fd0989e25da87371d49a70a6d9c145b8421",
-    "module.bundle.cjs": "b048a9c6c225d12b3c73f430bb31dce7a6e4fa4e6333595569dacd9a29e91b79",
+    "module.bundle.cjs": "9cf16fc24a269e219d30d65378c8452cf50ed574e693d58f0a59547ac4a8ab7f",
     "packages/cli/src/driver.ts": "6429a13f1979362ddcbc2ca04c1f1b8599e85ab71adabfee98ae84b13f474d26",
     "packages/compiler/src/ast/ast.ts": "52683b1c3babd09f4f0e5a515669595fd120323d83b4a56a300b80f315619e4b",
     "packages/compiler/src/ast/ctors.ts": "576e3b685d3b55c7a876998737d6d13cb6880cf8c0f18e4672e4b7399e6c42ba",
@@ -65,7 +65,7 @@
     "packages/compiler/src/codegen/codegen.ts": "7300c5ed0680b6d40d5d4b723ab56e0e6d1c6217edddfcf19dbc182f5ad9f1af",
     "packages/compiler/src/codegen/literals.ts": "42e53b000f8220c037230f204862216651bab70a1f90fa1c9341a0b555469865",
     "packages/compiler/src/codegen/pattern.ts": "2ebe95d048d89d1379afed81171970d7650fbef9c597b271837063f5edff0274",
-    "packages/compiler/src/codegen/typescript.ts": "8a900994d7fa799e3c88f8e09e1bf86e06ca358970b2b79347917895824fd1c5",
+    "packages/compiler/src/codegen/typescript.ts": "6d3d5210f49b08ca6f168020f0011d93607dd4d1aa38e8062399b6a98e5a1466",
     "packages/compiler/src/compile/compile.ts": "260b913cbced09cbdf14418eabb3b134004a851d3521cf7c95f43282cdcb6d37",
     "packages/compiler/src/doc/doc.ts": "cebc4de4a1dd16965a1d0934052af903b9c390759f6a317c73b3adce7bd9f56a",
     "packages/compiler/src/dts/dts.ts": "61ba011414fe17d37e60e954a92958585b786ff05f106065bfceaff8a4597cd7",
@@ -77,7 +77,7 @@
     "packages/compiler/src/extensions/plugins/jsx.ts": "877ac6e33b50ce1e8d5e682996388d9a4d8a79eae1e94cebd25af2634a9f5b73",
     "packages/compiler/src/extensions/plugins/preact.ts": "1fd31902fa3fdf57b11c9f64b9c7cb399337cbddc487729aa07f06027f8407ba",
     "packages/compiler/src/format/format-api.ts": "cb0b43a0e6fd8c9999eecac0bf298a67535bc8bb10446d1dde529ea7b4d56a27",
-    "packages/compiler/src/format/format.ts": "3c92a9bafe150a32469d060faebad1fbbe5a0fb6638e0f606346874be12c1104",
+    "packages/compiler/src/format/format.ts": "408487488d3c64929f274fc3953c6899ed6422f8324ffa74e96da9cd789d881a",
     "packages/compiler/src/infer/infer.ts": "64e7fbc2d1665b9b8969c51b6fa124ac355f3d5a7a95c300c2d8d43311bc0611",
     "packages/compiler/src/infer/local-names.ts": "e4563f4c03b52711c95c3281f1040d333cf8335de53b43fc1eb98452413ad61a",
     "packages/compiler/src/infer/scc.ts": "c1f633d387cbf1dddeb1fd6a97d7444c1a101db5d09765ad6557d4d68d41581a",
@@ -92,6 +92,6 @@
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
     "packages/compiler/src/prelude/prelude.gen.mjs": "293e8e3f2a8979adbac0cd58bf82a84766f37a6b66e7c64f88b8e2e1e2f09257",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "af4610932762b6802403d75ecfd3e62010c209a62e35e4a8b3fb37395583de0e"
+    "syntax.bundle.mjs": "3a77ef6c60cc26b0750eb5d452a3003359ea74a95346a0921a3b598d76318400"
   }
 }
