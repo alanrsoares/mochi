@@ -8,7 +8,14 @@
 import { dlopen, FFIType } from "bun:ffi";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { compileSync, compileTsSync, inferTypesSync } from "@mochi/compiler/compile/sync";
+import {
+  checkSync,
+  compileSync,
+  compileTsSync,
+  emitDtsSyncWith,
+  inferTypesSync,
+} from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { loadGraph } from "@mochi/compiler/graph";
 import { compileGraph } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
@@ -40,6 +47,16 @@ const CASES: Record<string, () => void | Promise<void>> = {
   "compile-js:example": () => ok("example", compileSync(read("examples/example.mochi"))),
   "compile-ts:example": () =>
     ok("example", compileTsSync(read("examples/example.mochi"), "@mochi/compiler/runtime")),
+  "dts:example": () =>
+    ok(
+      "example",
+      emitDtsSyncWith(read("examples/example.mochi"), "@mochi/compiler/runtime", defaultOptions),
+    ),
+  "check:example": () => {
+    const errs = checkSync(read("examples/example.mochi"));
+    if (errs.length > 0)
+      throw new Error(`check example failed: ${JSON.stringify(errs).slice(0, 500)}`);
+  },
   "infer:example": () => ok("example", inferTypesSync(read("examples/example.mochi"))),
   "graph-compile:modules": graph("examples/modules/main.mochi", true),
   "graph-load:bootstrap-lexer": graph("packages/compiler/src/lexer/lexer.mochi", false),

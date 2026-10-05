@@ -5,6 +5,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  checkSync,
+  compileSync,
+  compileTsSync,
+  emitDtsSyncWith,
+  inferTypesSync,
+} from "@mochi/compiler/compile/sync";
+import { defaultOptions } from "@mochi/compiler/extensions";
 import { loadGraph } from "@mochi/compiler/graph";
 import { compileGraph } from "@mochi/compiler/module";
 import { format } from "@mochi/dx/format";
@@ -82,6 +90,27 @@ const compileCases = async (root: string, rel: string, label: string): Promise<B
   ];
 };
 
+const SINGLE_FILES = ["examples/example.mochi", "packages/compiler/src/infer/scc.mochi"];
+
+/** One file through each single-file pass, so a regression names the pass that caused it. */
+const singleCases = (root: string, rel: string): BenchCase[] => {
+  const src = readFileSync(join(root, rel), "utf8");
+  const lines = `${src.split("\n").length} lines`;
+  const runtime = "@mochi/compiler/runtime";
+  const passes: Record<string, () => unknown> = {
+    "compile-js": () => expectOk(compileSync(src), "compile-js"),
+    "compile-ts": () => expectOk(compileTsSync(src, runtime), "compile-ts"),
+    dts: () => expectOk(emitDtsSyncWith(src, runtime, defaultOptions), "dts"),
+    infer: () => expectOk(inferTypesSync(src), "infer"),
+    check: () => checkSync(src),
+  };
+  return Object.entries(passes).map(([pass, run]) => ({
+    name: `${pass} ${rel}`,
+    note: lines,
+    run,
+  }));
+};
+
 /** Wall-time suites for `bun run bench`: real-sized inputs. */
 export const SUITES: Record<string, BenchSuite> = {
   loop: {
@@ -109,6 +138,10 @@ export const SUITES: Record<string, BenchSuite> = {
         },
       ];
     },
+  },
+  single: {
+    describe: "single-file js / ts / dts / infer / check on a small and a compiler-module input",
+    cases: async (root) => SINGLE_FILES.flatMap((rel) => singleCases(root, rel)),
   },
   compile: {
     describe: "load and compile the packages/cli/src/driver.mochi module graph",

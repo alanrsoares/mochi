@@ -13,6 +13,10 @@ benchmarks:
     exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts compile-js:example
   - name: "compile-ts:example"
     exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts compile-ts:example
+  - name: "dts:example"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts dts:example
+  - name: "check:example"
+    exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts check:example
   - name: "infer:example"
     exec: env BUN_JSC_useConcurrentJIT=false BUN_JSC_useConcurrentGC=false bun scripts/bench-case.ts infer:example
   - name: "graph-compile:modules"
