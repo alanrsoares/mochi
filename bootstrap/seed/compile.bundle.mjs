@@ -8291,7 +8291,10 @@ var matchFieldsFrom$ = (tpls, actuals, params, binds, i) => _Option_match8(_Arra
 var matchFieldsFrom = _curry9(5, matchFieldsFrom$);
 var matchTy$ = (tpl, actual, params, binds) => ((_v) => _v[0]._tag === "TyVar" && (([{ id }]) => _Set_has(id, params))(_v) ? (([{ id }]) => _Option_match8(_Map_get3(id, binds), () => Some8(_Map_set3(id, actual, binds)), (prev) => eq6(showType(prev), showType(actual)) ? Some8(binds) : None8))(_v) : _v[0]._tag === "TyVar" && _v[1]._tag === "TyVar" ? (([{ id: a }, { id: b }]) => eq6(a, b) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyCon" && _v[1]._tag === "TyCon" ? (([{ name: n, args: targs }, { name: m, args: aargs }]) => and6(eq6(n, m), eq6(length6(targs), length6(aargs))) ? matchTysFrom$(targs, aargs, params, binds, 0) : None8)(_v) : _v[0]._tag === "TyFn" && _v[1]._tag === "TyFn" ? (([{ from: tf, to: tt }, { from: af, to: at }]) => _Option_flatMap((b) => matchTy$(tt, at, params, b), matchTy$(tf, af, params, binds)))(_v) : _v[0]._tag === "TyRecord" && _v[1]._tag === "TyRecord" ? (([{ row: trow }, { row: arow }]) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: tfs }, { value: afs }]) => eq6(length6(tfs), length6(afs)) ? matchFieldsFrom$(tfs, afs, params, binds, 0) : None8)(_v) : None8)(_tuple4(closedFieldsOf$(trow, []), closedFieldsOf$(arow, []))))(_v) : _v[0]._tag === "TySingleton" && _v[1]._tag === "TySingleton" ? (([{ base: tb, value: tv }, { base: ab, value: av }]) => and6(eq6(tb, ab), eq6(tv, av)) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf" ? eq6(showType(tpl), showType(actual)) ? Some8(binds) : None8 : None8)(_tuple4(tpl, actual));
 var matchTy = _curry9(4, matchTy$);
-var templateRowFrom$ = (fields, vars, aliases, i) => _Option_match8(_Array_get7(i, fields), () => RowEmpty, (f) => (([t, _vars, _st]) => f.spread ? spreadRowInto$(t, templateRowFrom$(fields, vars, aliases, i + 1)) : rowHasLabel$(f.name, templateRowFrom$(fields, vars, aliases, i + 1)) ? templateRowFrom$(fields, vars, aliases, i + 1) : RowExtend(f.name, t, f.optional, templateRowFrom$(fields, vars, aliases, i + 1)))(typeExprToType$(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray([]))));
+var templateRowFrom$ = (fields, vars, aliases, i) => _Option_match8(_Array_get7(i, fields), () => RowEmpty, (f) => (([t, _vars, _st]) => {
+  const rest = templateRowFrom$(fields, vars, aliases, i + 1);
+  return f.spread ? spreadRowInto$(t, rest) : rowHasLabel$(f.name, rest) ? rest : RowExtend(f.name, t, f.optional, rest);
+})(typeExprToType$(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray([]))));
 var templateRowFrom = _curry9(4, templateRowFrom$);
 var templateVars = (params) => reduce2(_curry9(2, ([vs, ids], p) => {
   const id = -1e6 - length6(ids);
@@ -16520,7 +16523,10 @@ var builtinTypeNamesFor$ = (declared, wanted, body, i) => _Option_match20(_Array
   return and14(!_Set_has7(bt.name, declared), or13(_Set_has7(bt.name, wanted), _Str_contains2(bt.name, body))) ? _Array_prepend10(bt.name, rest) : rest;
 });
 var builtinTypeNamesFor = _curry22(4, builtinTypeNamesFor$);
-var aliasRowOf$ = (fields, aliases, i) => _Option_match20(_Array_get19(i, fields), () => RowEmpty, (f) => (([t, _vars, _st]) => f.spread ? spreadRowInto(t, aliasRowOf$(fields, aliases, i + 1)) : rowHasLabel(f.name, aliasRowOf$(fields, aliases, i + 1)) ? aliasRowOf$(fields, aliases, i + 1) : RowExtend(f.name, t, f.optional, aliasRowOf$(fields, aliases, i + 1)))(typeExprToType(f.fieldType, new Map, mkSt(0), aliases, _Set_fromArray8([]))));
+var aliasRowOf$ = (fields, aliases, i) => _Option_match20(_Array_get19(i, fields), () => RowEmpty, (f) => (([t, _vars, _st]) => {
+  const rest = aliasRowOf$(fields, aliases, i + 1);
+  return f.spread ? spreadRowInto(t, rest) : rowHasLabel(f.name, rest) ? rest : RowExtend(f.name, t, f.optional, rest);
+})(typeExprToType(f.fieldType, new Map, mkSt(0), aliases, _Set_fromArray8([]))));
 var aliasRowOf = _curry22(3, aliasRowOf$);
 var aliasShapeKey$ = (fields, aliases) => rowShapeKey(aliasRowOf$(fields, aliases, 0), new Map);
 var aliasShapeKey = _curry22(2, aliasShapeKey$);

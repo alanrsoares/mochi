@@ -1202,12 +1202,14 @@ const templateRowFrom$ = (
     _Array_get(i, fields),
     () => RowEmpty as Row,
     (f) =>
-      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-        f.spread
-          ? spreadRowInto$(t, templateRowFrom$(fields, vars, aliases, i + 1))
-          : rowHasLabel$(f.name, templateRowFrom$(fields, vars, aliases, i + 1))
-            ? templateRowFrom$(fields, vars, aliases, i + 1)
-            : RowExtend(f.name, t, f.optional, templateRowFrom$(fields, vars, aliases, i + 1)))(
+      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => {
+        const rest: Row = templateRowFrom$(fields, vars, aliases, i + 1);
+        return f.spread
+          ? spreadRowInto$(t, rest)
+          : rowHasLabel$(f.name, rest)
+            ? rest
+            : RowExtend(f.name, t, f.optional, rest);
+      })(
         typeExprToType$(f.fieldType, vars, Types.mkSt(0), aliases, _Set_fromArray([] as string[])),
       ),
   );

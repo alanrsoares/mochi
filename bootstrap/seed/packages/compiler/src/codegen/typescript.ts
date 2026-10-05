@@ -1338,12 +1338,14 @@ const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: n
     _Array_get(i, fields),
     () => RowEmpty as Row,
     (f) =>
-      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) =>
-        f.spread
-          ? spreadRowInto(t, aliasRowOf$(fields, aliases, i + 1))
-          : rowHasLabel(f.name, aliasRowOf$(fields, aliases, i + 1))
-            ? aliasRowOf$(fields, aliases, i + 1)
-            : RowExtend(f.name, t, f.optional, aliasRowOf$(fields, aliases, i + 1)))(
+      (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => {
+        const rest: Row = aliasRowOf$(fields, aliases, i + 1);
+        return f.spread
+          ? spreadRowInto(t, rest)
+          : rowHasLabel(f.name, rest)
+            ? rest
+            : RowExtend(f.name, t, f.optional, rest);
+      })(
         typeExprToType(
           f.fieldType,
           new Map<string, Ty>(),

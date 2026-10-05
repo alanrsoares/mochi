@@ -685,11 +685,12 @@ let aliasRowOf = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>, i) 
       aliases,
       Set.fromArray([])
     ) in
+    let rest = aliasRowOf(fields, aliases, i + 1) in
       f.spread
-        ? spreadRowInto(t, aliasRowOf(fields, aliases, i + 1))
-        : rowHasLabel(f.name, aliasRowOf(fields, aliases, i + 1))
-        ? aliasRowOf(fields, aliases, i + 1)
-        : RowExtend(f.name, t, f.optional, aliasRowOf(fields, aliases, i + 1))
+        ? spreadRowInto(t, rest)
+        : rowHasLabel(f.name, rest)
+        ? rest
+        : RowExtend(f.name, t, f.optional, rest)
 }
 
 let aliasShapeKey = (fields: [Ast.AliasField], aliases: Map<string, AliasInfo>) =>
