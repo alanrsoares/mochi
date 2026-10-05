@@ -13126,15 +13126,153 @@ var inferArms$ = (ctx, scrutT, resultT, arms, st) => ((_v) => _v.length === 0 ? 
 })())(arms);
 var inferArms = _curry17(5, inferArms$);
 var isPipeHole = (a) => ((_v) => _v._tag === "ERef" && _v.name === "_" ? true : false)(a);
-var fillPipeHole$ = (left, args) => map9((a) => isPipeHole(a) ? left : a, args);
-var fillPipeHole = _curry17(2, fillPipeHole$);
+var hasPipeHole = (right) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { args: rargs } = $match;
+      return length13(filter6(isPipeHole, rargs)) > 0;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+var fillPipeHole$ = (left, right, sp) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn: rfn, args: rargs, origin } = $match;
+      return ECall(rfn, map9((a) => isPipeHole(a) ? left : a, rargs), origin, sp);
+    }
+    default: {
+      return right;
+    }
+  }
+};
+var fillPipeHole = _curry17(3, fillPipeHole$);
 var inferMatch$ = (ctx, scrutinee, arms, st) => _Result_flatMap7(([scrutT, st1]) => (([resultT, st2]) => _Result_flatMap7((st3) => Ok9(_tuple8(resultT, st3)), inferArms$(ctx, scrutT, resultT, arms, st2)))(freshVar(st1)), inferExpr$(ctx, scrutinee, st));
 var inferMatch = _curry17(4, inferMatch$);
 var inferExpr$ = (ctx, e, st) => _Result_flatMap7(([t, st1]) => Ok9(_tuple8(t, ((_v) => _v._tag === "EField" ? (({ name, span: sp }) => recordBinder(sp, t, "property", name, None16, st1))(_v) : recordAt(exprSpan3(e), t, st1))(e))), inferExprRaw$(ctx, e, st));
 var inferExpr = _curry17(3, inferExpr$);
-var inferExprRaw$ = (ctx, e, st) => ((_v) => _v._tag === "ENum" ? Ok9(_tuple8(tNumber, st)) : _v._tag === "EUnit" ? Ok9(_tuple8(tUnit, st)) : _v._tag === "EBool" ? Ok9(_tuple8(tBool, st)) : _v._tag === "EStr" ? (({ value }) => Ok9(_tuple8(tLit(value), st)))(_v) : _v._tag === "ERef" ? (({ name, span: sp }) => _Option_match16(_Map_get6(name, ctx.env), () => ctx.open ? _Set_has4(name, ctx.localNames) ? Err9(typeErrHelp$(`'${name}' is not in scope here`, sp, "it is bound elsewhere in this file, but not around this use \u2014 check the binder's extent")) : (([t, st1]) => Ok9(_tuple8(t, st1)))(freshVar(st)) : _Option_match16(closestName(name, _Map_keys6(ctx.env)), () => Err9(typeErrHelp$(`unbound variable '${name}'`, sp, "bind the name before using it, or check the spelling")), (hint) => Err9(typeErrSuggest$(`unbound variable '${name}'`, sp, `did you mean '${hint}'?`, hint))), (sc) => (([t, st1]) => Ok9(_tuple8(t, _Option_match16(_Map_get6(name, ctx.letOwner), () => st1, (vsp) => noteUse(vsp, t, st1)))))(instantiate(sc, st))))(_v) : _v._tag === "ELambda" ? (({ params, body }) => (([posParams, labParams]) => (([paramTypes, bodyEnv, st1]) => _Result_flatMap7(([annotVars, st2]) => _Result_flatMap7(([labFields, st3]) => ((allTypes) => ((st3Labs) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(arrowChain$(allTypes, bodyT), recordNameParamsFrom$(posParams, paramTypes, st4))), inferExpr$(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3Labs)))(recordLabParamsFrom(labParams, labFields, st3)))(((_v) => _v.length === 0 ? paramTypes : _Array_append12(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams)), labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2)), constrainParamAnnotsFrom$(ctx, posParams, paramTypes, new Map, st1)))(bindParamsFrom$(posParams, ctx.env, st)))(splitLamParams$(params, [], [])))(_v) : _v._tag === "ELetIn" ? (({ name, nameSpan, annot, value, body, span: _span }) => ((_v) => _v._tag === "ELambda" ? ((lets) => ((idxOf) => ((tail) => (([localCtx, localSt, localErrs]) => _Option_match16(_Array_get15(0, localErrs), () => inferExpr$(localCtx, tail, localSt), (firstErr) => Err9(firstErr)))(processGroupsFrom$(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs)))(localTail(e)))(idxOfMap(lets)))(localLetsFrom(e)) : _Result_flatMap7(([valT, st1]) => _Result_flatMap7(([pinned, st2]) => ((widen) => ((sc) => ((vsp) => (($ctx) => inferExpr$($ctx, body, noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None16, st2))))(ctxWithLets(ctx, _Map_set6(name, sc, ctx.env), _Map_set6(name, vsp, ctx.letOwner))))(exprSpan3(value)))(generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen)))(_Option_match16(annot, () => true, () => false)), _Option_match16(annot, () => Ok9(_tuple8(valT, st1)), (te) => (([at, , stA]) => _Result_map6((stB) => _tuple8(at, stB), checkFits$(ctx, valT, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st1, ctx.aliasMap, _Set_fromArray5([]))))), inferExpr$(ctx, value, st)))(value))(_v) : _v._tag === "ELetBind" ? (({ param, paramSpan, monad, value, body }) => inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st))(_v) : _v._tag === "ECall" ? (({ fn, args, origin }) => ((api) => _Result_flatMap7((claimed) => _Option_match16(claimed, () => inferNormalCall$(ctx, fn, args, st), (r) => Ok9(r)), runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api)))({ inferExpr: _curry17(2, (e, st0) => inferExpr$(ctx, e, st0)), unify: _curry17(4, (left, right, st0, sp) => u$(ctx, left, right, st0, sp)) }))(_v) : _v._tag === "EPipe" && _v.right._tag === "ECall" && (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) => length13(filter6(isPipeHole, rargs)) > 0)(_v) ? (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) => inferExpr$(ctx, ECall(rfn, fillPipeHole$(left, rargs), origin, sp), st))(_v) : _v._tag === "EPipe" && _v.fast === true ? (({ left, right, span: sp }) => ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => inferExpr$(ctx, ECall(rfn, _Array_prepend6(left, rargs), origin, sp), st))(_v) : inferExpr$(ctx, ECall(right, [left], None16, sp), st))(right))(_v) : _v._tag === "EPipe" ? (({ left, right, span: sp }) => inferExpr$(ctx, ECall(right, [left], None16, sp), st))(_v) : _v._tag === "EDo" ? (({ exprs }) => inferDo$(ctx, exprs, st))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => inferTernary$(ctx, cond, thenE, elseE, st))(_v) : _v._tag === "ERecord" ? (({ fields, spread, span: sp }) => _Option_match16(spread, () => _Result_flatMap7(([row, st1]) => Ok9(_tuple8(tRecord(row), st1)), inferRecordRow$(ctx, fields, st)), (spreadExpr) => _Result_flatMap7(([row, st1]) => _Result_flatMap7(([baseT, st2]) => (([tailVar, st3]) => _Result_flatMap7((st4) => Ok9(_tuple8(baseT, st4)), u$(ctx, baseT, tRecord(rWithTail$(row, tailVar)), st3, sp)))(freshRowVar(st2)), inferExpr$(ctx, spreadExpr, st1)), inferRecordRow$(ctx, fields, st))))(_v) : _v._tag === "EField" ? (({ target, name, span: sp }) => ((_v) => _v._tag === "ERef" ? (({ name: tname }) => and11(_Map_has5(tname, ctx.ns), !_Map_has5(tname, ctx.env)) ? inferNsField$(ctx, tname, name, sp, st) : inferFieldAccess$(ctx, e, target, name, sp, st))(_v) : inferFieldAccess$(ctx, e, target, name, sp, st))(target))(_v) : _v._tag === "ETuple" ? (({ elements }) => _Result_flatMap7(([elems, st1]) => Ok9(_tuple8(tTuple(elems), st1)), inferTupleElems$(ctx, elements, st)))(_v) : _v._tag === "EArr" ? (({ elements }) => inferSeqSlots$(ctx, "Array", elements, st))(_v) : _v._tag === "EList" ? (({ elements }) => inferSeqSlots$(ctx, "List", elements, st))(_v) : _v._tag === "ESet" ? (({ elements }) => inferSeqSlots$(ctx, "Set", elements, st))(_v) : _v._tag === "EMap" ? (({ entries }) => inferMapExpr$(ctx, entries, st))(_v) : _v._tag === "EMatch" ? (({ scrutinee, arms }) => inferMatch$(ctx, scrutinee, arms, st))(_v) : _v._tag === "ELoop" ? (({ params, body }) => _Result_flatMap7(([frame, bodyEnv, bodyOwner, st1]) => inferExpr$(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1), inferLoopParamsFrom$(ctx, params, 0, ctx.env, [], ctx.letOwner, st)))(_v) : _v._tag === "ERecur" ? (({ args, span: sp }) => inferRecur$(ctx, args, sp, st))(_v) : _v._tag === "EInterp" ? (({ parts }) => _Result_flatMap7((st1) => Ok9(_tuple8(tString, st1)), inferInterpParts$(ctx, parts, st)))(_v) : (() => {
-  throw new Error("non-exhaustive match");
-})())(e);
+var inferExprRaw$ = (ctx, e, st) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      return Ok9(_tuple8(tNumber, st));
+    }
+    case "EUnit": {
+      return Ok9(_tuple8(tUnit, st));
+    }
+    case "EBool": {
+      return Ok9(_tuple8(tBool, st));
+    }
+    case "EStr": {
+      const { value } = $match;
+      return Ok9(_tuple8(tLit(value), st));
+    }
+    case "ERef": {
+      const { name, span: sp } = $match;
+      return _Option_match16(_Map_get6(name, ctx.env), () => ctx.open ? _Set_has4(name, ctx.localNames) ? Err9(typeErrHelp$(`'${name}' is not in scope here`, sp, "it is bound elsewhere in this file, but not around this use \u2014 check the binder's extent")) : (([t, st1]) => Ok9(_tuple8(t, st1)))(freshVar(st)) : _Option_match16(closestName(name, _Map_keys6(ctx.env)), () => Err9(typeErrHelp$(`unbound variable '${name}'`, sp, "bind the name before using it, or check the spelling")), (hint) => Err9(typeErrSuggest$(`unbound variable '${name}'`, sp, `did you mean '${hint}'?`, hint))), (sc) => (([t, st1]) => Ok9(_tuple8(t, _Option_match16(_Map_get6(name, ctx.letOwner), () => st1, (vsp) => noteUse(vsp, t, st1)))))(instantiate(sc, st)));
+    }
+    case "ELambda": {
+      const { params, body } = $match;
+      return (([posParams, labParams]) => (([paramTypes, bodyEnv, st1]) => _Result_flatMap7(([annotVars, st2]) => _Result_flatMap7(([labFields, st3]) => ((allTypes) => ((st3Labs) => _Result_flatMap7(([bodyT, st4]) => Ok9(_tuple8(arrowChain$(allTypes, bodyT), recordNameParamsFrom$(posParams, paramTypes, st4))), inferExpr$(ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)), body, st3Labs)))(recordLabParamsFrom(labParams, labFields, st3)))(((_v) => _v.length === 0 ? paramTypes : _Array_append12(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams)), labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2)), constrainParamAnnotsFrom$(ctx, posParams, paramTypes, new Map, st1)))(bindParamsFrom$(posParams, ctx.env, st)))(splitLamParams$(params, [], []));
+    }
+    case "ELetIn": {
+      const { name, nameSpan, annot, value, body, span: _span } = $match;
+      const $match$ = value;
+      switch ($match$._tag) {
+        case "ELambda": {
+          const lets = localLetsFrom(e);
+          const idxOf = idxOfMap(lets);
+          const tail = localTail(e);
+          return (([localCtx, localSt, localErrs]) => _Option_match16(_Array_get15(0, localErrs), () => inferExpr$(localCtx, tail, localSt), (firstErr) => Err9(firstErr)))(processGroupsFrom$(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs));
+        }
+        default: {
+          return _Result_flatMap7(([valT, st1]) => _Result_flatMap7(([pinned, st2]) => ((widen) => ((sc) => ((vsp) => (($ctx) => inferExpr$($ctx, body, noteLet(vsp, recordBinder(nameSpan, pinned, "let", name, None16, st2))))(ctxWithLets(ctx, _Map_set6(name, sc, ctx.env), _Map_set6(name, vsp, ctx.letOwner))))(exprSpan3(value)))(generalizeOver(ctx.env, ctx.scopeNames, pinned, st2, widen)))(_Option_match16(annot, () => true, () => false)), _Option_match16(annot, () => Ok9(_tuple8(valT, st1)), (te) => (([at, , stA]) => _Result_map6((stB) => _tuple8(at, stB), checkFits$(ctx, valT, at, stA, annotSpan(te))))(typeExprToType(te, new Map, st1, ctx.aliasMap, _Set_fromArray5([]))))), inferExpr$(ctx, value, st));
+        }
+      }
+    }
+    case "ELetBind": {
+      const { param, paramSpan, monad, value, body } = $match;
+      return inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st);
+    }
+    case "ECall": {
+      const { fn, args, origin } = $match;
+      const api = { inferExpr: _curry17(2, (e, st0) => inferExpr$(ctx, e, st0)), unify: _curry17(4, (left, right, st0, sp) => u$(ctx, left, right, st0, sp)) };
+      return _Result_flatMap7((claimed) => _Option_match16(claimed, () => inferNormalCall$(ctx, fn, args, st), (r) => Ok9(r)), runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api));
+    }
+    case "EPipe": {
+      const { left, right, fast, span: sp } = $match;
+      return inferExpr$(ctx, hasPipeHole(right) ? fillPipeHole$(left, right, sp) : fast ? ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => ECall(rfn, _Array_prepend6(left, rargs), origin, sp))(_v) : ECall(right, [left], None16, sp))(right) : ECall(right, [left], None16, sp), st);
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return inferDo$(ctx, exprs, st);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return inferTernary$(ctx, cond, thenE, elseE, st);
+    }
+    case "ERecord": {
+      const { fields, spread, span: sp } = $match;
+      return _Option_match16(spread, () => _Result_flatMap7(([row, st1]) => Ok9(_tuple8(tRecord(row), st1)), inferRecordRow$(ctx, fields, st)), (spreadExpr) => _Result_flatMap7(([row, st1]) => _Result_flatMap7(([baseT, st2]) => (([tailVar, st3]) => _Result_flatMap7((st4) => Ok9(_tuple8(baseT, st4)), u$(ctx, baseT, tRecord(rWithTail$(row, tailVar)), st3, sp)))(freshRowVar(st2)), inferExpr$(ctx, spreadExpr, st1)), inferRecordRow$(ctx, fields, st)));
+    }
+    case "EField": {
+      const { target, name, span: sp } = $match;
+      const $match$ = target;
+      switch ($match$._tag) {
+        case "ERef": {
+          const { name: tname } = $match$;
+          return and11(_Map_has5(tname, ctx.ns), !_Map_has5(tname, ctx.env)) ? inferNsField$(ctx, tname, name, sp, st) : inferFieldAccess$(ctx, e, target, name, sp, st);
+        }
+        default: {
+          return inferFieldAccess$(ctx, e, target, name, sp, st);
+        }
+      }
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      return _Result_flatMap7(([elems, st1]) => Ok9(_tuple8(tTuple(elems), st1)), inferTupleElems$(ctx, elements, st));
+    }
+    case "EArr": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "Array", elements, st);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "List", elements, st);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return inferSeqSlots$(ctx, "Set", elements, st);
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return inferMapExpr$(ctx, entries, st);
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return inferMatch$(ctx, scrutinee, arms, st);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return _Result_flatMap7(([frame, bodyEnv, bodyOwner, st1]) => inferExpr$(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1), inferLoopParamsFrom$(ctx, params, 0, ctx.env, [], ctx.letOwner, st));
+    }
+    case "ERecur": {
+      const { args, span: sp } = $match;
+      return inferRecur$(ctx, args, sp, st);
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      return _Result_flatMap7((st1) => Ok9(_tuple8(tString, st1)), inferInterpParts$(ctx, parts, st));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 var inferExprRaw = _curry17(3, inferExprRaw$);
 var inferDo$ = (ctx, exprs, st) => ((_v) => _v.length === 0 ? Err9(typeErr$("internal: empty do block", { start: 0, end: 0 })) : _v.length === 1 ? (([last]) => inferExpr$(ctx, last, st))(_v) : _v.length >= 1 ? (([first, ...rest]) => _Result_flatMap7(([, st1]) => inferDo$(ctx, rest, st1), inferExpr$(ctx, first, st)))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -14149,33 +14287,162 @@ var genCalleeFor$ = (ctx, fn, argc) => {
 };
 var genCalleeFor = _curry20(3, genCalleeFor$);
 var isPipeHole2 = (a) => ((_v) => _v._tag === "ERef" && _v.name === "_" ? true : false)(a);
-var genExpr$ = (ctx, e) => ((_v) => _v._tag === "ENum" ? (({ raw }) => raw)(_v) : _v._tag === "EUnit" ? "undefined" : _v._tag === "EBool" ? (({ value }) => value ? "true" : "false")(_v) : _v._tag === "EStr" ? (({ value }) => jsStringLit(value))(_v) : _v._tag === "ERef" ? (({ name }) => castOr$(name, isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : None18))(_v) : _v._tag === "ECall" ? (({ fn, args, origin }) => _Option_match18(tsxCall$(ctx, fn, args, origin), () => _Option_match18(tsInfix$(ctx, fn, args), () => {
-  const inner = `${genCalleeFor$(ctx, fn, length15(args))}(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), args))})`;
-  return castOr$(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None18);
-}, (infix) => infix), (jsx) => jsx))(_v) : _v._tag === "ELambda" ? (({ params, body, span: sp }) => (([arrow, arity]) => arity >= 2 ? `_curry(${show8(arity)}, ${arrow})` : arrow)(genArrow$(ctx, params, body, sp, "")))(_v) : _v._tag === "ELetIn" ? (({ name, value, body }) => ((param) => `((${param}) => ${genLambdaBody$(ctx, body)})(${genExpr$(ctx, value)})`)(suffixOr$(name, hook1(ctx.annotateLetin, value))))(_v) : _v._tag === "ELetBind" ? (({ param, monad, value, body }) => ((rt) => ((f) => ((v) => ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`)(genExpr$(ctx, value)))(`(${genParam(param)}) => ${genLambdaBody$(ctx, body)}`))(bindRuntime(monad)))(_v) : _v._tag === "EPipe" && _v.right._tag === "ECall" && (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) => someOf4(isPipeHole2, rargs))(_v) ? (({ left, right: { fn: rfn, args: rargs, origin }, span: sp }) => genExpr$(ctx, ECall(rfn, map12((a) => isPipeHole2(a) ? left : a, rargs), origin, sp)))(_v) : _v._tag === "EPipe" ? (({ left, right, fast, span: sp }) => fast ? ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => genExpr$(ctx, ECall(rfn, _Array_prepend8(left, rargs), origin, sp)))(_v) : genExpr$(ctx, ECall(right, [left], None18, sp)))(right) : ((_v) => _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v) ? (({ fn: rfn, args: rargs }) => `${genCalleeFor$(ctx, rfn, length15(rargs) + 1)}(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), _Array_append14(left, rargs)))})`)(_v) : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right))(_v) : _v._tag === "EDo" ? (({ exprs }) => genDo$(ctx, exprs))(_v) : _v._tag === "ETernary" ? (({ cond, thenE, elseE }) => `(${genExpr$(ctx, cond)} ? ${genExpr$(ctx, thenE)} : ${genExpr$(ctx, elseE)})`)(_v) : _v._tag === "EMatch" ? (({ scrutinee, arms }) => genMatch$(ctx, scrutinee, arms))(_v) : _v._tag === "ELoop" ? (({ params, body }) => `(() => { ${genLoopBlock$(ctx, params, body)} })()`)(_v) : _v._tag === "ERecur" ? (({ args }) => `_recur(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), args))})`)(_v) : _v._tag === "ERecord" ? (({ fields, spread }) => ((fieldStrs) => _Option_match18(spread, () => length15(fields) === 0 ? "{}" : `{ ${fieldStrs} }`, (s) => {
-  const spreadStr = `...${genExpr$(ctx, s)}`;
-  return length15(fields) === 0 ? `{ ${spreadStr} }` : `{ ${spreadStr}, ${fieldStrs} }`;
-}))(_Str_join8(", ", map12((f) => `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr$(ctx, f.value)}`, fields))))(_v) : _v._tag === "EField" ? (({ target, name, optional }) => _Option_match18(emptyNsEmit$(target, name, hook1(ctx.annotateEmpty, e)), () => _Option_match18(nsRuntimeId$(ctx, target, name), () => {
-  const member = `${genMember$(ctx, target)}.${name}`;
-  return optional ? ((tagType) => `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(_Option_isSome5(ctx.guardBaseType) ? " as const" : "") : member;
-}, (rt) => rt), (js) => js))(_v) : _v._tag === "ETuple" ? (({ elements }) => ((elems) => ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`)(_Str_join8(", ", map12((el) => genExpr$(ctx, el), elements))))(_v) : _v._tag === "EArr" ? (({ elements }) => ((body) => castOr$(body, length15(elements) === 0 ? hook1(ctx.annotateEmpty, e) : None18))(`[${_Str_join8(", ", map12((el) => genSeqSlot$(ctx, el), elements))}]`))(_v) : _v._tag === "EList" ? (({ elements }) => genList$(ctx, elements))(_v) : _v._tag === "ESet" ? (({ elements }) => `new Set([${_Str_join8(", ", map12((el) => genSeqSlot$(ctx, el), elements))}])`)(_v) : _v._tag === "EMap" ? (({ entries }) => _Option_match18(length15(entries) === 0 ? hook1(ctx.annotateEmpty, e) : None18, () => `new Map([${_Str_join8(", ", map12((en) => `[${genExpr$(ctx, en.key)}, ${genExpr$(ctx, en.value)}]`, entries))}])`, (t) => `new ${t}()`))(_v) : _v._tag === "EInterp" ? (({ parts }) => ((body) => `\`${body}\``)(_Str_join8("", map12((p) => {
-  const $match = p;
+var hasPipeHole2 = (right) => {
+  const $match = right;
   switch ($match._tag) {
-    case "IPLit": {
-      const { value } = $match;
-      return escapeTemplateLiteral(value);
+    case "ECall": {
+      const { args: rargs } = $match;
+      return someOf4(isPipeHole2, rargs);
     }
-    case "IPExpr": {
-      const { expr: ex } = $match;
-      return `\${${genExpr$(ctx, ex)}}`;
+    default: {
+      return false;
+    }
+  }
+};
+var fillPipeHole$2 = (left, right, sp) => {
+  const $match = right;
+  switch ($match._tag) {
+    case "ECall": {
+      const { fn: rfn, args: rargs, origin } = $match;
+      return ECall(rfn, map12((a) => isPipeHole2(a) ? left : a, rargs), origin, sp);
+    }
+    default: {
+      return right;
+    }
+  }
+};
+var fillPipeHole2 = _curry20(3, fillPipeHole$2);
+var genExpr$ = (ctx, e) => {
+  const $match = e;
+  switch ($match._tag) {
+    case "ENum": {
+      const { raw } = $match;
+      return raw;
+    }
+    case "EUnit": {
+      return "undefined";
+    }
+    case "EBool": {
+      const { value } = $match;
+      return value ? "true" : "false";
+    }
+    case "EStr": {
+      const { value } = $match;
+      return jsStringLit(value);
+    }
+    case "ERef": {
+      const { name } = $match;
+      return castOr$(name, isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : None18);
+    }
+    case "ECall": {
+      const { fn, args, origin } = $match;
+      return _Option_match18(tsxCall$(ctx, fn, args, origin), () => _Option_match18(tsInfix$(ctx, fn, args), () => {
+        const inner = `${genCalleeFor$(ctx, fn, length15(args))}(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), args))})`;
+        return castOr$(inner, isCtorRef(fn) ? hook1(ctx.annotateCall, e) : None18);
+      }, (infix) => infix), (jsx) => jsx);
+    }
+    case "ELambda": {
+      const { params, body, span: sp } = $match;
+      return (([arrow, arity]) => arity >= 2 ? `_curry(${show8(arity)}, ${arrow})` : arrow)(genArrow$(ctx, params, body, sp, ""));
+    }
+    case "ELetIn": {
+      const { name, value, body } = $match;
+      const param = suffixOr$(name, hook1(ctx.annotateLetin, value));
+      return `((${param}) => ${genLambdaBody$(ctx, body)})(${genExpr$(ctx, value)})`;
+    }
+    case "ELetBind": {
+      const { param, monad, value, body } = $match;
+      const rt = bindRuntime(monad);
+      const f = `(${genParam(param)}) => ${genLambdaBody$(ctx, body)}`;
+      const v = genExpr$(ctx, value);
+      return ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`;
+    }
+    case "EPipe": {
+      const { left, right, fast, span: sp } = $match;
+      return hasPipeHole2(right) ? genExpr$(ctx, fillPipeHole$2(left, right, sp)) : fast ? ((_v) => _v._tag === "ECall" ? (({ fn: rfn, args: rargs, origin }) => genExpr$(ctx, ECall(rfn, _Array_prepend8(left, rargs), origin, sp)))(_v) : genExpr$(ctx, ECall(right, [left], None18, sp)))(right) : ((_v) => _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v) ? (({ fn: rfn, args: rargs }) => `${genCalleeFor$(ctx, rfn, length15(rargs) + 1)}(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), _Array_append14(left, rargs)))})`)(_v) : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
+    }
+    case "EDo": {
+      const { exprs } = $match;
+      return genDo$(ctx, exprs);
+    }
+    case "ETernary": {
+      const { cond, thenE, elseE } = $match;
+      return `(${genExpr$(ctx, cond)} ? ${genExpr$(ctx, thenE)} : ${genExpr$(ctx, elseE)})`;
+    }
+    case "EMatch": {
+      const { scrutinee, arms } = $match;
+      return genMatch$(ctx, scrutinee, arms);
+    }
+    case "ELoop": {
+      const { params, body } = $match;
+      return `(() => { ${genLoopBlock$(ctx, params, body)} })()`;
+    }
+    case "ERecur": {
+      const { args } = $match;
+      return `_recur(${_Str_join8(", ", map12((a) => genExpr$(ctx, a), args))})`;
+    }
+    case "ERecord": {
+      const { fields, spread } = $match;
+      const fieldStrs = _Str_join8(", ", map12((f) => `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr$(ctx, f.value)}`, fields));
+      return _Option_match18(spread, () => length15(fields) === 0 ? "{}" : `{ ${fieldStrs} }`, (s) => {
+        const spreadStr = `...${genExpr$(ctx, s)}`;
+        return length15(fields) === 0 ? `{ ${spreadStr} }` : `{ ${spreadStr}, ${fieldStrs} }`;
+      });
+    }
+    case "EField": {
+      const { target, name, optional } = $match;
+      return _Option_match18(emptyNsEmit$(target, name, hook1(ctx.annotateEmpty, e)), () => _Option_match18(nsRuntimeId$(ctx, target, name), () => {
+        const member = `${genMember$(ctx, target)}.${name}`;
+        return optional ? ((tagType) => `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(_Option_isSome5(ctx.guardBaseType) ? " as const" : "") : member;
+      }, (rt) => rt), (js) => js);
+    }
+    case "ETuple": {
+      const { elements } = $match;
+      const elems = _Str_join8(", ", map12((el) => genExpr$(ctx, el), elements));
+      return ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
+    }
+    case "EArr": {
+      const { elements } = $match;
+      const body = `[${_Str_join8(", ", map12((el) => genSeqSlot$(ctx, el), elements))}]`;
+      return castOr$(body, length15(elements) === 0 ? hook1(ctx.annotateEmpty, e) : None18);
+    }
+    case "EList": {
+      const { elements } = $match;
+      return genList$(ctx, elements);
+    }
+    case "ESet": {
+      const { elements } = $match;
+      return `new Set([${_Str_join8(", ", map12((el) => genSeqSlot$(ctx, el), elements))}])`;
+    }
+    case "EMap": {
+      const { entries } = $match;
+      return _Option_match18(length15(entries) === 0 ? hook1(ctx.annotateEmpty, e) : None18, () => `new Map([${_Str_join8(", ", map12((en) => `[${genExpr$(ctx, en.key)}, ${genExpr$(ctx, en.value)}]`, entries))}])`, (t) => `new ${t}()`);
+    }
+    case "EInterp": {
+      const { parts } = $match;
+      const body = _Str_join8("", map12((p) => {
+        const $match$ = p;
+        switch ($match$._tag) {
+          case "IPLit": {
+            const { value } = $match$;
+            return escapeTemplateLiteral(value);
+          }
+          case "IPExpr": {
+            const { expr: ex } = $match$;
+            return `\${${genExpr$(ctx, ex)}}`;
+          }
+          default: {
+            throw new Error("non-exhaustive match");
+          }
+        }
+      }, parts));
+      return `\`${body}\``;
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
-}, parts))))(_v) : (() => {
-  throw new Error("non-exhaustive match");
-})())(e);
+};
 var genExpr = _curry20(2, genExpr$);
 var genDo$ = (ctx, exprs) => `(() => { ${genDoSteps$(ctx, exprs)} })()`;
 var genDo = _curry20(2, genDo$);
