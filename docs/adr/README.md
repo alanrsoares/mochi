@@ -186,6 +186,7 @@ What else was on the table and why not.
 | [0147](0147-function-tail-match-statements.md) | Flat switches for function-tail constructor matches | Accepted |
 | [0148](0148-format-emitted-output-at-host-boundaries.md) | Format emitted output at host boundaries | Accepted |
 | [0149](0149-saturated-direct-calls.md) | Saturated calls go direct to a raw twin | Accepted |
+| [0150](0150-dict-string-keyed-dictionary.md) | `Dict<a>`: uniform string-keyed dictionary | Accepted |
 
 Numbers not listed above (`0018`, `0019`, `0024`, `0027`, `0029`, `0030`, `0033`) have
 never been assigned to an ADR — no source citation pins a decision to them, so none was
