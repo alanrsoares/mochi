@@ -49,6 +49,7 @@ const NS_DOCS: Record<string, string> = {
   List: "Lazy `List` combinators (`@{…}` sequences).",
   Set: "Immutable Set ops (return a fresh Set).",
   Map: "Immutable Map ops (return a fresh Map).",
+  Dict: "Immutable string-keyed dictionary ops (return a fresh Dict). Plain object at runtime.",
   Option: "Option combinators — data-last for `|>` chains. Ctors stay unqualified (`Some`/`None`).",
   Result:
     "Result railway combinators — data-last for `|>` chains. Ctors stay unqualified (`Ok`/`Err`).",

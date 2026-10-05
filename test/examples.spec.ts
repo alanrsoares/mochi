@@ -555,6 +555,34 @@ let miss = Map.get("b", #{"a": 1})`;
   ]);
 });
 
+test("Dict<a> is an immutable string-keyed dictionary (ADR 0150)", () => {
+  const src = `let empty : Dict<number> = Dict.empty
+let d = empty |> Dict.set("a", 1) |> Dict.set("__proto__", 2)
+let gone = Dict.remove("a", d)
+let es = Dict.entries(d)
+let total = Dict.values(Dict.map(n => n * 10, d)) |> reduce((acc, n) => acc + n, 0)
+let out = (
+  Dict.get("a", d),
+  Dict.get("missing", d),
+  Dict.getOr(0, "zzz", d),
+  Dict.has("a", gone),
+  Dict.size(empty),
+  Dict.size(d),
+  Dict.fromEntries(es) == d,
+  total
+)`;
+  expect(compileAndEval(src, "out")).toEqual([
+    { _tag: "Some", value: 1 },
+    { _tag: "None" },
+    0,
+    false,
+    0,
+    2,
+    true,
+    30,
+  ]);
+});
+
 test("examples/life/main.mochi builds with the Bun terminal bindings", () => {
   expect(build("examples/life/main.mochi").length).toBeGreaterThan(0);
 });

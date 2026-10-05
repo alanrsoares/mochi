@@ -738,7 +738,7 @@ var isArrowT = (t) => {
     }
   }
 };
-var isCollection = (name) => or2(or2(or2(name === "Array", name === "List"), name === "Set"), name === "Map");
+var isCollection = (name) => or2(or2(or2(or2(name === "Array", name === "List"), name === "Set"), name === "Map"), name === "Dict");
 var isTupleT = (t) => {
   const $match = t;
   switch ($match._tag) {
@@ -11169,7 +11169,7 @@ var checkExprs$ = (e, reg) => {
   }
 };
 var checkExprs = _curry14(2, checkExprs$);
-var reservedNames = ["Array", "List", "Set", "Map", "Option", "Result", "Task", "Str"];
+var reservedNames = ["Array", "List", "Set", "Map", "Dict", "Option", "Result", "Task", "Str"];
 var redeclarableTypes = ["Option", "Result"];
 var reservedErr = _curry14(2, (name, sp) => checkErr(`'${name}' is a reserved collection namespace and cannot be bound`, sp));
 var checkReservedNames = (stmts) => firstSome((s) => {
@@ -15835,7 +15835,7 @@ var shapeFieldsFrom$ = (row, vars) => {
 var shapeFieldsFrom = _curry21(2, shapeFieldsFrom$);
 var shapeJoined$ = (ts, vars) => _Str_join9(", ", map13((t) => shapeType$(t, vars), ts));
 var shapeJoined = _curry21(2, shapeJoined$);
-var shapeType$ = (t, vars) => ((_v) => _v._tag === "TyRecord" ? (({ row }) => _Option_match19(shapeFieldsFrom$(row, vars), () => tsOf$(t, plainEnv(vars)), (fs) => length16(fs) === 0 ? "{}" : `{ ${_Str_join9("; ", _Array_sort(fs))} }`))(_v) : _v._tag === "TyCon" && _v.name === "Array" && _v.args.length === 1 ? (({ args: [elem] }) => ((inner) => ((_v) => _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? `(${inner})[]` : _v._tag === "TyFn" ? `(${inner})[]` : _v._tag === "TyOneOf" ? `(${inner})[]` : `${inner}[]`)(widenLits(elem)))(shapeType$(elem, vars)))(_v) : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1 ? (({ args: [elem] }) => `Iterable<${shapeType$(elem, vars)}>`)(_v) : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? (({ args: [value, error] }) => `() => Promise<Result<${shapeType$(value, vars)}, ${shapeType$(error, vars)}>>`)(_v) : _v._tag === "TyCon" && _v.name === "tuple" ? (({ args: elems }) => `[${shapeJoined$(elems, vars)}]`)(_v) : _v._tag === "TyCon" ? (({ name, args }) => length16(args) === 0 ? primitiveTs(name) : `${name}<${shapeJoined$(args, vars)}>`)(_v) : _v._tag === "TyOneOf" ? (({ members }) => _Str_join9(" | ", map13((m) => ((_v) => _v._tag === "TySingleton" && _v.base === "string" ? (({ value }) => `"${value}"`)(_v) : _v._tag === "TySingleton" ? (({ value }) => value)(_v) : shapeType$(m, vars))(m), members)))(_v) : tsOf$(t, plainEnv(vars)))(widenLits(t));
+var shapeType$ = (t, vars) => ((_v) => _v._tag === "TyRecord" ? (({ row }) => _Option_match19(shapeFieldsFrom$(row, vars), () => tsOf$(t, plainEnv(vars)), (fs) => length16(fs) === 0 ? "{}" : `{ ${_Str_join9("; ", _Array_sort(fs))} }`))(_v) : _v._tag === "TyCon" && _v.name === "Array" && _v.args.length === 1 ? (({ args: [elem] }) => ((inner) => ((_v) => _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? `(${inner})[]` : _v._tag === "TyFn" ? `(${inner})[]` : _v._tag === "TyOneOf" ? `(${inner})[]` : `${inner}[]`)(widenLits(elem)))(shapeType$(elem, vars)))(_v) : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1 ? (({ args: [elem] }) => `Iterable<${shapeType$(elem, vars)}>`)(_v) : _v._tag === "TyCon" && _v.name === "Dict" && _v.args.length === 1 ? (({ args: [elem] }) => `Record<string, ${shapeType$(elem, vars)}>`)(_v) : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? (({ args: [value, error] }) => `() => Promise<Result<${shapeType$(value, vars)}, ${shapeType$(error, vars)}>>`)(_v) : _v._tag === "TyCon" && _v.name === "tuple" ? (({ args: elems }) => `[${shapeJoined$(elems, vars)}]`)(_v) : _v._tag === "TyCon" ? (({ name, args }) => length16(args) === 0 ? primitiveTs(name) : `${name}<${shapeJoined$(args, vars)}>`)(_v) : _v._tag === "TyOneOf" ? (({ members }) => _Str_join9(" | ", map13((m) => ((_v) => _v._tag === "TySingleton" && _v.base === "string" ? (({ value }) => `"${value}"`)(_v) : _v._tag === "TySingleton" ? (({ value }) => value)(_v) : shapeType$(m, vars))(m), members)))(_v) : tsOf$(t, plainEnv(vars)))(widenLits(t));
 var shapeType = _curry21(2, shapeType$);
 var rowShapeKey$ = (row, vars) => _Option_map2((fs) => _Str_join9("; ", _Array_sort(fs)), shapeFieldsFrom$(row, vars));
 var rowShapeKey = _curry21(2, rowShapeKey$);
@@ -15861,7 +15861,7 @@ var tsArrowParams$ = (fromT, toT, env, i, params) => {
 var tsArrowParams = _curry21(5, tsArrowParams$);
 var tsOf$ = (t, env) => tsOfRaw$(widenLits(t), env);
 var tsOf = _curry21(2, tsOf$);
-var tsOfRaw$ = (t, env) => ((_v) => _v._tag === "TyVar" ? (({ id }) => _Option_unwrapOr12("unknown", _Map_get9(id, env.vars)))(_v) : _v._tag === "TyCon" && _v.name === "Array" && _v.args.length === 1 ? (({ args: [elem] }) => ((inner) => ((_v) => _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? `(${inner})[]` : _v._tag === "TyFn" ? `(${inner})[]` : _v._tag === "TyOneOf" ? `(${inner})[]` : `${inner}[]`)(elem))(tsOfRaw$(elem, env)))(_v) : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1 ? (({ args: [elem] }) => `Iterable<${tsOfRaw$(elem, env)}>`)(_v) : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? (({ args: [value, error] }) => `() => Promise<Result<${tsOfRaw$(value, env)}, ${tsOfRaw$(error, env)}>>`)(_v) : _v._tag === "TyCon" && _v.name === "tuple" ? (({ args: elems }) => `[${namesOf$(elems, env)}]`)(_v) : _v._tag === "TyCon" ? (({ name, args }) => nominal$(name, args, env))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => tsArrow$(fromT, toT, env))(_v) : _v._tag === "TyRecord" ? (({ row }) => tsRow$(row, env))(_v) : _v._tag === "TySingleton" && _v.base === "string" ? (({ value }) => `"${value}"`)(_v) : _v._tag === "TySingleton" ? (({ value }) => value)(_v) : _v._tag === "TyOneOf" ? (({ members }) => _Str_join9(" | ", map13((m) => tsOfRaw$(m, env), members)))(_v) : (() => {
+var tsOfRaw$ = (t, env) => ((_v) => _v._tag === "TyVar" ? (({ id }) => _Option_unwrapOr12("unknown", _Map_get9(id, env.vars)))(_v) : _v._tag === "TyCon" && _v.name === "Array" && _v.args.length === 1 ? (({ args: [elem] }) => ((inner) => ((_v) => _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? `(${inner})[]` : _v._tag === "TyFn" ? `(${inner})[]` : _v._tag === "TyOneOf" ? `(${inner})[]` : `${inner}[]`)(elem))(tsOfRaw$(elem, env)))(_v) : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1 ? (({ args: [elem] }) => `Iterable<${tsOfRaw$(elem, env)}>`)(_v) : _v._tag === "TyCon" && _v.name === "Dict" && _v.args.length === 1 ? (({ args: [elem] }) => `Record<string, ${tsOfRaw$(elem, env)}>`)(_v) : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? (({ args: [value, error] }) => `() => Promise<Result<${tsOfRaw$(value, env)}, ${tsOfRaw$(error, env)}>>`)(_v) : _v._tag === "TyCon" && _v.name === "tuple" ? (({ args: elems }) => `[${namesOf$(elems, env)}]`)(_v) : _v._tag === "TyCon" ? (({ name, args }) => nominal$(name, args, env))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => tsArrow$(fromT, toT, env))(_v) : _v._tag === "TyRecord" ? (({ row }) => tsRow$(row, env))(_v) : _v._tag === "TySingleton" && _v.base === "string" ? (({ value }) => `"${value}"`)(_v) : _v._tag === "TySingleton" ? (({ value }) => value)(_v) : _v._tag === "TyOneOf" ? (({ members }) => _Str_join9(" | ", map13((m) => tsOfRaw$(m, env), members)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(t);
 var tsOfRaw = _curry21(2, tsOfRaw$);
@@ -19517,6 +19517,346 @@ var _namespaces = {
       ]
     }
   },
+  Dict: {
+    empty: {
+      _tag: "TyCon",
+      name: "Dict",
+      args: [
+        {
+          _tag: "TyVar",
+          id: 0
+        }
+      ]
+    },
+    has: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Dict",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "bool",
+          args: []
+        }
+      }
+    },
+    get: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Dict",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Option",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    getOr: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyVar",
+        id: 0
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "string",
+          args: []
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Dict",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          },
+          to: {
+            _tag: "TyVar",
+            id: 0
+          }
+        }
+      }
+    },
+    set: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyFn",
+          from: {
+            _tag: "TyCon",
+            name: "Dict",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          },
+          to: {
+            _tag: "TyCon",
+            name: "Dict",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          }
+        }
+      }
+    },
+    remove: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "string",
+        args: []
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Dict",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Dict",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        }
+      }
+    },
+    size: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Dict",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "number",
+        args: []
+      }
+    },
+    keys: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Dict",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "string",
+            args: []
+          }
+        ]
+      }
+    },
+    values: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Dict",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    entries: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Dict",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "tuple",
+            args: [
+              {
+                _tag: "TyCon",
+                name: "string",
+                args: []
+              },
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    fromEntries: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "tuple",
+            args: [
+              {
+                _tag: "TyCon",
+                name: "string",
+                args: []
+              },
+              {
+                _tag: "TyVar",
+                id: 0
+              }
+            ]
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Dict",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          }
+        ]
+      }
+    },
+    map: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyVar",
+          id: 0
+        },
+        to: {
+          _tag: "TyVar",
+          id: 1
+        }
+      },
+      to: {
+        _tag: "TyFn",
+        from: {
+          _tag: "TyCon",
+          name: "Dict",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 0
+            }
+          ]
+        },
+        to: {
+          _tag: "TyCon",
+          name: "Dict",
+          args: [
+            {
+              _tag: "TyVar",
+              id: 1
+            }
+          ]
+        }
+      }
+    }
+  },
   Option: {
     map: {
       _tag: "TyFn",
@@ -20959,6 +21299,20 @@ var _namespaceRuntime = {
     values: "_Map_values",
     get: "_Map_get"
   },
+  Dict: {
+    empty: "_Dict_empty",
+    has: "_Dict_has",
+    get: "_Dict_get",
+    getOr: "_Dict_getOr",
+    set: "_Dict_set",
+    remove: "_Dict_remove",
+    size: "_Dict_size",
+    keys: "_Dict_keys",
+    values: "_Dict_values",
+    entries: "_Dict_entries",
+    fromEntries: "_Dict_fromEntries",
+    map: "_Dict_map"
+  },
   Option: {
     map: "_Option_map",
     flatMap: "_Option_flatMap",
@@ -21272,7 +21626,7 @@ var _preludeJsDefs = {
   return _compareRecords(x, y);
 };`,
   compare: "const compare = _curry(2, _compare);",
-  show: 'const show = (x) => {\n  const t = typeof x;\n  if (t === "string")\n    return JSON.stringify(x);\n  if (t !== "object" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(", ")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(", ")}}`;\n  if (typeof x[Symbol.iterator] === "function")\n    return "<List>";\n  if (typeof x._tag === "string") {\n    const ks = Object.keys(x).filter((k) => k !== "_tag");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(", ")})`;\n  }\n  const ks = Object.keys(x);\n  return ks.length === 0 ? String(x) : `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(", ")} }`;\n};',
+  show: 'const show = (x) => {\n  const t = typeof x;\n  if (t === "string")\n    return JSON.stringify(x);\n  if (t !== "object" || x === null)\n    return String(x);\n  if (Array.isArray(x))\n    return `[${x.map(show).join(", ")}]`;\n  if (x instanceof Map)\n    return `#{${[...x.entries()].map((e) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;\n  if (x instanceof Set)\n    return `#{${[...x].map(show).join(", ")}}`;\n  if (typeof x[Symbol.iterator] === "function")\n    return "<List>";\n  const dict = Object.getPrototypeOf(x) === null;\n  if (!dict && typeof x._tag === "string") {\n    const ks = Object.keys(x).filter((k) => k !== "_tag");\n    return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k) => show(x[k])).join(", ")})`;\n  }\n  const ks = Object.keys(x);\n  return ks.length === 0 ? dict ? "{}" : String(x) : `{ ${ks.map((k) => `${k}: ${show(x[k])}`).join(", ")} }`;\n};',
   ignore: `const ignore = (_x) => {
   return;
 };`,
@@ -21392,6 +21746,33 @@ var _preludeJsDefs = {
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
   _Map_get: "const _Map_get = _curry(2, (k, m) => m.has(k) ? Some(m.get(k)) : None);",
+  _dictFrom: `const _dictFrom = (entries) => {
+  const d = Object.create(null);
+  for (const [k, v] of entries)
+    d[k] = v;
+  return d;
+};`,
+  _dictHas: "const _dictHas = (k, d) => Object.getOwnPropertyDescriptor(d, k) !== undefined;",
+  _Dict_empty: "const _Dict_empty = Object.freeze(Object.create(null));",
+  _Dict_has: "const _Dict_has = _curry(2, (k, d) => _dictHas(k, d));",
+  _Dict_get: "const _Dict_get = _curry(2, (k, d) => _dictHas(k, d) ? Some(d[k]) : None);",
+  _Dict_getOr: "const _Dict_getOr = _curry(3, (def, k, d) => _dictHas(k, d) ? d[k] : def);",
+  _Dict_set: `const _Dict_set = _curry(3, (k, v, d) => {
+  const n = _dictFrom(Object.entries(d));
+  n[k] = v;
+  return n;
+});`,
+  _Dict_remove: `const _Dict_remove = _curry(2, (k, d) => {
+  const n = _dictFrom(Object.entries(d));
+  delete n[k];
+  return n;
+});`,
+  _Dict_size: "const _Dict_size = (d) => Object.keys(d).length;",
+  _Dict_keys: "const _Dict_keys = (d) => Object.keys(d);",
+  _Dict_values: "const _Dict_values = (d) => Object.values(d);",
+  _Dict_entries: "const _Dict_entries = (d) => Object.entries(d);",
+  _Dict_fromEntries: "const _Dict_fromEntries = (es) => _dictFrom(es);",
+  _Dict_map: "const _Dict_map = _curry(2, (f, d) => _dictFrom(Object.entries(d).map(([k, v]) => [k, f(v)])));",
   _Option_map: 'const _Option_map = _curry(2, (f, o) => o._tag === "Some" ? Some(f(o.value)) : None);',
   _Option_flatMap: 'const _Option_flatMap = _curry(2, (f, o) => o._tag === "Some" ? f(o.value) : None);',
   _Option_mapOr: 'const _Option_mapOr = _curry(3, (d, f, o) => o._tag === "Some" ? f(o.value) : d);',
@@ -21691,6 +22072,35 @@ var _runtimeDeps = {
     "_curry",
     "Some",
     "None"
+  ],
+  _Dict_has: [
+    "_curry",
+    "_dictHas"
+  ],
+  _Dict_get: [
+    "_curry",
+    "Some",
+    "None",
+    "_dictHas"
+  ],
+  _Dict_getOr: [
+    "_curry",
+    "_dictHas"
+  ],
+  _Dict_set: [
+    "_curry",
+    "_dictFrom"
+  ],
+  _Dict_remove: [
+    "_curry",
+    "_dictFrom"
+  ],
+  _Dict_fromEntries: [
+    "_dictFrom"
+  ],
+  _Dict_map: [
+    "_curry",
+    "_dictFrom"
   ],
   _Option_map: [
     "_curry",

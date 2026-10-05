@@ -28,7 +28,16 @@ const CTOR_TYPES: Record<string, string> = {
  * tuples, the loop/recur step protocol), not builtins a program can name, so
  * their types are hand-written and simply exempt from the drift check.
  */
-export const UNTYPED_BY_HM: readonly string[] = ["_list", "_tuple", "_recur", "_done", "_curry"];
+export const UNTYPED_BY_HM: readonly string[] = [
+  "_list",
+  "_tuple",
+  "_recur",
+  "_done",
+  "_curry",
+  "_dictFrom",
+  "_dictHas",
+  "_Dict_empty",
+];
 
 /** The annotation `runtime.ts` should carry for `jsId`, or `null` when exempt. */
 export const expectedAnnotation = (jsId: string): string | null => {

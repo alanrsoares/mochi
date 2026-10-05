@@ -17,6 +17,7 @@
         "@mochi/codemod": "workspace:*",
         "@mochi/compiler": "workspace:*",
         "@mochi/dx": "workspace:*",
+        "@mochi/json": "workspace:*",
         "@mochi/lsp": "workspace:*",
         "@mochi/plugin-preact": "workspace:*",
         "@mochi/plugin-re-reduced": "workspace:*",
@@ -146,6 +147,15 @@
       },
       "devDependencies": {
         "@mochi/test-support": "workspace:*",
+      },
+    },
+    "packages/json": {
+      "name": "@mochi/json",
+      "version": "0.1.0",
+      "dependencies": {
+        "@mochi/compiler": "workspace:*",
+        "@mochi/test": "workspace:*",
+        "@onrails/result": "^0.4.2",
       },
     },
     "packages/lsp": {
@@ -396,6 +406,8 @@
     "@mochi/dx": ["@mochi/dx@workspace:packages/dx"],
 
     "@mochi/example-snake": ["@mochi/example-snake@workspace:examples/snake"],
+
+    "@mochi/json": ["@mochi/json@workspace:packages/json"],
 
     "@mochi/lsp": ["@mochi/lsp@workspace:packages/lsp"],
 

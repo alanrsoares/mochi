@@ -213,6 +213,7 @@ Four literal forms, each a distinct type:
 | `@{1, 2, 3}` | `List<number>` (lazy) | generator-backed pull sequence |
 | `#{1, 2}` | `Set<number>` | native JS `Set` (dedupes) |
 | `#{ "a": 1 }` | `Map<K, V>` | native JS `Map` |
+| `Dict.fromEntries([("a", 1)])` | `Dict<A>` (TS `Record<string, A>`) | null-prototype plain object (ADR 0150) |
 
 Array / List / Set literals may splice with `...` (`[a, ...xs]`, `@{a, ...xs}`,
 `#{a, ...s}` — ADR 0001). Each spread must be the **same** collection kind.

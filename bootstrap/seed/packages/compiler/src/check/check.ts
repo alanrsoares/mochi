@@ -1462,7 +1462,17 @@ const checkExprs$ = (e: Expr, reg: Registry): PErr[] => {
   }
 };
 const checkExprs: _Curry<[e: Expr, reg: Registry], PErr[]> = _curry(2, checkExprs$);
-const reservedNames: string[] = ["Array", "List", "Set", "Map", "Option", "Result", "Task", "Str"];
+const reservedNames: string[] = [
+  "Array",
+  "List",
+  "Set",
+  "Map",
+  "Dict",
+  "Option",
+  "Result",
+  "Task",
+  "Str",
+];
 const redeclarableTypes: string[] = ["Option", "Result"];
 const reservedErr: <C>(name: string, sp: { end: number; start: number } & C) => PErr = _curry(
   2,

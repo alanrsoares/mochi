@@ -337,13 +337,17 @@ export const show: <A>(a: A) => string = (x: any) => {
     return `#{${[...x.entries()].map((e: any) => `${show(e[0])}: ${show(e[1])}`).join(", ")}}`;
   if (x instanceof Set) return `#{${[...x].map(show).join(", ")}}`;
   if (typeof x[Symbol.iterator] === "function") return "<List>";
-  if (typeof x._tag === "string") {
+  // Null-prototype objects are `Dict`s (ADR 0150): a `_tag` key is plain data.
+  const dict = Object.getPrototypeOf(x) === null;
+  if (!dict && typeof x._tag === "string") {
     const ks = Object.keys(x).filter((k: any) => k !== "_tag");
     return ks.length === 0 ? x._tag : `${x._tag}(${ks.map((k: any) => show(x[k])).join(", ")})`;
   }
   const ks = Object.keys(x);
   return ks.length === 0
-    ? String(x)
+    ? dict
+      ? "{}"
+      : String(x)
     : `{ ${ks.map((k: any) => `${k}: ${show(x[k])}`).join(", ")} }`;
 };
 export const ignore: <A>(a: A) => undefined = (_x: any) => undefined;
@@ -578,6 +582,57 @@ export const _Map_get: {
   <A, B>(a: A): (b: Map<A, B>) => Option<B>;
   <A, B>(a: A, b: Map<A, B>): Option<B>;
 } = _curry(2, (k: any, m: any) => (m.has(k) ? Some(m.get(k)) : None));
+export const _dictFrom = <A>(entries: Iterable<readonly [string, A]>): Record<string, A> => {
+  const d: Record<string, A> = Object.create(null);
+  for (const [k, v] of entries) d[k] = v;
+  return d;
+};
+export const _dictHas = (k: string, d: object): boolean =>
+  Object.getOwnPropertyDescriptor(d, k) !== undefined;
+export const _Dict_empty: Record<string, never> = Object.freeze(Object.create(null));
+export const _Dict_has: {
+  <A>(a: string): (b: Record<string, A>) => boolean;
+  <A>(a: string, b: Record<string, A>): boolean;
+} = _curry(2, (k: any, d: any) => _dictHas(k, d));
+export const _Dict_get: {
+  <A>(a: string): (b: Record<string, A>) => Option<A>;
+  <A>(a: string, b: Record<string, A>): Option<A>;
+} = _curry(2, (k: any, d: any) => (_dictHas(k, d) ? Some(d[k]) : None));
+export const _Dict_getOr: {
+  <A>(a: A): (b: string) => (c: Record<string, A>) => A;
+  <A>(a: A): (b: string, c: Record<string, A>) => A;
+  <A>(a: A, b: string): (c: Record<string, A>) => A;
+  <A>(a: A, b: string, c: Record<string, A>): A;
+} = _curry(3, (def: any, k: any, d: any) => (_dictHas(k, d) ? d[k] : def));
+export const _Dict_set: {
+  <A>(a: string): (b: A) => (c: Record<string, A>) => Record<string, A>;
+  <A>(a: string): (b: A, c: Record<string, A>) => Record<string, A>;
+  <A>(a: string, b: A): (c: Record<string, A>) => Record<string, A>;
+  <A>(a: string, b: A, c: Record<string, A>): Record<string, A>;
+} = _curry(3, (k: any, v: any, d: any) => {
+  const n = _dictFrom(Object.entries(d));
+  n[k] = v;
+  return n;
+});
+export const _Dict_remove: {
+  <A>(a: string): (b: Record<string, A>) => Record<string, A>;
+  <A>(a: string, b: Record<string, A>): Record<string, A>;
+} = _curry(2, (k: any, d: any) => {
+  const n = _dictFrom(Object.entries(d));
+  delete n[k];
+  return n;
+});
+export const _Dict_size: <A>(a: Record<string, A>) => number = (d: any) => Object.keys(d).length;
+export const _Dict_keys: <A>(a: Record<string, A>) => string[] = (d: any) => Object.keys(d);
+export const _Dict_values: <A>(a: Record<string, A>) => A[] = (d: any) => Object.values(d);
+export const _Dict_entries: <A>(a: Record<string, A>) => [string, A][] = (d: any) =>
+  Object.entries(d);
+export const _Dict_fromEntries: <A>(a: [string, A][]) => Record<string, A> = (es: any) =>
+  _dictFrom(es);
+export const _Dict_map: {
+  <A, B>(a: (a: A) => B): (b: Record<string, A>) => Record<string, B>;
+  <A, B>(a: (a: A) => B, b: Record<string, A>): Record<string, B>;
+} = _curry(2, (f: any, d: any) => _dictFrom(Object.entries(d).map(([k, v]) => [k, f(v)] as const)));
 export const _Option_map: {
   <A, B>(a: (a: A) => B): (b: Option<A>) => Option<B>;
   <A, B>(a: (a: A) => B, b: Option<A>): Option<B>;

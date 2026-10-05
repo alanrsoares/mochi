@@ -1,0 +1,59 @@
+import {
+  JArr,
+  JBool,
+  JNull,
+  JNum,
+  JObj,
+  JStr,
+  asNumber,
+  asObject,
+  asString,
+  field,
+  index,
+  parse,
+  stringify
+} from "@mochi/json"
+import { assertEq, check, describe, ok, test, text } from "@mochi/test"
+
+let doc = "{\"name\":\"mochi\",\"tags\":[1,true,null],\"nested\":{\"n\":2.5}}"
+
+let unwrap = r => switch r { | Ok(v) => v | Err(_) => JNull }
+
+let isErr = r => switch r { | Err(_) => true | Ok(_) => false }
+
+describe("parse", () => {
+  test("object fields", () =>
+    let v = unwrap(parse(doc)) in
+      do {
+        field("name", v) |> Option.flatMap(asString) |> assertEq(Some("mochi"));
+        field("nested", v)
+          |> Option.flatMap(field("n"))
+          |> Option.flatMap(asNumber)
+          |> assertEq(Some(2.5));
+        field("tags", v)
+          |> Option.flatMap(index(1))
+          |> assertEq(Some(JBool(true)));
+        field("tags", v) |> Option.flatMap(index(2)) |> assertEq(Some(JNull));
+        field("missing", v) |> assertEq(None)
+      });
+  test("overflowing number is an Err value", () =>
+    parse("1e400") |> isErr |> ok);
+  test("invalid text is an Err value", () => parse("{oops") |> isErr |> ok);
+  test("__proto__ is an ordinary key", () =>
+    field("__proto__", unwrap(parse("{\"__proto__\":1}")))
+      |> assertEq(Some(JNum(1))))
+})
+
+describe("stringify", () => {
+  test("round-trips", () => stringify(unwrap(parse(doc))) |> assertEq(Ok(doc)));
+  test("builds from ctors", () =>
+    stringify(JArr([JStr("a"), JNum(1), JNull]))
+      |> assertEq(Ok("[\"a\",1,null]")));
+  test("non-finite JNum is an Err", () => stringify(JNum(1 / 0)) |> isErr |> ok)
+})
+
+check("string round-trips as JStr", text, s =>
+  stringify(JStr(s))
+    |> Result.flatMap(parse)
+    |> Result.map(j => j == JStr(s))
+    |> assertEq(Ok(true)))

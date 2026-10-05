@@ -1,0 +1,1 @@
+{"name":"@mochi/json","version":"0.1.0","private":true,"type":"module","exports":{".":"./json.mochi","./runtime":"./src/runtime.ts"},"dependencies":{"@mochi/compiler":"workspace:*","@mochi/test":"workspace:*","@onrails/result":"^0.4.2"}}
