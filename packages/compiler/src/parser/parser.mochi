@@ -162,6 +162,12 @@ let isSpreadSig = te => switch te {
   | _ => false
 }
 
+/// Top-level arrow spine length (`a -> b -> c` → 2).
+let arrowArity = te => switch te {
+  | Ast.TyArrow(_, to, _) => 1 + arrowArity(to)
+  | _ => 0
+}
+
 let errAt = (message, lt) => Err({ message, start: lt.start, end: lt.end })
 
 let expectTok = (t, toks, pos) =>
@@ -1713,6 +1719,16 @@ let parseExtern = (toks, pos) =>
           ? isCurried
             ? errAt(
               "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
+              tokAt(toks, pConv)
+            )
+            : nextTok == TId("get_index") && arrowArity(t) != 2
+            ? errAt(
+              "'get_index' needs a signature of two parameters, like Obj -> string -> number",
+              tokAt(toks, pConv)
+            )
+            : nextTok == TId("set_index") && arrowArity(t) != 3
+            ? errAt(
+              "'set_index' needs a signature of three parameters, like Obj -> string -> number -> number",
               tokAt(toks, pConv)
             )
             : nextTok == TId("variadic") && !isSpreadSig(t)

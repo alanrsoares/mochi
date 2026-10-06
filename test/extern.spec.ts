@@ -82,6 +82,8 @@ let r = [at(xs, 1), put(xs, 0, 9), at(xs, 0)]`;
   expect(compileAndEval(src, "r")).toEqual([2, 9, 9]);
   expect(unwrapOk(format(src))).toBe(`${src}\n`);
   expect(unwrapOk(compileTargets(src)).ts).toContain("$receiver[$key]");
+  expect(isErr(compile("extern at : [number] -> number = get_index"))).toBe(true);
+  expect(isErr(compile("extern put : [number] -> number -> number = set_index"))).toBe(true);
 });
 
 test("composes functions with >> infix operator desugaring", () => {

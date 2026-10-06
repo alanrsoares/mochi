@@ -308,7 +308,7 @@ const externStmt$ = (
         module,
       );
       const second: string = imported === "" ? "" : ` ${strLit(imported)}`;
-      return first === ""
+      return or(convention === "get_index", convention === "set_index")
         ? `${head}${convention}`
         : `${head}${convention} ${strLit(first)}${second}`;
     },

@@ -141,7 +141,7 @@ export let externStmt = (name, params, typeExpr, module, imported, curried) =>
           module
         ) in
         let second = imported == "" ? "" : " ${strLit(imported)}" in
-          first == ""
+          convention == "get_index" || convention == "set_index"
             ? "${head}${convention}"
             : "${head}${convention} ${strLit(first)}${second}"
     }
