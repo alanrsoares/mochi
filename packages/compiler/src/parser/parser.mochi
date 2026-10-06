@@ -1705,7 +1705,11 @@ let parseExtern = (toks, pos) =>
           "get"
         ) || nextTok == TId(
           "set"
-        ) || nextTok == TId("new") || nextTok == TId("variadic")
+        ) || nextTok == TId(
+          "new"
+        ) || nextTok == TId(
+          "variadic"
+        ) || nextTok == TId("get_index") || nextTok == TId("set_index")
           ? isCurried
             ? errAt(
               "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
@@ -1717,7 +1721,8 @@ let parseExtern = (toks, pos) =>
               tokAt(toks, pConv)
             )
             : let? (convention, p6) = expectId(toks, pConv) in
-            let? (first, p7) = expectStr(toks, p6) in
+            let isIndex = convention.name == "get_index" || convention.name == "set_index" in
+            let? (first, p7) = isIndex ? Ok(("", p6)) : expectStr(toks, p6) in
             let hasSecond = switch tokAt(toks, p7).tok {
               | TStr(_) => convention.name == "global" || convention.name == "new" || convention.name == "variadic"
               | _ => false

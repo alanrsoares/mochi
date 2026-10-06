@@ -3971,16 +3971,22 @@ const parseExtern$ = (toks: LocTok[], pos: number): Result<[Stmt, number], PErr>
                                         or(
                                           or(
                                             or(
-                                              eq(nextTok, TId("global")),
-                                              eq(nextTok, TId("send")),
+                                              or(
+                                                or(
+                                                  eq(nextTok, TId("global")),
+                                                  eq(nextTok, TId("send")),
+                                                ),
+                                                eq(nextTok, TId("get")),
+                                              ),
+                                              eq(nextTok, TId("set")),
                                             ),
-                                            eq(nextTok, TId("get")),
+                                            eq(nextTok, TId("new")),
                                           ),
-                                          eq(nextTok, TId("set")),
+                                          eq(nextTok, TId("variadic")),
                                         ),
-                                        eq(nextTok, TId("new")),
+                                        eq(nextTok, TId("get_index")),
                                       ),
-                                      eq(nextTok, TId("variadic")),
+                                      eq(nextTok, TId("set_index")),
                                     )
                                       ? isCurried
                                         ? errAt(
@@ -3994,47 +4000,58 @@ const parseExtern$ = (toks: LocTok[], pos: number): Result<[Stmt, number], PErr>
                                             )
                                           : _Result_flatMap(
                                               ([convention, p6]) =>
-                                                _Result_flatMap(
-                                                  ([first, p7]) =>
-                                                    ((hasSecond: boolean) =>
-                                                      _Result_flatMap(
-                                                        ([second, p8]) =>
-                                                          Ok(
-                                                            _tuple(
-                                                              Ast.SExtern(
-                                                                nm.name,
-                                                                nm.span,
-                                                                params,
-                                                                t,
-                                                                `mochi:${convention.name}:${first}`,
-                                                                second,
-                                                                false,
-                                                                false,
-                                                                None as Option<string>,
-                                                                toEnd(start, toks, p8),
+                                                ((isIndex: boolean) =>
+                                                  _Result_flatMap(
+                                                    ([first, p7]) =>
+                                                      ((hasSecond: boolean) =>
+                                                        _Result_flatMap(
+                                                          ([second, p8]) =>
+                                                            Ok(
+                                                              _tuple(
+                                                                Ast.SExtern(
+                                                                  nm.name,
+                                                                  nm.span,
+                                                                  params,
+                                                                  t,
+                                                                  `mochi:${convention.name}:${first}`,
+                                                                  second,
+                                                                  false,
+                                                                  false,
+                                                                  None as Option<string>,
+                                                                  toEnd(start, toks, p8),
+                                                                ),
+                                                                p8,
                                                               ),
-                                                              p8,
-                                                            ),
-                                                          ) as Result<[Stmt, number], PErr>,
-                                                        hasSecond
-                                                          ? expectStr$(toks, p7)
-                                                          : (Ok(_tuple("", p7)) as Result<
-                                                              [string, number],
-                                                              PErr
-                                                            >),
-                                                      ))(
-                                                      ((_v) =>
-                                                        _v._tag === "TStr"
-                                                          ? or(
-                                                              or(
-                                                                convention.name === "global",
-                                                                convention.name === "new",
-                                                              ),
-                                                              convention.name === "variadic",
-                                                            )
-                                                          : false)(tokAt$(toks, p7).tok),
-                                                    ),
-                                                  expectStr$(toks, p6),
+                                                            ) as Result<[Stmt, number], PErr>,
+                                                          hasSecond
+                                                            ? expectStr$(toks, p7)
+                                                            : (Ok(_tuple("", p7)) as Result<
+                                                                [string, number],
+                                                                PErr
+                                                              >),
+                                                        ))(
+                                                        ((_v) =>
+                                                          _v._tag === "TStr"
+                                                            ? or(
+                                                                or(
+                                                                  convention.name === "global",
+                                                                  convention.name === "new",
+                                                                ),
+                                                                convention.name === "variadic",
+                                                              )
+                                                            : false)(tokAt$(toks, p7).tok),
+                                                      ),
+                                                    isIndex
+                                                      ? (Ok(_tuple("", p6)) as Result<
+                                                          [string, number],
+                                                          PErr
+                                                        >)
+                                                      : expectStr$(toks, p6),
+                                                  ))(
+                                                  or(
+                                                    convention.name === "get_index",
+                                                    convention.name === "set_index",
+                                                  ),
                                                 ),
                                               expectId$(toks, pConv),
                                             )

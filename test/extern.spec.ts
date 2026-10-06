@@ -70,6 +70,20 @@ let r = max([3, 9, 4])`;
   );
 });
 
+test("get_index and set_index emit bracket access", () => {
+  const src = `extern at : [number] -> number -> number = get_index
+extern put : [number] -> number -> number -> number = set_index
+let xs = [1, 2, 3]
+let r = [at(xs, 1), put(xs, 0, 9), at(xs, 0)]`;
+  expect(js(src)).toContain("const at = _curry(2, ($receiver, $key) => $receiver[$key]);");
+  expect(js(src)).toContain(
+    "const put = _curry(3, ($receiver, $key, $value) => ($receiver[$key] = $value));",
+  );
+  expect(compileAndEval(src, "r")).toEqual([2, 9, 9]);
+  expect(unwrapOk(format(src))).toBe(`${src}\n`);
+  expect(unwrapOk(compileTargets(src)).ts).toContain("$receiver[$key]");
+});
+
 test("composes functions with >> infix operator desugaring", () => {
   const code = `
     let inc = x => add(x, 1)

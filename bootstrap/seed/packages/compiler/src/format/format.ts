@@ -279,14 +279,14 @@ const generics: (params: string[]) => string = (params: string[]) =>
   length(params) === 0 ? "" : `<${_Str_join(", ", params)}>`;
 /**
  * `extern x : T = "mod" "name"`, or one of the host conventions
- * (`global`/`send`/`get`/`set`/`new`/`variadic`), which print without the module string.
+ * (`global`/`send`/`get`/`set`/`new`/`variadic`/`get_index`/`set_index`), which print without the module string.
  */
 const conventionOf: (module: string) => Option<string> = (module: string) =>
   _Array_get(
     0,
     filter(
       (c: string) => _Str_startsWith(`mochi:${c}:`, module),
-      ["global", "send", "get", "set", "new", "variadic"],
+      ["global", "send", "get", "set", "new", "variadic", "get_index", "set_index"],
     ),
   );
 const externStmt$ = (
@@ -308,7 +308,9 @@ const externStmt$ = (
         module,
       );
       const second: string = imported === "" ? "" : ` ${strLit(imported)}`;
-      return `${head}${convention} ${strLit(first)}${second}`;
+      return first === ""
+        ? `${head}${convention}`
+        : `${head}${convention} ${strLit(first)}${second}`;
     },
   );
 };

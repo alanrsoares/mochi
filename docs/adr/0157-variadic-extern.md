@@ -1,4 +1,4 @@
-# 0157 — `variadic` extern convention
+# 0157 — `variadic`, `get_index` and `set_index` extern conventions
 
 - **Status:** Accepted
 - **Date:** 2026-10-06
@@ -21,6 +21,17 @@ JS and TS backends share one emit.
 
 The signature must be exactly one list parameter (`[a] -> r`); any other shape
 is a parse error, since spreading a non-list would fail at runtime.
+
+Dynamic property access has two bare conventions with no strings, since the
+key is an argument rather than part of the binding:
+
+```mochi
+extern at : Obj -> string -> number = get_index
+extern put : Obj -> string -> number -> number = set_index
+```
+
+They emit `$receiver[$key]` and `($receiver[$key] = $value)`. The key type is
+whatever the signature declares; `get`/`set` stay for static names.
 
 ## Consequences
 

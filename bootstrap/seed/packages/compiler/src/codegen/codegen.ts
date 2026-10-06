@@ -3375,36 +3375,41 @@ const ${name} = _curry(${show(arity)}, (${args}) => ${ctor});`)(`new ${raw}(${ar
                       ))(`globalThis[${jsStringLit(target)}]`))(
                     _Str_slice(15, _Str_length(modName), modName),
                   )
-                : _Str_startsWith("mochi:send:", modName)
-                  ? ((target: string) =>
-                      ((arity: number) =>
-                        ((args: string) =>
-                          ((fn: string) =>
-                            arity < 2
-                              ? `const ${name} = ${fn};`
-                              : `const ${name} = _curry(${show(arity)}, ${fn});`)(
-                            args === ""
-                              ? `($receiver) => $receiver[${jsStringLit(target)}]()`
-                              : `($receiver, ${args}) => $receiver[${jsStringLit(target)}](${args})`,
-                          ))(externArgs(arity - 1)))(typeExprArity(typeExpr)))(
-                      _Str_slice(11, _Str_length(modName), modName),
-                    )
-                  : imported === "default"
-                    ? `import ${name} from ${jsStringLit(modName)};`
-                    : ((arity: number) =>
-                        arity <= 1
-                          ? ((spec: string) => `import { ${spec} } from ${jsStringLit(modName)};`)(
-                              eq(imported, name) ? name : `${imported} as ${name}`,
-                            )
-                          : ((raw: string) =>
-                              ((
-                                flat: string,
-                              ) => `import { ${imported} as ${raw} } from ${jsStringLit(modName)};
+                : _Str_startsWith("mochi:get_index:", modName)
+                  ? `const ${name} = _curry(2, ($receiver, $key) => $receiver[$key]);`
+                  : _Str_startsWith("mochi:set_index:", modName)
+                    ? `const ${name} = _curry(3, ($receiver, $key, $value) => ($receiver[$key] = $value));`
+                    : _Str_startsWith("mochi:send:", modName)
+                      ? ((target: string) =>
+                          ((arity: number) =>
+                            ((args: string) =>
+                              ((fn: string) =>
+                                arity < 2
+                                  ? `const ${name} = ${fn};`
+                                  : `const ${name} = _curry(${show(arity)}, ${fn});`)(
+                                args === ""
+                                  ? `($receiver) => $receiver[${jsStringLit(target)}]()`
+                                  : `($receiver, ${args}) => $receiver[${jsStringLit(target)}](${args})`,
+                              ))(externArgs(arity - 1)))(typeExprArity(typeExpr)))(
+                          _Str_slice(11, _Str_length(modName), modName),
+                        )
+                      : imported === "default"
+                        ? `import ${name} from ${jsStringLit(modName)};`
+                        : ((arity: number) =>
+                            arity <= 1
+                              ? ((spec: string) =>
+                                  `import { ${spec} } from ${jsStringLit(modName)};`)(
+                                  eq(imported, name) ? name : `${imported} as ${name}`,
+                                )
+                              : ((raw: string) =>
+                                  ((
+                                    flat: string,
+                                  ) => `import { ${imported} as ${raw} } from ${jsStringLit(modName)};
 const ${name} = _curry(${show(arity)}, ${flat});`)(
-                                curried
-                                  ? `(${externArgs(arity)}) => ${raw}${externApplied(arity)}`
-                                  : raw,
-                              ))(_Str_concat("$", name)))(typeExprArity(typeExpr));
+                                    curried
+                                      ? `(${externArgs(arity)}) => ${raw}${externApplied(arity)}`
+                                      : raw,
+                                  ))(_Str_concat("$", name)))(typeExprArity(typeExpr));
     }
     default: {
       return "";

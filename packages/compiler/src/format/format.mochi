@@ -123,9 +123,9 @@ let generics = params =>
   Array.length(params) == 0 ? "" : "<${Str.join(", ", params)}>"
 
 /// `extern x : T = "mod" "name"`, or one of the host conventions
-/// (`global`/`send`/`get`/`set`/`new`/`variadic`), which print without the module string.
+/// (`global`/`send`/`get`/`set`/`new`/`variadic`/`get_index`/`set_index`), which print without the module string.
 let conventionOf = module =>
-  ["global", "send", "get", "set", "new", "variadic"]
+  ["global", "send", "get", "set", "new", "variadic", "get_index", "set_index"]
     |> Array.filter(c => Str.startsWith("mochi:${c}:", module))
     |> Array.get(0)
 
@@ -141,7 +141,9 @@ export let externStmt = (name, params, typeExpr, module, imported, curried) =>
           module
         ) in
         let second = imported == "" ? "" : " ${strLit(imported)}" in
-          "${head}${convention} ${strLit(first)}${second}"
+          first == ""
+            ? "${head}${convention}"
+            : "${head}${convention} ${strLit(first)}${second}"
     }
 
 // --- shared layouts ----------------------------------------------------------

@@ -1907,6 +1907,10 @@ let genExtern = s => switch s {
         ? base
         : "${base}[${jsStringLit(imported)}]" in
         "const ${name} = ($a0) => ${callee}(...$a0);"
+      : Str.startsWith("mochi:get_index:", modName)
+      ? "const ${name} = _curry(2, ($receiver, $key) => $receiver[$key]);"
+      : Str.startsWith("mochi:set_index:", modName)
+      ? "const ${name} = _curry(3, ($receiver, $key, $value) => ($receiver[$key] = $value));"
       : Str.startsWith("mochi:send:", modName)
       ? let target = Str.slice(11, Str.length(modName), modName) in
       let arity = typeExprArity(typeExpr) in
