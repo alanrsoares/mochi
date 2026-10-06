@@ -123,9 +123,9 @@ let generics = params =>
   Array.length(params) == 0 ? "" : "<${Str.join(", ", params)}>"
 
 /// `extern x : T = "mod" "name"`, or one of the host conventions
-/// (`global`/`send`/`get`/`set`/`new`), which print without the module string.
+/// (`global`/`send`/`get`/`set`/`new`/`variadic`), which print without the module string.
 let conventionOf = module =>
-  ["global", "send", "get", "set", "new"]
+  ["global", "send", "get", "set", "new", "variadic"]
     |> Array.filter(c => Str.startsWith("mochi:${c}:", module))
     |> Array.get(0)
 

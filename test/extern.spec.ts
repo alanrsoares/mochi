@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { compile, compileTargets } from "@mochi/compiler";
 import { format } from "@mochi/dx/format";
-import { compileJs, typeOf } from "@mochi/test-support";
+import { compileAndEval, compileJs, typeOf } from "@mochi/test-support";
 import { isErr, isOk, unwrapOk } from "@onrails/result";
 
 const js = (src: string) => compileJs(src, { runtime: true });
@@ -53,6 +53,21 @@ let moved = setVector3(point, 4, 5, 6)`;
   const targets = unwrapOk(compileTargets(src));
   expect(targets.ts).toContain("declare const Vector3: unique symbol;");
   expect(targets.dts).toContain("export type Vector3 = { readonly [Vector3]: never };");
+});
+
+test("a variadic extern spreads its list argument into the host call", () => {
+  const src = `extern max : [number] -> number = variadic "Math" "max"
+let r = max([3, 9, 4])`;
+  expect(js(src)).toContain('const max = ($a0) => globalThis["Math"]["max"](...$a0);');
+  expect(compileAndEval(src, "r")).toBe(9);
+  expect(unwrapOk(format(src))).toBe(`${src}\n`);
+  const targets = unwrapOk(compileTargets(src));
+  expect(targets.ts).toContain('globalThis["Math"]["max"](...$a0)');
+  expect(isErr(compile(`${src}\nlet bad = max(1)`))).toBe(true);
+  expect(isErr(compile('extern f : number -> number = variadic "Math" "abs"'))).toBe(true);
+  expect(isErr(compile('extern f : [number] -> number -> number = variadic "Math" "max"'))).toBe(
+    true,
+  );
 });
 
 test("composes functions with >> infix operator desugaring", () => {

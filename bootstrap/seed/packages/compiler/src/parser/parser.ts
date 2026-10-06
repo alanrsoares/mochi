@@ -322,6 +322,16 @@ const toEnd: <C>(start: { start: number } & C, toks: LocTok[], pos: number) => S
     end: tokAt$(toks, pos - 1).end,
   }),
 );
+/**
+ * `[a] -> r`: the one list parameter a `variadic` extern spreads (#166).
+ */
+const isSpreadSig: (te: TypeExpr) => boolean = (te: TypeExpr) =>
+  ((_v) =>
+    _v._tag === "TyArrow" && _v.from._tag === "TyList" && _v.to._tag === "TyArrow"
+      ? false
+      : _v._tag === "TyArrow" && _v.from._tag === "TyList"
+        ? true
+        : false)(te);
 const errAt: <D, E>(message: string, lt: { end: number; start: number } & E) => Result<D, PErr> =
   _curry(2, <D, E>(message: string, lt: { end: number; start: number } & E) =>
     Err({ message: message, start: lt.start, end: lt.end }),
@@ -3959,61 +3969,75 @@ const parseExtern$ = (toks: LocTok[], pos: number): Result<[Stmt, number], PErr>
                                     or(
                                       or(
                                         or(
-                                          or(eq(nextTok, TId("global")), eq(nextTok, TId("send"))),
-                                          eq(nextTok, TId("get")),
+                                          or(
+                                            or(
+                                              eq(nextTok, TId("global")),
+                                              eq(nextTok, TId("send")),
+                                            ),
+                                            eq(nextTok, TId("get")),
+                                          ),
+                                          eq(nextTok, TId("set")),
                                         ),
-                                        eq(nextTok, TId("set")),
+                                        eq(nextTok, TId("new")),
                                       ),
-                                      eq(nextTok, TId("new")),
+                                      eq(nextTok, TId("variadic")),
                                     )
                                       ? isCurried
                                         ? errAt(
                                             "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
                                             tokAt$(toks, pConv),
                                           )
-                                        : _Result_flatMap(
-                                            ([convention, p6]) =>
-                                              _Result_flatMap(
-                                                ([first, p7]) =>
-                                                  ((hasSecond: boolean) =>
-                                                    _Result_flatMap(
-                                                      ([second, p8]) =>
-                                                        Ok(
-                                                          _tuple(
-                                                            Ast.SExtern(
-                                                              nm.name,
-                                                              nm.span,
-                                                              params,
-                                                              t,
-                                                              `mochi:${convention.name}:${first}`,
-                                                              second,
-                                                              false,
-                                                              false,
-                                                              None as Option<string>,
-                                                              toEnd(start, toks, p8),
+                                        : and(eq(nextTok, TId("variadic")), !isSpreadSig(t))
+                                          ? errAt(
+                                              "'variadic' needs a signature of one list parameter, like [number] -> number",
+                                              tokAt$(toks, pConv),
+                                            )
+                                          : _Result_flatMap(
+                                              ([convention, p6]) =>
+                                                _Result_flatMap(
+                                                  ([first, p7]) =>
+                                                    ((hasSecond: boolean) =>
+                                                      _Result_flatMap(
+                                                        ([second, p8]) =>
+                                                          Ok(
+                                                            _tuple(
+                                                              Ast.SExtern(
+                                                                nm.name,
+                                                                nm.span,
+                                                                params,
+                                                                t,
+                                                                `mochi:${convention.name}:${first}`,
+                                                                second,
+                                                                false,
+                                                                false,
+                                                                None as Option<string>,
+                                                                toEnd(start, toks, p8),
+                                                              ),
+                                                              p8,
                                                             ),
-                                                            p8,
-                                                          ),
-                                                        ) as Result<[Stmt, number], PErr>,
-                                                      hasSecond
-                                                        ? expectStr$(toks, p7)
-                                                        : (Ok(_tuple("", p7)) as Result<
-                                                            [string, number],
-                                                            PErr
-                                                          >),
-                                                    ))(
-                                                    ((_v) =>
-                                                      _v._tag === "TStr"
-                                                        ? or(
-                                                            convention.name === "global",
-                                                            convention.name === "new",
-                                                          )
-                                                        : false)(tokAt$(toks, p7).tok),
-                                                  ),
-                                                expectStr$(toks, p6),
-                                              ),
-                                            expectId$(toks, pConv),
-                                          )
+                                                          ) as Result<[Stmt, number], PErr>,
+                                                        hasSecond
+                                                          ? expectStr$(toks, p7)
+                                                          : (Ok(_tuple("", p7)) as Result<
+                                                              [string, number],
+                                                              PErr
+                                                            >),
+                                                      ))(
+                                                      ((_v) =>
+                                                        _v._tag === "TStr"
+                                                          ? or(
+                                                              or(
+                                                                convention.name === "global",
+                                                                convention.name === "new",
+                                                              ),
+                                                              convention.name === "variadic",
+                                                            )
+                                                          : false)(tokAt$(toks, p7).tok),
+                                                    ),
+                                                  expectStr$(toks, p6),
+                                                ),
+                                              expectId$(toks, pConv),
+                                            )
                                       : _Result_flatMap(
                                           ([moduleName, p6]) =>
                                             _Result_flatMap(

@@ -1900,6 +1900,13 @@ let genExtern = s => switch s {
           : arity == 0
           ? "const ${name} = () => new globalThis[${jsStringLit(target)}]();"
           : "const ${name} = _curry(${show(arity)}, (${args}) => new globalThis[${jsStringLit(target)}](${args}));"
+      : Str.startsWith("mochi:variadic:", modName)
+      ? let target = Str.slice(15, Str.length(modName), modName) in
+      let base = "globalThis[${jsStringLit(target)}]" in
+      let callee = imported == ""
+        ? base
+        : "${base}[${jsStringLit(imported)}]" in
+        "const ${name} = ($a0) => ${callee}(...$a0);"
       : Str.startsWith("mochi:send:", modName)
       ? let target = Str.slice(11, Str.length(modName), modName) in
       let arity = typeExprArity(typeExpr) in
