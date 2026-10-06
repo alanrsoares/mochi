@@ -155,6 +155,19 @@ let spanning = (a, b) => { start: a.start, end: b.end }
 let toEnd = (start, toks, pos) =>
   { start: start.start, end: tokAt(toks, pos - 1).end }
 
+/// `[a] -> r`: the one list parameter a `variadic` extern spreads (#166).
+let isSpreadSig = te => switch te {
+  | Ast.TyArrow(Ast.TyList(_, _), Ast.TyArrow(_, _, _), _) => false
+  | Ast.TyArrow(Ast.TyList(_, _), _, _) => true
+  | _ => false
+}
+
+/// Top-level arrow spine length (`a -> b -> c` → 2).
+let arrowArity = te => switch te {
+  | Ast.TyArrow(_, to, _) => 1 + arrowArity(to)
+  | _ => 0
+}
+
 let errAt = (message, lt) => Err({ message, start: lt.start, end: lt.end })
 
 let expectTok = (t, toks, pos) =>
@@ -1696,16 +1709,38 @@ let parseExtern = (toks, pos) =>
           "send"
         ) || nextTok == TId(
           "get"
-        ) || nextTok == TId("set") || nextTok == TId("new")
+        ) || nextTok == TId(
+          "set"
+        ) || nextTok == TId(
+          "new"
+        ) || nextTok == TId(
+          "variadic"
+        ) || nextTok == TId("get_index") || nextTok == TId("set_index")
           ? isCurried
             ? errAt(
               "'curried' applies to a module extern, not a JS convention — give the host's module and export instead",
               tokAt(toks, pConv)
             )
+            : nextTok == TId("get_index") && arrowArity(t) != 2
+            ? errAt(
+              "'get_index' needs a signature of two parameters, like Obj -> string -> number",
+              tokAt(toks, pConv)
+            )
+            : nextTok == TId("set_index") && arrowArity(t) != 3
+            ? errAt(
+              "'set_index' needs a signature of three parameters, like Obj -> string -> number -> number",
+              tokAt(toks, pConv)
+            )
+            : nextTok == TId("variadic") && !isSpreadSig(t)
+            ? errAt(
+              "'variadic' needs a signature of one list parameter, like [number] -> number",
+              tokAt(toks, pConv)
+            )
             : let? (convention, p6) = expectId(toks, pConv) in
-            let? (first, p7) = expectStr(toks, p6) in
+            let isIndex = convention.name == "get_index" || convention.name == "set_index" in
+            let? (first, p7) = isIndex ? Ok(("", p6)) : expectStr(toks, p6) in
             let hasSecond = switch tokAt(toks, p7).tok {
-              | TStr(_) => convention.name == "global" || convention.name == "new"
+              | TStr(_) => convention.name == "global" || convention.name == "new" || convention.name == "variadic"
               | _ => false
             } in
             let? (second, p8) = hasSecond

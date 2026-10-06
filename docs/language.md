@@ -394,6 +394,8 @@ They preserve the typed seam and emit direct JavaScript—no conversion runtime:
 
 ```mochi
 extern random : () -> number = global "Math" "random"
+extern max : [number] -> number = variadic "Math" "max"
+extern at : Obj -> string -> number = get_index
 extern map<T, U> : (T -> U) -> T -> U = "./runtime.js" "map"
 extern getId : Document -> string -> Element = send "getElementById"
 extern title : Document -> string = get "title"
