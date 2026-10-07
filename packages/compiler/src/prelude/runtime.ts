@@ -170,12 +170,18 @@ export const eq: { <A>(a: A): (b: A) => boolean; <A>(a: A, b: A): boolean } = _c
     }
     if (typeof x[Symbol.iterator] === "function" || typeof y[Symbol.iterator] === "function")
       throw new TypeError("eq on List: force it first with List.toArray");
-    const kx = Object.keys(x),
-      ky = Object.keys(y);
-    if (kx.length !== ky.length) return false;
-    for (const k of kx)
-      if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k])) return false;
-    return true;
+    // Single pass over own enumerable keys, no key arrays: fields are compared
+    // before the key counts, so mismatched shapes may read a getter first.
+    const own = Object.prototype.hasOwnProperty;
+    let nx = 0,
+      ny = 0;
+    for (const k in x)
+      if (own.call(x, k)) {
+        nx++;
+        if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k])) return false;
+      }
+    for (const k in y) if (own.call(y, k)) ny++;
+    return nx === ny;
   },
 );
 // Variant positional fields follow their numeric index; named fields follow

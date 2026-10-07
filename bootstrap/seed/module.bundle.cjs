@@ -21382,13 +21382,18 @@ var _preludeJsDefs = {
   }
   if (typeof x[Symbol.iterator] === "function" || typeof y[Symbol.iterator] === "function")
     throw new TypeError("eq on List: force it first with List.toArray");
-  const kx = Object.keys(x), ky = Object.keys(y);
-  if (kx.length !== ky.length)
-    return false;
-  for (const k of kx)
-    if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))
-      return false;
-  return true;
+  const own = Object.prototype.hasOwnProperty;
+  let nx = 0, ny = 0;
+  for (const k in x)
+    if (own.call(x, k)) {
+      nx++;
+      if (!Object.prototype.propertyIsEnumerable.call(y, k) || !eq(x[k], y[k]))
+        return false;
+    }
+  for (const k in y)
+    if (own.call(y, k))
+      ny++;
+  return nx === ny;
 });`,
   _compareFieldNames: `const _compareFieldNames = (a, b) => {
   const ax = /^_(0|[1-9]\\d*)$/.test(a), bx = /^_(0|[1-9]\\d*)$/.test(b);

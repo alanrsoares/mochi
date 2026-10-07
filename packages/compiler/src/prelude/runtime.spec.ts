@@ -65,6 +65,24 @@ test("record equality ignores prototypes and non-enumerable properties", () => {
   expect(eq({ propertyIsEnumerable: 1 }, { propertyIsEnumerable: 1 })).toBe(true);
 });
 
+test("record equality compares shared fields before key counts", () => {
+  // Pinned order: fields are walked first, so a mismatched shape still reaches
+  // a differing shared field (false) and reads each getter at most once.
+  let reads = 0;
+  const probe = {
+    get a() {
+      reads += 1;
+      return 1;
+    },
+  };
+  const same = (left: Record<string, unknown>, right: Record<string, unknown>): boolean =>
+    eq(left, right);
+  expect(same(probe, { a: 2, b: 3 })).toBe(false);
+  expect(reads).toBe(1);
+  expect(same({ a: 1, b: 2 }, { a: 1 })).toBe(false);
+  expect(same({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+});
+
 test("map is curried and immutable", () => {
   expect(map((x: number) => x * 2, [1, 2, 3])).toEqual([2, 4, 6]);
 });
