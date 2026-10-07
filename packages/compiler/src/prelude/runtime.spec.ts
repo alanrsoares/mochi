@@ -282,6 +282,65 @@ test("dedupeBy preserves projection and structural getter order", () => {
   expect(events).toEqual(["project:0", "project:1", "project:2", "project:3", "left", "right"]);
 });
 
+test("dedupeBy hashing agrees with the eq scan on nested, mixed and unhashable keys", () => {
+  const leaf = fc.oneof(
+    fc.jsonValue(),
+    fc.constant(undefined),
+    fc.constant(NaN),
+    fc.constant(-0),
+    fc.constant(0),
+    fc.bigInt(),
+  );
+  const key = fc.oneof(
+    leaf,
+    fc.array(leaf, { maxLength: 4 }),
+    fc.dictionary(fc.constantFrom("a", "b", "c"), fc.oneof(leaf, fc.array(leaf, { maxLength: 3 }))),
+    fc.constant(new Map([[1, 2]])),
+    fc.constant(Object.assign(new Array(2), { 1: 1 })),
+  );
+  fc.assert(
+    fc.property(fc.array(key, { maxLength: 24 }), (keys) => {
+      const seen: unknown[] = [];
+      const expected = keys.filter((k) => {
+        if (seen.some((s) => eq(s, k))) return false;
+        seen.push(k);
+        return true;
+      });
+      const actual = _Array_dedupeBy((k) => k, keys);
+      expect(actual.length).toBe(expected.length);
+      actual.forEach((k, i) => {
+        expect(Object.is(k, expected[i])).toBe(true);
+      });
+    }),
+    { numRuns: 300 },
+  );
+});
+
+test("dedupeBy keeps the eq scan's getter reads for unhashable keys beside hashed ones", () => {
+  const events: string[] = [];
+  const getter = (name: string, value: number) => ({
+    get v() {
+      events.push(name);
+      return value;
+    },
+  });
+  const keys: unknown[] = [{ v: 1 }, getter("g1", 1), { v: 2 }, getter("g2", 2), { v: 1 }];
+  const result = _Array_dedupeBy((i: number) => keys[i], [0, 1, 2, 3, 4]);
+  expect(result).toEqual([0, 2]);
+  // Replays the plain scan: each getter key is read while compared against the
+  // earlier retained keys, and the final {v:1} stops at its first match.
+  const seen: unknown[] = [];
+  const expectedEvents: string[] = [];
+  events.length = 0;
+  keys.forEach((k) => {
+    if (!seen.some((s) => eq(s, k))) seen.push(k);
+  });
+  expectedEvents.push(...events);
+  events.length = 0;
+  _Array_dedupeBy((i: number) => keys[i], [0, 1, 2, 3, 4]);
+  expect(events).toEqual(expectedEvents);
+});
+
 test("dedupeBy visits present slots once and observes projection mutations", () => {
   const sparse = new Array<undefined>(4);
   sparse[1] = undefined;
