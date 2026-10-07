@@ -56,9 +56,21 @@ test("single-param lambda", () => {
 test("multi-param lambda", () => {
   // Arity ≥ 2 lowers to a `_curry`-wrapped flat function (CRITIQUE §4.4) over
   // a raw twin that saturated calls reach directly (ADR 0149).
-  expect(js("let add = (a, b) => plus(a, b)")).toBe(
-    "const add$ = (a, b) => plus(a, b);\nconst add = _curry(2, add$);\n",
+  expect(js("export let add = (a, b) => plus(a, b)")).toBe(
+    "const add$ = (a, b) => plus(a, b);\nexport const add = _curry(2, add$);\n",
   );
+});
+
+test("a private function only called saturated drops its curry wrapper", () => {
+  // Nothing names the public binding, so only the raw twin is emitted.
+  expect(js("let add = (a, b) => plus(a, b)\nlet use = x => add(x, 1)")).not.toContain(
+    "_curry(2, add$)",
+  );
+  // With no wrapper left the module needs no `_curry` helper either.
+  expect(js("let add = (a, b) => plus(a, b)\nlet use = x => add(x, 1)")).not.toContain("_curry");
+  // A value use, a partial call or an export keeps it.
+  expect(js("let add = (a, b) => plus(a, b)\nlet use = x => add(x)")).toContain("_curry(2, add$)");
+  expect(js("let add = (a, b) => plus(a, b)\nlet use = map(add)")).toContain("_curry(2, add$)");
 });
 
 test("arrow binds looser than pipe: x => x |> f", () => {

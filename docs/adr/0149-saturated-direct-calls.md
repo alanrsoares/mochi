@@ -64,6 +64,23 @@ JS backend has no hook and twins every eligible function.
   change); `seed:check` is stable.
 - The bootstrap test harness dedupes `const name$` with its public binding.
 
+### Amendment: private functions drop the public binding
+
+A twin whose function is not exported and whose public name is never referenced
+emits only the function, under the public name (`const f = (a, b) => …`, calls
+`f(a, b)`). "Referenced" mirrors the lowering: a saturated plain call, a saturated
+fast pipe (`a->f(b)`) and `a |> f(b)` under `flattenPipe` reach the twin and do not
+count; every other mention (value use, partial or over-applied call, JSX call,
+hole pipe) does, so the wrapper stays. Nothing outside the module can see a
+private binding, so no behavior changes. A module left with no wrapper no longer
+inlines `_curry`.
+
+The self-hosted seed carried 704 `_curry` wrappers, 614 of them dead: about 29 KB
+raw / 4.6 KB gzipped per bundle and one `_curry` call per function at load. Test
+helpers that look a private binding up by name (`compileAndEval`) are unaffected
+for functions that keep a twin; tests of the curried public binding export the
+function or use it as a value.
+
 ## Out of scope
 
 Cross-module raw exports; over-application (`f(a, b, c)` on an arity-2 function);

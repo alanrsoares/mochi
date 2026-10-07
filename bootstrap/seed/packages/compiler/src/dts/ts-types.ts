@@ -142,30 +142,27 @@ const primitiveTs: (name: string) => string = (name: string) =>
               : _v === "unit"
                 ? "undefined"
                 : name)(name);
-const namesOf$ = (ts: Ty[], env: TsEnv): string =>
+const namesOf = (ts: Ty[], env: TsEnv): string =>
   _Str_join(
     ", ",
-    map((t: Ty) => tsOfRaw$(t, env), ts),
+    map((t: Ty) => tsOfRaw(t, env), ts),
   );
-const namesOf: _Curry<[ts: Ty[], env: TsEnv], string> = _curry(2, namesOf$);
-const qualifiedCon$ = (name: string, env: TsEnv): string =>
-  ((_v) =>
-    _v._tag === "Some" && (({ value: qual }) => qual !== "")(_v)
-      ? (({ value: qual }) => qual)(_v)
-      : primitiveTs(name))(_Map_get(name, env.recs));
 /**
  * `aliasRow` falls back to a bare con (`Node`) so a cycle still unifies with
  * the declaring module. A `.d.ts` records `Node` → `Ast.Node` in this index
  * under the bare name, which is never a row-shape key. Declaration hosts can
  * also supply nominal spellings here (ADR 0144). Empty entries fall through.
  */
-const qualifiedCon: _Curry<[name: string, env: TsEnv], string> = _curry(2, qualifiedCon$);
-const nominal$ = (name: string, args: Ty[], env: TsEnv): string => {
-  const shown: string = qualifiedCon$(name, env);
-  return length(args) === 0 ? shown : `${shown}<${namesOf$(args, env)}>`;
+const qualifiedCon = (name: string, env: TsEnv): string =>
+  ((_v) =>
+    _v._tag === "Some" && (({ value: qual }) => qual !== "")(_v)
+      ? (({ value: qual }) => qual)(_v)
+      : primitiveTs(name))(_Map_get(name, env.recs));
+const nominal = (name: string, args: Ty[], env: TsEnv): string => {
+  const shown: string = qualifiedCon(name, env);
+  return length(args) === 0 ? shown : `${shown}<${namesOf(args, env)}>`;
 };
-const nominal: _Curry<[name: string, args: Ty[], env: TsEnv], string> = _curry(3, nominal$);
-const tsRowFields$ = (row: Row, env: TsEnv): [string[], Option<number>] => {
+const tsRowFields = (row: Row, env: TsEnv): [string[], Option<number>] => {
   const $match = row;
   switch ($match._tag) {
     case "RowEmpty": {
@@ -179,35 +176,9 @@ const tsRowFields$ = (row: Row, env: TsEnv): [string[], Option<number>] => {
       const { label, fieldType, optional, rest } = $match;
       return (([fields, tail]: [string[], Option<number>]) =>
         _tuple(
-          _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw$(fieldType, env)}`, fields),
+          _Array_prepend(`${label}${optional ? "?" : ""}: ${tsOfRaw(fieldType, env)}`, fields),
           tail,
-        ))(tsRowFields$(rest, env));
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
-const tsRowFields: _Curry<[row: Row, env: TsEnv], [string[], Option<number>]> = _curry(
-  2,
-  tsRowFields$,
-);
-const shapeFieldsFrom$ = (row: Row, vars: Map<number, string>): Option<string[]> => {
-  const $match = row;
-  switch ($match._tag) {
-    case "RowEmpty": {
-      return Some([] as string[]) as Option<string[]>;
-    }
-    case "RowVar": {
-      return None as Option<string[]>;
-    }
-    case "RowExtend": {
-      const { label, fieldType, optional, rest } = $match;
-      return _Option_map(
-        (fs: string[]) =>
-          _Array_prepend(`${label}${optional ? "?" : ""}: ${shapeType$(fieldType, vars)}`, fs),
-        shapeFieldsFrom$(rest, vars),
-      );
+        ))(tsRowFields(rest, env));
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -221,22 +192,43 @@ const shapeFieldsFrom$ = (row: Row, vars: Map<number, string>): Option<string[]>
  * an unsorted nested row would miss the alias even when the nested row itself
  * still folds (ADR 0107).
  */
-const shapeFieldsFrom: _Curry<[row: Row, vars: Map<number, string>], Option<string[]>> = _curry(
-  2,
-  shapeFieldsFrom$,
-);
-const shapeJoined$ = (ts: Ty[], vars: Map<number, string>): string =>
+const shapeFieldsFrom = (row: Row, vars: Map<number, string>): Option<string[]> => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowEmpty": {
+      return Some([] as string[]) as Option<string[]>;
+    }
+    case "RowVar": {
+      return None as Option<string[]>;
+    }
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return _Option_map(
+        (fs: string[]) =>
+          _Array_prepend(`${label}${optional ? "?" : ""}: ${shapeType(fieldType, vars)}`, fs),
+        shapeFieldsFrom(rest, vars),
+      );
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const shapeJoined = (ts: Ty[], vars: Map<number, string>): string =>
   _Str_join(
     ", ",
-    map((t: Ty) => shapeType$(t, vars), ts),
+    map((t: Ty) => shapeType(t, vars), ts),
   );
-const shapeJoined: _Curry<[ts: Ty[], vars: Map<number, string>], string> = _curry(2, shapeJoined$);
-const shapeType$ = (t: Ty, vars: Map<number, string>): string =>
+/**
+ * Type text for a shape key. Same spelling as `tsOf` with an empty index,
+ * except a closed record's fields are sorted at every depth.
+ */
+const shapeType = (t: Ty, vars: Map<number, string>): string =>
   ((_v) =>
     _v._tag === "TyRecord"
       ? (({ row }) =>
           _Option_match(
-            shapeFieldsFrom$(row, vars),
+            shapeFieldsFrom(row, vars),
             () => tsOf$(t, plainEnv(vars)),
             (fs) => (length(fs) === 0 ? "{}" : `{ ${_Str_join("; ", _Array_sort(fs))} }`),
           ))(_v)
@@ -250,29 +242,29 @@ const shapeType$ = (t: Ty, vars: Map<number, string>): string =>
                     ? `(${inner})[]`
                     : _v._tag === "TyOneOf"
                       ? `(${inner})[]`
-                      : `${inner}[]`)(widenLits(elem)))(shapeType$(elem, vars)))(
+                      : `${inner}[]`)(widenLits(elem)))(shapeType(elem, vars)))(
             _v as Extract<Ty, { _tag: "TyCon" }>,
           )
         : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1
-          ? (({ args: [elem] }) => `Iterable<${shapeType$(elem, vars)}>`)(
+          ? (({ args: [elem] }) => `Iterable<${shapeType(elem, vars)}>`)(
               _v as Extract<Ty, { _tag: "TyCon" }>,
             )
           : _v._tag === "TyCon" && _v.name === "Dict" && _v.args.length === 1
-            ? (({ args: [elem] }) => `Record<string, ${shapeType$(elem, vars)}>`)(
+            ? (({ args: [elem] }) => `Record<string, ${shapeType(elem, vars)}>`)(
                 _v as Extract<Ty, { _tag: "TyCon" }>,
               )
             : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
               ? (({ args: [value, error] }) =>
-                  `() => Promise<Result<${shapeType$(value, vars)}, ${shapeType$(error, vars)}>>`)(
+                  `() => Promise<Result<${shapeType(value, vars)}, ${shapeType(error, vars)}>>`)(
                   _v as Extract<Ty, { _tag: "TyCon" }>,
                 )
               : _v._tag === "TyCon" && _v.name === "tuple"
-                ? (({ args: elems }) => `[${shapeJoined$(elems, vars)}]`)(_v)
+                ? (({ args: elems }) => `[${shapeJoined(elems, vars)}]`)(_v)
                 : _v._tag === "TyCon"
                   ? (({ name, args }) =>
                       length(args) === 0
                         ? primitiveTs(name)
-                        : `${name}<${shapeJoined$(args, vars)}>`)(_v)
+                        : `${name}<${shapeJoined(args, vars)}>`)(_v)
                   : _v._tag === "TyOneOf"
                     ? (({ members }) =>
                         _Str_join(
@@ -284,18 +276,13 @@ const shapeType$ = (t: Ty, vars: Map<number, string>): string =>
                                   ? (({ value }) => `"${value}"`)(_v)
                                   : _v._tag === "TySingleton"
                                     ? (({ value }) => value)(_v)
-                                    : shapeType$(m, vars))(m),
+                                    : shapeType(m, vars))(m),
                             members,
                           ),
                         ))(_v)
                     : tsOf$(t, plainEnv(vars)))(widenLits(t));
-/**
- * Type text for a shape key. Same spelling as `tsOf` with an empty index,
- * except a closed record's fields are sorted at every depth.
- */
-const shapeType: _Curry<[t: Ty, vars: Map<number, string>], string> = _curry(2, shapeType$);
 const rowShapeKey$ = (row: Row, vars: Map<number, string>): Option<string> =>
-  _Option_map((fs: string[]) => _Str_join("; ", _Array_sort(fs)), shapeFieldsFrom$(row, vars));
+  _Option_map((fs: string[]) => _Str_join("; ", _Array_sort(fs)), shapeFieldsFrom(row, vars));
 /**
  * The index key for a row. Sorted, because a row carries fields in the order
  * `unify` extended it: the same record type reaches `tsRow` as both
@@ -307,7 +294,12 @@ export const rowShapeKey: _Curry<[row: Row, vars: Map<number, string>], Option<s
   2,
   rowShapeKey$,
 );
-const aliasNameFor$ = (row: Row, env: TsEnv): Option<string> =>
+/**
+ * The declared name for a row, when the emitting module declared one. The
+ * empty-index short-circuit keeps the key off the hot path for the many call
+ * sites that render with no index at all.
+ */
+const aliasNameFor = (row: Row, env: TsEnv): Option<string> =>
   _Map_size(env.recs) === 0
     ? (None as Option<string>)
     : _Option_flatMap(
@@ -324,14 +316,8 @@ const aliasNameFor$ = (row: Row, env: TsEnv): Option<string> =>
                     })())(_Map_get(k, env.recs)),
         rowShapeKey$(row, env.vars),
       );
-/**
- * The declared name for a row, when the emitting module declared one. The
- * empty-index short-circuit keeps the key off the hot path for the many call
- * sites that render with no index at all.
- */
-const aliasNameFor: _Curry<[row: Row, env: TsEnv], Option<string>> = _curry(2, aliasNameFor$);
 const rowAliasName$ = (row: Row, recs: Map<string, string>): Option<string> =>
-  aliasNameFor$(row, recsEnv(recs));
+  aliasNameFor(row, recsEnv(recs));
 /**
  * The record alias `row` prints as under `recs`, for plugin hooks (ADR 0055).
  */
@@ -339,9 +325,9 @@ export const rowAliasName: _Curry<[row: Row, recs: Map<string, string>], Option<
   2,
   rowAliasName$,
 );
-const tsRow$ = (row: Row, env: TsEnv): string =>
+const tsRow = (row: Row, env: TsEnv): string =>
   _Option_match(
-    aliasNameFor$(row, env),
+    aliasNameFor(row, env),
     () =>
       (([fields, tail]: [string[], Option<number>]) => {
         const body: string = length(fields) === 0 ? "{}" : `{ ${_Str_join("; ", fields)} }`;
@@ -355,43 +341,36 @@ const tsRow$ = (row: Row, env: TsEnv): string =>
               (name) => (length(fields) === 0 ? name : `(${body} & ${name})`),
             ),
         );
-      })(tsRowFields$(row, env)),
+      })(tsRowFields(row, env)),
     (alias) => alias,
   );
-const tsRow: _Curry<[row: Row, env: TsEnv], string> = _curry(2, tsRow$);
-const tsReturn$ = (t: Ty, env: TsEnv): string => (isUnit(t) ? "void" : tsOfRaw$(t, env));
 /**
  * A `unit` result renders `void`, not `undefined`: a declared fn type has to
  * accept the host's ordinary `() => void` callbacks (ADR 0055). Standalone
  * `unit` values stay `undefined`, which is what codegen emits.
  */
-const tsReturn: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, tsReturn$);
-const tsArrow$ = (fromT: Ty, toT: Ty, env: TsEnv): string =>
-  isUnit(fromT)
-    ? `() => ${tsReturn$(toT, env)}`
-    : tsArrowParams$(fromT, toT, env, 0, [] as string[]);
-const tsArrow: _Curry<[fromT: Ty, toT: Ty, env: TsEnv], string> = _curry(3, tsArrow$);
-const tsArrowParams$ = (fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]): string => {
+const tsReturn = (t: Ty, env: TsEnv): string => (isUnit(t) ? "void" : tsOfRaw(t, env));
+const tsArrow = (fromT: Ty, toT: Ty, env: TsEnv): string =>
+  isUnit(fromT) ? `() => ${tsReturn(toT, env)}` : tsArrowParams(fromT, toT, env, 0, [] as string[]);
+const tsArrowParams = (fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]): string => {
   const params1: string[] = _Array_append(
-    `${_Str_fromCode(97 + i)}: ${tsOfRaw$(fromT, env)}`,
+    `${_Str_fromCode(97 + i)}: ${tsOfRaw(fromT, env)}`,
     params,
   );
   return ((_v) =>
     _v._tag === "TyFn" && (({ from: nextFrom, to: nextTo }) => !isUnit(nextFrom))(_v)
-      ? (({ from: nextFrom, to: nextTo }) => tsArrowParams$(nextFrom, nextTo, env, i + 1, params1))(
+      ? (({ from: nextFrom, to: nextTo }) => tsArrowParams(nextFrom, nextTo, env, i + 1, params1))(
           _v,
         )
-      : `(${_Str_join(", ", params1)}) => ${tsReturn$(toT, env)}`)(toT);
+      : `(${_Str_join(", ", params1)}) => ${tsReturn(toT, env)}`)(toT);
 };
-const tsArrowParams: _Curry<[fromT: Ty, toT: Ty, env: TsEnv, i: number, params: string[]], string> =
-  _curry(5, tsArrowParams$);
-const tsOf$ = (t: Ty, env: TsEnv): string => tsOfRaw$(widenLits(t), env);
+const tsOf$ = (t: Ty, env: TsEnv): string => tsOfRaw(widenLits(t), env);
 /**
  * Render an already-zonked HM type into strict TypeScript syntax. Bare
  * singleton types widen at this boundary just as the TS backend does.
  */
 export const tsOf: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, tsOf$);
-const tsOfRaw$ = (t: Ty, env: TsEnv): string =>
+const tsOfRaw = (t: Ty, env: TsEnv): string =>
   ((_v) =>
     _v._tag === "TyVar"
       ? (({ id }) => _Option_unwrapOr("unknown", _Map_get(id, env.vars)))(_v)
@@ -405,30 +384,30 @@ const tsOfRaw$ = (t: Ty, env: TsEnv): string =>
                     ? `(${inner})[]`
                     : _v._tag === "TyOneOf"
                       ? `(${inner})[]`
-                      : `${inner}[]`)(elem))(tsOfRaw$(elem, env)))(
+                      : `${inner}[]`)(elem))(tsOfRaw(elem, env)))(
             _v as Extract<Ty, { _tag: "TyCon" }>,
           )
         : _v._tag === "TyCon" && _v.name === "List" && _v.args.length === 1
-          ? (({ args: [elem] }) => `Iterable<${tsOfRaw$(elem, env)}>`)(
+          ? (({ args: [elem] }) => `Iterable<${tsOfRaw(elem, env)}>`)(
               _v as Extract<Ty, { _tag: "TyCon" }>,
             )
           : _v._tag === "TyCon" && _v.name === "Dict" && _v.args.length === 1
-            ? (({ args: [elem] }) => `Record<string, ${tsOfRaw$(elem, env)}>`)(
+            ? (({ args: [elem] }) => `Record<string, ${tsOfRaw(elem, env)}>`)(
                 _v as Extract<Ty, { _tag: "TyCon" }>,
               )
             : _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
               ? (({ args: [value, error] }) =>
-                  `() => Promise<Result<${tsOfRaw$(value, env)}, ${tsOfRaw$(error, env)}>>`)(
+                  `() => Promise<Result<${tsOfRaw(value, env)}, ${tsOfRaw(error, env)}>>`)(
                   _v as Extract<Ty, { _tag: "TyCon" }>,
                 )
               : _v._tag === "TyCon" && _v.name === "tuple"
-                ? (({ args: elems }) => `[${namesOf$(elems, env)}]`)(_v)
+                ? (({ args: elems }) => `[${namesOf(elems, env)}]`)(_v)
                 : _v._tag === "TyCon"
-                  ? (({ name, args }) => nominal$(name, args, env))(_v)
+                  ? (({ name, args }) => nominal(name, args, env))(_v)
                   : _v._tag === "TyFn"
-                    ? (({ from: fromT, to: toT }) => tsArrow$(fromT, toT, env))(_v)
+                    ? (({ from: fromT, to: toT }) => tsArrow(fromT, toT, env))(_v)
                     : _v._tag === "TyRecord"
-                      ? (({ row }) => tsRow$(row, env))(_v)
+                      ? (({ row }) => tsRow(row, env))(_v)
                       : _v._tag === "TySingleton" && _v.base === "string"
                         ? (({ value }) => `"${value}"`)(_v)
                         : _v._tag === "TySingleton"
@@ -437,12 +416,11 @@ const tsOfRaw$ = (t: Ty, env: TsEnv): string =>
                             ? (({ members }) =>
                                 _Str_join(
                                   " | ",
-                                  map((m: Ty) => tsOfRaw$(m, env), members),
+                                  map((m: Ty) => tsOfRaw(m, env), members),
                                 ))(_v)
                             : (() => {
                                 throw new Error("non-exhaustive match");
                               })())(t);
-const tsOfRaw: _Curry<[t: Ty, env: TsEnv], string> = _curry(2, tsOfRaw$);
 /**
  * A scheme variable prints as `A`, `B`, … then `T26`. A nominal type named
  * `Tok` is not one of those letters, so it must not be treated as a hole.
@@ -459,14 +437,13 @@ const isUpperChar: (ch: string) => boolean = (ch: string) =>
     () => false,
     (n) => and(n >= 65, n <= 90),
   );
-const allDigitsFrom$ = (s: string, i: number): boolean =>
-  i >= _Str_length(s) ? i > 1 : and(isDigitChar(_Str_slice(i, i + 1, s)), allDigitsFrom$(s, i + 1));
-const allDigitsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, allDigitsFrom$);
+const allDigitsFrom = (s: string, i: number): boolean =>
+  i >= _Str_length(s) ? i > 1 : and(isDigitChar(_Str_slice(i, i + 1, s)), allDigitsFrom(s, i + 1));
 const isTypeLetter: (s: string) => boolean = (s: string) =>
   _Str_length(s) === 1
     ? isUpperChar(s)
-    : and(and(_Str_length(s) > 1, _Str_slice(0, 1, s) === "T"), allDigitsFrom$(s, 1));
-const depthStep$ = (s: string, i: number, depth: number): number => {
+    : and(and(_Str_length(s) > 1, _Str_slice(0, 1, s) === "T"), allDigitsFrom(s, 1));
+const depthStep = (s: string, i: number, depth: number): number => {
   const ch: string = _Str_slice(i, i + 1, s);
   return or(or(or(ch === "<", ch === "{"), ch === "("), ch === "[")
     ? depth + 1
@@ -476,21 +453,17 @@ const depthStep$ = (s: string, i: number, depth: number): number => {
         ? depth - 1
         : depth;
 };
-const depthStep: _Curry<[s: string, i: number, depth: number], number> = _curry(3, depthStep$);
-const hasSuffix$ = (suf: string, s: string): boolean => {
+const hasSuffix = (suf: string, s: string): boolean => {
   const n: number = _Str_length(suf);
   const m: number = _Str_length(s);
   return and(m >= n, eq(_Str_slice(m - n, m, s), suf));
 };
-const hasSuffix: _Curry<[suf: string, s: string], boolean> = _curry(2, hasSuffix$);
-const splitTop$ = (sep: string, s: string): string[] =>
-  splitTopAt$(sep, s, 0, 0, 0, [] as string[]);
 /**
  * Split on `sep` only at bracket depth 0, so a nested `{ end: number; start: number }`
  * stays one field.
  */
-const splitTop: _Curry<[sep: string, s: string], string[]> = _curry(2, splitTop$);
-const splitTopAt$ = (
+const splitTop = (sep: string, s: string): string[] => splitTopAt(sep, s, 0, 0, 0, [] as string[]);
+const splitTopAt = (
   sep: string,
   s: string,
   i: number,
@@ -502,22 +475,14 @@ const splitTopAt$ = (
     ? _Array_append(_Str_slice(start, _Str_length(s), s), acc)
     : ((n: number) =>
         and(and(depth === 0, i + n <= _Str_length(s)), eq(_Str_slice(i, i + n, s), sep))
-          ? splitTopAt$(sep, s, i + n, 0, i + n, _Array_append(_Str_slice(start, i, s), acc))
-          : splitTopAt$(sep, s, i + 1, depthStep$(s, i, depth), start, acc))(_Str_length(sep));
-const splitTopAt: _Curry<
-  [sep: string, s: string, i: number, depth: number, start: number, acc: string[]],
-  string[]
-> = _curry(6, splitTopAt$);
-const findTop$ = (ch: string, s: string, i: number, depth: number): Option<number> =>
+          ? splitTopAt(sep, s, i + n, 0, i + n, _Array_append(_Str_slice(start, i, s), acc))
+          : splitTopAt(sep, s, i + 1, depthStep(s, i, depth), start, acc))(_Str_length(sep));
+const findTop = (ch: string, s: string, i: number, depth: number): Option<number> =>
   i >= _Str_length(s)
     ? (None as Option<number>)
     : and(depth === 0, eq(_Str_slice(i, i + 1, s), ch))
       ? (Some(i) as Option<number>)
-      : findTop$(ch, s, i + 1, depthStep$(s, i, depth));
-const findTop: _Curry<[ch: string, s: string, i: number, depth: number], Option<number>> = _curry(
-  4,
-  findTop$,
-);
+      : findTop(ch, s, i + 1, depthStep(s, i, depth));
 const bindLetter: <A, B>(letter: A, concrete: B, subst: Map<A, B>) => Option<Map<A, B>> = _curry(
   3,
   <A, B>(letter: A, concrete: B, subst: Map<A, B>) =>
@@ -527,7 +492,7 @@ const bindLetter: <A, B>(letter: A, concrete: B, subst: Map<A, B>) => Option<Map
       (prev) => (eq(prev, concrete) ? Some(subst) : None),
     ),
 );
-const agreeList$ = (
+const agreeList = (
   useTs: string[],
   aliasTs: string[],
   subst: Map<string, string>,
@@ -546,51 +511,42 @@ const agreeList$ = (
               () => None as Option<Map<string, string>>,
               (a) =>
                 _Option_match(
-                  typesAgree$(u, a, subst),
+                  typesAgree(u, a, subst),
                   () => None as Option<Map<string, string>>,
-                  (subst1) => agreeList$(useTs, aliasTs, subst1, i + 1),
+                  (subst1) => agreeList(useTs, aliasTs, subst1, i + 1),
                 ),
             ),
         );
-const agreeList: _Curry<
-  [useTs: string[], aliasTs: string[], subst: Map<string, string>, i: number],
-  Option<Map<string, string>>
-> = _curry(4, agreeList$);
 const peelApp: (s: string) => Option<{ name: string; args: string }> = (s: string) =>
   _Option_match(
-    findTop$("<", s, 0, 0),
+    findTop("<", s, 0, 0),
     () => None as Option<{ name: string; args: string }>,
     (i) =>
-      and(hasSuffix$(">", s), i > 0)
+      and(hasSuffix(">", s), i > 0)
         ? (Some({
             name: _Str_slice(0, i, s),
             args: _Str_slice(i + 1, _Str_length(s) - 1, s),
           }) as Option<{ name: string; args: string }>)
         : (None as Option<{ name: string; args: string }>),
   );
-const wrapped$ = (open: string, close: string, s: string): boolean =>
-  and(and(_Str_startsWith(open, s), hasSuffix$(close, s)), _Str_length(s) >= 2);
-const wrapped: _Curry<[open: string, close: string, s: string], boolean> = _curry(3, wrapped$);
+const wrapped = (open: string, close: string, s: string): boolean =>
+  and(and(_Str_startsWith(open, s), hasSuffix(close, s)), _Str_length(s) >= 2);
 const innerOf: (s: string) => string = (s: string) => _Str_slice(1, _Str_length(s) - 1, s);
 const stripParens: (s: string) => string = (s: string) =>
-  wrapped$("(", ")", s) ? _Str_slice(1, _Str_length(s) - 1, s) : s;
-const agreeArray$ = (
+  wrapped("(", ")", s) ? _Str_slice(1, _Str_length(s) - 1, s) : s;
+const agreeArray = (
   useT: string,
   aliasT: string,
   subst: Map<string, string>,
 ): Option<Map<string, string>> =>
-  and(hasSuffix$("[]", useT), hasSuffix$("[]", aliasT))
-    ? typesAgree$(
+  and(hasSuffix("[]", useT), hasSuffix("[]", aliasT))
+    ? typesAgree(
         stripParens(_Str_slice(0, _Str_length(useT) - 2, useT)),
         stripParens(_Str_slice(0, _Str_length(aliasT) - 2, aliasT)),
         subst,
       )
     : (None as Option<Map<string, string>>);
-const agreeArray: _Curry<
-  [useT: string, aliasT: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, agreeArray$);
-const agreeApp$ = (
+const agreeApp = (
   useT: string,
   aliasT: string,
   subst: Map<string, string>,
@@ -604,17 +560,13 @@ const agreeApp$ = (
         () => None as Option<Map<string, string>>,
         (a) =>
           eq(u.name, a.name)
-            ? agreeList$(splitTop$(", ", u.args), splitTop$(", ", a.args), subst, 0)
+            ? agreeList(splitTop(", ", u.args), splitTop(", ", a.args), subst, 0)
             : (None as Option<Map<string, string>>),
       ),
   );
-const agreeApp: _Curry<
-  [useT: string, aliasT: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, agreeApp$);
 const splitLabel: (s: string) => Option<{ label: string; ty: string }> = (s: string) =>
   _Option_match(
-    findTop$(":", s, 0, 0),
+    findTop(":", s, 0, 0),
     () => None as Option<{ label: string; ty: string }>,
     (i) =>
       Some({ label: _Str_slice(0, i, s), ty: _Str_slice(i + 1, _Str_length(s), s) }) as Option<{
@@ -622,7 +574,7 @@ const splitLabel: (s: string) => Option<{ label: string; ty: string }> = (s: str
         ty: string;
       }>,
   );
-const fieldAgree$ = (
+const fieldAgree = (
   useF: string,
   aliasF: string,
   subst: Map<string, string>,
@@ -636,24 +588,16 @@ const fieldAgree$ = (
         () => None as Option<Map<string, string>>,
         (a) =>
           eq(_Str_trim(u.label), _Str_trim(a.label))
-            ? typesAgree$(_Str_trim(u.ty), _Str_trim(a.ty), subst)
+            ? typesAgree(_Str_trim(u.ty), _Str_trim(a.ty), subst)
             : (None as Option<Map<string, string>>),
       ),
   );
-const fieldAgree: _Curry<
-  [useF: string, aliasF: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, fieldAgree$);
-const fieldsAgree$ = (
+const fieldsAgree = (
   useFs: string[],
   aliasFs: string[],
   subst: Map<string, string>,
-): Option<Map<string, string>> => agreeFields$(useFs, aliasFs, subst, 0);
-const fieldsAgree: _Curry<
-  [useFs: string[], aliasFs: string[], subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, fieldsAgree$);
-const agreeFields$ = (
+): Option<Map<string, string>> => agreeFields(useFs, aliasFs, subst, 0);
+const agreeFields = (
   useFs: string[],
   aliasFs: string[],
   subst: Map<string, string>,
@@ -672,55 +616,39 @@ const agreeFields$ = (
               () => None as Option<Map<string, string>>,
               (a) =>
                 _Option_match(
-                  fieldAgree$(u, a, subst),
+                  fieldAgree(u, a, subst),
                   () => None as Option<Map<string, string>>,
-                  (subst1) => agreeFields$(useFs, aliasFs, subst1, i + 1),
+                  (subst1) => agreeFields(useFs, aliasFs, subst1, i + 1),
                 ),
             ),
         );
-const agreeFields: _Curry<
-  [useFs: string[], aliasFs: string[], subst: Map<string, string>, i: number],
-  Option<Map<string, string>>
-> = _curry(4, agreeFields$);
-const agreeBrace$ = (
+const agreeBrace = (
   useT: string,
   aliasT: string,
   subst: Map<string, string>,
 ): Option<Map<string, string>> =>
-  and(wrapped$("{", "}", useT), wrapped$("{", "}", aliasT))
-    ? fieldsAgree$(splitTop$("; ", innerOf(useT)), splitTop$("; ", innerOf(aliasT)), subst)
+  and(wrapped("{", "}", useT), wrapped("{", "}", aliasT))
+    ? fieldsAgree(splitTop("; ", innerOf(useT)), splitTop("; ", innerOf(aliasT)), subst)
     : (None as Option<Map<string, string>>);
-const agreeBrace: _Curry<
-  [useT: string, aliasT: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, agreeBrace$);
-const agreeTuple$ = (
+const agreeTuple = (
   useT: string,
   aliasT: string,
   subst: Map<string, string>,
 ): Option<Map<string, string>> =>
-  and(wrapped$("[", "]", useT), wrapped$("[", "]", aliasT))
-    ? agreeList$(splitTop$(", ", innerOf(useT)), splitTop$(", ", innerOf(aliasT)), subst, 0)
+  and(wrapped("[", "]", useT), wrapped("[", "]", aliasT))
+    ? agreeList(splitTop(", ", innerOf(useT)), splitTop(", ", innerOf(aliasT)), subst, 0)
     : (None as Option<Map<string, string>>);
-const agreeTuple: _Curry<
-  [useT: string, aliasT: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, agreeTuple$);
-const agreeUnion$ = (
+const agreeUnion = (
   useT: string,
   aliasT: string,
   subst: Map<string, string>,
 ): Option<Map<string, string>> => {
-  const us: string[] = splitTop$(" | ", useT);
-  const als: string[] = splitTop$(" | ", aliasT);
+  const us: string[] = splitTop(" | ", useT);
+  const als: string[] = splitTop(" | ", aliasT);
   return and(length(us) > 1, eq(length(us), length(als)))
-    ? agreeList$(us, als, subst, 0)
+    ? agreeList(us, als, subst, 0)
     : (None as Option<Map<string, string>>);
 };
-const agreeUnion: _Curry<
-  [useT: string, aliasT: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, agreeUnion$);
 const firstSome: <A>(a: Option<A>, b: Option<A>) => Option<A> = _curry(
   2,
   <A>(a: Option<A>, b: Option<A>) =>
@@ -730,7 +658,12 @@ const firstSome: <A>(a: Option<A>, b: Option<A>) => Option<A> = _curry(
       () => a,
     ),
 );
-const typesAgree$ = (
+/**
+ * `useT` matches `aliasT` exactly, or by binding a scheme letter (`A`, `T26`)
+ * to the alias's concrete spelling. The binding has to be consistent: `A`
+ * cannot be `number` in one field and `string` in another.
+ */
+const typesAgree = (
   useT: string,
   aliasT: string,
   subst: Map<string, string>,
@@ -740,25 +673,21 @@ const typesAgree$ = (
     : isTypeLetter(useT)
       ? bindLetter(useT, aliasT, subst)
       : firstSome(
-          agreeArray$(useT, aliasT, subst),
+          agreeArray(useT, aliasT, subst),
           firstSome(
-            agreeApp$(useT, aliasT, subst),
+            agreeApp(useT, aliasT, subst),
             firstSome(
-              agreeBrace$(useT, aliasT, subst),
-              firstSome(agreeTuple$(useT, aliasT, subst), agreeUnion$(useT, aliasT, subst)),
+              agreeBrace(useT, aliasT, subst),
+              firstSome(agreeTuple(useT, aliasT, subst), agreeUnion(useT, aliasT, subst)),
             ),
           ),
         );
 /**
- * `useT` matches `aliasT` exactly, or by binding a scheme letter (`A`, `T26`)
- * to the alias's concrete spelling. The binding has to be consistent: `A`
- * cannot be `number` in one field and `string` in another.
+ * One alias explains this closed row. Two aliases (a `{ x: A, y: B }` that
+ * matches both a numeric point and a string point) explain nothing — folding
+ * either name would be a guess.
  */
-const typesAgree: _Curry<
-  [useT: string, aliasT: string, subst: Map<string, string>],
-  Option<Map<string, string>>
-> = _curry(3, typesAgree$);
-const uniqueSubst$ = (
+const uniqueSubst = (
   useKey: string,
   keys: string[],
   i: number,
@@ -769,14 +698,14 @@ const uniqueSubst$ = (
     () => found,
     (k) =>
       _Option_match(
-        fieldsAgree$(splitTop$("; ", useKey), splitTop$("; ", k), new Map<string, string>()),
-        () => uniqueSubst$(useKey, keys, i + 1, found),
+        fieldsAgree(splitTop("; ", useKey), splitTop("; ", k), new Map<string, string>()),
+        () => uniqueSubst(useKey, keys, i + 1, found),
         (subst) =>
           _Option_match(
             found,
-            () => uniqueSubst$(useKey, keys, i + 1, Some(subst) as Option<Map<string, string>>),
+            () => uniqueSubst(useKey, keys, i + 1, Some(subst) as Option<Map<string, string>>),
             () =>
-              uniqueSubst$(
+              uniqueSubst(
                 useKey,
                 keys,
                 i + 1,
@@ -785,15 +714,6 @@ const uniqueSubst$ = (
           ),
       ),
   );
-/**
- * One alias explains this closed row. Two aliases (a `{ x: A, y: B }` that
- * matches both a numeric point and a string point) explain nothing — folding
- * either name would be a guess.
- */
-const uniqueSubst: _Curry<
-  [useKey: string, keys: string[], i: number, found: Option<Map<string, string>>],
-  Option<Map<string, string>>
-> = _curry(4, uniqueSubst$);
 const substOf: <A, B>(
   useKey: string,
   env: { recs: Map<string, A> } & B,
@@ -801,7 +721,7 @@ const substOf: <A, B>(
   2,
   <A, B>(useKey: string, env: { recs: Map<string, A> } & B) =>
     _Option_match(
-      uniqueSubst$(useKey, _Map_keys(env.recs), 0, None as Option<Map<string, string>>),
+      uniqueSubst(useKey, _Map_keys(env.recs), 0, None as Option<Map<string, string>>),
       () => None as Option<Map<string, string>>,
       (subst) =>
         _Map_has("*", subst)

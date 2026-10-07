@@ -91,6 +91,7 @@ export type GCtx = {
   rawNames: Map<string, string>;
   rawArity: Map<string, number>;
   valueRefs: Set<string>;
+  publicRefs: Set<string>;
   userNames: Set<string>;
   docs: boolean;
 };
@@ -220,16 +221,15 @@ const hook2: <A, B, C>(h: Option<(a: A, b: B) => Option<C>>, x: A, y: B) => Opti
       (f) => f(x, y),
     ),
 );
-const emptyNsCtor$ = (con: string, ann: Option<string>): string =>
+/**
+ * `new Map<K, V>()` when annotated, `new Map()` otherwise.
+ */
+const emptyNsCtor = (con: string, ann: Option<string>): string =>
   _Option_match(
     ann,
     () => `new ${con}()`,
     (t) => `new ${t}()`,
   );
-/**
- * `new Map<K, V>()` when annotated, `new Map()` otherwise.
- */
-const emptyNsCtor: _Curry<[con: string, ann: Option<string>], string> = _curry(2, emptyNsCtor$);
 /**
  * Uppercase-initial name — a constructor, not an ordinary binding.
  * A record field name emits BARE only when it is a valid JS identifier;
@@ -240,18 +240,17 @@ const isIdentStart: (c: number) => boolean = (c: number) =>
   or(or(or(and(c >= 65, c <= 90), and(c >= 97, c <= 122)), c === 95), c === 36);
 const isIdentPart: (c: number) => boolean = (c: number) =>
   or(isIdentStart(c), and(c >= 48, c <= 57));
-const identPartsFrom$ = (s: string, i: number): boolean =>
+const identPartsFrom = (s: string, i: number): boolean =>
   _Option_match(
     _Str_codeAt(i, s),
     () => true,
-    (c) => and(isIdentPart(c), identPartsFrom$(s, i + 1)),
+    (c) => and(isIdentPart(c), identPartsFrom(s, i + 1)),
   );
-const identPartsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, identPartsFrom$);
 const isJsIdent: (s: string) => boolean = (s: string) =>
   _Option_match(
     _Str_codeAt(0, s),
     () => false,
-    (c) => and(isIdentStart(c), identPartsFrom$(s, 1)),
+    (c) => and(isIdentStart(c), identPartsFrom(s, 1)),
   );
 const isUpperStart: (s: string) => boolean = (s: string) =>
   _Option_exists((n: number) => and(n >= 65, n <= 90), _Str_codeAt(0, s));
@@ -278,16 +277,15 @@ const isCtorRef: (fn: Expr) => boolean = (fn: Expr) => {
     }
   }
 };
-const suffixOr$ = (name: string, ann: Option<string>): string =>
+/**
+ * `name: T` when annotated, bare name otherwise.
+ */
+const suffixOr = (name: string, ann: Option<string>): string =>
   _Option_match(
     ann,
     () => name,
     (t) => `${name}: ${t}`,
   );
-/**
- * `name: T` when annotated, bare name otherwise.
- */
-const suffixOr: _Curry<[name: string, ann: Option<string>], string> = _curry(2, suffixOr$);
 /**
  * No annotations at all — the JS backend's shape for every lambda.
  */
@@ -303,34 +301,29 @@ const paramAnnotsFor: <A, B>(
     (f) => f(sp, arity),
   ),
 );
-const annotatedParams$ = (cparams: LamParam[], annots: Option<string>[], i: number): string[] =>
+/**
+ * Zip collapsed params with their annotations; a missing or `None` entry
+ * leaves the param bare (generic position, or JS mode).
+ */
+const annotatedParams = (cparams: LamParam[], annots: Option<string>[], i: number): string[] =>
   _Option_match(
     _Array_get(i, cparams),
     () => [] as string[],
     (p) =>
       _Array_prepend(
-        suffixOr$(genParam(p), _Option_unwrapOr(None as Option<string>, _Array_get(i, annots))),
-        annotatedParams$(cparams, annots, i + 1),
+        suffixOr(genParam(p), _Option_unwrapOr(None as Option<string>, _Array_get(i, annots))),
+        annotatedParams(cparams, annots, i + 1),
       ),
   );
 /**
- * Zip collapsed params with their annotations; a missing or `None` entry
- * leaves the param bare (generic position, or JS mode).
+ * `expr as T` when annotated, bare otherwise.
  */
-const annotatedParams: _Curry<
-  [cparams: LamParam[], annots: Option<string>[], i: number],
-  string[]
-> = _curry(3, annotatedParams$);
-const castOr$ = (js: string, ann: Option<string>): string =>
+const castOr = (js: string, ann: Option<string>): string =>
   _Option_match(
     ann,
     () => js,
     (t) => `(${js} as ${t})`,
   );
-/**
- * `expr as T` when annotated, bare otherwise.
- */
-const castOr: _Curry<[js: string, ann: Option<string>], string> = _curry(2, castOr$);
 const bindRuntime: (monad: string) => string = (monad: string) =>
   monad === "Option" ? "_Option_flatMap" : monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
 const allOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
@@ -359,7 +352,7 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
   <A>(f: (a: A) => boolean, xs: A[]) => someOfFrom(f, xs, 0),
 );
-const escTemplateLoop$ = (chars: string[], i0: number, acc0: string): string => {
+const escTemplateLoop = (chars: string[], i0: number, acc0: string): string => {
   let i: number = i0;
   let acc: string = acc0;
   while (true) {
@@ -386,20 +379,15 @@ const escTemplateLoop$ = (chars: string[], i0: number, acc0: string): string => 
     return _step.value;
   }
 };
-const escTemplateLoop: _Curry<[chars: string[], i0: number, acc0: string], string> = _curry(
-  3,
-  escTemplateLoop$,
-);
 const escapeTemplateLiteral: (s: string) => string = (s: string) =>
-  escTemplateLoop$(_Str_chars(s), 0, "");
-const keyAt$ = (ctx: GCtx, ctor: string, i: number): string =>
+  escTemplateLoop(_Str_chars(s), 0, "");
+const keyAt = (ctx: GCtx, ctor: string, i: number): string =>
   _Option_match(
     _Map_get(ctor, ctx.keys),
     () => `_${show(i)}`,
     (ks) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)),
   );
-const keyAt: _Curry<[ctx: GCtx, ctor: string, i: number], string> = _curry(3, keyAt$);
-const nsRuntimeId$ = (ctx: GCtx, target: Expr, name: string): Option<string> => {
+const nsRuntimeId = (ctx: GCtx, target: Expr, name: string): Option<string> => {
   const $match = target;
   switch ($match._tag) {
     case "ERef": {
@@ -415,20 +403,21 @@ const nsRuntimeId$ = (ctx: GCtx, target: Expr, name: string): Option<string> => 
     }
   }
 };
-const nsRuntimeId: _Curry<[ctx: GCtx, target: Expr, name: string], Option<string>> = _curry(
-  3,
-  nsRuntimeId$,
-);
-const emptyNsEmit$ = (target: Expr, name: string, ann: Option<string>): Option<string> => {
+/**
+ * `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
+ * `@{}` / `#{}` (ADR 0080). `ann` is the resolved element typing when the TS
+ * backend supplies one — a bare `new Set()` infers `Set<never>` (ADR 0035).
+ */
+const emptyNsEmit = (target: Expr, name: string, ann: Option<string>): Option<string> => {
   const $match = target;
   switch ($match._tag) {
     case "ERef": {
       const { name: refName } = $match;
       return name === "empty"
         ? refName === "Set"
-          ? (Some(emptyNsCtor$("Set", ann)) as Option<string>)
+          ? (Some(emptyNsCtor("Set", ann)) as Option<string>)
           : refName === "Map"
-            ? (Some(emptyNsCtor$("Map", ann)) as Option<string>)
+            ? (Some(emptyNsCtor("Map", ann)) as Option<string>)
             : refName === "List"
               ? (Some("_list(function* () {})") as Option<string>)
               : (None as Option<string>)
@@ -439,15 +428,6 @@ const emptyNsEmit$ = (target: Expr, name: string, ann: Option<string>): Option<s
     }
   }
 };
-/**
- * `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
- * `@{}` / `#{}` (ADR 0080). `ann` is the resolved element typing when the TS
- * backend supplies one — a bare `new Set()` infers `Set<never>` (ADR 0035).
- */
-const emptyNsEmit: _Curry<
-  [target: Expr, name: string, ann: Option<string>],
-  Option<string>
-> = _curry(3, emptyNsEmit$);
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -463,7 +443,7 @@ const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
     }
   }
 };
-const splitLamParams$ = (
+const splitLamParams = (
   params: LamParam[],
   positional: LamParam[],
   labeled: LamParam[],
@@ -474,16 +454,12 @@ const splitLamParams$ = (
       : _v.length >= 1
         ? (([p, ...rest]) =>
             isLabeledParam(p)
-              ? splitLamParams$(rest, positional, _Array_append(p, labeled))
-              : splitLamParams$(rest, _Array_append(p, positional), labeled))(_v)
+              ? splitLamParams(rest, positional, _Array_append(p, labeled))
+              : splitLamParams(rest, _Array_append(p, positional), labeled))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const splitLamParams: _Curry<
-  [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
-  [LamParam[], LamParam[]]
-> = _curry(3, splitLamParams$);
-const absorbParams$ = (
+const absorbParams = (
   params: LamParam[],
   acc: LamParam[],
   fills: { labVar: string; labs: LamParam[] }[],
@@ -500,17 +476,8 @@ const absorbParams$ = (
               _Array_append({ labVar: labVar, labs: labeled }, fills),
               labN + 1,
             ))(labN === 0 ? "$lab" : `$lab${show(labN)}`))(labeled);
-  })(splitLamParams$(params, [] as LamParam[], [] as LamParam[]));
-const absorbParams: _Curry<
-  [
-    params: LamParam[],
-    acc: LamParam[],
-    fills: { labVar: string; labs: LamParam[] }[],
-    labN: number,
-  ],
-  [LamParam[], { labVar: string; labs: LamParam[] }[], number]
-> = _curry(4, absorbParams$);
-const collapseLambdaFrom$ = (
+  })(splitLamParams(params, [] as LamParam[], [] as LamParam[]));
+const collapseLambdaFrom = (
   params: LamParam[],
   body: Expr,
   acc: LamParam[],
@@ -522,38 +489,24 @@ const collapseLambdaFrom$ = (
     switch ($match._tag) {
       case "ELambda": {
         const { params: params2, body: body2 } = $match;
-        return collapseLambdaFrom$(params2, body2, acc1, fills1, labN1);
+        return collapseLambdaFrom(params2, body2, acc1, fills1, labN1);
       }
       default: {
         return _tuple(acc1, body, fills1);
       }
     }
-  })(absorbParams$(params, acc, fills, labN));
-const collapseLambdaFrom: _Curry<
-  [
-    params: LamParam[],
-    body: Expr,
-    acc: LamParam[],
-    fills: { labVar: string; labs: LamParam[] }[],
-    labN: number,
-  ],
-  [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]
-> = _curry(5, collapseLambdaFrom$);
-const collapseLambda$ = (
+  })(absorbParams(params, acc, fills, labN));
+const collapseLambda = (
   params: LamParam[],
   body: Expr,
 ): [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]] =>
-  collapseLambdaFrom$(
+  collapseLambdaFrom(
     params,
     body,
     [] as LamParam[],
     [] as { labVar: string; labs: LamParam[] }[],
     0,
   );
-const collapseLambda: _Curry<
-  [params: LamParam[], body: Expr],
-  [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]
-> = _curry(2, collapseLambda$);
 /**
  * A string, number or bool literal.
  */
@@ -574,7 +527,12 @@ const isPrimLit: (e: Expr) => boolean = (e: Expr) => {
     }
   }
 };
-const eqTest$ = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string> =>
+/**
+ * Structural `eq` as a JavaScript comparison, where the two agree exactly
+ * (ADR 0115): against a primitive literal it is `===`, and against a nullary
+ * ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+ */
+const eqTest = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string> =>
   ((_v) =>
     _v[1]._tag === "ERef" &&
     (([, { name: c }]) => isNullaryCtor(c, ctx.keys))(
@@ -582,7 +540,7 @@ const eqTest$ = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string>
     )
       ? (([, { name: c }]) =>
           (([key, lit]: [string, string]) =>
-            Some(`(${genMember$(ctx, left)}.${key} ${op} ${jsStringLit(lit)})`) as Option<string>)(
+            Some(`(${genMember(ctx, left)}.${key} ${op} ${jsStringLit(lit)})`) as Option<string>)(
             tagOf(ctx.keys, c),
           ))(_v as [[Expr, Expr][0], Extract<[Expr, Expr][1], { _tag: "ERef" }>])
       : _v[0]._tag === "ERef" &&
@@ -592,23 +550,17 @@ const eqTest$ = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string>
         ? (([{ name: c }]) =>
             (([key, lit]: [string, string]) =>
               Some(
-                `(${genMember$(ctx, right)}.${key} ${op} ${jsStringLit(lit)})`,
+                `(${genMember(ctx, right)}.${key} ${op} ${jsStringLit(lit)})`,
               ) as Option<string>)(tagOf(ctx.keys, c)))(
             _v as [Extract<[Expr, Expr][0], { _tag: "ERef" }>, [Expr, Expr][1]],
           )
         : or(isPrimLit(left), isPrimLit(right))
-          ? (Some(`(${genExpr$(ctx, left)} ${op} ${genExpr$(ctx, right)})`) as Option<string>)
+          ? (Some(`(${genExpr(ctx, left)} ${op} ${genExpr(ctx, right)})`) as Option<string>)
           : (None as Option<string>))(_tuple(left, right));
 /**
- * Structural `eq` as a JavaScript comparison, where the two agree exactly
- * (ADR 0115): against a primitive literal it is `===`, and against a nullary
- * ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+ * A call to a name the module binds itself, not the prelude function.
  */
-const eqTest: _Curry<[ctx: GCtx, left: Expr, right: Expr, op: string], Option<string>> = _curry(
-  4,
-  eqTest$,
-);
-const isUserCall$ = (ctx: GCtx, fn: Expr): boolean => {
+const isUserCall = (ctx: GCtx, fn: Expr): boolean => {
   const $match = fn;
   switch ($match._tag) {
     case "ERef": {
@@ -621,15 +573,17 @@ const isUserCall$ = (ctx: GCtx, fn: Expr): boolean => {
   }
 };
 /**
- * A call to a name the module binds itself, not the prelude function.
+ * The calls whose saturated runtime behavior is exactly JavaScript's infix
+ * behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
+ * `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
+ * belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
  */
-const isUserCall: _Curry<[ctx: GCtx, fn: Expr], boolean> = _curry(2, isUserCall$);
-const tsInfix$ = (ctx: GCtx, fn: Expr, args: Expr[]): Option<string> =>
-  or(!ctx.preserveInfix, isUserCall$(ctx, fn))
+const tsInfix = (ctx: GCtx, fn: Expr, args: Expr[]): Option<string> =>
+  or(!ctx.preserveInfix, isUserCall(ctx, fn))
     ? (None as Option<string>)
     : ((_v) =>
         _v[0]._tag === "ERef" && _v[0].name === "eq" && _v[1].length === 2
-          ? (([, [left, right]]) => eqTest$(ctx, left, right, "==="))(
+          ? (([, [left, right]]) => eqTest(ctx, left, right, "==="))(
               _v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]],
             )
           : _v[0]._tag === "ERef" && _v[0].name === "not" && _v[1].length === 1
@@ -646,63 +600,54 @@ const tsInfix$ = (ctx: GCtx, fn: Expr, args: Expr[]): Option<string> =>
                   )
                     ? (({ args: [left, right] }) =>
                         _Option_match(
-                          eqTest$(ctx, left, right, "!=="),
-                          () => Some(`!(${genExpr$(ctx, operand)})`) as Option<string>,
+                          eqTest(ctx, left, right, "!=="),
+                          () => Some(`!(${genExpr(ctx, operand)})`) as Option<string>,
                           (test) => Some(test) as Option<string>,
                         ))(
                         _v as Extract<Expr, { _tag: "ECall" }> & {
                           fn: Extract<Extract<Expr, { _tag: "ECall" }>["fn"], { _tag: "ERef" }>;
                         },
                       )
-                    : (Some(`!(${genExpr$(ctx, operand)})`) as Option<string>))(operand))(
+                    : (Some(`!(${genExpr(ctx, operand)})`) as Option<string>))(operand))(
                 _v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]],
               )
             : _v[0]._tag === "ERef" && _v[1].length === 2
               ? (([{ name }, [left, right]]) =>
                   ((_v) =>
                     _v === "add"
-                      ? (Some(
-                          `(${genExpr$(ctx, left)} + ${genExpr$(ctx, right)})`,
-                        ) as Option<string>)
+                      ? (Some(`(${genExpr(ctx, left)} + ${genExpr(ctx, right)})`) as Option<string>)
                       : _v === "sub"
                         ? (Some(
-                            `(${genExpr$(ctx, left)} - ${genExpr$(ctx, right)})`,
+                            `(${genExpr(ctx, left)} - ${genExpr(ctx, right)})`,
                           ) as Option<string>)
                         : _v === "mul"
                           ? (Some(
-                              `(${genExpr$(ctx, left)} * ${genExpr$(ctx, right)})`,
+                              `(${genExpr(ctx, left)} * ${genExpr(ctx, right)})`,
                             ) as Option<string>)
                           : _v === "div"
                             ? (Some(
-                                `(${genExpr$(ctx, left)} / ${genExpr$(ctx, right)})`,
+                                `(${genExpr(ctx, left)} / ${genExpr(ctx, right)})`,
                               ) as Option<string>)
                             : _v === "lt"
                               ? (Some(
-                                  `(${genExpr$(ctx, left)} < ${genExpr$(ctx, right)})`,
+                                  `(${genExpr(ctx, left)} < ${genExpr(ctx, right)})`,
                                 ) as Option<string>)
                               : _v === "lte"
                                 ? (Some(
-                                    `(${genExpr$(ctx, left)} <= ${genExpr$(ctx, right)})`,
+                                    `(${genExpr(ctx, left)} <= ${genExpr(ctx, right)})`,
                                   ) as Option<string>)
                                 : _v === "gt"
                                   ? (Some(
-                                      `(${genExpr$(ctx, left)} > ${genExpr$(ctx, right)})`,
+                                      `(${genExpr(ctx, left)} > ${genExpr(ctx, right)})`,
                                     ) as Option<string>)
                                   : _v === "gte"
                                     ? (Some(
-                                        `(${genExpr$(ctx, left)} >= ${genExpr$(ctx, right)})`,
+                                        `(${genExpr(ctx, left)} >= ${genExpr(ctx, right)})`,
                                       ) as Option<string>)
                                     : (None as Option<string>))(name))(
                   _v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]],
                 )
               : (None as Option<string>))(_tuple(fn, args));
-/**
- * The calls whose saturated runtime behavior is exactly JavaScript's infix
- * behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
- * `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
- * belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
- */
-const tsInfix: _Curry<[ctx: GCtx, fn: Expr, args: Expr[]], Option<string>> = _curry(3, tsInfix$);
 const jsxHasSpread: (children: SeqElem[]) => boolean = (children: SeqElem[]) =>
   ((_v) =>
     _v.length === 0
@@ -714,11 +659,11 @@ const jsxHasSpread: (children: SeqElem[]) => boolean = (children: SeqElem[]) =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(children);
-const jsxAttrs$ = (ctx: GCtx, fields: Field[], spread: Option<Expr>): string => {
+const jsxAttrs = (ctx: GCtx, fields: Field[], spread: Option<Expr>): string => {
   const head: string = _Option_match(
     spread,
     () => "",
-    (value) => ` {...${genExpr$(ctx, value)}}`,
+    (value) => ` {...${genExpr(ctx, value)}}`,
   );
   return `${head}${_Str_join(
     "",
@@ -727,16 +672,17 @@ const jsxAttrs$ = (ctx: GCtx, fields: Field[], spread: Option<Expr>): string => 
         ((_v) =>
           _v._tag === "EBool" && _v.value === true
             ? ` ${f.name}`
-            : ((value) => ` ${f.name}={${genExpr$(ctx, value)}}`)(_v))(f.value),
+            : ((value) => ` ${f.name}={${genExpr(ctx, value)}}`)(_v))(f.value),
       fields,
     ),
   )}`;
 };
-const jsxAttrs: _Curry<[ctx: GCtx, fields: Field[], spread: Option<Expr>], string> = _curry(
-  3,
-  jsxAttrs$,
-);
-const tsxArgs$ = (ctx: GCtx, args: Expr[]): Option<string> =>
+/**
+ * Re-fold only the parser's provenance-tagged `h(tag, props, children)`.
+ * A source-written `h(...)` remains a call, and child spreads retain that
+ * call form because JSX has no equivalent spread-child syntax.
+ */
+const tsxArgs = (ctx: GCtx, args: Expr[]): Option<string> =>
   ((_v) =>
     _v.length === 3 && _v[1]._tag === "ERecord" && _v[2]._tag === "EArr"
       ? (([tag, { fields, spread }, { elements: children }]) =>
@@ -758,7 +704,7 @@ const tsxArgs$ = (ctx: GCtx, args: Expr[]): Option<string> =>
                               switch ($match._tag) {
                                 case "SEExpr": {
                                   const { expr: value } = $match;
-                                  return `{${genExpr$(ctx, value)}}`;
+                                  return `{${genExpr(ctx, value)}}`;
                                 }
                                 case "SESpread": {
                                   return "";
@@ -769,13 +715,11 @@ const tsxArgs$ = (ctx: GCtx, args: Expr[]): Option<string> =>
                               }
                             }, children),
                           ),
-                        ))(jsxAttrs$(ctx, fields, spread)))(
+                        ))(jsxAttrs(ctx, fields, spread)))(
                   fragment
                     ? ""
                     : ((_v) =>
-                        _v._tag === "EStr" ? (({ value }) => value)(_v) : genMember$(ctx, tag))(
-                        tag,
-                      ),
+                        _v._tag === "EStr" ? (({ value }) => value)(_v) : genMember(ctx, tag))(tag),
                 ))(((_v) => (_v._tag === "EStr" && _v.value === "Fragment" ? true : false))(tag)))(
           _v as [
             Expr[][number],
@@ -784,27 +728,22 @@ const tsxArgs$ = (ctx: GCtx, args: Expr[]): Option<string> =>
           ],
         )
       : (None as Option<string>))(args);
-/**
- * Re-fold only the parser's provenance-tagged `h(tag, props, children)`.
- * A source-written `h(...)` remains a call, and child spreads retain that
- * call form because JSX has no equivalent spread-child syntax.
- */
-const tsxArgs: _Curry<[ctx: GCtx, args: Expr[]], Option<string>> = _curry(2, tsxArgs$);
-const tsxCall$ = (ctx: GCtx, fn: Expr, args: Expr[], origin: Option<string>): Option<string> =>
+const tsxCall = (ctx: GCtx, fn: Expr, args: Expr[], origin: Option<string>): Option<string> =>
   !ctx.preserveJsx
     ? (None as Option<string>)
     : ((_v) =>
         _v._tag === "Some" && _v.value === "jsx"
           ? ((_v) =>
               _v._tag === "ERef" && _v.name === "h"
-                ? tsxArgs$(ctx, args)
+                ? tsxArgs(ctx, args)
                 : (None as Option<string>))(fn)
           : (None as Option<string>))(origin);
-const tsxCall: _Curry<
-  [ctx: GCtx, fn: Expr, args: Expr[], origin: Option<string>],
-  Option<string>
-> = _curry(4, tsxCall$);
-const genArrow$ = (
+/**
+ * The arrow for a lambda, collapsed over its curried spine, and its collapsed
+ * arity. Shared by the `_curry`-wrapped expression form and a top-level raw
+ * twin (ADR 0149).
+ */
+const genArrow = (
   ctx: GCtx,
   params: LamParam[],
   body: Expr,
@@ -814,24 +753,20 @@ const genArrow$ = (
   (([cparams, cbody, fills]: [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]) => {
     const bound: Set<string> = fillNames(
       fills,
-      paramNameSet$(cparams, 0, _Set_fromArray([] as string[])),
+      paramNameSet(cparams, 0, _Set_fromArray([] as string[])),
     );
     const annots: ParamAnnots = paramAnnotsFor(ctx.annotateParams, sp, length(cparams));
     return _tuple(
-      `${annots.generics}(${_Str_join(", ", annotatedParams$(cparams, annots.params, 0))})${ret} => ${genLambdaBodyIn$(ctx, cbody, bound, genFillDecls$(ctx, fills))}`,
+      `${annots.generics}(${_Str_join(", ", annotatedParams(cparams, annots.params, 0))})${ret} => ${genLambdaBodyIn(ctx, cbody, bound, genFillDecls(ctx, fills))}`,
       length(cparams),
     );
-  })(collapseLambda$(params, body));
+  })(collapseLambda(params, body));
 /**
- * The arrow for a lambda, collapsed over its curried spine, and its collapsed
- * arity. Shared by the `_curry`-wrapped expression form and a top-level raw
- * twin (ADR 0149).
+ * The callee text for a call with `argc` arguments: the raw twin when the
+ * callee is a top-level function of exactly that arity (ADR 0149), else the
+ * ordinary callee.
  */
-const genArrow: _Curry<
-  [ctx: GCtx, params: LamParam[], body: Expr, sp: SpanAt, ret: string],
-  [string, number]
-> = _curry(5, genArrow$);
-const genCalleeFor$ = (ctx: GCtx, fn: Expr, argc: number): string => {
+const genCalleeFor = (ctx: GCtx, fn: Expr, argc: number): string => {
   const $match = fn;
   switch ($match._tag) {
     case "ERef": {
@@ -851,21 +786,13 @@ const genCalleeFor$ = (ctx: GCtx, fn: Expr, argc: number): string => {
                 Extract<[Option<number>, Option<string>][1], { _tag: "Some" }>,
               ],
             )
-          : genCallee$(ctx, fn))(
-        _tuple(_Map_get(name, ctx.rawArity), _Map_get(name, ctx.rawNames)),
-      );
+          : genCallee(ctx, fn))(_tuple(_Map_get(name, ctx.rawArity), _Map_get(name, ctx.rawNames)));
     }
     default: {
-      return genCallee$(ctx, fn);
+      return genCallee(ctx, fn);
     }
   }
 };
-/**
- * The callee text for a call with `argc` arguments: the raw twin when the
- * callee is a top-level function of exactly that arity (ADR 0149), else the
- * ordinary callee.
- */
-const genCalleeFor: _Curry<[ctx: GCtx, fn: Expr, argc: number], string> = _curry(3, genCalleeFor$);
 const isPipeHole: (a: Expr) => boolean = (a: Expr) =>
   ((_v) => (_v._tag === "ERef" && _v.name === "_" ? true : false))(a);
 const hasPipeHole: (right: Expr) => boolean = (right: Expr) => {
@@ -900,7 +827,7 @@ const isPipeAtom: (e: Expr) => boolean = (e: Expr) => {
     }
   }
 };
-const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
+const fillPipeHole = (left: Expr, right: Expr, sp: SpanAt): Expr => {
   const $match = right;
   switch ($match._tag) {
     case "ECall": {
@@ -921,8 +848,7 @@ const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
     }
   }
 };
-const fillPipeHole: _Curry<[left: Expr, right: Expr, sp: SpanAt], Expr> = _curry(3, fillPipeHole$);
-const genExpr$ = (ctx: GCtx, e: Expr): string => {
+const genExpr = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -942,7 +868,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
     }
     case "ERef": {
       const { name } = $match;
-      return castOr$(
+      return castOr(
         name,
         isNullaryCtor(name, ctx.keys) ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
       );
@@ -950,16 +876,16 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
     case "ECall": {
       const { fn, args, origin } = $match;
       return _Option_match(
-        tsxCall$(ctx, fn, args, origin),
+        tsxCall(ctx, fn, args, origin),
         () =>
           _Option_match(
-            tsInfix$(ctx, fn, args),
+            tsInfix(ctx, fn, args),
             () => {
-              const inner: string = `${genCalleeFor$(ctx, fn, length(args))}(${_Str_join(
+              const inner: string = `${genCalleeFor(ctx, fn, length(args))}(${_Str_join(
                 ", ",
-                map((a: Expr) => genExpr$(ctx, a), args),
+                map((a: Expr) => genExpr(ctx, a), args),
               )})`;
-              return castOr$(
+              return castOr(
                 inner,
                 isCtorRef(fn) ? hook1(ctx.annotateCall, e) : (None as Option<string>),
               );
@@ -973,61 +899,61 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
       const { params, body, span: sp } = $match;
       return (([arrow, arity]: [string, number]) =>
         arity >= 2 ? `_curry(${show(arity)}, ${arrow})` : arrow)(
-        genArrow$(ctx, params, body, sp, ""),
+        genArrow(ctx, params, body, sp, ""),
       );
     }
     case "ELetIn": {
       const { name, value, body } = $match;
-      const param: string = suffixOr$(name, hook1(ctx.annotateLetin, value));
-      return `((${param}) => ${genLambdaBody$(ctx, body)})(${genExpr$(ctx, value)})`;
+      const param: string = suffixOr(name, hook1(ctx.annotateLetin, value));
+      return `((${param}) => ${genLambdaBody(ctx, body)})(${genExpr(ctx, value)})`;
     }
     case "ELetBind": {
       const { param, monad, value, body } = $match;
       const rt: string = bindRuntime(monad);
-      const f: string = `(${genParam(param)}) => ${genLambdaBody$(ctx, body)}`;
-      const v: string = genExpr$(ctx, value);
+      const f: string = `(${genParam(param)}) => ${genLambdaBody(ctx, body)}`;
+      const v: string = genExpr(ctx, value);
       return ctx.flattenPipe ? `${rt}(${f}, ${v})` : `${rt}(${f})(${v})`;
     }
     case "EPipe": {
       const { left, right, fast, span: sp } = $match;
       return hasPipeHole(right)
-        ? genExpr$(ctx, fillPipeHole$(left, right, sp))
+        ? genExpr(ctx, fillPipeHole(left, right, sp))
         : fast
           ? ((_v) =>
               _v._tag === "ECall"
                 ? (({ fn: rfn, args: rargs, origin }) =>
-                    genExpr$(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)))(_v)
-                : genExpr$(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))(right)
+                    genExpr(ctx, Ast.ECall(rfn, _Array_prepend(left, rargs), origin, sp)))(_v)
+                : genExpr(ctx, Ast.ECall(right, [left], None as Option<string>, sp)))(right)
           : ((_v) =>
               _v._tag === "ECall" && (({ fn: rfn, args: rargs }) => ctx.flattenPipe)(_v)
                 ? (({ fn: rfn, args: rargs }) =>
-                    `${genCalleeFor$(ctx, rfn, length(rargs) + 1)}(${_Str_join(
+                    `${genCalleeFor(ctx, rfn, length(rargs) + 1)}(${_Str_join(
                       ", ",
-                      map((a: Expr) => genExpr$(ctx, a), _Array_append(left, rargs)),
+                      map((a: Expr) => genExpr(ctx, a), _Array_append(left, rargs)),
                     )})`)(_v)
-                : `${genCallee$(ctx, right)}(${genExpr$(ctx, left)})`)(right);
+                : `${genCallee(ctx, right)}(${genExpr(ctx, left)})`)(right);
     }
     case "EDo": {
       const { exprs } = $match;
-      return genDo$(ctx, exprs);
+      return genDo(ctx, exprs);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return `(${genExpr$(ctx, cond)} ? ${genExpr$(ctx, thenE)} : ${genExpr$(ctx, elseE)})`;
+      return `(${genExpr(ctx, cond)} ? ${genExpr(ctx, thenE)} : ${genExpr(ctx, elseE)})`;
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      return genMatch$(ctx, scrutinee, arms);
+      return genMatch(ctx, scrutinee, arms);
     }
     case "ELoop": {
       const { params, body } = $match;
-      return `(() => { ${genLoopBlock$(ctx, params, body)} })()`;
+      return `(() => { ${genLoopBlock(ctx, params, body)} })()`;
     }
     case "ERecur": {
       const { args } = $match;
       return `_recur(${_Str_join(
         ", ",
-        map((a: Expr) => genExpr$(ctx, a), args),
+        map((a: Expr) => genExpr(ctx, a), args),
       )})`;
     }
     case "ERecord": {
@@ -1036,7 +962,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
         ", ",
         map(
           (f: Field) =>
-            `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr$(ctx, f.value)}`,
+            `${isJsIdent(f.name) ? f.name : jsStringLit(f.name)}: ${genExpr(ctx, f.value)}`,
           fields,
         ),
       );
@@ -1044,7 +970,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
         spread,
         () => (length(fields) === 0 ? "{}" : `{ ${fieldStrs} }`),
         (s) => {
-          const spreadStr: string = `...${genExpr$(ctx, s)}`;
+          const spreadStr: string = `...${genExpr(ctx, s)}`;
           return length(fields) === 0 ? `{ ${spreadStr} }` : `{ ${spreadStr}, ${fieldStrs} }`;
         },
       );
@@ -1052,12 +978,12 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
     case "EField": {
       const { target, name, optional } = $match;
       return _Option_match(
-        emptyNsEmit$(target, name, hook1(ctx.annotateEmpty, e)),
+        emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)),
         () =>
           _Option_match(
-            nsRuntimeId$(ctx, target, name),
+            nsRuntimeId(ctx, target, name),
             () => {
-              const member: string = `${genMember$(ctx, target)}.${name}`;
+              const member: string = `${genMember(ctx, target)}.${name}`;
               return optional
                 ? ((tagType: string) =>
                     `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(
@@ -1074,7 +1000,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
       const { elements } = $match;
       const elems: string = _Str_join(
         ", ",
-        map((el: Expr) => genExpr$(ctx, el), elements),
+        map((el: Expr) => genExpr(ctx, el), elements),
       );
       return ctx.tupleHelper ? `_tuple(${elems})` : `[${elems}]`;
     }
@@ -1082,22 +1008,22 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
       const { elements } = $match;
       const body: string = `[${_Str_join(
         ", ",
-        map((el: SeqElem) => genSeqSlot$(ctx, el), elements),
+        map((el: SeqElem) => genSeqSlot(ctx, el), elements),
       )}]`;
-      return castOr$(
+      return castOr(
         body,
         length(elements) === 0 ? hook1(ctx.annotateEmpty, e) : (None as Option<string>),
       );
     }
     case "EList": {
       const { elements } = $match;
-      return genList$(ctx, elements);
+      return genList(ctx, elements);
     }
     case "ESet": {
       const { elements } = $match;
       return `new Set([${_Str_join(
         ", ",
-        map((el: SeqElem) => genSeqSlot$(ctx, el), elements),
+        map((el: SeqElem) => genSeqSlot(ctx, el), elements),
       )}])`;
     }
     case "EMap": {
@@ -1107,10 +1033,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
         () =>
           `new Map([${_Str_join(
             ", ",
-            map(
-              (en: MapEntry) => `[${genExpr$(ctx, en.key)}, ${genExpr$(ctx, en.value)}]`,
-              entries,
-            ),
+            map((en: MapEntry) => `[${genExpr(ctx, en.key)}, ${genExpr(ctx, en.value)}]`, entries),
           )}])`,
         (t) => `new ${t}()`,
       );
@@ -1128,7 +1051,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
             }
             case "IPExpr": {
               const { expr: ex } = $match$;
-              return `\${${genExpr$(ctx, ex)}}`;
+              return `\${${genExpr(ctx, ex)}}`;
             }
             default: {
               throw new Error("non-exhaustive match");
@@ -1143,39 +1066,35 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
     }
   }
 };
-const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genExpr$);
-const genDo$ = (ctx: GCtx, exprs: Expr[]): string => `(() => { ${genDoSteps$(ctx, exprs)} })()`;
-const genDo: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(2, genDo$);
-const genDoSteps$ = (ctx: GCtx, exprs: Expr[]): string =>
+const genDo = (ctx: GCtx, exprs: Expr[]): string => `(() => { ${genDoSteps(ctx, exprs)} })()`;
+const genDoSteps = (ctx: GCtx, exprs: Expr[]): string =>
   ((_v) =>
     _v.length === 1
-      ? (([last]) => `return ${genExpr$(ctx, last)};`)(_v)
+      ? (([last]) => `return ${genExpr(ctx, last)};`)(_v)
       : _v.length >= 1
-        ? (([first, ...rest]) => `${genExpr$(ctx, first)}; ${genDoSteps$(ctx, rest)}`)(_v)
+        ? (([first, ...rest]) => `${genExpr(ctx, first)}; ${genDoSteps(ctx, rest)}`)(_v)
         : _v.length === 0
           ? 'throw new Error("empty do block");'
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const genDoSteps: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(2, genDoSteps$);
-const genSeqSlot$ = (ctx: GCtx, el: SeqElem): string => {
+const genSeqSlot = (ctx: GCtx, el: SeqElem): string => {
   const $match = el;
   switch ($match._tag) {
     case "SEExpr": {
       const { expr: ex } = $match;
-      return genExpr$(ctx, ex);
+      return genExpr(ctx, ex);
     }
     case "SESpread": {
       const { expr: ex } = $match;
-      return `...${genExpr$(ctx, ex)}`;
+      return `...${genExpr(ctx, ex)}`;
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const genSeqSlot: _Curry<[ctx: GCtx, el: SeqElem], string> = _curry(2, genSeqSlot$);
-const genList$ = (ctx: GCtx, elements: SeqElem[]): string => {
+const genList = (ctx: GCtx, elements: SeqElem[]): string => {
   const yields: string = _Str_join(
     " ",
     map((el: SeqElem) => {
@@ -1183,11 +1102,11 @@ const genList$ = (ctx: GCtx, elements: SeqElem[]): string => {
       switch ($match._tag) {
         case "SEExpr": {
           const { expr: ex } = $match;
-          return `yield (${genExpr$(ctx, ex)});`;
+          return `yield (${genExpr(ctx, ex)});`;
         }
         case "SESpread": {
           const { expr: ex } = $match;
-          return `yield* (${genExpr$(ctx, ex)});`;
+          return `yield* (${genExpr(ctx, ex)});`;
         }
         default: {
           throw new Error("non-exhaustive match");
@@ -1197,7 +1116,6 @@ const genList$ = (ctx: GCtx, elements: SeqElem[]): string => {
   );
   return `_list(function* () {${yields === "" ? "" : ` ${yields} `}})`;
 };
-const genList: _Curry<[ctx: GCtx, elements: SeqElem[]], string> = _curry(2, genList$);
 const genParam: (p: LamParam) => string = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1233,33 +1151,31 @@ const genParam: (p: LamParam) => string = (p: LamParam) => {
     }
   }
 };
-const genCallee$ = (ctx: GCtx, e: Expr): string => {
+const genCallee = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
     case "ELambda": {
-      return `(${genExpr$(ctx, e)})`;
+      return `(${genExpr(ctx, e)})`;
     }
     default: {
-      return genExpr$(ctx, e);
+      return genExpr(ctx, e);
     }
   }
 };
-const genCallee: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genCallee$);
-const genMember$ = (ctx: GCtx, e: Expr): string => {
+const genMember = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
     case "ERecord": {
-      return `(${genExpr$(ctx, e)})`;
+      return `(${genExpr(ctx, e)})`;
     }
     case "ELambda": {
-      return `(${genExpr$(ctx, e)})`;
+      return `(${genExpr(ctx, e)})`;
     }
     default: {
-      return genExpr$(ctx, e);
+      return genExpr(ctx, e);
     }
   }
 };
-const genMember: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genMember$);
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
   const $match = el;
   switch ($match._tag) {
@@ -1492,7 +1408,7 @@ const canStatementMatch: <A, B, C>(
       arms,
     ),
 );
-const genLoopMatchArms$ = (
+const genLoopMatchArms = (
   ctx: GCtx,
   arms: MatchArm[],
   i: number,
@@ -1505,33 +1421,25 @@ const genLoopMatchArms$ = (
     (a) => {
       const slot: string = patSlot(ctx.keys, a.pattern);
       const bind: string = slot === "" ? "" : `const ${slot} = ${root}; `;
-      const body: string = `{ ${bind}${genLoopTail$(ctx, a.body, params)} }`;
+      const body: string = `{ ${bind}${genLoopTail(ctx, a.body, params)} }`;
       return isCatchAll(a.pattern)
         ? body
         : ((conds: string[]) =>
-            `if (${_Str_join(" && ", conds)}) ${body} ${genLoopMatchArms$(ctx, arms, i + 1, root, params)}`)(
+            `if (${_Str_join(" && ", conds)}) ${body} ${genLoopMatchArms(ctx, arms, i + 1, root, params)}`)(
             patConds(ctx.keys, a.pattern, root),
           );
     },
   );
-const genLoopMatchArms: _Curry<
-  [ctx: GCtx, arms: MatchArm[], i: number, root: string, params: LoopParam[]],
-  string
-> = _curry(5, genLoopMatchArms$);
-const genLoopMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]): string =>
+const genLoopMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]): string =>
   _Option_match(
-    genOptionalLoopMatch$(ctx, scrutinee, arms, params),
+    genOptionalLoopMatch(ctx, scrutinee, arms, params),
     () => {
-      const root: string = tempName$(ctx, "$loopMatch");
-      return `{ const ${root} = ${genExpr$(ctx, scrutinee)}; ${genLoopMatchArms$(ctx, arms, 0, root, params)} }`;
+      const root: string = tempName(ctx, "$loopMatch");
+      return `{ const ${root} = ${genExpr(ctx, scrutinee)}; ${genLoopMatchArms(ctx, arms, 0, root, params)} }`;
     },
     (fused) => fused,
   );
-const genLoopMatch: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]],
-  string
-> = _curry(4, genLoopMatch$);
-const genOptionalLoopMatch$ = (
+const genOptionalLoopMatch = (
   ctx: GCtx,
   scrutinee: Expr,
   arms: MatchArm[],
@@ -1550,11 +1458,11 @@ const genOptionalLoopMatch$ = (
                   optionalMatch(arms),
                   () => None as Option<string>,
                   (plan) => {
-                    const value: string = tempName$(ctx, "$optional");
+                    const value: string = tempName(ctx, "$optional");
                     const bind: string =
                       plan.binding === "" ? "" : `const ${plan.binding} = ${value}; `;
                     return Some(
-                      `{ const ${value} = ${genMember$(ctx, target)}.${name}; if (${value} != null) { ${bind}${genLoopTail$(ctx, plan.present, params)} } else { ${genLoopTail$(ctx, plan.absent, params)} } }`,
+                      `{ const ${value} = ${genMember(ctx, target)}.${name}; if (${value} != null) { ${bind}${genLoopTail(ctx, plan.present, params)} } else { ${genLoopTail(ctx, plan.absent, params)} } }`,
                     ) as Option<string>;
                   },
                 )
@@ -1562,10 +1470,6 @@ const genOptionalLoopMatch$ = (
             _tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)),
           ))(_v)
       : (None as Option<string>))(scrutinee);
-const genOptionalLoopMatch: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]],
-  Option<string>
-> = _curry(4, genOptionalLoopMatch$);
 const alwaysRecur: (e: Expr) => boolean = (e: Expr) => {
   const $match = e;
   switch ($match._tag) {
@@ -1607,7 +1511,7 @@ const lastDoExpr: (exprs: Expr[]) => Expr = (exprs: Expr[]) =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const wrapStepTails$ = (e: Expr, sp: SpanAt): Expr => {
+const wrapStepTails = (e: Expr, sp: SpanAt): Expr => {
   const $match = e;
   switch ($match._tag) {
     case "ERecur": {
@@ -1615,15 +1519,15 @@ const wrapStepTails$ = (e: Expr, sp: SpanAt): Expr => {
     }
     case "ETernary": {
       const { cond, thenE, elseE, span: tsp } = $match;
-      return Ast.ETernary(cond, wrapStepTails$(thenE, sp), wrapStepTails$(elseE, sp), tsp);
+      return Ast.ETernary(cond, wrapStepTails(thenE, sp), wrapStepTails(elseE, sp), tsp);
     }
     case "ELetIn": {
       const { name, nameSpan, annot, value, body, span: lsp } = $match;
-      return Ast.ELetIn(name, nameSpan, annot, value, wrapStepTails$(body, sp), lsp);
+      return Ast.ELetIn(name, nameSpan, annot, value, wrapStepTails(body, sp), lsp);
     }
     case "EDo": {
       const { exprs, span: dsp } = $match;
-      return Ast.EDo(wrapDoStepTail$(exprs, sp), dsp);
+      return Ast.EDo(wrapDoStepTail(exprs, sp), dsp);
     }
     case "EMatch": {
       const { scrutinee, arms, span: msp } = $match;
@@ -1633,7 +1537,7 @@ const wrapStepTails$ = (e: Expr, sp: SpanAt): Expr => {
           (a: MatchArm) => ({
             pattern: a.pattern,
             guard: a.guard,
-            body: wrapStepTails$(a.body, sp),
+            body: wrapStepTails(a.body, sp),
           }),
           arms,
         ),
@@ -1645,19 +1549,17 @@ const wrapStepTails$ = (e: Expr, sp: SpanAt): Expr => {
     }
   }
 };
-const wrapStepTails: _Curry<[e: Expr, sp: SpanAt], Expr> = _curry(2, wrapStepTails$);
-const wrapDoStepTail$ = (exprs: Expr[], sp: SpanAt): Expr[] =>
+const wrapDoStepTail = (exprs: Expr[], sp: SpanAt): Expr[] =>
   ((_v) =>
     _v.length === 1
-      ? (([last]) => [wrapStepTails$(last, sp)])(_v)
+      ? (([last]) => [wrapStepTails(last, sp)])(_v)
       : _v.length >= 1
-        ? (([first, ...rest]) => [first, ...wrapDoStepTail$(rest, sp)])(_v)
+        ? (([first, ...rest]) => [first, ...wrapDoStepTail(rest, sp)])(_v)
         : _v.length === 0
           ? ([] as Expr[])
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const wrapDoStepTail: _Curry<[exprs: Expr[], sp: SpanAt], Expr[]> = _curry(2, wrapDoStepTail$);
 const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
   params: ({ name: string } & A)[],
 ) =>
@@ -1665,18 +1567,17 @@ const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
     ", ",
     map((p: { name: string } & A) => p.name, params),
   );
-const tempName$ = (ctx: GCtx, name: string): string =>
+const tempName = (ctx: GCtx, name: string): string =>
   or(_Set_has(name, ctx.userNames), _Set_has(name, ctx.valueRefs))
-    ? tempName$(ctx, `${name}$`)
+    ? tempName(ctx, `${name}$`)
     : name;
-const tempName: _Curry<[ctx: GCtx, name: string], string> = _curry(2, tempName$);
-const genRecurTemps$ = (ctx: GCtx, args: Expr[], params: LoopParam[], i: number): string =>
+const genRecurTemps = (ctx: GCtx, args: Expr[], params: LoopParam[], i: number): string =>
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some"
       ? (([{ value: a }, { value: p }]) =>
           ((name: string) =>
-            `const ${suffixOr$(name, hook1(ctx.annotateLetin, p.init))} = ${genExpr$(ctx, a)}; ${genRecurTemps$(ctx, args, params, i + 1)}`)(
-            tempName$(ctx, `$recur${show(i)}`),
+            `const ${suffixOr(name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, a)}; ${genRecurTemps(ctx, args, params, i + 1)}`)(
+            tempName(ctx, `$recur${show(i)}`),
           ))(
           _v as [
             Extract<[Option<Expr>, Option<LoopParam>][0], { _tag: "Some" }>,
@@ -1684,52 +1585,50 @@ const genRecurTemps$ = (ctx: GCtx, args: Expr[], params: LoopParam[], i: number)
           ],
         )
       : "")(_tuple(_Array_get(i, args), _Array_get(i, params)));
-const genRecurTemps: _Curry<[ctx: GCtx, args: Expr[], params: LoopParam[], i: number], string> =
-  _curry(4, genRecurTemps$);
 const genRecurAssignments: <A>(ctx: GCtx, params: ({ name: string } & A)[], i: number) => string =
   _curry(3, <A>(ctx: GCtx, params: ({ name: string } & A)[], i: number) =>
     _Option_match(
       _Array_get(i, params),
       () => "",
       (p) =>
-        `${p.name} = ${tempName$(ctx, `$recur${show(i)}`)}; ${genRecurAssignments(ctx, params, i + 1)}`,
+        `${p.name} = ${tempName(ctx, `$recur${show(i)}`)}; ${genRecurAssignments(ctx, params, i + 1)}`,
     ),
   );
-const genLoopTail$ = (ctx: GCtx, e: Expr, params: LoopParam[]): string => {
+const genLoopTail = (ctx: GCtx, e: Expr, params: LoopParam[]): string => {
   const $match = e;
   switch ($match._tag) {
     case "ERecur": {
       const { args } = $match;
       return ((_v) =>
         _v[0].length === 1 && _v[1].length === 1
-          ? (([[p], [a]]) => `${p.name} = ${genExpr$(ctx, a)}; continue;`)(_v)
-          : `{ ${genRecurTemps$(ctx, args, params, 0)}${genRecurAssignments(ctx, params, 0)}continue; }`)(
+          ? (([[p], [a]]) => `${p.name} = ${genExpr(ctx, a)}; continue;`)(_v)
+          : `{ ${genRecurTemps(ctx, args, params, 0)}${genRecurAssignments(ctx, params, 0)}continue; }`)(
         _tuple(params, args),
       );
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
       return hasRecur(e)
-        ? `if (${genExpr$(ctx, cond)}) { ${genLoopTail$(ctx, thenE, params)} } else { ${genLoopTail$(ctx, elseE, params)} }`
-        : `return ${genExpr$(ctx, e)};`;
+        ? `if (${genExpr(ctx, cond)}) { ${genLoopTail(ctx, thenE, params)} } else { ${genLoopTail(ctx, elseE, params)} }`
+        : `return ${genExpr(ctx, e)};`;
     }
     case "ELetIn": {
       const { name, value, body } = $match;
       return hasRecur(e)
-        ? `{ const ${suffixOr$(name, hook1(ctx.annotateLetin, value))} = ${genExpr$(ctx, value)}; ${genLoopTail$(ctx, body, params)} }`
-        : `return ${genExpr$(ctx, e)};`;
+        ? `{ const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)}; ${genLoopTail(ctx, body, params)} }`
+        : `return ${genExpr(ctx, e)};`;
     }
     case "EDo": {
       const { exprs } = $match;
       return hasRecur(e)
-        ? `{ ${genDoLoopTail$(ctx, exprs, params)} }`
-        : `return ${genExpr$(ctx, e)};`;
+        ? `{ ${genDoLoopTail(ctx, exprs, params)} }`
+        : `return ${genExpr(ctx, e)};`;
     }
     case "EMatch": {
       const { scrutinee, arms, span: sp } = $match;
       return hasRecur(e)
         ? canStatementMatch(arms, params)
-          ? genLoopMatch$(ctx, scrutinee, arms, params)
+          ? genLoopMatch(ctx, scrutinee, arms, params)
           : ((step: string) =>
               ((rebind: string) =>
                 alwaysRecur(e)
@@ -1739,50 +1638,36 @@ const genLoopTail$ = (ctx: GCtx, e: Expr, params: LoopParam[]): string => {
                   _v.length === 1
                     ? (([p]) => `${p.name} = _step.args[0];`)(_v)
                     : `[${loopParamNames(params)}] = _step.args;`)(params),
-              ))(genExpr$(ctx, wrapStepTails$(e, sp)))
-        : `return ${genExpr$(ctx, e)};`;
+              ))(genExpr(ctx, wrapStepTails(e, sp)))
+        : `return ${genExpr(ctx, e)};`;
     }
     default: {
-      return `return ${genExpr$(ctx, e)};`;
+      return `return ${genExpr(ctx, e)};`;
     }
   }
 };
-const genLoopTail: _Curry<[ctx: GCtx, e: Expr, params: LoopParam[]], string> = _curry(
-  3,
-  genLoopTail$,
-);
-const genDoLoopTail$ = (ctx: GCtx, exprs: Expr[], params: LoopParam[]): string =>
+const genDoLoopTail = (ctx: GCtx, exprs: Expr[], params: LoopParam[]): string =>
   ((_v) =>
     _v.length === 1
-      ? (([last]) => genLoopTail$(ctx, last, params))(_v)
+      ? (([last]) => genLoopTail(ctx, last, params))(_v)
       : _v.length >= 1
-        ? (([first, ...rest]) => `${genExpr$(ctx, first)}; ${genDoLoopTail$(ctx, rest, params)}`)(
-            _v,
-          )
+        ? (([first, ...rest]) => `${genExpr(ctx, first)}; ${genDoLoopTail(ctx, rest, params)}`)(_v)
         : _v.length === 0
           ? "return undefined;"
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const genDoLoopTail: _Curry<[ctx: GCtx, exprs: Expr[], params: LoopParam[]], string> = _curry(
-  3,
-  genDoLoopTail$,
-);
-const genLoopBlock$ = (ctx: GCtx, params: LoopParam[], body: Expr): string => {
+const genLoopBlock = (ctx: GCtx, params: LoopParam[], body: Expr): string => {
   const decls: string = _Str_join(
     " ",
     map(
       (p: LoopParam) =>
-        `let ${suffixOr$(p.name, hook1(ctx.annotateLetin, p.init))} = ${genExpr$(ctx, p.init)};`,
+        `let ${suffixOr(p.name, hook1(ctx.annotateLetin, p.init))} = ${genExpr(ctx, p.init)};`,
       params,
     ),
   );
-  return `${decls} while (true) { ${genLoopTail$(ctx, body, params)} }`;
+  return `${decls} while (true) { ${genLoopTail(ctx, body, params)} }`;
 };
-const genLoopBlock: _Curry<[ctx: GCtx, params: LoopParam[], body: Expr], string> = _curry(
-  3,
-  genLoopBlock$,
-);
 const loopParamFree: <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>) => boolean =
   _curry(3, <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>) =>
     _Option_match(
@@ -1791,18 +1676,17 @@ const loopParamFree: <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>
       (p) => (_Set_has(p.name, seen) ? false : loopParamFree(params, i + 1, seen)),
     ),
   );
-const genLambdaBody$ = (ctx: GCtx, e: Expr): string => {
+const genLambdaBody = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
     case "ERecord": {
-      return `(${genExpr$(ctx, e)})`;
+      return `(${genExpr(ctx, e)})`;
     }
     default: {
-      return genExpr$(ctx, e);
+      return genExpr(ctx, e);
     }
   }
 };
-const genLambdaBody: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genLambdaBody$);
 const paramNames: (p: LamParam) => string[] = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1831,12 +1715,12 @@ const paramNames: (p: LamParam) => string[] = (p: LamParam) => {
     }
   }
 };
-const genLabeledFill$ = (ctx: GCtx, labVar: string, lab: LamParam): string => {
+const genLabeledFill = (ctx: GCtx, labVar: string, lab: LamParam): string => {
   const $match = lab;
   switch ($match._tag) {
     case "LPSpanned": {
       const { param: inner } = $match;
-      return genLabeledFill$(ctx, labVar, inner);
+      return genLabeledFill(ctx, labVar, inner);
     }
     case "LPLabeled": {
       const { name, optional, defaultValue } = $match;
@@ -1847,7 +1731,7 @@ const genLabeledFill$ = (ctx: GCtx, labVar: string, lab: LamParam): string => {
           optional
             ? `const ${name} = ${access} != null ? { _tag: "Some", value: ${access} } : { _tag: "None" };`
             : `const ${name} = ${access};`,
-        (d) => `const ${name} = ${access} != null ? ${access} : ${genExpr$(ctx, d)};`,
+        (d) => `const ${name} = ${access} != null ? ${access} : ${genExpr(ctx, d)};`,
       );
     }
     default: {
@@ -1855,11 +1739,7 @@ const genLabeledFill$ = (ctx: GCtx, labVar: string, lab: LamParam): string => {
     }
   }
 };
-const genLabeledFill: _Curry<[ctx: GCtx, labVar: string, lab: LamParam], string> = _curry(
-  3,
-  genLabeledFill$,
-);
-const genFillDecls$ = (ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]): string =>
+const genFillDecls = (ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]): string =>
   ((_v) =>
     _v.length === 0
       ? ""
@@ -1869,13 +1749,11 @@ const genFillDecls$ = (ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[])
             (g: { labVar: string; labs: LamParam[] }) =>
               _Str_join(
                 " ",
-                map((lab: LamParam) => genLabeledFill$(ctx, g.labVar, lab), g.labs),
+                map((lab: LamParam) => genLabeledFill(ctx, g.labVar, lab), g.labs),
               ),
             fills,
           ),
         )} `)(fills);
-const genFillDecls: _Curry<[ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]], string> =
-  _curry(2, genFillDecls$);
 const fillNames: <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) => Set<string> = _curry(
   2,
   <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) =>
@@ -1933,17 +1811,13 @@ const addNames: <A>(names: A[], i: number, acc: Set<A>) => Set<A> = _curry(
       (n) => addNames(names, i + 1, _Set_add(n, acc)),
     ),
 );
-const paramNameSet$ = (params: LamParam[], i: number, acc: Set<string>): Set<string> =>
+const paramNameSet = (params: LamParam[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, params),
     () => acc,
-    (p) => paramNameSet$(params, i + 1, addNames(paramNames(p), 0, acc)),
+    (p) => paramNameSet(params, i + 1, addNames(paramNames(p), 0, acc)),
   );
-const paramNameSet: _Curry<[params: LamParam[], i: number, acc: Set<string>], Set<string>> = _curry(
-  3,
-  paramNameSet$,
-);
-const letBlockLoop$ = (
+const letBlockLoop = (
   ctx: GCtx,
   e: Expr,
   seen: Set<string>,
@@ -1958,15 +1832,15 @@ const letBlockLoop$ = (
         ((_v) =>
           _v._tag === "ELambda"
             ? false
-            : _Set_has(name, exprRefs$(ctx, value, _Set_fromArray([] as string[]))))(value),
+            : _Set_has(name, exprRefs(ctx, value, _Set_fromArray([] as string[]))))(value),
       )
         ? _tuple(decls, e, seen)
-        : letBlockLoop$(
+        : letBlockLoop(
             ctx,
             body,
             _Set_add(name, seen),
             _Array_append(
-              `const ${suffixOr$(name, hook1(ctx.annotateLetin, value))} = ${genExpr$(ctx, value)};`,
+              `const ${suffixOr(name, hook1(ctx.annotateLetin, value))} = ${genExpr(ctx, value)};`,
               decls,
             ),
           );
@@ -1976,48 +1850,42 @@ const letBlockLoop$ = (
     }
   }
 };
-const letBlockLoop: _Curry<
-  [ctx: GCtx, e: Expr, seen: Set<string>, decls: string[]],
-  [string[], Expr, Set<string>]
-> = _curry(4, letBlockLoop$);
-const genLambdaBodyIn$ = (ctx: GCtx, e: Expr, bound: Set<string>, prefix: string): string =>
+const genLambdaBodyIn = (ctx: GCtx, e: Expr, bound: Set<string>, prefix: string): string =>
   (([decls, rest, seen]: [string[], Expr, Set<string>]) =>
     length(decls) === 0
       ? ((_v) =>
           _v._tag === "ELoop"
             ? (({ params, body }) =>
                 loopParamFree(params, 0, bound)
-                  ? `{ ${prefix}${genLoopBlock$(ctx, params, body)} }`
+                  ? `{ ${prefix}${genLoopBlock(ctx, params, body)} }`
                   : prefix === ""
-                    ? genLambdaBody$(ctx, e)
-                    : `{ ${prefix}return ${genLambdaBody$(ctx, e)}; }`)(_v)
+                    ? genLambdaBody(ctx, e)
+                    : `{ ${prefix}return ${genLambdaBody(ctx, e)}; }`)(_v)
             : _v._tag === "EMatch"
               ? (({ scrutinee, arms }) =>
-                  canFunctionMatch$(ctx, scrutinee, arms)
-                    ? `{ ${prefix}${genFunctionMatch$(ctx, scrutinee, arms)} }`
+                  canFunctionMatch(ctx, scrutinee, arms)
+                    ? `{ ${prefix}${genFunctionMatch(ctx, scrutinee, arms)} }`
                     : prefix === ""
-                      ? genLambdaBody$(ctx, e)
-                      : `{ ${prefix}return ${genLambdaBody$(ctx, e)}; }`)(_v)
+                      ? genLambdaBody(ctx, e)
+                      : `{ ${prefix}return ${genLambdaBody(ctx, e)}; }`)(_v)
               : prefix === ""
-                ? genLambdaBody$(ctx, e)
-                : `{ ${prefix}return ${genLambdaBody$(ctx, e)}; }`)(e)
+                ? genLambdaBody(ctx, e)
+                : `{ ${prefix}return ${genLambdaBody(ctx, e)}; }`)(e)
       : ((block: string) =>
           ((_v) =>
             _v._tag === "ELoop"
               ? (({ params, body }) =>
                   loopParamFree(params, 0, seen)
-                    ? `{ ${prefix}${block} ${genLoopBlock$(ctx, params, body)} }`
-                    : `{ ${prefix}${block} return ${genExpr$(ctx, rest)}; }`)(_v)
+                    ? `{ ${prefix}${block} ${genLoopBlock(ctx, params, body)} }`
+                    : `{ ${prefix}${block} return ${genExpr(ctx, rest)}; }`)(_v)
               : _v._tag === "EMatch"
                 ? (({ scrutinee, arms }) =>
-                    canFunctionMatch$(ctx, scrutinee, arms)
-                      ? `{ ${prefix}${block} ${genFunctionMatch$(ctx, scrutinee, arms)} }`
-                      : `{ ${prefix}${block} return ${genExpr$(ctx, rest)}; }`)(_v)
-                : `{ ${prefix}${block} return ${genExpr$(ctx, rest)}; }`)(rest))(
+                    canFunctionMatch(ctx, scrutinee, arms)
+                      ? `{ ${prefix}${block} ${genFunctionMatch(ctx, scrutinee, arms)} }`
+                      : `{ ${prefix}${block} return ${genExpr(ctx, rest)}; }`)(_v)
+                : `{ ${prefix}${block} return ${genExpr(ctx, rest)}; }`)(rest))(
           _Str_join(" ", decls),
-        ))(letBlockLoop$(ctx, e, bound, [] as string[]));
-const genLambdaBodyIn: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>, prefix: string], string> =
-  _curry(4, genLambdaBodyIn$);
+        ))(letBlockLoop(ctx, e, bound, [] as string[]));
 const functionMatchArms: <A, B>(
   arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
   tags: Set<string>,
@@ -2068,7 +1936,7 @@ const functionMatchArms: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const canFunctionMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): boolean =>
+const canFunctionMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): boolean =>
   and(
     _Option_isNone(builtinMatchPlan(ctx, scrutinee, arms)),
     ((_v) =>
@@ -2076,10 +1944,6 @@ const canFunctionMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): boolea
         ? false
         : functionMatchArms(arms, _Set_fromArray([] as string[])))(scrutinee),
   );
-const canFunctionMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], boolean> = _curry(
-  3,
-  canFunctionMatch$,
-);
 const functionPatternNames: (pattern: Pattern) => string[] = (pattern: Pattern) => {
   const $match = pattern;
   switch ($match._tag) {
@@ -2107,33 +1971,29 @@ const functionPatternNames: (pattern: Pattern) => string[] = (pattern: Pattern) 
     }
   }
 };
-const genFunctionTail$ = (ctx: GCtx, e: Expr, bound: Set<string>): string =>
+const genFunctionTail = (ctx: GCtx, e: Expr, bound: Set<string>): string =>
   (([decls, rest, seen]: [string[], Expr, Set<string>]) => {
     const prefix: string = _Str_join(" ", decls);
     const $match = rest;
     switch ($match._tag) {
       case "EMatch": {
         const { scrutinee, arms } = $match;
-        return canFunctionMatch$(ctx, scrutinee, arms)
-          ? `${prefix} ${genFunctionMatch$(ctx, scrutinee, arms)}`
-          : `${prefix} return ${genExpr$(ctx, rest)};`;
+        return canFunctionMatch(ctx, scrutinee, arms)
+          ? `${prefix} ${genFunctionMatch(ctx, scrutinee, arms)}`
+          : `${prefix} return ${genExpr(ctx, rest)};`;
       }
       case "ELoop": {
         const { params, body } = $match;
         return loopParamFree(params, 0, seen)
-          ? `${prefix} ${genLoopBlock$(ctx, params, body)}`
-          : `${prefix} return ${genExpr$(ctx, rest)};`;
+          ? `${prefix} ${genLoopBlock(ctx, params, body)}`
+          : `${prefix} return ${genExpr(ctx, rest)};`;
       }
       default: {
-        return `${prefix} return ${genExpr$(ctx, rest)};`;
+        return `${prefix} return ${genExpr(ctx, rest)};`;
       }
     }
-  })(letBlockLoop$(ctx, e, bound, [] as string[]));
-const genFunctionTail: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>], string> = _curry(
-  3,
-  genFunctionTail$,
-);
-const genFunctionCases$ = (ctx: GCtx, arms: MatchArm[], root: string): string =>
+  })(letBlockLoop(ctx, e, bound, [] as string[]));
+const genFunctionCases = (ctx: GCtx, arms: MatchArm[], root: string): string =>
   _Str_join(
     " ",
     map((a: MatchArm) => {
@@ -2147,13 +2007,9 @@ const genFunctionCases$ = (ctx: GCtx, arms: MatchArm[], root: string): string =>
       const slot: string = patSlot(ctx.keys, a.pattern);
       const bind: string = slot === "" ? "" : `const ${slot} = ${root}; `;
       const bound: Set<string> = _Set_fromArray(functionPatternNames(a.pattern));
-      return `${label} { ${bind}${genFunctionTail$(ctx, a.body, bound)} }`;
+      return `${label} { ${bind}${genFunctionTail(ctx, a.body, bound)} }`;
     }, arms),
   );
-const genFunctionCases: _Curry<[ctx: GCtx, arms: MatchArm[], root: string], string> = _curry(
-  3,
-  genFunctionCases$,
-);
 /**
  * The discriminant key a ctor `switch` reads: every arm names a ctor of one
  * type (ADR 0156), so the first ctor arm decides.
@@ -2179,18 +2035,14 @@ const switchKey: <A>(ctx: GCtx, arms: ({ pattern: Pattern } & A)[]) => string = 
         throw new Error("non-exhaustive match");
       }),
 );
-const genFunctionMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string => {
-  const root: string = tempName$(ctx, "$match");
+const genFunctionMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string => {
+  const root: string = tempName(ctx, "$match");
   const nestedCtx: GCtx = { ...ctx, userNames: _Set_add(root, ctx.userNames) };
   const fallback: string = someOf((a: MatchArm) => isCatchAll(a.pattern), arms)
     ? ""
     : 'default: { throw new Error("non-exhaustive match"); }';
-  return `const ${root} = ${genExpr$(ctx, scrutinee)}; switch (${root}.${switchKey(ctx, arms)}) { ${genFunctionCases$(nestedCtx, arms, root)} ${fallback} }`;
+  return `const ${root} = ${genExpr(ctx, scrutinee)}; switch (${root}.${switchKey(ctx, arms)}) { ${genFunctionCases(nestedCtx, arms, root)} ${fallback} }`;
 };
-const genFunctionMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genFunctionMatch$,
-);
 const isCatchAll: (p: Pattern) => boolean = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -2239,7 +2091,7 @@ const isPList: (p: Pattern) => boolean = (p: Pattern) => {
     }
   }
 };
-const catchAllParam$ = (ctx: GCtx, p: Pattern): string => {
+const catchAllParam = (ctx: GCtx, p: Pattern): string => {
   const $match = p;
   switch ($match._tag) {
     case "PArr": {
@@ -2276,7 +2128,6 @@ const catchAllParam$ = (ctx: GCtx, p: Pattern): string => {
     }
   }
 };
-const catchAllParam: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, catchAllParam$);
 const isListMatch: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
   arms: ({ pattern: Pattern } & A)[],
 ) => someOf((a: { pattern: Pattern } & A) => and(isPList(a.pattern), !isCatchAll(a.pattern)), arms);
@@ -2288,18 +2139,14 @@ const listTail: <A>(from: A) => string = <A>(from: A) =>
     ),
     "if (!_done) { let _s; while (!(_s = _it.next()).done) yield _s.value; } })",
   );
-const listArmGuards$ = (ctx: GCtx, elems: Pattern[], i: number): string[] =>
+const listArmGuards = (ctx: GCtx, elems: Pattern[], i: number): string[] =>
   _Option_match(
     _Array_get(i, elems),
     () => [] as string[],
     (el) =>
-      _Array_concat(patConds(ctx.keys, el, `_b[${show(i)}]`), listArmGuards$(ctx, elems, i + 1)),
+      _Array_concat(patConds(ctx.keys, el, `_b[${show(i)}]`), listArmGuards(ctx, elems, i + 1)),
   );
-const listArmGuards: _Curry<[ctx: GCtx, elems: Pattern[], i: number], string[]> = _curry(
-  3,
-  listArmGuards$,
-);
-const listArmBinds$ = (ctx: GCtx, elems: Pattern[], i: number): [string[], string[]] =>
+const listArmBinds = (ctx: GCtx, elems: Pattern[], i: number): [string[], string[]] =>
   _Option_match(
     _Array_get(i, elems),
     () => _tuple([] as string[], [] as string[]),
@@ -2309,26 +2156,22 @@ const listArmBinds$ = (ctx: GCtx, elems: Pattern[], i: number): [string[], strin
         return slot === ""
           ? _tuple(restParams, restArgs)
           : _tuple(_Array_prepend(slot, restParams), _Array_prepend(`_b[${show(i)}]`, restArgs));
-      })(listArmBinds$(ctx, elems, i + 1)),
+      })(listArmBinds(ctx, elems, i + 1)),
   );
-const listArmBinds: _Curry<[ctx: GCtx, elems: Pattern[], i: number], [string[], string[]]> = _curry(
-  3,
-  listArmBinds$,
-);
-const genListArm$ = (ctx: GCtx, p: Pattern, body: Expr): string => {
+const genListArm = (ctx: GCtx, p: Pattern, body: Expr): string => {
   const $match = p;
   switch ($match._tag) {
     case "PList": {
       const { elems, rest } = $match;
       const n: number = length(elems);
-      const guards: string[] = listArmGuards$(ctx, elems, 0);
+      const guards: string[] = listArmGuards(ctx, elems, 0);
       const head: string = _Option_isSome(rest)
         ? `_pull(${show(n)})`
         : `!_pull(${show(n + 1)}) && _b.length === ${show(n)}`;
       const cond: string = _Str_join(" && ", _Array_prepend(head, guards));
       return (([params0, args0]: [string[], string[]]) =>
         (([params, args]: [string[], string[]]) =>
-          `  if (${cond}) return ((${_Str_join(", ", params)}) => ${genLambdaBody$(ctx, body)})(${_Str_join(", ", args)});`)(
+          `  if (${cond}) return ((${_Str_join(", ", params)}) => ${genLambdaBody(ctx, body)})(${_Str_join(", ", args)});`)(
           ((_v) =>
             _v._tag === "Some" && _v.value._tag === "PBind"
               ? (({ value: { name } }) =>
@@ -2341,15 +2184,14 @@ const genListArm$ = (ctx: GCtx, p: Pattern, body: Expr): string => {
                   },
                 )
               : _tuple(params0, args0))(rest),
-        ))(listArmBinds$(ctx, elems, 0));
+        ))(listArmBinds(ctx, elems, 0));
     }
     default: {
       return "";
     }
   }
 };
-const genListArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr], string> = _curry(3, genListArm$);
-const listMatchLoop$ = (ctx: GCtx, arms: MatchArm[], i: number): [string[], string] =>
+const listMatchLoop = (ctx: GCtx, arms: MatchArm[], i: number): [string[], string] =>
   _Option_match(
     _Array_get(i, arms),
     () =>
@@ -2357,16 +2199,16 @@ const listMatchLoop$ = (ctx: GCtx, arms: MatchArm[], i: number): [string[], stri
     (a) =>
       and(isPList(a.pattern), !isCatchAll(a.pattern))
         ? (([restLines, fallback]: [string[], string]) =>
-            _tuple(_Array_prepend(genListArm$(ctx, a.pattern, a.body), restLines), fallback))(
-            listMatchLoop$(ctx, arms, i + 1),
+            _tuple(_Array_prepend(genListArm(ctx, a.pattern, a.body), restLines), fallback))(
+            listMatchLoop(ctx, arms, i + 1),
           )
         : isCatchAll(a.pattern)
           ? ((restName: Option<string>) =>
               ((fallback: string) => _tuple([] as string[], fallback))(
                 _Option_match(
                   restName,
-                  () => genExpr$(ctx, a.body),
-                  (name) => `((${name}) => ${genLambdaBody$(ctx, a.body)})(${listTail(0)})`,
+                  () => genExpr(ctx, a.body),
+                  (name) => `((${name}) => ${genLambdaBody(ctx, a.body)})(${listTail(0)})`,
                 ),
               ))(
               ((_v) =>
@@ -2393,13 +2235,9 @@ const listMatchLoop$ = (ctx: GCtx, arms: MatchArm[], i: number): [string[], stri
                     )
                   : (None as Option<string>))(a.pattern),
             )
-          : listMatchLoop$(ctx, arms, i + 1),
+          : listMatchLoop(ctx, arms, i + 1),
   );
-const listMatchLoop: _Curry<[ctx: GCtx, arms: MatchArm[], i: number], [string[], string]> = _curry(
-  3,
-  listMatchLoop$,
-);
-const genListMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
+const genListMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
   (([armLines, fallback]: [string[], string]) =>
     concat(
       concat(
@@ -2422,15 +2260,11 @@ const genListMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
           ),
           ";\n})(",
         ),
-        genExpr$(ctx, scrutinee),
+        genExpr(ctx, scrutinee),
       ),
       "[Symbol.iterator]())",
-    ))(listMatchLoop$(ctx, arms, 0));
-const genListMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genListMatch$,
-);
-const matchArmsLoop$ = (
+    ))(listMatchLoop(ctx, arms, 0));
+const matchArmsLoop = (
   ctx: GCtx,
   arms: MatchArm[],
   i: number,
@@ -2447,23 +2281,19 @@ const matchArmsLoop$ = (
             isCatchAll(a.pattern)
               ? _tuple(restLines, Some(_tuple(a.pattern, a.body)) as Option<[Pattern, Expr]>)
               : _tuple(
-                  _Array_prepend(`  ${genWithArm$(ctx, a.pattern, a.body, base)}`, restLines),
+                  _Array_prepend(`  ${genWithArm(ctx, a.pattern, a.body, base)}`, restLines),
                   restCatch,
                 ),
           (g) =>
             _tuple(
               _Array_prepend(
-                `  ${genGuardArm$(ctx, a.pattern, a.body, Some(g) as Option<Expr>, base)}`,
+                `  ${genGuardArm(ctx, a.pattern, a.body, Some(g) as Option<Expr>, base)}`,
                 restLines,
               ),
               restCatch,
             ),
-        ))(matchArmsLoop$(ctx, arms, i + 1, base)),
+        ))(matchArmsLoop(ctx, arms, i + 1, base)),
   );
-const matchArmsLoop: _Curry<
-  [ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>],
-  [string[], Option<[Pattern, Expr]>]
-> = _curry(4, matchArmsLoop$);
 /**
  * Any eager-array arm? Decides the ADR 0038 close-out below.
  */
@@ -2481,7 +2311,13 @@ const hasArrArm: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
       }
     }
   }, arms);
-const isShallowArm$ = (ctx: GCtx, p: Pattern): boolean => {
+/**
+ * Does TypeScript's own narrowing on `_v` type this arm's bindings? A
+ * discriminant or literal test on `_v` itself does; a test on a nested field
+ * narrows only that field, so a destructuring that reaches past it needs the
+ * arm's `patTarget` (ADR 0031).
+ */
+const isShallowArm = (ctx: GCtx, p: Pattern): boolean => {
   const $match = p;
   switch ($match._tag) {
     case "PAs": {
@@ -2493,13 +2329,6 @@ const isShallowArm$ = (ctx: GCtx, p: Pattern): boolean => {
     }
   }
 };
-/**
- * Does TypeScript's own narrowing on `_v` type this arm's bindings? A
- * discriminant or literal test on `_v` itself does; a test on a nested field
- * narrows only that field, so a destructuring that reaches past it needs the
- * arm's `patTarget` (ADR 0031).
- */
-const isShallowArm: _Curry<[ctx: GCtx, p: Pattern], boolean> = _curry(2, isShallowArm$);
 const isShallowPat: (p: Pattern) => boolean = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -2525,21 +2354,23 @@ const isShallowPat: (p: Pattern) => boolean = (p: Pattern) => {
     }
   }
 };
-const armView$ = (ctx: GCtx, p: Pattern, base: Option<string>): string =>
+/**
+ * `_v` as an arm's bindings see it: cast to the arm's narrowed type when the
+ * tests do not narrow it themselves and that type refines the base. The tests just proved the cast, as they
+ * prove the `_v is T` predicate of the `match()` form.
+ */
+const armView = (ctx: GCtx, p: Pattern, base: Option<string>): string =>
   ((_v) =>
-    _v._tag === "Some" && (({ value: b }) => !isShallowArm$(ctx, p))(_v)
+    _v._tag === "Some" && (({ value: b }) => !isShallowArm(ctx, p))(_v)
       ? (({ value: b }) =>
           ((target: string) => (eq(target, b) ? "_v" : `(_v as ${target})`))(
             patTarget(ctx.keys, p, b),
           ))(_v)
       : "_v")(base);
 /**
- * `_v` as an arm's bindings see it: cast to the arm's narrowed type when the
- * tests do not narrow it themselves and that type refines the base. The tests just proved the cast, as they
- * prove the `_v is T` predicate of the `match()` form.
+ * Run `body` under the pattern's bindings, destructured from `view`.
  */
-const armView: _Curry<[ctx: GCtx, p: Pattern, base: Option<string>], string> = _curry(3, armView$);
-const underBinds$ = (ctx: GCtx, p: Pattern, view: string, body: string): string => {
+const underBinds = (ctx: GCtx, p: Pattern, view: string, body: string): string => {
   const $match = p;
   switch ($match._tag) {
     case "PAs": {
@@ -2555,14 +2386,7 @@ const underBinds$ = (ctx: GCtx, p: Pattern, view: string, body: string): string 
     }
   }
 };
-/**
- * Run `body` under the pattern's bindings, destructured from `view`.
- */
-const underBinds: _Curry<[ctx: GCtx, p: Pattern, view: string, body: string], string> = _curry(
-  4,
-  underBinds$,
-);
-const ternArmTest$ = (
+const ternArmTest = (
   ctx: GCtx,
   p: Pattern,
   guardOpt: Option<Expr>,
@@ -2572,32 +2396,25 @@ const ternArmTest$ = (
   const all: string[] = _Option_match(
     guardOpt,
     () => conds,
-    (g) =>
-      _Array_append(underBinds$(ctx, p, armView$(ctx, p, base), `(${genExpr$(ctx, g)})`), conds),
+    (g) => _Array_append(underBinds(ctx, p, armView(ctx, p, base), `(${genExpr(ctx, g)})`), conds),
   );
   return length(all) === 0 ? "true" : _Str_join(" && ", all);
 };
-const ternArmTest: _Curry<
-  [ctx: GCtx, p: Pattern, guardOpt: Option<Expr>, base: Option<string>],
-  string
-> = _curry(4, ternArmTest$);
-const ternArms$ = (ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>): string =>
+const ternArms = (ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>): string =>
   _Option_match(
     _Array_get(i, arms),
     () => '(() => { throw new Error("non-exhaustive match"); })()',
     (a) => {
-      const body: string = `(${genLambdaBody$(ctx, a.body)})`;
+      const body: string = `(${genLambdaBody(ctx, a.body)})`;
       return and(_Option_isNone(a.guard), isCatchAll(a.pattern))
         ? ((_v) => (_v === "()" ? body : ((param) => `(${param} => ${body})(_v)`)(_v)))(
-            catchAllParam$(ctx, a.pattern),
+            catchAllParam(ctx, a.pattern),
           )
-        : `${ternArmTest$(ctx, a.pattern, a.guard, base)}
-    ? ${underBinds$(ctx, a.pattern, armView$(ctx, a.pattern, base), body)}
-    : ${ternArms$(ctx, arms, i + 1, base)}`;
+        : `${ternArmTest(ctx, a.pattern, a.guard, base)}
+    ? ${underBinds(ctx, a.pattern, armView(ctx, a.pattern, base), body)}
+    : ${ternArms(ctx, arms, i + 1, base)}`;
     },
   );
-const ternArms: _Curry<[ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>], string> =
-  _curry(4, ternArms$);
 /**
  * A match lowers to a ternary chain over `_v` (ADR 0113), except where the
  * TypeScript backend could not type an arm's bindings: a nested pattern on a
@@ -2610,7 +2427,7 @@ const ternaryTypes: <A, B>(
 ) => boolean = _curry(3, <A, B>(ctx: GCtx, arms: ({ pattern: Pattern } & B)[], base: Option<A>) =>
   or(
     or(_Option_isNone(ctx.guardBaseType), _Option_isSome(base)),
-    allOf((a: { pattern: Pattern } & B) => isShallowArm$(ctx, a.pattern), arms),
+    allOf((a: { pattern: Pattern } & B) => isShallowArm(ctx, a.pattern), arms),
   ),
 );
 
@@ -2670,7 +2487,7 @@ const optionalMatch: <A, C>(
         ),
     )
     .otherwise(() => None);
-const genOptionalMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): Option<string> =>
+const genOptionalMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): Option<string> =>
   ((_v) =>
     _v._tag === "EField" && _v.optional === true
       ? (({ target, name }) =>
@@ -2683,58 +2500,42 @@ const genOptionalMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): Option
               ? _Option_match(
                   optionalMatch(arms),
                   () => None as Option<string>,
-                  (plan) => Some(genOptionalBranches$(ctx, target, name, plan)) as Option<string>,
+                  (plan) => Some(genOptionalBranches(ctx, target, name, plan)) as Option<string>,
                 )
               : (None as Option<string>))(
             _tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)),
           ))(_v)
       : (None as Option<string>))(scrutinee);
-const genOptionalMatch: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[]],
-  Option<string>
-> = _curry(3, genOptionalMatch$);
-const genOptionalBranches$ = (
+const genOptionalBranches = (
   ctx: GCtx,
   target: Expr,
   name: string,
   plan: OptionalMatch,
 ): string => {
-  const value: string = tempName$(ctx, "$optional");
+  const value: string = tempName(ctx, "$optional");
   const bind: string = plan.binding === "" ? "" : `const ${plan.binding} = ${value}; `;
-  return `((${value}) => { if (${value} != null) { ${bind}return ${genExpr$(ctx, plan.present)}; } return ${genExpr$(ctx, plan.absent)}; })(${genMember$(ctx, target)}.${name})`;
+  return `((${value}) => { if (${value} != null) { ${bind}return ${genExpr(ctx, plan.present)}; } return ${genExpr(ctx, plan.absent)}; })(${genMember(ctx, target)}.${name})`;
 };
-const genOptionalBranches: _Curry<
-  [ctx: GCtx, target: Expr, name: string, plan: OptionalMatch],
-  string
-> = _curry(4, genOptionalBranches$);
-const genMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
+const genMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
   _Option_match(
-    genOptionalMatch$(ctx, scrutinee, arms),
-    () => genOrdinaryMatch$(ctx, scrutinee, arms),
+    genOptionalMatch(ctx, scrutinee, arms),
+    () => genOrdinaryMatch(ctx, scrutinee, arms),
     (fused) => fused,
   );
-const genMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genMatch$,
-);
-const genOrdinaryMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
+const genOrdinaryMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
   _Option_match(
     builtinMatchPlan(ctx, scrutinee, arms),
     () =>
       isListMatch(arms)
-        ? genListMatch$(ctx, scrutinee, arms)
+        ? genListMatch(ctx, scrutinee, arms)
         : ((base: Option<string>) =>
             ternaryTypes(ctx, arms, base)
-              ? `((_v) => ${ternArms$(ctx, arms, 0, base)})(${genExpr$(ctx, scrutinee)})`
-              : genMatchChain$(ctx, scrutinee, arms, base))(hook1(ctx.guardBaseType, scrutinee)),
-    (plan) => genBuiltinMatch$(ctx, scrutinee, plan),
+              ? `((_v) => ${ternArms(ctx, arms, 0, base)})(${genExpr(ctx, scrutinee)})`
+              : genMatchChain(ctx, scrutinee, arms, base))(hook1(ctx.guardBaseType, scrutinee)),
+    (plan) => genBuiltinMatch(ctx, scrutinee, plan),
   );
-const genOrdinaryMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genOrdinaryMatch$,
-);
 
-const builtinPayload$ = (pattern: Pattern, ctor: string, arity: number): Option<string> =>
+const builtinPayload = (pattern: Pattern, ctor: string, arity: number): Option<string> =>
   ((_v) =>
     _v._tag === "PCtor" &&
     _v.ns._tag === "None" &&
@@ -2762,10 +2563,6 @@ const builtinPayload$ = (pattern: Pattern, ctor: string, arity: number): Option<
           },
         )
       : (None as Option<string>))(pattern);
-const builtinPayload: _Curry<
-  [pattern: Pattern, ctor: string, arity: number],
-  Option<string>
-> = _curry(3, builtinPayload$);
 const builtinPair: <A, C, E, F>(
   ctx: GCtx,
   left: { guard: Option<A>; pattern: Pattern; body: Expr } & E,
@@ -2813,8 +2610,8 @@ const builtinPair: <A, C, E, F>(
               )
             : None)(
           _tuple(
-            builtinPayload$(left.pattern, leftCtor, leftArity),
-            builtinPayload$(right.pattern, rightCtor, 1),
+            builtinPayload(left.pattern, leftCtor, leftArity),
+            builtinPayload(right.pattern, rightCtor, 1),
           ),
         ),
 );
@@ -2891,20 +2688,17 @@ const builtinMatchPlan: <A, C>(
             )
             .otherwise(() => None))(scrutinee),
 );
-const genBuiltinHandler$ = (ctx: GCtx, binding: string, body: Expr): string => {
+const genBuiltinHandler = (ctx: GCtx, binding: string, body: Expr): string => {
   const bound: Set<string> =
     binding === "" ? _Set_fromArray([] as string[]) : _Set_fromArray([binding]);
-  return `(${binding}) => ${genLambdaBodyIn$(ctx, body, bound, "")}`;
+  return `(${binding}) => ${genLambdaBodyIn(ctx, body, bound, "")}`;
 };
-const genBuiltinHandler: _Curry<[ctx: GCtx, binding: string, body: Expr], string> = _curry(
-  3,
-  genBuiltinHandler$,
-);
-const genBuiltinMatch$ = (ctx: GCtx, scrutinee: Expr, plan: BuiltinMatchPlan): string =>
-  `${plan.helper}(${genExpr$(ctx, scrutinee)}, ${genBuiltinHandler$(ctx, plan.leftBinding, plan.left)}, ${genBuiltinHandler$(ctx, plan.rightBinding, plan.right)})`;
-const genBuiltinMatch: _Curry<[ctx: GCtx, scrutinee: Expr, plan: BuiltinMatchPlan], string> =
-  _curry(3, genBuiltinMatch$);
-const genMatchChain$ = (
+const genBuiltinMatch = (ctx: GCtx, scrutinee: Expr, plan: BuiltinMatchPlan): string =>
+  `${plan.helper}(${genExpr(ctx, scrutinee)}, ${genBuiltinHandler(ctx, plan.leftBinding, plan.left)}, ${genBuiltinHandler(ctx, plan.rightBinding, plan.right)})`;
+/**
+ * The `@onrails/pattern` chain.
+ */
+const genMatchChain = (
   ctx: GCtx,
   scrutinee: Expr,
   arms: MatchArm[],
@@ -2914,7 +2708,7 @@ const genMatchChain$ = (
     const tail: string = ((_v) =>
       _v._tag === "Some"
         ? (({ value: [p, body] }) =>
-            `  .otherwise(${catchAllParam$(ctx, p)} => ${genLambdaBody$(ctx, body)})`)(
+            `  .otherwise(${catchAllParam(ctx, p)} => ${genLambdaBody(ctx, body)})`)(
             _v as Extract<Option<[Pattern, Expr]>, { _tag: "Some" }>,
           )
         : _v._tag === "None"
@@ -2926,17 +2720,10 @@ const genMatchChain$ = (
             })())(catchAll);
     return _Str_join(
       "\n",
-      _Array_concat(_Array_prepend(`match(${genExpr$(ctx, scrutinee)})`, armLines), [tail]),
+      _Array_concat(_Array_prepend(`match(${genExpr(ctx, scrutinee)})`, armLines), [tail]),
     );
-  })(matchArmsLoop$(ctx, arms, 0, base));
-/**
- * The `@onrails/pattern` chain.
- */
-const genMatchChain: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], base: Option<string>],
-  string
-> = _curry(4, genMatchChain$);
-const genGuardArm$ = (
+  })(matchArmsLoop(ctx, arms, 0, base));
+const genGuardArm = (
   ctx: GCtx,
   p: Pattern,
   body: Expr,
@@ -2957,14 +2744,14 @@ const genGuardArm$ = (
           const { name } = $match;
           return _Array_append(
             slot === ""
-              ? `((${name}) => ${genExpr$(ctx, g)})(${root})`
-              : `((${name}) => ((${slot}) => ${genExpr$(ctx, g)})(${name}))(${root})`,
+              ? `((${name}) => ${genExpr(ctx, g)})(${root})`
+              : `((${name}) => ((${slot}) => ${genExpr(ctx, g)})(${name}))(${root})`,
             conds0,
           );
         }
         default: {
           return _Array_append(
-            slot === "" ? `(${genExpr$(ctx, g)})` : `((${slot}) => ${genExpr$(ctx, g)})(${root})`,
+            slot === "" ? `(${genExpr(ctx, g)})` : `((${slot}) => ${genExpr(ctx, g)})(${root})`,
             conds0,
           );
         }
@@ -2975,10 +2762,10 @@ const genGuardArm$ = (
   const handler: string = ((_v) =>
     _v._tag === "PAs"
       ? (({ name }) =>
-          `(${name}) => ${slot === "" ? genLambdaBody$(ctx, body) : `((${slot}) => ${genLambdaBody$(ctx, body)})(${name})`}`)(
+          `(${name}) => ${slot === "" ? genLambdaBody(ctx, body) : `((${slot}) => ${genLambdaBody(ctx, body)})(${name})`}`)(
           _v,
         )
-      : `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody$(ctx, body)}`)(p);
+      : `${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(ctx, body)}`)(p);
   return _Option_match(
     base,
     () => `.with((_v) => ${test}, ${handler})`,
@@ -2990,10 +2777,6 @@ const genGuardArm$ = (
     },
   );
 };
-const genGuardArm: _Curry<
-  [ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>],
-  string
-> = _curry(5, genGuardArm$);
 const isFlatSub: (p: Pattern) => boolean = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -3045,13 +2828,13 @@ const recordLits: <A>(fields: ({ pat: Pattern; label: string } & A)[], i: number
       },
     ),
   );
-const ctorArgParts$ = (ctx: GCtx, ctor: string, args: Pattern[], i: number): [string[], string[]] =>
+const ctorArgParts = (ctx: GCtx, ctor: string, args: Pattern[], i: number): [string[], string[]] =>
   _Option_match(
     _Array_get(i, args),
     () => _tuple([] as string[], [] as string[]),
     (a) =>
       (([restBinds, restLits]: [string[], string[]]) => {
-        const key: string = keyAt$(ctx, ctor, i);
+        const key: string = keyAt(ctx, ctor, i);
         const $match = a;
         switch ($match._tag) {
           case "PBind": {
@@ -3074,45 +2857,41 @@ const ctorArgParts$ = (ctx: GCtx, ctor: string, args: Pattern[], i: number): [st
             return _tuple(restBinds, restLits);
           }
         }
-      })(ctorArgParts$(ctx, ctor, args, i + 1)),
+      })(ctorArgParts(ctx, ctor, args, i + 1)),
   );
-const ctorArgParts: _Curry<
-  [ctx: GCtx, ctor: string, args: Pattern[], i: number],
-  [string[], string[]]
-> = _curry(4, ctorArgParts$);
-const genWithArm$ = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): string => {
+const genWithArm = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): string => {
   const $match = p;
   switch ($match._tag) {
     case "PAs": {
-      return genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+      return genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
     case "PArr": {
-      return genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+      return genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
     case "PTuple": {
-      return genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+      return genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
     case "POr": {
-      return genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+      return genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
     case "PLit": {
-      return `.with(${litValue(p)}, () => ${genLambdaBody$(ctx, body)})`;
+      return `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`;
     }
     case "PBool": {
-      return `.with(${litValue(p)}, () => ${genLambdaBody$(ctx, body)})`;
+      return `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`;
     }
     case "PStr": {
-      return `.with(${litValue(p)}, () => ${genLambdaBody$(ctx, body)})`;
+      return `.with(${litValue(p)}, () => ${genLambdaBody(ctx, body)})`;
     }
     case "PRecord": {
       const { fields } = $match;
       return allOf((f: PatField) => isFlatSub(f.pat), fields)
         ? ((lits: string[]) =>
             ((slot: string) =>
-              `.with({ ${_Str_join(", ", lits)} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody$(ctx, body)})`)(
+              `.with({ ${_Str_join(", ", lits)} }, ${slot === "" ? "()" : `(${slot})`} => ${genLambdaBody(ctx, body)})`)(
               patSlot(ctx.keys, p),
             ))(recordLits(fields, 0))
-        : genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+        : genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
     case "PCtor": {
       const { ctor: ctor0, args, ns } = $match;
@@ -3126,34 +2905,28 @@ const genWithArm$ = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): s
                 );
                 const param: string =
                   length(binds) === 0 ? "()" : `({ ${_Str_join(", ", binds)} })`;
-                return `.with({ ${patObj} }, ${param} => ${genLambdaBody$(ctx, body)})`;
-              })(tagOf(ctx.keys, ctor)))(ctorArgParts$(ctx, ctor, args, 0)))(ctorKeyOf(ctor0, ns))
-        : genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+                return `.with({ ${patObj} }, ${param} => ${genLambdaBody(ctx, body)})`;
+              })(tagOf(ctx.keys, ctor)))(ctorArgParts(ctx, ctor, args, 0)))(ctorKeyOf(ctor0, ns))
+        : genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
     default: {
-      return genGuardArm$(ctx, p, body, None as Option<Expr>, base);
+      return genGuardArm(ctx, p, body, None as Option<Expr>, base);
     }
   }
 };
-const genWithArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr, base: Option<string>], string> =
-  _curry(4, genWithArm$);
-const typedCtorParams$ = (keys: string[], paramTypes: string[], i: number): string[] =>
+/**
+ * `k0: T0, k1: T1` — a typed factory's parameter list.
+ */
+const typedCtorParams = (keys: string[], paramTypes: string[], i: number): string[] =>
   _Option_match(
     _Array_get(i, keys),
     () => [] as string[],
     (k) =>
       _Array_prepend(
         `${k}: ${_Option_unwrapOr("unknown", _Array_get(i, paramTypes))}`,
-        typedCtorParams$(keys, paramTypes, i + 1),
+        typedCtorParams(keys, paramTypes, i + 1),
       ),
   );
-/**
- * `k0: T0, k1: T1` — a typed factory's parameter list.
- */
-const typedCtorParams: _Curry<[keys: string[], paramTypes: string[], i: number], string[]> = _curry(
-  3,
-  typedCtorParams$,
-);
 const genCtor: <A, B, C>(
   c: { tagLit: string; fields: ({ name: Option<string> } & A)[]; name: string; tagKey: string } & B,
   ts: Option<{ retMono: string; generics: string; paramTypes: string[]; ret: string } & C>,
@@ -3184,13 +2957,13 @@ const genCtor: <A, B, C>(
                       ts,
                       () => `const ${c.name} = ${curried};`,
                       (t) =>
-                        `const ${c.name} = ${curried} as ${t.generics}(${_Str_join(", ", typedCtorParams$(keys, t.paramTypes, 0))}) => ${t.ret};`,
+                        `const ${c.name} = ${curried} as ${t.generics}(${_Str_join(", ", typedCtorParams(keys, t.paramTypes, 0))}) => ${t.ret};`,
                     ))(`_curry(${show(length(c.fields))}, ${impl})`)
                 : _Option_match(
                     ts,
                     () => `const ${c.name} = ${impl};`,
                     (t) =>
-                      `const ${c.name} = ${t.generics}(${_Str_join(", ", typedCtorParams$(keys, t.paramTypes, 0))}): ${t.ret} => ({ ${c.tagKey}: ${tag}, ${params} });`,
+                      `const ${c.name} = ${t.generics}(${_Str_join(", ", typedCtorParams(keys, t.paramTypes, 0))}): ${t.ret} => ({ ${c.tagKey}: ${tag}, ${params} });`,
                   ))(`(${params}) => ({ ${c.tagKey}: ${tag}, ${params} })`))(
             _Str_join(", ", keys),
           ))(keysOf(c.fields));
@@ -3254,7 +3027,7 @@ const genCtorsFrom: <A, B, C, D>(
       },
     ),
 );
-const genType$ = (ctx: GCtx, s: Stmt): string => {
+const genType = (ctx: GCtx, s: Stmt): string => {
   const $match = s;
   switch ($match._tag) {
     case "SType": {
@@ -3266,7 +3039,6 @@ const genType$ = (ctx: GCtx, s: Stmt): string => {
     }
   }
 };
-const genType: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, genType$);
 /**
  * Top-level arrow spine length (`a -> b -> c` → 2).
  */
@@ -3418,20 +3190,16 @@ const ${name} = _curry(${show(arity)}, ${flat});`)(
 };
 const stripAlExt: (s: string) => string = (s: string) =>
   _Str_endsWith(".mochi", s) ? _Str_slice(0, _Str_length(s) - 6, s) : s;
-const rewriteImportPath$ = (from: string, ext: string): string => {
-  const bare: string = stripAlExt(from);
-  return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}${ext}` : bare;
-};
 /**
  * Relative `./` / `../` get `ext` (`.js` for the JS backend, `""` for TS —
  * tsc resolves the extensionless sibling); bare package specs keep their
  * name, since a suffix would break package `exports` (ADR 0015).
  */
-const rewriteImportPath: _Curry<[from: string, ext: string], string> = _curry(
-  2,
-  rewriteImportPath$,
-);
-const genImport$ = (s: Stmt, ext: string): string => {
+const rewriteImportPath = (from: string, ext: string): string => {
+  const bare: string = stripAlExt(from);
+  return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}${ext}` : bare;
+};
+const genImport = (s: Stmt, ext: string): string => {
   const $match = s;
   switch ($match._tag) {
     case "SImport": {
@@ -3440,12 +3208,12 @@ const genImport$ = (s: Stmt, ext: string): string => {
         ", ",
         map((n: Name) => n.name, names),
       );
-      const path: string = rewriteImportPath$(from, ext);
+      const path: string = rewriteImportPath(from, ext);
       return `import { ${nameList} } from ${jsStringLit(path)};`;
     }
     case "SImportNs": {
       const { alias, from } = $match;
-      const path: string = rewriteImportPath$(from, ext);
+      const path: string = rewriteImportPath(from, ext);
       return `import * as ${alias.name} from ${jsStringLit(path)};`;
     }
     default: {
@@ -3453,7 +3221,6 @@ const genImport$ = (s: Stmt, ext: string): string => {
     }
   }
 };
-const genImport: _Curry<[s: Stmt, ext: string], string> = _curry(2, genImport$);
 const exportLine: (l: string) => string = (l: string) => `export ${l}`;
 const jsDocLine: (l: string) => string = (l: string) =>
   _Str_length(l) > 0 ? ` * ${_Str_replace("*/", "*\\/", l)}` : " *";
@@ -3469,7 +3236,12 @@ ${_Str_join("\n", lines)}
 `;
     },
   );
-const rawArityOf$ = (locals: Set<string>, s: Stmt): Option<number> =>
+/**
+ * Arity of a top-level `let` that gets a raw twin (ADR 0149): a lambda whose
+ * collapsed spine has >= 2 plain params, bound under a name no local binder
+ * reuses anywhere in the module (so a call by that name is always this one).
+ */
+const rawArityOf = (locals: Set<string>, s: Stmt): Option<number> =>
   ((_v) =>
     _v._tag === "SLet" &&
     _v.value._tag === "ELambda" &&
@@ -3483,34 +3255,28 @@ const rawArityOf$ = (locals: Set<string>, s: Stmt): Option<number> =>
           (([cparams, , fills]: [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]) =>
             and(length(cparams) >= 2, length(fills) === 0)
               ? (Some(length(cparams)) as Option<number>)
-              : (None as Option<number>))(collapseLambda$(params, body)))(
+              : (None as Option<number>))(collapseLambda(params, body)))(
           _v as Extract<Stmt, { _tag: "SLet" }> & {
             value: Extract<Extract<Stmt, { _tag: "SLet" }>["value"], { _tag: "ELambda" }>;
           },
         )
       : (None as Option<number>))(s);
 /**
- * Arity of a top-level `let` that gets a raw twin (ADR 0149): a lambda whose
- * collapsed spine has >= 2 plain params, bound under a name no local binder
- * reuses anywhere in the module (so a call by that name is always this one).
+ * The backend may decline a twin: the JS backend has no `annotateRaw` hook
+ * and takes every eligible function; the TS backend's hook answers `None` for
+ * a binding it cannot annotate strict-clean.
  */
-const rawArityOf: _Curry<[locals: Set<string>, s: Stmt], Option<number>> = _curry(2, rawArityOf$);
-const rawTwinAllowed$ = (ctx: GCtx, name: string, value: Expr): boolean =>
+const rawTwinAllowed = (ctx: GCtx, name: string, value: Expr): boolean =>
   _Option_match(
     ctx.annotateRaw,
     () => true,
     (h) => _Option_isSome(h(name, value)),
   );
 /**
- * The backend may decline a twin: the JS backend has no `annotateRaw` hook
- * and takes every eligible function; the TS backend's hook answers `None` for
- * a binding it cannot annotate strict-clean.
+ * Register a raw twin for every eligible top-level function. The raw name
+ * goes through `tempName`, so it cannot capture a bound name or value ref.
  */
-const rawTwinAllowed: _Curry<[ctx: GCtx, name: string, value: Expr], boolean> = _curry(
-  3,
-  rawTwinAllowed$,
-);
-const withRawTwins$ = (ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number): GCtx =>
+const withRawTwins = (ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number): GCtx =>
   _Option_match(
     _Array_get(i, stmts),
     () => ctx,
@@ -3518,16 +3284,16 @@ const withRawTwins$ = (ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number)
       ((_v) =>
         _v[0]._tag === "SLet" &&
         _v[1]._tag === "Some" &&
-        (([{ name, value }, { value: n }]) => rawTwinAllowed$(ctx, name, value))(
+        (([{ name, value }, { value: n }]) => rawTwinAllowed(ctx, name, value))(
           _v as [
             Extract<[Stmt, Option<number>][0], { _tag: "SLet" }>,
             Extract<[Stmt, Option<number>][1], { _tag: "Some" }>,
           ],
         )
           ? (([{ name, value }, { value: n }]) =>
-              ((next: GCtx) => withRawTwins$(next, locals, stmts, i + 1))({
+              ((next: GCtx) => withRawTwins(next, locals, stmts, i + 1))({
                 ...ctx,
-                rawNames: _Map_set(name, tempName$(ctx, `${name}$`), ctx.rawNames),
+                rawNames: _Map_set(name, tempName(ctx, `${name}$`), ctx.rawNames),
                 rawArity: _Map_set(name, n, ctx.rawArity),
               }))(
               _v as [
@@ -3535,15 +3301,9 @@ const withRawTwins$ = (ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number)
                 Extract<[Stmt, Option<number>][1], { _tag: "Some" }>,
               ],
             )
-          : withRawTwins$(ctx, locals, stmts, i + 1))(_tuple(s, rawArityOf$(locals, s))),
+          : withRawTwins(ctx, locals, stmts, i + 1))(_tuple(s, rawArityOf(locals, s))),
   );
-/**
- * Register a raw twin for every eligible top-level function. The raw name
- * goes through `tempName`, so it cannot capture a bound name or value ref.
- */
-const withRawTwins: _Curry<[ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number], GCtx> =
-  _curry(4, withRawTwins$);
-const genStmt$ = (ctx: GCtx, s: Stmt): string => {
+const genStmt = (ctx: GCtx, s: Stmt): string => {
   const $match = s;
   switch ($match._tag) {
     case "SError": {
@@ -3551,14 +3311,14 @@ const genStmt$ = (ctx: GCtx, s: Stmt): string => {
       return `throw new Error("codegen invariant: error node reached codegen at ${show(sp.start)}");`;
     }
     case "SImport": {
-      return genImport$(s, ctx.moduleExt);
+      return genImport(s, ctx.moduleExt);
     }
     case "SImportNs": {
-      return genImport$(s, ctx.moduleExt);
+      return genImport(s, ctx.moduleExt);
     }
     case "SType": {
       const { exported } = $match;
-      const decls: string = genType$(ctx, s);
+      const decls: string = genType(ctx, s);
       return decls === ""
         ? ""
         : exported
@@ -3582,9 +3342,12 @@ export { ${name} };`
       return ((_v) =>
         _v[0]._tag === "Some" && _v[1]._tag === "ELambda"
           ? (([{ value: raw }, { params, body, span: sp }]) =>
-              (([arrow, arity]: [string, number]) => `const ${raw} = ${arrow};
+              (([arrow, arity]: [string, number]) =>
+                and(!exported, !_Set_has(name, ctx.publicRefs))
+                  ? `${docComment}const ${raw} = ${arrow};`
+                  : `const ${raw} = ${arrow};
 ${head}_curry(${show(arity)}, ${raw});`)(
-                genArrow$(
+                genArrow(
                   ctx,
                   params,
                   body,
@@ -3597,29 +3360,27 @@ ${head}_curry(${show(arity)}, ${raw});`)(
                 Extract<[Option<string>, Expr][1], { _tag: "ELambda" }>,
               ],
             )
-          : `${head}${genExpr$(ctx, value)};`)(_tuple(_Map_get(name, ctx.rawNames), value));
+          : `${head}${genExpr(ctx, value)};`)(_tuple(_Map_get(name, ctx.rawNames), value));
     }
     case "SExpr": {
       const { value } = $match;
-      return `${genExpr$(ctx, value)};`;
+      return `${genExpr(ctx, value)};`;
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const genStmt: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, genStmt$);
-const usesMatchLibArm$ = (ctx: GCtx, a: MatchArm): boolean =>
+const usesMatchLibArm = (ctx: GCtx, a: MatchArm): boolean =>
   or(
     _Option_match(
       a.guard,
       () => false,
-      (g) => usesMatchLib$(ctx, g),
+      (g) => usesMatchLib(ctx, g),
     ),
-    usesMatchLib$(ctx, a.body),
+    usesMatchLib(ctx, a.body),
   );
-const usesMatchLibArm: _Curry<[ctx: GCtx, a: MatchArm], boolean> = _curry(2, usesMatchLibArm$);
-const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
+const usesMatchLib = (ctx: GCtx, e: Expr): boolean => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -3640,54 +3401,54 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
     case "ECall": {
       const { fn, args } = $match;
       return or(
-        usesMatchLib$(ctx, fn),
-        someOf((x: Expr) => usesMatchLib$(ctx, x), args),
+        usesMatchLib(ctx, fn),
+        someOf((x: Expr) => usesMatchLib(ctx, x), args),
       );
     }
     case "ELambda": {
       const { body } = $match;
-      return usesMatchLib$(ctx, body);
+      return usesMatchLib(ctx, body);
     }
     case "ELetIn": {
       const { value, body } = $match;
-      return or(usesMatchLib$(ctx, value), usesMatchLib$(ctx, body));
+      return or(usesMatchLib(ctx, value), usesMatchLib(ctx, body));
     }
     case "ELetBind": {
       const { value, body } = $match;
-      return or(usesMatchLib$(ctx, value), usesMatchLib$(ctx, body));
+      return or(usesMatchLib(ctx, value), usesMatchLib(ctx, body));
     }
     case "EPipe": {
       const { left, right } = $match;
-      return or(usesMatchLib$(ctx, left), usesMatchLib$(ctx, right));
+      return or(usesMatchLib(ctx, left), usesMatchLib(ctx, right));
     }
     case "EDo": {
       const { exprs } = $match;
-      return someOf((x: Expr) => usesMatchLib$(ctx, x), exprs);
+      return someOf((x: Expr) => usesMatchLib(ctx, x), exprs);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return or(usesMatchLib$(ctx, cond), or(usesMatchLib$(ctx, thenE), usesMatchLib$(ctx, elseE)));
+      return or(usesMatchLib(ctx, cond), or(usesMatchLib(ctx, thenE), usesMatchLib(ctx, elseE)));
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
       return or(
         and(!isListMatch(arms), !ternaryTypes(ctx, arms, hook1(ctx.guardBaseType, scrutinee))),
         or(
-          usesMatchLib$(ctx, scrutinee),
-          someOf((a: MatchArm) => usesMatchLibArm$(ctx, a), arms),
+          usesMatchLib(ctx, scrutinee),
+          someOf((a: MatchArm) => usesMatchLibArm(ctx, a), arms),
         ),
       );
     }
     case "ELoop": {
       const { params, body } = $match;
       return or(
-        someOf((p: LoopParam) => usesMatchLib$(ctx, p.init), params),
-        usesMatchLib$(ctx, body),
+        someOf((p: LoopParam) => usesMatchLib(ctx, p.init), params),
+        usesMatchLib(ctx, body),
       );
     }
     case "ERecur": {
       const { args } = $match;
-      return someOf((x: Expr) => usesMatchLib$(ctx, x), args);
+      return someOf((x: Expr) => usesMatchLib(ctx, x), args);
     }
     case "ERecord": {
       const { fields, spread } = $match;
@@ -3695,24 +3456,24 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
         _Option_match(
           spread,
           () => false,
-          (s) => usesMatchLib$(ctx, s),
+          (s) => usesMatchLib(ctx, s),
         ),
-        someOf((f: Field) => usesMatchLib$(ctx, f.value), fields),
+        someOf((f: Field) => usesMatchLib(ctx, f.value), fields),
       );
     }
     case "EField": {
       const { target } = $match;
-      return usesMatchLib$(ctx, target);
+      return usesMatchLib(ctx, target);
     }
     case "ETuple": {
       const { elements } = $match;
-      return someOf((x: Expr) => usesMatchLib$(ctx, x), elements);
+      return someOf((x: Expr) => usesMatchLib(ctx, x), elements);
     }
     case "EArr": {
       const { elements } = $match;
       return someOf(
         (el: SeqElem) =>
-          usesMatchLib$(
+          usesMatchLib(
             ctx,
             ((_v) =>
               _v._tag === "SEExpr"
@@ -3730,7 +3491,7 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
       const { elements } = $match;
       return someOf(
         (el: SeqElem) =>
-          usesMatchLib$(
+          usesMatchLib(
             ctx,
             ((_v) =>
               _v._tag === "SEExpr"
@@ -3748,7 +3509,7 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
       const { elements } = $match;
       return someOf(
         (el: SeqElem) =>
-          usesMatchLib$(
+          usesMatchLib(
             ctx,
             ((_v) =>
               _v._tag === "SEExpr"
@@ -3765,7 +3526,7 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
     case "EMap": {
       const { entries } = $match;
       return someOf(
-        (en: MapEntry) => or(usesMatchLib$(ctx, en.key), usesMatchLib$(ctx, en.value)),
+        (en: MapEntry) => or(usesMatchLib(ctx, en.key), usesMatchLib(ctx, en.value)),
         entries,
       );
     }
@@ -3779,7 +3540,7 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
           }
           case "IPExpr": {
             const { expr: ex } = $match$;
-            return usesMatchLib$(ctx, ex);
+            return usesMatchLib(ctx, ex);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -3792,8 +3553,7 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
     }
   }
 };
-const usesMatchLib: _Curry<[ctx: GCtx, e: Expr], boolean> = _curry(2, usesMatchLib$);
-const loopInitRefsFrom$ = (
+const loopInitRefsFrom = (
   ctx: GCtx,
   params: LoopParam[],
   i: number,
@@ -3802,23 +3562,15 @@ const loopInitRefsFrom$ = (
   _Option_match(
     _Array_get(i, params),
     () => acc,
-    (p) => loopInitRefsFrom$(ctx, params, i + 1, exprRefs$(ctx, p.init, acc)),
+    (p) => loopInitRefsFrom(ctx, params, i + 1, exprRefs(ctx, p.init, acc)),
   );
-const loopInitRefsFrom: _Curry<
-  [ctx: GCtx, params: LoopParam[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, loopInitRefsFrom$);
-const exprRefsListFrom$ = (ctx: GCtx, xs: Expr[], i: number, acc: Set<string>): Set<string> =>
+const exprRefsListFrom = (ctx: GCtx, xs: Expr[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, xs),
     () => acc,
-    (x) => exprRefsListFrom$(ctx, xs, i + 1, exprRefs$(ctx, x, acc)),
+    (x) => exprRefsListFrom(ctx, xs, i + 1, exprRefs(ctx, x, acc)),
   );
-const exprRefsListFrom: _Curry<
-  [ctx: GCtx, xs: Expr[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsListFrom$);
-const exprRefsInterpPartsFrom$ = (
+const exprRefsInterpPartsFrom = (
   ctx: GCtx,
   parts: InterpPart[],
   i: number,
@@ -3828,7 +3580,7 @@ const exprRefsInterpPartsFrom$ = (
     _Array_get(i, parts),
     () => acc,
     (p) =>
-      exprRefsInterpPartsFrom$(
+      exprRefsInterpPartsFrom(
         ctx,
         parts,
         i + 1,
@@ -3836,17 +3588,13 @@ const exprRefsInterpPartsFrom$ = (
           _v._tag === "IPLit"
             ? acc
             : _v._tag === "IPExpr"
-              ? (({ expr: ex }) => exprRefs$(ctx, ex, acc))(_v)
+              ? (({ expr: ex }) => exprRefs(ctx, ex, acc))(_v)
               : (() => {
                   throw new Error("non-exhaustive match");
                 })())(p),
       ),
   );
-const exprRefsInterpPartsFrom: _Curry<
-  [ctx: GCtx, parts: InterpPart[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsInterpPartsFrom$);
-const exprRefsArmsFrom$ = (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>): Set<string> =>
+const exprRefsArmsFrom = (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, arms),
     () => acc,
@@ -3854,31 +3602,18 @@ const exprRefsArmsFrom$ = (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<stri
       const acc1: Set<string> = _Option_match(
         a.guard,
         () => acc,
-        (g) => exprRefs$(ctx, g, acc),
+        (g) => exprRefs(ctx, g, acc),
       );
-      return exprRefsArmsFrom$(ctx, arms, i + 1, exprRefs$(ctx, a.body, acc1));
+      return exprRefsArmsFrom(ctx, arms, i + 1, exprRefs(ctx, a.body, acc1));
     },
   );
-const exprRefsArmsFrom: _Curry<
-  [ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsArmsFrom$);
-const exprRefsFieldsFrom$ = (
-  ctx: GCtx,
-  fields: Field[],
-  i: number,
-  acc: Set<string>,
-): Set<string> =>
+const exprRefsFieldsFrom = (ctx: GCtx, fields: Field[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, fields),
     () => acc,
-    (f) => exprRefsFieldsFrom$(ctx, fields, i + 1, exprRefs$(ctx, f.value, acc)),
+    (f) => exprRefsFieldsFrom(ctx, fields, i + 1, exprRefs(ctx, f.value, acc)),
   );
-const exprRefsFieldsFrom: _Curry<
-  [ctx: GCtx, fields: Field[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsFieldsFrom$);
-const exprRefsEntriesFrom$ = (
+const exprRefsEntriesFrom = (
   ctx: GCtx,
   entries: MapEntry[],
   i: number,
@@ -3888,18 +3623,37 @@ const exprRefsEntriesFrom$ = (
     _Array_get(i, entries),
     () => acc,
     (en) =>
-      exprRefsEntriesFrom$(
-        ctx,
-        entries,
-        i + 1,
-        exprRefs$(ctx, en.value, exprRefs$(ctx, en.key, acc)),
-      ),
+      exprRefsEntriesFrom(ctx, entries, i + 1, exprRefs(ctx, en.value, exprRefs(ctx, en.key, acc))),
   );
-const exprRefsEntriesFrom: _Curry<
-  [ctx: GCtx, entries: MapEntry[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsEntriesFrom$);
-const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
+/**
+ * A call that lowers to the raw twin (`genCalleeFor`, ADR 0149) and so never
+ * names the public binding. JSX calls (`origin`) go through `tsxCall` and do.
+ */
+const isTwinCall: <A>(ctx: GCtx, fn: Expr, argc: number, origin: Option<A>) => boolean = _curry(
+  4,
+  <A>(ctx: GCtx, fn: Expr, argc: number, origin: Option<A>) => {
+    const $match = fn;
+    switch ($match._tag) {
+      case "ERef": {
+        const { name } = $match;
+        return _Option_match(
+          origin,
+          () =>
+            _Option_match(
+              _Map_get(name, ctx.rawArity),
+              () => false,
+              (n) => eq(n, argc),
+            ),
+          () => false,
+        );
+      }
+      default: {
+        return false;
+      }
+    }
+  },
+);
+const exprRefs = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -3919,8 +3673,10 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       return _Set_add(name, acc);
     }
     case "ECall": {
-      const { fn, args } = $match;
-      return exprRefsListFrom$(ctx, args, 0, exprRefs$(ctx, fn, acc));
+      const { fn, args, origin } = $match;
+      return isTwinCall(ctx, fn, length(args), origin)
+        ? exprRefsListFrom(ctx, args, 0, acc)
+        : exprRefsListFrom(ctx, args, 0, exprRefs(ctx, fn, acc));
     }
     case "ELambda": {
       const { params, body } = $match;
@@ -3942,7 +3698,7 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
                         param: {
                           defaultValue: { value: d },
                         },
-                      }) => exprRefs$(ctx, d, b))(
+                      }) => exprRefs(ctx, d, b))(
                         _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
                           param: Extract<
                             Extract<LamParam, { _tag: "LPSpanned" }>["param"],
@@ -3959,7 +3715,7 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
                         },
                       )
                     : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some"
-                      ? (({ defaultValue: { value: d } }) => exprRefs$(ctx, d, b))(
+                      ? (({ defaultValue: { value: d } }) => exprRefs(ctx, d, b))(
                           _v as Extract<LamParam, { _tag: "LPLabeled" }> & {
                             defaultValue: Extract<
                               Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
@@ -3976,32 +3732,41 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
           acc2,
           fills,
         );
-        return exprRefs$(ctx, cbody, acc3);
-      })(collapseLambda$(params, body));
+        return exprRefs(ctx, cbody, acc3);
+      })(collapseLambda(params, body));
     }
     case "ELetIn": {
       const { value, body } = $match;
-      return exprRefs$(ctx, body, exprRefs$(ctx, value, acc));
+      return exprRefs(ctx, body, exprRefs(ctx, value, acc));
     }
     case "ELetBind": {
       const { monad, value, body } = $match;
-      return exprRefs$(ctx, body, exprRefs$(ctx, value, _Set_add(bindRuntime(monad), acc)));
+      return exprRefs(ctx, body, exprRefs(ctx, value, _Set_add(bindRuntime(monad), acc)));
     }
     case "EPipe": {
-      const { left, right } = $match;
-      return exprRefs$(ctx, right, exprRefs$(ctx, left, acc));
+      const { left, right, fast } = $match;
+      const acc1: Set<string> = exprRefs(ctx, left, acc);
+      return ((_v) =>
+        _v._tag === "ECall" &&
+        (({ fn: rfn, args: rargs, origin }) =>
+          and(
+            and(!hasPipeHole(right), or(fast, ctx.flattenPipe)),
+            isTwinCall(ctx, rfn, length(rargs) + 1, origin),
+          ))(_v)
+          ? (({ fn: rfn, args: rargs, origin }) => exprRefsListFrom(ctx, rargs, 0, acc1))(_v)
+          : exprRefs(ctx, right, acc1))(right);
     }
     case "EDo": {
       const { exprs } = $match;
-      return exprRefsListFrom$(ctx, exprs, 0, acc);
+      return exprRefsListFrom(ctx, exprs, 0, acc);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return exprRefs$(ctx, elseE, exprRefs$(ctx, thenE, exprRefs$(ctx, cond, acc)));
+      return exprRefs(ctx, elseE, exprRefs(ctx, thenE, exprRefs(ctx, cond, acc)));
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      const acc1: Set<string> = exprRefs$(ctx, scrutinee, acc);
+      const acc1: Set<string> = exprRefs(ctx, scrutinee, acc);
       const acc2: Set<string> = someOf(
         (a: MatchArm) =>
           ((_v) =>
@@ -4012,7 +3777,7 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       )
         ? _Set_add("_list", acc1)
         : acc1;
-      return exprRefsArmsFrom$(
+      return exprRefsArmsFrom(
         ctx,
         arms,
         0,
@@ -4025,25 +3790,25 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
     case "ERecord": {
       const { fields, spread } = $match;
-      return exprRefsFieldsFrom$(
+      return exprRefsFieldsFrom(
         ctx,
         fields,
         0,
         _Option_match(
           spread,
           () => acc,
-          (s) => exprRefs$(ctx, s, acc),
+          (s) => exprRefs(ctx, s, acc),
         ),
       );
     }
     case "EField": {
       const { target, name } = $match;
       return _Option_match(
-        emptyNsEmit$(target, name, None as Option<string>),
+        emptyNsEmit(target, name, None as Option<string>),
         () =>
           _Option_match(
-            nsRuntimeId$(ctx, target, name),
-            () => exprRefs$(ctx, target, acc),
+            nsRuntimeId(ctx, target, name),
+            () => exprRefs(ctx, target, acc),
             (rt) => _Set_add(rt, acc),
           ),
         () =>
@@ -4057,20 +3822,20 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       const acc1: Set<string> = loopNeedsStep(ctx, body, params)
         ? _Set_add("_recur", _Set_add("_done", acc))
         : acc;
-      const acc2: Set<string> = loopInitRefsFrom$(ctx, params, 0, acc1);
-      return exprRefs$(ctx, body, acc2);
+      const acc2: Set<string> = loopInitRefsFrom(ctx, params, 0, acc1);
+      return exprRefs(ctx, body, acc2);
     }
     case "ERecur": {
       const { args } = $match;
-      return exprRefsListFrom$(ctx, args, 0, acc);
+      return exprRefsListFrom(ctx, args, 0, acc);
     }
     case "ETuple": {
       const { elements } = $match;
-      return exprRefsListFrom$(ctx, elements, 0, acc);
+      return exprRefsListFrom(ctx, elements, 0, acc);
     }
     case "EArr": {
       const { elements } = $match;
-      return exprRefsListFrom$(
+      return exprRefsListFrom(
         ctx,
         map((el: SeqElem) => {
           const $match$ = el;
@@ -4094,7 +3859,7 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
     case "EList": {
       const { elements } = $match;
-      return exprRefsListFrom$(
+      return exprRefsListFrom(
         ctx,
         map((el: SeqElem) => {
           const $match$ = el;
@@ -4118,7 +3883,7 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
     case "ESet": {
       const { elements } = $match;
-      return exprRefsListFrom$(
+      return exprRefsListFrom(
         ctx,
         map((el: SeqElem) => {
           const $match$ = el;
@@ -4142,19 +3907,18 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
     case "EMap": {
       const { entries } = $match;
-      return exprRefsEntriesFrom$(ctx, entries, 0, acc);
+      return exprRefsEntriesFrom(ctx, entries, 0, acc);
     }
     case "EInterp": {
       const { parts } = $match;
-      return exprRefsInterpPartsFrom$(ctx, parts, 0, acc);
+      return exprRefsInterpPartsFrom(ctx, parts, 0, acc);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _curry(3, exprRefs$);
-const boundNamesFrom$ = (
+const boundNamesFrom = (
   valueRefs: Set<string>,
   stmts: Stmt[],
   i: number,
@@ -4164,7 +3928,7 @@ const boundNamesFrom$ = (
     _Array_get(i, stmts),
     () => acc,
     (s) =>
-      boundNamesFrom$(
+      boundNamesFrom(
         valueRefs,
         stmts,
         i + 1,
@@ -4198,83 +3962,71 @@ const boundNamesFrom$ = (
                           })())(s),
       ),
   );
-const boundNamesFrom: _Curry<
-  [valueRefs: Set<string>, stmts: Stmt[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, boundNamesFrom$);
-const boundNames$ = (valueRefs: Set<string>, stmts: Stmt[]): Set<string> =>
-  boundNamesFrom$(valueRefs, stmts, 0, _Set_fromArray([] as string[]));
-const boundNames: _Curry<[valueRefs: Set<string>, stmts: Stmt[]], Set<string>> = _curry(
-  2,
-  boundNames$,
-);
-const collectValueRefs$ = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
+const boundNames = (valueRefs: Set<string>, stmts: Stmt[]): Set<string> =>
+  boundNamesFrom(valueRefs, stmts, 0, _Set_fromArray([] as string[]));
+/**
+ * Names referenced in let/expr values — not patterns. `| TLet =>` does not
+ * count, so a local unused ctor factory can be dropped.
+ */
+const collectValueRefs = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, stmts),
     () => acc,
     (s) =>
-      collectValueRefs$(
+      collectValueRefs(
         ctx,
         stmts,
         i + 1,
         ((_v) =>
           _v._tag === "SLet"
-            ? (({ value }) => exprRefs$(ctx, value, acc))(_v)
+            ? (({ value }) => exprRefs(ctx, value, acc))(_v)
             : _v._tag === "SExpr"
-              ? (({ value }) => exprRefs$(ctx, value, acc))(_v)
+              ? (({ value }) => exprRefs(ctx, value, acc))(_v)
               : acc)(s),
       ),
   );
-/**
- * Names referenced in let/expr values — not patterns. `| TLet =>` does not
- * count, so a local unused ctor factory can be dropped.
- */
-const collectValueRefs: _Curry<
-  [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, collectValueRefs$);
-const refsForStmt$ = (ctx: GCtx, s: Stmt): Set<string> => {
-  const $match = s;
-  switch ($match._tag) {
-    case "SLet": {
-      const { value } = $match;
-      return exprRefs$(ctx, value, _Set_fromArray([] as string[]));
-    }
-    case "SExpr": {
-      const { value } = $match;
-      return exprRefs$(ctx, value, _Set_fromArray([] as string[]));
-    }
-    case "SType": {
-      const { ctors, exported } = $match;
-      return someOf(
-        (c: Ctor) => and(length(c.fields) >= 2, or(exported, _Set_has(c.name, ctx.valueRefs))),
-        ctors,
-      )
-        ? _Set_add("_curry", _Set_fromArray([] as string[]))
-        : _Set_fromArray([] as string[]);
-    }
-    case "SExtern": {
-      const { typeExpr } = $match;
-      return typeExprArity(typeExpr) >= 2
-        ? _Set_add("_curry", _Set_fromArray([] as string[]))
-        : _Set_fromArray([] as string[]);
-    }
-    default: {
-      return _Set_fromArray([] as string[]);
-    }
-  }
-};
-const refsForStmt: _Curry<[ctx: GCtx, s: Stmt], Set<string>> = _curry(2, refsForStmt$);
-const collectRefsFrom$ = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
+const refsForStmt = (ctx: GCtx, s: Stmt): Set<string> =>
+  ((_v) =>
+    _v._tag === "SLet" &&
+    _v.value._tag === "ELambda" &&
+    (({ name, value: { params, body } }) =>
+      eq(_Map_get(name, ctx.rawNames), Some(name) as Option<string>))(
+      _v as Extract<Stmt, { _tag: "SLet" }> & {
+        value: Extract<Extract<Stmt, { _tag: "SLet" }>["value"], { _tag: "ELambda" }>;
+      },
+    )
+      ? (({ name, value: { params, body } }) =>
+          (([, cbody, ,]: [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]) =>
+            exprRefs(ctx, cbody, _Set_fromArray([] as string[])))(collapseLambda(params, body)))(
+          _v as Extract<Stmt, { _tag: "SLet" }> & {
+            value: Extract<Extract<Stmt, { _tag: "SLet" }>["value"], { _tag: "ELambda" }>;
+          },
+        )
+      : _v._tag === "SLet"
+        ? (({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))(_v)
+        : _v._tag === "SExpr"
+          ? (({ value }) => exprRefs(ctx, value, _Set_fromArray([] as string[])))(_v)
+          : _v._tag === "SType"
+            ? (({ ctors, exported }) =>
+                someOf(
+                  (c: Ctor) =>
+                    and(length(c.fields) >= 2, or(exported, _Set_has(c.name, ctx.valueRefs))),
+                  ctors,
+                )
+                  ? _Set_add("_curry", _Set_fromArray([] as string[]))
+                  : _Set_fromArray([] as string[]))(_v)
+            : _v._tag === "SExtern"
+              ? (({ typeExpr }) =>
+                  typeExprArity(typeExpr) >= 2
+                    ? _Set_add("_curry", _Set_fromArray([] as string[]))
+                    : _Set_fromArray([] as string[]))(_v)
+              : _Set_fromArray([] as string[]))(s);
+const collectRefsFrom = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, stmts),
     () => acc,
-    (s) => collectRefsFrom$(ctx, stmts, i + 1, _Set_union(acc, refsForStmt$(ctx, s))),
+    (s) => collectRefsFrom(ctx, stmts, i + 1, _Set_union(acc, refsForStmt(ctx, s))),
   );
-const collectRefsFrom: _Curry<
-  [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, collectRefsFrom$);
 const addDepsFrom: <A>(deps: A[], j: number, refs: Set<A>, queue: A[]) => [Set<A>, A[]] = _curry(
   4,
   <A>(deps: A[], j: number, refs: Set<A>, queue: A[]) =>
@@ -4313,13 +4065,13 @@ const runtimeRefNames: <A>(
 ) => string[] = _curry(
   4,
   <A>(ctx: GCtx, stmts: Stmt[], jsDefs: Map<string, A>, runtimeDeps: Map<string, string[]>) => {
-    const refs0: Set<string> = collectRefsFrom$(ctx, stmts, 0, _Set_fromArray([] as string[]));
+    const refs0: Set<string> = collectRefsFrom(ctx, stmts, 0, _Set_fromArray([] as string[]));
     const refs: Set<string> = closeRefsFrom(_Set_toArray(refs0), 0, refs0, runtimeDeps);
-    const bound: Set<string> = boundNames$(ctx.valueRefs, stmts);
+    const bound: Set<string> = boundNames(ctx.valueRefs, stmts);
     return filter((n: string) => and(_Set_has(n, refs), !_Set_has(n, bound)), _Map_keys(jsDefs));
   },
 );
-const preludePreamble$ = (
+const preludePreamble = (
   ctx: GCtx,
   stmts: Stmt[],
   jsDefs: Map<string, string>,
@@ -4333,20 +4085,12 @@ const preludePreamble$ = (
 
 `;
 };
-const preludePreamble: _Curry<
-  [ctx: GCtx, stmts: Stmt[], jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>],
-  string
-> = _curry(4, preludePreamble$);
-const genStmtAllFrom$ = (ctx: GCtx, stmts: Stmt[], i: number): string[] =>
+const genStmtAllFrom = (ctx: GCtx, stmts: Stmt[], i: number): string[] =>
   _Option_match(
     _Array_get(i, stmts),
     () => [] as string[],
-    (s) => _Array_prepend(genStmt$(ctx, s), genStmtAllFrom$(ctx, stmts, i + 1)),
+    (s) => _Array_prepend(genStmt(ctx, s), genStmtAllFrom(ctx, stmts, i + 1)),
   );
-const genStmtAllFrom: _Curry<[ctx: GCtx, stmts: Stmt[], i: number], string[]> = _curry(
-  3,
-  genStmtAllFrom$,
-);
 /**
  * `useRuntime`: inline the prelude builtins the program uses, so the emitted
  * module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
@@ -4427,38 +4171,61 @@ export const codegenWith: <A>(
       rawNames: new Map([]),
       rawArity: new Map([]),
       valueRefs: _Set_fromArray([]),
+      publicRefs: _Set_fromArray([]),
       userNames: _Set_union(
-        boundNames$(_Set_fromArray([] as string[]), stmts),
+        boundNames(_Set_fromArray([] as string[]), stmts),
         localBinderNames(stmts),
       ),
       docs: opts.docs,
     };
-    const valueRefs: Set<string> = collectValueRefs$(
-      ctx0,
-      stmts,
-      0,
-      _Set_fromArray([] as string[]),
-    );
+    const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
     const userNames: Set<string> = _Set_union(
-      boundNames$(valueRefs, stmts),
+      boundNames(valueRefs, stmts),
       localBinderNames(stmts),
     );
-    const ctx: GCtx = withRawTwins$(
+    const ctx1: GCtx = withRawTwins(
       { ...ctx0, valueRefs: valueRefs, userNames: userNames },
       localBinderNames(stmts),
       stmts,
       0,
     );
+    const publicRefs: Set<string> = collectValueRefs(
+      ctx1,
+      stmts,
+      0,
+      _Set_fromArray([] as string[]),
+    );
+    const exportedNames: Set<string> = reduce(
+      _curry(2, (acc: Set<string>, s: Stmt) =>
+        ((_v) =>
+          _v._tag === "SLet" && _v.exported === true
+            ? (({ name }) => _Set_add(name, acc))(_v)
+            : acc)(s),
+      ),
+      _Set_fromArray([] as string[]),
+      stmts,
+    );
+    const ctx: GCtx = {
+      ...ctx1,
+      publicRefs: publicRefs,
+      rawNames: reduce(
+        _curry(2, (m: Map<string, string>, n: string) =>
+          or(_Set_has(n, exportedNames), _Set_has(n, publicRefs)) ? m : _Map_set(n, n, m),
+        ),
+        ctx1.rawNames,
+        _Map_keys(ctx1.rawNames),
+      ),
+    };
     const needsMatch: boolean = someOf((s: Stmt) => {
       const $match = s;
       switch ($match._tag) {
         case "SLet": {
           const { value } = $match;
-          return usesMatchLib$(ctx, value);
+          return usesMatchLib(ctx, value);
         }
         case "SExpr": {
           const { value } = $match;
-          return usesMatchLib$(ctx, value);
+          return usesMatchLib(ctx, value);
         }
         default: {
           return false;
@@ -4466,8 +4233,8 @@ export const codegenWith: <A>(
       }
     }, stmts);
     const header: string = needsMatch ? 'import { match } from "@onrails/pattern";\n\n' : "";
-    const preamble: string = useRuntime ? preludePreamble$(ctx, stmts, jsDefs, runtimeDeps) : "";
-    const body: string = _Str_join("\n", genStmtAllFrom$(ctx, stmts, 0));
+    const preamble: string = useRuntime ? preludePreamble(ctx, stmts, jsDefs, runtimeDeps) : "";
+    const body: string = _Str_join("\n", genStmtAllFrom(ctx, stmts, 0));
     return `${header}${preamble}${body}
 `;
   },
@@ -4514,18 +4281,14 @@ export const runtimeDepNames: <A>(
       rawNames: new Map([]),
       rawArity: new Map([]),
       valueRefs: _Set_fromArray([]),
+      publicRefs: _Set_fromArray([]),
       userNames: _Set_union(
-        boundNames$(_Set_fromArray([] as string[]), stmts),
+        boundNames(_Set_fromArray([] as string[]), stmts),
         localBinderNames(stmts),
       ),
       docs: false,
     };
-    const valueRefs: Set<string> = collectValueRefs$(
-      ctx0,
-      stmts,
-      0,
-      _Set_fromArray([] as string[]),
-    );
+    const valueRefs: Set<string> = collectValueRefs(ctx0, stmts, 0, _Set_fromArray([] as string[]));
     return runtimeRefNames({ ...ctx0, valueRefs: valueRefs }, stmts, jsDefs, runtimeDeps);
   },
 );

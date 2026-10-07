@@ -16,7 +16,10 @@ let viaTwin = (a, b, c) => mix(a, b, c)
 let viaPipe = (a, b, c) => a->mix(b, c)
 let viaPartial = a => mix(a)
 let sum = (n, acc) => n == 0 ? acc : sum(n - 1, acc + n)
-let sumTwice = n => sum(n, 0) + sum(n, 0)`;
+let sumTwice = n => sum(n, 0) + sum(n, 0)
+// A value use keeps the public curried binding of sum (a private, saturated-only
+// function has none), so the regrouped calls below have something to regroup.
+let sumKeep = sum`;
 
 const fns = compileAndEval(src, "{ mix, viaTwin, viaPipe, viaPartial, sum, sumTwice }") as Fns;
 

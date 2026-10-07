@@ -131,14 +131,13 @@ export const defaultOpts: Opts = {
   plugins: None as Option<HostPlugin[]>,
   dtsTypeNames: new Map<string, string>(),
 };
-const afterBlanks$ = (s: string, i: number): Option<string> =>
+const afterBlanks = (s: string, i: number): Option<string> =>
   ((_v) =>
     _v._tag === "Some" && _v.value === " "
-      ? afterBlanks$(s, i + 1)
+      ? afterBlanks(s, i + 1)
       : _v._tag === "Some" && _v.value === "\t"
-        ? afterBlanks$(s, i + 1)
+        ? afterBlanks(s, i + 1)
         : ((other) => other)(_v))(_Str_get(i, s));
-const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(2, afterBlanks$);
 /**
  * The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
  * that intentionally reaches for host globals opts itself in, so a graph can
@@ -155,7 +154,7 @@ export const openDirective: (src: string) => boolean = (src: string) => {
           ? true
           : _v._tag === "Some" && _v.value === "r"
             ? true
-            : false)(afterBlanks$(t, 10)),
+            : false)(afterBlanks(t, 10)),
   );
 };
 const openMode$ = (src: string, requested: boolean): boolean => or(requested, openDirective(src));
@@ -165,7 +164,7 @@ const openMode$ = (src: string, requested: boolean): boolean => or(requested, op
 export const openMode: _Curry<[src: string, requested: boolean], boolean> = _curry(2, openMode$);
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
-const stampStage$ = (kind: string, e: StageErr): Stamped => ({
+const stampStage = (kind: string, e: StageErr): Stamped => ({
   kind: kind,
   message: e.message,
   start: e.start,
@@ -173,7 +172,6 @@ const stampStage$ = (kind: string, e: StageErr): Stamped => ({
   help: None as Option<string>,
   suggestions: noSuggestions,
 });
-const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(2, stampStage$);
 const stampType: <F>(
   e: {
     suggestions: { end: number; replaceWith: string; start: number; title: string }[];
@@ -198,7 +196,7 @@ const stampType: <F>(
   help: e.help,
   suggestions: e.suggestions,
 });
-const typecheckWith$ = (
+const typecheckWith = (
   prog: Stmt[],
   open: boolean,
   plugins: Option<HostPlugin[]>,
@@ -210,42 +208,30 @@ const typecheckWith$ = (
       inferProgramWith(prog, builtins, namespaces, open, plugins),
     ),
   );
-const typecheckWith: _Curry<
-  [prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(3, typecheckWith$);
-const frontend$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], Stamped[]> =>
+const frontend = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], Stamped[]> =>
   _Result_match(
     lex(src),
-    (e) => Err([stampStage$("lex", e)]) as Result<Stmt[], Stamped[]>,
+    (e) => Err([stampStage("lex", e)]) as Result<Stmt[], Stamped[]>,
     (tokens) => {
       const parsed: { stmts: Stmt[]; diagnostics: StageErr[] } = parseRecovering(tokens, plugins);
       return ((_v) =>
         _v.length === 0
           ? _Result_mapErr(
-              (es: StageErr[]) => map((e: StageErr) => stampStage$("check", e), es),
+              (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
               checkAll(parsed.stmts),
             )
           : ((ds) =>
-              Err(map((e: StageErr) => stampStage$("parse", e), ds)) as Result<Stmt[], Stamped[]>)(
+              Err(map((e: StageErr) => stampStage("parse", e), ds)) as Result<Stmt[], Stamped[]>)(
               _v,
             ))(parsed.diagnostics);
     },
   );
-const frontend: _Curry<
-  [src: string, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(2, frontend$);
-const pipelineWith$ = (
+const pipelineWith = (
   src: string,
   open: boolean,
   plugins: Option<HostPlugin[]>,
 ): Result<Stmt[], Stamped[]> =>
-  _Result_flatMap((stmts) => typecheckWith$(stmts, open, plugins), frontend$(src, plugins));
-const pipelineWith: _Curry<
-  [src: string, open: boolean, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(3, pipelineWith$);
+  _Result_flatMap((stmts) => typecheckWith(stmts, open, plugins), frontend(src, plugins));
 const typedProgramWith$ = (
   src: string,
   opts: Opts,
@@ -281,7 +267,7 @@ const typedProgramWith$ = (
           ),
         ),
       ),
-    frontend$(src, opts.plugins),
+    frontend(src, opts.plugins),
   );
 /**
  * typedProgram : string -> Result (stmts, InferResult) Err — the AST *and* its
@@ -315,7 +301,7 @@ export const typedProgram: (src: string) => Result<
   ],
   Stamped[]
 > = (src: string) => typedProgramWith$(src, defaultOpts);
-const typedQuery$ = (
+const typedQuery = (
   src: string,
   stmts: Stmt[],
   opts: Opts,
@@ -353,18 +339,6 @@ const typedQuery$ = (
       inferProgramTypesWith(stmts, builtins, namespaces, openMode$(src, opts.open), opts.plugins),
     ),
   );
-const typedQuery: _Curry<
-  [src: string, stmts: Stmt[], opts: Opts],
-  Result<
-    {
-      env: Map<string, Scheme>;
-      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, AliasInfo>;
-      letParams: TypeAt[];
-    },
-    Stamped[]
-  >
-> = _curry(3, typedQuery$);
 const inferTypesWith$ = (
   src: string,
   opts: Opts,
@@ -376,7 +350,7 @@ const inferTypesWith$ = (
     letParams: TypeAt[];
   },
   Stamped[]
-> => _Result_flatMap((stmts) => typedQuery$(src, stmts, opts), frontend$(src, opts.plugins));
+> => _Result_flatMap((stmts) => typedQuery(src, stmts, opts), frontend(src, opts.plugins));
 /**
  * inferTypes : string -> Result InferResult Err — strict typed-query seam
  * for host DX. Keeps the recorded span -> type table instead of discarding it.
@@ -408,7 +382,7 @@ const inferTypesRecoveringWith$ = (
   _Result_match(
     lex(src),
     (e) =>
-      Err([stampStage$("lex", e)]) as Result<
+      Err([stampStage("lex", e)]) as Result<
         {
           env: Map<string, Scheme>;
           types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
@@ -423,9 +397,9 @@ const inferTypesRecoveringWith$ = (
         opts.plugins,
       );
       return _Result_flatMap(
-        (stmts: Stmt[]) => typedQuery$(src, stmts, opts),
+        (stmts: Stmt[]) => typedQuery(src, stmts, opts),
         _Result_mapErr(
-          (es: StageErr[]) => map((e: StageErr) => stampStage$("check", e), es),
+          (es: StageErr[]) => map((e: StageErr) => stampStage("check", e), es),
           checkAll(parsed.stmts),
         ),
       );
@@ -500,7 +474,7 @@ export const emitJsWith: _Curry<[stmts: Stmt[], opts: Opts], string> = _curry(2,
 const compileWith$ = (src: string, opts: Opts): Result<string, Stamped[]> =>
   _Result_map(
     (prog: Stmt[]) => emitJsWith$(prog, opts),
-    pipelineWith$(src, openMode$(src, opts.open), opts.plugins),
+    pipelineWith(src, openMode$(src, opts.open), opts.plugins),
   );
 /**
  * compileWith : string -> Opts -> Result string Err
@@ -583,7 +557,7 @@ const compileTsWith$ = (
           ),
         ),
       ),
-    frontend$(src, opts.plugins),
+    frontend(src, opts.plugins),
   );
 /**
  * compileTs : string -> Result string Err — the SAME railway, but the typed

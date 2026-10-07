@@ -219,8 +219,8 @@ testEach("codegen emits runtime forms", [
   },
   {
     label: "curried multi-argument lambda",
-    src: "let addPair = (a, b) => add(a, b)",
-    want: "const addPair$ = (a, b) => add(a, b);\nconst addPair = _curry(2, addPair$);"
+    src: "export let addPair = (a, b) => add(a, b)",
+    want: "const addPair$ = (a, b) => add(a, b);\nexport const addPair = _curry(2, addPair$);"
   },
   {
     label: "record update",
@@ -336,7 +336,7 @@ testEach("GenOpts hooks reach their emission site", [
   {
     label: "annotateParams annotates params and scopes generics",
     src: "let addPair = (a, b) => add(a, b)",
-    want: "const addPair$ = <A, B>(a: A, b: B) =>"
+    want: "const addPair = <A, B>(a: A, b: B) =>"
   },
   {
     label: "annotateEmpty pins an empty map literal",
@@ -375,7 +375,7 @@ testEach("the JS backend leaves every hook slot bare", [
   {
     label: "bare lambda params",
     src: "let addPair = (a, b) => add(a, b)",
-    want: "const addPair$ = (a, b) =>"
+    want: "const addPair = (a, b) =>"
   },
   { label: "bare empty map", src: "let table = #{}", want: "new Map([])" },
   {
@@ -407,7 +407,7 @@ test("codegen matches codegenWith under the JS options", () =>
     genSrc("let addPair = (a, b) => add(a, b)") |> Result.unwrapOr("<error>")
   ))
 
-let rawFn = "let f = (a, b) => add(a, b)\n"
+let rawFn = "export let f = (a, b) => add(a, b)\n"
 
 testEach("a saturated call to a top-level function takes its raw twin (ADR 0149)", [
   {
@@ -418,7 +418,12 @@ testEach("a saturated call to a top-level function takes its raw twin (ADR 0149)
   {
     label: "the public binding is _curry over the twin",
     src: rawFn,
-    want: "const f$ = (a, b) => add(a, b);\nconst f = _curry(2, f$);"
+    want: "const f$ = (a, b) => add(a, b);\nexport const f = _curry(2, f$);"
+  },
+  {
+    label: "a private function called only saturated drops the public binding",
+    src: "let f = (a, b) => add(a, b)\nlet r = f(1, 2)",
+    want: "const f = (a, b) => add(a, b);\nconst r = f(1, 2);"
   },
   {
     label: "a partial call stays curried",
@@ -448,7 +453,7 @@ testEach("a saturated call to a top-level function takes its raw twin (ADR 0149)
   {
     label: "a recursive call inside the twin is saturated",
     src: "let go = (n, acc) => n == 0 ? acc : go(n - 1, acc * n)",
-    want: "go$("
+    want: "go(sub(n, 1)"
   }
 ], row => emitted(jsGenOpts, row.src) |> Str.contains(row.want) |> ok)
 

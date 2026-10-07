@@ -12,7 +12,7 @@ import {
   _recur,
 } from "@mochi/compiler/runtime";
 
-const skipStrLoop$ = (src: string, j0: number): Option<number> => {
+const skipStrLoop = (src: string, j0: number): Option<number> => {
   let j: number = j0;
   while (true) {
     const _step = ((_v) =>
@@ -44,8 +44,7 @@ const skipStrLoop$ = (src: string, j0: number): Option<number> => {
     return _step.value;
   }
 };
-const skipStrLoop: _Curry<[src: string, j0: number], Option<number>> = _curry(2, skipStrLoop$);
-const skipStringLiteral$ = (src: string, i: number): Option<number> => skipStrLoop$(src, i + 1);
+const skipStringLiteral$ = (src: string, i: number): Option<number> => skipStrLoop(src, i + 1);
 export const skipStringLiteral: _Curry<[src: string, i: number], Option<number>> = _curry(
   2,
   skipStringLiteral$,
@@ -65,7 +64,7 @@ export const skipLineCommentTo: _Curry<[src: string, j: number], number> = _curr
   2,
   skipLineCommentTo$,
 );
-const findHoleLoop$ = (src: string, j0: number, depth0: number): Option<number> => {
+const findHoleLoop = (src: string, j0: number, depth0: number): Option<number> => {
   let j: number = j0;
   let depth: number = depth0;
   while (true) {
@@ -98,11 +97,7 @@ const findHoleLoop$ = (src: string, j0: number, depth0: number): Option<number> 
     return _step.value;
   }
 };
-const findHoleLoop: _Curry<[src: string, j0: number, depth0: number], Option<number>> = _curry(
-  3,
-  findHoleLoop$,
-);
-const findHoleEnd$ = (src: string, start: number): Option<number> => findHoleLoop$(src, start, 1);
+const findHoleEnd$ = (src: string, start: number): Option<number> => findHoleLoop(src, start, 1);
 export const findHoleEnd: _Curry<[src: string, start: number], Option<number>> = _curry(
   2,
   findHoleEnd$,

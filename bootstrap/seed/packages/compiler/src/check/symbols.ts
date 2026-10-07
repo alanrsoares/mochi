@@ -144,13 +144,7 @@ const emptyOrigins: Origins = {
   types: new Map<string, Loc>(),
   ctors: new Map<string, Loc>(),
 };
-const occ$ = (
-  name: string,
-  space: string,
-  def: Loc,
-  span: SpanAt,
-  role: string,
-): SymOccurrence => ({
+const occ = (name: string, space: string, def: Loc, span: SpanAt, role: string): SymOccurrence => ({
   name: name,
   space: space,
   defPath: def.path,
@@ -160,16 +154,11 @@ const occ$ = (
   end: span.end,
   role: role,
 });
-const occ: _Curry<
-  [name: string, space: string, def: Loc, span: SpanAt, role: string],
-  SymOccurrence
-> = _curry(5, occ$);
-const locOf$ = (env: SymEnv, span: SpanAt): Loc => ({
+const locOf = (env: SymEnv, span: SpanAt): Loc => ({
   path: env.path,
   start: span.start,
   end: span.end,
 });
-const locOf: _Curry<[env: SymEnv, span: SpanAt], Loc> = _curry(2, locOf$);
 const upperStart: (s: string) => boolean = (s: string) =>
   _Option_match(
     _Str_codeAt(0, s),
@@ -177,48 +166,40 @@ const upperStart: (s: string) => boolean = (s: string) =>
     (c) => and(c >= 65, c <= 90),
   );
 const parked: (a: string) => boolean = _Str_startsWith("$");
-const orElse$ = (first: Option<Loc>, second: () => Option<Loc>): Option<Loc> =>
+const orElse = (first: Option<Loc>, second: () => Option<Loc>): Option<Loc> =>
   _Option_match(
     first,
     () => second(),
     (loc) => Some(loc) as Option<Loc>,
   );
-const orElse: _Curry<[first: Option<Loc>, second: () => Option<Loc>], Option<Loc>> = _curry(
-  2,
-  orElse$,
-);
-const lookup$ = (env: SymEnv, space: string, name: string): Option<Loc> =>
+const lookup = (env: SymEnv, space: string, name: string): Option<Loc> =>
   ((_v) =>
     _v === "value"
-      ? orElse$(_Map_get(name, env.locals), () =>
-          orElse$(_Map_get(name, env.top.values), () => _Map_get(name, env.prelude.origins.values)),
+      ? orElse(_Map_get(name, env.locals), () =>
+          orElse(_Map_get(name, env.top.values), () => _Map_get(name, env.prelude.origins.values)),
         )
       : _v === "type"
-        ? orElse$(_Map_get(name, env.top.types), () => _Map_get(name, env.prelude.origins.types))
-        : orElse$(_Map_get(name, env.top.ctors), () => _Map_get(name, env.prelude.origins.ctors)))(
+        ? orElse(_Map_get(name, env.top.types), () => _Map_get(name, env.prelude.origins.types))
+        : orElse(_Map_get(name, env.top.ctors), () => _Map_get(name, env.prelude.origins.ctors)))(
     space,
   );
-const lookup: _Curry<[env: SymEnv, space: string, name: string], Option<Loc>> = _curry(3, lookup$);
-const use$ = (env: SymEnv, space: string, name: string, span: SpanAt): SymOccurrence[] =>
+const use = (env: SymEnv, space: string, name: string, span: SpanAt): SymOccurrence[] =>
   _Option_match(
-    lookup$(env, space, name),
+    lookup(env, space, name),
     () => [] as SymOccurrence[],
-    (def) => [occ$(name, space, def, span, "use")],
+    (def) => [occ(name, space, def, span, "use")],
   );
-const use: _Curry<[env: SymEnv, space: string, name: string, span: SpanAt], SymOccurrence[]> =
-  _curry(4, use$);
-const walked$ = (occs: SymOccurrence[], fields: Map<string, Loc>): Walked => ({
+const walked = (occs: SymOccurrence[], fields: Map<string, Loc>): Walked => ({
   occs: occs,
   fields: fields,
   frames: [] as ScopeFrame[],
 });
-const walked: _Curry<[occs: SymOccurrence[], fields: Map<string, Loc>], Walked> = _curry(
-  2,
-  walked$,
-);
 const none: (fields: Map<string, Loc>) => Walked = (fields: Map<string, Loc>) =>
-  walked$([] as SymOccurrence[], fields);
-const andThen$ = (first: Walked, rest: (a: Map<string, Loc>) => Walked): Walked => {
+  walked([] as SymOccurrence[], fields);
+/**
+ * Run `rest` on the field table `first` leaves, and join their occurrences.
+ */
+const andThen = (first: Walked, rest: (a: Map<string, Loc>) => Walked): Walked => {
   const second: Walked = rest(first.fields);
   return {
     occs: _Array_concat(first.occs, second.occs),
@@ -226,20 +207,12 @@ const andThen$ = (first: Walked, rest: (a: Map<string, Loc>) => Walked): Walked 
     frames: _Array_concat(first.frames, second.frames),
   };
 };
-/**
- * Run `rest` on the field table `first` leaves, and join their occurrences.
- */
-const andThen: _Curry<[first: Walked, rest: (a: Map<string, Loc>) => Walked], Walked> = _curry(
-  2,
-  andThen$,
-);
-const prefixed$ = (occs: SymOccurrence[], w: Walked): Walked => ({
+const prefixed = (occs: SymOccurrence[], w: Walked): Walked => ({
   occs: _Array_concat(occs, w.occs),
   fields: w.fields,
   frames: w.frames,
 });
-const prefixed: _Curry<[occs: SymOccurrence[], w: Walked], Walked> = _curry(2, prefixed$);
-const sameLoc$ = (a: Option<Loc>, b: Option<Loc>): boolean =>
+const sameLoc = (a: Option<Loc>, b: Option<Loc>): boolean =>
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some"
       ? (([{ value: x }, { value: y }]) =>
@@ -252,11 +225,13 @@ const sameLoc$ = (a: Option<Loc>, b: Option<Loc>): boolean =>
       : _v[0]._tag === "None" && _v[1]._tag === "None"
         ? true
         : false)(_tuple(a, b));
-const sameLoc: _Curry<[a: Option<Loc>, b: Option<Loc>], boolean> = _curry(2, sameLoc$);
-const newBinds$ = (outer: SymEnv, inner: SymEnv): Map<string, Loc> =>
+/**
+ * The value binders `inner` holds that `outer` does not (or rebinds).
+ */
+const newBinds = (outer: SymEnv, inner: SymEnv): Map<string, Loc> =>
   reduce(
     _curry(2, (acc: Map<string, Loc>, name: string) =>
-      or(sameLoc$(_Map_get(name, outer.locals), _Map_get(name, inner.locals)), parked(name))
+      or(sameLoc(_Map_get(name, outer.locals), _Map_get(name, inner.locals)), parked(name))
         ? acc
         : _Option_match(
             _Map_get(name, inner.locals),
@@ -268,11 +243,11 @@ const newBinds$ = (outer: SymEnv, inner: SymEnv): Map<string, Loc> =>
     _Map_keys(inner.locals),
   );
 /**
- * The value binders `inner` holds that `outer` does not (or rebinds).
+ * Close a scope: record the binders `inner` added over `outer` as a frame
+ * live across `sp`, after the frames nested inside it.
  */
-const newBinds: _Curry<[outer: SymEnv, inner: SymEnv], Map<string, Loc>> = _curry(2, newBinds$);
-const framed$ = (outer: SymEnv, inner: SymEnv, sp: SpanAt, w: Walked): Walked => {
-  const binds: Map<string, Loc> = newBinds$(outer, inner);
+const framed = (outer: SymEnv, inner: SymEnv, sp: SpanAt, w: Walked): Walked => {
+  const binds: Map<string, Loc> = newBinds(outer, inner);
   return _Map_size(binds) === 0
     ? w
     : {
@@ -281,33 +256,24 @@ const framed$ = (outer: SymEnv, inner: SymEnv, sp: SpanAt, w: Walked): Walked =>
         frames: _Array_append({ start: sp.start, end: sp.end, binds: binds }, w.frames),
       };
 };
-/**
- * Close a scope: record the binders `inner` added over `outer` as a frame
- * live across `sp`, after the frames nested inside it.
- */
-const framed: _Curry<[outer: SymEnv, inner: SymEnv, sp: SpanAt, w: Walked], Walked> = _curry(
-  4,
-  framed$,
-);
-const touchField$ = (env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>): Walked =>
+const touchField = (env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>): Walked =>
   _Option_match(
     _Map_get(name, fields),
     () => {
-      const def: Loc = locOf$(env, span);
-      return walked$([occ$(name, "field", def, span, "def")], _Map_set(name, def, fields));
+      const def: Loc = locOf(env, span);
+      return walked([occ(name, "field", def, span, "def")], _Map_set(name, def, fields));
     },
-    (def) => walked$([occ$(name, "field", def, span, "use")], fields),
+    (def) => walked([occ(name, "field", def, span, "use")], fields),
   );
-const touchField: _Curry<
-  [env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, touchField$);
-const bindLocal$ = (
+/**
+ * Bind a local value in `env`'s innermost scope.
+ */
+const bindLocal = (
   env: SymEnv,
   name: string,
   span: SpanAt,
 ): { env: SymEnv; occ: SymOccurrence } => {
-  const def: Loc = locOf$(env, span);
+  const def: Loc = locOf(env, span);
   return {
     env: {
       path: env.path,
@@ -315,51 +281,37 @@ const bindLocal$ = (
       prelude: env.prelude,
       locals: _Map_set(name, def, env.locals),
     },
-    occ: occ$(name, "value", def, span, "def"),
+    occ: occ(name, "value", def, span, "def"),
   };
 };
-/**
- * Bind a local value in `env`'s innermost scope.
- */
-const bindLocal: _Curry<
-  [env: SymEnv, name: string, span: SpanAt],
-  { env: SymEnv; occ: SymOccurrence }
-> = _curry(3, bindLocal$);
-const bound$ = (env: SymEnv, occs: SymOccurrence[], fields: Map<string, Loc>): BoundScope => ({
+const bound = (env: SymEnv, occs: SymOccurrence[], fields: Map<string, Loc>): BoundScope => ({
   env: env,
   occs: occs,
   fields: fields,
   frames: [] as ScopeFrame[],
 });
-const bound: _Curry<[env: SymEnv, occs: SymOccurrence[], fields: Map<string, Loc>], BoundScope> =
-  _curry(3, bound$);
-const boundWith$ = (env: SymEnv, occs: SymOccurrence[], w: Walked): BoundScope => ({
+/**
+ * `bound`, keeping the frames of an expression walked on the way (a default).
+ */
+const boundWith = (env: SymEnv, occs: SymOccurrence[], w: Walked): BoundScope => ({
   env: env,
   occs: occs,
   fields: w.fields,
   frames: w.frames,
 });
-/**
- * `bound`, keeping the frames of an expression walked on the way (a default).
- */
-const boundWith: _Curry<[env: SymEnv, occs: SymOccurrence[], w: Walked], BoundScope> = _curry(
-  3,
-  boundWith$,
-);
-const bindName$ = (
+const bindName = (
   env: SymEnv,
   name: string,
   span: SpanAt,
   fields: Map<string, Loc>,
 ): BoundScope => {
-  const b: { env: SymEnv; occ: SymOccurrence } = bindLocal$(env, name, span);
-  return bound$(b.env, [b.occ], fields);
+  const b: { env: SymEnv; occ: SymOccurrence } = bindLocal(env, name, span);
+  return bound(b.env, [b.occ], fields);
 };
-const bindName: _Curry<
-  [env: SymEnv, name: string, span: SpanAt, fields: Map<string, Loc>],
-  BoundScope
-> = _curry(4, bindName$);
-const boundThen$ = (
+/**
+ * Continue a binder walk: `rest` sees the scope and field table `first` left.
+ */
+const boundThen = (
   first: BoundScope,
   rest: (a: SymEnv, b: Map<string, Loc>) => BoundScope,
 ): BoundScope => {
@@ -371,14 +323,7 @@ const boundThen$ = (
     frames: _Array_concat(first.frames, second.frames),
   };
 };
-/**
- * Continue a binder walk: `rest` sees the scope and field table `first` left.
- */
-const boundThen: _Curry<
-  [first: BoundScope, rest: (a: SymEnv, b: Map<string, Loc>) => BoundScope],
-  BoundScope
-> = _curry(2, boundThen$);
-const bindNames$ = (
+const bindNames = (
   env: SymEnv,
   names: string[],
   spans: SpanAt[],
@@ -388,96 +333,80 @@ const bindNames$ = (
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some"
       ? (([{ value: name }, { value: span }]) =>
-          boundThen$(
-            bindName$(env, name, span, fields),
-            _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindNames$(e, names, spans, i + 1, fs)),
+          boundThen(
+            bindName(env, name, span, fields),
+            _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindNames(e, names, spans, i + 1, fs)),
           ))(
           _v as [
             Extract<[Option<string>, Option<SpanAt>][0], { _tag: "Some" }>,
             Extract<[Option<string>, Option<SpanAt>][1], { _tag: "Some" }>,
           ],
         )
-      : bound$(env, [] as SymOccurrence[], fields))(
+      : bound(env, [] as SymOccurrence[], fields))(
     _tuple(_Array_get(i, names), _Array_get(i, spans)),
   );
-const bindNames: _Curry<
-  [env: SymEnv, names: string[], spans: SpanAt[], i: number, fields: Map<string, Loc>],
-  BoundScope
-> = _curry(5, bindNames$);
-const walkTypes$ = (env: SymEnv, types: TypeExpr[], i: number): SymOccurrence[] =>
+const walkTypes = (env: SymEnv, types: TypeExpr[], i: number): SymOccurrence[] =>
   _Option_match(
     _Array_get(i, types),
     () => [] as SymOccurrence[],
-    (t) => _Array_concat(walkType$(env, t), walkTypes$(env, types, i + 1)),
+    (t) => _Array_concat(walkType(env, t), walkTypes(env, types, i + 1)),
   );
-const walkTypes: _Curry<[env: SymEnv, types: TypeExpr[], i: number], SymOccurrence[]> = _curry(
-  3,
-  walkTypes$,
-);
-const walkType$ = (env: SymEnv, t: TypeExpr): SymOccurrence[] => {
+const walkType = (env: SymEnv, t: TypeExpr): SymOccurrence[] => {
   const $match = t;
   switch ($match._tag) {
     case "TyName": {
       const { name, span } = $match;
-      return upperStart(name) ? use$(env, "type", name, span) : ([] as SymOccurrence[]);
+      return upperStart(name) ? use(env, "type", name, span) : ([] as SymOccurrence[]);
     }
     case "TyArrow": {
       const { from, to } = $match;
-      return _Array_concat(walkType$(env, from), walkType$(env, to));
+      return _Array_concat(walkType(env, from), walkType(env, to));
     }
     case "TyApp": {
       const { ctor, args, span } = $match;
-      return _Array_concat(use$(env, "type", ctor, span), walkTypes$(env, args, 0));
+      return _Array_concat(use(env, "type", ctor, span), walkTypes(env, args, 0));
     }
     case "TyTuple": {
       const { elems } = $match;
-      return walkTypes$(env, elems, 0);
+      return walkTypes(env, elems, 0);
     }
     case "TyList": {
       const { elem } = $match;
-      return walkType$(env, elem);
+      return walkType(env, elem);
     }
     case "TyQual": {
       const { alias, name, nameSpan, args } = $match;
-      return _Array_concat(
-        use$(env, "type", `${alias}.${name}`, nameSpan),
-        walkTypes$(env, args, 0),
-      );
+      return _Array_concat(use(env, "type", `${alias}.${name}`, nameSpan), walkTypes(env, args, 0));
     }
     case "TyLit": {
       return [] as SymOccurrence[];
     }
     case "TyUnion": {
       const { members } = $match;
-      return walkTypes$(env, members, 0);
+      return walkTypes(env, members, 0);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const walkType: _Curry<[env: SymEnv, t: TypeExpr], SymOccurrence[]> = _curry(2, walkType$);
-const walkAnnot$ = (env: SymEnv, annot: Option<TypeExpr>): SymOccurrence[] =>
+const walkAnnot = (env: SymEnv, annot: Option<TypeExpr>): SymOccurrence[] =>
   _Option_match(
     annot,
     () => [] as SymOccurrence[],
-    (t) => walkType$(env, t),
+    (t) => walkType(env, t),
   );
-const walkAnnot: _Curry<[env: SymEnv, annot: Option<TypeExpr>], SymOccurrence[]> = _curry(
-  2,
-  walkAnnot$,
-);
-const bindParam$ = (env: SymEnv, param: LamParam, fields: Map<string, Loc>): BoundScope =>
+const bindParam = (env: SymEnv, param: LamParam, fields: Map<string, Loc>): BoundScope =>
   ((_v) =>
     _v._tag === "LPSpanned" && _v.param._tag === "LPName" && _v.nameSpans.length === 1
       ? (({ param: { name, annot }, nameSpans: [span] }) =>
           ((annotOccs: SymOccurrence[]) =>
             parked(name)
-              ? bound$(env, annotOccs, fields)
+              ? bound(env, annotOccs, fields)
               : ((b: { env: SymEnv; occ: SymOccurrence }) =>
-                  bound$(b.env, _Array_append(b.occ, annotOccs), fields))(
-                  bindLocal$(env, name, span),
-                ))(walkAnnot$(env, annot)))(
+                  bound(b.env, _Array_append(b.occ, annotOccs), fields))(
+                  bindLocal(env, name, span),
+                ))(walkAnnot(env, annot)))(
           _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
             param: Extract<Extract<LamParam, { _tag: "LPSpanned" }>["param"], { _tag: "LPName" }>;
           },
@@ -488,17 +417,17 @@ const bindParam$ = (env: SymEnv, param: LamParam, fields: Map<string, Loc>): Bou
               ((dflt: Walked) =>
                 ((before: SymOccurrence[]) =>
                   parked(name)
-                    ? boundWith$(env, before, dflt)
+                    ? boundWith(env, before, dflt)
                     : ((b: { env: SymEnv; occ: SymOccurrence }) =>
-                        boundWith$(b.env, _Array_append(b.occ, before), dflt))(
-                        bindLocal$(env, name, span),
+                        boundWith(b.env, _Array_append(b.occ, before), dflt))(
+                        bindLocal(env, name, span),
                       ))(_Array_concat(annotOccs, dflt.occs)))(
                 _Option_match(
                   defaultValue,
                   () => none(fields),
-                  (e) => walkExpr$(env, e, fields),
+                  (e) => walkExpr(env, e, fields),
                 ),
-              ))(walkAnnot$(env, annot)))(
+              ))(walkAnnot(env, annot)))(
             _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
               param: Extract<
                 Extract<LamParam, { _tag: "LPSpanned" }>["param"],
@@ -507,7 +436,7 @@ const bindParam$ = (env: SymEnv, param: LamParam, fields: Map<string, Loc>): Bou
             },
           )
         : _v._tag === "LPSpanned" && _v.param._tag === "LPTuple"
-          ? (({ param: { names }, nameSpans: spans }) => bindNames$(env, names, spans, 0, fields))(
+          ? (({ param: { names }, nameSpans: spans }) => bindNames(env, names, spans, 0, fields))(
               _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
                 param: Extract<
                   Extract<LamParam, { _tag: "LPSpanned" }>["param"],
@@ -517,7 +446,7 @@ const bindParam$ = (env: SymEnv, param: LamParam, fields: Map<string, Loc>): Bou
             )
           : _v._tag === "LPSpanned" && _v.param._tag === "LPRecord"
             ? (({ param: { fields: names }, nameSpans: spans }) =>
-                bindNames$(env, names, spans, 0, fields))(
+                bindNames(env, names, spans, 0, fields))(
                 _v as Extract<LamParam, { _tag: "LPSpanned" }> & {
                   param: Extract<
                     Extract<LamParam, { _tag: "LPSpanned" }>["param"],
@@ -526,21 +455,19 @@ const bindParam$ = (env: SymEnv, param: LamParam, fields: Map<string, Loc>): Bou
                 },
               )
             : _v._tag === "LPName"
-              ? (({ annot }) => bound$(env, walkAnnot$(env, annot), fields))(_v)
+              ? (({ annot }) => bound(env, walkAnnot(env, annot), fields))(_v)
               : _v._tag === "LPLabeled"
                 ? (({ annot, defaultValue }) =>
                     ((dflt: Walked) =>
-                      boundWith$(env, _Array_concat(walkAnnot$(env, annot), dflt.occs), dflt))(
+                      boundWith(env, _Array_concat(walkAnnot(env, annot), dflt.occs), dflt))(
                       _Option_match(
                         defaultValue,
                         () => none(fields),
-                        (e) => walkExpr$(env, e, fields),
+                        (e) => walkExpr(env, e, fields),
                       ),
                     ))(_v)
-                : bound$(env, [] as SymOccurrence[], fields))(param);
-const bindParam: _Curry<[env: SymEnv, param: LamParam, fields: Map<string, Loc>], BoundScope> =
-  _curry(3, bindParam$);
-const bindParams$ = (
+                : bound(env, [] as SymOccurrence[], fields))(param);
+const bindParams = (
   env: SymEnv,
   params: LamParam[],
   i: number,
@@ -548,42 +475,30 @@ const bindParams$ = (
 ): BoundScope =>
   _Option_match(
     _Array_get(i, params),
-    () => bound$(env, [] as SymOccurrence[], fields),
+    () => bound(env, [] as SymOccurrence[], fields),
     (param) =>
-      boundThen$(
-        bindParam$(env, param, fields),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindParams$(e, params, i + 1, fs)),
+      boundThen(
+        bindParam(env, param, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindParams(e, params, i + 1, fs)),
       ),
   );
-const bindParams: _Curry<
-  [env: SymEnv, params: LamParam[], i: number, fields: Map<string, Loc>],
-  BoundScope
-> = _curry(4, bindParams$);
-const walkPatOpt$ = (env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>): BoundScope =>
+const walkPatOpt = (env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>): BoundScope =>
   _Option_match(
     pat,
-    () => bound$(env, [] as SymOccurrence[], fields),
-    (p) => walkPat$(env, p, fields),
+    () => bound(env, [] as SymOccurrence[], fields),
+    (p) => walkPat(env, p, fields),
   );
-const walkPatOpt: _Curry<
-  [env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>],
-  BoundScope
-> = _curry(3, walkPatOpt$);
-const walkPats$ = (env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>): BoundScope =>
+const walkPats = (env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>): BoundScope =>
   _Option_match(
     _Array_get(i, pats),
-    () => bound$(env, [] as SymOccurrence[], fields),
+    () => bound(env, [] as SymOccurrence[], fields),
     (p) =>
-      boundThen$(
-        walkPat$(env, p, fields),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats$(e, pats, i + 1, fs)),
+      boundThen(
+        walkPat(env, p, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats(e, pats, i + 1, fs)),
       ),
   );
-const walkPats: _Curry<
-  [env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>],
-  BoundScope
-> = _curry(4, walkPats$);
-const walkPatFields$ = (
+const walkPatFields = (
   env: SymEnv,
   pfs: PatField[],
   i: number,
@@ -591,65 +506,61 @@ const walkPatFields$ = (
 ): BoundScope =>
   _Option_match(
     _Array_get(i, pfs),
-    () => bound$(env, [] as SymOccurrence[], fields),
+    () => bound(env, [] as SymOccurrence[], fields),
     (pf) => {
-      const label: Walked = touchField$(env, pf.label, pf.labelSpan, fields);
-      return boundThen$(
-        boundThen$(
-          bound$(env, label.occs, label.fields),
-          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPat$(e, pf.pat, fs)),
+      const label: Walked = touchField(env, pf.label, pf.labelSpan, fields);
+      return boundThen(
+        boundThen(
+          bound(env, label.occs, label.fields),
+          _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPat(e, pf.pat, fs)),
         ),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatFields$(e, pfs, i + 1, fs)),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatFields(e, pfs, i + 1, fs)),
       );
     },
   );
-const walkPatFields: _Curry<
-  [env: SymEnv, pfs: PatField[], i: number, fields: Map<string, Loc>],
-  BoundScope
-> = _curry(4, walkPatFields$);
-const walkPat$ = (env: SymEnv, pat: Pattern, fields: Map<string, Loc>): BoundScope => {
+const walkPat = (env: SymEnv, pat: Pattern, fields: Map<string, Loc>): BoundScope => {
   const $match = pat;
   switch ($match._tag) {
     case "PAs": {
       const { pat: inner, name, nameSpan } = $match;
-      return boundThen$(
-        walkPat$(env, inner, fields),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindName$(e, name, nameSpan, fs)),
+      return boundThen(
+        walkPat(env, inner, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindName(e, name, nameSpan, fs)),
       );
     }
     case "PBind": {
       const { name, span } = $match;
       return name === "_"
-        ? bound$(env, [] as SymOccurrence[], fields)
-        : bindName$(env, name, span, fields);
+        ? bound(env, [] as SymOccurrence[], fields)
+        : bindName(env, name, span, fields);
     }
     case "PCtor": {
       const { ctor, args, span } = $match;
-      return boundThen$(
-        bound$(env, use$(env, "ctor", ctor, span), fields),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats$(e, args, 0, fs)),
+      return boundThen(
+        bound(env, use(env, "ctor", ctor, span), fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPats(e, args, 0, fs)),
       );
     }
     case "PRecord": {
       const { fields: pfs } = $match;
-      return walkPatFields$(env, pfs, 0, fields);
+      return walkPatFields(env, pfs, 0, fields);
     }
     case "PTuple": {
       const { elems } = $match;
-      return walkPats$(env, elems, 0, fields);
+      return walkPats(env, elems, 0, fields);
     }
     case "PArr": {
       const { elems, rest } = $match;
-      return boundThen$(
-        walkPats$(env, elems, 0, fields),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt$(e, rest, fs)),
+      return boundThen(
+        walkPats(env, elems, 0, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt(e, rest, fs)),
       );
     }
     case "PList": {
       const { elems, rest } = $match;
-      return boundThen$(
-        walkPats$(env, elems, 0, fields),
-        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt$(e, rest, fs)),
+      return boundThen(
+        walkPats(env, elems, 0, fields),
+        _curry(2, (e: SymEnv, fs: Map<string, Loc>) => walkPatOpt(e, rest, fs)),
       );
     }
     case "POr": {
@@ -657,29 +568,25 @@ const walkPat$ = (env: SymEnv, pat: Pattern, fields: Map<string, Loc>): BoundSco
       return ((_v) =>
         _v.length >= 1
           ? (([first, ...rest]) =>
-              boundThen$(
-                walkPat$(env, first, fields),
+              boundThen(
+                walkPat(env, first, fields),
                 _curry(2, (e: SymEnv, fs: Map<string, Loc>) => {
-                  const uses: Walked = walkPatUsesList$(e, rest, 0, fs);
-                  return bound$(e, uses.occs, uses.fields);
+                  const uses: Walked = walkPatUsesList(e, rest, 0, fs);
+                  return bound(e, uses.occs, uses.fields);
                 }),
               ))(_v)
           : _v.length === 0
-            ? bound$(env, [] as SymOccurrence[], fields)
+            ? bound(env, [] as SymOccurrence[], fields)
             : (() => {
                 throw new Error("non-exhaustive match");
               })())(alts);
     }
     default: {
-      return bound$(env, [] as SymOccurrence[], fields);
+      return bound(env, [] as SymOccurrence[], fields);
     }
   }
 };
-const walkPat: _Curry<[env: SymEnv, pat: Pattern, fields: Map<string, Loc>], BoundScope> = _curry(
-  3,
-  walkPat$,
-);
-const walkPatUsesList$ = (
+const walkPatUsesList = (
   env: SymEnv,
   pats: Pattern[],
   i: number,
@@ -689,25 +596,17 @@ const walkPatUsesList$ = (
     _Array_get(i, pats),
     () => none(fields),
     (p) =>
-      andThen$(walkPatUses$(env, p, fields), (fs: Map<string, Loc>) =>
-        walkPatUsesList$(env, pats, i + 1, fs),
+      andThen(walkPatUses(env, p, fields), (fs: Map<string, Loc>) =>
+        walkPatUsesList(env, pats, i + 1, fs),
       ),
   );
-const walkPatUsesList: _Curry<
-  [env: SymEnv, pats: Pattern[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkPatUsesList$);
-const walkPatUsesOpt$ = (env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>): Walked =>
+const walkPatUsesOpt = (env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>): Walked =>
   _Option_match(
     pat,
     () => none(fields),
-    (p) => walkPatUses$(env, p, fields),
+    (p) => walkPatUses(env, p, fields),
   );
-const walkPatUsesOpt: _Curry<
-  [env: SymEnv, pat: Option<Pattern>, fields: Map<string, Loc>],
-  Walked
-> = _curry(3, walkPatUsesOpt$);
-const walkPatFieldUses$ = (
+const walkPatFieldUses = (
   env: SymEnv,
   pfs: PatField[],
   i: number,
@@ -717,83 +616,71 @@ const walkPatFieldUses$ = (
     _Array_get(i, pfs),
     () => none(fields),
     (pf) =>
-      andThen$(
-        andThen$(touchField$(env, pf.label, pf.labelSpan, fields), (fs: Map<string, Loc>) =>
-          walkPatUses$(env, pf.pat, fs),
+      andThen(
+        andThen(touchField(env, pf.label, pf.labelSpan, fields), (fs: Map<string, Loc>) =>
+          walkPatUses(env, pf.pat, fs),
         ),
-        (fs: Map<string, Loc>) => walkPatFieldUses$(env, pfs, i + 1, fs),
+        (fs: Map<string, Loc>) => walkPatFieldUses(env, pfs, i + 1, fs),
       ),
   );
-const walkPatFieldUses: _Curry<
-  [env: SymEnv, pfs: PatField[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkPatFieldUses$);
-const walkPatUses$ = (env: SymEnv, pat: Pattern, fields: Map<string, Loc>): Walked => {
+/**
+ * A pattern walk that records uses (ctors, fields) but binds nothing.
+ */
+const walkPatUses = (env: SymEnv, pat: Pattern, fields: Map<string, Loc>): Walked => {
   const $match = pat;
   switch ($match._tag) {
     case "PAs": {
       const { pat: inner } = $match;
-      return walkPatUses$(env, inner, fields);
+      return walkPatUses(env, inner, fields);
     }
     case "PCtor": {
       const { ctor, args, span } = $match;
-      return prefixed$(use$(env, "ctor", ctor, span), walkPatUsesList$(env, args, 0, fields));
+      return prefixed(use(env, "ctor", ctor, span), walkPatUsesList(env, args, 0, fields));
     }
     case "PRecord": {
       const { fields: pfs } = $match;
-      return walkPatFieldUses$(env, pfs, 0, fields);
+      return walkPatFieldUses(env, pfs, 0, fields);
     }
     case "PTuple": {
       const { elems } = $match;
-      return walkPatUsesList$(env, elems, 0, fields);
+      return walkPatUsesList(env, elems, 0, fields);
     }
     case "PArr": {
       const { elems, rest } = $match;
-      return andThen$(walkPatUsesList$(env, elems, 0, fields), (fs: Map<string, Loc>) =>
-        walkPatUsesOpt$(env, rest, fs),
+      return andThen(walkPatUsesList(env, elems, 0, fields), (fs: Map<string, Loc>) =>
+        walkPatUsesOpt(env, rest, fs),
       );
     }
     case "PList": {
       const { elems, rest } = $match;
-      return andThen$(walkPatUsesList$(env, elems, 0, fields), (fs: Map<string, Loc>) =>
-        walkPatUsesOpt$(env, rest, fs),
+      return andThen(walkPatUsesList(env, elems, 0, fields), (fs: Map<string, Loc>) =>
+        walkPatUsesOpt(env, rest, fs),
       );
     }
     case "POr": {
       const { alts } = $match;
-      return walkPatUsesList$(env, alts, 0, fields);
+      return walkPatUsesList(env, alts, 0, fields);
     }
     default: {
       return none(fields);
     }
   }
 };
-/**
- * A pattern walk that records uses (ctors, fields) but binds nothing.
- */
-const walkPatUses: _Curry<[env: SymEnv, pat: Pattern, fields: Map<string, Loc>], Walked> = _curry(
-  3,
-  walkPatUses$,
-);
-const walkExprs$ = (env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>): Walked =>
+const walkExprs = (env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>): Walked =>
   _Option_match(
     _Array_get(i, exprs),
     () => none(fields),
     (e) =>
-      andThen$(walkExpr$(env, e, fields), (fs: Map<string, Loc>) =>
-        walkExprs$(env, exprs, i + 1, fs),
-      ),
+      andThen(walkExpr(env, e, fields), (fs: Map<string, Loc>) => walkExprs(env, exprs, i + 1, fs)),
   );
-const walkExprs: _Curry<[env: SymEnv, exprs: Expr[], i: number, fields: Map<string, Loc>], Walked> =
-  _curry(4, walkExprs$);
-const walkSeqs$ = (env: SymEnv, elems: SeqElem[], i: number, fields: Map<string, Loc>): Walked =>
+const walkSeqs = (env: SymEnv, elems: SeqElem[], i: number, fields: Map<string, Loc>): Walked =>
   ((_v) =>
     _v._tag === "None"
       ? none(fields)
       : _v._tag === "Some" && _v.value._tag === "SEExpr"
         ? (({ value: { expr: e } }) =>
-            andThen$(walkExpr$(env, e, fields), (fs: Map<string, Loc>) =>
-              walkSeqs$(env, elems, i + 1, fs),
+            andThen(walkExpr(env, e, fields), (fs: Map<string, Loc>) =>
+              walkSeqs(env, elems, i + 1, fs),
             ))(
             _v as Extract<Option<SeqElem>, { _tag: "Some" }> & {
               value: Extract<
@@ -804,8 +691,8 @@ const walkSeqs$ = (env: SymEnv, elems: SeqElem[], i: number, fields: Map<string,
           )
         : _v._tag === "Some" && _v.value._tag === "SESpread"
           ? (({ value: { expr: e } }) =>
-              andThen$(walkExpr$(env, e, fields), (fs: Map<string, Loc>) =>
-                walkSeqs$(env, elems, i + 1, fs),
+              andThen(walkExpr(env, e, fields), (fs: Map<string, Loc>) =>
+                walkSeqs(env, elems, i + 1, fs),
               ))(
               _v as Extract<Option<SeqElem>, { _tag: "Some" }> & {
                 value: Extract<
@@ -817,11 +704,7 @@ const walkSeqs$ = (env: SymEnv, elems: SeqElem[], i: number, fields: Map<string,
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, elems));
-const walkSeqs: _Curry<
-  [env: SymEnv, elems: SeqElem[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkSeqs$);
-const walkInterp$ = (
+const walkInterp = (
   env: SymEnv,
   parts: InterpPart[],
   i: number,
@@ -831,11 +714,11 @@ const walkInterp$ = (
     _v._tag === "None"
       ? none(fields)
       : _v._tag === "Some" && _v.value._tag === "IPLit"
-        ? walkInterp$(env, parts, i + 1, fields)
+        ? walkInterp(env, parts, i + 1, fields)
         : _v._tag === "Some" && _v.value._tag === "IPExpr"
           ? (({ value: { expr: e } }) =>
-              andThen$(walkExpr$(env, e, fields), (fs: Map<string, Loc>) =>
-                walkInterp$(env, parts, i + 1, fs),
+              andThen(walkExpr(env, e, fields), (fs: Map<string, Loc>) =>
+                walkInterp(env, parts, i + 1, fs),
               ))(
               _v as Extract<Option<InterpPart>, { _tag: "Some" }> & {
                 value: Extract<
@@ -847,32 +730,19 @@ const walkInterp$ = (
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, parts));
-const walkInterp: _Curry<
-  [env: SymEnv, parts: InterpPart[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkInterp$);
-const walkRecordFields$ = (
-  env: SymEnv,
-  rfs: Field[],
-  i: number,
-  fields: Map<string, Loc>,
-): Walked =>
+const walkRecordFields = (env: SymEnv, rfs: Field[], i: number, fields: Map<string, Loc>): Walked =>
   _Option_match(
     _Array_get(i, rfs),
     () => none(fields),
     (f) =>
-      andThen$(
-        andThen$(touchField$(env, f.name, f.nameSpan, fields), (fs: Map<string, Loc>) =>
-          walkExpr$(env, f.value, fs),
+      andThen(
+        andThen(touchField(env, f.name, f.nameSpan, fields), (fs: Map<string, Loc>) =>
+          walkExpr(env, f.value, fs),
         ),
-        (fs: Map<string, Loc>) => walkRecordFields$(env, rfs, i + 1, fs),
+        (fs: Map<string, Loc>) => walkRecordFields(env, rfs, i + 1, fs),
       ),
   );
-const walkRecordFields: _Curry<
-  [env: SymEnv, rfs: Field[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkRecordFields$);
-const walkEntries$ = (
+const walkEntries = (
   env: SymEnv,
   entries: MapEntry[],
   i: number,
@@ -882,42 +752,34 @@ const walkEntries$ = (
     _Array_get(i, entries),
     () => none(fields),
     (entry) =>
-      andThen$(
-        andThen$(walkExpr$(env, entry.key, fields), (fs: Map<string, Loc>) =>
-          walkExpr$(env, entry.value, fs),
+      andThen(
+        andThen(walkExpr(env, entry.key, fields), (fs: Map<string, Loc>) =>
+          walkExpr(env, entry.value, fs),
         ),
-        (fs: Map<string, Loc>) => walkEntries$(env, entries, i + 1, fs),
+        (fs: Map<string, Loc>) => walkEntries(env, entries, i + 1, fs),
       ),
   );
-const walkEntries: _Curry<
-  [env: SymEnv, entries: MapEntry[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkEntries$);
-const walkArms$ = (env: SymEnv, arms: MatchArm[], i: number, fields: Map<string, Loc>): Walked =>
+const walkArms = (env: SymEnv, arms: MatchArm[], i: number, fields: Map<string, Loc>): Walked =>
   _Option_match(
     _Array_get(i, arms),
     () => none(fields),
     (arm) => {
-      const pat: BoundScope = walkPat$(env, arm.pattern, fields);
+      const pat: BoundScope = walkPat(env, arm.pattern, fields);
       const guard: Walked = _Option_match(
         arm.guard,
         () => none(pat.fields),
-        (g) => walkExpr$(pat.env, g, pat.fields),
+        (g) => walkExpr(pat.env, g, pat.fields),
       );
-      const body: Walked = andThen$(prefixed$(pat.occs, guard), (fs: Map<string, Loc>) =>
-        walkExpr$(pat.env, arm.body, fs),
+      const body: Walked = andThen(prefixed(pat.occs, guard), (fs: Map<string, Loc>) =>
+        walkExpr(pat.env, arm.body, fs),
       );
       const armSpan: SpanAt = { start: patSpan(arm.pattern).start, end: exprSpan(arm.body).end };
-      return andThen$(framed$(env, pat.env, armSpan, body), (fs: Map<string, Loc>) =>
-        walkArms$(env, arms, i + 1, fs),
+      return andThen(framed(env, pat.env, armSpan, body), (fs: Map<string, Loc>) =>
+        walkArms(env, arms, i + 1, fs),
       );
     },
   );
-const walkArms: _Curry<
-  [env: SymEnv, arms: MatchArm[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkArms$);
-const walkLoopInits$ = (
+const walkLoopInits = (
   env: SymEnv,
   params: LoopParam[],
   i: number,
@@ -927,14 +789,10 @@ const walkLoopInits$ = (
     _Array_get(i, params),
     () => none(fields),
     (param) =>
-      andThen$(walkExpr$(env, param.init, fields), (fs: Map<string, Loc>) =>
-        walkLoopInits$(env, params, i + 1, fs),
+      andThen(walkExpr(env, param.init, fields), (fs: Map<string, Loc>) =>
+        walkLoopInits(env, params, i + 1, fs),
       ),
   );
-const walkLoopInits: _Curry<
-  [env: SymEnv, params: LoopParam[], i: number, fields: Map<string, Loc>],
-  Walked
-> = _curry(4, walkLoopInits$);
 const bindLoopParams: <A>(
   env: SymEnv,
   params: ({ name: string; nameSpan: SpanAt } & A)[],
@@ -950,16 +808,16 @@ const bindLoopParams: <A>(
   ) =>
     _Option_match(
       _Array_get(i, params),
-      () => bound$(env, [] as SymOccurrence[], fields),
+      () => bound(env, [] as SymOccurrence[], fields),
       (param) =>
-        boundThen$(
-          bindName$(env, param.name, param.nameSpan, fields),
+        boundThen(
+          bindName(env, param.name, param.nameSpan, fields),
           _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindLoopParams(e, params, i + 1, fs)),
         ),
     ),
 );
 
-const letRun$ = (e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]): LetRun => {
+const letRun = (e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]): LetRun => {
   const $match = e;
   switch ($match._tag) {
     case "ELetIn": {
@@ -967,7 +825,7 @@ const letRun$ = (e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]): LetR
       const $match$ = value;
       switch ($match$._tag) {
         case "ELambda": {
-          return letRun$(body, _Array_append(_tuple(name, nameSpan, annot, value), acc));
+          return letRun(body, _Array_append(_tuple(name, nameSpan, annot, value), acc));
         }
         default: {
           return { binders: acc, tail: e };
@@ -979,10 +837,6 @@ const letRun$ = (e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]): LetR
     }
   }
 };
-const letRun: _Curry<[e: Expr, acc: [string, SpanAt, Option<TypeExpr>, Expr][]], LetRun> = _curry(
-  2,
-  letRun$,
-);
 const bindRun: <A, B>(
   env: SymEnv,
   binders: [string, SpanAt, A, B][],
@@ -992,18 +846,18 @@ const bindRun: <A, B>(
   4,
   <A, B>(env: SymEnv, binders: [string, SpanAt, A, B][], i: number, fields: Map<string, Loc>) =>
     match(_Array_get(i, binders))
-      .with({ _tag: "None" }, () => bound$(env, [] as SymOccurrence[], fields))
+      .with({ _tag: "None" }, () => bound(env, [] as SymOccurrence[], fields))
       .with(
         (_v) => _v._tag === "Some",
         ({ value: [name, nameSpan, ,] }) =>
-          boundThen$(
-            bindName$(env, name, nameSpan, fields),
+          boundThen(
+            bindName(env, name, nameSpan, fields),
             _curry(2, (e: SymEnv, fs: Map<string, Loc>) => bindRun(e, binders, i + 1, fs)),
           ),
       )
       .exhaustive(),
 );
-const walkRunValues$ = (
+const walkRunValues = (
   env: SymEnv,
   binders: [string, SpanAt, Option<TypeExpr>, Expr][],
   i: number,
@@ -1014,95 +868,77 @@ const walkRunValues$ = (
       ? none(fields)
       : _v._tag === "Some"
         ? (({ value: [, , annot, value] }) =>
-            andThen$(
-              prefixed$(walkAnnot$(env, annot), walkExpr$(env, value, fields)),
-              (fs: Map<string, Loc>) => walkRunValues$(env, binders, i + 1, fs),
+            andThen(
+              prefixed(walkAnnot(env, annot), walkExpr(env, value, fields)),
+              (fs: Map<string, Loc>) => walkRunValues(env, binders, i + 1, fs),
             ))(_v as Extract<Option<[string, SpanAt, Option<TypeExpr>, Expr]>, { _tag: "Some" }>)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(_Array_get(i, binders));
-const walkRunValues: _Curry<
-  [
-    env: SymEnv,
-    binders: [string, SpanAt, Option<TypeExpr>, Expr][],
-    i: number,
-    fields: Map<string, Loc>,
-  ],
-  Walked
-> = _curry(4, walkRunValues$);
-const walkLetRun$ = (env: SymEnv, run: LetRun, fields: Map<string, Loc>): Walked => {
+const walkLetRun = (env: SymEnv, run: LetRun, fields: Map<string, Loc>): Walked => {
   const scope: BoundScope = bindRun(env, run.binders, 0, fields);
-  return framed$(
+  return framed(
     env,
     scope.env,
     exprSpan(run.tail),
-    prefixed$(
+    prefixed(
       scope.occs,
-      andThen$(walkRunValues$(scope.env, run.binders, 0, scope.fields), (fs: Map<string, Loc>) =>
-        walkExpr$(scope.env, run.tail, fs),
+      andThen(walkRunValues(scope.env, run.binders, 0, scope.fields), (fs: Map<string, Loc>) =>
+        walkExpr(scope.env, run.tail, fs),
       ),
     ),
   );
 };
-const walkLetRun: _Curry<[env: SymEnv, run: LetRun, fields: Map<string, Loc>], Walked> = _curry(
-  3,
-  walkLetRun$,
-);
-const fieldNameSpan$ = (span: SpanAt, name: string): SpanAt => ({
+const fieldNameSpan = (span: SpanAt, name: string): SpanAt => ({
   start: span.end - _Str_length(name),
   end: span.end,
 });
-const fieldNameSpan: _Curry<[span: SpanAt, name: string], SpanAt> = _curry(2, fieldNameSpan$);
-const walkFieldAccess$ = (
+const walkFieldAccess = (
   env: SymEnv,
   target: Expr,
   name: string,
   span: SpanAt,
   fields: Map<string, Loc>,
 ): Walked => {
-  const nameSpan: SpanAt = fieldNameSpan$(span, name);
+  const nameSpan: SpanAt = fieldNameSpan(span, name);
   const member: Option<Loc> = ((_v) =>
     _v._tag === "ERef"
       ? (({ name: ns }) => _Map_get(`${ns}.${name}`, env.prelude.members))(_v)
       : (None as Option<Loc>))(target);
-  return andThen$(walkExpr$(env, target, fields), (fs: Map<string, Loc>) =>
+  return andThen(walkExpr(env, target, fields), (fs: Map<string, Loc>) =>
     _Option_match(
       member,
-      () => touchField$(env, name, nameSpan, fs),
-      (def) => walked$([occ$(name, "value", def, nameSpan, "use")], fs),
+      () => touchField(env, name, nameSpan, fs),
+      (def) => walked([occ(name, "value", def, nameSpan, "use")], fs),
     ),
   );
 };
-const walkFieldAccess: _Curry<
-  [env: SymEnv, target: Expr, name: string, span: SpanAt, fields: Map<string, Loc>],
-  Walked
-> = _curry(5, walkFieldAccess$);
-const walkExpr$ = (env: SymEnv, expr: Expr, fields: Map<string, Loc>): Walked => {
+const walkExpr = (env: SymEnv, expr: Expr, fields: Map<string, Loc>): Walked => {
   const $match = expr;
   switch ($match._tag) {
     case "ERef": {
       const { name, span } = $match;
       return parked(name)
         ? none(fields)
-        : and(upperStart(name), lookup$(env, "ctor", name)._tag !== "None")
-          ? walked$(use$(env, "ctor", name, span), fields)
-          : walked$(use$(env, "value", name, span), fields);
+        : and(upperStart(name), lookup(env, "ctor", name)._tag !== "None")
+          ? walked(use(env, "ctor", name, span), fields)
+          : walked(use(env, "value", name, span), fields);
     }
     case "EInterp": {
       const { parts } = $match;
-      return walkInterp$(env, parts, 0, fields);
+      return walkInterp(env, parts, 0, fields);
     }
     case "ECall": {
       const { fn, args } = $match;
-      return andThen$(walkExpr$(env, fn, fields), (fs: Map<string, Loc>) =>
-        walkExprs$(env, args, 0, fs),
+      return andThen(walkExpr(env, fn, fields), (fs: Map<string, Loc>) =>
+        walkExprs(env, args, 0, fs),
       );
     }
     case "ELambda": {
       const { params, body, span: sp } = $match;
-      const scope: BoundScope = bindParams$(env, params, 0, fields);
-      const inner: Walked = walkExpr$(scope.env, body, scope.fields);
-      return framed$(env, scope.env, sp, {
+      const scope: BoundScope = bindParams(env, params, 0, fields);
+      const inner: Walked = walkExpr(scope.env, body, scope.fields);
+      return framed(env, scope.env, sp, {
         occs: _Array_concat(scope.occs, inner.occs),
         fields: inner.fields,
         frames: _Array_concat(scope.frames, inner.frames),
@@ -1113,24 +949,24 @@ const walkExpr$ = (env: SymEnv, expr: Expr, fields: Map<string, Loc>): Walked =>
       const $match$ = value;
       switch ($match$._tag) {
         case "ELambda": {
-          return walkLetRun$(
+          return walkLetRun(
             env,
-            letRun$(expr, [] as [string, SpanAt, Option<TypeExpr>, Expr][]),
+            letRun(expr, [] as [string, SpanAt, Option<TypeExpr>, Expr][]),
             fields,
           );
         }
         default: {
-          const v: Walked = walkExpr$(env, value, fields);
-          const scope: BoundScope = bindName$(env, name, nameSpan, v.fields);
-          const inner: Walked = framed$(
+          const v: Walked = walkExpr(env, value, fields);
+          const scope: BoundScope = bindName(env, name, nameSpan, v.fields);
+          const inner: Walked = framed(
             env,
             scope.env,
             exprSpan(body),
-            walkExpr$(scope.env, body, scope.fields),
+            walkExpr(scope.env, body, scope.fields),
           );
           return {
             occs: _Array_concat(
-              _Array_concat(v.occs, _Array_concat(walkAnnot$(env, annot), scope.occs)),
+              _Array_concat(v.occs, _Array_concat(walkAnnot(env, annot), scope.occs)),
               inner.occs,
             ),
             fields: inner.fields,
@@ -1141,13 +977,13 @@ const walkExpr$ = (env: SymEnv, expr: Expr, fields: Map<string, Loc>): Walked =>
     }
     case "ELetBind": {
       const { param, value, body } = $match;
-      const v: Walked = walkExpr$(env, value, fields);
-      const scope: BoundScope = bindParam$(env, param, v.fields);
-      const inner: Walked = framed$(
+      const v: Walked = walkExpr(env, value, fields);
+      const scope: BoundScope = bindParam(env, param, v.fields);
+      const inner: Walked = framed(
         env,
         scope.env,
         exprSpan(body),
-        walkExpr$(scope.env, body, scope.fields),
+        walkExpr(scope.env, body, scope.fields),
       );
       return {
         occs: _Array_concat(_Array_concat(v.occs, scope.occs), inner.occs),
@@ -1157,13 +993,13 @@ const walkExpr$ = (env: SymEnv, expr: Expr, fields: Map<string, Loc>): Walked =>
     }
     case "ELoop": {
       const { params, body } = $match;
-      const inits: Walked = walkLoopInits$(env, params, 0, fields);
+      const inits: Walked = walkLoopInits(env, params, 0, fields);
       const scope: BoundScope = bindLoopParams(env, params, 0, inits.fields);
-      const inner: Walked = framed$(
+      const inner: Walked = framed(
         env,
         scope.env,
         exprSpan(body),
-        walkExpr$(scope.env, body, scope.fields),
+        walkExpr(scope.env, body, scope.fields),
       );
       return {
         occs: _Array_concat(_Array_concat(inits.occs, scope.occs), inner.occs),
@@ -1173,102 +1009,96 @@ const walkExpr$ = (env: SymEnv, expr: Expr, fields: Map<string, Loc>): Walked =>
     }
     case "ERecur": {
       const { args } = $match;
-      return walkExprs$(env, args, 0, fields);
+      return walkExprs(env, args, 0, fields);
     }
     case "EPipe": {
       const { left, right } = $match;
-      return andThen$(walkExpr$(env, left, fields), (fs: Map<string, Loc>) =>
-        walkExpr$(env, right, fs),
+      return andThen(walkExpr(env, left, fields), (fs: Map<string, Loc>) =>
+        walkExpr(env, right, fs),
       );
     }
     case "EDo": {
       const { exprs } = $match;
-      return walkExprs$(env, exprs, 0, fields);
+      return walkExprs(env, exprs, 0, fields);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return walkExprs$(env, [cond, thenE, elseE], 0, fields);
+      return walkExprs(env, [cond, thenE, elseE], 0, fields);
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      return andThen$(walkExpr$(env, scrutinee, fields), (fs: Map<string, Loc>) =>
-        walkArms$(env, arms, 0, fs),
+      return andThen(walkExpr(env, scrutinee, fields), (fs: Map<string, Loc>) =>
+        walkArms(env, arms, 0, fs),
       );
     }
     case "ERecord": {
       const { fields: rfs, spread } = $match;
       return _Option_match(
         spread,
-        () => walkRecordFields$(env, rfs, 0, fields),
+        () => walkRecordFields(env, rfs, 0, fields),
         (base) =>
-          andThen$(walkExpr$(env, base, fields), (fs: Map<string, Loc>) =>
-            walkRecordFields$(env, rfs, 0, fs),
+          andThen(walkExpr(env, base, fields), (fs: Map<string, Loc>) =>
+            walkRecordFields(env, rfs, 0, fs),
           ),
       );
     }
     case "EField": {
       const { target, name, span } = $match;
-      return walkFieldAccess$(env, target, name, span, fields);
+      return walkFieldAccess(env, target, name, span, fields);
     }
     case "ETuple": {
       const { elements } = $match;
-      return walkExprs$(env, elements, 0, fields);
+      return walkExprs(env, elements, 0, fields);
     }
     case "EArr": {
       const { elements } = $match;
-      return walkSeqs$(env, elements, 0, fields);
+      return walkSeqs(env, elements, 0, fields);
     }
     case "EList": {
       const { elements } = $match;
-      return walkSeqs$(env, elements, 0, fields);
+      return walkSeqs(env, elements, 0, fields);
     }
     case "ESet": {
       const { elements } = $match;
-      return walkSeqs$(env, elements, 0, fields);
+      return walkSeqs(env, elements, 0, fields);
     }
     case "EMap": {
       const { entries } = $match;
-      return walkEntries$(env, entries, 0, fields);
+      return walkEntries(env, entries, 0, fields);
     }
     default: {
       return none(fields);
     }
   }
 };
-const walkExpr: _Curry<[env: SymEnv, expr: Expr, fields: Map<string, Loc>], Walked> = _curry(
-  3,
-  walkExpr$,
-);
 
-const withValue$ = (o: Origins, name: string, def: Loc): Origins => ({
+const withValue = (o: Origins, name: string, def: Loc): Origins => ({
   values: _Map_set(name, def, o.values),
   types: o.types,
   ctors: o.ctors,
 });
-const withValue: _Curry<[o: Origins, name: string, def: Loc], Origins> = _curry(3, withValue$);
-const withType$ = (o: Origins, name: string, def: Loc): Origins => ({
+const withType = (o: Origins, name: string, def: Loc): Origins => ({
   values: o.values,
   types: _Map_set(name, def, o.types),
   ctors: o.ctors,
 });
-const withType: _Curry<[o: Origins, name: string, def: Loc], Origins> = _curry(3, withType$);
-const withCtor$ = (o: Origins, name: string, def: Loc): Origins => ({
+const withCtor = (o: Origins, name: string, def: Loc): Origins => ({
   values: o.values,
   types: o.types,
   ctors: _Map_set(name, def, o.ctors),
 });
-const withCtor: _Curry<[o: Origins, name: string, def: Loc], Origins> = _curry(3, withCtor$);
-const topThen$ = (
+const topThen = (
   first: TopScope,
   occs: SymOccurrence[],
   top: Origins,
   fields: Map<string, Loc>,
 ): TopScope => ({ top: top, occs: _Array_concat(first.occs, occs), fields: fields });
-const topThen: _Curry<
-  [first: TopScope, occs: SymOccurrence[], top: Origins, fields: Map<string, Loc>],
-  TopScope
-> = _curry(4, topThen$);
-const bindImport$ = (
+/**
+ * An imported name resolves to its export site when `origins` has it: a ctor
+ * (also seeded as a value, for non-call uses), then a value, then a type.
+ * Unresolved, the import itself is the def.
+ */
+const bindImport = (
   env: SymEnv,
   origins: Origins,
   acc: TopScope,
@@ -1278,10 +1108,10 @@ const bindImport$ = (
   ((_v) =>
     _v[0]._tag === "Some"
       ? (([{ value: def }, ,]) =>
-          topThen$(
+          topThen(
             acc,
-            [occ$(name, "ctor", def, span, "use")],
-            withValue$(withCtor$(acc.top, name, def), name, def),
+            [occ(name, "ctor", def, span, "use")],
+            withValue(withCtor(acc.top, name, def), name, def),
             acc.fields,
           ))(
           _v as [
@@ -1292,10 +1122,10 @@ const bindImport$ = (
         )
       : _v[0]._tag === "None" && _v[1]._tag === "Some"
         ? (([, { value: def }]) =>
-            topThen$(
+            topThen(
               acc,
-              [occ$(name, "value", def, span, "use")],
-              withValue$(acc.top, name, def),
+              [occ(name, "value", def, span, "use")],
+              withValue(acc.top, name, def),
               acc.fields,
             ))(
             _v as [
@@ -1306,10 +1136,10 @@ const bindImport$ = (
           )
         : _v[0]._tag === "None" && _v[1]._tag === "None" && _v[2]._tag === "Some"
           ? (([, , { value: def }]) =>
-              topThen$(
+              topThen(
                 acc,
-                [occ$(name, "type", def, span, "use")],
-                withType$(acc.top, name, def),
+                [occ(name, "type", def, span, "use")],
+                withType(acc.top, name, def),
                 acc.fields,
               ))(
               _v as [
@@ -1319,27 +1149,18 @@ const bindImport$ = (
               ],
             )
           : ((def: Loc) =>
-              topThen$(
+              topThen(
                 acc,
-                [occ$(name, "value", def, span, "def")],
-                withValue$(acc.top, name, def),
+                [occ(name, "value", def, span, "def")],
+                withValue(acc.top, name, def),
                 acc.fields,
-              ))(locOf$(env, span)))(
+              ))(locOf(env, span)))(
     _tuple(
       _Map_get(name, origins.ctors),
       _Map_get(name, origins.values),
       _Map_get(name, origins.types),
     ),
   );
-/**
- * An imported name resolves to its export site when `origins` has it: a ctor
- * (also seeded as a value, for non-call uses), then a value, then a type.
- * Unresolved, the import itself is the def.
- */
-const bindImport: _Curry<
-  [env: SymEnv, origins: Origins, acc: TopScope, name: string, span: SpanAt],
-  TopScope
-> = _curry(5, bindImport$);
 const bindImports: <A>(
   env: SymEnv,
   origins: Origins,
@@ -1358,22 +1179,21 @@ const bindImports: <A>(
     _Option_match(
       _Array_get(i, names),
       () => acc,
-      (n) =>
-        bindImports(env, origins, bindImport$(env, origins, acc, n.name, n.span), names, i + 1),
+      (n) => bindImports(env, origins, bindImport(env, origins, acc, n.name, n.span), names, i + 1),
     ),
 );
-const bindCtors$ = (env: SymEnv, acc: TopScope, ctors: Ctor[], i: number): TopScope =>
+const bindCtors = (env: SymEnv, acc: TopScope, ctors: Ctor[], i: number): TopScope =>
   _Option_match(
     _Array_get(i, ctors),
     () => acc,
     (c) => {
-      const def: Loc = locOf$(env, c.span);
-      return bindCtors$(
+      const def: Loc = locOf(env, c.span);
+      return bindCtors(
         env,
-        topThen$(
+        topThen(
           acc,
-          [occ$(c.name, "ctor", def, c.span, "def")],
-          withCtor$(acc.top, c.name, def),
+          [occ(c.name, "ctor", def, c.span, "def")],
+          withCtor(acc.top, c.name, def),
           acc.fields,
         ),
         ctors,
@@ -1381,35 +1201,25 @@ const bindCtors$ = (env: SymEnv, acc: TopScope, ctors: Ctor[], i: number): TopSc
       );
     },
   );
-const bindCtors: _Curry<[env: SymEnv, acc: TopScope, ctors: Ctor[], i: number], TopScope> = _curry(
-  4,
-  bindCtors$,
-);
-const touchAliasFields$ = (env: SymEnv, acc: TopScope, afs: AliasField[], i: number): TopScope =>
+const touchAliasFields = (env: SymEnv, acc: TopScope, afs: AliasField[], i: number): TopScope =>
   _Option_match(
     _Array_get(i, afs),
     () => acc,
     (f) => {
-      const w: Walked = touchField$(env, f.name, f.nameSpan, acc.fields);
-      return touchAliasFields$(env, topThen$(acc, w.occs, acc.top, w.fields), afs, i + 1);
+      const w: Walked = touchField(env, f.name, f.nameSpan, acc.fields);
+      return touchAliasFields(env, topThen(acc, w.occs, acc.top, w.fields), afs, i + 1);
     },
   );
-const touchAliasFields: _Curry<
-  [env: SymEnv, acc: TopScope, afs: AliasField[], i: number],
-  TopScope
-> = _curry(4, touchAliasFields$);
-const bindTopValue$ = (env: SymEnv, acc: TopScope, name: string, span: SpanAt): TopScope => {
-  const def: Loc = locOf$(env, span);
-  return topThen$(
+const bindTopValue = (env: SymEnv, acc: TopScope, name: string, span: SpanAt): TopScope => {
+  const def: Loc = locOf(env, span);
+  return topThen(
     acc,
-    [occ$(name, "value", def, span, "def")],
-    withValue$(acc.top, name, def),
+    [occ(name, "value", def, span, "def")],
+    withValue(acc.top, name, def),
     acc.fields,
   );
 };
-const bindTopValue: _Curry<[env: SymEnv, acc: TopScope, name: string, span: SpanAt], TopScope> =
-  _curry(4, bindTopValue$);
-const bindTopLevels$ = (
+const bindTopLevels = (
   env: SymEnv,
   origins: Origins,
   stmts: Stmt[],
@@ -1420,14 +1230,14 @@ const bindTopLevels$ = (
     _Array_get(i, stmts),
     () => acc,
     (stmt) =>
-      bindTopLevels$(
+      bindTopLevels(
         env,
         origins,
         stmts,
         i + 1,
         ((_v) =>
           _v._tag === "SImportNs"
-            ? (({ alias }) => bindTopValue$(env, acc, alias.name, alias.span))(_v)
+            ? (({ alias }) => bindTopValue(env, acc, alias.name, alias.span))(_v)
             : _v._tag === "SImport"
               ? (({ names }) => bindImports(env, origins, acc, names, 0))(_v)
               : _v._tag === "SType"
@@ -1437,48 +1247,44 @@ const bindTopLevels$ = (
                         _Option_match(
                           alias,
                           () => withCtors,
-                          (afs) => touchAliasFields$(env, withCtors, afs, 0),
+                          (afs) => touchAliasFields(env, withCtors, afs, 0),
                         ))(
-                        bindCtors$(
+                        bindCtors(
                           env,
-                          topThen$(
+                          topThen(
                             acc,
-                            [occ$(name, "type", def, nameSpan, "def")],
-                            withType$(acc.top, name, def),
+                            [occ(name, "type", def, nameSpan, "def")],
+                            withType(acc.top, name, def),
                             acc.fields,
                           ),
                           ctors,
                           0,
                         ),
-                      ))(locOf$(env, nameSpan)))(_v)
+                      ))(locOf(env, nameSpan)))(_v)
                 : _v._tag === "SLet"
                   ? (({ name, nameSpan }) =>
-                      parked(name) ? acc : bindTopValue$(env, acc, name, nameSpan))(_v)
+                      parked(name) ? acc : bindTopValue(env, acc, name, nameSpan))(_v)
                   : _v._tag === "SExtern"
-                    ? (({ name, nameSpan }) => bindTopValue$(env, acc, name, nameSpan))(_v)
+                    ? (({ name, nameSpan }) => bindTopValue(env, acc, name, nameSpan))(_v)
                     : acc)(stmt),
       ),
   );
-const bindTopLevels: _Curry<
-  [env: SymEnv, origins: Origins, stmts: Stmt[], i: number, acc: TopScope],
-  TopScope
-> = _curry(5, bindTopLevels$);
 const ctorFieldTypes: (ctors: Ctor[]) => TypeExpr[] = (ctors: Ctor[]) =>
   _Array_flatMap((c: Ctor) => map((f: CtorField) => f.fieldType, c.fields), ctors);
-const walkStmt$ = (env: SymEnv, stmt: Stmt, fields: Map<string, Loc>): Walked => {
+const walkStmt = (env: SymEnv, stmt: Stmt, fields: Map<string, Loc>): Walked => {
   const $match = stmt;
   switch ($match._tag) {
     case "SLet": {
       const { annot, value } = $match;
-      return prefixed$(walkAnnot$(env, annot), walkExpr$(env, value, fields));
+      return prefixed(walkAnnot(env, annot), walkExpr(env, value, fields));
     }
     case "SExpr": {
       const { value } = $match;
-      return walkExpr$(env, value, fields);
+      return walkExpr(env, value, fields);
     }
     case "SExtern": {
       const { typeExpr } = $match;
-      return walked$(walkType$(env, typeExpr), fields);
+      return walked(walkType(env, typeExpr), fields);
     }
     case "SType": {
       const { ctors, alias, aliasType } = $match;
@@ -1487,10 +1293,10 @@ const walkStmt$ = (env: SymEnv, stmt: Stmt, fields: Map<string, Loc>): Walked =>
         () => [] as TypeExpr[],
         (afs) => map((f: AliasField) => f.fieldType, afs),
       );
-      return walked$(
+      return walked(
         _Array_concat(
-          walkTypes$(env, _Array_concat(ctorFieldTypes(ctors), aliasTypes), 0),
-          walkAnnot$(env, aliasType),
+          walkTypes(env, _Array_concat(ctorFieldTypes(ctors), aliasTypes), 0),
+          walkAnnot(env, aliasType),
         ),
         fields,
       );
@@ -1500,21 +1306,15 @@ const walkStmt$ = (env: SymEnv, stmt: Stmt, fields: Map<string, Loc>): Walked =>
     }
   }
 };
-const walkStmt: _Curry<[env: SymEnv, stmt: Stmt, fields: Map<string, Loc>], Walked> = _curry(
-  3,
-  walkStmt$,
-);
-const walkStmts$ = (env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>): Walked =>
+const walkStmts = (env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>): Walked =>
   _Option_match(
     _Array_get(i, stmts),
     () => none(fields),
     (stmt) =>
-      andThen$(walkStmt$(env, stmt, fields), (fs: Map<string, Loc>) =>
-        walkStmts$(env, stmts, i + 1, fs),
+      andThen(walkStmt(env, stmt, fields), (fs: Map<string, Loc>) =>
+        walkStmts(env, stmts, i + 1, fs),
       ),
   );
-const walkStmts: _Curry<[env: SymEnv, stmts: Stmt[], i: number, fields: Map<string, Loc>], Walked> =
-  _curry(4, walkStmts$);
 const indexWith$ = (
   path: string,
   origins: Origins,
@@ -1522,12 +1322,12 @@ const indexWith$ = (
   stmts: Stmt[],
 ): SymIndex => {
   const env0: SymEnv = { path: path, top: emptyOrigins, prelude: prelude, locals: new Map([]) };
-  const tops: TopScope = bindTopLevels$(env0, origins, stmts, 0, {
+  const tops: TopScope = bindTopLevels(env0, origins, stmts, 0, {
     top: emptyOrigins,
     occs: [] as SymOccurrence[],
     fields: new Map<string, Loc>(),
   });
-  const body: Walked = walkStmts$(
+  const body: Walked = walkStmts(
     { path: path, top: tops.top, prelude: prelude, locals: new Map<string, Loc>() },
     stmts,
     0,
@@ -1548,17 +1348,17 @@ export const indexWith: _Curry<
   [path: string, origins: Origins, prelude: SymPrelude, stmts: Stmt[]],
   SymIndex
 > = _curry(4, indexWith$);
-const originsFrom$ = (path: string, stmts: Stmt[], i: number, acc: Origins): Origins =>
+const originsFrom = (path: string, stmts: Stmt[], i: number, acc: Origins): Origins =>
   ((_v) =>
     _v._tag === "None"
       ? acc
       : _v._tag === "Some" && _v.value._tag === "SLet" && _v.value.exported === true
         ? (({ value: { name, nameSpan } }) =>
-            originsFrom$(
+            originsFrom(
               path,
               stmts,
               i + 1,
-              withValue$(acc, name, { path: path, start: nameSpan.start, end: nameSpan.end }),
+              withValue(acc, name, { path: path, start: nameSpan.start, end: nameSpan.end }),
             ))(
             _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
               value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SLet" }>;
@@ -1566,11 +1366,11 @@ const originsFrom$ = (path: string, stmts: Stmt[], i: number, acc: Origins): Ori
           )
         : _v._tag === "Some" && _v.value._tag === "SExtern" && _v.value.exported === true
           ? (({ value: { name, nameSpan } }) =>
-              originsFrom$(
+              originsFrom(
                 path,
                 stmts,
                 i + 1,
-                withValue$(acc, name, { path: path, start: nameSpan.start, end: nameSpan.end }),
+                withValue(acc, name, { path: path, start: nameSpan.start, end: nameSpan.end }),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                 value: Extract<
@@ -1581,16 +1381,16 @@ const originsFrom$ = (path: string, stmts: Stmt[], i: number, acc: Origins): Ori
             )
           : _v._tag === "Some" && _v.value._tag === "SType" && _v.value.exported === true
             ? (({ value: { name, nameSpan, ctors } }) =>
-                originsFrom$(
+                originsFrom(
                   path,
                   stmts,
                   i + 1,
                   reduce(
                     _curry(2, (o: Origins, c: Ctor) => {
                       const at: Loc = { path: path, start: c.span.start, end: c.span.end };
-                      return withValue$(withCtor$(o, c.name, at), c.name, at);
+                      return withValue(withCtor(o, c.name, at), c.name, at);
                     }),
-                    withType$(acc, name, { path: path, start: nameSpan.start, end: nameSpan.end }),
+                    withType(acc, name, { path: path, start: nameSpan.start, end: nameSpan.end }),
                     ctors,
                   ),
                 ))(
@@ -1602,16 +1402,12 @@ const originsFrom$ = (path: string, stmts: Stmt[], i: number, acc: Origins): Ori
                 },
               )
             : _v._tag === "Some"
-              ? originsFrom$(path, stmts, i + 1, acc)
+              ? originsFrom(path, stmts, i + 1, acc)
               : (() => {
                   throw new Error("non-exhaustive match");
                 })())(_Array_get(i, stmts));
-const originsFrom: _Curry<[path: string, stmts: Stmt[], i: number, acc: Origins], Origins> = _curry(
-  4,
-  originsFrom$,
-);
 const originsOf$ = (path: string, stmts: Stmt[]): Origins =>
-  originsFrom$(path, stmts, 0, emptyOrigins);
+  originsFrom(path, stmts, 0, emptyOrigins);
 /**
  * originsOf : string -> [Stmt] -> Origins
  * The export sites an importer's `indexWith` resolves its imports to.

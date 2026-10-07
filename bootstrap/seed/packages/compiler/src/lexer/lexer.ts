@@ -63,7 +63,7 @@ export type Comment =
 export type TPart = { _tag: "PLit"; value: string } | { _tag: "PHole"; start: number; end: number };
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 
-import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result } from "@mochi/compiler/runtime";
 
 import {
   Err,
@@ -281,15 +281,11 @@ const punctTok: (c: string) => Option<Tok> = (c: string) =>
                                                     : _v === ">"
                                                       ? (Some(TGt as Tok) as Option<Tok>)
                                                       : (None as Option<Tok>))(c);
-const scanWhile$ = (pred: (a: string) => boolean, src: string, j: number): number =>
+const scanWhile = (pred: (a: string) => boolean, src: string, j: number): number =>
   ((_v) =>
     _v._tag === "Some" && (({ value: c }) => pred(c))(_v)
-      ? (({ value: c }) => scanWhile$(pred, src, j + 1))(_v)
+      ? (({ value: c }) => scanWhile(pred, src, j + 1))(_v)
       : j)(_Str_get(j, src));
-const scanWhile: _Curry<[pred: (a: string) => boolean, src: string, j: number], number> = _curry(
-  3,
-  scanWhile$,
-);
 const escChar: (n: string) => string = (n: string) =>
   ((_v) => (_v === "n" ? "\n" : _v === "t" ? "\t" : ((c) => c)(_v)))(n);
 const PLit = (value: string): TPart => ({ _tag: "PLit", value });
@@ -297,7 +293,7 @@ const PHole = _curry(2, (start, end) => ({ _tag: "PHole", start, end })) as (
   start: number,
   end: number,
 ) => TPart;
-const literalTok$ = (idx: number, total: number, value: string): Tok =>
+const literalTok = (idx: number, total: number, value: string): Tok =>
   total === 1
     ? TStr(value)
     : idx === 0
@@ -305,8 +301,7 @@ const literalTok$ = (idx: number, total: number, value: string): Tok =>
       : eq(idx, total - 1)
         ? TTmplEnd(value)
         : TTmplMid(value);
-const literalTok: _Curry<[idx: number, total: number, value: string], Tok> = _curry(3, literalTok$);
-const scanTemplateLoop$ = (
+const scanTemplateLoop = (
   src: string,
   j0: number,
   value0: string,
@@ -354,19 +349,11 @@ const scanTemplateLoop$ = (
     return _step.value;
   }
 };
-const scanTemplateLoop: _Curry<
-  [src: string, j0: number, value0: string, parts0: TPart[]],
-  Option<{ parts: TPart[]; end: number }>
-> = _curry(4, scanTemplateLoop$);
-const scanTemplate$ = (src: string, i: number): Option<{ parts: TPart[]; end: number }> =>
-  scanTemplateLoop$(src, i + 1, "", [] as TPart[]);
-const scanTemplate: _Curry<
-  [src: string, i: number],
-  Option<{ parts: TPart[]; end: number }>
-> = _curry(2, scanTemplate$);
+const scanTemplate = (src: string, i: number): Option<{ parts: TPart[]; end: number }> =>
+  scanTemplateLoop(src, i + 1, "", [] as TPart[]);
 const notNewline: (c: string) => boolean = (c: string) => c !== "\n";
-const scanComment$ = (src: string, start: number, lineTok: boolean): Comment => {
-  const stop: number = scanWhile$(notNewline, src, start);
+const scanComment = (src: string, start: number, lineTok: boolean): Comment => {
+  const stop: number = scanWhile(notNewline, src, start);
   return lineTok
     ? Trailing(stop)
     : _Option_contains("/", _Str_get(start + 2, src))
@@ -375,11 +362,7 @@ const scanComment$ = (src: string, start: number, lineTok: boolean): Comment => 
         )
       : PlainOwn(stop);
 };
-const scanComment: _Curry<[src: string, start: number, lineTok: boolean], Comment> = _curry(
-  3,
-  scanComment$,
-);
-const mkTok$ = (tok: Tok, start: number, stop: number, doc: string[]): LocTok =>
+const mkTok = (tok: Tok, start: number, stop: number, doc: string[]): LocTok =>
   ((_v) =>
     _v.length === 0
       ? { tok: tok, start: start, end: stop, doc: None as Option<string> }
@@ -389,21 +372,15 @@ const mkTok$ = (tok: Tok, start: number, stop: number, doc: string[]): LocTok =>
           end: stop,
           doc: Some(_Str_join("\n", lines)) as Option<string>,
         }))(_v))(doc);
-const mkTok: _Curry<[tok: Tok, start: number, stop: number, doc: string[]], LocTok> = _curry(
-  4,
-  mkTok$,
-);
 
-const pushRun$ = (run: LocTok[], buf: LocTok[][]): LocTok[][] => {
+const pushRun = (run: LocTok[], buf: LocTok[][]): LocTok[][] => {
   const n: number = length(buf);
   return ((_v) =>
     _v._tag === "Some" && (({ value: top }) => length(top) <= length(run))(_v)
-      ? (({ value: top }) => pushRun$(_Array_concat(top, run), _Array_take(n - 1, buf)))(_v)
+      ? (({ value: top }) => pushRun(_Array_concat(top, run), _Array_take(n - 1, buf)))(_v)
       : _Array_append(run, buf))(_Array_get(n - 1, buf));
 };
-const pushRun: _Curry<[run: LocTok[], buf: LocTok[][]], LocTok[][]> = _curry(2, pushRun$);
-const pushTok$ = (t: LocTok, buf: LocTok[][]): LocTok[][] => pushRun$([t], buf);
-const pushTok: _Curry<[t: LocTok, buf: LocTok[][]], LocTok[][]> = _curry(2, pushTok$);
+const pushTok = (t: LocTok, buf: LocTok[][]): LocTok[][] => pushRun([t], buf);
 const bufToks: (buf: LocTok[][]) => LocTok[] = (buf: LocTok[][]) =>
   _Array_flatMap((run: LocTok[]) => run, buf);
 const lexError: <A, B, C, D>(
@@ -416,9 +393,8 @@ const lexError: <A, B, C, D>(
 );
 const numValue: (raw: string) => number = (raw: string) =>
   _Option_unwrapOr(0 / 0, _Str_toNumber(raw));
-const numStart$ = (src: string, i: number, c: string): boolean =>
+const numStart = (src: string, i: number, c: string): boolean =>
   or(isDigit(c), and(c === "-", _Option_exists(isDigit, _Str_get(i + 1, src))));
-const numStart: _Curry<[src: string, i: number, c: string], boolean> = _curry(3, numStart$);
 const offsetLocTok: <C>(
   lt: { doc: Option<string>; end: number; start: number; tok: Tok } & C,
   by: number,
@@ -447,12 +423,12 @@ const spliceHoleToks: <A>(
       () => toks,
       (ht) => {
         const toks2: LocTok[][] =
-          ht.tok._tag === "TEof" ? toks : pushTok$(offsetLocTok(ht, by), toks);
+          ht.tok._tag === "TEof" ? toks : pushTok(offsetLocTok(ht, by), toks);
         return spliceHoleToks(_Array_tail(holeToks), by, toks2);
       },
     ),
 );
-const spliceHole$ = (
+const spliceHole = (
   src: string,
   start: number,
   stop: number,
@@ -471,11 +447,7 @@ const spliceHole$ = (
         { message: string; start: number; end: number }
       >,
   );
-const spliceHole: _Curry<
-  [src: string, start: number, stop: number, toks: LocTok[][]],
-  Result<LocTok[][], { message: string; start: number; end: number }>
-> = _curry(4, spliceHole$);
-const lexParts$ = (
+const lexParts = (
   src: string,
   parts: TPart[],
   idx: number,
@@ -493,8 +465,8 @@ const lexParts$ = (
       switch ($match._tag) {
         case "PLit": {
           const { value } = $match;
-          const t: LocTok = mkTok$(literalTok$(idx, total, value), wholeStart, wholeEnd, doc);
-          return lexParts$(
+          const t: LocTok = mkTok(literalTok(idx, total, value), wholeStart, wholeEnd, doc);
+          return lexParts(
             src,
             _Array_tail(parts),
             idx + 1,
@@ -502,16 +474,16 @@ const lexParts$ = (
             wholeStart,
             wholeEnd,
             [] as string[],
-            pushTok$(t, toks),
+            pushTok(t, toks),
           );
         }
         case "PHole": {
           const { start: hs, end: he } = $match;
           return _Result_match(
-            spliceHole$(src, hs, he, toks),
+            spliceHole(src, hs, he, toks),
             (e) => Err(e) as Result<LocTok[][], { message: string; start: number; end: number }>,
             (toks2) =>
-              lexParts$(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2),
+              lexParts(src, _Array_tail(parts), idx + 1, total, wholeStart, wholeEnd, doc, toks2),
           );
         }
         default: {
@@ -520,20 +492,7 @@ const lexParts$ = (
       }
     },
   );
-const lexParts: _Curry<
-  [
-    src: string,
-    parts: TPart[],
-    idx: number,
-    total: number,
-    wholeStart: number,
-    wholeEnd: number,
-    doc: string[],
-    toks: LocTok[][],
-  ],
-  Result<LocTok[][], { end: number; start: number; message: string }>
-> = _curry(8, lexParts$);
-const emit$ = (
+const emit = (
   src: string,
   tok: Tok,
   start: number,
@@ -541,32 +500,24 @@ const emit$ = (
   doc: string[],
   toks: LocTok[][],
 ): Result<LocTok[], { end: number; start: number; message: string }> =>
-  go$(src, stop, [] as string[], 0, true, pushTok$(mkTok$(tok, start, stop, doc), toks));
-const emit: _Curry<
-  [src: string, tok: Tok, start: number, stop: number, doc: string[], toks: LocTok[][]],
-  Result<LocTok[], { end: number; start: number; message: string }>
-> = _curry(6, emit$);
-const lexString$ = (
+  go(src, stop, [] as string[], 0, true, pushTok(mkTok(tok, start, stop, doc), toks));
+const lexString = (
   src: string,
   i: number,
   doc: string[],
   toks: LocTok[][],
 ): Result<LocTok[], { message: string; start: number; end: number }> =>
   _Option_match(
-    scanTemplate$(src, i),
+    scanTemplate(src, i),
     () => lexError("unterminated string literal", i, _Str_length(src)),
     (scanned) =>
       _Result_match(
-        lexParts$(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks),
+        lexParts(src, scanned.parts, 0, length(scanned.parts), i, scanned.end, doc, toks),
         (e) => Err(e) as Result<LocTok[], { end: number; start: number; message: string }>,
-        (toks2) => go$(src, scanned.end, [] as string[], 0, true, toks2),
+        (toks2) => go(src, scanned.end, [] as string[], 0, true, toks2),
       ),
   );
-const lexString: _Curry<
-  [src: string, i: number, doc: string[], toks: LocTok[][]],
-  Result<LocTok[], { message: string; start: number; end: number }>
-> = _curry(4, lexString$);
-const go$ = (
+const go = (
   src: string,
   i: number,
   doc: string[],
@@ -576,7 +527,7 @@ const go$ = (
 ): Result<LocTok[], { end: number; start: number; message: string }> =>
   ((_v) =>
     _v._tag === "None"
-      ? (Ok(bufToks(pushTok$(mkTok$(TEof as Tok, i, i, doc), toks))) as Result<
+      ? (Ok(bufToks(pushTok(mkTok(TEof as Tok, i, i, doc), toks))) as Result<
           LocTok[],
           { end: number; start: number; message: string }
         >)
@@ -584,63 +535,59 @@ const go$ = (
         ? (({ value: c }) =>
             c === "\n"
               ? ((n: number) =>
-                  ((kept: string[]) => go$(src, i + 1, kept, n, false, toks))(
+                  ((kept: string[]) => go(src, i + 1, kept, n, false, toks))(
                     lt(n, 2) ? doc : ([] as string[]),
                   ))(nlRun + 1)
-              : go$(src, i + 1, doc, nlRun, lineTok, toks))(_v)
+              : go(src, i + 1, doc, nlRun, lineTok, toks))(_v)
         : _v._tag === "Some" && _v.value === "/" && _Option_contains("/", _Str_get(i + 1, src))
           ? ((_v) =>
               _v._tag === "Trailing"
-                ? (({ stop }) => go$(src, stop, doc, nlRun, lineTok, toks))(_v)
+                ? (({ stop }) => go(src, stop, doc, nlRun, lineTok, toks))(_v)
                 : _v._tag === "PlainOwn"
-                  ? (({ stop }) => go$(src, stop, [] as string[], 0, lineTok, toks))(_v)
+                  ? (({ stop }) => go(src, stop, [] as string[], 0, lineTok, toks))(_v)
                   : _v._tag === "DocLine"
                     ? (({ text, stop }) =>
-                        go$(src, stop, _Array_append(text, doc), 0, lineTok, toks))(_v)
+                        go(src, stop, _Array_append(text, doc), 0, lineTok, toks))(_v)
                     : (() => {
                         throw new Error("non-exhaustive match");
-                      })())(scanComment$(src, i, lineTok))
+                      })())(scanComment(src, i, lineTok))
           : _v._tag === "Some"
             ? (({ value: c }) =>
                 _Str_slice(i, i + 3, src) === "..."
-                  ? emit$(src, TSpread as Tok, i, i + 3, doc, toks)
+                  ? emit(src, TSpread as Tok, i, i + 3, doc, toks)
                   : _Option_match(
                       digraphTok(_Str_slice(i, i + 2, src)),
                       () =>
                         c === '"'
-                          ? lexString$(src, i, doc, toks)
-                          : numStart$(src, i, c)
+                          ? lexString(src, i, doc, toks)
+                          : numStart(src, i, c)
                             ? ((j: number) =>
                                 ((raw: string) =>
-                                  emit$(src, TNum(numValue(raw), raw), i, j, doc, toks))(
+                                  emit(src, TNum(numValue(raw), raw), i, j, doc, toks))(
                                   _Str_slice(i, j, src),
-                                ))(scanWhile$(isNumChar, src, i + 1))
+                                ))(scanWhile(isNumChar, src, i + 1))
                             : _Option_match(
                                 punctTok(c),
                                 () =>
                                   isIdStart(c)
                                     ? ((j: number) =>
-                                        emit$(
+                                        emit(
                                           src,
                                           identTok(_Str_slice(i, j, src)),
                                           i,
                                           j,
                                           doc,
                                           toks,
-                                        ))(scanWhile$(isIdChar, src, i + 1))
+                                        ))(scanWhile(isIdChar, src, i + 1))
                                     : lexError(`unexpected char '${c}'`, i, i + 1),
-                                (t) => emit$(src, t, i, i + 1, doc, toks),
+                                (t) => emit(src, t, i, i + 1, doc, toks),
                               ),
-                      (t) => emit$(src, t, i, i + 2, doc, toks),
+                      (t) => emit(src, t, i, i + 2, doc, toks),
                     ))(_v)
             : (() => {
                 throw new Error("non-exhaustive match");
               })())(_Str_get(i, src));
-const go: _Curry<
-  [src: string, i: number, doc: string[], nlRun: number, lineTok: boolean, toks: LocTok[][]],
-  Result<LocTok[], { end: number; start: number; message: string }>
-> = _curry(6, go$);
 export const lex: (
   src: string,
 ) => Result<LocTok[], { end: number; start: number; message: string }> = (src: string) =>
-  go$(src, 0, [] as string[], 0, false, [] as LocTok[][]);
+  go(src, 0, [] as string[], 0, false, [] as LocTok[][]);

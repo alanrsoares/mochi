@@ -171,13 +171,12 @@ export const writeAll: <A>(outs: ({ path: string; js: string } & A)[]) => Result
     return _step.value;
   }
 };
-const tsWritePath$ = (path: string, body: string): string =>
+const tsWritePath = (path: string, body: string): string =>
   _Str_endsWith(".mochi", path)
     ? _Str_startsWith("/** @jsx h */", body)
       ? `${_Str_slice(0, _Str_length(path) - 6, path)}.tsx`
       : tsOutPath(path)
     : path;
-const tsWritePath: _Curry<[path: string, body: string], string> = _curry(2, tsWritePath$);
 export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Result<string, string> =
   <A>(outs: ({ path: string; js: string } & A)[]) => {
     let remaining = outs;
@@ -191,7 +190,7 @@ export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Resu
           (_v) => _v.length >= 1,
           ([o, ...rest]) =>
             _Result_match(
-              writeFile(tsWritePath$(o.path, o.js), o.js),
+              writeFile(tsWritePath(o.path, o.js), o.js),
               (e) => _done(Err(e) as Result<string, string>),
               (w) => {
                 const _printed = print(`  wrote ${w}`);
