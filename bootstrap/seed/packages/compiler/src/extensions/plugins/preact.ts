@@ -39,7 +39,7 @@ import {
 import { widenLits } from "../../infer/schemes";
 const arrOf: (elem: Ty) => Ty = (elem: Ty) => tCon("Array", [elem]);
 const setStateDomain: (state: Ty) => Ty = (state: Ty) => tUnion([state, tArrow(state, state)]);
-const isRef$ = (fn: Expr, name: string): boolean => {
+const isRef = (fn: Expr, name: string): boolean => {
   const $match = fn;
   switch ($match._tag) {
     case "ERef": {
@@ -185,7 +185,7 @@ const inferUseState: <A, B, C, D>(
     st: B,
     api: { inferExpr: (a: A, b: B) => Result<[Ty, St], C> } & D,
   ) =>
-    and(isRef$(fn, "useState"), length(args) === 1)
+    and(isRef(fn, "useState"), length(args) === 1)
       ? _Option_match(
           _Array_get(0, args),
           () => Ok(None as Option<[Ty, St]>),
@@ -221,7 +221,7 @@ const inferUseLazyState: <A, B, C, D, E>(
       inferExpr: (a: Expr, b: { next: number } & D) => Result<[A, B], C>;
     } & E,
   ) =>
-    and(isRef$(fn, "useLazyState"), length(args) === 1)
+    and(isRef(fn, "useLazyState"), length(args) === 1)
       ? _Option_match(
           _Array_get(0, args),
           () => Ok(None as Option<[Ty, St]>),
@@ -256,7 +256,7 @@ const inferUseRef: <A, B, C, D>(
     st: B,
     api: { inferExpr: (a: A, b: B) => Result<[Ty, St], C> } & D,
   ) =>
-    and(isRef$(fn, "useRef"), length(args) === 1)
+    and(isRef(fn, "useRef"), length(args) === 1)
       ? _Option_match(
           _Array_get(0, args),
           () => Ok(None as Option<[Ty, St]>),
@@ -347,7 +347,7 @@ const inferEffectLike: <A, D, E, F>(
     } & F,
     name: string,
   ) =>
-    and(isRef$(fn, name), length(args) >= 1)
+    and(isRef(fn, name), length(args) >= 1)
       ? _Option_match(
           _Array_get(0, args),
           () => Ok(None),
@@ -390,7 +390,7 @@ const inferUseCallback: <C>(
       inferExpr: (a: Expr, b: St) => Result<[Ty, St], BoundErr>;
     } & C,
   ) =>
-    and(isRef$(fn, "useCallback"), length(args) >= 1)
+    and(isRef(fn, "useCallback"), length(args) >= 1)
       ? _Option_match(
           _Array_get(0, args),
           () => Ok(None as Option<[Ty, St]>),
@@ -432,7 +432,7 @@ const inferUseMemo: <A, D, E>(
       inferExpr: (a: Expr, b: St) => Result<[A, { next: number } & D], BoundErr>;
     } & E,
   ) =>
-    and(isRef$(fn, "useMemo"), length(args) >= 1)
+    and(isRef(fn, "useMemo"), length(args) >= 1)
       ? _Option_match(
           _Array_get(0, args),
           () => Ok(None as Option<[Ty, St]>),
@@ -473,13 +473,13 @@ const inferHookDeps: <A, B, C, D, E>(
     st: { next: number } & D,
     api: { inferExpr: (a: A, b: { next: number } & D) => Result<[B, { next: number } & D], C> } & E,
   ) => {
-    const expected: Option<number> = isRef$(fn, "hookDeps0")
+    const expected: Option<number> = isRef(fn, "hookDeps0")
       ? (Some(0) as Option<number>)
-      : isRef$(fn, "hookDeps1")
+      : isRef(fn, "hookDeps1")
         ? (Some(1) as Option<number>)
-        : isRef$(fn, "hookDeps2")
+        : isRef(fn, "hookDeps2")
           ? (Some(2) as Option<number>)
-          : isRef$(fn, "hookDeps")
+          : isRef(fn, "hookDeps")
             ? (Some(3) as Option<number>)
             : (None as Option<number>);
     return _Option_match(

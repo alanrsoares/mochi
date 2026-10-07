@@ -41,14 +41,14 @@ const someOf: <A>(f: (a: A) => boolean, xs: A[]) => boolean = _curry(
   2,
   <A>(f: (a: A) => boolean, xs: A[]) => someOfFrom(f, xs, 0),
 );
-const patternKeyAt$ = (ctorKeys: Map<string, string[]>, ctor: string, i: number): string =>
+const patternKeyAt = (ctorKeys: Map<string, string[]>, ctor: string, i: number): string =>
   _Option_match(
     _Map_get(ctor, ctorKeys),
     () => `_${show(i)}`,
     (ks) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)),
   );
-const keyedSlot$ = (key: string, sub: string): string => (eq(sub, key) ? key : `${key}: ${sub}`);
-const pctorEntries$ = (
+const keyedSlot = (key: string, sub: string): string => (eq(sub, key) ? key : `${key}: ${sub}`);
+const pctorEntries = (
   ctorKeys: Map<string, string[]>,
   ctor: string,
   args: Pattern[],
@@ -59,24 +59,20 @@ const pctorEntries$ = (
     () => [] as string[],
     (a) => {
       const s: string = patSlot$(ctorKeys, a);
-      const restEntries: string[] = pctorEntries$(ctorKeys, ctor, args, i + 1);
+      const restEntries: string[] = pctorEntries(ctorKeys, ctor, args, i + 1);
       return s === ""
         ? restEntries
-        : _Array_prepend(keyedSlot$(patternKeyAt$(ctorKeys, ctor, i), s), restEntries);
+        : _Array_prepend(keyedSlot(patternKeyAt(ctorKeys, ctor, i), s), restEntries);
     },
   );
-const precordEntries$ = (
-  ctorKeys: Map<string, string[]>,
-  fields: PatField[],
-  i: number,
-): string[] =>
+const precordEntries = (ctorKeys: Map<string, string[]>, fields: PatField[], i: number): string[] =>
   _Option_match(
     _Array_get(i, fields),
     () => [] as string[],
     (f) => {
       const s: string = patSlot$(ctorKeys, f.pat);
-      const restEntries: string[] = precordEntries$(ctorKeys, fields, i + 1);
-      return s === "" ? restEntries : _Array_prepend(keyedSlot$(f.label, s), restEntries);
+      const restEntries: string[] = precordEntries(ctorKeys, fields, i + 1);
+      return s === "" ? restEntries : _Array_prepend(keyedSlot(f.label, s), restEntries);
     },
   );
 const patSlot$ = (ctorKeys: Map<string, string[]>, p: Pattern): string => {
@@ -111,12 +107,12 @@ const patSlot$ = (ctorKeys: Map<string, string[]>, p: Pattern): string => {
     }
     case "PCtor": {
       const { ctor, args, ns } = $match;
-      const entries: string[] = pctorEntries$(ctorKeys, ctorKeyOf(ctor, ns), args, 0);
+      const entries: string[] = pctorEntries(ctorKeys, ctorKeyOf(ctor, ns), args, 0);
       return length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`;
     }
     case "PRecord": {
       const { fields } = $match;
-      const entries: string[] = precordEntries$(ctorKeys, fields, 0);
+      const entries: string[] = precordEntries(ctorKeys, fields, 0);
       return length(entries) === 0 ? "" : `{ ${_Str_join(", ", entries)} }`;
     }
     case "PTuple": {
@@ -157,7 +153,7 @@ export const patSlot: _Curry<[ctorKeys: Map<string, string[]>, p: Pattern], stri
   2,
   patSlot$,
 );
-const pctorConds$ = (
+const pctorConds = (
   ctorKeys: Map<string, string[]>,
   ctor: string,
   args: Pattern[],
@@ -169,11 +165,11 @@ const pctorConds$ = (
     () => [] as string[],
     (a) =>
       _Array_concat(
-        patConds$(ctorKeys, a, `${path}.${patternKeyAt$(ctorKeys, ctor, i)}`),
-        pctorConds$(ctorKeys, ctor, args, i + 1, path),
+        patConds$(ctorKeys, a, `${path}.${patternKeyAt(ctorKeys, ctor, i)}`),
+        pctorConds(ctorKeys, ctor, args, i + 1, path),
       ),
   );
-const precordConds$ = (
+const precordConds = (
   ctorKeys: Map<string, string[]>,
   fields: PatField[],
   i: number,
@@ -185,10 +181,10 @@ const precordConds$ = (
     (f) =>
       _Array_concat(
         patConds$(ctorKeys, f.pat, `${path}.${f.label}`),
-        precordConds$(ctorKeys, fields, i + 1, path),
+        precordConds(ctorKeys, fields, i + 1, path),
       ),
   );
-const ptupleConds$ = (
+const ptupleConds = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
   i: number,
@@ -200,10 +196,10 @@ const ptupleConds$ = (
     (el) =>
       _Array_concat(
         patConds$(ctorKeys, el, `${path}[${show(i)}]`),
-        ptupleConds$(ctorKeys, elems, i + 1, path),
+        ptupleConds(ctorKeys, elems, i + 1, path),
       ),
   );
-const parrConds$ = (
+const parrConds = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
   i: number,
@@ -215,7 +211,7 @@ const parrConds$ = (
     (el) =>
       _Array_concat(
         patConds$(ctorKeys, el, `${path}[${show(i)}]`),
-        parrConds$(ctorKeys, elems, i + 1, path),
+        parrConds(ctorKeys, elems, i + 1, path),
       ),
   );
 const patConds$ = (ctorKeys: Map<string, string[]>, p: Pattern, path: string): string[] => {
@@ -252,22 +248,22 @@ const patConds$ = (ctorKeys: Map<string, string[]>, p: Pattern, path: string): s
       return (([key, lit]: [string, string]) =>
         _Array_prepend(
           `${path}.${key} === ${jsStringLit(lit)}`,
-          pctorConds$(ctorKeys, ck, args, 0, path),
+          pctorConds(ctorKeys, ck, args, 0, path),
         ))(tagOf(ctorKeys, ck));
     }
     case "PRecord": {
       const { fields } = $match;
-      return precordConds$(ctorKeys, fields, 0, path);
+      return precordConds(ctorKeys, fields, 0, path);
     }
     case "PTuple": {
       const { elems } = $match;
-      return ptupleConds$(ctorKeys, elems, 0, path);
+      return ptupleConds(ctorKeys, elems, 0, path);
     }
     case "PArr": {
       const { elems, rest } = $match;
       return _Array_prepend(
         `${path}.length ${_Option_isSome(rest) ? ">=" : "==="} ${show(length(elems))}`,
-        parrConds$(ctorKeys, elems, 0, path),
+        parrConds(ctorKeys, elems, 0, path),
       );
     }
     case "POr": {
@@ -304,7 +300,7 @@ export const patConds: _Curry<
  * is two slots down, and without this the predicate stopped at the top level
  * while the handler destructured all the way (TS2339 on the inner field).
  */
-const fieldRefine$ = (
+const fieldRefine = (
   ctorKeys: Map<string, string[]>,
   p: Pattern,
   fieldBase: string,
@@ -331,7 +327,7 @@ const fieldRefine$ = (
     }
   }
 };
-const ctorRefines$ = (
+const ctorRefines = (
   ctorKeys: Map<string, string[]>,
   args: Pattern[],
   keys: string[],
@@ -342,16 +338,16 @@ const ctorRefines$ = (
     _Array_get(i, args),
     () => [] as string[],
     (a) => {
-      const rest: string[] = ctorRefines$(ctorKeys, args, keys, member, i + 1);
+      const rest: string[] = ctorRefines(ctorKeys, args, keys, member, i + 1);
       const key: string = _Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys));
       return _Option_match(
-        fieldRefine$(ctorKeys, a, `${member}[${jsStringLit(key)}]`),
+        fieldRefine(ctorKeys, a, `${member}[${jsStringLit(key)}]`),
         () => rest,
         (sub) => _Array_prepend(`${jsStringLit(key)}: ${sub}`, rest),
       );
     },
   );
-const recordRefines$ = (
+const recordRefines = (
   ctorKeys: Map<string, string[]>,
   fields: PatField[],
   base: string,
@@ -361,9 +357,9 @@ const recordRefines$ = (
     _Array_get(i, fields),
     () => [] as string[],
     (f) => {
-      const rest: string[] = recordRefines$(ctorKeys, fields, base, i + 1);
+      const rest: string[] = recordRefines(ctorKeys, fields, base, i + 1);
       return _Option_match(
-        fieldRefine$(ctorKeys, f.pat, `${base}[${jsStringLit(f.label)}]`),
+        fieldRefine(ctorKeys, f.pat, `${base}[${jsStringLit(f.label)}]`),
         () => rest,
         (sub) => _Array_prepend(`${jsStringLit(f.label)}: ${sub}`, rest),
       );
@@ -376,7 +372,7 @@ const tupleSlotBase: <A>(base: string, i: A) => string = _curry(
   2,
   <A>(base: string, i: A) => `(${base})[${show(i)}]`,
 );
-const tupleTargets$ = (
+const tupleTargets = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
   base: string,
@@ -388,12 +384,12 @@ const tupleTargets$ = (
     (el) => {
       const slotBase: string = tupleSlotBase(base, i);
       return _Array_prepend(
-        _Option_unwrapOr(slotBase, fieldRefine$(ctorKeys, el, slotBase)),
-        tupleTargets$(ctorKeys, elems, base, i + 1),
+        _Option_unwrapOr(slotBase, fieldRefine(ctorKeys, el, slotBase)),
+        tupleTargets(ctorKeys, elems, base, i + 1),
       );
     },
   );
-const tupleRefines$ = (
+const tupleRefines = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
   base: string,
@@ -404,14 +400,14 @@ const tupleRefines$ = (
     () => false,
     (el) =>
       or(
-        _Option_isSome(fieldRefine$(ctorKeys, el, tupleSlotBase(base, i))),
-        tupleRefines$(ctorKeys, elems, base, i + 1),
+        _Option_isSome(fieldRefine(ctorKeys, el, tupleSlotBase(base, i))),
+        tupleRefines(ctorKeys, elems, base, i + 1),
       ),
   );
 /**
  * Array elements all share one element base (`T[number]`).
  */
-const arrTargets$ = (
+const arrTargets = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
   elemBase: string,
@@ -422,11 +418,11 @@ const arrTargets$ = (
     () => [] as string[],
     (el) =>
       _Array_prepend(
-        _Option_unwrapOr(elemBase, fieldRefine$(ctorKeys, el, elemBase)),
-        arrTargets$(ctorKeys, elems, elemBase, i + 1),
+        _Option_unwrapOr(elemBase, fieldRefine(ctorKeys, el, elemBase)),
+        arrTargets(ctorKeys, elems, elemBase, i + 1),
       ),
   );
-const arrRefines$ = (
+const arrRefines = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
   elemBase: string,
@@ -437,8 +433,8 @@ const arrRefines$ = (
     () => false,
     (el) =>
       or(
-        _Option_isSome(fieldRefine$(ctorKeys, el, elemBase)),
-        arrRefines$(ctorKeys, elems, elemBase, i + 1),
+        _Option_isSome(fieldRefine(ctorKeys, el, elemBase)),
+        arrRefines(ctorKeys, elems, elemBase, i + 1),
       ),
   );
 const patTarget$ = (ctorKeys: Map<string, string[]>, p: Pattern, base: string): string => {
@@ -454,32 +450,32 @@ const patTarget$ = (ctorKeys: Map<string, string[]>, p: Pattern, base: string): 
       return (([key, lit]: [string, string]) => {
         const member: string = `Extract<${base}, { ${key}: ${jsStringLit(lit)} }>`;
         const keys: string[] = _Option_unwrapOr([] as string[], _Map_get(ck, ctorKeys));
-        const refines: string[] = ctorRefines$(ctorKeys, args, keys, member, 0);
+        const refines: string[] = ctorRefines(ctorKeys, args, keys, member, 0);
         return length(refines) === 0 ? member : `${member} & { ${_Str_join("; ", refines)} }`;
       })(tagOf(ctorKeys, ck));
     }
     case "PRecord": {
       const { fields } = $match;
-      const refines: string[] = recordRefines$(ctorKeys, fields, base, 0);
+      const refines: string[] = recordRefines(ctorKeys, fields, base, 0);
       return length(refines) === 0 ? base : `${base} & { ${_Str_join("; ", refines)} }`;
     }
     case "PTuple": {
       const { elems } = $match;
-      return !tupleRefines$(ctorKeys, elems, base, 0)
+      return !tupleRefines(ctorKeys, elems, base, 0)
         ? base
-        : `[${_Str_join(", ", tupleTargets$(ctorKeys, elems, base, 0))}]`;
+        : `[${_Str_join(", ", tupleTargets(ctorKeys, elems, base, 0))}]`;
     }
     case "PArr": {
       const { elems, rest: restOpt } = $match;
       const elemBase: string = `(${base})[number]`;
-      return !arrRefines$(ctorKeys, elems, elemBase, 0)
+      return !arrRefines(ctorKeys, elems, elemBase, 0)
         ? base
         : ((heads: string) =>
             _Option_match(
               restOpt,
               () => `[${heads}]`,
               () => `[${heads}, ...${base}]`,
-            ))(_Str_join(", ", arrTargets$(ctorKeys, elems, elemBase, 0)));
+            ))(_Str_join(", ", arrTargets(ctorKeys, elems, elemBase, 0)));
     }
     default: {
       return base;

@@ -355,8 +355,8 @@ const arrMissingLen: <A>(
     ? n
     : arrMissingLen(shape, n + 1),
 );
-const rangeArr$ = (i: number, top: number): number[] =>
-  i > top ? ([] as number[]) : _Array_prepend(i, rangeArr$(i + 1, top));
+const rangeArr = (i: number, top: number): number[] =>
+  i > top ? ([] as number[]) : _Array_prepend(i, rangeArr(i + 1, top));
 const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => number[] = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
 ) => {
@@ -365,9 +365,9 @@ const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) 
     _Option_unwrapOr(0, shape.restFrom),
     shape.fixed,
   );
-  return rangeArr$(0, top);
+  return rangeArr(0, top);
 };
-const specializeRow$ = (h: MHead, mp: MP, labels: string[]): Option<MP[]> => {
+const specializeRow = (h: MHead, mp: MP, labels: string[]): Option<MP[]> => {
   const $match = h;
   switch ($match._tag) {
     case "HCtor": {
@@ -471,7 +471,7 @@ const specializeRow$ = (h: MHead, mp: MP, labels: string[]): Option<MP[]> => {
     }
   }
 };
-const specializeOne$ = (h: MHead, arity: number, labels: string[], row: MP[]): MP[][] =>
+const specializeOne = (h: MHead, arity: number, labels: string[], row: MP[]): MP[][] =>
   _Option_match(
     _Array_head(row),
     () => [] as MP[][],
@@ -480,14 +480,14 @@ const specializeOne$ = (h: MHead, arity: number, labels: string[], row: MP[]): M
       return isWildMP(hd)
         ? [_Array_concat(mWilds(arity), rest)]
         : _Option_match(
-            specializeRow$(h, hd, labels),
+            specializeRow(h, hd, labels),
             () => [] as MP[][],
             (sub) => [_Array_concat(sub, rest)],
           );
     },
   );
-const specializeM$ = (m: MP[][], h: MHead, arity: number, labels: string[]): MP[][] =>
-  _Array_flatMap((row: MP[]) => specializeOne$(h, arity, labels, row), m);
+const specializeM = (m: MP[][], h: MHead, arity: number, labels: string[]): MP[][] =>
+  _Array_flatMap((row: MP[]) => specializeOne(h, arity, labels, row), m);
 const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
   _Array_flatMap(
     (row: MP[]) =>
@@ -498,7 +498,7 @@ const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
       ),
     m,
   );
-const rebuild$ = (h: MHead, args: MP[], labels: string[]): MP => {
+const rebuild = (h: MHead, args: MP[], labels: string[]): MP => {
   const $match = h;
   switch ($match._tag) {
     case "HCtor": {
@@ -544,8 +544,8 @@ const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
       }
     }
   }, heads);
-const freshNum$ = (taken: number[], i: number): number =>
-  _Array_contains(i, taken) ? freshNum$(taken, i + 1) : i;
+const freshNum = (taken: number[], i: number): number =>
+  _Array_contains(i, taken) ? freshNum(taken, i + 1) : i;
 const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -561,9 +561,9 @@ const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   }, heads);
 const starsOf: (n: number) => string = (n: number) =>
   n <= 0 ? "" : _Str_concat("*", starsOf(sub(n, 1)));
-const freshStr$ = (taken: string[], i: number): string => {
+const freshStr = (taken: string[], i: number): string => {
   const s: string = starsOf(i);
-  return _Array_contains(s, taken) ? freshStr$(taken, i + 1) : s;
+  return _Array_contains(s, taken) ? freshStr(taken, i + 1) : s;
 };
 const ctorNames: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
@@ -591,7 +591,7 @@ const boolVals: (heads: MHead[]) => boolean[] = (heads: MHead[]) =>
       }
     }
   }, heads);
-const ctorInfoSuffixed$ = (
+const ctorInfoSuffixed = (
   keys: string[],
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
@@ -601,38 +601,36 @@ const ctorInfoSuffixed$ = (
       ? (None as Option<{ owner: string; arity: number }>)
       : _v.length >= 1
         ? (([k, ...rest]) =>
-            _Str_endsWith(`.${n}`, k) ? _Map_get(k, reg.ctors) : ctorInfoSuffixed$(rest, reg, n))(
-            _v,
-          )
+            _Str_endsWith(`.${n}`, k) ? _Map_get(k, reg.ctors) : ctorInfoSuffixed(rest, reg, n))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(keys);
 const qualifierOf: (n: string) => string = (n: string) =>
   ((_v) => (_v.length === 2 ? (([alias]) => `${alias}.`)(_v) : ""))(_Str_split(".", n));
-const ctorInfoOf$ = (
+const ctorInfoOf = (
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
 ): Option<{ owner: string; arity: number }> =>
   _Option_match(
     _Map_get(n, reg.ctors),
-    () => ctorInfoSuffixed$(_Map_keys(reg.ctors), reg, n),
+    () => ctorInfoSuffixed(_Map_keys(reg.ctors), reg, n),
     (info) => Some(info) as Option<{ owner: string; arity: number }>,
   );
-const arityOfCtor$ = (
+const arityOfCtor = (
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
 ): number =>
   _Option_match(
-    ctorInfoOf$(reg, n),
+    ctorInfoOf(reg, n),
     () => 0,
     (info) => info.arity,
   );
-const ownerOfCtor$ = (
+const ownerOfCtor = (
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
 ): Option<string> =>
   _Option_match(
-    ctorInfoOf$(reg, n),
+    ctorInfoOf(reg, n),
     () => None as Option<string>,
     (info) => Some(info.owner) as Option<string>,
   );
@@ -643,7 +641,7 @@ const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[],
     all,
   ),
 );
-const useful$ = (
+const useful = (
   m: MP[][],
   width: number,
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
@@ -657,8 +655,8 @@ const useful$ = (
         : UNone(sub(fuel, 1))
       : length(m) === 0
         ? USome(mWilds(width), sub(fuel, 1))
-        : usefulSplit$(m, width, reg, sub(fuel, 1));
-const usefulSplit$ = (
+        : usefulSplit(m, width, reg, sub(fuel, 1));
+const usefulSplit = (
   m: MP[][],
   width: number,
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
@@ -668,11 +666,11 @@ const usefulSplit$ = (
   const heads: MHead[] = headsOf(col);
   return _Option_match(
     _Array_head(heads),
-    () => prependWitness$(MWild as MP, useful$(defaultM(m), sub(width, 1), reg, fuel)),
-    (h0) => usefulHead$(m, col, heads, h0, width, reg, fuel),
+    () => prependWitness(MWild as MP, useful(defaultM(m), sub(width, 1), reg, fuel)),
+    (h0) => usefulHead(m, col, heads, h0, width, reg, fuel),
   );
 };
-const prependWitness$ = (mp: MP, r: URes): URes => {
+const prependWitness = (mp: MP, r: URes): URes => {
   const $match = r;
   switch ($match._tag) {
     case "UFuel": {
@@ -691,7 +689,7 @@ const prependWitness$ = (mp: MP, r: URes): URes => {
     }
   }
 };
-const tryHeads$ = (
+const tryHeads = (
   m: MP[][],
   heads: MHead[],
   arities: number[],
@@ -706,19 +704,19 @@ const tryHeads$ = (
     () => UNone(fuel),
     (h) => {
       const arity: number = _Option_unwrapOr(0, _Array_get(i, arities));
-      const $match = useful$(specializeM$(m, h, arity, labels), sub(arity + width, 1), reg, fuel);
+      const $match = useful(specializeM(m, h, arity, labels), sub(arity + width, 1), reg, fuel);
       switch ($match._tag) {
         case "UFuel": {
           return UFuel as URes;
         }
         case "UNone": {
           const { fuel: f2 } = $match;
-          return tryHeads$(m, heads, arities, labels, width, reg, f2, i + 1);
+          return tryHeads(m, heads, arities, labels, width, reg, f2, i + 1);
         }
         case "USome": {
           const { row, fuel: f2 } = $match;
           return USome(
-            _Array_prepend(rebuild$(h, _Array_take(arity, row), labels), _Array_drop(arity, row)),
+            _Array_prepend(rebuild(h, _Array_take(arity, row), labels), _Array_drop(arity, row)),
             f2,
           );
         }
@@ -728,7 +726,7 @@ const tryHeads$ = (
       }
     },
   );
-const usefulHead$ = (
+const usefulHead = (
   m: MP[][],
   col: MP[],
   heads: MHead[],
@@ -741,31 +739,31 @@ const usefulHead$ = (
   switch ($match._tag) {
     case "HTuple": {
       const { arity } = $match;
-      return tryHeads$(m, [HTuple(arity)], [arity], [] as string[], width, reg, fuel, 0);
+      return tryHeads(m, [HTuple(arity)], [arity], [] as string[], width, reg, fuel, 0);
     }
     case "HRecord": {
       const labels: string[] = recordLabelsOf(col);
-      return tryHeads$(m, [HRecord as MHead], [length(labels)], labels, width, reg, fuel, 0);
+      return tryHeads(m, [HRecord as MHead], [length(labels)], labels, width, reg, fuel, 0);
     }
     case "HCtor": {
-      return usefulCtor$(m, heads, width, reg, fuel);
+      return usefulCtor(m, heads, width, reg, fuel);
     }
     case "HBool": {
-      return usefulBool$(m, heads, width, reg, fuel);
+      return usefulBool(m, heads, width, reg, fuel);
     }
     case "HArr": {
-      return usefulArr$(m, col, width, reg, fuel);
+      return usefulArr(m, col, width, reg, fuel);
     }
     case "HNum": {
-      return prependWitness$(
-        MNum(freshNum$(takenNums(heads), 0)),
-        useful$(defaultM(m), sub(width, 1), reg, fuel),
+      return prependWitness(
+        MNum(freshNum(takenNums(heads), 0)),
+        useful(defaultM(m), sub(width, 1), reg, fuel),
       );
     }
     case "HStr": {
-      return prependWitness$(
-        MStr(freshStr$(takenStrs(heads), 0)),
-        useful$(defaultM(m), sub(width, 1), reg, fuel),
+      return prependWitness(
+        MStr(freshStr(takenStrs(heads), 0)),
+        useful(defaultM(m), sub(width, 1), reg, fuel),
       );
     }
     default: {
@@ -773,7 +771,7 @@ const usefulHead$ = (
     }
   }
 };
-const usefulCtor$ = (
+const usefulCtor = (
   m: MP[][],
   heads: MHead[],
   width: number,
@@ -784,7 +782,7 @@ const usefulCtor$ = (
   const ownerOpt: Option<string> = _Option_match(
     _Array_head(names),
     () => None as Option<string>,
-    (n) => ownerOfCtor$(reg, n),
+    (n) => ownerOfCtor(reg, n),
   );
   const q: string = _Option_match(
     _Array_head(names),
@@ -797,26 +795,26 @@ const usefulCtor$ = (
     (o) => map((n: string) => `${q}${n}`, _Map_getOr([] as string[], o, reg.types)),
   );
   return and(length(all) > 0, allNamesIn(all, names))
-    ? tryHeads$(
+    ? tryHeads(
         m,
         map((n: string) => HCtor(n), all),
-        map((n: string) => arityOfCtor$(reg, n), all),
+        map((n: string) => arityOfCtor(reg, n), all),
         [] as string[],
         width,
         reg,
         fuel,
         0,
       )
-    : prependWitness$(
+    : prependWitness(
         _Option_match(
           _Array_head(filter((n: string) => !_Array_contains(n, names), all)),
           () => MWild as MP,
-          (n) => MCtor(n, mWilds(arityOfCtor$(reg, n))),
+          (n) => MCtor(n, mWilds(arityOfCtor(reg, n))),
         ),
-        useful$(defaultM(m), sub(width, 1), reg, fuel),
+        useful(defaultM(m), sub(width, 1), reg, fuel),
       );
 };
-const usefulBool$ = (
+const usefulBool = (
   m: MP[][],
   heads: MHead[],
   width: number,
@@ -826,10 +824,10 @@ const usefulBool$ = (
   const vs: boolean[] = boolVals(heads);
   const hasTrue: boolean = _Array_contains(true, vs);
   return and(hasTrue, _Array_contains(false, vs))
-    ? tryHeads$(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
-    : prependWitness$(MBool(!hasTrue), useful$(defaultM(m), sub(width, 1), reg, fuel));
+    ? tryHeads(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
+    : prependWitness(MBool(!hasTrue), useful(defaultM(m), sub(width, 1), reg, fuel));
 };
-const usefulArr$ = (
+const usefulArr = (
   m: MP[][],
   col: MP[],
   width: number,
@@ -839,7 +837,7 @@ const usefulArr$ = (
   const shape: ArrShape = arrShapeOf(col);
   return arrComplete(shape)
     ? ((lens: number[]) =>
-        tryHeads$(
+        tryHeads(
           m,
           map((n: number) => HArr(n), lens),
           lens,
@@ -849,19 +847,19 @@ const usefulArr$ = (
           fuel,
           0,
         ))(arrLengths(shape))
-    : prependWitness$(
+    : prependWitness(
         MArr(mWilds(arrMissingLen(shape, 0)), false),
-        useful$(defaultM(m), sub(width, 1), reg, fuel),
+        useful(defaultM(m), sub(width, 1), reg, fuel),
       );
 };
-const showFields$ = (labels: string[], pats: MP[], i: number): string[] =>
+const showFields = (labels: string[], pats: MP[], i: number): string[] =>
   _Option_match(
     _Array_get(i, labels),
     () => [] as string[],
     (l) =>
       _Array_prepend(
         `${l}: ${showWitness(_Option_unwrapOr(MWild as MP, _Array_get(i, pats)))}`,
-        showFields$(labels, pats, i + 1),
+        showFields(labels, pats, i + 1),
       ),
   );
 /**
@@ -898,7 +896,7 @@ export const showWitness: (mp: MP) => string = (mp: MP) => {
     }
     case "MRecord": {
       const { labels, pats } = $match;
-      return `{ ${_Str_join(", ", showFields$(labels, pats, 0))} }`;
+      return `{ ${_Str_join(", ", showFields(labels, pats, 0))} }`;
     }
     case "MArr": {
       const { elems, rest } = $match;
@@ -944,7 +942,7 @@ const checkExhaustiveM$ = (
     (p: Pattern) => map((alt: Pattern) => [toMP(alt)], explodePat(p)),
     patterns,
   );
-  const $match = useful$(rows, 1, reg, 20000);
+  const $match = useful(rows, 1, reg, 20000);
   switch ($match._tag) {
     case "UFuel": {
       return ExFuel as ExhaustVerdict;

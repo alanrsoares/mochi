@@ -78,7 +78,7 @@ const indexOfFrom: <A>(v: A, xs: A[], i: number) => number = _curry(
     }
   },
 );
-const visitNeighbors$ = (v: number, ws: number[], adj: number[][], st: TSt): TSt => {
+const visitNeighbors = (v: number, ws: number[], adj: number[][], st: TSt): TSt => {
   let remaining: number[] = ws;
   let current: TSt = st;
   while (true) {
@@ -98,7 +98,7 @@ const visitNeighbors$ = (v: number, ws: number[], adj: number[][], st: TSt): TSt
                     _recur(rest, {
                       ...next,
                       low: _Map_set(v, min(lowOfV(v, next), lowOfV(w, next)), next.low),
-                    }))(connect$(w, adj, current)))(_v)
+                    }))(connect(w, adj, current)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(remaining);
@@ -109,7 +109,7 @@ const visitNeighbors$ = (v: number, ws: number[], adj: number[][], st: TSt): TSt
     return _step.value;
   }
 };
-const connect$ = (v: number, adj: number[][], st: TSt): TSt => {
+const connect = (v: number, adj: number[][], st: TSt): TSt => {
   const st1: TSt = {
     ...st,
     index: _Map_set(v, st.counter, st.index),
@@ -118,7 +118,7 @@ const connect$ = (v: number, adj: number[][], st: TSt): TSt => {
     stack: _Array_append(v, st.stack),
     counter: st.counter + 1,
   };
-  const st2: TSt = visitNeighbors$(v, neighborsOf(v, adj), adj, st1);
+  const st2: TSt = visitNeighbors(v, neighborsOf(v, adj), adj, st1);
   return eq(lowOfV(v, st2), indexOfV(v, st2))
     ? ((start: number) =>
         ((comp: number[]) => ({
@@ -129,7 +129,7 @@ const connect$ = (v: number, adj: number[][], st: TSt): TSt => {
         }))(_Array_drop(start, st2.stack)))(indexOfFrom(v, st2.stack, 0))
     : st2;
 };
-const connectAllFrom$ = (i: number, n: number, adj: number[][], st: TSt): TSt => {
+const connectAllFrom = (i: number, n: number, adj: number[][], st: TSt): TSt => {
   let j: number = i;
   let current: TSt = st;
   while (true) {
@@ -138,7 +138,7 @@ const connectAllFrom$ = (i: number, n: number, adj: number[][], st: TSt): TSt =>
     } else {
       {
         const $recur0: number = j + 1;
-        const $recur1: TSt = hasIndex(j, current) ? current : connect$(j, adj, current);
+        const $recur1: TSt = hasIndex(j, current) ? current : connect(j, adj, current);
         j = $recur0;
         current = $recur1;
         continue;
@@ -156,5 +156,5 @@ export const stronglyConnected: (adj: number[][]) => number[][] = (adj: number[]
     counter: 0,
     sccs: [],
   };
-  return connectAllFrom$(0, n, adj, initSt).sccs;
+  return connectAllFrom(0, n, adj, initSt).sccs;
 };

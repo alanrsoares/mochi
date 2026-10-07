@@ -52,7 +52,7 @@ test("fast pipe binds tighter than ++ (ADR 0073)", () => {
   ).toBe("hi!");
   expect(
     unwrapOk(compile('let foo = (c, n) => "z"\nlet x = 1\nlet result = "a" ++ x->foo(1)')),
-  ).toContain("foo$(x, 1)");
+  ).toContain("foo(x, 1)");
   expect(unwrapOk(format('let s = "hi" ++ ctx->gen(1)'))).toBe('let s = "hi" ++ ctx->gen(1)\n');
   expect(unwrapOk(format('let s = ("hi" ++ ctx)->gen(1)'))).toBe('let s = ("hi" ++ ctx)->gen(1)\n');
 });

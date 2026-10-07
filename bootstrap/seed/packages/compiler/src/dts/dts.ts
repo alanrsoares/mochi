@@ -88,7 +88,7 @@ import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensi
  * resolve, without needing the module graph: single-file dts sees the `tqual`
  * nodes even though it cannot see the dependency's exports.
  */
-const writtenQualsIn$ = (
+const writtenQualsIn = (
   te: TypeExpr,
   local: Set<string>,
   acc: Map<string, string>,
@@ -103,37 +103,37 @@ const writtenQualsIn$ = (
     }
     case "TyArrow": {
       const { from, to } = $match;
-      return writtenQualsIn$(to, local, writtenQualsIn$(from, local, acc));
+      return writtenQualsIn(to, local, writtenQualsIn(from, local, acc));
     }
     case "TyApp": {
       const { args } = $match;
-      return writtenQualsInAll$(args, local, acc, 0);
+      return writtenQualsInAll(args, local, acc, 0);
     }
     case "TyTuple": {
       const { elems } = $match;
-      return writtenQualsInAll$(elems, local, acc, 0);
+      return writtenQualsInAll(elems, local, acc, 0);
     }
     case "TyList": {
       const { elem } = $match;
-      return writtenQualsIn$(elem, local, acc);
+      return writtenQualsIn(elem, local, acc);
     }
     case "TyUnion": {
       const { members } = $match;
-      return writtenQualsInAll$(members, local, acc, 0);
+      return writtenQualsInAll(members, local, acc, 0);
     }
     case "TyQual": {
       const { alias, name, args } = $match;
       const acc1: Map<string, string> = or(_Set_has(name, local), _Map_has(name, acc))
         ? acc
         : _Map_set(name, `${alias}.${name}`, acc);
-      return writtenQualsInAll$(args, local, acc1, 0);
+      return writtenQualsInAll(args, local, acc1, 0);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const writtenQualsInAll$ = (
+const writtenQualsInAll = (
   tes: TypeExpr[],
   local: Set<string>,
   acc: Map<string, string>,
@@ -142,9 +142,9 @@ const writtenQualsInAll$ = (
   _Option_match(
     _Array_get(i, tes),
     () => acc,
-    (te) => writtenQualsInAll$(tes, local, writtenQualsIn$(te, local, acc), i + 1),
+    (te) => writtenQualsInAll(tes, local, writtenQualsIn(te, local, acc), i + 1),
   );
-const ctorQualsFrom$ = (
+const ctorQualsFrom = (
   ctors: Ctor[],
   local: Set<string>,
   acc: Map<string, string>,
@@ -154,10 +154,10 @@ const ctorQualsFrom$ = (
     _Array_get(i, ctors),
     () => acc,
     (c) =>
-      ctorQualsFrom$(
+      ctorQualsFrom(
         ctors,
         local,
-        writtenQualsInAll$(
+        writtenQualsInAll(
           map((f: CtorField) => f.fieldType, c.fields),
           local,
           acc,
@@ -166,7 +166,7 @@ const ctorQualsFrom$ = (
         i + 1,
       ),
   );
-const writtenQualsFrom$ = (
+const writtenQualsFrom = (
   stmts: Stmt[],
   local: Set<string>,
   acc: Map<string, string>,
@@ -177,20 +177,20 @@ const writtenQualsFrom$ = (
       ? acc
       : _v._tag === "Some" && _v.value._tag === "SExtern"
         ? (({ value: { typeExpr: te } }) =>
-            writtenQualsFrom$(stmts, local, writtenQualsIn$(te, local, acc), i + 1))(
+            writtenQualsFrom(stmts, local, writtenQualsIn(te, local, acc), i + 1))(
             _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
               value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SExtern" }>;
             },
           )
         : _v._tag === "Some" && _v.value._tag === "SLet"
           ? (({ value: { annot } }) =>
-              writtenQualsFrom$(
+              writtenQualsFrom(
                 stmts,
                 local,
                 _Option_match(
                   annot,
                   () => acc,
-                  (te) => writtenQualsIn$(te, local, acc),
+                  (te) => writtenQualsIn(te, local, acc),
                 ),
                 i + 1,
               ))(
@@ -202,25 +202,25 @@ const writtenQualsFrom$ = (
             ? (({ value: { ctors, alias, aliasType } }) =>
                 ((acc1: Map<string, string>) =>
                   ((acc2: Map<string, string>) =>
-                    ((acc3: Map<string, string>) => writtenQualsFrom$(stmts, local, acc3, i + 1))(
+                    ((acc3: Map<string, string>) => writtenQualsFrom(stmts, local, acc3, i + 1))(
                       _Option_match(
                         aliasType,
                         () => acc2,
-                        (te) => writtenQualsIn$(te, local, acc2),
+                        (te) => writtenQualsIn(te, local, acc2),
                       ),
                     ))(
                     _Option_match(
                       alias,
                       () => acc1,
                       (fields) =>
-                        writtenQualsInAll$(
+                        writtenQualsInAll(
                           map((f: AliasField) => f.fieldType, fields),
                           local,
                           acc1,
                           0,
                         ),
                     ),
-                  ))(ctorQualsFrom$(ctors, local, acc, 0)))(
+                  ))(ctorQualsFrom(ctors, local, acc, 0)))(
                 _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
                   value: Extract<
                     Extract<Option<Stmt>, { _tag: "Some" }>["value"],
@@ -229,7 +229,7 @@ const writtenQualsFrom$ = (
                 },
               )
             : _v._tag === "Some"
-              ? writtenQualsFrom$(stmts, local, acc, i + 1)
+              ? writtenQualsFrom(stmts, local, acc, i + 1)
               : (() => {
                   throw new Error("non-exhaustive match");
                 })())(_Array_get(i, stmts));
@@ -238,7 +238,7 @@ const writtenQualsFrom$ = (
  * (ADR 0046). Applied to inferred types before they print; the printers stay
  * qualification-free so the `.ts` backend is untouched.
  */
-const qualifyRow$ = (row: Row, qualify: Map<string, string>): Row => {
+const qualifyRow = (row: Row, qualify: Map<string, string>): Row => {
   const $match = row;
   switch ($match._tag) {
     case "RowEmpty": {
@@ -250,14 +250,14 @@ const qualifyRow$ = (row: Row, qualify: Map<string, string>): Row => {
     }
     case "RowExtend": {
       const { label, fieldType, optional, rest } = $match;
-      return RowExtend(label, qualifyTy$(fieldType, qualify), optional, qualifyRow$(rest, qualify));
+      return RowExtend(label, qualifyTy(fieldType, qualify), optional, qualifyRow(rest, qualify));
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const qualifyTy$ = (t: Ty, qualify: Map<string, string>): Ty => {
+const qualifyTy = (t: Ty, qualify: Map<string, string>): Ty => {
   const $match = t;
   switch ($match._tag) {
     case "TyVar": {
@@ -268,16 +268,16 @@ const qualifyTy$ = (t: Ty, qualify: Map<string, string>): Ty => {
       const { name, args } = $match;
       return TyCon(
         _Map_getOr(name, name, qualify),
-        map((a: Ty) => qualifyTy$(a, qualify), args),
+        map((a: Ty) => qualifyTy(a, qualify), args),
       );
     }
     case "TyFn": {
       const { from, to } = $match;
-      return TyFn(qualifyTy$(from, qualify), qualifyTy$(to, qualify));
+      return TyFn(qualifyTy(from, qualify), qualifyTy(to, qualify));
     }
     case "TyRecord": {
       const { row } = $match;
-      return TyRecord(qualifyRow$(row, qualify));
+      return TyRecord(qualifyRow(row, qualify));
     }
     case "TySingleton": {
       const { base, value } = $match;
@@ -285,7 +285,7 @@ const qualifyTy$ = (t: Ty, qualify: Map<string, string>): Ty => {
     }
     case "TyOneOf": {
       const { members } = $match;
-      return TyOneOf(map((m: Ty) => qualifyTy$(m, qualify), members));
+      return TyOneOf(map((m: Ty) => qualifyTy(m, qualify), members));
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -296,7 +296,7 @@ const qualifyTy$ = (t: Ty, qualify: Map<string, string>): Ty => {
  * The same rename on a written `TypeExpr` — ctor and alias field types print
  * from the AST, not from an inferred `Ty`.
  */
-const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
+const qualifyTe = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
   const $match = te;
   switch ($match._tag) {
     case "TyName": {
@@ -305,26 +305,26 @@ const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
     }
     case "TyArrow": {
       const { from, to, span } = $match;
-      return Ast.TyArrow(qualifyTe$(from, qualify), qualifyTe$(to, qualify), span);
+      return Ast.TyArrow(qualifyTe(from, qualify), qualifyTe(to, qualify), span);
     }
     case "TyApp": {
       const { ctor, args, span } = $match;
       return Ast.TyApp(
         _Map_getOr(ctor, ctor, qualify),
-        map((a: TypeExpr) => qualifyTe$(a, qualify), args),
+        map((a: TypeExpr) => qualifyTe(a, qualify), args),
         span,
       );
     }
     case "TyTuple": {
       const { elems, span } = $match;
       return Ast.TyTuple(
-        map((e: TypeExpr) => qualifyTe$(e, qualify), elems),
+        map((e: TypeExpr) => qualifyTe(e, qualify), elems),
         span,
       );
     }
     case "TyList": {
       const { elem, span } = $match;
-      return Ast.TyList(qualifyTe$(elem, qualify), span);
+      return Ast.TyList(qualifyTe(elem, qualify), span);
     }
     case "TyQual": {
       const { alias, name, nameSpan, args, span } = $match;
@@ -332,7 +332,7 @@ const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
         alias,
         name,
         nameSpan,
-        map((a: TypeExpr) => qualifyTe$(a, qualify), args),
+        map((a: TypeExpr) => qualifyTe(a, qualify), args),
         span,
       );
     }
@@ -343,7 +343,7 @@ const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
     case "TyUnion": {
       const { members, span } = $match;
       return Ast.TyUnion(
-        map((m: TypeExpr) => qualifyTe$(m, qualify), members),
+        map((m: TypeExpr) => qualifyTe(m, qualify), members),
         span,
       );
     }
@@ -352,21 +352,21 @@ const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
     }
   }
 };
-const qualifyField$ = (f: CtorField, qualify: Map<string, string>): CtorField => ({
+const qualifyField = (f: CtorField, qualify: Map<string, string>): CtorField => ({
   name: f.name,
-  fieldType: qualifyTe$(f.fieldType, qualify),
+  fieldType: qualifyTe(f.fieldType, qualify),
 });
-const qualifyCtor$ = (c: Ctor, qualify: Map<string, string>): Ctor => ({
+const qualifyCtor = (c: Ctor, qualify: Map<string, string>): Ctor => ({
   name: c.name,
-  fields: map((f: CtorField) => qualifyField$(f, qualify), c.fields),
+  fields: map((f: CtorField) => qualifyField(f, qualify), c.fields),
   tagKey: c.tagKey,
   tagLit: c.tagLit,
   span: c.span,
 });
-const qualifyAliasField$ = (f: AliasField, qualify: Map<string, string>): AliasField => ({
+const qualifyAliasField = (f: AliasField, qualify: Map<string, string>): AliasField => ({
   name: f.name,
   nameSpan: f.nameSpan,
-  fieldType: qualifyTe$(f.fieldType, qualify),
+  fieldType: qualifyTe(f.fieldType, qualify),
   optional: f.optional,
   spread: f.spread,
 });
@@ -375,7 +375,7 @@ const qualifyAliasField$ = (f: AliasField, qualify: Map<string, string>): AliasF
  * emits these module-locally for the `.ts` backend; a `.d.ts` exports them, and
  * an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
  */
-const typeDeclsFrom$ = (
+const typeDeclsFrom = (
   stmts: Stmt[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, string>,
@@ -402,7 +402,7 @@ const typeDeclsFrom$ = (
                               `${docComment}${typeDecl(
                                 name,
                                 params,
-                                map((c: Ctor) => qualifyCtor$(c, qualify), ctors),
+                                map((c: Ctor) => qualifyCtor(c, qualify), ctors),
                                 aliases,
                                 recs,
                               )}`,
@@ -410,7 +410,7 @@ const typeDeclsFrom$ = (
                             ),
                       (te) =>
                         _Array_prepend(
-                          `${docComment}${aliasTsDecl(name, params, qualifyTe$(te, qualify), aliases, recs)}`,
+                          `${docComment}${aliasTsDecl(name, params, qualifyTe(te, qualify), aliases, recs)}`,
                           rest,
                         ),
                     ),
@@ -419,21 +419,21 @@ const typeDeclsFrom$ = (
                       `${docComment}${recordAliasDecl(
                         name,
                         params,
-                        map((f: AliasField) => qualifyAliasField$(f, qualify), fields),
+                        map((f: AliasField) => qualifyAliasField(f, qualify), fields),
                         aliases,
                         withoutOwnShape(fields, params, aliases, recs),
                       )}`,
                       rest,
                     ),
                 ))(docs ? jsDoc(doc) : ""))(
-              typeDeclsFrom$(stmts, aliases, recs, qualify, docs, i + 1),
+              typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1),
             ))(
             _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
               value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
             },
           )
         : _v._tag === "Some"
-          ? typeDeclsFrom$(stmts, aliases, recs, qualify, docs, i + 1)
+          ? typeDeclsFrom(stmts, aliases, recs, qualify, docs, i + 1)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
@@ -442,13 +442,13 @@ const typeDeclsFrom$ = (
  * — the order `foldAliasesAt` tries them, as src/dts/dts.ts folds with the
  * inference result's local alias list.
  */
-const localAliasKeys$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
+const localAliasKeys = (stmts: Stmt[], i: number, acc: string[]): string[] =>
   ((_v) =>
     _v._tag === "None"
       ? acc
       : _v._tag === "Some" && _v.value._tag === "SType"
         ? (({ value: { name, alias, aliasType } }) =>
-            localAliasKeys$(
+            localAliasKeys(
               stmts,
               i + 1,
               or(_Option_isSome(alias), _Option_isSome(aliasType)) ? _Array_append(name, acc) : acc,
@@ -458,7 +458,7 @@ const localAliasKeys$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
             },
           )
         : _v._tag === "Some"
-          ? localAliasKeys$(stmts, i + 1, acc)
+          ? localAliasKeys(stmts, i + 1, acc)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
@@ -507,7 +507,7 @@ const bindingDeclsFrom: <A>(
                         _Map_get(name, env),
                         () => rest,
                         (sc) => {
-                          const ty: Ty = qualifyTy$(sc.ty, qualify);
+                          const ty: Ty = qualifyTy(sc.ty, qualify);
                           return _Array_prepend(
                             decl(
                               _Option_unwrapOr(
@@ -569,7 +569,7 @@ const bindingDeclsFrom: <A>(
  * has to be DECLARED here — unlike the `.ts` backend, which imports it from the
  * runtime instead (ADR 0093).
  */
-const builtinDeclsFor$ = (
+const builtinDeclsFor = (
   names: string[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, string>,
@@ -579,7 +579,7 @@ const builtinDeclsFor$ = (
     _Array_get(i, builtinTypeDecls),
     () => [] as string[],
     (bt) => {
-      const rest: string[] = builtinDeclsFor$(names, aliases, recs, i + 1);
+      const rest: string[] = builtinDeclsFor(names, aliases, recs, i + 1);
       return _Array_contains(bt.name, names)
         ? _Array_prepend(typeDecl(bt.name, bt.params, bt.ctors, aliases, recs), rest)
         : rest;
@@ -598,17 +598,17 @@ const mochiDtsSpec: (from: string) => string = (from: string) => {
 /**
  * `import type * as D from "./shapes.mochi"` for each namespace alias the body names.
  */
-const nsTypeImportsFrom$ = (stmts: Stmt[], body: string, seen: Set<string>, i: number): string[] =>
+const nsTypeImportsFrom = (stmts: Stmt[], body: string, seen: Set<string>, i: number): string[] =>
   ((_v) =>
     _v._tag === "None"
       ? ([] as string[])
       : _v._tag === "Some" && _v.value._tag === "SImportNs"
         ? (({ value: { alias, from } }) =>
             or(_Set_has(alias.name, seen), !_Str_contains(`${alias.name}.`, body))
-              ? nsTypeImportsFrom$(stmts, body, seen, i + 1)
+              ? nsTypeImportsFrom(stmts, body, seen, i + 1)
               : _Array_prepend(
                   `import type * as ${alias.name} from "${mochiDtsSpec(from)}";`,
-                  nsTypeImportsFrom$(stmts, body, _Set_add(alias.name, seen), i + 1),
+                  nsTypeImportsFrom(stmts, body, _Set_add(alias.name, seen), i + 1),
                 ))(
             _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
               value: Extract<
@@ -618,7 +618,7 @@ const nsTypeImportsFrom$ = (stmts: Stmt[], body: string, seen: Set<string>, i: n
             },
           )
         : _v._tag === "Some"
-          ? nsTypeImportsFrom$(stmts, body, seen, i + 1)
+          ? nsTypeImportsFrom(stmts, body, seen, i + 1)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
@@ -766,18 +766,18 @@ export const emitDtsFromTypedWith: <A>(
     dtsTypeNames: Map<string, string>,
   ) => {
     const local: Set<string> = declaredTypeNames(stmts, 0, _Set_fromArray([] as string[]));
-    const quals: Map<string, string> = writtenQualsFrom$(stmts, local, qualify, 0);
+    const quals: Map<string, string> = writtenQualsFrom(stmts, local, qualify, 0);
     const recs: Map<string, string> = hostTypeRecs(
       dtsTypeNames,
       local,
       qualConRecs(_Map_keys(quals), quals, aliases, declarationRecs$(stmts, aliases), 0),
     );
-    const types: string[] = typeDeclsFrom$(stmts, aliases, recs, quals, docs, 0);
+    const types: string[] = typeDeclsFrom(stmts, aliases, recs, quals, docs, 0);
     const bindings: string[] = bindingDeclsFrom(
       stmts,
       env,
       aliases,
-      localAliasKeys$(stmts, 0, [] as string[]),
+      localAliasKeys(stmts, 0, [] as string[]),
       recs,
       quals,
       docs,
@@ -789,14 +789,14 @@ export const emitDtsFromTypedWith: <A>(
     const wanted: Set<string> = referencedCons(stmts, env, 0, _Set_fromArray([] as string[]));
     const core: string = _Str_join("\n", _Array_concat(types, bindings));
     const builtinNames: string[] = builtinTypeNamesFor(declared, wanted, core, 0);
-    const body: string = `${_Str_join("\n", _Array_concat(builtinDeclsFor$(builtinNames, aliases, recs, 0), _Array_concat(types, bindings)))}
+    const body: string = `${_Str_join("\n", _Array_concat(builtinDeclsFor(builtinNames, aliases, recs, 0), _Array_concat(types, bindings)))}
 `;
     const curry: string[] = _Str_contains("_Curry<", body)
       ? [`import type { _Curry } from "${runtimeImport}";`]
       : ([] as string[]);
     const imports: string[] = _Array_concat(
       curry,
-      nsTypeImportsFrom$(stmts, body, _Set_fromArray([] as string[]), 0),
+      nsTypeImportsFrom(stmts, body, _Set_fromArray([] as string[]), 0),
     );
     return length(imports) === 0
       ? body
@@ -809,7 +809,7 @@ ${body}`;
  * position (ADR 0046). A name the file declares itself wins — it is already
  * writable bare, and it shadows. First alias wins on a collision.
  */
-const addQuals$ = (
+const addQuals = (
   alias: string,
   names: string[],
   local: Set<string>,
@@ -820,7 +820,7 @@ const addQuals$ = (
     _Array_get(i, names),
     () => acc,
     (name) =>
-      addQuals$(
+      addQuals(
         alias,
         names,
         local,
@@ -857,7 +857,7 @@ const qualsFromAliases: <A>(
               aliases,
               quals,
               local,
-              addQuals$(alias, _Set_toArray(scope.types), local, acc, 0),
+              addQuals(alias, _Set_toArray(scope.types), local, acc, 0),
               i + 1,
             ),
         ),

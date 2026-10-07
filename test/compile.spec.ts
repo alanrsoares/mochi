@@ -66,6 +66,8 @@ test("a private function only called saturated drops its curry wrapper", () => {
   expect(js("let add = (a, b) => plus(a, b)\nlet use = x => add(x, 1)")).not.toContain(
     "_curry(2, add$)",
   );
+  // With no wrapper left the module needs no `_curry` helper either.
+  expect(js("let add = (a, b) => plus(a, b)\nlet use = x => add(x, 1)")).not.toContain("_curry");
   // A value use, a partial call or an export keeps it.
   expect(js("let add = (a, b) => plus(a, b)\nlet use = x => add(x)")).toContain("_curry(2, add$)");
   expect(js("let add = (a, b) => plus(a, b)\nlet use = map(add)")).toContain("_curry(2, add$)");

@@ -166,7 +166,7 @@ const genericHead: <A>(params: A[], i: number, acc: string[]) => string = _curry
  * params bound positionally, aliases left nominal — then render through `tsOf`,
  * so the TS grammar has exactly one encoder.
  */
-const fieldTs$ = (
+const fieldTs = (
   te: TypeExpr,
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -183,7 +183,7 @@ const fieldTs$ = (
  * declared field name and its emitted key can never drift); this loop only
  * ever reads `fieldType`.
  */
-const ctorFieldsFrom$ = (
+const ctorFieldsFrom = (
   fields: CtorField[],
   keys: string[],
   params: string[],
@@ -196,25 +196,25 @@ const ctorFieldsFrom$ = (
     () => [] as string[],
     (fld) =>
       _Array_prepend(
-        `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs$(fld.fieldType, params, aliases, recs)}`,
-        ctorFieldsFrom$(fields, keys, params, aliases, recs, i + 1),
+        `${_Option_unwrapOr(`_${show(i)}`, _Array_get(i, keys))}: ${fieldTs(fld.fieldType, params, aliases, recs)}`,
+        ctorFieldsFrom(fields, keys, params, aliases, recs, i + 1),
       ),
   );
 /**
  * One ctor's runtime shape: its discriminant (`_tag` unless `@tag`/`@as`, ADR 0156) plus its fields.
  */
-const ctorVariant$ = (
+const ctorVariant = (
   c: Ctor,
   params: string[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, string>,
 ): string => {
-  const fields: string[] = ctorFieldsFrom$(c.fields, keysOf(c.fields), params, aliases, recs, 0);
+  const fields: string[] = ctorFieldsFrom(c.fields, keysOf(c.fields), params, aliases, recs, 0);
   return length(fields) === 0
     ? `{ ${c.tagKey}: ${jsStringLit(c.tagLit)} }`
     : `{ ${c.tagKey}: ${jsStringLit(c.tagLit)}; ${_Str_join("; ", fields)} }`;
 };
-const ctorVariantsFrom$ = (
+const ctorVariantsFrom = (
   ctors: Ctor[],
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -226,8 +226,8 @@ const ctorVariantsFrom$ = (
     () => [] as string[],
     (c) =>
       _Array_prepend(
-        `  | ${ctorVariant$(c, params, aliases, recs)}`,
-        ctorVariantsFrom$(ctors, params, aliases, recs, i + 1),
+        `  | ${ctorVariant(c, params, aliases, recs)}`,
+        ctorVariantsFrom(ctors, params, aliases, recs, i + 1),
       ),
   );
 const typeDecl$ = (
@@ -239,7 +239,7 @@ const typeDecl$ = (
 ): string => {
   const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
   return `export type ${head} =
-${_Str_join("\n", ctorVariantsFrom$(ctors, params, aliases, recs, 0))};`;
+${_Str_join("\n", ctorVariantsFrom(ctors, params, aliases, recs, 0))};`;
 };
 /**
  * A `type` decl -> an exported tagged union matching the runtime shape.
@@ -254,7 +254,7 @@ export const typeDecl: _Curry<
   ],
   string
 > = _curry(5, typeDecl$);
-const aliasFieldsFrom$ = (
+const aliasFieldsFrom = (
   fields: AliasField[],
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -265,17 +265,17 @@ const aliasFieldsFrom$ = (
     _Array_get(i, fields),
     () => [] as string[],
     (f) =>
-      or(f.spread, _Array_contains(f.name, laterSpreadLabelsFrom$(fields, params, aliases, i + 1)))
-        ? aliasFieldsFrom$(fields, params, aliases, recs, i + 1)
+      or(f.spread, _Array_contains(f.name, laterSpreadLabelsFrom(fields, params, aliases, i + 1)))
+        ? aliasFieldsFrom(fields, params, aliases, recs, i + 1)
         : _Array_prepend(
-            `${f.name}${f.optional ? "?" : ""}: ${fieldTs$(f.fieldType, params, aliases, recs)}`,
-            aliasFieldsFrom$(fields, params, aliases, recs, i + 1),
+            `${f.name}${f.optional ? "?" : ""}: ${fieldTs(f.fieldType, params, aliases, recs)}`,
+            aliasFieldsFrom(fields, params, aliases, recs, i + 1),
           ),
   );
 /**
  * Labels a `...A` spread brings in — its record row's, as inference sees them.
  */
-const spreadLabelsOf$ = (
+const spreadLabelsOf = (
   te: TypeExpr,
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -285,7 +285,7 @@ const spreadLabelsOf$ = (
     switch ($match._tag) {
       case "TyRecord": {
         const { row } = $match;
-        return rowLabelsOf$(row, [] as string[]);
+        return rowLabelsOf(row, [] as string[]);
       }
       default: {
         return [] as string[];
@@ -300,12 +300,12 @@ const spreadLabelsOf$ = (
       _Set_fromArray([] as string[]),
     ),
   );
-const rowLabelsOf$ = (row: Row, acc: string[]): string[] => {
+const rowLabelsOf = (row: Row, acc: string[]): string[] => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { label: l, rest } = $match;
-      return rowLabelsOf$(rest, _Array_append(l, acc));
+      return rowLabelsOf(rest, _Array_append(l, acc));
     }
     default: {
       return acc;
@@ -316,7 +316,7 @@ const rowLabelsOf$ = (row: Row, acc: string[]): string[] => {
  * Labels written after spread `i` — they override it (ADR 0154), so the TS
  * intersection must not also demand the spread's own, possibly differing, type.
  */
-const laterLabelsFrom$ = (
+const laterLabelsFrom = (
   fields: AliasField[],
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -327,15 +327,15 @@ const laterLabelsFrom$ = (
     () => [] as string[],
     (f) =>
       _Array_concat(
-        f.spread ? spreadLabelsOf$(f.fieldType, params, aliases) : [f.name],
-        laterLabelsFrom$(fields, params, aliases, i + 1),
+        f.spread ? spreadLabelsOf(f.fieldType, params, aliases) : [f.name],
+        laterLabelsFrom(fields, params, aliases, i + 1),
       ),
   );
 /**
  * Labels brought in by spreads written after position `i` — they override an
  * earlier own field of the same name.
  */
-const laterSpreadLabelsFrom$ = (
+const laterSpreadLabelsFrom = (
   fields: AliasField[],
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -346,11 +346,11 @@ const laterSpreadLabelsFrom$ = (
     () => [] as string[],
     (f) =>
       _Array_concat(
-        f.spread ? spreadLabelsOf$(f.fieldType, params, aliases) : ([] as string[]),
-        laterSpreadLabelsFrom$(fields, params, aliases, i + 1),
+        f.spread ? spreadLabelsOf(f.fieldType, params, aliases) : ([] as string[]),
+        laterSpreadLabelsFrom(fields, params, aliases, i + 1),
       ),
   );
-const spreadPartsFrom$ = (
+const spreadPartsFrom = (
   fields: AliasField[],
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -361,7 +361,7 @@ const spreadPartsFrom$ = (
     _Array_get(i, fields),
     () => [] as string[],
     (f) => {
-      const rest: string[] = spreadPartsFrom$(fields, params, aliases, recs, i + 1);
+      const rest: string[] = spreadPartsFrom(fields, params, aliases, recs, i + 1);
       return f.spread
         ? ((own: string) =>
             ((shadowed: string[]) =>
@@ -375,10 +375,10 @@ const spreadPartsFrom$ = (
                 rest,
               ))(
               filter(
-                (l: string) => _Array_contains(l, laterLabelsFrom$(fields, params, aliases, i + 1)),
-                spreadLabelsOf$(f.fieldType, params, aliases),
+                (l: string) => _Array_contains(l, laterLabelsFrom(fields, params, aliases, i + 1)),
+                spreadLabelsOf(f.fieldType, params, aliases),
               ),
-            ))(fieldTs$(f.fieldType, params, aliases, recs))
+            ))(fieldTs(f.fieldType, params, aliases, recs))
         : rest;
     },
   );
@@ -390,8 +390,8 @@ const recordAliasDecl$ = (
   recs: Map<string, string>,
 ): string => {
   const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
-  const body: string[] = aliasFieldsFrom$(fields, params, aliases, recs, 0);
-  const spreads: string[] = spreadPartsFrom$(fields, params, aliases, recs, 0);
+  const body: string[] = aliasFieldsFrom(fields, params, aliases, recs, 0);
+  const spreads: string[] = spreadPartsFrom(fields, params, aliases, recs, 0);
   const own: string[] =
     length(body) === 0
       ? length(spreads) === 0
@@ -423,7 +423,7 @@ const aliasTsDecl$ = (
   recs: Map<string, string>,
 ): string => {
   const head: string = `${name}${genericHead(params, 0, [] as string[])}`;
-  return `export type ${head} = ${fieldTs$(template, params, aliases, recs)};`;
+  return `export type ${head} = ${fieldTs(template, params, aliases, recs)};`;
 };
 /**
  * A transparent type alias (`type Id = number`) -> the aliased type directly.
@@ -621,7 +621,7 @@ export const guardParamTs: _Curry<[t: Ty, recs: Map<string, string>], Option<str
  * letters live on the const's TYPE head and naming one in a value position
  * would be an out-of-scope TS2304.
  */
-const lambdaParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[] =>
+const lambdaParamsFrom = (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[] =>
   i >= arity
     ? ([] as Option<string>[])
     : ((_v) =>
@@ -633,11 +633,11 @@ const lambdaParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option<
                   : isConcrete(fromT)
                     ? (Some(tsOf(fromT, recsEnv(env.recs))) as Option<string>)
                     : (None as Option<string>),
-                lambdaParamsFrom$(toT, arity, env, i + 1),
+                lambdaParamsFrom(toT, arity, env, i + 1),
               ))(_v)
-          : _Array_prepend(None as Option<string>, lambdaParamsFrom$(t, arity, env, i + 1)))(t);
+          : _Array_prepend(None as Option<string>, lambdaParamsFrom(t, arity, env, i + 1)))(t);
 const lambdaParamTypesTs$ = (lamType: Ty, arity: number, env: TsEnv): Option<string>[] =>
-  lambdaParamsFrom$(lamType, arity, env, 0);
+  lambdaParamsFrom(lamType, arity, env, 0);
 export const lambdaParamTypesTs: _Curry<
   [lamType: Ty, arity: number, env: TsEnv],
   Option<string>[]
@@ -651,7 +651,7 @@ export const lambdaParamTypesTs: _Curry<
  * the lambda brings them into value scope. `None` when the binding is not
  * generic — the concrete-only path already covers it.
  */
-const genericParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[] =>
+const genericParamsFrom = (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[] =>
   i >= arity
     ? ([] as Option<string>[])
     : ((_v) =>
@@ -659,9 +659,9 @@ const genericParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option
           ? (({ from: fromT, to: toT }) =>
               _Array_prepend(
                 Some(tsOf(fromT, env)) as Option<string>,
-                genericParamsFrom$(toT, arity, env, i + 1),
+                genericParamsFrom(toT, arity, env, i + 1),
               ))(_v)
-          : _Array_prepend(None as Option<string>, genericParamsFrom$(t, arity, env, i + 1)))(t);
+          : _Array_prepend(None as Option<string>, genericParamsFrom(t, arity, env, i + 1)))(t);
 export const genericLambdaParams: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   arity: number,
@@ -678,7 +678,7 @@ export const genericLambdaParams: <A>(
       : ((rendered: { env: TsEnv; head: string; pins: Map<number, string> }) =>
           Some({
             generics: rendered.head,
-            params: genericParamsFrom$(sc.ty, arity, rendered.env, 0),
+            params: genericParamsFrom(sc.ty, arity, rendered.env, 0),
           }) as Option<ParamAnnots>)(schemeRender(sc, recs)),
 );
 /**
@@ -695,7 +695,7 @@ const neverArgs: <A>(params: A[], i: number, acc: string[]) => string[] = _curry
       () => neverArgs(params, i + 1, _Array_append("never", acc)),
     ),
 );
-const ctorParamTypes$ = (
+const ctorParamTypes = (
   fields: CtorField[],
   params: string[],
   aliases: Map<string, AliasInfo>,
@@ -707,8 +707,8 @@ const ctorParamTypes$ = (
     () => [] as string[],
     (fld) =>
       _Array_prepend(
-        fieldTs$(fld.fieldType, params, aliases, recs),
-        ctorParamTypes$(fields, params, aliases, recs, i + 1),
+        fieldTs(fld.fieldType, params, aliases, recs),
+        ctorParamTypes(fields, params, aliases, recs, i + 1),
       ),
   );
 const ctorFactoryTs$ = (
@@ -722,7 +722,7 @@ const ctorFactoryTs$ = (
   const monos: string[] = neverArgs(params, 0, [] as string[]);
   return {
     generics: head,
-    paramTypes: ctorParamTypes$(c.fields, params, aliases, recs, 0),
+    paramTypes: ctorParamTypes(c.fields, params, aliases, recs, 0),
     ret: `${typeName}${head}`,
     retMono: length(monos) === 0 ? typeName : `${typeName}<${_Str_join(", ", monos)}>`,
   };
@@ -765,11 +765,11 @@ const paramDeclName: <A>(p: LamParam, i: A) => string = _curry(2, <A>(p: LamPara
  * Longest first, so the flat all-at-once signature is emitted LAST.
  */
 const compositions: (n: number) => number[][] = (n: number) =>
-  n === 0 ? [[] as number[]] : compositionsFrom$(n, 1);
-const compositionsFrom$ = (n: number, k: number): number[][] =>
+  n === 0 ? [[] as number[]] : compositionsFrom(n, 1);
+const compositionsFrom = (n: number, k: number): number[][] =>
   k > n
     ? ([] as number[][])
-    : _Array_concat(map(_Array_prepend(k), compositions(n - k)), compositionsFrom$(n, k + 1));
+    : _Array_concat(map(_Array_prepend(k), compositions(n - k)), compositionsFrom(n, k + 1));
 /**
  * Slice `params` into consecutive groups of the given sizes.
  */
@@ -789,17 +789,17 @@ const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => 
 /**
  * Fold the trailing groups into a curried tail: `(c) => (d) => R`.
  */
-const curriedTail$ = (slices: string[][], i: number, acc: string): string =>
+const curriedTail = (slices: string[][], i: number, acc: string): string =>
   i < 1
     ? acc
-    : curriedTail$(
+    : curriedTail(
         slices,
         i - 1,
         `(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(i, slices)))}) => ${acc}`,
       );
 const overloadSig$ = (head: string, params: string[], ret: string, groups: number[]): string => {
   const slices: string[][] = sliceGroups(params, groups, 0, 0);
-  const tail: string = curriedTail$(slices, length(slices) - 1, ret);
+  const tail: string = curriedTail(slices, length(slices) - 1, ret);
   return `${head}(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(0, slices)))}): ${tail};`;
 };
 const overloadSig: _Curry<[head: string, params: string[], ret: string, groups: number[]], string> =
@@ -845,7 +845,7 @@ export const curriedFnType: _Curry<[params: string[], ret: string], string> = _c
  * collecting one rendered `name: T` per param. A zero-param lambda consumes
  * the `unit` arrow the JS side erases.
  */
-const flatParamsFrom$ = (
+const flatParamsFrom = (
   t: Ty,
   value: Expr,
   env: TsEnv,
@@ -857,14 +857,14 @@ const flatParamsFrom$ = (
     case "ELambda": {
       const { params, body } = $match;
       return length(params) === 0
-        ? ((next: Ty) => flatParamsFrom$(next, body, env, n, acc))(
+        ? ((next: Ty) => flatParamsFrom(next, body, env, n, acc))(
             ((_v) =>
               _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
                 ? (({ from: fromT, to: toT }) => toT)(_v)
                 : t)(t),
           )
-        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom$(t1, body, env, n1, acc1))(
-            takeParams$(t, params, env, 0, n, acc),
+        : (([t1, n1, acc1]: [Ty, number, string[]]) => flatParamsFrom(t1, body, env, n1, acc1))(
+            takeParams(t, params, env, 0, n, acc),
           );
     }
     default: {
@@ -872,7 +872,7 @@ const flatParamsFrom$ = (
     }
   }
 };
-const takeParams$ = (
+const takeParams = (
   t: Ty,
   params: LamParam[],
   env: TsEnv,
@@ -888,7 +888,7 @@ const takeParams$ = (
       switch ($match._tag) {
         case "TyFn": {
           const { from: fromT, to: toT } = $match;
-          return takeParams$(
+          return takeParams(
             toT,
             params,
             env,
@@ -907,21 +907,21 @@ const takeParams$ = (
  * Arity-aware nested form: one arrow peeled per param, recursing into the body
  * so a curried definition keeps its shape.
  */
-const declType$ = (t: Ty, value: Expr, env: TsEnv): string => {
+const declType = (t: Ty, value: Expr, env: TsEnv): string => {
   const $match = value;
   switch ($match._tag) {
     case "ELambda": {
       const { params, body } = $match;
       return length(params) === 0
-        ? ((next: Ty) => `() => ${declType$(next, body, env)}`)(
+        ? ((next: Ty) => `() => ${declType(next, body, env)}`)(
             ((_v) =>
               _v._tag === "TyFn" && (({ from: fromT, to: toT }) => isUnit(fromT))(_v)
                 ? (({ from: fromT, to: toT }) => toT)(_v)
                 : t)(t),
           )
         : (([t1, _n, ps]: [Ty, number, string[]]) =>
-            `(${_Str_join(", ", ps)}) => ${declType$(t1, body, env)}`)(
-            takeParams$(t, params, env, 0, 0, [] as string[]),
+            `(${_Str_join(", ", ps)}) => ${declType(t1, body, env)}`)(
+            takeParams(t, params, env, 0, 0, [] as string[]),
           );
     }
     default: {
@@ -993,7 +993,7 @@ const rawReturnTs: <A>(
     );
     return rendered.head === ""
       ? (([_params, ret]: [string[], string]) => Some(`: ${ret}`) as Option<string>)(
-          flatParamsFrom$(sc.ty, value, rendered.env, 0, [] as string[]),
+          flatParamsFrom(sc.ty, value, rendered.env, 0, [] as string[]),
         )
       : (None as Option<string>);
   },
@@ -1018,9 +1018,9 @@ const coreBindingTsType: <A>(
       case "ELambda": {
         return rendered.head === ""
           ? (([params, ret]: [string[], string]) => curriedFnType$(params, ret))(
-              flatParamsFrom$(sc.ty, value, rendered.env, 0, [] as string[]),
+              flatParamsFrom(sc.ty, value, rendered.env, 0, [] as string[]),
             )
-          : `${rendered.head}${declType$(sc.ty, value, rendered.env)}`;
+          : `${rendered.head}${declType(sc.ty, value, rendered.env)}`;
       }
       default: {
         return tsOf(sc.ty, tsEnv(rendered.pins, recs));
@@ -1063,34 +1063,34 @@ export const typeAtTable: <A, B, C, D, E>(
  * Every `con` name a type mentions — used to decide which builtin variant
  * decls a module has to carry so its own references resolve.
  */
-const consInTy$ = (t: Ty, acc: Set<string>): Set<string> =>
+const consInTy = (t: Ty, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
       ? (({ args: [value, error] }) =>
-          consInTy$(error, consInTy$(value, _Set_add("Result", _Set_add("Task", acc)))))(
+          consInTy(error, consInTy(value, _Set_add("Result", _Set_add("Task", acc)))))(
           _v as Extract<Ty, { _tag: "TyCon" }>,
         )
       : _v._tag === "TyCon"
-        ? (({ name, args }) => consInAll$(args, _Set_add(name, acc), 0))(_v)
+        ? (({ name, args }) => consInAll(args, _Set_add(name, acc), 0))(_v)
         : _v._tag === "TyFn"
-          ? (({ from: fromT, to: toT }) => consInTy$(toT, consInTy$(fromT, acc)))(_v)
+          ? (({ from: fromT, to: toT }) => consInTy(toT, consInTy(fromT, acc)))(_v)
           : _v._tag === "TyRecord"
-            ? (({ row }) => consInRow$(row, acc))(_v)
+            ? (({ row }) => consInRow(row, acc))(_v)
             : _v._tag === "TyOneOf"
-              ? (({ members }) => consInAll$(members, acc, 0))(_v)
+              ? (({ members }) => consInAll(members, acc, 0))(_v)
               : acc)(t);
-const consInAll$ = (ts: Ty[], acc: Set<string>, i: number): Set<string> =>
+const consInAll = (ts: Ty[], acc: Set<string>, i: number): Set<string> =>
   _Option_match(
     _Array_get(i, ts),
     () => acc,
-    (t) => consInAll$(ts, consInTy$(t, acc), i + 1),
+    (t) => consInAll(ts, consInTy(t, acc), i + 1),
   );
-const consInRow$ = (row: Row, acc: Set<string>): Set<string> => {
+const consInRow = (row: Row, acc: Set<string>): Set<string> => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { fieldType, rest } = $match;
-      return consInRow$(rest, consInTy$(fieldType, acc));
+      return consInRow(rest, consInTy(fieldType, acc));
     }
     default: {
       return acc;
@@ -1185,7 +1185,7 @@ export const referencedCons: <A>(
                   : _Option_match(
                       _Map_get(name, env),
                       () => acc,
-                      (sc) => consInTy$(sc.ty, acc),
+                      (sc) => consInTy(sc.ty, acc),
                     ),
               ))(
               _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
@@ -1237,13 +1237,13 @@ export const builtinTypeNamesFor: _Curry<
  * expands a record alias at `typeExprToType`, so this reproduces exactly what
  * inference will have put in the type table for a value of that alias.
  */
-const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number): Row =>
+const aliasRowOf = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number): Row =>
   _Option_match(
     _Array_get(i, fields),
     () => RowEmpty as Row,
     (f) =>
       (([t, _vars, _st]: [Ty, Map<string, Ty>, St]) => {
-        const rest: Row = aliasRowOf$(fields, aliases, i + 1);
+        const rest: Row = aliasRowOf(fields, aliases, i + 1);
         return f.spread
           ? spreadRowInto(t, rest)
           : rowHasLabel(f.name, rest)
@@ -1259,8 +1259,8 @@ const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: n
         ),
       ),
   );
-const aliasShapeKey$ = (fields: AliasField[], aliases: Map<string, AliasInfo>): Option<string> =>
-  rowShapeKey(aliasRowOf$(fields, aliases, 0), new Map<number, string>());
+const aliasShapeKey = (fields: AliasField[], aliases: Map<string, AliasInfo>): Option<string> =>
+  rowShapeKey(aliasRowOf(fields, aliases, 0), new Map<number, string>());
 /**
  * Every record alias IN SCOPE, keyed by canonical row shape (ADR 0092). Built
  * from the merged alias map rather than this module's own `SType`s, so a dep's
@@ -1298,7 +1298,7 @@ const indexAlias: <A>(
             or(length(info.params) !== 0, length(info.fields) === 0)
               ? acc
               : _Option_match(
-                  aliasShapeKey$(info.fields, aliases),
+                  aliasShapeKey(info.fields, aliases),
                   () => acc,
                   (k) => _Map_set(k, name, acc),
                 ),
@@ -1306,7 +1306,7 @@ const indexAlias: <A>(
         ),
     ),
 );
-const recordAliasIndexFrom$ = (
+const recordAliasIndexFrom = (
   keys: string[],
   aliases: Map<string, AliasInfo>,
   i: number,
@@ -1316,16 +1316,16 @@ const recordAliasIndexFrom$ = (
     _Array_get(i, keys),
     () => acc,
     (key) =>
-      recordAliasIndexFrom$(keys, aliases, i + 1, indexAlias(key, bareName(key), aliases, acc)),
+      recordAliasIndexFrom(keys, aliases, i + 1, indexAlias(key, bareName(key), aliases, acc)),
   );
 export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, string> = (
   aliases: Map<string, AliasInfo>,
-) => recordAliasIndexFrom$(_Array_sort(_Map_keys(aliases)), aliases, 0, new Map<string, string>());
+) => recordAliasIndexFrom(_Array_sort(_Map_keys(aliases)), aliases, 0, new Map<string, string>());
 /**
  * Bare names of parameterised aliases. `LocTok` and `LocTok<t>` share one,
  * and printing the nullary name then imports the parameterised one.
  */
-const parameterizedBares$ = (
+const parameterizedBares = (
   keys: string[],
   aliases: Map<string, AliasInfo>,
   i: number,
@@ -1337,9 +1337,9 @@ const parameterizedBares$ = (
     (key) =>
       _Option_match(
         _Map_get(key, aliases),
-        () => parameterizedBares$(keys, aliases, i + 1, acc),
+        () => parameterizedBares(keys, aliases, i + 1, acc),
         (info) =>
-          parameterizedBares$(
+          parameterizedBares(
             keys,
             aliases,
             i + 1,
@@ -1352,7 +1352,7 @@ const parameterizedBares$ = (
  * when every owner is ambiguous. Keys are sorted, so a later qualified copy
  * (`Schemes.AliasInfo`) cannot bury an earlier unique name (`QualAliasInfo`).
  */
-const printableName$ = (
+const printableName = (
   keys: string[],
   shape: string,
   aliases: Map<string, AliasInfo>,
@@ -1367,9 +1367,9 @@ const printableName$ = (
       const bare: string = bareName(key);
       return _Option_match(
         _Map_get(key, aliases),
-        () => printableName$(keys, shape, aliases, bad, acc, i + 1),
+        () => printableName(keys, shape, aliases, bad, acc, i + 1),
         (info) =>
-          printableName$(
+          printableName(
             keys,
             shape,
             aliases,
@@ -1380,7 +1380,7 @@ const printableName$ = (
                 or(or(_Set_has(bare, bad), length(info.params) !== 0), length(info.fields) === 0)
                   ? acc
                   : _Option_match(
-                      aliasShapeKey$(info.fields, aliases),
+                      aliasShapeKey(info.fields, aliases),
                       () => acc,
                       (k) => (eq(k, shape) ? bare : acc),
                     ),
@@ -1391,7 +1391,7 @@ const printableName$ = (
       );
     },
   );
-const dropAmbiguous$ = (
+const dropAmbiguous = (
   keys: string[],
   recs: Map<string, string>,
   aliases: Map<string, AliasInfo>,
@@ -1406,12 +1406,12 @@ const dropAmbiguous$ = (
     (k) =>
       _Option_match(
         _Map_get(k, recs),
-        () => dropAmbiguous$(keys, recs, aliases, bad, localNames, aliasKeys, i + 1),
+        () => dropAmbiguous(keys, recs, aliases, bad, localNames, aliasKeys, i + 1),
         (name) =>
-          dropAmbiguous$(
+          dropAmbiguous(
             keys,
             and(_Set_has(name, bad), !_Set_has(name, localNames))
-              ? _Map_set(k, printableName$(aliasKeys, k, aliases, bad, "", 0), recs)
+              ? _Map_set(k, printableName(aliasKeys, k, aliases, bad, "", 0), recs)
               : recs,
             aliases,
             bad,
@@ -1427,11 +1427,11 @@ const withoutAmbiguousAlias$ = (
   localNames: Set<string>,
 ): Map<string, string> => {
   const aliasKeys: string[] = _Array_sort(_Map_keys(aliases));
-  return dropAmbiguous$(
+  return dropAmbiguous(
     _Map_keys(recs),
     recs,
     aliases,
-    parameterizedBares$(aliasKeys, aliases, 0, _Set_fromArray([] as string[])),
+    parameterizedBares(aliasKeys, aliases, 0, _Set_fromArray([] as string[])),
     localNames,
     aliasKeys,
     0,
@@ -1469,14 +1469,14 @@ export const withoutOwnShape: <A, B>(
       _Array_get(0, params),
       () =>
         _Option_match(
-          aliasShapeKey$(fields, aliases),
+          aliasShapeKey(fields, aliases),
           () => recs,
           (k) => _Map_delete(k, recs),
         ),
       () => recs,
     ),
 );
-const typeHeaderFrom$ = (
+const typeHeaderFrom = (
   stmts: Stmt[],
   aliases: Map<string, AliasInfo>,
   recs: Map<string, string>,
@@ -1517,13 +1517,13 @@ ${docComment}type ${name} = { readonly [${name}]: never };`,
                       `${docComment}${recordAliasDecl$(name, params, fields, aliases, withoutOwnShape(fields, params, aliases, recs))}`,
                       rest,
                     ),
-                ))(docs ? jsDoc(doc) : ""))(typeHeaderFrom$(stmts, aliases, recs, docs, i + 1)))(
+                ))(docs ? jsDoc(doc) : ""))(typeHeaderFrom(stmts, aliases, recs, docs, i + 1)))(
             _v as Extract<Option<Stmt>, { _tag: "Some" }> & {
               value: Extract<Extract<Option<Stmt>, { _tag: "Some" }>["value"], { _tag: "SType" }>;
             },
           )
         : _v._tag === "Some"
-          ? typeHeaderFrom$(stmts, aliases, recs, docs, i + 1)
+          ? typeHeaderFrom(stmts, aliases, recs, docs, i + 1)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
@@ -1599,7 +1599,7 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) => {
     }
     case "ECall": {
       const { fn, args } = $match;
-      return _Array_concat(scopedSpans(fn), scopedSpansAt$(args, 0));
+      return _Array_concat(scopedSpans(fn), scopedSpansAt(args, 0));
     }
     case "ELetIn": {
       const { value, body } = $match;
@@ -1615,7 +1615,7 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) => {
     }
     case "EDo": {
       const { exprs } = $match;
-      return scopedSpansAt$(exprs, 0);
+      return scopedSpansAt(exprs, 0);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
@@ -1626,12 +1626,12 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) => {
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      return _Array_concat(scopedSpans(scrutinee), scopedSpansInArms$(arms, 0));
+      return _Array_concat(scopedSpans(scrutinee), scopedSpansInArms(arms, 0));
     }
     case "ERecord": {
       const { fields, spread } = $match;
       return _Array_concat(
-        scopedSpansInFields$(fields, 0),
+        scopedSpansInFields(fields, 0),
         _Option_match(
           spread,
           () => [] as SpanAt[],
@@ -1646,36 +1646,36 @@ const scopedSpans: (e: Expr) => SpanAt[] = (e: Expr) => {
     }
     case "ETuple": {
       const { elements } = $match;
-      return scopedSpansAt$(elements, 0);
+      return scopedSpansAt(elements, 0);
     }
     case "EArr": {
       const { elements, span: sp } = $match;
-      return scopedSpansInSeq$(elements, sp);
+      return scopedSpansInSeq(elements, sp);
     }
     case "EList": {
       const { elements, span: sp } = $match;
-      return scopedSpansInSeq$(elements, sp);
+      return scopedSpansInSeq(elements, sp);
     }
     case "ESet": {
       const { elements, span: sp } = $match;
-      return scopedSpansInSeq$(elements, sp);
+      return scopedSpansInSeq(elements, sp);
     }
     case "EMap": {
       const { entries, span: sp } = $match;
-      const inner: SpanAt[] = scopedSpansInEntries$(entries, 0);
+      const inner: SpanAt[] = scopedSpansInEntries(entries, 0);
       return length(entries) === 0 ? _Array_prepend(sp, inner) : inner;
     }
     case "ELoop": {
       const { params, body } = $match;
-      return _Array_concat(scopedSpansInLoop$(params, 0), scopedSpans(body));
+      return _Array_concat(scopedSpansInLoop(params, 0), scopedSpans(body));
     }
     case "ERecur": {
       const { args } = $match;
-      return scopedSpansAt$(args, 0);
+      return scopedSpansAt(args, 0);
     }
     case "EInterp": {
       const { parts } = $match;
-      return scopedSpansInParts$(parts, 0);
+      return scopedSpansInParts(parts, 0);
     }
     default: {
       return [] as SpanAt[];
@@ -1693,13 +1693,13 @@ const isRefExpr: (e: Expr) => boolean = (e: Expr) => {
     }
   }
 };
-const scopedSpansAt$ = (exprs: Expr[], i: number): SpanAt[] =>
+const scopedSpansAt = (exprs: Expr[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, exprs),
     () => [] as SpanAt[],
-    (e) => _Array_concat(scopedSpans(e), scopedSpansAt$(exprs, i + 1)),
+    (e) => _Array_concat(scopedSpans(e), scopedSpansAt(exprs, i + 1)),
   );
-const scopedSpansInArms$ = (arms: MatchArm[], i: number): SpanAt[] =>
+const scopedSpansInArms = (arms: MatchArm[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, arms),
     () => [] as SpanAt[],
@@ -1710,32 +1710,32 @@ const scopedSpansInArms$ = (arms: MatchArm[], i: number): SpanAt[] =>
           () => [] as SpanAt[],
           (g) => scopedSpans(g),
         ),
-        _Array_concat(scopedSpans(a.body), scopedSpansInArms$(arms, i + 1)),
+        _Array_concat(scopedSpans(a.body), scopedSpansInArms(arms, i + 1)),
       ),
   );
-const scopedSpansInFields$ = (fields: Field[], i: number): SpanAt[] =>
+const scopedSpansInFields = (fields: Field[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, fields),
     () => [] as SpanAt[],
-    (f) => _Array_concat(scopedSpans(f.value), scopedSpansInFields$(fields, i + 1)),
+    (f) => _Array_concat(scopedSpans(f.value), scopedSpansInFields(fields, i + 1)),
   );
-const scopedSpansInEntries$ = (entries: MapEntry[], i: number): SpanAt[] =>
+const scopedSpansInEntries = (entries: MapEntry[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, entries),
     () => [] as SpanAt[],
     (en) =>
       _Array_concat(
         scopedSpans(en.key),
-        _Array_concat(scopedSpans(en.value), scopedSpansInEntries$(entries, i + 1)),
+        _Array_concat(scopedSpans(en.value), scopedSpansInEntries(entries, i + 1)),
       ),
   );
-const scopedSpansInElems$ = (elements: SeqElem[], i: number): SpanAt[] =>
+const scopedSpansInElems = (elements: SeqElem[], i: number): SpanAt[] =>
   ((_v) =>
     _v._tag === "None"
       ? ([] as SpanAt[])
       : _v._tag === "Some" && _v.value._tag === "SEExpr"
         ? (({ value: { expr: e } }) =>
-            _Array_concat(scopedSpans(e), scopedSpansInElems$(elements, i + 1)))(
+            _Array_concat(scopedSpans(e), scopedSpansInElems(elements, i + 1)))(
             _v as Extract<Option<SeqElem>, { _tag: "Some" }> & {
               value: Extract<
                 Extract<Option<SeqElem>, { _tag: "Some" }>["value"],
@@ -1745,7 +1745,7 @@ const scopedSpansInElems$ = (elements: SeqElem[], i: number): SpanAt[] =>
           )
         : _v._tag === "Some" && _v.value._tag === "SESpread"
           ? (({ value: { expr: e } }) =>
-              _Array_concat(scopedSpans(e), scopedSpansInElems$(elements, i + 1)))(
+              _Array_concat(scopedSpans(e), scopedSpansInElems(elements, i + 1)))(
               _v as Extract<Option<SeqElem>, { _tag: "Some" }> & {
                 value: Extract<
                   Extract<Option<SeqElem>, { _tag: "Some" }>["value"],
@@ -1760,23 +1760,23 @@ const scopedSpansInElems$ = (elements: SeqElem[], i: number): SpanAt[] =>
  * An EMPTY `[]` / `@{}` / `#{}` is itself annotatable; a populated one only
  * carries its elements' nested nodes.
  */
-const scopedSpansInSeq$ = (elements: SeqElem[], sp: SpanAt): SpanAt[] => {
-  const inner: SpanAt[] = scopedSpansInElems$(elements, 0);
+const scopedSpansInSeq = (elements: SeqElem[], sp: SpanAt): SpanAt[] => {
+  const inner: SpanAt[] = scopedSpansInElems(elements, 0);
   return length(elements) === 0 ? _Array_prepend(sp, inner) : inner;
 };
-const scopedSpansInLoop$ = (params: LoopParam[], i: number): SpanAt[] =>
+const scopedSpansInLoop = (params: LoopParam[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, params),
     () => [] as SpanAt[],
-    (p) => _Array_concat(scopedSpans(p.init), scopedSpansInLoop$(params, i + 1)),
+    (p) => _Array_concat(scopedSpans(p.init), scopedSpansInLoop(params, i + 1)),
   );
-const scopedSpansInParts$ = (parts: InterpPart[], i: number): SpanAt[] =>
+const scopedSpansInParts = (parts: InterpPart[], i: number): SpanAt[] =>
   ((_v) =>
     _v._tag === "None"
       ? ([] as SpanAt[])
       : _v._tag === "Some" && _v.value._tag === "IPExpr"
         ? (({ value: { expr: e } }) =>
-            _Array_concat(scopedSpans(e), scopedSpansInParts$(parts, i + 1)))(
+            _Array_concat(scopedSpans(e), scopedSpansInParts(parts, i + 1)))(
             _v as Extract<Option<InterpPart>, { _tag: "Some" }> & {
               value: Extract<
                 Extract<Option<InterpPart>, { _tag: "Some" }>["value"],
@@ -1785,7 +1785,7 @@ const scopedSpansInParts$ = (parts: InterpPart[], i: number): SpanAt[] =>
             },
           )
         : _v._tag === "Some"
-          ? scopedSpansInParts$(parts, i + 1)
+          ? scopedSpansInParts(parts, i + 1)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, parts));
@@ -2218,7 +2218,7 @@ export const emitTsModuleWith: <A, B, C, D, E, F, G, H, I>(
       aliases,
       nullaryLocalNames$(stmts, 0, _Set_fromArray([] as string[])),
     );
-    const typeHeader: string[] = typeHeaderFrom$(stmts, aliases, recs, docs, 0);
+    const typeHeader: string[] = typeHeaderFrom(stmts, aliases, recs, docs, 0);
     const body: string = codegenWith(stmts, imported, false, ns, jsDefs, runtimeDeps, {
       ...tsGenOpts(stmts, env, types, letParams, aliases, bindingHooks),
       docs: docs,
@@ -2347,7 +2347,7 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
  * type has no head to bind — a record's trailing row var is skipped here and
  * the declaration prints the closed body.
  */
-const freeIdsIn$ = (t: Ty, acc: number[]): number[] => {
+const freeIdsIn = (t: Ty, acc: number[]): number[] => {
   const $match = t;
   switch ($match._tag) {
     case "TyVar": {
@@ -2356,40 +2356,40 @@ const freeIdsIn$ = (t: Ty, acc: number[]): number[] => {
     }
     case "TyCon": {
       const { args } = $match;
-      return freeIdsInAll$(args, acc);
+      return freeIdsInAll(args, acc);
     }
     case "TyFn": {
       const { from: fromT, to: toT } = $match;
-      return freeIdsIn$(toT, freeIdsIn$(fromT, acc));
+      return freeIdsIn(toT, freeIdsIn(fromT, acc));
     }
     case "TyRecord": {
       const { row } = $match;
-      return freeIdsInRow$(row, acc);
+      return freeIdsInRow(row, acc);
     }
     case "TySingleton": {
       return acc;
     }
     case "TyOneOf": {
       const { members } = $match;
-      return freeIdsInAll$(members, acc);
+      return freeIdsInAll(members, acc);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const freeIdsInAll$ = (ts: Ty[], acc: number[]): number[] =>
+const freeIdsInAll = (ts: Ty[], acc: number[]): number[] =>
   reduce(
-    _curry(2, (a: number[], t: Ty) => freeIdsIn$(t, a)),
+    _curry(2, (a: number[], t: Ty) => freeIdsIn(t, a)),
     acc,
     ts,
   );
-const freeIdsInRow$ = (row: Row, acc: number[]): number[] => {
+const freeIdsInRow = (row: Row, acc: number[]): number[] => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { fieldType, rest } = $match;
-      return freeIdsInRow$(rest, freeIdsIn$(fieldType, acc));
+      return freeIdsInRow(rest, freeIdsIn(fieldType, acc));
     }
     default: {
       return acc;
@@ -2443,7 +2443,7 @@ const arrowCount: (t: Ty) => number = (t: Ty) => {
  * Peel `arity` arrows into `a: T`, `b: T`, … — the same positional naming
  * `tsArrow` uses, so a declaration and a call site read alike.
  */
-const hostParams$ = (t: Ty, arity: number, names: Map<number, string>, i: number): string[] =>
+const hostParams = (t: Ty, arity: number, names: Map<number, string>, i: number): string[] =>
   i >= arity
     ? ([] as string[])
     : ((_v) =>
@@ -2451,38 +2451,38 @@ const hostParams$ = (t: Ty, arity: number, names: Map<number, string>, i: number
           ? (({ from: fromT, to: toT }) =>
               _Array_prepend(
                 `${_Str_fromCode(97 + i)}: ${tsOf(fromT, plainEnv(names))}`,
-                hostParams$(toT, arity, names, i + 1),
+                hostParams(toT, arity, names, i + 1),
               ))(_v)
           : ([] as string[]))(t);
-const hostReturn$ = (t: Ty, arity: number, i: number): Ty =>
+const hostReturn = (t: Ty, arity: number, i: number): Ty =>
   i >= arity
     ? t
-    : ((_v) => (_v._tag === "TyFn" ? (({ to: toT }) => hostReturn$(toT, arity, i + 1))(_v) : t))(t);
+    : ((_v) => (_v._tag === "TyFn" ? (({ to: toT }) => hostReturn(toT, arity, i + 1))(_v) : t))(t);
 /**
  * `(a: A) => (b: B) => R` — a CURRIED host's own shape (ADR 0064). Unlike
  * `flatHostType` there are no partial-application overloads to offer: `_curry`
  * is built AROUND this host, not exported by it, so it takes exactly one
  * argument per call. Folded right-to-left, hence the reverse.
  */
-const curriedHostType$ = (t: Ty, arity: number): string => {
-  const ids: number[] = freeIdsIn$(t, [] as number[]);
+const curriedHostType = (t: Ty, arity: number): string => {
+  const ids: number[] = freeIdsIn(t, [] as number[]);
   const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
   return `${genericHeadOf(ids, names)}${reduce(
     _curry(2, (acc: string, p: string) => `(${p}) => ${acc}`),
-    tsOf(hostReturn$(t, arity, 0), plainEnv(names)),
-    _Array_reverse(hostParams$(t, arity, names, 0)),
+    tsOf(hostReturn(t, arity, 0), plainEnv(names)),
+    _Array_reverse(hostParams(t, arity, names, 0)),
   )}`;
 };
 const flatHostType$ = (t: Ty, arity: number): string => {
-  const ids: number[] = freeIdsIn$(t, [] as number[]);
+  const ids: number[] = freeIdsIn(t, [] as number[]);
   const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
   const head: string = genericHeadOf(ids, names);
   return arity === 0
     ? `${head}${tsOf(t, plainEnv(names))}`
     : curriedOverloads$(
         head,
-        hostParams$(t, arity, names, 0),
-        tsOf(hostReturn$(t, arity, 0), plainEnv(names)),
+        hostParams(t, arity, names, 0),
+        tsOf(hostReturn(t, arity, 0), plainEnv(names)),
       );
 };
 /**
@@ -2501,9 +2501,9 @@ const externDecl: <A, B>(
   const t: Ty = e.scheme.ty;
   const n: number = arrowCount(t);
   return and(n >= 1, e.curried)
-    ? `export declare const ${e.imported}: ${curriedHostType$(t, n)};`
+    ? `export declare const ${e.imported}: ${curriedHostType(t, n)};`
     : n === 0
-      ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn$(t, [] as number[]))))};`
+      ? `export declare const ${e.imported}: ${tsOf(t, plainEnv(anyFor(freeIdsIn(t, [] as number[]))))};`
       : `export declare const ${e.imported}: ${flatHostType$(t, n)};`;
 };
 /**
@@ -2525,7 +2525,7 @@ export const externModuleDts: <A, B>(
       _curry(
         2,
         (acc: Set<string>, e: { scheme: { ty: Ty } & A; imported: string; curried: boolean } & B) =>
-          consInTy$(e.scheme.ty, acc),
+          consInTy(e.scheme.ty, acc),
       ),
       _Set_fromArray([] as string[]),
       externs,

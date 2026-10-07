@@ -206,7 +206,7 @@ const firstAtPath: <A>(
       (e) => atPath("type", path, e),
     ),
 );
-const parseModule$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], MErr> =>
+const parseModule = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], MErr> =>
   _Result_match(
     lex(src),
     (e) => Err(stamp("lex", e)) as Result<Stmt[], MErr>,
@@ -217,7 +217,7 @@ const parseModule$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[]
         (stmts) => Ok(stmts) as Result<Stmt[], MErr>,
       ),
   );
-const importFromsFrom$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
+const importFromsFrom = (stmts: Stmt[], i: number, acc: string[]): string[] =>
   _Option_match(
     _Array_get(i, stmts),
     () => acc,
@@ -226,22 +226,22 @@ const importFromsFrom$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
       switch ($match._tag) {
         case "SImport": {
           const { from } = $match;
-          return importFromsFrom$(stmts, i + 1, _Array_append(from, acc));
+          return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
         }
         case "SImportNs": {
           const { from } = $match;
-          return importFromsFrom$(stmts, i + 1, _Array_append(from, acc));
+          return importFromsFrom(stmts, i + 1, _Array_append(from, acc));
         }
         default: {
-          return importFromsFrom$(stmts, i + 1, acc);
+          return importFromsFrom(stmts, i + 1, acc);
         }
       }
     },
   );
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
-  importFromsFrom$(stmts, 0, [] as string[]);
+  importFromsFrom(stmts, 0, [] as string[]);
 
-const visit$ = (path: string, acc: Acc, plugins: Option<HostPlugin[]>): Result<Acc, MErr> =>
+const visit = (path: string, acc: Acc, plugins: Option<HostPlugin[]>): Result<Acc, MErr> =>
   ((_v) =>
     _v._tag === "Some" && _v.value === "done"
       ? (Ok(acc) as Result<Acc, MErr>)
@@ -253,11 +253,11 @@ const visit$ = (path: string, acc: Acc, plugins: Option<HostPlugin[]>): Result<A
               () => Err(mErr(`cannot read module '${path}'`)) as Result<Acc, MErr>,
               (src) =>
                 _Result_match(
-                  parseModule$(src, plugins),
+                  parseModule(src, plugins),
                   (e) => Err(e) as Result<Acc, MErr>,
                   (stmts) =>
                     _Result_match(
-                      visitAll$(importFroms(stmts), path, acc1, plugins),
+                      visitAll(importFroms(stmts), path, acc1, plugins),
                       (e) => Err(e) as Result<Acc, MErr>,
                       (acc2) =>
                         Ok({
@@ -269,7 +269,7 @@ const visit$ = (path: string, acc: Acc, plugins: Option<HostPlugin[]>): Result<A
             ))({ state: _Map_set(path, "loading", acc.state), order: acc.order }))(
     _Map_get(path, acc.state),
   );
-const visitAll$ = (
+const visitAll = (
   froms: string[],
   importer: string,
   acc: Acc,
@@ -281,9 +281,9 @@ const visitAll$ = (
       : _v.length >= 1
         ? (([from, ...rest]) =>
             _Result_match(
-              visit$(resolveImport(importer, from), acc, plugins),
+              visit(resolveImport(importer, from), acc, plugins),
               (e) => Err(e) as Result<Acc, MErr>,
-              (acc1) => visitAll$(rest, importer, acc1, plugins),
+              (acc1) => visitAll(rest, importer, acc1, plugins),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -291,7 +291,7 @@ const visitAll$ = (
 const loadGraphWith$ = (entry: string, plugins: Option<HostPlugin[]>): Result<Loaded[], MErr> =>
   _Result_flatMap(
     (acc) => Ok(acc.order) as Result<Loaded[], MErr>,
-    visit$(absPath(entry), { state: new Map<string, string>(), order: [] as Loaded[] }, plugins),
+    visit(absPath(entry), { state: new Map<string, string>(), order: [] as Loaded[] }, plugins),
   );
 /**
  * loadGraphWith : string -> Option [Plugin] -> Result [Loaded] MErr
@@ -413,7 +413,7 @@ const qualScopeOf: <A, B>(
     >,
   ) => ({ types: exportedTypeNames(stmts), aliases: scopeAliases(stmts, quals) }),
 );
-const withTagEntry$ = (
+const withTagEntry = (
   name: string,
   depKeys: Map<string, string[]>,
   keys: Map<string, string[]>,
@@ -469,7 +469,7 @@ const withNamedCtor: <A, B, C, D, E, F, G, H, I>(
     keys: _Option_match(
       _Map_get(name, depKeys),
       () => res.keys,
-      (ks) => withTagEntry$(name, depKeys, _Map_set(name, ks, res.keys)),
+      (ks) => withTagEntry(name, depKeys, _Map_set(name, ks, res.keys)),
     ),
     quals: res.quals,
   }),
@@ -556,7 +556,7 @@ const prefixCtorsInto: <A>(
               throw new Error("non-exhaustive match");
             })())(keys),
 );
-const prefixKeysInto$ = (
+const prefixKeysInto = (
   names: string[],
   alias: string,
   from: Map<string, string[]>,
@@ -569,7 +569,7 @@ const prefixKeysInto$ = (
         ? (([k, ...rest]) =>
             ((q: string) =>
               ((withKeys: Map<string, string[]>) =>
-                prefixKeysInto$(
+                prefixKeysInto(
                   rest,
                   alias,
                   from,
@@ -769,7 +769,7 @@ const resolveImportsFrom: <B, C>(
                               ),
                               types: mergeMap(depReg.types, res.reg.types),
                             },
-                            keys: prefixKeysInto$(
+                            keys: prefixKeysInto(
                               filter((k: string) => !_Str_startsWith("@", k), _Map_keys(depKeys)),
                               alias.name,
                               depKeys,
@@ -800,7 +800,7 @@ const resolveImportsFrom: <B, C>(
                   throw new Error("non-exhaustive match");
                 })())(_Array_get(i, stmts)),
 );
-const openFor$ = (loaded: Loaded, isEntry: boolean, opts: Opts): boolean =>
+const openFor = (loaded: Loaded, isEntry: boolean, opts: Opts): boolean =>
   and(isEntry, opts.strictEntry) ? opts.open : openMode(loaded.src, opts.open);
 const compileOne: <A>(
   ctx: {
@@ -855,7 +855,7 @@ const compileOne: <A>(
                 loaded.stmts,
                 builtins,
                 namespaces,
-                openFor$(loaded, isEntry, opts),
+                openFor(loaded, isEntry, opts),
                 res.imports,
                 res.nsImports,
                 res.quals,
@@ -896,7 +896,7 @@ const compileOne: <A>(
         ),
     ),
 );
-const compileAll$ = (
+const compileAll = (
   ctx: RecoveryCtx,
   graph: Loaded[],
   opts: Opts,
@@ -909,13 +909,13 @@ const compileAll$ = (
             _Result_match(
               compileOne(ctx, m, false, length(rest) === 0, opts),
               (e) => Err(e) as Result<ModuleOutput[], MErr[]>,
-              (ctx1) => compileAll$(ctx1, rest, opts),
+              (ctx1) => compileAll(ctx1, rest, opts),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(graph);
 const compileGraphWith$ = (graph: Loaded[], opts: Opts): Result<ModuleOutput[], MErr[]> =>
-  compileAll$(
+  compileAll(
     {
       exportsByPath: new Map<string, Map<string, Scheme>>(),
       regByPath: new Map<string, Registry>(),
@@ -1037,17 +1037,17 @@ const checkErrorsRecovering: <B, C>(
     );
   },
 );
-const sameErr$ = (a: MErr, b: MErr): boolean =>
+const sameErr = (a: MErr, b: MErr): boolean =>
   and(
     and(and(eq(a.kind, b.kind), eq(a.message, b.message)), eq(a.start, b.start)),
     eq(a.end, b.end),
   );
-const mergeRecovered$ = (es: MErr[], checks: MErr[]): MErr[] =>
+const mergeRecovered = (es: MErr[], checks: MErr[]): MErr[] =>
   _Array_concat(
     checks,
-    filter((e: MErr) => length(filter((c: MErr) => sameErr$(c, e), checks)) === 0, es),
+    filter((e: MErr) => length(filter((c: MErr) => sameErr(c, e), checks)) === 0, es),
   );
-const recoverOne$ = (
+const recoverOne = (
   ctx: RecoveryCtx,
   m: Loaded,
   isEntry: boolean,
@@ -1058,11 +1058,11 @@ const recoverOne$ = (
     compileOne(ctx, m, true, isEntry, opts),
     (es) => {
       const checks: MErr[] = checkErrorsRecovering(ctx, m);
-      return { ctx: ctx, errors: _Array_concat(errors, mergeRecovered$(es, checks)) };
+      return { ctx: ctx, errors: _Array_concat(errors, mergeRecovered(es, checks)) };
     },
     (ctx1) => ({ ctx: ctx1, errors: errors }),
   );
-const compileAllRecovering$ = (
+const compileAllRecovering = (
   ctx: RecoveryCtx,
   graph: Loaded[],
   errors: MErr[],
@@ -1073,9 +1073,8 @@ const compileAllRecovering$ = (
       ? { ctx: ctx, errors: errors }
       : _v.length >= 1
         ? (([m, ...rest]) =>
-            ((next: RecoveryGraphState) =>
-              compileAllRecovering$(next.ctx, rest, next.errors, opts))(
-              recoverOne$(ctx, m, length(rest) === 0, errors, opts),
+            ((next: RecoveryGraphState) => compileAllRecovering(next.ctx, rest, next.errors, opts))(
+              recoverOne(ctx, m, length(rest) === 0, errors, opts),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -1106,7 +1105,7 @@ export const recoverGraphFromWith: <A>(
 ) => RecoveryGraphState = _curry(
   3,
   <A>(state: { ctx: RecoveryCtx; errors: MErr[] } & A, graph: Loaded[], opts: Opts) =>
-    compileAllRecovering$(state.ctx, graph, state.errors, opts),
+    compileAllRecovering(state.ctx, graph, state.errors, opts),
 );
 export const recoverGraphFrom: <A>(
   state: { ctx: RecoveryCtx; errors: MErr[] } & A,
@@ -1121,7 +1120,7 @@ const recoverModuleWith$ = (
   loaded: Loaded,
   isEntry: boolean,
   opts: Opts,
-): RecoveryGraphState => recoverOne$(state.ctx, loaded, isEntry, state.errors, opts);
+): RecoveryGraphState => recoverOne(state.ctx, loaded, isEntry, state.errors, opts);
 /**
  * recoverModuleWith : RecoveryGraphState -> Loaded -> bool -> Compile.Opts -> RecoveryGraphState
  * Recover one module on top of a state that already holds its dependencies.
@@ -1811,22 +1810,22 @@ const endsAtBoundary: (part: string) => boolean = (part: string) =>
     : !isIdentChar(_Option_unwrapOr("", _Str_get(_Str_length(part) - 1, part)));
 const startsAtBoundary: (part: string) => boolean = (part: string) =>
   _Str_length(part) === 0 ? true : !isIdentChar(_Option_unwrapOr("", _Str_get(0, part)));
-const occursAsWordFrom$ = (parts: string[], i: number): boolean =>
+const occursAsWordFrom = (parts: string[], i: number): boolean =>
   _Option_match(
     _Array_get(i, parts),
     () => false,
     (after) =>
       and(_Option_mapOr(false, endsAtBoundary, _Array_get(i - 1, parts)), startsAtBoundary(after))
         ? true
-        : occursAsWordFrom$(parts, i + 1),
+        : occursAsWordFrom(parts, i + 1),
   );
-const occursAsWord$ = (name: string, text: string): boolean =>
-  occursAsWordFrom$(_Str_split(name, text), 1);
+const occursAsWord = (name: string, text: string): boolean =>
+  occursAsWordFrom(_Str_split(name, text), 1);
 const importedBinding: (spec: string) => string = (spec: string) => {
   const parts: string[] = _Str_split(" as ", spec);
   return _Str_trim(_Option_unwrapOr(spec, _Array_get(length(parts) - 1, parts)));
 };
-const bindingsInLine$ = (line: string, acc: Set<string>): Set<string> =>
+const bindingsInLine = (line: string, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(1, _Str_split("{", line)),
     () => acc,
@@ -1844,7 +1843,7 @@ const bindingsInLine$ = (line: string, acc: Set<string>): Set<string> =>
   );
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
-    _curry(2, (acc: Set<string>, line: string) => bindingsInLine$(line, acc)),
+    _curry(2, (acc: Set<string>, line: string) => bindingsInLine(line, acc)),
     _Set_fromArray([] as string[]),
     filter(_Str_startsWith("import {"), _Str_split("\n", ts)),
   );
@@ -2016,7 +2015,7 @@ const groupByOwner: <A>(
             or(eq(owner, ctx.importer), _Set_has(name, ctx.localTypes)),
             _Set_has(name, ctx.bound),
           ),
-          !occursAsWord$(name, ctx.ts),
+          !occursAsWord(name, ctx.ts),
         )
           ? acc
           : ((spec: string) =>
@@ -2033,7 +2032,7 @@ const groupByOwner: <A>(
  * references, grouped by declaring module. Builtin variants never appear in
  * `typeOwner` — the emitter inlines their decls instead (ADR 0031).
  */
-const crossModuleTypeImports$ = (
+const crossModuleTypeImports = (
   ts: string,
   importer: string,
   localTypes: Set<string>,
@@ -2247,7 +2246,7 @@ const compileOneTs: <A, B>(
                   opts.docs,
                   bindingHooksFor(opts.plugins),
                 );
-                const lines: string[] = crossModuleTypeImports$(
+                const lines: string[] = crossModuleTypeImports(
                   body,
                   loaded.path,
                   localTypeNames(loaded.stmts),

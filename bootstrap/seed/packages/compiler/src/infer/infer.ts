@@ -478,21 +478,21 @@ const annotSpan: (t: TypeExpr) => SpanAt = (t: TypeExpr) => {
     }
   }
 };
-const typeErr$ = (msg: string, sp: SpanAt): IErr => ({
+const typeErr = (msg: string, sp: SpanAt): IErr => ({
   message: msg,
   start: sp.start,
   end: sp.end,
   help: None as Option<string>,
   suggestions: noSuggestions,
 });
-const typeErrHelp$ = (msg: string, sp: SpanAt, help: string): IErr => ({
+const typeErrHelp = (msg: string, sp: SpanAt, help: string): IErr => ({
   message: msg,
   start: sp.start,
   end: sp.end,
   help: Some(help) as Option<string>,
   suggestions: noSuggestions,
 });
-const typeErrSuggest$ = (msg: string, sp: SpanAt, help: string, hint: string): IErr => ({
+const typeErrSuggest = (msg: string, sp: SpanAt, help: string, hint: string): IErr => ({
   message: msg,
   start: sp.start,
   end: sp.end,
@@ -585,7 +585,7 @@ const insertPrint: <A>(
         throw new Error("non-exhaustive match");
       }),
 );
-const printsFrom$ = (
+const printsFrom = (
   keys: string[],
   aliases: Map<string, AliasInfo>,
   i: number,
@@ -597,13 +597,13 @@ const printsFrom$ = (
     (key) =>
       _Option_match(
         _Map_get(key, aliases),
-        () => printsFrom$(keys, aliases, i + 1, acc),
+        () => printsFrom(keys, aliases, i + 1, acc),
         (info) =>
           _Option_match(
             shownOfAlias(info, aliases),
-            () => printsFrom$(keys, aliases, i + 1, acc),
+            () => printsFrom(keys, aliases, i + 1, acc),
             (shown) =>
-              printsFrom$(
+              printsFrom(
                 keys,
                 aliases,
                 i + 1,
@@ -625,13 +625,13 @@ const applyPrints: <A>(
       (p) => applyPrints(_Str_replace(p.shown, p.name, msg), prints, i + 1),
     ),
 );
-const nameAliases$ = (msg: string, aliases: Map<string, AliasInfo>): string =>
+const nameAliases = (msg: string, aliases: Map<string, AliasInfo>): string =>
   applyPrints(
     msg,
-    printsFrom$(_Map_keys(aliases), aliases, 0, [] as { shown: string; name: string }[]),
+    printsFrom(_Map_keys(aliases), aliases, 0, [] as { shown: string; name: string }[]),
     0,
   );
-const u$ = (
+const u = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -650,13 +650,13 @@ const u$ = (
 ): Result<St, IErr> =>
   _Result_match(
     unify(left, right, st),
-    (e) => Err(typeErr$(nameAliases$(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+    (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
     (newSt) => Ok(newSt) as Result<St, IErr>,
   );
 /**
  * `actual` may be used as `expected` (ADR 0098 optional fields).
  */
-const checkFits$ = (
+const checkFits = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -675,7 +675,7 @@ const checkFits$ = (
 ): Result<St, IErr> =>
   _Result_match(
     fits(actual, expected, st),
-    (e) => Err(typeErr$(nameAliases$(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+    (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
     (newSt) => Ok(newSt) as Result<St, IErr>,
   );
 const bindParamNamesFrom: <A>(
@@ -701,7 +701,7 @@ const bindParamNamesFrom: <A>(
       throw new Error("non-exhaustive match");
     }),
 );
-const bindParamFieldsFrom$ = (
+const bindParamFieldsFrom = (
   fields: string[],
   env: Map<string, Scheme>,
   row: Row,
@@ -713,13 +713,13 @@ const bindParamFieldsFrom$ = (
       : _v.length >= 1
         ? (([f, ...rest]) =>
             (([ft, st1]: [Ty, St]) =>
-              bindParamFieldsFrom$(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
+              bindParamFieldsFrom(rest, _Map_set(f, mono(ft), env), rExtend(f, ft, row), st1))(
               freshVar(st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const recordParamNamesFrom$ = (
+const recordParamNamesFrom = (
   names: string[],
   spans: SpanAt[],
   types: Ty[],
@@ -729,7 +729,7 @@ const recordParamNamesFrom$ = (
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some" && _v[2]._tag === "Some"
       ? (([{ value: n }, { value: sp }, { value: t }]) =>
-          recordParamNamesFrom$(
+          recordParamNamesFrom(
             names,
             spans,
             types,
@@ -756,7 +756,7 @@ const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _cu
       names,
     ),
 );
-const bindParam$ = (
+const bindParam = (
   p: LamParam,
   env: Map<string, Scheme>,
   st: St,
@@ -772,21 +772,21 @@ const bindParam$ = (
             const { names } = $match$;
             const elems: Ty[] = ((_v) =>
               _v._tag === "TyCon" ? (({ args: ts }) => ts)(_v) : ([] as Ty[]))(t);
-            return _tuple(t, env1, recordParamNamesFrom$(names, spans, elems, 0, st1));
+            return _tuple(t, env1, recordParamNamesFrom(names, spans, elems, 0, st1));
           }
           case "LPRecord": {
             const { fields } = $match$;
             return _tuple(
               t,
               env1,
-              recordParamNamesFrom$(fields, spans, envTypesOf(fields, env1), 0, st1),
+              recordParamNamesFrom(fields, spans, envTypesOf(fields, env1), 0, st1),
             );
           }
           default: {
             return _tuple(t, env1, st1);
           }
         }
-      })(bindParam$(inner, env, st));
+      })(bindParam(inner, env, st));
     }
     case "LPName": {
       const { name } = $match;
@@ -801,7 +801,7 @@ const bindParam$ = (
       const { fields } = $match;
       return (([rowBase, st1]: [Row, St]) =>
         (([row, env1, st2]: [Row, Map<string, Scheme>, St]) => _tuple(tRecord(row), env1, st2))(
-          bindParamFieldsFrom$(fields, env, rowBase, st1),
+          bindParamFieldsFrom(fields, env, rowBase, st1),
         ))(freshRowVar(st));
     }
     case "LPLabeled": {
@@ -813,7 +813,7 @@ const bindParam$ = (
     }
   }
 };
-const bindParamsFrom$ = (
+const bindParamsFrom = (
   params: LamParam[],
   env: Map<string, Scheme>,
   st: St,
@@ -825,13 +825,13 @@ const bindParamsFrom$ = (
         ? (([p, ...rest]) =>
             (([t, env1, st1]: [Ty, Map<string, Scheme>, St]) =>
               (([restTs, env2, st2]: [Ty[], Map<string, Scheme>, St]) =>
-                _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom$(rest, env1, st1)))(
-              bindParam$(p, env, st),
+                _tuple(_Array_prepend(t, restTs), env2, st2))(bindParamsFrom(rest, env1, st1)))(
+              bindParam(p, env, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const constrainParamAnnotsFrom$ = (
+const constrainParamAnnotsFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -870,8 +870,8 @@ const constrainParamAnnotsFrom$ = (
                               (([annotT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
                                 _Result_flatMap(
                                   (st2) =>
-                                    constrainParamAnnotsFrom$(ctx, rest, restTypes, vars1, st2),
-                                  checkFits$(ctx, paramT, annotT, st1, annotSpan(te)),
+                                    constrainParamAnnotsFrom(ctx, rest, restTypes, vars1, st2),
+                                  checkFits(ctx, paramT, annotT, st1, annotSpan(te)),
                                 ))(
                                 typeExprToType(
                                   te,
@@ -896,21 +896,21 @@ const constrainParamAnnotsFrom$ = (
                                 };
                               },
                             )
-                          : constrainParamAnnotsFrom$(ctx, rest, restTypes, vars, st))(param))(_v)
+                          : constrainParamAnnotsFrom(ctx, rest, restTypes, vars, st))(param))(_v)
                   : (() => {
                       throw new Error("non-exhaustive match");
                     })())(paramTypes))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const arrowChain$ = (paramTypes: Ty[], resultT: Ty): Ty =>
+const arrowChain = (paramTypes: Ty[], resultT: Ty): Ty =>
   ((_v) =>
     _v.length === 0
       ? tArrow(tUnit, resultT)
       : _v.length === 1
         ? (([p]) => tArrow(p, resultT))(_v)
         : _v.length >= 1
-          ? (([p, ...rest]) => tArrow(p, arrowChain$(rest, resultT)))(_v)
+          ? (([p, ...rest]) => tArrow(p, arrowChain(rest, resultT)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(paramTypes);
@@ -1122,7 +1122,7 @@ const ctxWithLoop: <B, C>(
     scopeNames: ctx.scopeNames,
   }),
 );
-const inferLoopParamsFrom$ = (
+const inferLoopParamsFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1152,7 +1152,7 @@ const inferLoopParamsFrom$ = (
       _Result_flatMap(
         ([t, st1]) =>
           ((sp: SpanAt) =>
-            inferLoopParamsFrom$(
+            inferLoopParamsFrom(
               ctx,
               params,
               i + 1,
@@ -1161,10 +1161,10 @@ const inferLoopParamsFrom$ = (
               _Map_set(p.name, sp, ownerAcc),
               noteLet(sp, recordBinder(p.nameSpan, t, "let", p.name, None as Option<string>, st1)),
             ))(exprSpan(p.init)),
-        inferExpr$(ctx, p.init, st),
+        inferExpr(ctx, p.init, st),
       ),
   );
-const unifyRecurArgsFrom$ = (
+const unifyRecurArgsFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1189,17 +1189,17 @@ const unifyRecurArgsFrom$ = (
         ([at, st1]) =>
           _Option_match(
             _Array_get(i, frame),
-            () => unifyRecurArgsFrom$(ctx, args, frame, i + 1, st1),
+            () => unifyRecurArgsFrom(ctx, args, frame, i + 1, st1),
             (pt) =>
               _Result_flatMap(
-                (st2) => unifyRecurArgsFrom$(ctx, args, frame, i + 1, st2),
-                u$(ctx, at, pt, st1, exprSpan(a)),
+                (st2) => unifyRecurArgsFrom(ctx, args, frame, i + 1, st2),
+                u(ctx, at, pt, st1, exprSpan(a)),
               ),
           ),
-        inferExpr$(ctx, a, st),
+        inferExpr(ctx, a, st),
       ),
   );
-const inferRecur$ = (
+const inferRecur = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1217,7 +1217,7 @@ const inferRecur$ = (
 ): Result<[Ty, St], IErr> =>
   ((_v) =>
     _v.length === 0
-      ? (Err(typeErr$("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>)
+      ? (Err(typeErr("'recur' is only legal inside a loop body", sp)) as Result<[Ty, St], IErr>)
       : _v.length >= 1
         ? (([frame]) =>
             _Result_flatMap(
@@ -1225,7 +1225,7 @@ const inferRecur$ = (
                 (([t, st2]: [Ty, St]) => Ok(_tuple(t, st2)) as Result<[Ty, St], IErr>)(
                   freshVar(st1),
                 ),
-              unifyRecurArgsFrom$(ctx, args, frame, 0, st),
+              unifyRecurArgsFrom(ctx, args, frame, 0, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -1242,7 +1242,7 @@ const rowHasOptional: (row: Row) => boolean = (row: Row) => {
     }
   }
 };
-const domainNeedsFits$ = (t: Ty, st: St): boolean => {
+const domainNeedsFits = (t: Ty, st: St): boolean => {
   const $match = zonk(t, st);
   switch ($match._tag) {
     case "TyRecord": {
@@ -1270,7 +1270,7 @@ const rowAllOptional: (row: Row) => boolean = (row: Row) => {
     }
   }
 };
-const domainIsOmittableRecord$ = (t: Ty, st: St): boolean => {
+const domainIsOmittableRecord = (t: Ty, st: St): boolean => {
   const $match = zonk(t, st);
   switch ($match._tag) {
     case "TyRecord": {
@@ -1297,7 +1297,7 @@ const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
     }
   }
 };
-const splitLamParams$ = (
+const splitLamParams = (
   params: LamParam[],
   positional: LamParam[],
   labeled: LamParam[],
@@ -1308,8 +1308,8 @@ const splitLamParams$ = (
       : _v.length >= 1
         ? (([p, ...rest]) =>
             isLabeledParam(p)
-              ? splitLamParams$(rest, positional, _Array_append(p, labeled))
-              : splitLamParams$(rest, _Array_append(p, positional), labeled))(_v)
+              ? splitLamParams(rest, positional, _Array_append(p, labeled))
+              : splitLamParams(rest, _Array_append(p, positional), labeled))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
@@ -1317,7 +1317,7 @@ const splitLamParams$ = (
  * One pass per label, threading `st` but NOT `env`: a default is inferred in
  * the positional-only scope, so one label's default cannot read another's.
  */
-const labFieldsFrom$ = (
+const labFieldsFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1346,7 +1346,7 @@ const labFieldsFrom$ = (
         ? (([lab, ...rest]) =>
             ((_v) =>
               _v._tag === "LPSpanned"
-                ? (({ param: inner }) => labFieldsFrom$(ctx, [inner, ...rest], env, vars, st))(_v)
+                ? (({ param: inner }) => labFieldsFrom(ctx, [inner, ...rest], env, vars, st))(_v)
                 : _v._tag === "LPLabeled"
                   ? (({ name, annot, optional, defaultValue }) =>
                       (([fieldT, vars1, st1]: [Ty, Map<string, Ty>, St]) =>
@@ -1381,7 +1381,7 @@ const labFieldsFrom$ = (
                                       ],
                                       IErr
                                     >,
-                                  labFieldsFrom$(ctx, rest, env, vars1, st2),
+                                  labFieldsFrom(ctx, rest, env, vars1, st2),
                                 ))(
                                 or(
                                   optional,
@@ -1410,16 +1410,16 @@ const labFieldsFrom$ = (
                                       const widened: Ty = widenLits(zonk(dt, s2));
                                       return _Result_flatMap(
                                         (s3) => Ok(_tuple(widened, s3)) as Result<[Ty, St], IErr>,
-                                        u$(ctx, fieldT, widened, s2, exprSpan(d)),
+                                        u(ctx, fieldT, widened, s2, exprSpan(d)),
                                       );
                                     },
                                     () =>
                                       _Result_flatMap(
                                         (s3) => Ok(_tuple(fieldT, s3)) as Result<[Ty, St], IErr>,
-                                        checkFits$(ctx, dt, fieldT, s2, exprSpan(d)),
+                                        checkFits(ctx, dt, fieldT, s2, exprSpan(d)),
                                       ),
                                   ),
-                                inferExpr$(ctxWithEnv(ctx, env), d, st1),
+                                inferExpr(ctxWithEnv(ctx, env), d, st1),
                               ),
                           ),
                         ))(
@@ -1436,7 +1436,7 @@ const labFieldsFrom$ = (
                             ),
                         ),
                       ))(_v)
-                  : labFieldsFrom$(ctx, rest, env, vars, st))(lab))(_v)
+                  : labFieldsFrom(ctx, rest, env, vars, st))(lab))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(labs);
@@ -1524,7 +1524,7 @@ const recordLabParamsFrom: <A>(
 /**
  * Each plain positional name at its span, after the body has constrained it.
  */
-const recordNameParamsFrom$ = (params: LamParam[], types: Ty[], st: St): St =>
+const recordNameParamsFrom = (params: LamParam[], types: Ty[], st: St): St =>
   ((_v) =>
     _v[0].length >= 1 &&
     _v[0][0]._tag === "LPSpanned" &&
@@ -1541,7 +1541,7 @@ const recordNameParamsFrom$ = (params: LamParam[], types: Ty[], st: St): St =>
           ],
           [t, ...ts],
         ]) =>
-          recordNameParamsFrom$(
+          recordNameParamsFrom(
             rest,
             ts,
             recordBinder(sp, t, "parameter", name, None as Option<string>, st),
@@ -1560,9 +1560,9 @@ const recordNameParamsFrom$ = (params: LamParam[], types: Ty[], st: St): St =>
           ],
         )
       : _v[0].length >= 1 && _v[1].length >= 1
-        ? (([[, ...rest], [, ...ts]]) => recordNameParamsFrom$(rest, ts, st))(_v)
+        ? (([[, ...rest], [, ...ts]]) => recordNameParamsFrom(rest, ts, st))(_v)
         : st)(_tuple(params, types));
-const inferCallArgs$ = (
+const inferCallArgs = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1589,27 +1589,27 @@ const inferCallArgs$ = (
                 ((_v) =>
                   _v._tag === "TyFn"
                     ? (({ from: fromT, to: toT }) =>
-                        domainNeedsFits$(fromT, st1)
+                        domainNeedsFits(fromT, st1)
                           ? _Result_flatMap(
-                              (st2) => inferCallArgs$(ctx, toT, rest, st2, callSpan),
-                              checkFits$(ctx, argT, fromT, st1, exprSpan(arg)),
+                              (st2) => inferCallArgs(ctx, toT, rest, st2, callSpan),
+                              checkFits(ctx, argT, fromT, st1, exprSpan(arg)),
                             )
                           : (([resultT, st2]: [Ty, St]) =>
                               _Result_flatMap(
-                                (st3) => inferCallArgs$(ctx, resultT, rest, st3, callSpan),
-                                u$(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
+                                (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
+                                u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
                               ))(freshVar(st1)))(_v)
                     : (([resultT, st2]: [Ty, St]) =>
                         _Result_flatMap(
-                          (st3) => inferCallArgs$(ctx, resultT, rest, st3, callSpan),
-                          u$(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
+                          (st3) => inferCallArgs(ctx, resultT, rest, st3, callSpan),
+                          u(ctx, fnT, tArrow(argT, resultT), st2, exprSpan(arg)),
                         ))(freshVar(st1)))(resolve(fnT, st1)),
-              inferExpr$(ctx, arg, st),
+              inferExpr(ctx, arg, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(args);
-const isBuiltinCall$ = (
+const isBuiltinCall = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1623,37 +1623,37 @@ const isBuiltinCall$ = (
   },
   name: string,
 ): boolean => and(_Map_has(name, ctx.letOwner) === false, _Set_has(name, ctx.localNames) === false);
-const reachesList$ = (sorted: boolean, t: Ty): boolean =>
+const reachesList = (sorted: boolean, t: Ty): boolean =>
   ((_v) =>
     _v._tag === "TyCon" && _v.name === "List"
       ? true
       : _v._tag === "TyCon" && _v.name === "Map" && _v.args.length === 2
-        ? (({ args: [k, v] }) => or(and(sorted, reachesList$(sorted, k)), reachesList$(sorted, v)))(
+        ? (({ args: [k, v] }) => or(and(sorted, reachesList(sorted, k)), reachesList(sorted, v)))(
             _v as Extract<Ty, { _tag: "TyCon" }>,
           )
         : _v._tag === "TyCon" && _v.name === "Set"
           ? (({ args: targs }) =>
-              and(sorted, length(filter((a: Ty) => reachesList$(sorted, a), targs)) > 0))(_v)
+              and(sorted, length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0))(_v)
           : _v._tag === "TyCon"
-            ? (({ args: targs }) => length(filter((a: Ty) => reachesList$(sorted, a), targs)) > 0)(
+            ? (({ args: targs }) => length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0)(
                 _v,
               )
             : _v._tag === "TyRecord"
-              ? (({ row }) => rowReachesList$(sorted, row))(_v)
+              ? (({ row }) => rowReachesList(sorted, row))(_v)
               : false)(t);
-const rowReachesList$ = (sorted: boolean, row: Row): boolean => {
+const rowReachesList = (sorted: boolean, row: Row): boolean => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { fieldType: ft, rest } = $match;
-      return or(reachesList$(sorted, ft), rowReachesList$(sorted, rest));
+      return or(reachesList(sorted, ft), rowReachesList(sorted, rest));
     }
     default: {
       return false;
     }
   }
 };
-const checkEqEligible$ = (
+const checkEqEligible = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1673,13 +1673,13 @@ const checkEqEligible$ = (
   switch ($match._tag) {
     case "ERef": {
       const { name } = $match;
-      return and(or(name === "eq", name === "compare"), isBuiltinCall$(ctx, name))
+      return and(or(name === "eq", name === "compare"), isBuiltinCall(ctx, name))
         ? ((_v) =>
             _v._tag === "TyFn"
               ? (({ from: operandT }) =>
-                  reachesList$(name === "compare", zonk(operandT, st))
+                  reachesList(name === "compare", zonk(operandT, st))
                     ? (Err(
-                        typeErrHelp$(
+                        typeErrHelp(
                           "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
                           exprSpan(fn),
                           "force it first with `List.toArray`",
@@ -1709,7 +1709,7 @@ const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
     }
   }
 };
-const inferTupleLet$ = (
+const inferTupleLet = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1738,13 +1738,13 @@ const inferTupleLet$ = (
                   [Ty, St],
                   IErr
                 >,
-              inferExpr$(ctxWithEnv(ctx, bodyEnv), body, st3),
+              inferExpr(ctxWithEnv(ctx, bodyEnv), body, st3),
             ),
-          u$(ctx, paramT, valueT, st2, exprSpan(value)),
-        ))(bindParam$(param, ctx.env, st1)),
-    inferExpr$(ctx, value, st),
+          u(ctx, paramT, valueT, st2, exprSpan(value)),
+        ))(bindParam(param, ctx.env, st1)),
+    inferExpr(ctx, value, st),
   );
-const inferApplied$ = (
+const inferApplied = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1767,32 +1767,32 @@ const inferApplied$ = (
           ? ((_v) =>
               _v._tag === "TyFn"
                 ? (({ from: fromT, to: toT }) =>
-                    domainIsOmittableRecord$(fromT, st1)
+                    domainIsOmittableRecord(fromT, st1)
                       ? _Result_flatMap(
                           (st2) => Ok(_tuple(toT, st2)) as Result<[Ty, St], IErr>,
-                          checkFits$(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
+                          checkFits(ctx, tRecord(RowEmpty as Row), fromT, st1, exprSpan(fn)),
                         )
                       : (([resultT, st2]: [Ty, St]) =>
                           _Result_flatMap(
                             (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-                            u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
+                            u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                           ))(freshVar(st1)))(_v)
                 : (([resultT, st2]: [Ty, St]) =>
                     _Result_flatMap(
                       (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-                      u$(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
+                      u(ctx, fnT, tArrow(tUnit, resultT), st2, exprSpan(fn)),
                     ))(freshVar(st1)))(resolve(fnT, st1))
           : _Result_flatMap(
               ([resultT, st2]) =>
                 _Result_map(
                   (_: undefined) => _tuple(resultT, st2),
-                  checkEqEligible$(ctx, fn, fnT, st2),
+                  checkEqEligible(ctx, fn, fnT, st2),
                 ),
-              inferCallArgs$(ctx, fnT, args, st1, exprSpan(fn)),
+              inferCallArgs(ctx, fnT, args, st1, exprSpan(fn)),
             ))(args),
-    inferExpr$(ctx, fn, st),
+    inferExpr(ctx, fn, st),
   );
-const inferNormalCall$ = (
+const inferNormalCall = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1819,12 +1819,12 @@ const inferNormalCall$ = (
           [value],
         ]) =>
           isTupleParam(param)
-            ? inferTupleLet$(ctx, param, body, lamSpan, value, st)
-            : inferApplied$(ctx, fn, args, st))(
+            ? inferTupleLet(ctx, param, body, lamSpan, value, st)
+            : inferApplied(ctx, fn, args, st))(
           _v as [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]],
         )
-      : inferApplied$(ctx, fn, args, st))(_tuple(fn, args));
-const inferTernary$ = (
+      : inferApplied(ctx, fn, args, st))(_tuple(fn, args));
+const inferTernary = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1851,15 +1851,15 @@ const inferTernary$ = (
                 ([elseT, st4]) =>
                   _Result_flatMap(
                     (st5) => Ok(_tuple(thenT, st5)) as Result<[Ty, St], IErr>,
-                    u$(ctx, thenT, elseT, st4, exprSpan(elseE)),
+                    u(ctx, thenT, elseT, st4, exprSpan(elseE)),
                   ),
-                inferExpr$(ctx, elseE, st3),
+                inferExpr(ctx, elseE, st3),
               ),
-            inferExpr$(ctx, thenE, st2),
+            inferExpr(ctx, thenE, st2),
           ),
-        u$(ctx, condT, tBool, st1, exprSpan(cond)),
+        u(ctx, condT, tBool, st1, exprSpan(cond)),
       ),
-    inferExpr$(ctx, cond, st),
+    inferExpr(ctx, cond, st),
   );
 const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) => {
   const $match = p;
@@ -1877,7 +1877,7 @@ const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) => {
     }
   }
 };
-const inferBindBody$ = (
+const inferBindBody = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1906,10 +1906,10 @@ const inferBindBody$ = (
                 const wantBody: Ty = mkBody(resT);
                 return _Result_flatMap(
                   (st5) => Ok(_tuple(wantBody, st5)) as Result<[Ty, St], IErr>,
-                  u$(ctx, bodyT, wantBody, st4, exprSpan(body)),
+                  u(ctx, bodyT, wantBody, st4, exprSpan(body)),
                 );
               })(freshVar(st3)),
-            inferExpr$(ctxWithEnv(ctx, bodyEnv), body, stNamed),
+            inferExpr(ctxWithEnv(ctx, bodyEnv), body, stNamed),
           ))(
           _Option_match(
             bindNameOf(param),
@@ -1917,9 +1917,9 @@ const inferBindBody$ = (
             (name) => recordBinder(paramSpan, payloadT, "let", name, None as Option<string>, st2),
           ),
         ),
-      u$(ctx, paramT, payloadT, st1, paramSpan),
-    ))(bindParam$(param, ctx.env, st));
-const inferTwoSlotBind$ = (
+      u(ctx, paramT, payloadT, st1, paramSpan),
+    ))(bindParam(param, ctx.env, st));
+const inferTwoSlotBind = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1943,7 +1943,7 @@ const inferTwoSlotBind$ = (
     (([errT, st2]: [Ty, St]) =>
       _Result_flatMap(
         (st3) =>
-          inferBindBody$(
+          inferBindBody(
             ctx,
             param,
             paramSpan,
@@ -1952,9 +1952,9 @@ const inferTwoSlotBind$ = (
             (resT: Ty) => tCon(ctor, [resT, errT]),
             st3,
           ),
-        u$(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
+        u(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
       ))(freshVar(st1)))(freshVar(st));
-const inferQuestionBind$ = (
+const inferQuestionBind = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -1978,7 +1978,7 @@ const inferQuestionBind$ = (
   switch ($match._tag) {
     case "TyVar": {
       const $written = setLetBindMonad(bind, "Result");
-      return inferTwoSlotBind$(ctx, param, paramSpan, value, body, valT, "Result", st);
+      return inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st);
     }
     case "TyCon": {
       const { name } = $match;
@@ -1987,7 +1987,7 @@ const inferQuestionBind$ = (
             (([payloadT, st1]: [Ty, St]) =>
               _Result_flatMap(
                 (st2) =>
-                  inferBindBody$(
+                  inferBindBody(
                     ctx,
                     param,
                     paramSpan,
@@ -1996,15 +1996,15 @@ const inferQuestionBind$ = (
                     (resT: Ty) => tCon("Option", [resT]),
                     st2,
                   ),
-                u$(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
+                u(ctx, valT, tCon("Option", [payloadT]), st1, exprSpan(value)),
               ))(freshVar(st)))(setLetBindMonad(bind, "Option"))
         : name === "Result"
           ? (($written) =>
-              inferTwoSlotBind$(ctx, param, paramSpan, value, body, valT, "Result", st))(
+              inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Result", st))(
               setLetBindMonad(bind, "Result"),
             )
           : (Err(
-              typeErr$(
+              typeErr(
                 `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
                 exprSpan(value),
               ),
@@ -2012,15 +2012,12 @@ const inferQuestionBind$ = (
     }
     default: {
       return Err(
-        typeErr$(
-          `let? requires Option or Result, got ${showType(zonk(valT, st))}`,
-          exprSpan(value),
-        ),
+        typeErr(`let? requires Option or Result, got ${showType(zonk(valT, st))}`, exprSpan(value)),
       ) as Result<[Ty, St], IErr>;
     }
   }
 };
-const inferLetBind$ = (
+const inferLetBind = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2043,11 +2040,11 @@ const inferLetBind$ = (
   _Result_flatMap(
     ([valT, st1]) =>
       monad === "Task"
-        ? inferTwoSlotBind$(ctx, param, paramSpan, value, body, valT, "Task", st1)
-        : inferQuestionBind$(ctx, bind, param, paramSpan, value, body, valT, st1),
-    inferExpr$(ctx, value, st),
+        ? inferTwoSlotBind(ctx, param, paramSpan, value, body, valT, "Task", st1)
+        : inferQuestionBind(ctx, bind, param, paramSpan, value, body, valT, st1),
+    inferExpr(ctx, value, st),
   );
-const inferRecordRow$ = (
+const inferRecordRow = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2072,14 +2069,14 @@ const inferRecordRow$ = (
                 _Result_flatMap(
                   ([ft, st2]) =>
                     Ok(_tuple(rExtend(f.name, ft, restRow), st2)) as Result<[Row, St], IErr>,
-                  inferExpr$(ctx, f.value, st1),
+                  inferExpr(ctx, f.value, st1),
                 ),
-              inferRecordRow$(ctx, rest, st),
+              inferRecordRow(ctx, rest, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const rWithTail$ = (row: Row, tail: Row): Row => {
+const rWithTail = (row: Row, tail: Row): Row => {
   const $match = row;
   switch ($match._tag) {
     case "RowEmpty": {
@@ -2091,21 +2088,21 @@ const rWithTail$ = (row: Row, tail: Row): Row => {
     }
     case "RowExtend": {
       const { label, fieldType, optional, rest } = $match;
-      return rField(label, fieldType, rWithTail$(rest, tail), optional);
+      return rField(label, fieldType, rWithTail(rest, tail), optional);
     }
     default: {
       throw new Error("non-exhaustive match");
     }
   }
 };
-const lookupField$ = (row: Row, name: string): Option<[Ty, boolean]> => {
+const lookupField = (row: Row, name: string): Option<[Ty, boolean]> => {
   const $match = row;
   switch ($match._tag) {
     case "RowExtend": {
       const { label, fieldType, optional, rest } = $match;
       return eq(label, name)
         ? (Some(_tuple(fieldType, optional)) as Option<[Ty, boolean]>)
-        : lookupField$(rest, name);
+        : lookupField(rest, name);
     }
     default: {
       return None as Option<[Ty, boolean]>;
@@ -2130,7 +2127,7 @@ const rowEndsEmpty: (row: Row) => boolean = (row: Row) => {
     }
   }
 };
-const inferFieldAccess$ = (
+const inferFieldAccess = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2167,18 +2164,18 @@ const inferFieldAccess$ = (
                       )
                     : _v._tag === "None"
                       ? rowEndsEmpty(row)
-                        ? (Err(typeErr$(`record missing field '${name}'`, sp)) as Result<
+                        ? (Err(typeErr(`record missing field '${name}'`, sp)) as Result<
                             [Ty, St],
                             IErr
                           >)
-                        : inferDuckField$(ctx, targetT, name, sp, st1)
+                        : inferDuckField(ctx, targetT, name, sp, st1)
                       : (() => {
                           throw new Error("non-exhaustive match");
-                        })())(lookupField$(row, name)))(_v)
-            : inferDuckField$(ctx, targetT, name, sp, st1))(zonked))(zonk(targetT, st1)),
-    inferExpr$(ctx, target, st),
+                        })())(lookupField(row, name)))(_v)
+            : inferDuckField(ctx, targetT, name, sp, st1))(zonked))(zonk(targetT, st1)),
+    inferExpr(ctx, target, st),
   );
-const inferDuckField$ = (
+const inferDuckField = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2199,9 +2196,9 @@ const inferDuckField$ = (
     (([restRow, st3]: [Row, St]) =>
       _Result_flatMap(
         (st4) => Ok(_tuple(fieldT, st4)) as Result<[Ty, St], IErr>,
-        u$(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
+        u(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
       ))(freshRowVar(st2)))(freshVar(st));
-const inferNsField$ = (
+const inferNsField = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2220,11 +2217,11 @@ const inferNsField$ = (
 ): Result<[Ty, St], IErr> =>
   _Option_match(
     _Map_get(name, _Map_getOr(new Map<string, Scheme>(), tname, ctx.ns)),
-    () => Err(typeErr$(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
+    () => Err(typeErr(`'${tname}' has no member '${name}'`, sp)) as Result<[Ty, St], IErr>,
     (sc) =>
       (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
   );
-const inferInterpParts$ = (
+const inferInterpParts = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2243,7 +2240,7 @@ const inferInterpParts$ = (
     _v.length === 0
       ? (Ok(st) as Result<St, IErr>)
       : _v.length >= 1 && _v[0]._tag === "IPLit"
-        ? (([, ...rest]) => inferInterpParts$(ctx, rest, st))(
+        ? (([, ...rest]) => inferInterpParts(ctx, rest, st))(
             _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
           )
         : _v.length >= 1 && _v[0]._tag === "IPExpr"
@@ -2251,15 +2248,15 @@ const inferInterpParts$ = (
               _Result_flatMap(
                 ([t, st1]) =>
                   _Result_flatMap(
-                    (st2) => inferInterpParts$(ctx, rest, st2),
-                    u$(ctx, t, tString, st1, exprSpan(ex)),
+                    (st2) => inferInterpParts(ctx, rest, st2),
+                    u(ctx, t, tString, st1, exprSpan(ex)),
                   ),
-                inferExpr$(ctx, ex, st),
+                inferExpr(ctx, ex, st),
               ))(_v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]])
           : (() => {
               throw new Error("non-exhaustive match");
             })())(parts);
-const inferTupleElems$ = (
+const inferTupleElems = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2284,9 +2281,9 @@ const inferTupleElems$ = (
                 _Result_flatMap(
                   ([restTs, st2]) =>
                     Ok(_tuple(_Array_prepend(t, restTs), st2)) as Result<[Ty[], St], IErr>,
-                  inferTupleElems$(ctx, rest, st1),
+                  inferTupleElems(ctx, rest, st1),
                 ),
-              inferExpr$(ctx, el, st),
+              inferExpr(ctx, el, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -2307,7 +2304,7 @@ const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
     }
   }
 };
-const inferSeqSlotsElems$ = (
+const inferSeqSlotsElems = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2334,8 +2331,8 @@ const inferSeqSlotsElems$ = (
                 ([et, st1]) =>
                   ((want: Ty) =>
                     _Result_flatMap(
-                      (st2) => inferSeqSlotsElems$(ctx, con, elem, rest, st2),
-                      u$(ctx, want, et, st1, exprSpan(ex)),
+                      (st2) => inferSeqSlotsElems(ctx, con, elem, rest, st2),
+                      u(ctx, want, et, st1, exprSpan(ex)),
                     ))(
                     ((_v) =>
                       _v._tag === "SEExpr"
@@ -2346,12 +2343,12 @@ const inferSeqSlotsElems$ = (
                               throw new Error("non-exhaustive match");
                             })())(slot),
                   ),
-                inferExpr$(ctx, ex, st),
+                inferExpr(ctx, ex, st),
               ))(seqElemExpr(slot)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elements);
-const inferSeqSlots$ = (
+const inferSeqSlots = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2370,9 +2367,9 @@ const inferSeqSlots$ = (
   (([elem, st1]: [Ty, St]) =>
     _Result_flatMap(
       (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
-      inferSeqSlotsElems$(ctx, con, elem, elements, st1),
+      inferSeqSlotsElems(ctx, con, elem, elements, st1),
     ))(freshVar(st));
-const inferMapEntries$ = (
+const inferMapEntries = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2401,19 +2398,19 @@ const inferMapEntries$ = (
                     _Result_flatMap(
                       ([vt, st3]) =>
                         _Result_flatMap(
-                          (st4) => inferMapEntries$(ctx, k, v, rest, st4),
-                          u$(ctx, v, vt, st3, exprSpan(ent.value)),
+                          (st4) => inferMapEntries(ctx, k, v, rest, st4),
+                          u(ctx, v, vt, st3, exprSpan(ent.value)),
                         ),
-                      inferExpr$(ctx, ent.value, st2),
+                      inferExpr(ctx, ent.value, st2),
                     ),
-                  u$(ctx, k, kt, st1, exprSpan(ent.key)),
+                  u(ctx, k, kt, st1, exprSpan(ent.key)),
                 ),
-              inferExpr$(ctx, ent.key, st),
+              inferExpr(ctx, ent.key, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(entries);
-const inferMapExpr$ = (
+const inferMapExpr = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2432,7 +2429,7 @@ const inferMapExpr$ = (
     (([v, st2]: [Ty, St]) =>
       _Result_flatMap(
         (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
-        inferMapEntries$(ctx, k, v, entries, st2),
+        inferMapEntries(ctx, k, v, entries, st2),
       ))(freshVar(st1)))(freshVar(st));
 const mergeBindingMapsFrom: <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) => Map<A, B> =
   _curry(3, <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) =>
@@ -2486,7 +2483,7 @@ const mergeEnvBindings: <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) => Map<A,
   <A>(bindings: Map<A, Ty>, env: Map<A, Scheme>) =>
     mergeEnvBindingsFrom(_Map_keys(bindings), bindings, env),
 );
-const inferArms$ = (
+const inferArms = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2518,24 +2515,24 @@ const inferArms$ = (
                           _Result_flatMap(
                             ([bodyT, st4]) =>
                               _Result_flatMap(
-                                (st5) => inferArms$(ctx, scrutT, resultT, rest, st5),
-                                u$(ctx, resultT, bodyT, st4, exprSpan(arm.body)),
+                                (st5) => inferArms(ctx, scrutT, resultT, rest, st5),
+                                u(ctx, resultT, bodyT, st4, exprSpan(arm.body)),
                               ),
-                            inferExpr$(armCtx, arm.body, st3),
+                            inferExpr(armCtx, arm.body, st3),
                           ),
                         _Option_match(
                           arm.guard,
                           () => Ok(st2) as Result<St, IErr>,
                           (g) =>
                             _Result_flatMap(
-                              ([guardT, stg]) => u$(ctx, tBool, guardT, stg, exprSpan(g)),
-                              inferExpr$(armCtx, g, st2),
+                              ([guardT, stg]) => u(ctx, tBool, guardT, stg, exprSpan(g)),
+                              inferExpr(armCtx, g, st2),
                             ),
                         ),
                       ))(ctxWithEnv(ctx, mergeEnvBindings(bindings, ctx.env))),
-                  u$(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
+                  u(ctx, scrutT, patT, st1, patSpan(arm.pattern)),
                 ),
-              inferPat$(ctx, arm.pattern, st),
+              inferPat(ctx, arm.pattern, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -2574,7 +2571,7 @@ const isPipeAtom: (e: Expr) => boolean = (e: Expr) => {
     }
   }
 };
-const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
+const fillPipeHole = (left: Expr, right: Expr, sp: SpanAt): Expr => {
   const $match = right;
   switch ($match._tag) {
     case "ECall": {
@@ -2595,7 +2592,7 @@ const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
     }
   }
 };
-const inferMatch$ = (
+const inferMatch = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2616,16 +2613,16 @@ const inferMatch$ = (
       (([resultT, st2]: [Ty, St]) =>
         _Result_flatMap(
           (st3) => Ok(_tuple(resultT, st3)) as Result<[Ty, St], IErr>,
-          inferArms$(ctx, scrutT, resultT, arms, st2),
+          inferArms(ctx, scrutT, resultT, arms, st2),
         ))(freshVar(st1)),
-    inferExpr$(ctx, scrutinee, st),
+    inferExpr(ctx, scrutinee, st),
   );
 /**
  * Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
  * every expression node's inferred type lands in `st.recorded`, keyed by span,
  * so the TS backend can annotate lambda params and empty literals (ADR 0090).
  */
-const inferExpr$ = (
+const inferExpr = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2652,9 +2649,9 @@ const inferExpr$ = (
               : recordAt(exprSpan(e), t, st1))(e),
         ),
       ) as Result<[Ty, St], IErr>,
-    inferExprRaw$(ctx, e, st),
+    inferExprRaw(ctx, e, st),
   );
-const inferExprRaw$ = (
+const inferExprRaw = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -2692,7 +2689,7 @@ const inferExprRaw$ = (
           ctx.open
             ? _Set_has(name, ctx.localNames)
               ? (Err(
-                  typeErrHelp$(
+                  typeErrHelp(
                     `'${name}' is not in scope here`,
                     sp,
                     "it is bound elsewhere in this file, but not around this use — check the binder's extent",
@@ -2703,7 +2700,7 @@ const inferExprRaw$ = (
                 closestName(name, _Map_keys(ctx.env)),
                 () =>
                   Err(
-                    typeErrHelp$(
+                    typeErrHelp(
                       `unbound variable '${name}'`,
                       sp,
                       "bind the name before using it, or check the spelling",
@@ -2711,7 +2708,7 @@ const inferExprRaw$ = (
                   ) as Result<[Ty, St], IErr>,
                 (hint) =>
                   Err(
-                    typeErrSuggest$(
+                    typeErrSuggest(
                       `unbound variable '${name}'`,
                       sp,
                       `did you mean '${hint}'?`,
@@ -2747,11 +2744,11 @@ const inferExprRaw$ = (
                         ([bodyT, st4]) =>
                           Ok(
                             _tuple(
-                              arrowChain$(allTypes, bodyT),
-                              recordNameParamsFrom$(posParams, paramTypes, st4),
+                              arrowChain(allTypes, bodyT),
+                              recordNameParamsFrom(posParams, paramTypes, st4),
                             ),
                           ) as Result<[Ty, St], IErr>,
-                        inferExpr$(
+                        inferExpr(
                           ctxWithEnv(ctx, envWithLabFields(labFields, bodyEnv)),
                           body,
                           st3Labs,
@@ -2762,11 +2759,11 @@ const inferExprRaw$ = (
                         ? paramTypes
                         : _Array_append(tRecord(rowOfLabFields(labFields)), paramTypes))(labParams),
                   ),
-                labFieldsFrom$(ctx, labParams, bodyEnv, annotVars, st2),
+                labFieldsFrom(ctx, labParams, bodyEnv, annotVars, st2),
               ),
-            constrainParamAnnotsFrom$(ctx, posParams, paramTypes, new Map<string, Ty>(), st1),
-          ))(bindParamsFrom$(posParams, ctx.env, st)))(
-        splitLamParams$(params, [] as LamParam[], [] as LamParam[]),
+            constrainParamAnnotsFrom(ctx, posParams, paramTypes, new Map<string, Ty>(), st1),
+          ))(bindParamsFrom(posParams, ctx.env, st)))(
+        splitLamParams(params, [] as LamParam[], [] as LamParam[]),
       );
     }
     case "ELetIn": {
@@ -2794,9 +2791,9 @@ const inferExprRaw$ = (
           ]) =>
             _Option_match(
               _Array_get(0, localErrs),
-              () => inferExpr$(localCtx, tail, localSt),
+              () => inferExpr(localCtx, tail, localSt),
               (firstErr) => Err(firstErr) as Result<[Ty, St], IErr>,
-            ))(processGroupsFrom$(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs));
+            ))(processGroupsFrom(ctx, stronglyConnected(adjOf(lets, idxOf)), lets, st, noErrs));
         }
         default: {
           return _Result_flatMap(
@@ -2807,7 +2804,7 @@ const inferExprRaw$ = (
                     ((sc: Scheme) =>
                       ((vsp: SpanAt) =>
                         (($ctx) =>
-                          inferExpr$(
+                          inferExpr(
                             $ctx,
                             body,
                             noteLet(
@@ -2843,7 +2840,7 @@ const inferExprRaw$ = (
                     (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
                       _Result_map(
                         (stB: St) => _tuple(at, stB),
-                        checkFits$(ctx, valT, at, stA, annotSpan(te)),
+                        checkFits(ctx, valT, at, stA, annotSpan(te)),
                       ))(
                       typeExprToType(
                         te,
@@ -2855,28 +2852,28 @@ const inferExprRaw$ = (
                     ),
                 ),
               ),
-            inferExpr$(ctx, value, st),
+            inferExpr(ctx, value, st),
           );
         }
       }
     }
     case "ELetBind": {
       const { param, paramSpan, monad, value, body } = $match;
-      return inferLetBind$(ctx, e, param, paramSpan, monad, value, body, st);
+      return inferLetBind(ctx, e, param, paramSpan, monad, value, body, st);
     }
     case "ECall": {
       const { fn, args, origin } = $match;
       const api: InferApi = {
-        inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr$(ctx, e, st0)),
+        inferExpr: _curry(2, (e: Expr, st0: St) => inferExpr(ctx, e, st0)),
         unify: _curry(4, (left: Ty, right: Ty, st0: St, sp: SpanAt) =>
-          u$(ctx, left, right, st0, sp),
+          u(ctx, left, right, st0, sp),
         ),
       };
       return _Result_flatMap(
         (claimed) =>
           _Option_match(
             claimed,
-            () => inferNormalCall$(ctx, fn, args, st),
+            () => inferNormalCall(ctx, fn, args, st),
             (r) => Ok(r) as Result<[Ty, St], IErr>,
           ),
         runInferCallHooks(inferCallHooksOf(ctx.plugins), fn, args, origin, st, api),
@@ -2884,10 +2881,10 @@ const inferExprRaw$ = (
     }
     case "EPipe": {
       const { left, right, fast, span: sp } = $match;
-      return inferExpr$(
+      return inferExpr(
         ctx,
         hasPipeHole(right)
-          ? fillPipeHole$(left, right, sp)
+          ? fillPipeHole(left, right, sp)
           : fast
             ? ((_v) =>
                 _v._tag === "ECall"
@@ -2900,11 +2897,11 @@ const inferExprRaw$ = (
     }
     case "EDo": {
       const { exprs } = $match;
-      return inferDo$(ctx, exprs, st);
+      return inferDo(ctx, exprs, st);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return inferTernary$(ctx, cond, thenE, elseE, st);
+      return inferTernary(ctx, cond, thenE, elseE, st);
     }
     case "ERecord": {
       const { fields, spread, span: sp } = $match;
@@ -2913,7 +2910,7 @@ const inferExprRaw$ = (
         () =>
           _Result_flatMap(
             ([row, st1]) => Ok(_tuple(tRecord(row), st1)) as Result<[Ty, St], IErr>,
-            inferRecordRow$(ctx, fields, st),
+            inferRecordRow(ctx, fields, st),
           ),
         (spreadExpr) =>
           _Result_flatMap(
@@ -2923,11 +2920,11 @@ const inferExprRaw$ = (
                   (([tailVar, st3]: [Row, St]) =>
                     _Result_flatMap(
                       (st4) => Ok(_tuple(baseT, st4)) as Result<[Ty, St], IErr>,
-                      u$(ctx, baseT, tRecord(rWithTail$(row, tailVar)), st3, sp),
+                      u(ctx, baseT, tRecord(rWithTail(row, tailVar)), st3, sp),
                     ))(freshRowVar(st2)),
-                inferExpr$(ctx, spreadExpr, st1),
+                inferExpr(ctx, spreadExpr, st1),
               ),
-            inferRecordRow$(ctx, fields, st),
+            inferRecordRow(ctx, fields, st),
           ),
       );
     }
@@ -2938,11 +2935,11 @@ const inferExprRaw$ = (
         case "ERef": {
           const { name: tname } = $match$;
           return and(_Map_has(tname, ctx.ns), !_Map_has(tname, ctx.env))
-            ? inferNsField$(ctx, tname, name, sp, st)
-            : inferFieldAccess$(ctx, e, target, name, sp, st);
+            ? inferNsField(ctx, tname, name, sp, st)
+            : inferFieldAccess(ctx, e, target, name, sp, st);
         }
         default: {
-          return inferFieldAccess$(ctx, e, target, name, sp, st);
+          return inferFieldAccess(ctx, e, target, name, sp, st);
         }
       }
     }
@@ -2950,46 +2947,46 @@ const inferExprRaw$ = (
       const { elements } = $match;
       return _Result_flatMap(
         ([elems, st1]) => Ok(_tuple(tTuple(elems), st1)) as Result<[Ty, St], IErr>,
-        inferTupleElems$(ctx, elements, st),
+        inferTupleElems(ctx, elements, st),
       );
     }
     case "EArr": {
       const { elements } = $match;
-      return inferSeqSlots$(ctx, "Array", elements, st);
+      return inferSeqSlots(ctx, "Array", elements, st);
     }
     case "EList": {
       const { elements } = $match;
-      return inferSeqSlots$(ctx, "List", elements, st);
+      return inferSeqSlots(ctx, "List", elements, st);
     }
     case "ESet": {
       const { elements } = $match;
-      return inferSeqSlots$(ctx, "Set", elements, st);
+      return inferSeqSlots(ctx, "Set", elements, st);
     }
     case "EMap": {
       const { entries } = $match;
-      return inferMapExpr$(ctx, entries, st);
+      return inferMapExpr(ctx, entries, st);
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      return inferMatch$(ctx, scrutinee, arms, st);
+      return inferMatch(ctx, scrutinee, arms, st);
     }
     case "ELoop": {
       const { params, body } = $match;
       return _Result_flatMap(
         ([frame, bodyEnv, bodyOwner, st1]) =>
-          inferExpr$(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1),
-        inferLoopParamsFrom$(ctx, params, 0, ctx.env, [] as Ty[], ctx.letOwner, st),
+          inferExpr(ctxWithLoop(ctx, bodyEnv, frame, bodyOwner), body, st1),
+        inferLoopParamsFrom(ctx, params, 0, ctx.env, [] as Ty[], ctx.letOwner, st),
       );
     }
     case "ERecur": {
       const { args, span: sp } = $match;
-      return inferRecur$(ctx, args, sp, st);
+      return inferRecur(ctx, args, sp, st);
     }
     case "EInterp": {
       const { parts } = $match;
       return _Result_flatMap(
         (st1) => Ok(_tuple(tString, st1)) as Result<[Ty, St], IErr>,
-        inferInterpParts$(ctx, parts, st),
+        inferInterpParts(ctx, parts, st),
       );
     }
     default: {
@@ -2997,7 +2994,7 @@ const inferExprRaw$ = (
     }
   }
 };
-const inferDo$ = (
+const inferDo = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3014,18 +3011,16 @@ const inferDo$ = (
 ): Result<[Ty, St], IErr> =>
   ((_v) =>
     _v.length === 0
-      ? (Err(typeErr$("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>)
+      ? (Err(typeErr("internal: empty do block", { start: 0, end: 0 })) as Result<[Ty, St], IErr>)
       : _v.length === 1
-        ? (([last]) => inferExpr$(ctx, last, st))(_v)
+        ? (([last]) => inferExpr(ctx, last, st))(_v)
         : _v.length >= 1
           ? (([first, ...rest]) =>
-              _Result_flatMap(([, st1]) => inferDo$(ctx, rest, st1), inferExpr$(ctx, first, st)))(
-              _v,
-            )
+              _Result_flatMap(([, st1]) => inferDo(ctx, rest, st1), inferExpr(ctx, first, st)))(_v)
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const inferPatRecordFrom$ = (
+const inferPatRecordFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3049,19 +3044,19 @@ const inferPatRecordFrom$ = (
         ? (([f, ...rest]) =>
             _Result_flatMap(
               ([subT, subBindings, st1]) =>
-                inferPatRecordFrom$(
+                inferPatRecordFrom(
                   ctx,
                   rest,
                   rExtend(f.label, subT, row),
                   mergeBindingMaps(bindings, subBindings),
                   recordBinder(f.labelSpan, subT, "property", f.label, None as Option<string>, st1),
                 ),
-              inferPat$(ctx, f.pat, st),
+              inferPat(ctx, f.pat, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const inferPatRecord$ = (
+const inferPatRecord = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3080,9 +3075,9 @@ const inferPatRecord$ = (
     _Result_flatMap(
       ([row, bindings, st2]) =>
         Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-      inferPatRecordFrom$(ctx, fields, rowBase, new Map<string, Ty>(), st1),
+      inferPatRecordFrom(ctx, fields, rowBase, new Map<string, Ty>(), st1),
     ))(freshRowVar(st));
-const inferPatCtorArgs$ = (
+const inferPatCtorArgs = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3113,7 +3108,7 @@ const inferPatCtorArgs$ = (
                       ([subT, subBindings, st1]) =>
                         _Result_flatMap(
                           (st2) =>
-                            inferPatCtorArgs$(
+                            inferPatCtorArgs(
                               ctx,
                               ctor,
                               toT,
@@ -3122,17 +3117,17 @@ const inferPatCtorArgs$ = (
                               mergeBindingMaps(bindings, subBindings),
                               sp,
                             ),
-                          u$(ctx, fromT, subT, st1, patSpan(argPat)),
+                          u(ctx, fromT, subT, st1, patSpan(argPat)),
                         ),
-                      inferPat$(ctx, argPat, st),
+                      inferPat(ctx, argPat, st),
                     ))(_v)
                 : (Err(
-                    typeErr$(`constructor '${ctor}' applied to too many arguments`, sp),
+                    typeErr(`constructor '${ctor}' applied to too many arguments`, sp),
                   ) as Result<[Ty, Map<string, Ty>, St], IErr>))(resolve(curT, st)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(args);
-const inferPatTupleFrom$ = (
+const inferPatTupleFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3166,14 +3161,14 @@ const inferPatTupleFrom$ = (
                         st2,
                       ),
                     ) as Result<[Ty[], Map<string, Ty>, St], IErr>,
-                  inferPatTupleFrom$(ctx, rest, st1),
+                  inferPatTupleFrom(ctx, rest, st1),
                 ),
-              inferPat$(ctx, ep, st),
+              inferPat(ctx, ep, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elems);
-const inferPatTuple$ = (
+const inferPatTuple = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3191,9 +3186,9 @@ const inferPatTuple$ = (
   _Result_flatMap(
     ([elemTs, bindings, st1]) =>
       Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-    inferPatTupleFrom$(ctx, elems, st),
+    inferPatTupleFrom(ctx, elems, st),
   );
-const inferSeqPatElems$ = (
+const inferSeqPatElems = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3224,16 +3219,16 @@ const inferSeqPatElems$ = (
                           [Map<string, Ty>, St],
                           IErr
                         >,
-                      inferSeqPatElems$(ctx, elem, rest, st2),
+                      inferSeqPatElems(ctx, elem, rest, st2),
                     ),
-                  u$(ctx, elem, subT, st1, patSpan(ep)),
+                  u(ctx, elem, subT, st1, patSpan(ep)),
                 ),
-              inferPat$(ctx, ep, st),
+              inferPat(ctx, ep, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elems);
-const inferSeqPat$ = (
+const inferSeqPat = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3266,19 +3261,19 @@ const inferSeqPat$ = (
                       [Ty, Map<string, Ty>, St],
                       IErr
                     >,
-                  u$(ctx, subT, seqT, st3, patSpan(r)),
+                  u(ctx, subT, seqT, st3, patSpan(r)),
                 ),
-              inferPat$(ctx, r, st2),
+              inferPat(ctx, r, st2),
             ),
         ),
-      inferSeqPatElems$(ctx, elem, elems, st1),
+      inferSeqPatElems(ctx, elem, elems, st1),
     );
   })(freshVar(st));
 /**
  * Pattern-side analogue of `inferExpr` — records every pattern node's span
  * and type, so a pattern-bound param can be annotated by span.
  */
-const inferPat$ = (
+const inferPat = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3306,9 +3301,9 @@ const inferPat$ = (
               : recordAt(patSpan(p), t, st1))(p),
         ),
       ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-    inferPatRaw$(ctx, p, st),
+    inferPatRaw(ctx, p, st),
   );
-const inferPatRaw$ = (
+const inferPatRaw = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3336,7 +3331,7 @@ const inferPatRaw$ = (
               recordBinder(nameSpan, t, "parameter", name, None as Option<string>, st1),
             ),
           ) as Result<[Ty, Map<string, Ty>, St], IErr>,
-        inferPat$(ctx, pat, st),
+        inferPat(ctx, pat, st),
       );
     }
     case "PWild": {
@@ -3380,7 +3375,7 @@ const inferPatRaw$ = (
     }
     case "PRecord": {
       const { fields } = $match;
-      return inferPatRecord$(ctx, fields, st);
+      return inferPatRecord(ctx, fields, st);
     }
     case "PCtor": {
       const { ctor, args, ns, span: sp } = $match;
@@ -3390,13 +3385,13 @@ const inferPatRaw$ = (
           _Option_match(
             _Map_get(ctor, ctx.env),
             () =>
-              Err(typeErr$(`unknown constructor '${ctor}'`, sp)) as Result<
+              Err(typeErr(`unknown constructor '${ctor}'`, sp)) as Result<
                 [Ty, Map<string, Ty>, St],
                 IErr
               >,
             (sc) =>
               (([curT, st1]: [Ty, St]) =>
-                inferPatCtorArgs$(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                 instantiate(sc, st),
               ),
           ),
@@ -3404,13 +3399,13 @@ const inferPatRaw$ = (
           _Option_match(
             _Map_get(ctor, _Map_getOr(new Map<string, Scheme>(), alias, ctx.ns)),
             () =>
-              Err(typeErr$(`'${alias}' has no member '${ctor}'`, sp)) as Result<
+              Err(typeErr(`'${alias}' has no member '${ctor}'`, sp)) as Result<
                 [Ty, Map<string, Ty>, St],
                 IErr
               >,
             (sc) =>
               (([curT, st1]: [Ty, St]) =>
-                inferPatCtorArgs$(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
+                inferPatCtorArgs(ctx, ctor, curT, args, st1, new Map<string, Ty>(), sp))(
                 instantiate(sc, st),
               ),
           ),
@@ -3418,19 +3413,19 @@ const inferPatRaw$ = (
     }
     case "PTuple": {
       const { elems } = $match;
-      return inferPatTuple$(ctx, elems, st);
+      return inferPatTuple(ctx, elems, st);
     }
     case "PArr": {
       const { elems, rest } = $match;
-      return inferSeqPat$(ctx, "Array", elems, rest, st);
+      return inferSeqPat(ctx, "Array", elems, rest, st);
     }
     case "PList": {
       const { elems, rest } = $match;
-      return inferSeqPat$(ctx, "List", elems, rest, st);
+      return inferSeqPat(ctx, "List", elems, rest, st);
     }
     case "POr": {
       const { alts, span: sp } = $match;
-      return inferOrPat$(ctx, alts, sp, st);
+      return inferOrPat(ctx, alts, sp, st);
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -3481,7 +3476,7 @@ const unifyOrPatBinding: <B>(
         _Option_match(
           _Map_get(name, altBindings),
           () => Ok(st) as Result<St, IErr>,
-          (ty) => u$(ctx, prevT, ty, st, sp),
+          (ty) => u(ctx, prevT, ty, st, sp),
         ),
     ),
 );
@@ -3539,7 +3534,7 @@ const unifyOrPatBindings: <B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const inferOrPatAlts$ = (
+const inferOrPatAlts = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3566,7 +3561,7 @@ const inferOrPatAlts$ = (
           _Result_flatMap(
             (st2) =>
               _Result_flatMap(
-                (st3) => inferOrPatAlts$(ctx, alts, i + 1, t, bindings, st3),
+                (st3) => inferOrPatAlts(ctx, alts, i + 1, t, bindings, st3),
                 unifyOrPatBindings(
                   ctx,
                   _Map_keys(altBindings),
@@ -3576,12 +3571,12 @@ const inferOrPatAlts$ = (
                   patSpan(alt),
                 ),
               ),
-            u$(ctx, t, altT, st1, patSpan(alt)),
+            u(ctx, t, altT, st1, patSpan(alt)),
           ),
-        inferPat$(ctx, alt, st),
+        inferPat(ctx, alt, st),
       ),
   );
-const inferOrPat$ = (
+const inferOrPat = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -3599,7 +3594,7 @@ const inferOrPat$ = (
 ): Result<[Ty, Map<string, Ty>, St], IErr> =>
   ((_v) =>
     _v.length === 0
-      ? (Err(typeErr$("or-pattern needs at least one alternative", sp)) as Result<
+      ? (Err(typeErr("or-pattern needs at least one alternative", sp)) as Result<
           [Ty, Map<string, Ty>, St],
           IErr
         >)
@@ -3609,9 +3604,9 @@ const inferOrPat$ = (
               ([t, bindings, st1]) =>
                 _Result_flatMap(
                   (st2) => Ok(_tuple(t, bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
-                  inferOrPatAlts$(ctx, rest, 0, t, bindings, st1),
+                  inferOrPatAlts(ctx, rest, 0, t, bindings, st1),
                 ),
-              inferPat$(ctx, first, st),
+              inferPat(ctx, first, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
@@ -3680,12 +3675,12 @@ const addAllFrom: <A>(names: A[], set: Set<A>) => Set<A> = _curry(2, <A>(names: 
       throw new Error("non-exhaustive match");
     }),
 );
-const paramBound$ = (p: LamParam, bound: Set<string>): Set<string> => {
+const paramBound = (p: LamParam, bound: Set<string>): Set<string> => {
   const $match = p;
   switch ($match._tag) {
     case "LPSpanned": {
       const { param: inner } = $match;
-      return paramBound$(inner, bound);
+      return paramBound(inner, bound);
     }
     case "LPName": {
       const { name } = $match;
@@ -3708,12 +3703,12 @@ const paramBound$ = (p: LamParam, bound: Set<string>): Set<string> => {
     }
   }
 };
-const lambdaBound$ = (params: LamParam[], bound: Set<string>): Set<string> =>
+const lambdaBound = (params: LamParam[], bound: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? bound
       : _v.length >= 1
-        ? (([p, ...rest]) => lambdaBound$(rest, paramBound$(p, bound)))(_v)
+        ? (([p, ...rest]) => lambdaBound(rest, paramBound(p, bound)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
@@ -3721,7 +3716,7 @@ const lambdaBound$ = (params: LamParam[], bound: Set<string>): Set<string> =>
  * A labeled default names the enclosing scope, not the lambda's own params,
  * so its refs are free in the lambda — the SCC needs that edge (ADR 0098 §2).
  */
-const labeledDefaultRefs$ = (
+const labeledDefaultRefs = (
   params: LamParam[],
   bound: Set<string>,
   acc: Set<string>,
@@ -3733,10 +3728,10 @@ const labeledDefaultRefs$ = (
         ? (([p, ...rest]) =>
             ((_v) =>
               _v._tag === "LPSpanned"
-                ? (({ param: inner }) => labeledDefaultRefs$([inner, ...rest], bound, acc))(_v)
+                ? (({ param: inner }) => labeledDefaultRefs([inner, ...rest], bound, acc))(_v)
                 : _v._tag === "LPLabeled" && _v.defaultValue._tag === "Some"
                   ? (({ defaultValue: { value: d } }) =>
-                      labeledDefaultRefs$(rest, bound, freeRefs$(d, bound, acc)))(
+                      labeledDefaultRefs(rest, bound, freeRefs(d, bound, acc)))(
                       _v as Extract<LamParam, { _tag: "LPLabeled" }> & {
                         defaultValue: Extract<
                           Extract<LamParam, { _tag: "LPLabeled" }>["defaultValue"],
@@ -3744,7 +3739,7 @@ const labeledDefaultRefs$ = (
                         >;
                       },
                     )
-                  : labeledDefaultRefs$(rest, bound, acc))(p))(_v)
+                  : labeledDefaultRefs(rest, bound, acc))(p))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
@@ -3757,7 +3752,7 @@ const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = 
       params,
     ),
 );
-const loopInitRefsFrom$ = (
+const loopInitRefsFrom = (
   params: LoopParam[],
   i: number,
   bound: Set<string>,
@@ -3766,41 +3761,41 @@ const loopInitRefsFrom$ = (
   _Option_match(
     _Array_get(i, params),
     () => acc,
-    (p) => loopInitRefsFrom$(params, i + 1, bound, freeRefs$(p.init, bound, acc)),
+    (p) => loopInitRefsFrom(params, i + 1, bound, freeRefs(p.init, bound, acc)),
   );
-const freeRefsList$ = (es: Expr[], bound: Set<string>, acc: Set<string>): Set<string> =>
+const freeRefsList = (es: Expr[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
       : _v.length >= 1
-        ? (([e, ...rest]) => freeRefsList$(rest, bound, freeRefs$(e, bound, acc)))(_v)
+        ? (([e, ...rest]) => freeRefsList(rest, bound, freeRefs(e, bound, acc)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(es);
-const freeRefsFields$ = (fields: Field[], bound: Set<string>, acc: Set<string>): Set<string> =>
+const freeRefsFields = (fields: Field[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
       : _v.length >= 1
-        ? (([f, ...rest]) => freeRefsFields$(rest, bound, freeRefs$(f.value, bound, acc)))(_v)
+        ? (([f, ...rest]) => freeRefsFields(rest, bound, freeRefs(f.value, bound, acc)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const freeRefsEntries$ = (entries: MapEntry[], bound: Set<string>, acc: Set<string>): Set<string> =>
+const freeRefsEntries = (entries: MapEntry[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
       : _v.length >= 1
         ? (([ent, ...rest]) =>
-            freeRefsEntries$(
+            freeRefsEntries(
               rest,
               bound,
-              freeRefs$(ent.value, bound, freeRefs$(ent.key, bound, acc)),
+              freeRefs(ent.value, bound, freeRefs(ent.key, bound, acc)),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(entries);
-const freeRefsInterpParts$ = (
+const freeRefsInterpParts = (
   parts: InterpPart[],
   bound: Set<string>,
   acc: Set<string>,
@@ -3809,18 +3804,18 @@ const freeRefsInterpParts$ = (
     _v.length === 0
       ? acc
       : _v.length >= 1 && _v[0]._tag === "IPLit"
-        ? (([, ...rest]) => freeRefsInterpParts$(rest, bound, acc))(
+        ? (([, ...rest]) => freeRefsInterpParts(rest, bound, acc))(
             _v as [Extract<InterpPart[][number], { _tag: "IPLit" }>, ...InterpPart[]],
           )
         : _v.length >= 1 && _v[0]._tag === "IPExpr"
           ? (([{ expr: ex }, ...rest]) =>
-              freeRefsInterpParts$(rest, bound, freeRefs$(ex, bound, acc)))(
+              freeRefsInterpParts(rest, bound, freeRefs(ex, bound, acc)))(
               _v as [Extract<InterpPart[][number], { _tag: "IPExpr" }>, ...InterpPart[]],
             )
           : (() => {
               throw new Error("non-exhaustive match");
             })())(parts);
-const freeRefsArms$ = (arms: MatchArm[], bound: Set<string>, acc: Set<string>): Set<string> =>
+const freeRefsArms = (arms: MatchArm[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -3828,17 +3823,17 @@ const freeRefsArms$ = (arms: MatchArm[], bound: Set<string>, acc: Set<string>): 
         ? (([arm, ...rest]) =>
             ((armBound: Set<string>) =>
               ((acc1: Set<string>) =>
-                freeRefsArms$(rest, bound, freeRefs$(arm.body, armBound, acc1)))(
+                freeRefsArms(rest, bound, freeRefs(arm.body, armBound, acc1)))(
                 _Option_match(
                   arm.guard,
                   () => acc,
-                  (g) => freeRefs$(g, armBound, acc),
+                  (g) => freeRefs(g, armBound, acc),
                 ),
               ))(addAllFrom(patternBinds(arm.pattern), bound)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(arms);
-const freeRefs$ = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> => {
+const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> => {
   const $match = e;
   switch ($match._tag) {
     case "ENum": {
@@ -3859,87 +3854,87 @@ const freeRefs$ = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> =
     }
     case "ECall": {
       const { fn, args } = $match;
-      return freeRefsList$(args, bound, freeRefs$(fn, bound, acc));
+      return freeRefsList(args, bound, freeRefs(fn, bound, acc));
     }
     case "ELambda": {
       const { params, body } = $match;
-      return freeRefs$(body, lambdaBound$(params, bound), labeledDefaultRefs$(params, bound, acc));
+      return freeRefs(body, lambdaBound(params, bound), labeledDefaultRefs(params, bound, acc));
     }
     case "ELetIn": {
       const { name, value, body } = $match;
       const valueBound: Set<string> = ((_v) =>
         _v._tag === "ELambda" ? _Set_add(name, bound) : bound)(value);
-      const acc1: Set<string> = freeRefs$(value, valueBound, acc);
-      return freeRefs$(body, _Set_add(name, bound), acc1);
+      const acc1: Set<string> = freeRefs(value, valueBound, acc);
+      return freeRefs(body, _Set_add(name, bound), acc1);
     }
     case "ELetBind": {
       const { param, value, body } = $match;
-      const acc1: Set<string> = freeRefs$(value, bound, acc);
-      return freeRefs$(body, paramBound$(param, bound), acc1);
+      const acc1: Set<string> = freeRefs(value, bound, acc);
+      return freeRefs(body, paramBound(param, bound), acc1);
     }
     case "EPipe": {
       const { left, right } = $match;
-      return freeRefs$(right, bound, freeRefs$(left, bound, acc));
+      return freeRefs(right, bound, freeRefs(left, bound, acc));
     }
     case "EDo": {
       const { exprs } = $match;
-      return freeRefsList$(exprs, bound, acc);
+      return freeRefsList(exprs, bound, acc);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return freeRefs$(elseE, bound, freeRefs$(thenE, bound, freeRefs$(cond, bound, acc)));
+      return freeRefs(elseE, bound, freeRefs(thenE, bound, freeRefs(cond, bound, acc)));
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      return freeRefsArms$(arms, bound, freeRefs$(scrutinee, bound, acc));
+      return freeRefsArms(arms, bound, freeRefs(scrutinee, bound, acc));
     }
     case "ELoop": {
       const { params, body } = $match;
-      return freeRefs$(body, loopBound(params, bound), loopInitRefsFrom$(params, 0, bound, acc));
+      return freeRefs(body, loopBound(params, bound), loopInitRefsFrom(params, 0, bound, acc));
     }
     case "ERecur": {
       const { args } = $match;
-      return freeRefsList$(args, bound, acc);
+      return freeRefsList(args, bound, acc);
     }
     case "ERecord": {
       const { fields, spread } = $match;
-      return freeRefsFields$(
+      return freeRefsFields(
         fields,
         bound,
         _Option_match(
           spread,
           () => acc,
-          (s) => freeRefs$(s, bound, acc),
+          (s) => freeRefs(s, bound, acc),
         ),
       );
     }
     case "EField": {
       const { target } = $match;
-      return freeRefs$(target, bound, acc);
+      return freeRefs(target, bound, acc);
     }
     case "ETuple": {
       const { elements } = $match;
-      return freeRefsList$(elements, bound, acc);
+      return freeRefsList(elements, bound, acc);
     }
     case "EArr": {
       const { elements } = $match;
-      return freeRefsList$(map(seqElemExpr, elements), bound, acc);
+      return freeRefsList(map(seqElemExpr, elements), bound, acc);
     }
     case "EList": {
       const { elements } = $match;
-      return freeRefsList$(map(seqElemExpr, elements), bound, acc);
+      return freeRefsList(map(seqElemExpr, elements), bound, acc);
     }
     case "ESet": {
       const { elements } = $match;
-      return freeRefsList$(map(seqElemExpr, elements), bound, acc);
+      return freeRefsList(map(seqElemExpr, elements), bound, acc);
     }
     case "EMap": {
       const { entries } = $match;
-      return freeRefsEntries$(entries, bound, acc);
+      return freeRefsEntries(entries, bound, acc);
     }
     case "EInterp": {
       const { parts } = $match;
-      return freeRefsInterpParts$(parts, bound, acc);
+      return freeRefsInterpParts(parts, bound, acc);
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -4096,7 +4091,7 @@ const seedNsImports: <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) => Map<A, B> = 
   <A, B>(nsImports: Map<A, B>, ns: Map<A, B>) =>
     seedNsImportsFrom(_Map_keys(nsImports), nsImports, ns),
 );
-const aliasMapFrom$ = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, AliasInfo> =>
+const aliasMapFrom = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, AliasInfo> =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -4105,7 +4100,7 @@ const aliasMapFrom$ = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, 
             ((_v) =>
               _v._tag === "SType" && _v.alias._tag === "Some"
                 ? (({ name, params, alias: { value: fields } }) =>
-                    aliasMapFrom$(
+                    aliasMapFrom(
                       rest,
                       _Map_set(
                         name,
@@ -4119,7 +4114,7 @@ const aliasMapFrom$ = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, 
                   )
                 : _v._tag === "SType" && _v.aliasType._tag === "Some"
                   ? (({ name, params, aliasType: { value: te } }) =>
-                      aliasMapFrom$(
+                      aliasMapFrom(
                         rest,
                         _Map_set(
                           name,
@@ -4138,7 +4133,7 @@ const aliasMapFrom$ = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, 
                         >;
                       },
                     )
-                  : aliasMapFrom$(rest, acc))(s))(_v)
+                  : aliasMapFrom(rest, acc))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
@@ -4176,7 +4171,7 @@ const registerCtorsFrom: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerUserCtorsFrom$ = (
+const registerUserCtorsFrom = (
   stmts: Stmt[],
   aliasMap: Map<string, AliasInfo>,
   env: Map<string, Scheme>,
@@ -4191,10 +4186,10 @@ const registerUserCtorsFrom$ = (
               _v._tag === "SType"
                 ? (({ name, params, ctors }) =>
                     (([env1, st1]: [Map<string, Scheme>, St]) =>
-                      registerUserCtorsFrom$(rest, aliasMap, env1, st1))(
+                      registerUserCtorsFrom(rest, aliasMap, env1, st1))(
                       registerCtorsFrom(ctors, name, params, aliasMap, env, st),
                     ))(_v)
-                : registerUserCtorsFrom$(rest, aliasMap, env, st))(s))(_v)
+                : registerUserCtorsFrom(rest, aliasMap, env, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
@@ -4277,7 +4272,7 @@ const registerBuiltinCtorsFrom: <A, B, C>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerExternsFrom$ = (
+const registerExternsFrom = (
   stmts: Stmt[],
   aliasMap: Map<string, AliasInfo>,
   env: Map<string, Scheme>,
@@ -4294,7 +4289,7 @@ const registerExternsFrom$ = (
                     (([vars, st0]: [Map<string, Ty>, St]) =>
                       (([t, , st1]: [Ty, Map<string, Ty>, St]) => {
                         const sc: Scheme = generalize(env, t, st1, false);
-                        return registerExternsFrom$(
+                        return registerExternsFrom(
                           rest,
                           aliasMap,
                           _Map_set(name, sc, env),
@@ -4317,7 +4312,7 @@ const registerExternsFrom$ = (
                         params,
                       ),
                     ))(_v)
-                : registerExternsFrom$(rest, aliasMap, env, st))(s))(_v)
+                : registerExternsFrom(rest, aliasMap, env, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
@@ -4371,7 +4366,7 @@ const localTail: (e: Expr) => Expr = (e: Expr) =>
           },
         )
       : e)(e);
-const idxOfFrom$ = (lets: Stmt[], i0: number, acc0: Map<string, number>): Map<string, number> => {
+const idxOfFrom = (lets: Stmt[], i0: number, acc0: Map<string, number>): Map<string, number> => {
   let i: number = i0;
   let acc: Map<string, number> = acc0;
   while (true) {
@@ -4397,7 +4392,7 @@ const idxOfFrom$ = (lets: Stmt[], i0: number, acc0: Map<string, number>): Map<st
   }
 };
 const idxOfMap: (lets: Stmt[]) => Map<string, number> = (lets: Stmt[]) =>
-  idxOfFrom$(lets, 0, new Map<string, number>());
+  idxOfFrom(lets, 0, new Map<string, number>());
 const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
   2,
   <A>(letStmt: Stmt, idxOf: Map<string, A>) => {
@@ -4413,7 +4408,7 @@ const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
               (j) => [j],
             ),
           _Set_toArray(
-            freeRefs$(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
+            freeRefs(value, _Set_fromArray([] as string[]), _Set_fromArray([] as string[])),
           ),
         );
       }
@@ -4444,7 +4439,7 @@ const groupOfFrom: <A>(idxs: number[], lets: A[]) => A[] = _curry(
               throw new Error("non-exhaustive match");
             })())(idxs),
 );
-const preBindGroupFrom$ = (
+const preBindGroupFrom = (
   group: Stmt[],
   env: Map<string, Scheme>,
   st: St,
@@ -4458,13 +4453,13 @@ const preBindGroupFrom$ = (
               _v._tag === "SLet"
                 ? (({ name }) =>
                     (([v, st1]: [Ty, St]) =>
-                      preBindGroupFrom$(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)))(_v)
-                : preBindGroupFrom$(rest, env, st))(s))(_v)
+                      preBindGroupFrom(rest, _Map_set(name, mono(v), env), st1))(freshVar(st)))(_v)
+                : preBindGroupFrom(rest, env, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
 
-const inferMember$ = (
+const inferMember = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -4491,12 +4486,12 @@ const inferMember$ = (
               _Map_get(name, ctx.env),
               () =>
                 Err({
-                  err: typeErr$(`internal: missing self-binding for '${name}'`, span),
+                  err: typeErr(`internal: missing self-binding for '${name}'`, span),
                   st: st1,
                 }) as Result<[Ty, St], MemberErr>,
               (selfSc) =>
                 _Result_match(
-                  u$(ctx, selfSc.ty, t, st1, span),
+                  u(ctx, selfSc.ty, t, st1, span),
                   (e) => Err({ err: e, st: st1 }) as Result<[Ty, St], MemberErr>,
                   (st2) =>
                     _Option_match(
@@ -4505,7 +4500,7 @@ const inferMember$ = (
                       (te) =>
                         (([at, , stA]: [Ty, Map<string, Ty>, St]) =>
                           _Result_match(
-                            checkFits$(ctx, t, at, stA, annotSpan(te)),
+                            checkFits(ctx, t, at, stA, annotSpan(te)),
                             (e) => Err({ err: e, st: stA }) as Result<[Ty, St], MemberErr>,
                             (stB) => Ok(_tuple(at, stB)) as Result<[Ty, St], MemberErr>,
                           ))(
@@ -4522,8 +4517,8 @@ const inferMember$ = (
             ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
         : (() => {
             throw new Error("non-exhaustive match");
-          })())(inferExpr$(ctx, value, st));
-const inferGroupFrom$ = (
+          })())(inferExpr(ctx, value, st));
+const inferGroupFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -4550,13 +4545,13 @@ const inferGroupFrom$ = (
                     ((_v) =>
                       _v._tag === "Err"
                         ? (({ error: me }) =>
-                            inferGroupFrom$(ctx, rest, me.st, _Array_append(me.err, errs)))(_v)
+                            inferGroupFrom(ctx, rest, me.st, _Array_append(me.err, errs)))(_v)
                         : _v._tag === "Ok"
                           ? (({ value: [pinned, st3] }) =>
                               ((stNamed: St) =>
                                 (([restTypes, st4, errs1]: [Map<string, Ty>, St, IErr[]]) =>
                                   _tuple(_Map_set(name, pinned, restTypes), st4, errs1))(
-                                  inferGroupFrom$(ctx, rest, stNamed, errs),
+                                  inferGroupFrom(ctx, rest, stNamed, errs),
                                 ))(
                                 _Str_startsWith("$", name)
                                   ? st3
@@ -4564,8 +4559,8 @@ const inferGroupFrom$ = (
                               ))(_v as Extract<Result<[Ty, St], MemberErr>, { _tag: "Ok" }>)
                           : (() => {
                               throw new Error("non-exhaustive match");
-                            })())(inferMember$(ctx, name, annot, value, span, st)))(_v)
-                : inferGroupFrom$(ctx, rest, st, errs))(s))(_v)
+                            })())(inferMember(ctx, name, annot, value, span, st)))(_v)
+                : inferGroupFrom(ctx, rest, st, errs))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
@@ -4585,7 +4580,7 @@ const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> =
               throw new Error("non-exhaustive match");
             })())(group),
 );
-const groupNamesFrom$ = (group: Stmt[], acc: string[]): string[] =>
+const groupNamesFrom = (group: Stmt[], acc: string[]): string[] =>
   ((_v) =>
     _v.length === 0
       ? acc
@@ -4593,12 +4588,12 @@ const groupNamesFrom$ = (group: Stmt[], acc: string[]): string[] =>
         ? (([s, ...rest]) =>
             ((_v) =>
               _v._tag === "SLet"
-                ? (({ name }) => groupNamesFrom$(rest, _Array_append(name, acc)))(_v)
-                : groupNamesFrom$(rest, acc))(s))(_v)
+                ? (({ name }) => groupNamesFrom(rest, _Array_append(name, acc)))(_v)
+                : groupNamesFrom(rest, acc))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const generalizeGroupFrom$ = (
+const generalizeGroupFrom = (
   group: Stmt[],
   bodyTypes: Map<string, Ty>,
   preEnv: Map<string, Scheme>,
@@ -4617,7 +4612,7 @@ const generalizeGroupFrom$ = (
                     _Option_match(
                       _Map_get(name, bodyTypes),
                       () =>
-                        generalizeGroupFrom$(
+                        generalizeGroupFrom(
                           rest,
                           bodyTypes,
                           preEnv,
@@ -4635,7 +4630,7 @@ const generalizeGroupFrom$ = (
                           () => true,
                           () => false,
                         );
-                        return generalizeGroupFrom$(
+                        return generalizeGroupFrom(
                           rest,
                           bodyTypes,
                           preEnv,
@@ -4645,11 +4640,11 @@ const generalizeGroupFrom$ = (
                         );
                       },
                     ))(_v)
-                : generalizeGroupFrom$(rest, bodyTypes, preEnv, env, names, st))(s))(_v)
+                : generalizeGroupFrom(rest, bodyTypes, preEnv, env, names, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const noteGroupLets$ = (
+const noteGroupLets = (
   group: Stmt[],
   letOwner: Map<string, SpanAt>,
   st: St,
@@ -4663,14 +4658,14 @@ const noteGroupLets$ = (
               _v._tag === "SLet" && (({ name, value }) => !_Str_startsWith("$", name))(_v)
                 ? (({ name, value }) =>
                     ((sp: SpanAt) =>
-                      noteGroupLets$(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
+                      noteGroupLets(rest, _Map_set(name, sp, letOwner), noteLet(sp, st)))(
                       exprSpan(value),
                     ))(_v)
-                : noteGroupLets$(rest, letOwner, st))(s))(_v)
+                : noteGroupLets(rest, letOwner, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const processGroupsFrom$ = (
+const processGroupsFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -4708,9 +4703,9 @@ const processGroupsFrom$ = (
         ? (([comp, ...restSccs]) =>
             ((group: Stmt[]) =>
               (([preEnv, st1]: [Map<string, Scheme>, St]) => {
-                const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom$(group, [] as string[]));
+                const preCtx = ctxWithGroup(ctx, preEnv, groupNamesFrom(group, [] as string[]));
                 return (([bodyTypes, st2, errs1]: [Map<string, Ty>, St, IErr[]]) => {
-                  const finalEnv: Map<string, Scheme> = generalizeGroupFrom$(
+                  const finalEnv: Map<string, Scheme> = generalizeGroupFrom(
                     group,
                     bodyTypes,
                     preEnv,
@@ -4719,19 +4714,19 @@ const processGroupsFrom$ = (
                     st2,
                   );
                   return (([finalOwner, st3]: [Map<string, SpanAt>, St]) =>
-                    processGroupsFrom$(
+                    processGroupsFrom(
                       ctxWithLets(ctx, finalEnv, finalOwner),
                       restSccs,
                       lets,
                       st3,
                       errs1,
-                    ))(noteGroupLets$(group, ctx.letOwner, st2));
-                })(inferGroupFrom$(preCtx, group, st1, errs));
-              })(preBindGroupFrom$(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v)
+                    ))(noteGroupLets(group, ctx.letOwner, st2));
+                })(inferGroupFrom(preCtx, group, st1, errs));
+              })(preBindGroupFrom(group, ctx.env, st)))(groupOfFrom(comp, lets)))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(sccs);
-const inferExprStmtsFrom$ = (
+const inferExprStmtsFrom = (
   ctx: {
     env: Map<string, Scheme>;
     open: boolean;
@@ -4758,18 +4753,18 @@ const inferExprStmtsFrom$ = (
                     ((_v) =>
                       _v._tag === "Err"
                         ? (({ error: e }) =>
-                            inferExprStmtsFrom$(ctx, rest, st, _Array_append(e, errs)))(_v)
+                            inferExprStmtsFrom(ctx, rest, st, _Array_append(e, errs)))(_v)
                         : _v._tag === "Ok"
                           ? (({ value: [t, st1] }) =>
                               _Result_match(
-                                u$(ctx, t, tUnit, st1, span),
-                                (e) => inferExprStmtsFrom$(ctx, rest, st1, _Array_append(e, errs)),
-                                (st2) => inferExprStmtsFrom$(ctx, rest, st2, errs),
+                                u(ctx, t, tUnit, st1, span),
+                                (e) => inferExprStmtsFrom(ctx, rest, st1, _Array_append(e, errs)),
+                                (st2) => inferExprStmtsFrom(ctx, rest, st2, errs),
                               ))(_v as Extract<Result<[Ty, St], IErr>, { _tag: "Ok" }>)
                           : (() => {
                               throw new Error("non-exhaustive match");
-                            })())(inferExpr$(ctx, value, st)))(_v)
-                : inferExprStmtsFrom$(ctx, rest, st, errs))(s))(_v)
+                            })())(inferExpr(ctx, value, st)))(_v)
+                : inferExprStmtsFrom(ctx, rest, st, errs))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
@@ -5003,22 +4998,21 @@ const isConcrete: (t: Ty) => boolean = (t: Ty) => {
   const f: VarSets = freeInType(t);
   return and(_Set_size(f.tv) === 0, _Set_size(f.rv) === 0);
 };
-const allSameConcreteFrom$ = (shown: string, uses: Ty[], i: number): boolean =>
+const allSameConcreteFrom = (shown: string, uses: Ty[], i: number): boolean =>
   _Option_match(
     _Array_get(i, uses),
     () => true,
     (t) =>
-      and(isConcrete(t), eq(showType(t), shown)) ? allSameConcreteFrom$(shown, uses, i + 1) : false,
+      and(isConcrete(t), eq(showType(t), shown)) ? allSameConcreteFrom(shown, uses, i + 1) : false,
   );
-const allSameConcrete$ = (shown: string, uses: Ty[]): boolean =>
-  allSameConcreteFrom$(shown, uses, 0);
+const allSameConcrete = (shown: string, uses: Ty[]): boolean => allSameConcreteFrom(shown, uses, 0);
 /**
  * Resolve `letParams` for TS emit (ADR 0035): a noted `let` is annotated only
  * when its body instantiated it at ONE fully-concrete type. Uses zonk against
  * the FINAL state, like `zonkRecorded` — a use recorded mid-inference is still
  * full of unsolved vars.
  */
-const resolveLetParamsFrom$ = (keys: string[], st: St): TypeAt[] =>
+const resolveLetParamsFrom = (keys: string[], st: St): TypeAt[] =>
   ((_v) =>
     _v.length === 0
       ? ([] as TypeAt[])
@@ -5030,7 +5024,7 @@ const resolveLetParamsFrom$ = (keys: string[], st: St): TypeAt[] =>
                   _Array_get(0, uses),
                   () => tail,
                   (first) =>
-                    allSameConcrete$(showType(first), uses)
+                    allSameConcrete(showType(first), uses)
                       ? _Option_match(
                           _Map_get(k, st.letSpans),
                           () => tail,
@@ -5038,13 +5032,13 @@ const resolveLetParamsFrom$ = (keys: string[], st: St): TypeAt[] =>
                         )
                       : tail,
                 ))(map((t: Ty) => zonk(t, st), _Map_getOr([] as Ty[], k, st.letUses))))(
-              resolveLetParamsFrom$(rest, st),
+              resolveLetParamsFrom(rest, st),
             ))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(keys);
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
-  resolveLetParamsFrom$(_Map_keys(st.letSpans), st);
+  resolveLetParamsFrom(_Map_keys(st.letSpans), st);
 /**
  * Full inference result — the metadata the TS backend needs on top of `env`
  * (ADR 0090), including `letParams` (ADR 0035).
@@ -5120,7 +5114,7 @@ const runInferImports: <A, B>(
       nsImports,
       seedNs(namespaces, env0, st0),
     );
-    const aliasMap: Map<string, AliasInfo> = aliasMapFrom$(
+    const aliasMap: Map<string, AliasInfo> = aliasMapFrom(
       stmts,
       qualAliasSeed(stmts, quals, new Map<string, AliasInfo>()),
     );
@@ -5172,8 +5166,8 @@ const runInferImports: <A, B>(
                         letParams: TypeAt[];
                       },
                       IErr[]
-                    >))(errs1))(inferExprStmtsFrom$(finalCtx, stmts, st4, errs)))(
-            processGroupsFrom$(
+                    >))(errs1))(inferExprStmtsFrom(finalCtx, stmts, st4, errs)))(
+            processGroupsFrom(
               {
                 env: env4,
                 open: openMode,
@@ -5191,9 +5185,9 @@ const runInferImports: <A, B>(
               noErrs,
             ),
           );
-        })(registerExternsFrom$(stmts, aliasMap, env2, st2)))(
+        })(registerExternsFrom(stmts, aliasMap, env2, st2)))(
         registerBuiltinCtorsFrom(builtinDeclsFor(stmts), aliasMap, env1, st1),
-      ))(registerUserCtorsFrom$(stmts, aliasMap, env0, st0));
+      ))(registerUserCtorsFrom(stmts, aliasMap, env0, st0));
   },
 );
 /**
@@ -5223,7 +5217,7 @@ export const scopeAliases: <A, B>(
         >;
       } & B
     >,
-  ) => aliasMapFrom$(stmts, qualAliasSeed(stmts, quals, new Map<string, AliasInfo>())),
+  ) => aliasMapFrom(stmts, qualAliasSeed(stmts, quals, new Map<string, AliasInfo>())),
 );
 /**
  * Env-only view — the shape every existing caller (compile.mochi,

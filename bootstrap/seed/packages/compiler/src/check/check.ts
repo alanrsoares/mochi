@@ -418,7 +418,7 @@ const ctorNameOf: (p: Pattern) => string = (p: Pattern) => {
     }
   }
 };
-const patCtorKey$ = (ctor: string, ns: Option<string>): string =>
+const patCtorKey = (ctor: string, ns: Option<string>): string =>
   _Option_match(
     ns,
     () => ctor,
@@ -455,7 +455,7 @@ const checkPattern: <A, B>(
       }
       case "PCtor": {
         const { ctor, args, ns, span: sp } = $match;
-        const key: string = patCtorKey$(ctor, ns);
+        const key: string = patCtorKey(ctor, ns);
         return _Option_match(
           _Map_get(key, reg.ctors),
           () => Some(checkErr(`unknown constructor '${key}'`, sp)) as Option<PErr>,
@@ -517,7 +517,7 @@ const checkPattern: <A, B>(
     }
   },
 );
-const binderPathsArgs$ = (
+const binderPathsArgs = (
   args: Pattern[],
   i: number,
   at: string,
@@ -528,11 +528,11 @@ const binderPathsArgs$ = (
     () => Ok(acc) as Result<Map<string, string>, PErr>,
     (a) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsArgs$(args, i + 1, at, acc2),
-        binderPaths$(a, `${at}.a${show(i)}`, acc),
+        (acc2: Map<string, string>) => binderPathsArgs(args, i + 1, at, acc2),
+        binderPaths(a, `${at}.a${show(i)}`, acc),
       ),
   );
-const binderPathsFields$ = (
+const binderPathsFields = (
   fields: PatField[],
   i: number,
   at: string,
@@ -543,11 +543,11 @@ const binderPathsFields$ = (
     () => Ok(acc) as Result<Map<string, string>, PErr>,
     (f) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsFields$(fields, i + 1, at, acc2),
-        binderPaths$(f.pat, `${at}.${f.label}`, acc),
+        (acc2: Map<string, string>) => binderPathsFields(fields, i + 1, at, acc2),
+        binderPaths(f.pat, `${at}.${f.label}`, acc),
       ),
   );
-const binderPathsElems$ = (
+const binderPathsElems = (
   elems: Pattern[],
   i: number,
   at: string,
@@ -558,11 +558,11 @@ const binderPathsElems$ = (
     () => Ok(acc) as Result<Map<string, string>, PErr>,
     (e) =>
       _Result_flatMap(
-        (acc2: Map<string, string>) => binderPathsElems$(elems, i + 1, at, acc2),
-        binderPaths$(e, `${at}.t${show(i)}`, acc),
+        (acc2: Map<string, string>) => binderPathsElems(elems, i + 1, at, acc2),
+        binderPaths(e, `${at}.t${show(i)}`, acc),
       ),
   );
-const binderPaths$ = (
+const binderPaths = (
   p: Pattern,
   at: string,
   acc: Map<string, string>,
@@ -579,7 +579,7 @@ const binderPaths$ = (
                 PErr
               >)
             : (Ok(_Map_set(name, at, acc1)) as Result<Map<string, string>, PErr>),
-        binderPaths$(pat, at, acc),
+        binderPaths(pat, at, acc),
       );
     }
     case "PBind": {
@@ -593,15 +593,15 @@ const binderPaths$ = (
     }
     case "PCtor": {
       const { args } = $match;
-      return binderPathsArgs$(args, 0, at, acc);
+      return binderPathsArgs(args, 0, at, acc);
     }
     case "PRecord": {
       const { fields } = $match;
-      return binderPathsFields$(fields, 0, at, acc);
+      return binderPathsFields(fields, 0, at, acc);
     }
     case "PTuple": {
       const { elems } = $match;
-      return binderPathsElems$(elems, 0, at, acc);
+      return binderPathsElems(elems, 0, at, acc);
     }
     default: {
       return Ok(acc) as Result<Map<string, string>, PErr>;
@@ -644,7 +644,7 @@ const altMapsFrom: <A, B>(
                 () =>
                   _Result_flatMap(
                     (m) => altMapsFrom(alts, i + 1, reg, _Array_append(m, acc)),
-                    binderPaths$(alt, "", new Map<string, string>()),
+                    binderPaths(alt, "", new Map<string, string>()),
                   ),
                 (e) => Err(e) as Result<Map<string, string>[], PErr>,
               ),
@@ -724,7 +724,7 @@ const armUnguardedCatchAll: <A, B>(a: { pattern: Pattern; guard: Option<A> } & B
 >(
   a: { pattern: Pattern; guard: Option<A> } & B,
 ) => and(isCatchAll(a.pattern), _Option_isNone(a.guard));
-const guardErrs$ = (arms: MatchArm[], listSwitch: boolean): Option<PErr> =>
+const guardErrs = (arms: MatchArm[], listSwitch: boolean): Option<PErr> =>
   firstSome(
     (a: MatchArm) =>
       _Option_match(
@@ -742,7 +742,7 @@ const guardErrs$ = (arms: MatchArm[], listSwitch: boolean): Option<PErr> =>
       ),
     arms,
   );
-const firstCatchIdx$ = (arms: MatchArm[], i0: number): Option<number> => {
+const firstCatchIdx = (arms: MatchArm[], i0: number): Option<number> => {
   let i: number = i0;
   while (true) {
     {
@@ -765,7 +765,7 @@ const firstCatchIdx$ = (arms: MatchArm[], i0: number): Option<number> => {
 };
 const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
   _Option_match(
-    firstCatchIdx$(arms, 0),
+    firstCatchIdx(arms, 0),
     () => None as Option<PErr>,
     (i) =>
       _Option_match(
@@ -857,7 +857,7 @@ const ctorLoop: <A, B, C, D>(
         switch ($match._tag) {
           case "PCtor": {
             const { ctor, args, ns, span: sp } = $match;
-            const key: string = patCtorKey$(ctor, ns);
+            const key: string = patCtorKey(ctor, ns);
             return _Option_match(
               _Map_get(key, reg.ctors),
               () =>
@@ -1024,7 +1024,7 @@ const checkMatch: <A>(
           arms,
         );
         return _Option_match(
-          guardErrs$(arms, listSwitch),
+          guardErrs(arms, listSwitch),
           () =>
             _Option_match(
               unreachableAfterCatch(arms),
@@ -1073,7 +1073,7 @@ const checkMatch: <A>(
       (e) => Some(e) as Option<PErr>,
     ),
 );
-const checkExpr$ = (
+const checkExpr = (
   e: Expr,
   reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
 ): Option<PErr> => {
@@ -1097,35 +1097,35 @@ const checkExpr$ = (
     case "ECall": {
       const { fn, args } = $match;
       return _Option_orElse(
-        firstSome((a: Expr) => checkExpr$(a, reg), args),
-        checkExpr$(fn, reg),
+        firstSome((a: Expr) => checkExpr(a, reg), args),
+        checkExpr(fn, reg),
       );
     }
     case "ELambda": {
       const { body } = $match;
-      return checkExpr$(body, reg);
+      return checkExpr(body, reg);
     }
     case "ELetIn": {
       const { value, body } = $match;
-      return _Option_orElse(checkExpr$(body, reg), checkExpr$(value, reg));
+      return _Option_orElse(checkExpr(body, reg), checkExpr(value, reg));
     }
     case "ELetBind": {
       const { value, body } = $match;
-      return _Option_orElse(checkExpr$(body, reg), checkExpr$(value, reg));
+      return _Option_orElse(checkExpr(body, reg), checkExpr(value, reg));
     }
     case "EPipe": {
       const { left, right } = $match;
-      return _Option_orElse(checkExpr$(right, reg), checkExpr$(left, reg));
+      return _Option_orElse(checkExpr(right, reg), checkExpr(left, reg));
     }
     case "EDo": {
       const { exprs } = $match;
-      return firstSome((x: Expr) => checkExpr$(x, reg), exprs);
+      return firstSome((x: Expr) => checkExpr(x, reg), exprs);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
       return _Option_orElse(
-        checkExpr$(elseE, reg),
-        _Option_orElse(checkExpr$(thenE, reg), checkExpr$(cond, reg)),
+        checkExpr(elseE, reg),
+        _Option_orElse(checkExpr(thenE, reg), checkExpr(cond, reg)),
       );
     }
     case "EMatch": {
@@ -1136,54 +1136,54 @@ const checkExpr$ = (
           firstSome(
             (a: MatchArm) =>
               _Option_orElse(
-                checkExpr$(a.body, reg),
+                checkExpr(a.body, reg),
                 _Option_match(
                   a.guard,
                   () => None as Option<PErr>,
-                  (g) => checkExpr$(g, reg),
+                  (g) => checkExpr(g, reg),
                 ),
               ),
             arms,
           ),
-          checkExpr$(scrutinee, reg),
+          checkExpr(scrutinee, reg),
         ),
       );
     }
     case "ERecord": {
       const { fields, spread } = $match;
       return _Option_orElse(
-        firstSome((f: Field) => checkExpr$(f.value, reg), fields),
+        firstSome((f: Field) => checkExpr(f.value, reg), fields),
         _Option_match(
           spread,
           () => None as Option<PErr>,
-          (s) => checkExpr$(s, reg),
+          (s) => checkExpr(s, reg),
         ),
       );
     }
     case "EField": {
       const { target } = $match;
-      return checkExpr$(target, reg);
+      return checkExpr(target, reg);
     }
     case "ELoop": {
       const { params, body } = $match;
       return _Option_orElse(
-        checkExpr$(body, reg),
-        firstSome((p: LoopParam) => checkExpr$(p.init, reg), params),
+        checkExpr(body, reg),
+        firstSome((p: LoopParam) => checkExpr(p.init, reg), params),
       );
     }
     case "ERecur": {
       const { args } = $match;
-      return firstSome((a: Expr) => checkExpr$(a, reg), args);
+      return firstSome((a: Expr) => checkExpr(a, reg), args);
     }
     case "ETuple": {
       const { elements } = $match;
-      return firstSome((el: Expr) => checkExpr$(el, reg), elements);
+      return firstSome((el: Expr) => checkExpr(el, reg), elements);
     }
     case "EArr": {
       const { elements } = $match;
       return firstSome(
         (el: SeqElem) =>
-          checkExpr$(
+          checkExpr(
             ((_v) =>
               _v._tag === "SEExpr"
                 ? (({ expr: e }) => e)(_v)
@@ -1201,7 +1201,7 @@ const checkExpr$ = (
       const { elements } = $match;
       return firstSome(
         (el: SeqElem) =>
-          checkExpr$(
+          checkExpr(
             ((_v) =>
               _v._tag === "SEExpr"
                 ? (({ expr: e }) => e)(_v)
@@ -1219,7 +1219,7 @@ const checkExpr$ = (
       const { elements } = $match;
       return firstSome(
         (el: SeqElem) =>
-          checkExpr$(
+          checkExpr(
             ((_v) =>
               _v._tag === "SEExpr"
                 ? (({ expr: e }) => e)(_v)
@@ -1236,7 +1236,7 @@ const checkExpr$ = (
     case "EMap": {
       const { entries } = $match;
       return firstSome(
-        (en: MapEntry) => _Option_orElse(checkExpr$(en.value, reg), checkExpr$(en.key, reg)),
+        (en: MapEntry) => _Option_orElse(checkExpr(en.value, reg), checkExpr(en.key, reg)),
         entries,
       );
     }
@@ -1250,7 +1250,7 @@ const checkExpr$ = (
           }
           case "IPExpr": {
             const { expr: ex } = $match$;
-            return checkExpr$(ex, reg);
+            return checkExpr(ex, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1263,7 +1263,7 @@ const checkExpr$ = (
     }
   }
 };
-const checkExprs$ = (
+const checkExprs = (
   e: Expr,
   reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
 ): PErr[] => {
@@ -1286,44 +1286,44 @@ const checkExprs$ = (
     }
     case "ECall": {
       const { fn, args } = $match;
-      return [...checkExprs$(fn, reg), ..._Array_flatMap((a: Expr) => checkExprs$(a, reg), args)];
+      return [...checkExprs(fn, reg), ..._Array_flatMap((a: Expr) => checkExprs(a, reg), args)];
     }
     case "ELambda": {
       const { body } = $match;
-      return checkExprs$(body, reg);
+      return checkExprs(body, reg);
     }
     case "ELetIn": {
       const { value, body } = $match;
-      return [...checkExprs$(value, reg), ...checkExprs$(body, reg)];
+      return [...checkExprs(value, reg), ...checkExprs(body, reg)];
     }
     case "ELetBind": {
       const { value, body } = $match;
-      return [...checkExprs$(value, reg), ...checkExprs$(body, reg)];
+      return [...checkExprs(value, reg), ...checkExprs(body, reg)];
     }
     case "EPipe": {
       const { left, right } = $match;
-      return [...checkExprs$(left, reg), ...checkExprs$(right, reg)];
+      return [...checkExprs(left, reg), ...checkExprs(right, reg)];
     }
     case "EDo": {
       const { exprs } = $match;
-      return _Array_flatMap((x: Expr) => checkExprs$(x, reg), exprs);
+      return _Array_flatMap((x: Expr) => checkExprs(x, reg), exprs);
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
-      return [...checkExprs$(cond, reg), ...checkExprs$(thenE, reg), ...checkExprs$(elseE, reg)];
+      return [...checkExprs(cond, reg), ...checkExprs(thenE, reg), ...checkExprs(elseE, reg)];
     }
     case "EMatch": {
       const { scrutinee, arms, span: sp } = $match;
       return [
-        ...checkExprs$(scrutinee, reg),
+        ...checkExprs(scrutinee, reg),
         ..._Array_flatMap(
           (a: MatchArm) => [
             ..._Option_match(
               a.guard,
               () => [] as PErr[],
-              (g) => checkExprs$(g, reg),
+              (g) => checkExprs(g, reg),
             ),
-            ...checkExprs$(a.body, reg),
+            ...checkExprs(a.body, reg),
           ],
           arms,
         ),
@@ -1340,29 +1340,29 @@ const checkExprs$ = (
         ..._Option_match(
           spread,
           () => [] as PErr[],
-          (s) => checkExprs$(s, reg),
+          (s) => checkExprs(s, reg),
         ),
-        ..._Array_flatMap((f: Field) => checkExprs$(f.value, reg), fields),
+        ..._Array_flatMap((f: Field) => checkExprs(f.value, reg), fields),
       ];
     }
     case "EField": {
       const { target } = $match;
-      return checkExprs$(target, reg);
+      return checkExprs(target, reg);
     }
     case "ELoop": {
       const { params, body } = $match;
       return [
-        ..._Array_flatMap((p: LoopParam) => checkExprs$(p.init, reg), params),
-        ...checkExprs$(body, reg),
+        ..._Array_flatMap((p: LoopParam) => checkExprs(p.init, reg), params),
+        ...checkExprs(body, reg),
       ];
     }
     case "ERecur": {
       const { args } = $match;
-      return _Array_flatMap((a: Expr) => checkExprs$(a, reg), args);
+      return _Array_flatMap((a: Expr) => checkExprs(a, reg), args);
     }
     case "ETuple": {
       const { elements } = $match;
-      return _Array_flatMap((el: Expr) => checkExprs$(el, reg), elements);
+      return _Array_flatMap((el: Expr) => checkExprs(el, reg), elements);
     }
     case "EArr": {
       const { elements } = $match;
@@ -1371,11 +1371,11 @@ const checkExprs$ = (
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1390,11 +1390,11 @@ const checkExprs$ = (
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1409,11 +1409,11 @@ const checkExprs$ = (
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1424,7 +1424,7 @@ const checkExprs$ = (
     case "EMap": {
       const { entries } = $match;
       return _Array_flatMap(
-        (entry: MapEntry) => [...checkExprs$(entry.key, reg), ...checkExprs$(entry.value, reg)],
+        (entry: MapEntry) => [...checkExprs(entry.key, reg), ...checkExprs(entry.value, reg)],
         entries,
       );
     }
@@ -1438,7 +1438,7 @@ const checkExprs$ = (
           }
           case "IPExpr": {
             const { expr: value } = $match$;
-            return checkExprs$(value, reg);
+            return checkExprs(value, reg);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -1680,7 +1680,7 @@ const typeExprSpan: (te: TypeExpr) => SpanAt = (te: TypeExpr) => {
     }
   }
 };
-const checkReservedParam$ = (param: LamParam, sp: SpanAt): PErr[] => {
+const checkReservedParam = (param: LamParam, sp: SpanAt): PErr[] => {
   const $match = param;
   switch ($match._tag) {
     case "LPName": {
@@ -1708,7 +1708,7 @@ const checkReservedParam$ = (param: LamParam, sp: SpanAt): PErr[] => {
     }
     case "LPSpanned": {
       const { param: inner } = $match;
-      return checkReservedParam$(inner, sp);
+      return checkReservedParam(inner, sp);
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -1795,7 +1795,7 @@ const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) => {
     case "ELambda": {
       const { params, body, span: sp } = $match;
       return [
-        ..._Array_flatMap((param: LamParam) => checkReservedParam$(param, sp), params),
+        ..._Array_flatMap((param: LamParam) => checkReservedParam(param, sp), params),
         ...checkReservedExpr(body),
       ];
     }
@@ -1810,7 +1810,7 @@ const checkReservedExpr: (expr: Expr) => PErr[] = (expr: Expr) => {
     case "ELetBind": {
       const { param, paramSpan: paramSp, value, body } = $match;
       return [
-        ...checkReservedParam$(param, paramSp),
+        ...checkReservedParam(param, paramSp),
         ...checkReservedExpr(value),
         ...checkReservedExpr(body),
       ];
@@ -2080,15 +2080,15 @@ const checkCtorFieldVarsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
       }
     }
   }, stmts);
-const identChar$ = (c: string, first: boolean): boolean =>
+const identChar = (c: string, first: boolean): boolean =>
   or(
     or(or(c === "_", c === "$"), !eq(_Str_toLower(c), _Str_toUpper(c))),
     and(!first, _Str_contains(c, "0123456789")),
   );
-const identFrom$ = (s: string, i: number): boolean =>
+const identFrom = (s: string, i: number): boolean =>
   i >= _Str_length(s)
     ? true
-    : and(identChar$(_Option_unwrapOr("", _Str_get(i, s)), i === 0), identFrom$(s, i + 1));
+    : and(identChar(_Option_unwrapOr("", _Str_get(i, s)), i === 0), identFrom(s, i + 1));
 const dupTags: <C, D>(
   ctors: ({ tagLit: string; name: string; span: { end: number; start: number } & C } & D)[],
   seen: Set<string>,
@@ -2147,7 +2147,7 @@ const ctorTagErrs: <C, D, E, F>(
       _Array_get(0, ctors),
       () => [] as PErr[],
       (first) => [
-        ...(or(first.tagKey === "_tag", identFrom$(first.tagKey, 0))
+        ...(or(first.tagKey === "_tag", identFrom(first.tagKey, 0))
           ? ([] as PErr[])
           : [
               checkErr(
@@ -2603,7 +2603,7 @@ const duplicateLoopParam: <C, D>(
     }
   }
 };
-const checkLoopDo$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
+const checkLoopDo = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
   let i: number = 0;
   while (true) {
     {
@@ -2614,10 +2614,10 @@ const checkLoopDo$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): O
       if ($loopMatch._tag === "Some") {
         const { value: expr } = $loopMatch;
         if (_Option_isNone(_Array_get(i + 1, exprs))) {
-          return checkLoopExpr$(expr, frame, tail);
+          return checkLoopExpr(expr, frame, tail);
         } else {
           {
-            const $loopMatch = checkLoopExpr$(expr, frame, false);
+            const $loopMatch = checkLoopExpr(expr, frame, false);
             if ($loopMatch._tag === "Some") {
               const { value: error } = $loopMatch;
               return Some(error) as Option<PErr>;
@@ -2634,13 +2634,13 @@ const checkLoopDo$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): O
     }
   }
 };
-const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
+const checkLoopExpr = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
   const $match = e;
   switch ($match._tag) {
     case "ELoop": {
       const { params, body } = $match;
       return _Option_orElse(
-        checkLoopExpr$(
+        checkLoopExpr(
           body,
           Some({
             arity: length(params),
@@ -2649,7 +2649,7 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
           true,
         ),
         _Option_orElse(
-          firstSome((p: LoopParam) => checkLoopExpr$(p.init, frame, false), params),
+          firstSome((p: LoopParam) => checkLoopExpr(p.init, frame, false), params),
           duplicateLoopParam(params),
         ),
       );
@@ -2671,14 +2671,14 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
                     sp,
                   ),
                 ) as Option<PErr>)
-              : firstSome((a: Expr) => checkLoopExpr$(a, frame, false), args),
+              : firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
       );
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
       return _Option_orElse(
-        checkLoopExpr$(elseE, frame, tail),
-        _Option_orElse(checkLoopExpr$(thenE, frame, tail), checkLoopExpr$(cond, frame, false)),
+        checkLoopExpr(elseE, frame, tail),
+        _Option_orElse(checkLoopExpr(thenE, frame, tail), checkLoopExpr(cond, frame, false)),
       );
     }
     case "EMatch": {
@@ -2688,22 +2688,22 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
           (arm: MatchArm) =>
             _Option_match(
               arm.guard,
-              () => checkLoopExpr$(arm.body, frame, tail),
+              () => checkLoopExpr(arm.body, frame, tail),
               (guard) =>
                 _Option_orElse(
-                  checkLoopExpr$(arm.body, frame, tail),
-                  checkLoopExpr$(guard, frame, false),
+                  checkLoopExpr(arm.body, frame, tail),
+                  checkLoopExpr(guard, frame, false),
                 ),
             ),
           arms,
         ),
-        checkLoopExpr$(scrutinee, frame, false),
+        checkLoopExpr(scrutinee, frame, false),
       );
     }
     case "ELetIn": {
       const { name, nameSpan: nameSp, value, body } = $match;
       return _Option_orElse(
-        checkLoopExpr$(body, frame, tail),
+        checkLoopExpr(body, frame, tail),
         _Option_orElse(
           ((_v) =>
             _v._tag === "Some" && (({ value: current }) => _Set_has(name, current.names))(_v)
@@ -2715,57 +2715,54 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
                     ),
                   ) as Option<PErr>)(_v)
               : (None as Option<PErr>))(frame),
-          checkLoopExpr$(value, frame, false),
+          checkLoopExpr(value, frame, false),
         ),
       );
     }
     case "ELetBind": {
       const { value, body } = $match;
       return _Option_orElse(
-        checkLoopExpr$(body, None as Option<LoopFrame>, false),
-        checkLoopExpr$(value, frame, false),
+        checkLoopExpr(body, None as Option<LoopFrame>, false),
+        checkLoopExpr(value, frame, false),
       );
     }
     case "ELambda": {
       const { body } = $match;
-      return checkLoopExpr$(body, None as Option<LoopFrame>, false);
+      return checkLoopExpr(body, None as Option<LoopFrame>, false);
     }
     case "ECall": {
       const { fn, args } = $match;
       return _Option_orElse(
-        firstSome((a: Expr) => checkLoopExpr$(a, frame, false), args),
-        checkLoopExpr$(fn, frame, false),
+        firstSome((a: Expr) => checkLoopExpr(a, frame, false), args),
+        checkLoopExpr(fn, frame, false),
       );
     }
     case "EPipe": {
       const { left, right } = $match;
-      return _Option_orElse(
-        checkLoopExpr$(right, frame, false),
-        checkLoopExpr$(left, frame, false),
-      );
+      return _Option_orElse(checkLoopExpr(right, frame, false), checkLoopExpr(left, frame, false));
     }
     case "EDo": {
       const { exprs } = $match;
-      return checkLoopDo$(exprs, frame, tail);
+      return checkLoopDo(exprs, frame, tail);
     }
     case "ERecord": {
       const { fields, spread } = $match;
       return _Option_orElse(
-        firstSome((field: Field) => checkLoopExpr$(field.value, frame, false), fields),
+        firstSome((field: Field) => checkLoopExpr(field.value, frame, false), fields),
         _Option_match(
           spread,
           () => None as Option<PErr>,
-          (value) => checkLoopExpr$(value, frame, false),
+          (value) => checkLoopExpr(value, frame, false),
         ),
       );
     }
     case "EField": {
       const { target } = $match;
-      return checkLoopExpr$(target, frame, false);
+      return checkLoopExpr(target, frame, false);
     }
     case "ETuple": {
       const { elements } = $match;
-      return firstSome((el: Expr) => checkLoopExpr$(el, frame, false), elements);
+      return firstSome((el: Expr) => checkLoopExpr(el, frame, false), elements);
     }
     case "EArr": {
       const { elements } = $match;
@@ -2774,11 +2771,11 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2793,11 +2790,11 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2812,11 +2809,11 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2829,8 +2826,8 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
       return firstSome(
         (entry: MapEntry) =>
           _Option_orElse(
-            checkLoopExpr$(entry.value, frame, false),
-            checkLoopExpr$(entry.key, frame, false),
+            checkLoopExpr(entry.value, frame, false),
+            checkLoopExpr(entry.key, frame, false),
           ),
         entries,
       );
@@ -2845,7 +2842,7 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
           }
           case "IPExpr": {
             const { expr: value } = $match$;
-            return checkLoopExpr$(value, frame, false);
+            return checkLoopExpr(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -2864,11 +2861,11 @@ const checkLoops: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
     switch ($match._tag) {
       case "SLet": {
         const { value } = $match;
-        return checkLoopExpr$(value, None as Option<LoopFrame>, false);
+        return checkLoopExpr(value, None as Option<LoopFrame>, false);
       }
       case "SExpr": {
         const { value } = $match;
-        return checkLoopExpr$(value, None as Option<LoopFrame>, false);
+        return checkLoopExpr(value, None as Option<LoopFrame>, false);
       }
       default: {
         return None as Option<PErr>;
@@ -2907,7 +2904,7 @@ const loopParamErrors: <C, D>(
     }
   }
 };
-const checkLoopDoAll$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): PErr[] => {
+const checkLoopDoAll = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): PErr[] => {
   let i: number = 0;
   let errors: PErr[] = [] as PErr[];
   while (true) {
@@ -2924,7 +2921,7 @@ const checkLoopDoAll$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean)
             const $recur0: number = i + 1;
             const $recur1: PErr[] = [
               ...errors,
-              ...checkLoopExprs$(expr, frame, isLast ? tail : false),
+              ...checkLoopExprs(expr, frame, isLast ? tail : false),
             ];
             i = $recur0;
             errors = $recur1;
@@ -2936,15 +2933,15 @@ const checkLoopDoAll$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean)
     }
   }
 };
-const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr[] => {
+const checkLoopExprs = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr[] => {
   const $match = e;
   switch ($match._tag) {
     case "ELoop": {
       const { params, body } = $match;
       return [
         ...loopParamErrors(params),
-        ..._Array_flatMap((p: LoopParam) => checkLoopExprs$(p.init, frame, false), params),
-        ...checkLoopExprs$(
+        ..._Array_flatMap((p: LoopParam) => checkLoopExprs(p.init, frame, false), params),
+        ...checkLoopExprs(
           body,
           Some({
             arity: length(params),
@@ -2973,31 +2970,28 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
             : ([] as PErr[])),
         ],
       );
-      return [
-        ...siteErrors,
-        ..._Array_flatMap((a: Expr) => checkLoopExprs$(a, frame, false), args),
-      ];
+      return [...siteErrors, ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args)];
     }
     case "ETernary": {
       const { cond, thenE, elseE } = $match;
       return [
-        ...checkLoopExprs$(cond, frame, false),
-        ...checkLoopExprs$(thenE, frame, tail),
-        ...checkLoopExprs$(elseE, frame, tail),
+        ...checkLoopExprs(cond, frame, false),
+        ...checkLoopExprs(thenE, frame, tail),
+        ...checkLoopExprs(elseE, frame, tail),
       ];
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
       return [
-        ...checkLoopExprs$(scrutinee, frame, false),
+        ...checkLoopExprs(scrutinee, frame, false),
         ..._Array_flatMap(
           (arm: MatchArm) => [
             ..._Option_match(
               arm.guard,
               () => [] as PErr[],
-              (guard) => checkLoopExprs$(guard, frame, false),
+              (guard) => checkLoopExprs(guard, frame, false),
             ),
-            ...checkLoopExprs$(arm.body, frame, tail),
+            ...checkLoopExprs(arm.body, frame, tail),
           ],
           arms,
         ),
@@ -3012,35 +3006,35 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
                 checkErr(`'${name}' shadows a loop param inside the loop body; rename it`, nameSp),
               ])(_v)
             : ([] as PErr[]))(frame),
-        ...checkLoopExprs$(value, frame, false),
-        ...checkLoopExprs$(body, frame, tail),
+        ...checkLoopExprs(value, frame, false),
+        ...checkLoopExprs(body, frame, tail),
       ];
     }
     case "ELetBind": {
       const { value, body } = $match;
       return [
-        ...checkLoopExprs$(value, frame, false),
-        ...checkLoopExprs$(body, None as Option<LoopFrame>, false),
+        ...checkLoopExprs(value, frame, false),
+        ...checkLoopExprs(body, None as Option<LoopFrame>, false),
       ];
     }
     case "ELambda": {
       const { body } = $match;
-      return checkLoopExprs$(body, None as Option<LoopFrame>, false);
+      return checkLoopExprs(body, None as Option<LoopFrame>, false);
     }
     case "ECall": {
       const { fn, args } = $match;
       return [
-        ...checkLoopExprs$(fn, frame, false),
-        ..._Array_flatMap((a: Expr) => checkLoopExprs$(a, frame, false), args),
+        ...checkLoopExprs(fn, frame, false),
+        ..._Array_flatMap((a: Expr) => checkLoopExprs(a, frame, false), args),
       ];
     }
     case "EPipe": {
       const { left, right } = $match;
-      return [...checkLoopExprs$(left, frame, false), ...checkLoopExprs$(right, frame, false)];
+      return [...checkLoopExprs(left, frame, false), ...checkLoopExprs(right, frame, false)];
     }
     case "EDo": {
       const { exprs } = $match;
-      return checkLoopDoAll$(exprs, frame, tail);
+      return checkLoopDoAll(exprs, frame, tail);
     }
     case "ERecord": {
       const { fields, spread } = $match;
@@ -3048,18 +3042,18 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
         ..._Option_match(
           spread,
           () => [] as PErr[],
-          (value) => checkLoopExprs$(value, frame, false),
+          (value) => checkLoopExprs(value, frame, false),
         ),
-        ..._Array_flatMap((field: Field) => checkLoopExprs$(field.value, frame, false), fields),
+        ..._Array_flatMap((field: Field) => checkLoopExprs(field.value, frame, false), fields),
       ];
     }
     case "EField": {
       const { target } = $match;
-      return checkLoopExprs$(target, frame, false);
+      return checkLoopExprs(target, frame, false);
     }
     case "ETuple": {
       const { elements } = $match;
-      return _Array_flatMap((el: Expr) => checkLoopExprs$(el, frame, false), elements);
+      return _Array_flatMap((el: Expr) => checkLoopExprs(el, frame, false), elements);
     }
     case "EArr": {
       const { elements } = $match;
@@ -3068,11 +3062,11 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -3087,11 +3081,11 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -3106,11 +3100,11 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
         switch ($match$._tag) {
           case "SEExpr": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           case "SESpread": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -3122,8 +3116,8 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
       const { entries } = $match;
       return _Array_flatMap(
         (entry: MapEntry) => [
-          ...checkLoopExprs$(entry.key, frame, false),
-          ...checkLoopExprs$(entry.value, frame, false),
+          ...checkLoopExprs(entry.key, frame, false),
+          ...checkLoopExprs(entry.value, frame, false),
         ],
         entries,
       );
@@ -3138,7 +3132,7 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
           }
           case "IPExpr": {
             const { expr: value } = $match$;
-            return checkLoopExprs$(value, frame, false);
+            return checkLoopExprs(value, frame, false);
           }
           default: {
             throw new Error("non-exhaustive match");
@@ -3157,11 +3151,11 @@ const checkLoopsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
     switch ($match._tag) {
       case "SLet": {
         const { value } = $match;
-        return checkLoopExprs$(value, None as Option<LoopFrame>, false);
+        return checkLoopExprs(value, None as Option<LoopFrame>, false);
       }
       case "SExpr": {
         const { value } = $match;
-        return checkLoopExprs$(value, None as Option<LoopFrame>, false);
+        return checkLoopExprs(value, None as Option<LoopFrame>, false);
       }
       default: {
         return [] as PErr[];
@@ -3239,11 +3233,11 @@ export const checkWith: <A, B>(
                                   switch ($match._tag) {
                                     case "SLet": {
                                       const { value } = $match;
-                                      return checkExpr$(value, reg);
+                                      return checkExpr(value, reg);
                                     }
                                     case "SExpr": {
                                       const { value } = $match;
-                                      return checkExpr$(value, reg);
+                                      return checkExpr(value, reg);
                                     }
                                     default: {
                                       return None as Option<PErr>;
@@ -3344,11 +3338,11 @@ export const checkAllWith: <A, B>(
             switch ($match._tag) {
               case "SLet": {
                 const { value } = $match;
-                return checkExprs$(value, reg);
+                return checkExprs(value, reg);
               }
               case "SExpr": {
                 const { value } = $match;
-                return checkExprs$(value, reg);
+                return checkExprs(value, reg);
               }
               default: {
                 return [] as PErr[];

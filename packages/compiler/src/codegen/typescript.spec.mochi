@@ -470,7 +470,7 @@ test("a monomorphic raw twin annotates its return type (ADR 0149)", () =>
   assertEq(
     true,
     tsOf("let go = (n, acc) => n == 0 ? acc : go(n - 1, acc * n)")
-      |> Str.contains("const go$ = (n: number, acc: number): number =>")
+      |> Str.contains("const go = (n: number, acc: number): number =>")
   ))
 
 test("a saturated call takes the raw twin in typed emit (ADR 0149)", () =>
@@ -479,7 +479,7 @@ test("a saturated call takes the raw twin in typed emit (ADR 0149)", () =>
     tsOf(
       "let go = (n, acc) => n == 0 ? acc : go(n - 1, acc * n)\nlet r = go(3, 1)"
     )
-      |> Str.contains("const r = go$(3, 1);")
+      |> Str.contains("const r = go(3, 1);")
   ))
 
 test("a generic binding keeps no raw twin in typed emit (ADR 0149)", () =>

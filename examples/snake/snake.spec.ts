@@ -62,9 +62,9 @@ test("snake animation loop keeps the frame renderer in Mochi", () => {
   const boardJs = unwrapOk(compile(boardSource));
   expect(boardJs).toContain('from "@mochi/web/canvas";');
   expect(boardJs).toContain("roundRect, canvasRefSeed, startCanvasLoop, setFillStyle");
-  expect(boardJs).toContain("const drawFrame$ = (");
-  expect(boardJs).toContain("const drawFoodEdgeGlow$ = (");
-  expect(boardJs).toContain("const drawSnakePathGo$ = (");
+  expect(boardJs).toContain("const drawFrame = (");
+  expect(boardJs).toContain("const drawFoodEdgeGlow = (");
+  expect(boardJs).toContain("const drawSnakePathGo = (");
   expect(boardJs).toContain('setLineCap(ctx, "round")');
   expect(boardJs).toContain('setLineJoin(ctx, "round")');
   expect(boardJs).not.toContain("startParticleLoop");

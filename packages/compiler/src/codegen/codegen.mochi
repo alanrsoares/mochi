@@ -2397,6 +2397,12 @@ let collectValueRefs = (ctx: GCtx, stmts, i, acc) => switch Array.get(i, stmts) 
 }
 
 let refsForStmt = (ctx: GCtx, s) => switch s {
+  | Ast.SLet(name, _, _, Ast.ELambda(params, body, _), _, _, _) when // A twin whose public binding was dropped is a bare arrow: no `_curry`.
+Map.get(name, ctx.rawNames) == Some(name) => let (_, cbody, _) = collapseLambda(
+      params,
+      body
+    ) in
+      ctx->exprRefs(cbody, Set.fromArray([]))
   | Ast.SLet(_, _, _, value, _, _, _) => ctx->exprRefs(value, Set.fromArray([]))
   | Ast.SExpr(value, _) => ctx->exprRefs(value, Set.fromArray([]))
   | Ast.SType(_, _, _, ctors, _, _, exported, _, _) =>
@@ -2517,9 +2523,28 @@ export let codegenWith = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, 
     valueRefs,
     userNames
   }->withRawTwins(localBinderNames(stmts), stmts, 0) in
+  let publicRefs = ctx1->collectValueRefs(stmts, 0, Set.fromArray([])) in
+  let exportedNames = Array.reduce(
+    (acc, s) => switch s {
+      | Ast.SLet(name, _, _, _, true, _, _) => Set.add(name, acc)
+      | _ => acc
+    },
+    Set.fromArray([]),
+    stmts
+  ) in
+  // A twin whose public binding is dropped takes the public name itself, so the
+  // emitted function reads `const f = (a, b) => …` and calls stay `f(a, b)`.
   let ctx = {
     ...ctx1,
-    publicRefs: ctx1->collectValueRefs(stmts, 0, Set.fromArray([]))
+    publicRefs,
+    rawNames: Array.reduce(
+      (m, n) =>
+        Set.has(n, exportedNames) || Set.has(n, publicRefs)
+          ? m
+          : Map.set(n, n, m),
+      ctx1.rawNames,
+      Map.keys(ctx1.rawNames)
+    )
   } in
   let needsMatch = someOf(
     s => switch s {
