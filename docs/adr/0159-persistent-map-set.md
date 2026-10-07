@@ -26,6 +26,19 @@ Constraints any design must keep:
 - **Insertion order is observable** (`Map.keys`, `Map.values`, `Set.toArray`, `show`, deterministic emit). A plain hash trie iterates in hash order, so the sizing prototype is not enough.
 - **Structural keys** (ADR 0152): lookup is by `eq`, not `SameValueZero`; a trie needs `_eqHash` (ADR 0158) for object keys.
 
+## Stage 0 finding (workload survey)
+
+Probing `new Map(m)`/`new Set(s)` copy sizes while building the compiler graph
+(`mochi build --emit=ts packages/cli/src/driver.mochi`, 14.8 s): 447k Map copies,
+63.5k of them ≥512 entries (max 9,856), 215M elements copied, 577 ms (~4% of the
+build). A single site accounts for all of it: `typeAtFrom` in
+`codegen/typescript.mochi`, which folds every inferred type's span into a `Map`
+(`Map.set(spanKey(r.span), r.ty, acc)`) before TS emit. Sets never exceed 525
+entries (58 copies ≥512, 30k elements); `mochi fmt` copies nothing over 103.
+
+So the quadratic fold is real, but it is one fold-built table, not general
+persistent-map use. A bulk builder fixes it without touching the representation.
+
 ## Options
 
 1. **Status quo.** No work; quadratic folds stay.
@@ -38,7 +51,7 @@ Constraints any design must keep:
 
 Options 4 then 5, staged, each stage gated on evidence:
 
-0. **Find a real workload.** Locate a mochi program (compiler graph, examples, user-shaped fixtures) whose `Map.set`/`Set.add` fold exceeds ~1k entries. The compiler's own maps are small and stay native, so without one the trie is speculative and, under the perf trade-off rule, is deferred. Ship option 4 alone and stop.
+0. **Find a real workload.** Locate a mochi program (compiler graph, examples, user-shaped fixtures) whose `Map.set`/`Set.add` fold exceeds ~1k entries. The compiler's own maps are small and stay native, so without one the trie is speculative and, under the perf trade-off rule, is deferred. Ship option 4 alone and stop. **Result: the survey found one fold (above), which option 4 removes; the trie stays deferred unless a workload that incremental-updates a large map turns up.**
 1. **Bulk builders** (`Map.fromEntries`, `Map.setAll`), with `eq`-key semantics identical to repeated `Map.set`.
 2. **Ordered persistent prototype** with a model-based fast-check property test against native `Map`: random set/delete/get/iterate, structural keys, insertion order, and *branching* histories (fork a version, write to both), because tombstone compaction amortizes badly when old versions are reused. Keyed by `_eqHash` (ADR 0158) with the unhashable ordered-scan fallback, otherwise object keys gain nothing: `_keyOf` is already an O(N) scan for them. Fuse the `has`+`get` pair so a promoted lookup walks the trie once. Go/no-go on read cost and the threshold, with hysteresis so a map near it does not flip between native and promoted.
 3. `Map` writes, then `Set`; seed refreeze and a CodSpeed case for a large fold.
