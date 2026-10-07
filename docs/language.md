@@ -227,7 +227,7 @@ Four literal forms, each a distinct type:
 | `@{1, 2, 3}` | `List<number>` (lazy) | generator-backed pull sequence |
 | `#{1, 2}` | `Set<number>` | native JS `Set` (dedupes) |
 | `#{ "a": 1 }` | `Map<K, V>` | native JS `Map` |
-| `Map.fromEntries([(k, v)])` | `Map<K, V>` | native JS `Map`, one linear build; same result as folding `Map.set` (ADR 0159) |
+| `Map.fromEntries([(k, v)])` | `Map<K, V>` | native JS `Map`, built without a copy per entry (linear for primitive keys; object keys keep the O(N) `eq` scan); same result as folding `Map.set` (ADR 0159) |
 | `Dict.fromEntries([("a", 1)])` | `Dict<A>` (TS `Record<string, A>`) | null-prototype plain object (ADR 0150) |
 
 Array / List / Set literals may splice with `...` (`[a, ...xs]`, `@{a, ...xs}`,

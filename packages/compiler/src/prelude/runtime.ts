@@ -610,8 +610,9 @@ export const _Map_delete: {
   n.delete(_keyOf(m, k));
   return n;
 });
-// Linear build with the same result as folding `_Map_set`: a repeated key keeps its
-// first position and takes the last value (`eq` keys resolve through `_keyOf`).
+// Same result as folding `_Map_set` without a copy per entry: a repeated key keeps
+// its first position and takes the last value. Linear for primitive keys; object
+// keys still resolve through `_keyOf`'s ordered `eq` scan (ADR 0152), so O(N) each.
 export const _Map_fromEntries: <A, B>(a: [A, B][]) => Map<A, B> = (es: any) => {
   const n = new Map<any, any>();
   for (const [k, v] of es) n.set(_keyOf(n, k), v);
