@@ -15000,6 +15000,7 @@ var ternaryTypes = _curry20(3, (ctx, arms, base) => or11(or11(_Option_isNone2(ct
 var isOptionalNone = (pattern) => ((_v) => _v._tag === "PCtor" && _v.ctor === "None" ? (({ args, ns }) => and13(length15(args) === 0, _Option_isNone2(ns)))(_v) : false)(pattern);
 var optionalMatchPair = _curry20(2, (present, absent) => or11(or11(_Option_isSome6(present.guard), _Option_isSome6(absent.guard)), !isOptionalNone(absent.pattern)) ? None18 : ((_v) => _v._tag === "PCtor" && _v.ctor === "Some" ? (({ args, ns }) => and13(length15(args) === 1, _Option_isNone2(ns)) ? ((_v) => _v._tag === "Some" && _v.value._tag === "PBind" ? (({ value: { name } }) => Some18({ binding: name, present: present.body, absent: absent.body }))(_v) : _v._tag === "Some" && _v.value._tag === "PWild" ? Some18({ binding: "", present: present.body, absent: absent.body }) : None18)(_Array_get17(0, args)) : None18)(_v) : None18)(present.pattern));
 var optionalMatch = (arms) => match9(arms).with((_v) => _v.length === 2, ([a, b]) => _Option_match18(optionalMatchPair(a, b), () => optionalMatchPair(b, a), (plan) => Some18(plan))).otherwise(() => None18);
+var fusesOptionalMatch = (ctx, arms) => ((_v) => _v[0]._tag === "Some" && _v[0].value.length === 1 && _v[0].value[0] === "value" && _v[1]._tag === "Some" && _v[1].value.length === 0 ? _Option_isSome6(optionalMatch(arms)) : false)(_tuple10(_Map_get9("Some", ctx.keys), _Map_get9("None", ctx.keys)));
 var genOptionalMatch = (ctx, scrutinee, arms) => ((_v) => _v._tag === "EField" && _v.optional === true ? (({ target, name }) => ((_v) => _v[0]._tag === "Some" && _v[0].value.length === 1 && _v[0].value[0] === "value" && _v[1]._tag === "Some" && _v[1].value.length === 0 ? _Option_match18(optionalMatch(arms), () => None18, (plan) => Some18(genOptionalBranches(ctx, target, name, plan))) : None18)(_tuple10(_Map_get9("Some", ctx.keys), _Map_get9("None", ctx.keys))))(_v) : None18)(scrutinee);
 var genOptionalBranches = (ctx, target, name, plan) => {
   const value = tempName(ctx, "$optional");
@@ -15513,7 +15514,7 @@ var exprRefs = (ctx, e, acc) => {
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      const acc1 = exprRefs(ctx, scrutinee, acc);
+      const acc1 = ((_v) => _v._tag === "EField" && _v.optional === true && (({ target }) => fusesOptionalMatch(ctx, arms))(_v) ? (({ target }) => exprRefs(ctx, target, acc))(_v) : exprRefs(ctx, scrutinee, acc))(scrutinee);
       const acc2 = someOf4((a) => ((_v) => _v._tag === "PList" && _v.rest._tag === "Some" && _v.rest.value._tag === "PBind" ? true : false)(a.pattern), arms) ? _Set_add6("_list", acc1) : acc1;
       return exprRefsArmsFrom(ctx, arms, 0, _Option_match18(builtinMatchPlan(ctx, scrutinee, arms), () => acc2, (plan) => _Set_add6(plan.helper, acc2)));
     }

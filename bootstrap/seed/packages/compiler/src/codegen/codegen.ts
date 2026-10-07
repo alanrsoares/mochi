@@ -2482,6 +2482,19 @@ const optionalMatch: <A, C>(
         ),
     )
     .otherwise(() => None);
+/**
+ * Whether an optional-field scrutinee lowers through the fused Some/None path
+ * (builtin Option layout, two plain arms), so it never builds an Option.
+ */
+const fusesOptionalMatch = (ctx: GCtx, arms: MatchArm[]): boolean =>
+  ((_v) =>
+    _v[0]._tag === "Some" &&
+    _v[0].value.length === 1 &&
+    _v[0].value[0] === "value" &&
+    _v[1]._tag === "Some" &&
+    _v[1].value.length === 0
+      ? _Option_isSome(optionalMatch(arms))
+      : false)(_tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)));
 const genOptionalMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): Option<string> =>
   ((_v) =>
     _v._tag === "EField" && _v.optional === true
@@ -3761,7 +3774,12 @@ const exprRefs = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      const acc1: Set<string> = exprRefs(ctx, scrutinee, acc);
+      const acc1: Set<string> = ((_v) =>
+        _v._tag === "EField" &&
+        _v.optional === true &&
+        (({ target }) => fusesOptionalMatch(ctx, arms))(_v)
+          ? (({ target }) => exprRefs(ctx, target, acc))(_v)
+          : exprRefs(ctx, scrutinee, acc))(scrutinee);
       const acc2: Set<string> = someOf(
         (a: MatchArm) =>
           ((_v) =>

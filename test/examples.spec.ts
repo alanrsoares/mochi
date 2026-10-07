@@ -352,7 +352,8 @@ test.each([
 let read = (row: Row) => switch row.value { ${arms} }`;
   const fn = compileAndEval(src, "read") as (row: Record<string, unknown>) => number;
   expect([0, 7, undefined, null].map((value) => fn({ value }))).toEqual([...expected]);
-  expect(compileJs(src, { open: false })).not.toContain("_opt(");
+  // Neither the call nor the runtime helper definition: nothing builds an Option.
+  expect(compileJs(src, { open: false })).not.toContain("_opt");
 });
 
 test("optional match fusion evaluates targets and getters once, before only the selected body", () => {
