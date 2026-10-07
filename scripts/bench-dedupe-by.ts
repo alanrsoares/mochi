@@ -52,6 +52,18 @@ const fixtures: readonly Fixture[] = [
     expected: 400,
   },
   {
+    name: "records-nested-4000",
+    input: "Array.from({length:4000},(_,i)=>({id:i,name:'n'+(i%50),pos:{x:i,y:1}}))",
+    projection: "x=>x",
+    expected: 4000,
+  },
+  {
+    name: "records-repeated-4000",
+    input: "Array.from({length:4000},(_,i)=>({id:i%100,pos:[i%100,1]}))",
+    projection: "x=>x",
+    expected: 100,
+  },
+  {
     name: "mixed",
     input: "Array.from({length:4000},(_,i)=>i%2?'key'+i:i)",
     projection: "x=>x",
@@ -93,7 +105,7 @@ for (const round of [0, 1]) {
       const file = join(out, `${fixture.name}-${variant.name}.mjs`);
       writeFileSync(
         file,
-        `${preludeJsDefs._curry}\n${preludeJsDefs.eq}\n${variant.code}\n${guards}
+        `${preludeJsDefs._curry}\n${preludeJsDefs.eq}\n${preludeJsDefs._hashStr}\n${preludeJsDefs._eqHash}\n${variant.code}\n${guards}
 const input=${fixture.input},project=${fixture.projection};
 const run=()=>_Array_dedupeBy(project,input);
 const verify=value=>{if(value.length!==${fixture.expected})throw new Error('length');for(let i=0;i<value.length;i++)if(value[i]!==input[i])throw new Error('order or representative');};

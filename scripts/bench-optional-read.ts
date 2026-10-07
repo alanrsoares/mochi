@@ -13,13 +13,16 @@ type Fixture = {
   readonly escaping: boolean;
 };
 
-const wrapper = '((v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" })(row.value)';
+const inline = '((v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" })(row.value)';
+// Escaping reads now emit the shared `_opt` runtime helper; runtime:false omits it.
+const helper = 'const _opt = (v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" };';
+const wrapper = "_opt(row.value)";
 // Frozen pre-fusion output for this exact fixture; runtime:false omits helpers.
 const previousMatch = `const read = (row) => ((_v) => _v._tag === "Some"
     ? (({ value: v }) => (v))(_v)
     : _v._tag === "None"
     ? (0)
-    : (() => { throw new Error("non-exhaustive match"); })())(${wrapper});`;
+    : (() => { throw new Error("non-exhaustive match"); })())(${inline});`;
 const fixtures: readonly Fixture[] = [
   {
     name: "read-consumed",
@@ -45,17 +48,16 @@ const out = repoPath(".cache", "bench", "optional-read");
 mkdirSync(out, { recursive: true });
 
 for (const fixture of fixtures) {
-  const emitted = compileJs(`type Row = { value?: number }\n${fixture.source}`, {
+  const compiled = compileJs(`type Row = { value?: number }\n${fixture.source}`, {
     runtime: false,
     open: false,
   });
+  const emitted = compiled.includes(wrapper) ? `${helper}\n${compiled}` : compiled;
   const numeric = fixture.name === "match-consumed";
-  if (!numeric && emitted.split(wrapper).length !== 2) throw new Error("optional wrapper changed");
-  if (numeric && emitted.includes('_tag: "Some"')) throw new Error("match fusion missing");
+  if (!numeric && compiled.split(wrapper).length !== 2) throw new Error("optional wrapper changed");
+  if (numeric && compiled.includes("_opt(")) throw new Error("match fusion missing");
   const candidate =
-    fixture.candidate === "helper"
-      ? `const wrap = (v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" };\n${emitted.replace(wrapper, "wrap(row.value)")}`
-      : fixture.candidate;
+    fixture.candidate === "helper" ? compiled.replace(wrapper, inline) : fixture.candidate;
   const variants = numeric
     ? [
         { name: "previous", code: previousMatch },

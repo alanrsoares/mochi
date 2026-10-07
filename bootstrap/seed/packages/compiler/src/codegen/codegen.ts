@@ -984,12 +984,7 @@ const genExpr = (ctx: GCtx, e: Expr): string => {
             nsRuntimeId(ctx, target, name),
             () => {
               const member: string = `${genMember(ctx, target)}.${name}`;
-              return optional
-                ? ((tagType: string) =>
-                    `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(
-                    _Option_isSome(ctx.guardBaseType) ? " as const" : "",
-                  )
-                : member;
+              return optional ? `_opt(${member})` : member;
             },
             (rt) => rt,
           ),
@@ -2487,6 +2482,19 @@ const optionalMatch: <A, C>(
         ),
     )
     .otherwise(() => None);
+/**
+ * Whether an optional-field scrutinee lowers through the fused Some/None path
+ * (builtin Option layout, two plain arms), so it never builds an Option.
+ */
+const fusesOptionalMatch = (ctx: GCtx, arms: MatchArm[]): boolean =>
+  ((_v) =>
+    _v[0]._tag === "Some" &&
+    _v[0].value.length === 1 &&
+    _v[0].value[0] === "value" &&
+    _v[1]._tag === "Some" &&
+    _v[1].value.length === 0
+      ? _Option_isSome(optionalMatch(arms))
+      : false)(_tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)));
 const genOptionalMatch = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): Option<string> =>
   ((_v) =>
     _v._tag === "EField" && _v.optional === true
@@ -3766,7 +3774,12 @@ const exprRefs = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      const acc1: Set<string> = exprRefs(ctx, scrutinee, acc);
+      const acc1: Set<string> = ((_v) =>
+        _v._tag === "EField" &&
+        _v.optional === true &&
+        (({ target }) => fusesOptionalMatch(ctx, arms))(_v)
+          ? (({ target }) => exprRefs(ctx, target, acc))(_v)
+          : exprRefs(ctx, scrutinee, acc))(scrutinee);
       const acc2: Set<string> = someOf(
         (a: MatchArm) =>
           ((_v) =>
@@ -3802,13 +3815,13 @@ const exprRefs = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       );
     }
     case "EField": {
-      const { target, name } = $match;
+      const { target, name, optional } = $match;
       return _Option_match(
         emptyNsEmit(target, name, None as Option<string>),
         () =>
           _Option_match(
             nsRuntimeId(ctx, target, name),
-            () => exprRefs(ctx, target, acc),
+            () => exprRefs(ctx, target, optional ? _Set_add("_opt", acc) : acc),
             (rt) => _Set_add(rt, acc),
           ),
         () =>

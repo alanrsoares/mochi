@@ -14193,7 +14193,7 @@ var genExpr = (ctx, e) => {
       const { target, name, optional } = $match;
       return _Option_match18(emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)), () => _Option_match18(nsRuntimeId(ctx, target, name), () => {
         const member = `${genMember(ctx, target)}.${name}`;
-        return optional ? ((tagType) => `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(_Option_isSome6(ctx.guardBaseType) ? " as const" : "") : member;
+        return optional ? `_opt(${member})` : member;
       }, (rt) => rt), (js) => js);
     }
     case "ETuple": {
@@ -14979,6 +14979,7 @@ var ternaryTypes = _curry20(3, (ctx, arms, base) => or11(or11(_Option_isNone2(ct
 var isOptionalNone = (pattern) => ((_v) => _v._tag === "PCtor" && _v.ctor === "None" ? (({ args, ns }) => and13(length15(args) === 0, _Option_isNone2(ns)))(_v) : false)(pattern);
 var optionalMatchPair = _curry20(2, (present, absent) => or11(or11(_Option_isSome6(present.guard), _Option_isSome6(absent.guard)), !isOptionalNone(absent.pattern)) ? None18 : ((_v) => _v._tag === "PCtor" && _v.ctor === "Some" ? (({ args, ns }) => and13(length15(args) === 1, _Option_isNone2(ns)) ? ((_v) => _v._tag === "Some" && _v.value._tag === "PBind" ? (({ value: { name } }) => Some18({ binding: name, present: present.body, absent: absent.body }))(_v) : _v._tag === "Some" && _v.value._tag === "PWild" ? Some18({ binding: "", present: present.body, absent: absent.body }) : None18)(_Array_get17(0, args)) : None18)(_v) : None18)(present.pattern));
 var optionalMatch = (arms) => match9(arms).with((_v) => _v.length === 2, ([a, b]) => _Option_match18(optionalMatchPair(a, b), () => optionalMatchPair(b, a), (plan) => Some18(plan))).otherwise(() => None18);
+var fusesOptionalMatch = (ctx, arms) => ((_v) => _v[0]._tag === "Some" && _v[0].value.length === 1 && _v[0].value[0] === "value" && _v[1]._tag === "Some" && _v[1].value.length === 0 ? _Option_isSome6(optionalMatch(arms)) : false)(_tuple10(_Map_get9("Some", ctx.keys), _Map_get9("None", ctx.keys)));
 var genOptionalMatch = (ctx, scrutinee, arms) => ((_v) => _v._tag === "EField" && _v.optional === true ? (({ target, name }) => ((_v) => _v[0]._tag === "Some" && _v[0].value.length === 1 && _v[0].value[0] === "value" && _v[1]._tag === "Some" && _v[1].value.length === 0 ? _Option_match18(optionalMatch(arms), () => None18, (plan) => Some18(genOptionalBranches(ctx, target, name, plan))) : None18)(_tuple10(_Map_get9("Some", ctx.keys), _Map_get9("None", ctx.keys))))(_v) : None18)(scrutinee);
 var genOptionalBranches = (ctx, target, name, plan) => {
   const value = tempName(ctx, "$optional");
@@ -15492,7 +15493,7 @@ var exprRefs = (ctx, e, acc) => {
     }
     case "EMatch": {
       const { scrutinee, arms } = $match;
-      const acc1 = exprRefs(ctx, scrutinee, acc);
+      const acc1 = ((_v) => _v._tag === "EField" && _v.optional === true && (({ target }) => fusesOptionalMatch(ctx, arms))(_v) ? (({ target }) => exprRefs(ctx, target, acc))(_v) : exprRefs(ctx, scrutinee, acc))(scrutinee);
       const acc2 = someOf4((a) => ((_v) => _v._tag === "PList" && _v.rest._tag === "Some" && _v.rest.value._tag === "PBind" ? true : false)(a.pattern), arms) ? _Set_add6("_list", acc1) : acc1;
       return exprRefsArmsFrom(ctx, arms, 0, _Option_match18(builtinMatchPlan(ctx, scrutinee, arms), () => acc2, (plan) => _Set_add6(plan.helper, acc2)));
     }
@@ -15501,8 +15502,8 @@ var exprRefs = (ctx, e, acc) => {
       return exprRefsFieldsFrom(ctx, fields, 0, _Option_match18(spread, () => acc, (s) => exprRefs(ctx, s, acc)));
     }
     case "EField": {
-      const { target, name } = $match;
-      return _Option_match18(emptyNsEmit(target, name, None18), () => _Option_match18(nsRuntimeId(ctx, target, name), () => exprRefs(ctx, target, acc), (rt) => _Set_add6(rt, acc)), () => ((_v) => _v._tag === "ERef" && _v.name === "List" ? _Set_add6("_list", acc) : acc)(target));
+      const { target, name, optional } = $match;
+      return _Option_match18(emptyNsEmit(target, name, None18), () => _Option_match18(nsRuntimeId(ctx, target, name), () => exprRefs(ctx, target, optional ? _Set_add6("_opt", acc) : acc), (rt) => _Set_add6(rt, acc)), () => ((_v) => _v._tag === "ERef" && _v.name === "List" ? _Set_add6("_list", acc) : acc)(target));
     }
     case "ELoop": {
       const { params, body } = $match;
@@ -21285,6 +21286,7 @@ var _preludeJsDefs = {
   _done: 'const _done = (value) => ({ _tag: "done", value });',
   Some: 'const Some = (value) => ({ _tag: "Some", value });',
   None: 'const None = { _tag: "None" };',
+  _opt: 'const _opt = (v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" };',
   Ok: 'const Ok = (value) => ({ _tag: "Ok", value });',
   Err: 'const Err = (error) => ({ _tag: "Err", error });',
   add: "const add = _curry(2, (a, b) => a + b);",
@@ -21698,15 +21700,103 @@ var _preludeJsDefs = {
   _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
   _Array_sortBy: "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
   _Array_dedupe: "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
+  _hashStr: `const _hashStr = (s) => {
+  let h = 5381;
+  for (let i = 0;i < s.length; i++)
+    h = Math.imul(h, 33) ^ s.charCodeAt(i);
+  return h | 0;
+};`,
+  _eqHash: `const _eqHash = (x, depth) => {
+  switch (typeof x) {
+    case "number":
+      return Number.isInteger(x) && x > -2147483648 && x < 2147483647 ? x | 0 : _hashStr(String(x));
+    case "string":
+      return _hashStr(x) ^ 23505;
+    case "boolean":
+      return x ? 10 : 11;
+    case "undefined":
+      return 12;
+    case "bigint":
+      return _hashStr(String(x)) + 13;
+    case "symbol":
+      return 14;
+    case "function":
+      return 15;
+  }
+  if (x === null)
+    return 1;
+  if (depth <= 0)
+    return 2;
+  if (Array.isArray(x)) {
+    let h = 3 + x.length * 7;
+    for (let i = 0;i < x.length; i++) {
+      if (!(i in x))
+        return;
+      const d = Object.getOwnPropertyDescriptor(x, i);
+      if (d.get || d.set)
+        return;
+      const v = _eqHash(d.value, depth - 1);
+      if (v === undefined)
+        return;
+      h = Math.imul(h, 31) + v | 0;
+    }
+    return h;
+  }
+  if (x instanceof Map || x instanceof Set || typeof x[Symbol.iterator] === "function")
+    return;
+  const keys = Object.keys(x);
+  let sum = 0;
+  for (let i = 0;i < keys.length; i++) {
+    const k = keys[i];
+    const d = Object.getOwnPropertyDescriptor(x, k);
+    if (d.get || d.set)
+      return;
+    const v = _eqHash(d.value, depth - 1);
+    if (v === undefined)
+      return;
+    sum = sum + (_hashStr(k) ^ Math.imul(v, 16777619)) | 0;
+  }
+  return 4 + keys.length + sum | 0;
+};`,
   _Array_dedupeBy: `const _Array_dedupeBy = _curry(2, (f, xs) => {
   const primitive = new Set;
   const structural = [];
+  const buckets = new Map;
+  const unhashable = [];
   return xs.filter((x) => {
     const k = f(x);
     if (k !== null && typeof k === "object") {
-      if (structural.some((s) => eq(s, k)))
+      const h = _eqHash(k, 3);
+      if (h === undefined) {
+        if (structural.some((s) => eq(s, k)))
+          return false;
+        unhashable.push({ k, idx: structural.length });
+        structural.push(k);
+        return true;
+      }
+      const bucket = buckets.get(h);
+      let first = 1 / 0;
+      if (bucket) {
+        for (const e of bucket)
+          if (eq(e.k, k)) {
+            first = e.idx;
+            break;
+          }
+      }
+      for (const u of unhashable) {
+        if (u.idx >= first)
+          break;
+        if (eq(u.k, k))
+          return false;
+      }
+      if (first !== 1 / 0)
         return false;
+      const entry = { k, idx: structural.length };
       structural.push(k);
+      if (bucket)
+        bucket.push(entry);
+      else
+        buckets.set(h, [entry]);
       return true;
     }
     if (Number.isNaN(k))
@@ -22112,9 +22202,13 @@ var _runtimeDeps = {
   _Array_dedupe: [
     "eq"
   ],
+  _eqHash: [
+    "_hashStr"
+  ],
   _Array_dedupeBy: [
     "_curry",
-    "eq"
+    "eq",
+    "_eqHash"
   ],
   _Array_max: [
     "Some",
