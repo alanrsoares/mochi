@@ -71,4 +71,6 @@ jobs:
       - uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
-          run: node .cache/codspeed/bench.mjs
+          # Single-threaded V8: its GC/compiler helper threads make futex
+          # syscalls that simulation cannot count ("inconsistent instrumentation").
+          run: node --single-threaded .cache/codspeed/bench.mjs
