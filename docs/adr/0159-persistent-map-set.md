@@ -31,21 +31,23 @@ Constraints any design must keep:
 1. **Status quo.** No work; quadratic folds stay.
 2. **Replace the representation with an ordered HAMT.** Uniformly fast writes; breaks the native bridge (`instanceof`, `.d.ts`, host callers), slower reads everywhere, reseeds the compiler.
 3. **Separate persistent type** (`PMap`/`PSet`, like `Dict`, ADR 0150). Opt-in and no bridge risk; duplicates the API and leaves existing `Map.set` folds quadratic.
-4. **Adaptive promotion (recommended).** Collections below a threshold (~512 entries) stay native and unchanged. `Map.set`/`Set.add` on a larger one returns an ordered persistent structure that *subclasses* `Map`/`Set`, so `instanceof`, iteration, `.size`, `eq`, `compare` and `show` keep working. Insertion order is kept by pairing the key trie with a persistent sequence indexed by insertion counter (tombstones plus compaction on delete). Host-created native maps simply take the existing copy path until a mochi write promotes them.
+4. **Bulk builders** (`Map.fromEntries`, `Map.setAll`). `Map` has none today (`Dict` has `fromEntries`; `Set` has `fromArray`). Linear, no representation change, fixes the common "fold N writes" shape. Does not help incremental updates of a large existing map.
+5. **Adaptive promotion.** Collections below a threshold (~512 entries) stay native and unchanged. `Map.set`/`Set.add` on a larger one returns an ordered persistent structure that *subclasses* `Map`/`Set`, so `instanceof`, iteration, `.size`, `eq`, `compare` and `show` keep working. Insertion order is kept by pairing the key trie with a persistent sequence indexed by insertion counter (tombstones plus compaction on delete). Host-created native maps simply take the existing copy path until a mochi write promotes them.
 
 ## Decision (proposed)
 
-Adopt option 4, staged:
+Options 4 then 5, staged, each stage gated on evidence:
 
-1. Ordered persistent map prototype with a model-based fast-check property test against native `Map` (random set/delete/get/iterate, structural keys, order) and the same benchmark; go/no-go on read cost and the promotion threshold.
-2. `Map` writes, then `Set`.
-3. Seed refreeze and a CodSpeed case for a large fold.
+0. **Find a real workload.** Locate a mochi program (compiler graph, examples, user-shaped fixtures) whose `Map.set`/`Set.add` fold exceeds ~1k entries. The compiler's own maps are small and stay native, so without one the trie is speculative and, under the perf trade-off rule, is deferred. Ship option 4 alone and stop.
+1. **Bulk builders** (`Map.fromEntries`, `Map.setAll`), with `eq`-key semantics identical to repeated `Map.set`.
+2. **Ordered persistent prototype** with a model-based fast-check property test against native `Map`: random set/delete/get/iterate, structural keys, insertion order, and *branching* histories (fork a version, write to both), because tombstone compaction amortizes badly when old versions are reused. Keyed by `_eqHash` (ADR 0158) with the unhashable ordered-scan fallback, otherwise object keys gain nothing: `_keyOf` is already an O(N) scan for them. Fuse the `has`+`get` pair so a promoted lookup walks the trie once. Go/no-go on read cost and the threshold, with hysteresis so a map near it does not flip between native and promoted.
+3. `Map` writes, then `Set`; seed refreeze and a CodSpeed case for a large fold.
 
 ## Consequences
 
 - Fold-built collections above the threshold go from O(N²) to O(N log₃₂ N); small collections are bit-for-bit unchanged, so no perf drop on the compiler's own (small) maps.
 - Reads on promoted collections cost ~3–4× native; acceptable only if the threshold keeps typical maps native.
-- A promoted value is a `Map` subclass: host code that *mutates* it (`m.set`) must throw or copy; this must be decided and tested in slice 1.
+- A promoted value is a `Map` subclass: every method must be overridden (`forEach`, `entries`, `clear`, `Symbol.iterator`, …); inherited mutators (`set`, `delete`, `clear`) must throw or copy (decided in stage 2). `Map.prototype.get.call(promoted)` sees empty native slots, and each promoted object carries an unused native `Map`.
 - Native-only host identity tricks (`Object.getPrototypeOf(m) === Map.prototype`) see a difference.
 
 ## Alternatives rejected
