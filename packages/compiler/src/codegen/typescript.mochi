@@ -566,14 +566,10 @@ let coreBindingTsType = (sc, value, recs) =>
 /// Per-node types are keyed by span text, so a lookup is one Map hit.
 let spanKey = sp => "${show(sp.start)}:${show(sp.end)}"
 
-let typeAtFrom = (types, i, acc) => switch Array.get(i, types) {
-  | None => acc
-  | Some(r) => typeAtFrom(types, i + 1, Map.set(spanKey(r.span), r.ty, acc))
-}
-
 /// Later records win when two nodes share a span — `zonkRecorded` already put
-/// them in source order, so a plain left fold gets that for free.
-export let typeAtTable = types => typeAtFrom(types, 0, #{})
+/// them in source order, and `Map.fromEntries` keeps the last value per key.
+export let typeAtTable = types =>
+  Map.fromEntries(Array.map(r => (spanKey(r.span), r.ty), types))
 
 /// Every `con` name a type mentions — used to decide which builtin variant
 /// decls a module has to carry so its own references resolve.

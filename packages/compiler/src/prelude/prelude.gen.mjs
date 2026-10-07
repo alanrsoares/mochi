@@ -2454,6 +2454,43 @@ const _namespaces = {
         }
       }
     },
+    "fromEntries": {
+      "_tag": "TyFn",
+      "from": {
+        "_tag": "TyCon",
+        "name": "Array",
+        "args": [
+          {
+            "_tag": "TyCon",
+            "name": "tuple",
+            "args": [
+              {
+                "_tag": "TyVar",
+                "id": 0
+              },
+              {
+                "_tag": "TyVar",
+                "id": 1
+              }
+            ]
+          }
+        ]
+      },
+      "to": {
+        "_tag": "TyCon",
+        "name": "Map",
+        "args": [
+          {
+            "_tag": "TyVar",
+            "id": 0
+          },
+          {
+            "_tag": "TyVar",
+            "id": 1
+          }
+        ]
+      }
+    },
     "empty": {
       "_tag": "TyCon",
       "name": "Map",
@@ -4294,7 +4331,8 @@ const _namespaceRuntime = {
     "size": "_Map_size",
     "keys": "_Map_keys",
     "values": "_Map_values",
-    "get": "_Map_get"
+    "get": "_Map_get",
+    "fromEntries": "_Map_fromEntries"
   },
   "Dict": {
     "empty": "_Dict_empty",
@@ -4448,6 +4486,7 @@ const _preludeJsDefs = {
   "_Map_getOr": "const _Map_getOr = _curry(3, (d, k, m) => {\n  const key = _keyOf(m, k);\n  return m.has(key) ? m.get(key) : d;\n});",
   "_Map_set": "const _Map_set = _curry(3, (k, v, m) => {\n  const key = _keyOf(m, k);\n  if (m.has(key) && Object.is(m.get(key), v))\n    return m;\n  return new Map(m).set(key, v);\n});",
   "_Map_delete": "const _Map_delete = _curry(2, (k, m) => {\n  const n = new Map(m);\n  n.delete(_keyOf(m, k));\n  return n;\n});",
+  "_Map_fromEntries": "const _Map_fromEntries = (es) => {\n  const n = new Map;\n  for (const [k, v] of es)\n    n.set(_keyOf(n, k), v);\n  return n;\n};",
   "_Map_size": "const _Map_size = (m) => m.size;",
   "_Map_keys": "const _Map_keys = (m) => [...m.keys()];",
   "_Map_values": "const _Map_values = (m) => [...m.values()];",
@@ -4714,6 +4753,9 @@ const _runtimeDeps = {
   ],
   "_Map_delete": [
     "_curry",
+    "_keyOf"
+  ],
+  "_Map_fromEntries": [
     "_keyOf"
   ],
   "_Map_get": [

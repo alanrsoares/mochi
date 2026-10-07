@@ -839,6 +839,19 @@ export type Point = { x: number, y: number }`;
   expect(targets.dts).toContain("/**\n * Point in 2D space.\n */\nexport type Point =");
 });
 
+test("Map.fromEntries builds like folding Map.set (ADR 0159)", () => {
+  const src = `let m = Map.fromEntries([((1, 2), "a"), ((3, 4), "c"), ((1, 2), "b")])
+let out = (Map.size(m), Map.get((1, 2), m), Map.keys(m))`;
+  expect(compileAndEval(src, "out")).toEqual([
+    2,
+    { _tag: "Some", value: "b" },
+    [
+      [1, 2],
+      [3, 4],
+    ],
+  ]);
+});
+
 test("Map/Set resolve composite keys structurally (ADR 0152)", () => {
   const src = `let m = Map.empty |> Map.set((1, 2), "a") |> Map.set((1, 2), "b") |> Map.set((3, 4), "c")
 let s = Set.fromArray([[1], [1], [2]]) |> Set.add([2]) |> Set.add([3])

@@ -39,6 +39,7 @@ import {
   _Array_take,
   _List_concat,
   _Map_delete,
+  _Map_fromEntries,
   _Map_get,
   _Map_keys,
   _Map_set,
@@ -1036,31 +1037,16 @@ const coreBindingTsType: <A>(
 const spanKey: <A, B, C>(sp: { start: A; end: B } & C) => string = <A, B, C>(
   sp: { start: A; end: B } & C,
 ) => `${show(sp.start)}:${show(sp.end)}`;
-const typeAtFrom: <A, B, C, D, E>(
-  types: ({ span: { start: A; end: B } & D; ty: C } & E)[],
-  i: number,
-  acc: Map<string, C>,
-) => Map<string, C> = _curry(
-  3,
-  <A, B, C, D, E>(
-    types: ({ span: { start: A; end: B } & D; ty: C } & E)[],
-    i: number,
-    acc: Map<string, C>,
-  ) =>
-    _Option_match(
-      _Array_get(i, types),
-      () => acc,
-      (r) => typeAtFrom(types, i + 1, _Map_set(spanKey(r.span), r.ty, acc)),
-    ),
-);
 /**
  * Later records win when two nodes share a span — `zonkRecorded` already put
- * them in source order, so a plain left fold gets that for free.
+ * them in source order, and `Map.fromEntries` keeps the last value per key.
  */
 export const typeAtTable: <A, B, C, D, E>(
   types: ({ span: { start: A; end: B } & D; ty: C } & E)[],
 ) => Map<string, C> = <A, B, C, D, E>(types: ({ span: { start: A; end: B } & D; ty: C } & E)[]) =>
-  typeAtFrom(types, 0, new Map<string, C>());
+  _Map_fromEntries(
+    map((r: { span: { start: A; end: B } & D; ty: C } & E) => _tuple(spanKey(r.span), r.ty), types),
+  );
 /**
  * Every `con` name a type mentions — used to decide which builtin variant
  * decls a module has to carry so its own references resolve.

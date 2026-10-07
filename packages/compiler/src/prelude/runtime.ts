@@ -610,6 +610,13 @@ export const _Map_delete: {
   n.delete(_keyOf(m, k));
   return n;
 });
+// Linear build with the same result as folding `_Map_set`: a repeated key keeps its
+// first position and takes the last value (`eq` keys resolve through `_keyOf`).
+export const _Map_fromEntries: <A, B>(a: [A, B][]) => Map<A, B> = (es: any) => {
+  const n = new Map<any, any>();
+  for (const [k, v] of es) n.set(_keyOf(n, k), v);
+  return n;
+};
 export const _Map_size: <A, B>(a: Map<A, B>) => number = (m: any) => m.size;
 export const _Map_keys: <A, B>(a: Map<A, B>) => A[] = (m: any) => [...m.keys()];
 export const _Map_values: <A, B>(a: Map<A, B>) => B[] = (m: any) => [...m.values()];
