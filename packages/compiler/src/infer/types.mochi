@@ -349,14 +349,22 @@ let resolveRow = (r, st: St) => switch r {
 }
 
 /// Fully apply the substitution ("zonk") — for display and assertions.
-export let zonk = (t, st: St) => switch resolve(t, st) {
-  | TyVar(id) => tVar(id)
-  | TyCon(name, args) => tCon(name, args |> map(a => zonk(a, st)))
-  | TyFn(from, to) => tArrow(zonk(from, st), zonk(to, st))
-  | TyRecord(row) => tRecord(zonkRow(row, st))
-  | TySingleton(base, value) => TySingleton(base, value)
-  | TyOneOf(members) => tUnion(members |> map(m => zonk(m, st)))
-}
+///
+/// Leaves are returned as-is: the resolved head is already fully applied, and
+/// types are immutable, so rebuilding a var, a nullary con or a singleton only
+/// allocates.
+export let zonk = (t, st: St) =>
+  let h = resolve(t, st) in
+    switch h {
+      | TyVar(_) => h
+      | TyCon(name, args) => Array.length(args) == 0
+          ? h
+          : tCon(name, args |> map(a => zonk(a, st)))
+      | TyFn(from, to) => tArrow(zonk(from, st), zonk(to, st))
+      | TyRecord(row) => tRecord(zonkRow(row, st))
+      | TySingleton(_, _) => h
+      | TyOneOf(members) => tUnion(members |> map(m => zonk(m, st)))
+    }
 
 let zonkRow = (row, st: St) => switch resolveRow(row, st) {
   | RowExtend(label, fieldType, optional, rest) => rField(

@@ -1,13 +1,13 @@
 {
-  "sourceRevision": "b1afe58838a63e2ef156d0aac32d0a14f69dfeea",
+  "sourceRevision": "0aa1dc6e346166748114e94d587a4a5b5a5bcbbf",
   "emitted": {
     "compile-host-types.d.ts": "21f9f3bc45e807777ebb616375663558ad729906f802c4f937f619babb652a05",
-    "compile.bundle.cjs": "f624391c01910be4924df773ff5ae6a0baef38990860883bd996bff7cefcd164",
+    "compile.bundle.cjs": "64526230c1ec0a3d96f42691c980b1aca72cada9e3e38df6ea77db4ab819e9ad",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "13d06fa8e5f9b3c97dc80503972e4101825bd5d4b9425f2ae33ff843e64f67b3",
+    "compile.bundle.mjs": "25d9e9edefc043cc2655e38c7ef2aa8607958b36064ac399fb74bd44638b6392",
     "host-types.d.ts": "a3a23ca4b1908f05d99ec6a5a787b2b0fceff235a7f0a494fa786c20fd87b58f",
     "module-host-types.d.ts": "ab88c673320fac00e8a87ccb435e5e533f650b636147ec06de35905b4675da2c",
-    "module.bundle.cjs": "43ab92584f5d0439a0c38c2b277de28ff03acb3b8eddc9127500ce825a83a7ea",
+    "module.bundle.cjs": "3ba9c9365dc3e11d7d8275c5ef5a336db900b33e20d176a2b8617c3b526a0346",
     "packages/cli/src/driver.ts": "ed3ba54da4f334787243d2e3c2dcfc8ee79494797123d2b161d170540e836a2d",
     "packages/compiler/src/ast/ast.ts": "e4517c145609bd4e29551c6449f16a7665187155f892c251f2a7ab6986317363",
     "packages/compiler/src/ast/ctors.ts": "31c2f02a4a63c9349aac072afb19e81acea0648cfc6b99b72d28148954026191",
@@ -35,7 +35,7 @@
     "packages/compiler/src/infer/local-names.ts": "15bc5e0155e0e4ba1cf76d8309d54ef985e22855de43619a52c079255a07fbec",
     "packages/compiler/src/infer/scc.ts": "de797e90a38e68d6d1c4dba28078471258d01af248cf445845ba3ab3885c5ba4",
     "packages/compiler/src/infer/schemes.ts": "6e8a70ea0c97f7f9cf9f7b8832f4165bf5570c033e2d707133f31410652f3a29",
-    "packages/compiler/src/infer/types.ts": "ba0cdf44bc650722ced613db943f0dbf3506c26bdbaaff562bfd1c7e948941f5",
+    "packages/compiler/src/infer/types.ts": "5676c30496ccc486eee2e3adf7041050df89f064bd60258ea04161ed18739736",
     "packages/compiler/src/lexer/lexer.ts": "98b88fbd56c5b9486ee07b9a3544b1ae330a5e2c309b8e8d313536739c4f5e52",
     "packages/compiler/src/lexer/str-scan.ts": "dbd0e6c5f2c8ee43bfba550e57c9553019a807e70d075a3db0efd28fe5a42cef",
     "packages/compiler/src/module/host.d.mts": "6f27fc7b7e685aee0f421e35324b376e74c73b85a64b966a1674abbdd090067d",
@@ -45,16 +45,16 @@
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
     "packages/compiler/src/prelude/prelude.gen.mjs": "84815e512354cf54a146dba3fc703d544a22ff3639e3cc964482517b826a301a",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "ad50614f8ba2f10e0e6c104cdb47431d2e369d68eae45144ccd98dbe0babdb7f"
+    "syntax.bundle.mjs": "282a8a647f2a333a4f6c371a52e49d7e826309e31687a1aa6e11495091f67617"
   },
   "files": {
     "compile-host-types.d.ts": "40682d1a0de5dbef4d1aa01619b9ed9c3e1cd8d5ea32d41b77149e82c6baef10",
-    "compile.bundle.cjs": "f624391c01910be4924df773ff5ae6a0baef38990860883bd996bff7cefcd164",
+    "compile.bundle.cjs": "64526230c1ec0a3d96f42691c980b1aca72cada9e3e38df6ea77db4ab819e9ad",
     "compile.bundle.d.mts": "82378964d0e33110160a3d7962908620fc21be8e0b368ad438343edce9cb01b8",
-    "compile.bundle.mjs": "13d06fa8e5f9b3c97dc80503972e4101825bd5d4b9425f2ae33ff843e64f67b3",
+    "compile.bundle.mjs": "25d9e9edefc043cc2655e38c7ef2aa8607958b36064ac399fb74bd44638b6392",
     "host-types.d.ts": "206a6aa1ed387e66be24b977b94e3241eca9f324d8e65644da21f59f1a605256",
     "module-host-types.d.ts": "6a03469faa1485978aa9a301eca28fd0989e25da87371d49a70a6d9c145b8421",
-    "module.bundle.cjs": "43ab92584f5d0439a0c38c2b277de28ff03acb3b8eddc9127500ce825a83a7ea",
+    "module.bundle.cjs": "3ba9c9365dc3e11d7d8275c5ef5a336db900b33e20d176a2b8617c3b526a0346",
     "packages/cli/src/driver.ts": "6429a13f1979362ddcbc2ca04c1f1b8599e85ab71adabfee98ae84b13f474d26",
     "packages/compiler/src/ast/ast.ts": "52683b1c3babd09f4f0e5a515669595fd120323d83b4a56a300b80f315619e4b",
     "packages/compiler/src/ast/ctors.ts": "2c2ff48285263c365206786ad5c0d752c411aa6658bdbd32bd098ec2b23d49f5",
@@ -82,7 +82,7 @@
     "packages/compiler/src/infer/local-names.ts": "e4563f4c03b52711c95c3281f1040d333cf8335de53b43fc1eb98452413ad61a",
     "packages/compiler/src/infer/scc.ts": "c1f633d387cbf1dddeb1fd6a97d7444c1a101db5d09765ad6557d4d68d41581a",
     "packages/compiler/src/infer/schemes.ts": "c853abd3f300cd7b59fe28bbaeb2950d0ba4a061d12b1a21d008cde21555eadf",
-    "packages/compiler/src/infer/types.ts": "525d95966353d5593bf7af5ea32e6ccfe61b3954fc906406168587ad6d1f7910",
+    "packages/compiler/src/infer/types.ts": "1c014747ec245cab3f1c5a918603b21cd1eada57736c3cf2af062ed2487f729d",
     "packages/compiler/src/lexer/lexer.ts": "891724abcde632413366f9861b0d1834b0976439d8897933cdfa813a3e30aff4",
     "packages/compiler/src/lexer/str-scan.ts": "6369902fa27989d77a5fe72ddd6851077da4a4af417b4ec64a0f3f569be43348",
     "packages/compiler/src/module/host.d.mts": "29630e71b730d3d2b683efd7e25d861d91050674d0f609cf85220eeb27b7a35c",
@@ -92,6 +92,6 @@
     "packages/compiler/src/prelude/prelude.gen.d.mts": "af17de7f91de264a20bfb042d5d76d804cfc1e833c4bd94c4091a45992841608",
     "packages/compiler/src/prelude/prelude.gen.mjs": "293e8e3f2a8979adbac0cd58bf82a84766f37a6b66e7c64f88b8e2e1e2f09257",
     "syntax.bundle.d.mts": "650a0730c36ae6f437021c9fe149ce64a2ac7386345d4561dc4f543ffcb141c5",
-    "syntax.bundle.mjs": "ad50614f8ba2f10e0e6c104cdb47431d2e369d68eae45144ccd98dbe0babdb7f"
+    "syntax.bundle.mjs": "282a8a647f2a333a4f6c371a52e49d7e826309e31687a1aa6e11495091f67617"
   }
 }

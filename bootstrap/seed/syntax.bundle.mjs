@@ -568,15 +568,15 @@ var resolveRow$ = (r, st) => {
 };
 var resolveRow = _curry4(2, resolveRow$);
 var zonk$ = (t, st) => {
-  const $match = resolve$(t, st);
+  const h = resolve$(t, st);
+  const $match = h;
   switch ($match._tag) {
     case "TyVar": {
-      const { id } = $match;
-      return tVar(id);
+      return h;
     }
     case "TyCon": {
       const { name, args } = $match;
-      return tCon$(name, map((a) => zonk$(a, st), args));
+      return length2(args) === 0 ? h : tCon$(name, map((a) => zonk$(a, st), args));
     }
     case "TyFn": {
       const { from, to } = $match;
@@ -587,8 +587,7 @@ var zonk$ = (t, st) => {
       return tRecord(zonkRow$(row, st));
     }
     case "TySingleton": {
-      const { base, value } = $match;
-      return TySingleton(base, value);
+      return h;
     }
     case "TyOneOf": {
       const { members } = $match;

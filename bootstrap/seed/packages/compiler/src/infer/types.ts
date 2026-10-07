@@ -619,18 +619,20 @@ const resolveRow$ = (r: Row, st: St): Row => {
 };
 const resolveRow: _Curry<[r: Row, st: St], Row> = _curry(2, resolveRow$);
 const zonk$ = (t: Ty, st: St): Ty => {
-  const $match = resolve$(t, st);
+  const h: Ty = resolve$(t, st);
+  const $match = h;
   switch ($match._tag) {
     case "TyVar": {
-      const { id } = $match;
-      return tVar(id);
+      return h;
     }
     case "TyCon": {
       const { name, args } = $match;
-      return tCon$(
-        name,
-        map((a: Ty) => zonk$(a, st), args),
-      );
+      return length(args) === 0
+        ? h
+        : tCon$(
+            name,
+            map((a: Ty) => zonk$(a, st), args),
+          );
     }
     case "TyFn": {
       const { from, to } = $match;
@@ -641,8 +643,7 @@ const zonk$ = (t: Ty, st: St): Ty => {
       return tRecord(zonkRow$(row, st));
     }
     case "TySingleton": {
-      const { base, value } = $match;
-      return TySingleton(base, value);
+      return h;
     }
     case "TyOneOf": {
       const { members } = $match;
@@ -655,6 +656,10 @@ const zonk$ = (t: Ty, st: St): Ty => {
 };
 /**
  * Fully apply the substitution ("zonk") — for display and assertions.
+ *
+ * Leaves are returned as-is: the resolved head is already fully applied, and
+ * types are immutable, so rebuilding a var, a nullary con or a singleton only
+ * allocates.
  */
 export const zonk: _Curry<[t: Ty, st: St], Ty> = _curry(2, zonk$);
 const zonkRow$ = (row: Row, st: St): Row => {
