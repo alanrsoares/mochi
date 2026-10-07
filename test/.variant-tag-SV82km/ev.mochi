@@ -1,0 +1,5 @@
+@tag("type")
+export type Ev =
+  | @as("click") Click(x: number, y: number)
+  | @as("key") Key(k: string)
+  | Idle

@@ -1,0 +1,5 @@
+import { Click, Key, Idle } from "./ev.mochi"
+let describe = e => switch e { | Click(x, y) => "c${show(x + y)}" | Key(k) => k | Idle => "idle" }
+let nested = (o: Option<Ev>) => switch o { | Some(Click(x, _)) => x | _ => 0 - 1 }
+let guarded = e => switch e { | Click(x, _) when x > 5 => "big" | _ => "other" }
+export let out = [describe(Click(1, 2)), describe(Key("a")), describe(Idle), show(Idle == Idle), show(nested(Some(Click(7, 8)))), show(nested(None)), guarded(Click(9, 0)), guarded(Idle)]

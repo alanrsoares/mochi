@@ -15662,7 +15662,7 @@ var runtimeDepNames = _curry20(5, (stmts, imported, ns, jsDefs, runtimeDeps) => 
 var codegen$ = (stmts, imported, useRuntime, ns, jsDefs, runtimeDeps) => codegenWith(stmts, imported, useRuntime, ns, jsDefs, runtimeDeps, jsGenOpts);
 var codegen = _curry20(6, codegen$);
 
-import { None as None20, Some as Some20, _Array_append as _Array_append16, _Array_concat as _Array_concat11, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get19, _Array_prepend as _Array_prepend10, _Array_reverse, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take4, _Map_delete as _Map_delete4, _Map_get as _Map_get11, _Map_keys as _Map_keys9, _Map_set as _Map_set9, _Map_size as _Map_size2, _Map_values as _Map_values3, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome7, _Option_map as _Option_map3, _Option_match as _Option_match20, _Option_unwrapOr as _Option_unwrapOr13, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray9, _Set_has as _Set_has8, _Str_contains as _Str_contains3, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join10, _Str_split as _Str_split9, _Str_startsWith as _Str_startsWith6, _curry as _curry22, _tuple as _tuple12, and as and15, concat as concat2, eq as eq18, filter as filter9, length as length17, map as map14, or as or13, reduce as reduce6, show as show10 } from "@mochi/compiler/runtime";
+import { None as None20, Some as Some20, _Array_append as _Array_append16, _Array_concat as _Array_concat11, _Array_contains as _Array_contains4, _Array_dedupeBy, _Array_drop as _Array_drop3, _Array_get as _Array_get19, _Array_prepend as _Array_prepend10, _Array_reverse, _Array_sort as _Array_sort2, _Array_sortBy, _Array_take as _Array_take4, _Map_delete as _Map_delete4, _Map_fromEntries, _Map_get as _Map_get11, _Map_keys as _Map_keys9, _Map_set as _Map_set9, _Map_size as _Map_size2, _Map_values as _Map_values3, _Option_flatMap as _Option_flatMap3, _Option_isSome as _Option_isSome7, _Option_map as _Option_map3, _Option_match as _Option_match20, _Option_unwrapOr as _Option_unwrapOr13, _Set_add as _Set_add8, _Set_fromArray as _Set_fromArray9, _Set_has as _Set_has8, _Str_contains as _Str_contains3, _Str_fromCode as _Str_fromCode3, _Str_join as _Str_join10, _Str_split as _Str_split9, _Str_startsWith as _Str_startsWith6, _curry as _curry22, _tuple as _tuple12, and as and15, concat as concat2, eq as eq18, filter as filter9, length as length17, map as map14, or as or13, reduce as reduce6, show as show10 } from "@mochi/compiler/runtime";
 
 import { None as None19, Some as Some19, _Array_append as _Array_append15, _Array_concat as _Array_concat10, _Array_get as _Array_get18, _Array_prepend as _Array_prepend9, _Array_sort, _Map_delete as _Map_delete3, _Map_get as _Map_get10, _Map_has as _Map_has7, _Map_keys as _Map_keys8, _Map_set as _Map_set8, _Map_size, _Option_flatMap as _Option_flatMap2, _Option_map as _Option_map2, _Option_match as _Option_match19, _Option_unwrapOr as _Option_unwrapOr12, _Set_add as _Set_add7, _Set_fromArray as _Set_fromArray8, _Set_has as _Set_has7, _Str_codeAt as _Str_codeAt7, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get5, _Str_join as _Str_join9, _Str_length as _Str_length8, _Str_slice as _Str_slice4, _Str_startsWith as _Str_startsWith5, _Str_trim, _curry as _curry21, _tuple as _tuple11, and as and14, eq as eq17, filter as filter8, length as length16, map as map13, or as or12, show as show9 } from "@mochi/compiler/runtime";
 var tsEnv$ = (vars, recs) => ({ vars, recs });
@@ -16078,8 +16078,7 @@ var coreBindingTsType = _curry22(3, (sc, value, recs) => {
   }
 });
 var spanKey = (sp) => `${show10(sp.start)}:${show10(sp.end)}`;
-var typeAtFrom = _curry22(3, (types, i, acc) => _Option_match20(_Array_get19(i, types), () => acc, (r) => typeAtFrom(types, i + 1, _Map_set9(spanKey(r.span), r.ty, acc))));
-var typeAtTable = (types) => typeAtFrom(types, 0, new Map);
+var typeAtTable = (types) => _Map_fromEntries(map14((r) => _tuple12(spanKey(r.span), r.ty), types));
 var consInTy = (t, acc) => ((_v) => _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2 ? (({ args: [value, error] }) => consInTy(error, consInTy(value, _Set_add8("Result", _Set_add8("Task", acc)))))(_v) : _v._tag === "TyCon" ? (({ name, args }) => consInAll(args, _Set_add8(name, acc), 0))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => consInTy(toT, consInTy(fromT, acc)))(_v) : _v._tag === "TyRecord" ? (({ row }) => consInRow(row, acc))(_v) : _v._tag === "TyOneOf" ? (({ members }) => consInAll(members, acc, 0))(_v) : acc)(t);
 var consInAll = (ts, acc, i) => _Option_match20(_Array_get19(i, ts), () => acc, (t) => consInAll(ts, consInTy(t, acc), i + 1));
 var consInRow = (row, acc) => {
@@ -19304,6 +19303,43 @@ var _namespaces = {
         }
       }
     },
+    fromEntries: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "tuple",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 1
+              }
+            ]
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      }
+    },
     empty: {
       _tag: "TyCon",
       name: "Map",
@@ -21144,7 +21180,8 @@ var _namespaceRuntime = {
     size: "_Map_size",
     keys: "_Map_keys",
     values: "_Map_values",
-    get: "_Map_get"
+    get: "_Map_get",
+    fromEntries: "_Map_fromEntries"
   },
   Dict: {
     empty: "_Dict_empty",
@@ -21623,6 +21660,12 @@ var _preludeJsDefs = {
   n.delete(_keyOf(m, k));
   return n;
 });`,
+  _Map_fromEntries: `const _Map_fromEntries = (es) => {
+  const n = new Map;
+  for (const [k, v] of es)
+    n.set(_keyOf(n, k), v);
+  return n;
+};`,
   _Map_size: "const _Map_size = (m) => m.size;",
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
@@ -22074,6 +22117,9 @@ var _runtimeDeps = {
   ],
   _Map_delete: [
     "_curry",
+    "_keyOf"
+  ],
+  _Map_fromEntries: [
     "_keyOf"
   ],
   _Map_get: [

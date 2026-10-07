@@ -208,6 +208,7 @@ export const preludeNamespaces: Record<string, Record<string, Type>> = {
     keys: tArrow(mapT(a, b), arr(a)), // Map k v -> [k]
     values: tArrow(mapT(a, b), arr(b)), // Map k v -> [v]
     get: tArrow(a, tArrow(mapT(a, b), opt(b))), // k -> Map k v -> Option v
+    fromEntries: tArrow(arr(pair(a, b)), mapT(a, b)), // [(k, v)] -> Map k v, same result as folding `set`
     empty: mapT(a, b), // Map k v — same runtime as `#{}`
   },
   // Dict ops — immutable string-keyed dictionary (ADR 0150). Plain null-prototype
@@ -348,6 +349,7 @@ export const namespaceRuntime: Record<string, Record<string, string>> = {
     keys: "_Map_keys",
     values: "_Map_values",
     get: "_Map_get",
+    fromEntries: "_Map_fromEntries",
   },
   Dict: {
     empty: "_Dict_empty",

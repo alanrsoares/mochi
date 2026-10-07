@@ -13,6 +13,7 @@ import {
   _Dict_remove,
   _Dict_set,
   _Dict_size,
+  _Map_fromEntries,
   _Map_get,
   _Map_set,
   _Option_match,
@@ -419,4 +420,23 @@ test("compare treats a Dict _tag key as data; eq on Map/Set is structural", () =
   expect(eq(new Map([[[1, 2], "a"]]), new Map([[[1, 3], "a"]]))).toBe(false);
   expect(eq(new Set([[1], [2]]), new Set([[2], [1]]))).toBe(true);
   expect(eq(new Set([[1]]), new Set([[2]]))).toBe(false);
+});
+
+test("Map.fromEntries equals folding Map.set, including eq keys and key order", () => {
+  const fold = (es: [unknown, number][]) =>
+    es.reduce<Map<unknown, number>>((m, [k, v]) => _Map_set(k, v, m), new Map());
+  const key = fc.oneof(
+    fc.integer({ min: 0, max: 5 }),
+    fc.string({ maxLength: 2 }),
+    fc.record({ a: fc.integer({ min: 0, max: 2 }) }),
+    fc.tuple(fc.integer({ min: 0, max: 2 }), fc.integer({ min: 0, max: 2 })),
+  );
+  fc.assert(
+    fc.property(fc.array(fc.tuple(key, fc.integer()), { maxLength: 30 }), (es) => {
+      const built = _Map_fromEntries(es);
+      const folded = fold(es);
+      expect<unknown[]>([...built.keys()]).toEqual([...folded.keys()]);
+      expect<unknown[]>([...built.values()]).toEqual([...folded.values()]);
+    }),
+  );
 });

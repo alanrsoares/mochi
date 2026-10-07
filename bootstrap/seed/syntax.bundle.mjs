@@ -12180,6 +12180,43 @@ var _namespaces = {
         }
       }
     },
+    fromEntries: {
+      _tag: "TyFn",
+      from: {
+        _tag: "TyCon",
+        name: "Array",
+        args: [
+          {
+            _tag: "TyCon",
+            name: "tuple",
+            args: [
+              {
+                _tag: "TyVar",
+                id: 0
+              },
+              {
+                _tag: "TyVar",
+                id: 1
+              }
+            ]
+          }
+        ]
+      },
+      to: {
+        _tag: "TyCon",
+        name: "Map",
+        args: [
+          {
+            _tag: "TyVar",
+            id: 0
+          },
+          {
+            _tag: "TyVar",
+            id: 1
+          }
+        ]
+      }
+    },
     empty: {
       _tag: "TyCon",
       name: "Map",
@@ -14020,7 +14057,8 @@ var _namespaceRuntime = {
     size: "_Map_size",
     keys: "_Map_keys",
     values: "_Map_values",
-    get: "_Map_get"
+    get: "_Map_get",
+    fromEntries: "_Map_fromEntries"
   },
   Dict: {
     empty: "_Dict_empty",
@@ -14499,6 +14537,12 @@ var _preludeJsDefs = {
   n.delete(_keyOf(m, k));
   return n;
 });`,
+  _Map_fromEntries: `const _Map_fromEntries = (es) => {
+  const n = new Map;
+  for (const [k, v] of es)
+    n.set(_keyOf(n, k), v);
+  return n;
+};`,
   _Map_size: "const _Map_size = (m) => m.size;",
   _Map_keys: "const _Map_keys = (m) => [...m.keys()];",
   _Map_values: "const _Map_values = (m) => [...m.values()];",
@@ -14950,6 +14994,9 @@ var _runtimeDeps = {
   ],
   _Map_delete: [
     "_curry",
+    "_keyOf"
+  ],
+  _Map_fromEntries: [
     "_keyOf"
   ],
   _Map_get: [
