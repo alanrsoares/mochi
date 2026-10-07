@@ -138,7 +138,6 @@ const afterBlanks$ = (s: string, i: number): Option<string> =>
       : _v._tag === "Some" && _v.value === "\t"
         ? afterBlanks$(s, i + 1)
         : ((other) => other)(_v))(_Str_get(i, s));
-const afterBlanks: _Curry<[s: string, i: number], Option<string>> = _curry(2, afterBlanks$);
 /**
  * The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
  * that intentionally reaches for host globals opts itself in, so a graph can
@@ -173,7 +172,6 @@ const stampStage$ = (kind: string, e: StageErr): Stamped => ({
   help: None as Option<string>,
   suggestions: noSuggestions,
 });
-const stampStage: _Curry<[kind: string, e: StageErr], Stamped> = _curry(2, stampStage$);
 const stampType: <F>(
   e: {
     suggestions: { end: number; replaceWith: string; start: number; title: string }[];
@@ -210,10 +208,6 @@ const typecheckWith$ = (
       inferProgramWith(prog, builtins, namespaces, open, plugins),
     ),
   );
-const typecheckWith: _Curry<
-  [prog: Stmt[], open: boolean, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(3, typecheckWith$);
 const frontend$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], Stamped[]> =>
   _Result_match(
     lex(src),
@@ -232,20 +226,12 @@ const frontend$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[], S
             ))(parsed.diagnostics);
     },
   );
-const frontend: _Curry<
-  [src: string, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(2, frontend$);
 const pipelineWith$ = (
   src: string,
   open: boolean,
   plugins: Option<HostPlugin[]>,
 ): Result<Stmt[], Stamped[]> =>
   _Result_flatMap((stmts) => typecheckWith$(stmts, open, plugins), frontend$(src, plugins));
-const pipelineWith: _Curry<
-  [src: string, open: boolean, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], Stamped[]>
-> = _curry(3, pipelineWith$);
 const typedProgramWith$ = (
   src: string,
   opts: Opts,
@@ -353,18 +339,6 @@ const typedQuery$ = (
       inferProgramTypesWith(stmts, builtins, namespaces, openMode$(src, opts.open), opts.plugins),
     ),
   );
-const typedQuery: _Curry<
-  [src: string, stmts: Stmt[], opts: Opts],
-  Result<
-    {
-      env: Map<string, Scheme>;
-      types: { span: SpanAt; ty: Ty; display: string; sym: Option<BinderSym> }[];
-      aliases: Map<string, AliasInfo>;
-      letParams: TypeAt[];
-    },
-    Stamped[]
-  >
-> = _curry(3, typedQuery$);
 const inferTypesWith$ = (
   src: string,
   opts: Opts,

@@ -131,7 +131,7 @@ test("displayed JS and TS panels execute matching shape and record behavior", ()
       "mul",
       "pi",
       "square",
-      `${js}\nreturn [area({ _tag: "Circle", _0: 2 }), area({ _tag: "Rect", _0: 3, _1: 4 }), widen(3, { w: 2, label: "box" })];`,
+      `${js}\nreturn [area({ _tag: "Circle", _0: 2 }), area({ _tag: "Rect", _0: 3, _1: 4 }), (typeof widen$ === "undefined" ? widen : widen$)(3, { w: 2, label: "box" })];`,
     );
     expect(run(_curry, mul, pi, square)).toEqual([4 * Math.PI, 12, { w: 6, label: "box" }]);
   }

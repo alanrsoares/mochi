@@ -2,7 +2,7 @@ import type { Expr } from "../../ast/ast";
 import type { Row, SpanAt, St, Ty } from "../../infer/types";
 import type { BoundErr } from "./jsx";
 
-import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result } from "@mochi/compiler/runtime";
 
 import {
   Err,
@@ -51,7 +51,6 @@ const isRef$ = (fn: Expr, name: string): boolean => {
     }
   }
 };
-const isRef: _Curry<[fn: Expr, name: string], boolean> = _curry(2, isRef$);
 const preactSpan: (e: Expr) => SpanAt = (e: Expr) => {
   const $match = e;
   switch ($match._tag) {

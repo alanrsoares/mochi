@@ -44,7 +44,6 @@ const skipStrLoop$ = (src: string, j0: number): Option<number> => {
     return _step.value;
   }
 };
-const skipStrLoop: _Curry<[src: string, j0: number], Option<number>> = _curry(2, skipStrLoop$);
 const skipStringLiteral$ = (src: string, i: number): Option<number> => skipStrLoop$(src, i + 1);
 export const skipStringLiteral: _Curry<[src: string, i: number], Option<number>> = _curry(
   2,
@@ -98,10 +97,6 @@ const findHoleLoop$ = (src: string, j0: number, depth0: number): Option<number> 
     return _step.value;
   }
 };
-const findHoleLoop: _Curry<[src: string, j0: number, depth0: number], Option<number>> = _curry(
-  3,
-  findHoleLoop$,
-);
 const findHoleEnd$ = (src: string, start: number): Option<number> => findHoleLoop$(src, start, 1);
 export const findHoleEnd: _Curry<[src: string, start: number], Option<number>> = _curry(
   2,

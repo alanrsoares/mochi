@@ -424,7 +424,6 @@ const patCtorKey$ = (ctor: string, ns: Option<string>): string =>
     () => ctor,
     (alias) => `${alias}.${ctor}`,
   );
-const patCtorKey: _Curry<[ctor: string, ns: Option<string>], string> = _curry(2, patCtorKey$);
 const seqElemsRest: (p: Pattern) => Option<[Pattern[], Option<Pattern>]> = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -533,10 +532,6 @@ const binderPathsArgs$ = (
         binderPaths$(a, `${at}.a${show(i)}`, acc),
       ),
   );
-const binderPathsArgs: _Curry<
-  [args: Pattern[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, PErr>
-> = _curry(4, binderPathsArgs$);
 const binderPathsFields$ = (
   fields: PatField[],
   i: number,
@@ -552,10 +547,6 @@ const binderPathsFields$ = (
         binderPaths$(f.pat, `${at}.${f.label}`, acc),
       ),
   );
-const binderPathsFields: _Curry<
-  [fields: PatField[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, PErr>
-> = _curry(4, binderPathsFields$);
 const binderPathsElems$ = (
   elems: Pattern[],
   i: number,
@@ -571,10 +562,6 @@ const binderPathsElems$ = (
         binderPaths$(e, `${at}.t${show(i)}`, acc),
       ),
   );
-const binderPathsElems: _Curry<
-  [elems: Pattern[], i: number, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, PErr>
-> = _curry(4, binderPathsElems$);
 const binderPaths$ = (
   p: Pattern,
   at: string,
@@ -621,10 +608,6 @@ const binderPaths$ = (
     }
   }
 };
-const binderPaths: _Curry<
-  [p: Pattern, at: string, acc: Map<string, string>],
-  Result<Map<string, string>, PErr>
-> = _curry(3, binderPaths$);
 const altMapsFrom: <A, B>(
   alts: Pattern[],
   i: number,
@@ -759,10 +742,6 @@ const guardErrs$ = (arms: MatchArm[], listSwitch: boolean): Option<PErr> =>
       ),
     arms,
   );
-const guardErrs: _Curry<[arms: MatchArm[], listSwitch: boolean], Option<PErr>> = _curry(
-  2,
-  guardErrs$,
-);
 const firstCatchIdx$ = (arms: MatchArm[], i0: number): Option<number> => {
   let i: number = i0;
   while (true) {
@@ -784,10 +763,6 @@ const firstCatchIdx$ = (arms: MatchArm[], i0: number): Option<number> => {
     }
   }
 };
-const firstCatchIdx: _Curry<[arms: MatchArm[], i0: number], Option<number>> = _curry(
-  2,
-  firstCatchIdx$,
-);
 const unreachableAfterCatch: (arms: MatchArm[]) => Option<PErr> = (arms: MatchArm[]) =>
   _Option_match(
     firstCatchIdx$(arms, 0),
@@ -1288,13 +1263,6 @@ const checkExpr$ = (
     }
   }
 };
-const checkExpr: _Curry<
-  [
-    e: Expr,
-    reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
-  ],
-  Option<PErr>
-> = _curry(2, checkExpr$);
 const checkExprs$ = (
   e: Expr,
   reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
@@ -1483,13 +1451,6 @@ const checkExprs$ = (
     }
   }
 };
-const checkExprs: _Curry<
-  [
-    e: Expr,
-    reg: { ctors: Map<string, { arity: number; owner: string }>; types: Map<string, string[]> },
-  ],
-  PErr[]
-> = _curry(2, checkExprs$);
 const reservedNames: string[] = [
   "Array",
   "List",
@@ -1754,10 +1715,6 @@ const checkReservedParam$ = (param: LamParam, sp: SpanAt): PErr[] => {
     }
   }
 };
-const checkReservedParam: _Curry<[param: LamParam, sp: SpanAt], PErr[]> = _curry(
-  2,
-  checkReservedParam$,
-);
 const checkReservedPattern: (pat: Pattern) => PErr[] = (pat: Pattern) => {
   const $match = pat;
   switch ($match._tag) {
@@ -2128,12 +2085,10 @@ const identChar$ = (c: string, first: boolean): boolean =>
     or(or(c === "_", c === "$"), !eq(_Str_toLower(c), _Str_toUpper(c))),
     and(!first, _Str_contains(c, "0123456789")),
   );
-const identChar: _Curry<[c: string, first: boolean], boolean> = _curry(2, identChar$);
 const identFrom$ = (s: string, i: number): boolean =>
   i >= _Str_length(s)
     ? true
     : and(identChar$(_Option_unwrapOr("", _Str_get(i, s)), i === 0), identFrom$(s, i + 1));
-const identFrom: _Curry<[s: string, i: number], boolean> = _curry(2, identFrom$);
 const dupTags: <C, D>(
   ctors: ({ tagLit: string; name: string; span: { end: number; start: number } & C } & D)[],
   seen: Set<string>,
@@ -2679,10 +2634,6 @@ const checkLoopDo$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean): O
     }
   }
 };
-const checkLoopDo: _Curry<
-  [exprs: Expr[], frame: Option<LoopFrame>, tail: boolean],
-  Option<PErr>
-> = _curry(3, checkLoopDo$);
 const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Option<PErr> => {
   const $match = e;
   switch ($match._tag) {
@@ -2907,10 +2858,6 @@ const checkLoopExpr$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): Optio
     }
   }
 };
-const checkLoopExpr: _Curry<
-  [e: Expr, frame: Option<LoopFrame>, tail: boolean],
-  Option<PErr>
-> = _curry(3, checkLoopExpr$);
 const checkLoops: (stmts: Stmt[]) => Option<PErr> = (stmts: Stmt[]) =>
   firstSome((stmt: Stmt) => {
     const $match = stmt;
@@ -2989,8 +2936,6 @@ const checkLoopDoAll$ = (exprs: Expr[], frame: Option<LoopFrame>, tail: boolean)
     }
   }
 };
-const checkLoopDoAll: _Curry<[exprs: Expr[], frame: Option<LoopFrame>, tail: boolean], PErr[]> =
-  _curry(3, checkLoopDoAll$);
 const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr[] => {
   const $match = e;
   switch ($match._tag) {
@@ -3206,10 +3151,6 @@ const checkLoopExprs$ = (e: Expr, frame: Option<LoopFrame>, tail: boolean): PErr
     }
   }
 };
-const checkLoopExprs: _Curry<[e: Expr, frame: Option<LoopFrame>, tail: boolean], PErr[]> = _curry(
-  3,
-  checkLoopExprs$,
-);
 const checkLoopsAll: (stmts: Stmt[]) => PErr[] = (stmts: Stmt[]) =>
   _Array_flatMap((stmt: Stmt) => {
     const $match = stmt;

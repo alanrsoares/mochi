@@ -41,7 +41,6 @@ const charsEq$ = (a: string, i: number, b: string, j: number): boolean =>
           ],
         )
       : false)(_tuple(_Str_get(i, a), _Str_get(j, b)));
-const charsEq: _Curry<[a: string, i: number, b: string, j: number], boolean> = _curry(4, charsEq$);
 const initRow: (n: number) => number[] = (n: number) => {
   let j: number = 0;
   let row: number[] = [] as number[];
@@ -70,10 +69,6 @@ const cellAt$ = (
   const cost: number = charsEq$(a, i - 1, b, j - 1) ? 0 : 1;
   return min(min(at(cur, j - 1, 0) + 1, at(prev, j, 0) + 1), at(prev, j - 1, 0) + cost);
 };
-const cellAt: _Curry<
-  [a: string, b: string, i: number, j: number, prev: number[], cur: number[]],
-  number
-> = _curry(6, cellAt$);
 const fillRow$ = (a: string, b: string, i: number, prev: number[], n: number): number[] => {
   let j: number = 1;
   let cur: number[] = [i];
@@ -91,8 +86,6 @@ const fillRow$ = (a: string, b: string, i: number, prev: number[], n: number): n
     }
   }
 };
-const fillRow: _Curry<[a: string, b: string, i: number, prev: number[], n: number], number[]> =
-  _curry(5, fillRow$);
 const levFrom$ = (a: string, b: string, m: number, n: number): number => {
   let i: number = 1;
   let prev: number[] = initRow(n);
@@ -110,13 +103,11 @@ const levFrom$ = (a: string, b: string, m: number, n: number): number => {
     }
   }
 };
-const levFrom: _Curry<[a: string, b: string, m: number, n: number], number> = _curry(4, levFrom$);
 const lev$ = (a: string, b: string): number => {
   const m: number = _Str_length(a);
   const n: number = _Str_length(b);
   return m === 0 ? n : n === 0 ? m : levFrom$(a, b, m, n);
 };
-const lev: _Curry<[a: string, b: string], number> = _curry(2, lev$);
 /**
  * `^[A-Z]` — identifier heads are ASCII. Empty and non-letters are lower.
  */
@@ -127,13 +118,11 @@ const upperStart: (s: string) => boolean = (s: string) =>
     (n) => and(n >= 65, n <= 90),
   );
 const sameCaseClass$ = (a: string, b: string): boolean => eq(upperStart(a), upperStart(b));
-const sameCaseClass: _Curry<[a: string, b: string], boolean> = _curry(2, sameCaseClass$);
 const skipName$ = (want: string, n: string): boolean =>
   or(
     or(or(or(n === "", eq(n, want)), _Str_startsWith("$", n)), _Str_startsWith("_", n)),
     !sameCaseClass$(want, n),
   );
-const skipName: _Curry<[want: string, n: string], boolean> = _curry(2, skipName$);
 const consider$ = (
   want: string,
   budget: number,
@@ -147,10 +136,6 @@ const consider$ = (
         and(d <= budget, d < bestDist)
           ? _tuple(Some(n) as Option<string>, d)
           : _tuple(best, bestDist))(lev$(want, n));
-const consider: _Curry<
-  [want: string, budget: number, best: Option<string>, bestDist: number, n: string],
-  [Option<string>, number]
-> = _curry(5, consider$);
 const closestFrom$ = (
   want: string,
   names: string[],
@@ -168,17 +153,6 @@ const closestFrom$ = (
         consider$(want, budget, best, bestDist, n),
       ),
   );
-const closestFrom: _Curry<
-  [
-    want: string,
-    names: string[],
-    i: number,
-    budget: number,
-    best: Option<string>,
-    bestDist: number,
-  ],
-  Option<string>
-> = _curry(6, closestFrom$);
 const closestName$ = (want: string, names: string[]): Option<string> => {
   const budget: number = max(1, floor(_Str_length(want) / 3));
   return closestFrom$(want, names, 0, budget, None as Option<string>, _Str_length(want) + 2);

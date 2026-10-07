@@ -66,14 +66,9 @@ const builtinCtor$ = (
   name: string,
   fields: { fieldType: TypeExpr; name: Option<string> }[],
 ): Ctor => ({ name: name, fields: fields, tagKey: "_tag", tagLit: name, span: builtinSpan });
-const builtinCtor: _Curry<
-  [name: string, fields: { fieldType: TypeExpr; name: Option<string> }[]],
-  Ctor
-> = _curry(2, builtinCtor$);
 const valueField$ = (label: string, ty: string): CtorField[] => [
   { name: Some(label), fieldType: Ast.TyName(ty, builtinSpan) },
 ];
-const valueField: _Curry<[label: string, ty: string], CtorField[]> = _curry(2, valueField$);
 export const builtinTypeDecls: { name: string; params: string[]; ctors: Ctor[] }[] = [
   {
     name: "Option",
@@ -107,10 +102,6 @@ const declaresType$ = (stmts: Stmt[], i: number, name: string): boolean =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-const declaresType: _Curry<[stmts: Stmt[], i: number, name: string], boolean> = _curry(
-  3,
-  declaresType$,
-);
 /**
  * The builtin decls a program does NOT shadow: a user `type` of the same name
  * suppresses the whole builtin type (the type-name-shadow rule, matching
@@ -253,10 +244,6 @@ const buildLoop$ = (
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-const buildLoop: _Curry<
-  [stmts: Stmt[], i: number, reg: Registry],
-  Result<Registry, { message: string; start: number; end: number }>
-> = _curry(3, buildLoop$);
 /**
  * The failing builder — check's entry point: duplicate-decl detection lives
  * here, at the single derivation, so no later pass can see a registry check
@@ -302,10 +289,6 @@ const exportedRegLoop$ = (stmts: Stmt[], i0: number, reg0: Registry): Registry =
     return _step.value;
   }
 };
-const exportedRegLoop: _Curry<[stmts: Stmt[], i0: number, reg0: Registry], Registry> = _curry(
-  3,
-  exportedRegLoop$,
-);
 export const exportedRegistry: (stmts: Stmt[]) => Registry = (stmts: Stmt[]) =>
   exportedRegLoop$(stmts, 0, emptyRegistry);
 export const tagEntryOf: (name: string) => string = (name: string) => `@tag:${name}`;
@@ -318,10 +301,6 @@ const withTag$ = (
   and(tagKey === "_tag", eq(tagLit, name))
     ? _Map_delete(tagEntryOf(name), m)
     : _Map_set(tagEntryOf(name), [tagKey, tagLit], m);
-const withTag: _Curry<
-  [m: Map<string, string[]>, name: string, tagKey: string, tagLit: string],
-  Map<string, string[]>
-> = _curry(4, withTag$);
 const ctorKeysInto: <A, B>(
   ctors: ({
     tagLit: string;
@@ -399,10 +378,6 @@ const ctorKeysFrom$ = (stmts: Stmt[], i: number, m: Map<string, string[]>): Map<
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-const ctorKeysFrom: _Curry<
-  [stmts: Stmt[], i: number, m: Map<string, string[]>],
-  Map<string, string[]>
-> = _curry(3, ctorKeysFrom$);
 const ctorKeysFromStmts$ = (stmts: Stmt[], m: Map<string, string[]>): Map<string, string[]> =>
   ctorKeysFrom$(stmts, 0, m);
 export const ctorKeysFromStmts: _Curry<
@@ -479,9 +454,5 @@ const exportedCtorKeysFrom$ = (
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-const exportedCtorKeysFrom: _Curry<
-  [stmts: Stmt[], i: number, m: Map<string, string[]>],
-  Map<string, string[]>
-> = _curry(3, exportedCtorKeysFrom$);
 export const exportedCtorKeys: (stmts: Stmt[]) => Map<string, string[]> = (stmts: Stmt[]) =>
   exportedCtorKeysFrom$(stmts, 0, new Map<string, string[]>());

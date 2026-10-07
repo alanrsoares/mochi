@@ -91,6 +91,7 @@ export type GCtx = {
   rawNames: Map<string, string>;
   rawArity: Map<string, number>;
   valueRefs: Set<string>;
+  publicRefs: Set<string>;
   userNames: Set<string>;
   docs: boolean;
 };
@@ -220,16 +221,15 @@ const hook2: <A, B, C>(h: Option<(a: A, b: B) => Option<C>>, x: A, y: B) => Opti
       (f) => f(x, y),
     ),
 );
+/**
+ * `new Map<K, V>()` when annotated, `new Map()` otherwise.
+ */
 const emptyNsCtor$ = (con: string, ann: Option<string>): string =>
   _Option_match(
     ann,
     () => `new ${con}()`,
     (t) => `new ${t}()`,
   );
-/**
- * `new Map<K, V>()` when annotated, `new Map()` otherwise.
- */
-const emptyNsCtor: _Curry<[con: string, ann: Option<string>], string> = _curry(2, emptyNsCtor$);
 /**
  * Uppercase-initial name — a constructor, not an ordinary binding.
  * A record field name emits BARE only when it is a valid JS identifier;
@@ -246,7 +246,6 @@ const identPartsFrom$ = (s: string, i: number): boolean =>
     () => true,
     (c) => and(isIdentPart(c), identPartsFrom$(s, i + 1)),
   );
-const identPartsFrom: _Curry<[s: string, i: number], boolean> = _curry(2, identPartsFrom$);
 const isJsIdent: (s: string) => boolean = (s: string) =>
   _Option_match(
     _Str_codeAt(0, s),
@@ -278,16 +277,15 @@ const isCtorRef: (fn: Expr) => boolean = (fn: Expr) => {
     }
   }
 };
+/**
+ * `name: T` when annotated, bare name otherwise.
+ */
 const suffixOr$ = (name: string, ann: Option<string>): string =>
   _Option_match(
     ann,
     () => name,
     (t) => `${name}: ${t}`,
   );
-/**
- * `name: T` when annotated, bare name otherwise.
- */
-const suffixOr: _Curry<[name: string, ann: Option<string>], string> = _curry(2, suffixOr$);
 /**
  * No annotations at all — the JS backend's shape for every lambda.
  */
@@ -303,6 +301,10 @@ const paramAnnotsFor: <A, B>(
     (f) => f(sp, arity),
   ),
 );
+/**
+ * Zip collapsed params with their annotations; a missing or `None` entry
+ * leaves the param bare (generic position, or JS mode).
+ */
 const annotatedParams$ = (cparams: LamParam[], annots: Option<string>[], i: number): string[] =>
   _Option_match(
     _Array_get(i, cparams),
@@ -314,23 +316,14 @@ const annotatedParams$ = (cparams: LamParam[], annots: Option<string>[], i: numb
       ),
   );
 /**
- * Zip collapsed params with their annotations; a missing or `None` entry
- * leaves the param bare (generic position, or JS mode).
+ * `expr as T` when annotated, bare otherwise.
  */
-const annotatedParams: _Curry<
-  [cparams: LamParam[], annots: Option<string>[], i: number],
-  string[]
-> = _curry(3, annotatedParams$);
 const castOr$ = (js: string, ann: Option<string>): string =>
   _Option_match(
     ann,
     () => js,
     (t) => `(${js} as ${t})`,
   );
-/**
- * `expr as T` when annotated, bare otherwise.
- */
-const castOr: _Curry<[js: string, ann: Option<string>], string> = _curry(2, castOr$);
 const bindRuntime: (monad: string) => string = (monad: string) =>
   monad === "Option" ? "_Option_flatMap" : monad === "Result" ? "_Result_flatMap" : "_Task_andThen";
 const allOfFrom: <A>(f: (a: A) => boolean, xs: A[], i: number) => boolean = _curry(
@@ -386,10 +379,6 @@ const escTemplateLoop$ = (chars: string[], i0: number, acc0: string): string => 
     return _step.value;
   }
 };
-const escTemplateLoop: _Curry<[chars: string[], i0: number, acc0: string], string> = _curry(
-  3,
-  escTemplateLoop$,
-);
 const escapeTemplateLiteral: (s: string) => string = (s: string) =>
   escTemplateLoop$(_Str_chars(s), 0, "");
 const keyAt$ = (ctx: GCtx, ctor: string, i: number): string =>
@@ -398,7 +387,6 @@ const keyAt$ = (ctx: GCtx, ctor: string, i: number): string =>
     () => `_${show(i)}`,
     (ks) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)),
   );
-const keyAt: _Curry<[ctx: GCtx, ctor: string, i: number], string> = _curry(3, keyAt$);
 const nsRuntimeId$ = (ctx: GCtx, target: Expr, name: string): Option<string> => {
   const $match = target;
   switch ($match._tag) {
@@ -415,10 +403,11 @@ const nsRuntimeId$ = (ctx: GCtx, target: Expr, name: string): Option<string> => 
     }
   }
 };
-const nsRuntimeId: _Curry<[ctx: GCtx, target: Expr, name: string], Option<string>> = _curry(
-  3,
-  nsRuntimeId$,
-);
+/**
+ * `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
+ * `@{}` / `#{}` (ADR 0080). `ann` is the resolved element typing when the TS
+ * backend supplies one — a bare `new Set()` infers `Set<never>` (ADR 0035).
+ */
 const emptyNsEmit$ = (target: Expr, name: string, ann: Option<string>): Option<string> => {
   const $match = target;
   switch ($match._tag) {
@@ -439,15 +428,6 @@ const emptyNsEmit$ = (target: Expr, name: string, ann: Option<string>): Option<s
     }
   }
 };
-/**
- * `Set.empty` / `Map.empty` / `List.empty` lower to the same runtime as
- * `@{}` / `#{}` (ADR 0080). `ann` is the resolved element typing when the TS
- * backend supplies one — a bare `new Set()` infers `Set<never>` (ADR 0035).
- */
-const emptyNsEmit: _Curry<
-  [target: Expr, name: string, ann: Option<string>],
-  Option<string>
-> = _curry(3, emptyNsEmit$);
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -479,10 +459,6 @@ const splitLamParams$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const splitLamParams: _Curry<
-  [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
-  [LamParam[], LamParam[]]
-> = _curry(3, splitLamParams$);
 const absorbParams$ = (
   params: LamParam[],
   acc: LamParam[],
@@ -501,15 +477,6 @@ const absorbParams$ = (
               labN + 1,
             ))(labN === 0 ? "$lab" : `$lab${show(labN)}`))(labeled);
   })(splitLamParams$(params, [] as LamParam[], [] as LamParam[]));
-const absorbParams: _Curry<
-  [
-    params: LamParam[],
-    acc: LamParam[],
-    fills: { labVar: string; labs: LamParam[] }[],
-    labN: number,
-  ],
-  [LamParam[], { labVar: string; labs: LamParam[] }[], number]
-> = _curry(4, absorbParams$);
 const collapseLambdaFrom$ = (
   params: LamParam[],
   body: Expr,
@@ -529,16 +496,6 @@ const collapseLambdaFrom$ = (
       }
     }
   })(absorbParams$(params, acc, fills, labN));
-const collapseLambdaFrom: _Curry<
-  [
-    params: LamParam[],
-    body: Expr,
-    acc: LamParam[],
-    fills: { labVar: string; labs: LamParam[] }[],
-    labN: number,
-  ],
-  [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]
-> = _curry(5, collapseLambdaFrom$);
 const collapseLambda$ = (
   params: LamParam[],
   body: Expr,
@@ -550,10 +507,6 @@ const collapseLambda$ = (
     [] as { labVar: string; labs: LamParam[] }[],
     0,
   );
-const collapseLambda: _Curry<
-  [params: LamParam[], body: Expr],
-  [LamParam[], Expr, { labVar: string; labs: LamParam[] }[]]
-> = _curry(2, collapseLambda$);
 /**
  * A string, number or bool literal.
  */
@@ -574,6 +527,11 @@ const isPrimLit: (e: Expr) => boolean = (e: Expr) => {
     }
   }
 };
+/**
+ * Structural `eq` as a JavaScript comparison, where the two agree exactly
+ * (ADR 0115): against a primitive literal it is `===`, and against a nullary
+ * ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+ */
 const eqTest$ = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string> =>
   ((_v) =>
     _v[1]._tag === "ERef" &&
@@ -600,14 +558,8 @@ const eqTest$ = (ctx: GCtx, left: Expr, right: Expr, op: string): Option<string>
           ? (Some(`(${genExpr$(ctx, left)} ${op} ${genExpr$(ctx, right)})`) as Option<string>)
           : (None as Option<string>))(_tuple(left, right));
 /**
- * Structural `eq` as a JavaScript comparison, where the two agree exactly
- * (ADR 0115): against a primitive literal it is `===`, and against a nullary
- * ctor (a bare `{ _tag }`) it is a tag test. `op` is `===` or `!==`.
+ * A call to a name the module binds itself, not the prelude function.
  */
-const eqTest: _Curry<[ctx: GCtx, left: Expr, right: Expr, op: string], Option<string>> = _curry(
-  4,
-  eqTest$,
-);
 const isUserCall$ = (ctx: GCtx, fn: Expr): boolean => {
   const $match = fn;
   switch ($match._tag) {
@@ -621,9 +573,11 @@ const isUserCall$ = (ctx: GCtx, fn: Expr): boolean => {
   }
 };
 /**
- * A call to a name the module binds itself, not the prelude function.
+ * The calls whose saturated runtime behavior is exactly JavaScript's infix
+ * behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
+ * `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
+ * belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
  */
-const isUserCall: _Curry<[ctx: GCtx, fn: Expr], boolean> = _curry(2, isUserCall$);
 const tsInfix$ = (ctx: GCtx, fn: Expr, args: Expr[]): Option<string> =>
   or(!ctx.preserveInfix, isUserCall$(ctx, fn))
     ? (None as Option<string>)
@@ -696,13 +650,6 @@ const tsInfix$ = (ctx: GCtx, fn: Expr, args: Expr[]): Option<string> =>
                   _v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]],
                 )
               : (None as Option<string>))(_tuple(fn, args));
-/**
- * The calls whose saturated runtime behavior is exactly JavaScript's infix
- * behavior: the numeric operators, `not`, and the `eq` / `!=` cases of
- * `eqTest`. General `eq` is structural and `mod` is true modulo, so neither
- * belongs here. `and` / `or` evaluate both sides, unlike `&&` / `||`.
- */
-const tsInfix: _Curry<[ctx: GCtx, fn: Expr, args: Expr[]], Option<string>> = _curry(3, tsInfix$);
 const jsxHasSpread: (children: SeqElem[]) => boolean = (children: SeqElem[]) =>
   ((_v) =>
     _v.length === 0
@@ -732,10 +679,11 @@ const jsxAttrs$ = (ctx: GCtx, fields: Field[], spread: Option<Expr>): string => 
     ),
   )}`;
 };
-const jsxAttrs: _Curry<[ctx: GCtx, fields: Field[], spread: Option<Expr>], string> = _curry(
-  3,
-  jsxAttrs$,
-);
+/**
+ * Re-fold only the parser's provenance-tagged `h(tag, props, children)`.
+ * A source-written `h(...)` remains a call, and child spreads retain that
+ * call form because JSX has no equivalent spread-child syntax.
+ */
 const tsxArgs$ = (ctx: GCtx, args: Expr[]): Option<string> =>
   ((_v) =>
     _v.length === 3 && _v[1]._tag === "ERecord" && _v[2]._tag === "EArr"
@@ -784,12 +732,6 @@ const tsxArgs$ = (ctx: GCtx, args: Expr[]): Option<string> =>
           ],
         )
       : (None as Option<string>))(args);
-/**
- * Re-fold only the parser's provenance-tagged `h(tag, props, children)`.
- * A source-written `h(...)` remains a call, and child spreads retain that
- * call form because JSX has no equivalent spread-child syntax.
- */
-const tsxArgs: _Curry<[ctx: GCtx, args: Expr[]], Option<string>> = _curry(2, tsxArgs$);
 const tsxCall$ = (ctx: GCtx, fn: Expr, args: Expr[], origin: Option<string>): Option<string> =>
   !ctx.preserveJsx
     ? (None as Option<string>)
@@ -800,10 +742,11 @@ const tsxCall$ = (ctx: GCtx, fn: Expr, args: Expr[], origin: Option<string>): Op
                 ? tsxArgs$(ctx, args)
                 : (None as Option<string>))(fn)
           : (None as Option<string>))(origin);
-const tsxCall: _Curry<
-  [ctx: GCtx, fn: Expr, args: Expr[], origin: Option<string>],
-  Option<string>
-> = _curry(4, tsxCall$);
+/**
+ * The arrow for a lambda, collapsed over its curried spine, and its collapsed
+ * arity. Shared by the `_curry`-wrapped expression form and a top-level raw
+ * twin (ADR 0149).
+ */
 const genArrow$ = (
   ctx: GCtx,
   params: LamParam[],
@@ -823,14 +766,10 @@ const genArrow$ = (
     );
   })(collapseLambda$(params, body));
 /**
- * The arrow for a lambda, collapsed over its curried spine, and its collapsed
- * arity. Shared by the `_curry`-wrapped expression form and a top-level raw
- * twin (ADR 0149).
+ * The callee text for a call with `argc` arguments: the raw twin when the
+ * callee is a top-level function of exactly that arity (ADR 0149), else the
+ * ordinary callee.
  */
-const genArrow: _Curry<
-  [ctx: GCtx, params: LamParam[], body: Expr, sp: SpanAt, ret: string],
-  [string, number]
-> = _curry(5, genArrow$);
 const genCalleeFor$ = (ctx: GCtx, fn: Expr, argc: number): string => {
   const $match = fn;
   switch ($match._tag) {
@@ -860,12 +799,6 @@ const genCalleeFor$ = (ctx: GCtx, fn: Expr, argc: number): string => {
     }
   }
 };
-/**
- * The callee text for a call with `argc` arguments: the raw twin when the
- * callee is a top-level function of exactly that arity (ADR 0149), else the
- * ordinary callee.
- */
-const genCalleeFor: _Curry<[ctx: GCtx, fn: Expr, argc: number], string> = _curry(3, genCalleeFor$);
 const isPipeHole: (a: Expr) => boolean = (a: Expr) =>
   ((_v) => (_v._tag === "ERef" && _v.name === "_" ? true : false))(a);
 const hasPipeHole: (right: Expr) => boolean = (right: Expr) => {
@@ -921,7 +854,6 @@ const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
     }
   }
 };
-const fillPipeHole: _Curry<[left: Expr, right: Expr, sp: SpanAt], Expr> = _curry(3, fillPipeHole$);
 const genExpr$ = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
@@ -1143,9 +1075,7 @@ const genExpr$ = (ctx: GCtx, e: Expr): string => {
     }
   }
 };
-const genExpr: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genExpr$);
 const genDo$ = (ctx: GCtx, exprs: Expr[]): string => `(() => { ${genDoSteps$(ctx, exprs)} })()`;
-const genDo: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(2, genDo$);
 const genDoSteps$ = (ctx: GCtx, exprs: Expr[]): string =>
   ((_v) =>
     _v.length === 1
@@ -1157,7 +1087,6 @@ const genDoSteps$ = (ctx: GCtx, exprs: Expr[]): string =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const genDoSteps: _Curry<[ctx: GCtx, exprs: Expr[]], string> = _curry(2, genDoSteps$);
 const genSeqSlot$ = (ctx: GCtx, el: SeqElem): string => {
   const $match = el;
   switch ($match._tag) {
@@ -1174,7 +1103,6 @@ const genSeqSlot$ = (ctx: GCtx, el: SeqElem): string => {
     }
   }
 };
-const genSeqSlot: _Curry<[ctx: GCtx, el: SeqElem], string> = _curry(2, genSeqSlot$);
 const genList$ = (ctx: GCtx, elements: SeqElem[]): string => {
   const yields: string = _Str_join(
     " ",
@@ -1197,7 +1125,6 @@ const genList$ = (ctx: GCtx, elements: SeqElem[]): string => {
   );
   return `_list(function* () {${yields === "" ? "" : ` ${yields} `}})`;
 };
-const genList: _Curry<[ctx: GCtx, elements: SeqElem[]], string> = _curry(2, genList$);
 const genParam: (p: LamParam) => string = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1244,7 +1171,6 @@ const genCallee$ = (ctx: GCtx, e: Expr): string => {
     }
   }
 };
-const genCallee: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genCallee$);
 const genMember$ = (ctx: GCtx, e: Expr): string => {
   const $match = e;
   switch ($match._tag) {
@@ -1259,7 +1185,6 @@ const genMember$ = (ctx: GCtx, e: Expr): string => {
     }
   }
 };
-const genMember: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genMember$);
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
   const $match = el;
   switch ($match._tag) {
@@ -1514,10 +1439,6 @@ const genLoopMatchArms$ = (
           );
     },
   );
-const genLoopMatchArms: _Curry<
-  [ctx: GCtx, arms: MatchArm[], i: number, root: string, params: LoopParam[]],
-  string
-> = _curry(5, genLoopMatchArms$);
 const genLoopMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]): string =>
   _Option_match(
     genOptionalLoopMatch$(ctx, scrutinee, arms, params),
@@ -1527,10 +1448,6 @@ const genLoopMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: Loo
     },
     (fused) => fused,
   );
-const genLoopMatch: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]],
-  string
-> = _curry(4, genLoopMatch$);
 const genOptionalLoopMatch$ = (
   ctx: GCtx,
   scrutinee: Expr,
@@ -1562,10 +1479,6 @@ const genOptionalLoopMatch$ = (
             _tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)),
           ))(_v)
       : (None as Option<string>))(scrutinee);
-const genOptionalLoopMatch: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], params: LoopParam[]],
-  Option<string>
-> = _curry(4, genOptionalLoopMatch$);
 const alwaysRecur: (e: Expr) => boolean = (e: Expr) => {
   const $match = e;
   switch ($match._tag) {
@@ -1645,7 +1558,6 @@ const wrapStepTails$ = (e: Expr, sp: SpanAt): Expr => {
     }
   }
 };
-const wrapStepTails: _Curry<[e: Expr, sp: SpanAt], Expr> = _curry(2, wrapStepTails$);
 const wrapDoStepTail$ = (exprs: Expr[], sp: SpanAt): Expr[] =>
   ((_v) =>
     _v.length === 1
@@ -1657,7 +1569,6 @@ const wrapDoStepTail$ = (exprs: Expr[], sp: SpanAt): Expr[] =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const wrapDoStepTail: _Curry<[exprs: Expr[], sp: SpanAt], Expr[]> = _curry(2, wrapDoStepTail$);
 const loopParamNames: <A>(params: ({ name: string } & A)[]) => string = <A>(
   params: ({ name: string } & A)[],
 ) =>
@@ -1669,7 +1580,6 @@ const tempName$ = (ctx: GCtx, name: string): string =>
   or(_Set_has(name, ctx.userNames), _Set_has(name, ctx.valueRefs))
     ? tempName$(ctx, `${name}$`)
     : name;
-const tempName: _Curry<[ctx: GCtx, name: string], string> = _curry(2, tempName$);
 const genRecurTemps$ = (ctx: GCtx, args: Expr[], params: LoopParam[], i: number): string =>
   ((_v) =>
     _v[0]._tag === "Some" && _v[1]._tag === "Some"
@@ -1684,8 +1594,6 @@ const genRecurTemps$ = (ctx: GCtx, args: Expr[], params: LoopParam[], i: number)
           ],
         )
       : "")(_tuple(_Array_get(i, args), _Array_get(i, params)));
-const genRecurTemps: _Curry<[ctx: GCtx, args: Expr[], params: LoopParam[], i: number], string> =
-  _curry(4, genRecurTemps$);
 const genRecurAssignments: <A>(ctx: GCtx, params: ({ name: string } & A)[], i: number) => string =
   _curry(3, <A>(ctx: GCtx, params: ({ name: string } & A)[], i: number) =>
     _Option_match(
@@ -1747,10 +1655,6 @@ const genLoopTail$ = (ctx: GCtx, e: Expr, params: LoopParam[]): string => {
     }
   }
 };
-const genLoopTail: _Curry<[ctx: GCtx, e: Expr, params: LoopParam[]], string> = _curry(
-  3,
-  genLoopTail$,
-);
 const genDoLoopTail$ = (ctx: GCtx, exprs: Expr[], params: LoopParam[]): string =>
   ((_v) =>
     _v.length === 1
@@ -1764,10 +1668,6 @@ const genDoLoopTail$ = (ctx: GCtx, exprs: Expr[], params: LoopParam[]): string =
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const genDoLoopTail: _Curry<[ctx: GCtx, exprs: Expr[], params: LoopParam[]], string> = _curry(
-  3,
-  genDoLoopTail$,
-);
 const genLoopBlock$ = (ctx: GCtx, params: LoopParam[], body: Expr): string => {
   const decls: string = _Str_join(
     " ",
@@ -1779,10 +1679,6 @@ const genLoopBlock$ = (ctx: GCtx, params: LoopParam[], body: Expr): string => {
   );
   return `${decls} while (true) { ${genLoopTail$(ctx, body, params)} }`;
 };
-const genLoopBlock: _Curry<[ctx: GCtx, params: LoopParam[], body: Expr], string> = _curry(
-  3,
-  genLoopBlock$,
-);
 const loopParamFree: <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>) => boolean =
   _curry(3, <A, B>(params: ({ name: A } & B)[], i: number, seen: Set<A>) =>
     _Option_match(
@@ -1802,7 +1698,6 @@ const genLambdaBody$ = (ctx: GCtx, e: Expr): string => {
     }
   }
 };
-const genLambdaBody: _Curry<[ctx: GCtx, e: Expr], string> = _curry(2, genLambdaBody$);
 const paramNames: (p: LamParam) => string[] = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1855,10 +1750,6 @@ const genLabeledFill$ = (ctx: GCtx, labVar: string, lab: LamParam): string => {
     }
   }
 };
-const genLabeledFill: _Curry<[ctx: GCtx, labVar: string, lab: LamParam], string> = _curry(
-  3,
-  genLabeledFill$,
-);
 const genFillDecls$ = (ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]): string =>
   ((_v) =>
     _v.length === 0
@@ -1874,8 +1765,6 @@ const genFillDecls$ = (ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[])
             fills,
           ),
         )} `)(fills);
-const genFillDecls: _Curry<[ctx: GCtx, fills: { labVar: string; labs: LamParam[] }[]], string> =
-  _curry(2, genFillDecls$);
 const fillNames: <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) => Set<string> = _curry(
   2,
   <A>(fills: ({ labs: LamParam[] } & A)[], acc: Set<string>) =>
@@ -1939,10 +1828,6 @@ const paramNameSet$ = (params: LamParam[], i: number, acc: Set<string>): Set<str
     () => acc,
     (p) => paramNameSet$(params, i + 1, addNames(paramNames(p), 0, acc)),
   );
-const paramNameSet: _Curry<[params: LamParam[], i: number, acc: Set<string>], Set<string>> = _curry(
-  3,
-  paramNameSet$,
-);
 const letBlockLoop$ = (
   ctx: GCtx,
   e: Expr,
@@ -1976,10 +1861,6 @@ const letBlockLoop$ = (
     }
   }
 };
-const letBlockLoop: _Curry<
-  [ctx: GCtx, e: Expr, seen: Set<string>, decls: string[]],
-  [string[], Expr, Set<string>]
-> = _curry(4, letBlockLoop$);
 const genLambdaBodyIn$ = (ctx: GCtx, e: Expr, bound: Set<string>, prefix: string): string =>
   (([decls, rest, seen]: [string[], Expr, Set<string>]) =>
     length(decls) === 0
@@ -2016,8 +1897,6 @@ const genLambdaBodyIn$ = (ctx: GCtx, e: Expr, bound: Set<string>, prefix: string
                 : `{ ${prefix}${block} return ${genExpr$(ctx, rest)}; }`)(rest))(
           _Str_join(" ", decls),
         ))(letBlockLoop$(ctx, e, bound, [] as string[]));
-const genLambdaBodyIn: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>, prefix: string], string> =
-  _curry(4, genLambdaBodyIn$);
 const functionMatchArms: <A, B>(
   arms: ({ guard: Option<A>; pattern: Pattern } & B)[],
   tags: Set<string>,
@@ -2076,10 +1955,6 @@ const canFunctionMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): boolea
         ? false
         : functionMatchArms(arms, _Set_fromArray([] as string[])))(scrutinee),
   );
-const canFunctionMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], boolean> = _curry(
-  3,
-  canFunctionMatch$,
-);
 const functionPatternNames: (pattern: Pattern) => string[] = (pattern: Pattern) => {
   const $match = pattern;
   switch ($match._tag) {
@@ -2129,10 +2004,6 @@ const genFunctionTail$ = (ctx: GCtx, e: Expr, bound: Set<string>): string =>
       }
     }
   })(letBlockLoop$(ctx, e, bound, [] as string[]));
-const genFunctionTail: _Curry<[ctx: GCtx, e: Expr, bound: Set<string>], string> = _curry(
-  3,
-  genFunctionTail$,
-);
 const genFunctionCases$ = (ctx: GCtx, arms: MatchArm[], root: string): string =>
   _Str_join(
     " ",
@@ -2150,10 +2021,6 @@ const genFunctionCases$ = (ctx: GCtx, arms: MatchArm[], root: string): string =>
       return `${label} { ${bind}${genFunctionTail$(ctx, a.body, bound)} }`;
     }, arms),
   );
-const genFunctionCases: _Curry<[ctx: GCtx, arms: MatchArm[], root: string], string> = _curry(
-  3,
-  genFunctionCases$,
-);
 /**
  * The discriminant key a ctor `switch` reads: every arm names a ctor of one
  * type (ADR 0156), so the first ctor arm decides.
@@ -2187,10 +2054,6 @@ const genFunctionMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string
     : 'default: { throw new Error("non-exhaustive match"); }';
   return `const ${root} = ${genExpr$(ctx, scrutinee)}; switch (${root}.${switchKey(ctx, arms)}) { ${genFunctionCases$(nestedCtx, arms, root)} ${fallback} }`;
 };
-const genFunctionMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genFunctionMatch$,
-);
 const isCatchAll: (p: Pattern) => boolean = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -2276,7 +2139,6 @@ const catchAllParam$ = (ctx: GCtx, p: Pattern): string => {
     }
   }
 };
-const catchAllParam: _Curry<[ctx: GCtx, p: Pattern], string> = _curry(2, catchAllParam$);
 const isListMatch: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
   arms: ({ pattern: Pattern } & A)[],
 ) => someOf((a: { pattern: Pattern } & A) => and(isPList(a.pattern), !isCatchAll(a.pattern)), arms);
@@ -2295,10 +2157,6 @@ const listArmGuards$ = (ctx: GCtx, elems: Pattern[], i: number): string[] =>
     (el) =>
       _Array_concat(patConds(ctx.keys, el, `_b[${show(i)}]`), listArmGuards$(ctx, elems, i + 1)),
   );
-const listArmGuards: _Curry<[ctx: GCtx, elems: Pattern[], i: number], string[]> = _curry(
-  3,
-  listArmGuards$,
-);
 const listArmBinds$ = (ctx: GCtx, elems: Pattern[], i: number): [string[], string[]] =>
   _Option_match(
     _Array_get(i, elems),
@@ -2311,10 +2169,6 @@ const listArmBinds$ = (ctx: GCtx, elems: Pattern[], i: number): [string[], strin
           : _tuple(_Array_prepend(slot, restParams), _Array_prepend(`_b[${show(i)}]`, restArgs));
       })(listArmBinds$(ctx, elems, i + 1)),
   );
-const listArmBinds: _Curry<[ctx: GCtx, elems: Pattern[], i: number], [string[], string[]]> = _curry(
-  3,
-  listArmBinds$,
-);
 const genListArm$ = (ctx: GCtx, p: Pattern, body: Expr): string => {
   const $match = p;
   switch ($match._tag) {
@@ -2348,7 +2202,6 @@ const genListArm$ = (ctx: GCtx, p: Pattern, body: Expr): string => {
     }
   }
 };
-const genListArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr], string> = _curry(3, genListArm$);
 const listMatchLoop$ = (ctx: GCtx, arms: MatchArm[], i: number): [string[], string] =>
   _Option_match(
     _Array_get(i, arms),
@@ -2395,10 +2248,6 @@ const listMatchLoop$ = (ctx: GCtx, arms: MatchArm[], i: number): [string[], stri
             )
           : listMatchLoop$(ctx, arms, i + 1),
   );
-const listMatchLoop: _Curry<[ctx: GCtx, arms: MatchArm[], i: number], [string[], string]> = _curry(
-  3,
-  listMatchLoop$,
-);
 const genListMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
   (([armLines, fallback]: [string[], string]) =>
     concat(
@@ -2426,10 +2275,6 @@ const genListMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
       ),
       "[Symbol.iterator]())",
     ))(listMatchLoop$(ctx, arms, 0));
-const genListMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genListMatch$,
-);
 const matchArmsLoop$ = (
   ctx: GCtx,
   arms: MatchArm[],
@@ -2460,10 +2305,6 @@ const matchArmsLoop$ = (
             ),
         ))(matchArmsLoop$(ctx, arms, i + 1, base)),
   );
-const matchArmsLoop: _Curry<
-  [ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>],
-  [string[], Option<[Pattern, Expr]>]
-> = _curry(4, matchArmsLoop$);
 /**
  * Any eager-array arm? Decides the ADR 0038 close-out below.
  */
@@ -2481,6 +2322,12 @@ const hasArrArm: <A>(arms: ({ pattern: Pattern } & A)[]) => boolean = <A>(
       }
     }
   }, arms);
+/**
+ * Does TypeScript's own narrowing on `_v` type this arm's bindings? A
+ * discriminant or literal test on `_v` itself does; a test on a nested field
+ * narrows only that field, so a destructuring that reaches past it needs the
+ * arm's `patTarget` (ADR 0031).
+ */
 const isShallowArm$ = (ctx: GCtx, p: Pattern): boolean => {
   const $match = p;
   switch ($match._tag) {
@@ -2493,13 +2340,6 @@ const isShallowArm$ = (ctx: GCtx, p: Pattern): boolean => {
     }
   }
 };
-/**
- * Does TypeScript's own narrowing on `_v` type this arm's bindings? A
- * discriminant or literal test on `_v` itself does; a test on a nested field
- * narrows only that field, so a destructuring that reaches past it needs the
- * arm's `patTarget` (ADR 0031).
- */
-const isShallowArm: _Curry<[ctx: GCtx, p: Pattern], boolean> = _curry(2, isShallowArm$);
 const isShallowPat: (p: Pattern) => boolean = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -2525,6 +2365,11 @@ const isShallowPat: (p: Pattern) => boolean = (p: Pattern) => {
     }
   }
 };
+/**
+ * `_v` as an arm's bindings see it: cast to the arm's narrowed type when the
+ * tests do not narrow it themselves and that type refines the base. The tests just proved the cast, as they
+ * prove the `_v is T` predicate of the `match()` form.
+ */
 const armView$ = (ctx: GCtx, p: Pattern, base: Option<string>): string =>
   ((_v) =>
     _v._tag === "Some" && (({ value: b }) => !isShallowArm$(ctx, p))(_v)
@@ -2534,11 +2379,8 @@ const armView$ = (ctx: GCtx, p: Pattern, base: Option<string>): string =>
           ))(_v)
       : "_v")(base);
 /**
- * `_v` as an arm's bindings see it: cast to the arm's narrowed type when the
- * tests do not narrow it themselves and that type refines the base. The tests just proved the cast, as they
- * prove the `_v is T` predicate of the `match()` form.
+ * Run `body` under the pattern's bindings, destructured from `view`.
  */
-const armView: _Curry<[ctx: GCtx, p: Pattern, base: Option<string>], string> = _curry(3, armView$);
 const underBinds$ = (ctx: GCtx, p: Pattern, view: string, body: string): string => {
   const $match = p;
   switch ($match._tag) {
@@ -2555,13 +2397,6 @@ const underBinds$ = (ctx: GCtx, p: Pattern, view: string, body: string): string 
     }
   }
 };
-/**
- * Run `body` under the pattern's bindings, destructured from `view`.
- */
-const underBinds: _Curry<[ctx: GCtx, p: Pattern, view: string, body: string], string> = _curry(
-  4,
-  underBinds$,
-);
 const ternArmTest$ = (
   ctx: GCtx,
   p: Pattern,
@@ -2577,10 +2412,6 @@ const ternArmTest$ = (
   );
   return length(all) === 0 ? "true" : _Str_join(" && ", all);
 };
-const ternArmTest: _Curry<
-  [ctx: GCtx, p: Pattern, guardOpt: Option<Expr>, base: Option<string>],
-  string
-> = _curry(4, ternArmTest$);
 const ternArms$ = (ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>): string =>
   _Option_match(
     _Array_get(i, arms),
@@ -2596,8 +2427,6 @@ const ternArms$ = (ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>)
     : ${ternArms$(ctx, arms, i + 1, base)}`;
     },
   );
-const ternArms: _Curry<[ctx: GCtx, arms: MatchArm[], i: number, base: Option<string>], string> =
-  _curry(4, ternArms$);
 /**
  * A match lowers to a ternary chain over `_v` (ADR 0113), except where the
  * TypeScript backend could not type an arm's bindings: a nested pattern on a
@@ -2689,10 +2518,6 @@ const genOptionalMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): Option
             _tuple(_Map_get("Some", ctx.keys), _Map_get("None", ctx.keys)),
           ))(_v)
       : (None as Option<string>))(scrutinee);
-const genOptionalMatch: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[]],
-  Option<string>
-> = _curry(3, genOptionalMatch$);
 const genOptionalBranches$ = (
   ctx: GCtx,
   target: Expr,
@@ -2703,20 +2528,12 @@ const genOptionalBranches$ = (
   const bind: string = plan.binding === "" ? "" : `const ${plan.binding} = ${value}; `;
   return `((${value}) => { if (${value} != null) { ${bind}return ${genExpr$(ctx, plan.present)}; } return ${genExpr$(ctx, plan.absent)}; })(${genMember$(ctx, target)}.${name})`;
 };
-const genOptionalBranches: _Curry<
-  [ctx: GCtx, target: Expr, name: string, plan: OptionalMatch],
-  string
-> = _curry(4, genOptionalBranches$);
 const genMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
   _Option_match(
     genOptionalMatch$(ctx, scrutinee, arms),
     () => genOrdinaryMatch$(ctx, scrutinee, arms),
     (fused) => fused,
   );
-const genMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genMatch$,
-);
 const genOrdinaryMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string =>
   _Option_match(
     builtinMatchPlan(ctx, scrutinee, arms),
@@ -2729,10 +2546,6 @@ const genOrdinaryMatch$ = (ctx: GCtx, scrutinee: Expr, arms: MatchArm[]): string
               : genMatchChain$(ctx, scrutinee, arms, base))(hook1(ctx.guardBaseType, scrutinee)),
     (plan) => genBuiltinMatch$(ctx, scrutinee, plan),
   );
-const genOrdinaryMatch: _Curry<[ctx: GCtx, scrutinee: Expr, arms: MatchArm[]], string> = _curry(
-  3,
-  genOrdinaryMatch$,
-);
 
 const builtinPayload$ = (pattern: Pattern, ctor: string, arity: number): Option<string> =>
   ((_v) =>
@@ -2762,10 +2575,6 @@ const builtinPayload$ = (pattern: Pattern, ctor: string, arity: number): Option<
           },
         )
       : (None as Option<string>))(pattern);
-const builtinPayload: _Curry<
-  [pattern: Pattern, ctor: string, arity: number],
-  Option<string>
-> = _curry(3, builtinPayload$);
 const builtinPair: <A, C, E, F>(
   ctx: GCtx,
   left: { guard: Option<A>; pattern: Pattern; body: Expr } & E,
@@ -2896,14 +2705,11 @@ const genBuiltinHandler$ = (ctx: GCtx, binding: string, body: Expr): string => {
     binding === "" ? _Set_fromArray([] as string[]) : _Set_fromArray([binding]);
   return `(${binding}) => ${genLambdaBodyIn$(ctx, body, bound, "")}`;
 };
-const genBuiltinHandler: _Curry<[ctx: GCtx, binding: string, body: Expr], string> = _curry(
-  3,
-  genBuiltinHandler$,
-);
 const genBuiltinMatch$ = (ctx: GCtx, scrutinee: Expr, plan: BuiltinMatchPlan): string =>
   `${plan.helper}(${genExpr$(ctx, scrutinee)}, ${genBuiltinHandler$(ctx, plan.leftBinding, plan.left)}, ${genBuiltinHandler$(ctx, plan.rightBinding, plan.right)})`;
-const genBuiltinMatch: _Curry<[ctx: GCtx, scrutinee: Expr, plan: BuiltinMatchPlan], string> =
-  _curry(3, genBuiltinMatch$);
+/**
+ * The `@onrails/pattern` chain.
+ */
 const genMatchChain$ = (
   ctx: GCtx,
   scrutinee: Expr,
@@ -2929,13 +2735,6 @@ const genMatchChain$ = (
       _Array_concat(_Array_prepend(`match(${genExpr$(ctx, scrutinee)})`, armLines), [tail]),
     );
   })(matchArmsLoop$(ctx, arms, 0, base));
-/**
- * The `@onrails/pattern` chain.
- */
-const genMatchChain: _Curry<
-  [ctx: GCtx, scrutinee: Expr, arms: MatchArm[], base: Option<string>],
-  string
-> = _curry(4, genMatchChain$);
 const genGuardArm$ = (
   ctx: GCtx,
   p: Pattern,
@@ -2990,10 +2789,6 @@ const genGuardArm$ = (
     },
   );
 };
-const genGuardArm: _Curry<
-  [ctx: GCtx, p: Pattern, body: Expr, guardOpt: Option<Expr>, base: Option<string>],
-  string
-> = _curry(5, genGuardArm$);
 const isFlatSub: (p: Pattern) => boolean = (p: Pattern) => {
   const $match = p;
   switch ($match._tag) {
@@ -3076,10 +2871,6 @@ const ctorArgParts$ = (ctx: GCtx, ctor: string, args: Pattern[], i: number): [st
         }
       })(ctorArgParts$(ctx, ctor, args, i + 1)),
   );
-const ctorArgParts: _Curry<
-  [ctx: GCtx, ctor: string, args: Pattern[], i: number],
-  [string[], string[]]
-> = _curry(4, ctorArgParts$);
 const genWithArm$ = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): string => {
   const $match = p;
   switch ($match._tag) {
@@ -3135,8 +2926,9 @@ const genWithArm$ = (ctx: GCtx, p: Pattern, body: Expr, base: Option<string>): s
     }
   }
 };
-const genWithArm: _Curry<[ctx: GCtx, p: Pattern, body: Expr, base: Option<string>], string> =
-  _curry(4, genWithArm$);
+/**
+ * `k0: T0, k1: T1` — a typed factory's parameter list.
+ */
 const typedCtorParams$ = (keys: string[], paramTypes: string[], i: number): string[] =>
   _Option_match(
     _Array_get(i, keys),
@@ -3147,13 +2939,6 @@ const typedCtorParams$ = (keys: string[], paramTypes: string[], i: number): stri
         typedCtorParams$(keys, paramTypes, i + 1),
       ),
   );
-/**
- * `k0: T0, k1: T1` — a typed factory's parameter list.
- */
-const typedCtorParams: _Curry<[keys: string[], paramTypes: string[], i: number], string[]> = _curry(
-  3,
-  typedCtorParams$,
-);
 const genCtor: <A, B, C>(
   c: { tagLit: string; fields: ({ name: Option<string> } & A)[]; name: string; tagKey: string } & B,
   ts: Option<{ retMono: string; generics: string; paramTypes: string[]; ret: string } & C>,
@@ -3266,7 +3051,6 @@ const genType$ = (ctx: GCtx, s: Stmt): string => {
     }
   }
 };
-const genType: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, genType$);
 /**
  * Top-level arrow spine length (`a -> b -> c` → 2).
  */
@@ -3418,19 +3202,15 @@ const ${name} = _curry(${show(arity)}, ${flat});`)(
 };
 const stripAlExt: (s: string) => string = (s: string) =>
   _Str_endsWith(".mochi", s) ? _Str_slice(0, _Str_length(s) - 6, s) : s;
-const rewriteImportPath$ = (from: string, ext: string): string => {
-  const bare: string = stripAlExt(from);
-  return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}${ext}` : bare;
-};
 /**
  * Relative `./` / `../` get `ext` (`.js` for the JS backend, `""` for TS —
  * tsc resolves the extensionless sibling); bare package specs keep their
  * name, since a suffix would break package `exports` (ADR 0015).
  */
-const rewriteImportPath: _Curry<[from: string, ext: string], string> = _curry(
-  2,
-  rewriteImportPath$,
-);
+const rewriteImportPath$ = (from: string, ext: string): string => {
+  const bare: string = stripAlExt(from);
+  return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}${ext}` : bare;
+};
 const genImport$ = (s: Stmt, ext: string): string => {
   const $match = s;
   switch ($match._tag) {
@@ -3453,7 +3233,6 @@ const genImport$ = (s: Stmt, ext: string): string => {
     }
   }
 };
-const genImport: _Curry<[s: Stmt, ext: string], string> = _curry(2, genImport$);
 const exportLine: (l: string) => string = (l: string) => `export ${l}`;
 const jsDocLine: (l: string) => string = (l: string) =>
   _Str_length(l) > 0 ? ` * ${_Str_replace("*/", "*\\/", l)}` : " *";
@@ -3469,6 +3248,11 @@ ${_Str_join("\n", lines)}
 `;
     },
   );
+/**
+ * Arity of a top-level `let` that gets a raw twin (ADR 0149): a lambda whose
+ * collapsed spine has >= 2 plain params, bound under a name no local binder
+ * reuses anywhere in the module (so a call by that name is always this one).
+ */
 const rawArityOf$ = (locals: Set<string>, s: Stmt): Option<number> =>
   ((_v) =>
     _v._tag === "SLet" &&
@@ -3490,11 +3274,10 @@ const rawArityOf$ = (locals: Set<string>, s: Stmt): Option<number> =>
         )
       : (None as Option<number>))(s);
 /**
- * Arity of a top-level `let` that gets a raw twin (ADR 0149): a lambda whose
- * collapsed spine has >= 2 plain params, bound under a name no local binder
- * reuses anywhere in the module (so a call by that name is always this one).
+ * The backend may decline a twin: the JS backend has no `annotateRaw` hook
+ * and takes every eligible function; the TS backend's hook answers `None` for
+ * a binding it cannot annotate strict-clean.
  */
-const rawArityOf: _Curry<[locals: Set<string>, s: Stmt], Option<number>> = _curry(2, rawArityOf$);
 const rawTwinAllowed$ = (ctx: GCtx, name: string, value: Expr): boolean =>
   _Option_match(
     ctx.annotateRaw,
@@ -3502,14 +3285,9 @@ const rawTwinAllowed$ = (ctx: GCtx, name: string, value: Expr): boolean =>
     (h) => _Option_isSome(h(name, value)),
   );
 /**
- * The backend may decline a twin: the JS backend has no `annotateRaw` hook
- * and takes every eligible function; the TS backend's hook answers `None` for
- * a binding it cannot annotate strict-clean.
+ * Register a raw twin for every eligible top-level function. The raw name
+ * goes through `tempName`, so it cannot capture a bound name or value ref.
  */
-const rawTwinAllowed: _Curry<[ctx: GCtx, name: string, value: Expr], boolean> = _curry(
-  3,
-  rawTwinAllowed$,
-);
 const withRawTwins$ = (ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number): GCtx =>
   _Option_match(
     _Array_get(i, stmts),
@@ -3537,12 +3315,6 @@ const withRawTwins$ = (ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number)
             )
           : withRawTwins$(ctx, locals, stmts, i + 1))(_tuple(s, rawArityOf$(locals, s))),
   );
-/**
- * Register a raw twin for every eligible top-level function. The raw name
- * goes through `tempName`, so it cannot capture a bound name or value ref.
- */
-const withRawTwins: _Curry<[ctx: GCtx, locals: Set<string>, stmts: Stmt[], i: number], GCtx> =
-  _curry(4, withRawTwins$);
 const genStmt$ = (ctx: GCtx, s: Stmt): string => {
   const $match = s;
   switch ($match._tag) {
@@ -3582,7 +3354,10 @@ export { ${name} };`
       return ((_v) =>
         _v[0]._tag === "Some" && _v[1]._tag === "ELambda"
           ? (([{ value: raw }, { params, body, span: sp }]) =>
-              (([arrow, arity]: [string, number]) => `const ${raw} = ${arrow};
+              (([arrow, arity]: [string, number]) =>
+                and(!exported, !_Set_has(name, ctx.publicRefs))
+                  ? `${docComment}const ${raw} = ${arrow};`
+                  : `const ${raw} = ${arrow};
 ${head}_curry(${show(arity)}, ${raw});`)(
                 genArrow$(
                   ctx,
@@ -3608,7 +3383,6 @@ ${head}_curry(${show(arity)}, ${raw});`)(
     }
   }
 };
-const genStmt: _Curry<[ctx: GCtx, s: Stmt], string> = _curry(2, genStmt$);
 const usesMatchLibArm$ = (ctx: GCtx, a: MatchArm): boolean =>
   or(
     _Option_match(
@@ -3618,7 +3392,6 @@ const usesMatchLibArm$ = (ctx: GCtx, a: MatchArm): boolean =>
     ),
     usesMatchLib$(ctx, a.body),
   );
-const usesMatchLibArm: _Curry<[ctx: GCtx, a: MatchArm], boolean> = _curry(2, usesMatchLibArm$);
 const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
   const $match = e;
   switch ($match._tag) {
@@ -3792,7 +3565,6 @@ const usesMatchLib$ = (ctx: GCtx, e: Expr): boolean => {
     }
   }
 };
-const usesMatchLib: _Curry<[ctx: GCtx, e: Expr], boolean> = _curry(2, usesMatchLib$);
 const loopInitRefsFrom$ = (
   ctx: GCtx,
   params: LoopParam[],
@@ -3804,20 +3576,12 @@ const loopInitRefsFrom$ = (
     () => acc,
     (p) => loopInitRefsFrom$(ctx, params, i + 1, exprRefs$(ctx, p.init, acc)),
   );
-const loopInitRefsFrom: _Curry<
-  [ctx: GCtx, params: LoopParam[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, loopInitRefsFrom$);
 const exprRefsListFrom$ = (ctx: GCtx, xs: Expr[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, xs),
     () => acc,
     (x) => exprRefsListFrom$(ctx, xs, i + 1, exprRefs$(ctx, x, acc)),
   );
-const exprRefsListFrom: _Curry<
-  [ctx: GCtx, xs: Expr[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsListFrom$);
 const exprRefsInterpPartsFrom$ = (
   ctx: GCtx,
   parts: InterpPart[],
@@ -3842,10 +3606,6 @@ const exprRefsInterpPartsFrom$ = (
                 })())(p),
       ),
   );
-const exprRefsInterpPartsFrom: _Curry<
-  [ctx: GCtx, parts: InterpPart[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsInterpPartsFrom$);
 const exprRefsArmsFrom$ = (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, arms),
@@ -3859,10 +3619,6 @@ const exprRefsArmsFrom$ = (ctx: GCtx, arms: MatchArm[], i: number, acc: Set<stri
       return exprRefsArmsFrom$(ctx, arms, i + 1, exprRefs$(ctx, a.body, acc1));
     },
   );
-const exprRefsArmsFrom: _Curry<
-  [ctx: GCtx, arms: MatchArm[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsArmsFrom$);
 const exprRefsFieldsFrom$ = (
   ctx: GCtx,
   fields: Field[],
@@ -3874,10 +3630,6 @@ const exprRefsFieldsFrom$ = (
     () => acc,
     (f) => exprRefsFieldsFrom$(ctx, fields, i + 1, exprRefs$(ctx, f.value, acc)),
   );
-const exprRefsFieldsFrom: _Curry<
-  [ctx: GCtx, fields: Field[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsFieldsFrom$);
 const exprRefsEntriesFrom$ = (
   ctx: GCtx,
   entries: MapEntry[],
@@ -3895,10 +3647,34 @@ const exprRefsEntriesFrom$ = (
         exprRefs$(ctx, en.value, exprRefs$(ctx, en.key, acc)),
       ),
   );
-const exprRefsEntriesFrom: _Curry<
-  [ctx: GCtx, entries: MapEntry[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, exprRefsEntriesFrom$);
+/**
+ * A call that lowers to the raw twin (`genCalleeFor`, ADR 0149) and so never
+ * names the public binding. JSX calls (`origin`) go through `tsxCall` and do.
+ */
+const isTwinCall: <A>(ctx: GCtx, fn: Expr, argc: number, origin: Option<A>) => boolean = _curry(
+  4,
+  <A>(ctx: GCtx, fn: Expr, argc: number, origin: Option<A>) => {
+    const $match = fn;
+    switch ($match._tag) {
+      case "ERef": {
+        const { name } = $match;
+        return _Option_match(
+          origin,
+          () =>
+            _Option_match(
+              _Map_get(name, ctx.rawArity),
+              () => false,
+              (n) => eq(n, argc),
+            ),
+          () => false,
+        );
+      }
+      default: {
+        return false;
+      }
+    }
+  },
+);
 const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
   const $match = e;
   switch ($match._tag) {
@@ -3919,8 +3695,10 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       return _Set_add(name, acc);
     }
     case "ECall": {
-      const { fn, args } = $match;
-      return exprRefsListFrom$(ctx, args, 0, exprRefs$(ctx, fn, acc));
+      const { fn, args, origin } = $match;
+      return isTwinCall(ctx, fn, length(args), origin)
+        ? exprRefsListFrom$(ctx, args, 0, acc)
+        : exprRefsListFrom$(ctx, args, 0, exprRefs$(ctx, fn, acc));
     }
     case "ELambda": {
       const { params, body } = $match;
@@ -3988,8 +3766,17 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       return exprRefs$(ctx, body, exprRefs$(ctx, value, _Set_add(bindRuntime(monad), acc)));
     }
     case "EPipe": {
-      const { left, right } = $match;
-      return exprRefs$(ctx, right, exprRefs$(ctx, left, acc));
+      const { left, right, fast } = $match;
+      const acc1: Set<string> = exprRefs$(ctx, left, acc);
+      return ((_v) =>
+        _v._tag === "ECall" &&
+        (({ fn: rfn, args: rargs, origin }) =>
+          and(
+            and(!hasPipeHole(right), or(fast, ctx.flattenPipe)),
+            isTwinCall(ctx, rfn, length(rargs) + 1, origin),
+          ))(_v)
+          ? (({ fn: rfn, args: rargs, origin }) => exprRefsListFrom$(ctx, rargs, 0, acc1))(_v)
+          : exprRefs$(ctx, right, acc1))(right);
     }
     case "EDo": {
       const { exprs } = $match;
@@ -4153,7 +3940,6 @@ const exprRefs$ = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
     }
   }
 };
-const exprRefs: _Curry<[ctx: GCtx, e: Expr, acc: Set<string>], Set<string>> = _curry(3, exprRefs$);
 const boundNamesFrom$ = (
   valueRefs: Set<string>,
   stmts: Stmt[],
@@ -4198,16 +3984,12 @@ const boundNamesFrom$ = (
                           })())(s),
       ),
   );
-const boundNamesFrom: _Curry<
-  [valueRefs: Set<string>, stmts: Stmt[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, boundNamesFrom$);
 const boundNames$ = (valueRefs: Set<string>, stmts: Stmt[]): Set<string> =>
   boundNamesFrom$(valueRefs, stmts, 0, _Set_fromArray([] as string[]));
-const boundNames: _Curry<[valueRefs: Set<string>, stmts: Stmt[]], Set<string>> = _curry(
-  2,
-  boundNames$,
-);
+/**
+ * Names referenced in let/expr values — not patterns. `| TLet =>` does not
+ * count, so a local unused ctor factory can be dropped.
+ */
 const collectValueRefs$ = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, stmts),
@@ -4225,14 +4007,6 @@ const collectValueRefs$ = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>
               : acc)(s),
       ),
   );
-/**
- * Names referenced in let/expr values — not patterns. `| TLet =>` does not
- * count, so a local unused ctor factory can be dropped.
- */
-const collectValueRefs: _Curry<
-  [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, collectValueRefs$);
 const refsForStmt$ = (ctx: GCtx, s: Stmt): Set<string> => {
   const $match = s;
   switch ($match._tag) {
@@ -4264,17 +4038,12 @@ const refsForStmt$ = (ctx: GCtx, s: Stmt): Set<string> => {
     }
   }
 };
-const refsForStmt: _Curry<[ctx: GCtx, s: Stmt], Set<string>> = _curry(2, refsForStmt$);
 const collectRefsFrom$ = (ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
   _Option_match(
     _Array_get(i, stmts),
     () => acc,
     (s) => collectRefsFrom$(ctx, stmts, i + 1, _Set_union(acc, refsForStmt$(ctx, s))),
   );
-const collectRefsFrom: _Curry<
-  [ctx: GCtx, stmts: Stmt[], i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, collectRefsFrom$);
 const addDepsFrom: <A>(deps: A[], j: number, refs: Set<A>, queue: A[]) => [Set<A>, A[]] = _curry(
   4,
   <A>(deps: A[], j: number, refs: Set<A>, queue: A[]) =>
@@ -4333,20 +4102,12 @@ const preludePreamble$ = (
 
 `;
 };
-const preludePreamble: _Curry<
-  [ctx: GCtx, stmts: Stmt[], jsDefs: Map<string, string>, runtimeDeps: Map<string, string[]>],
-  string
-> = _curry(4, preludePreamble$);
 const genStmtAllFrom$ = (ctx: GCtx, stmts: Stmt[], i: number): string[] =>
   _Option_match(
     _Array_get(i, stmts),
     () => [] as string[],
     (s) => _Array_prepend(genStmt$(ctx, s), genStmtAllFrom$(ctx, stmts, i + 1)),
   );
-const genStmtAllFrom: _Curry<[ctx: GCtx, stmts: Stmt[], i: number], string[]> = _curry(
-  3,
-  genStmtAllFrom$,
-);
 /**
  * `useRuntime`: inline the prelude builtins the program uses, so the emitted
  * module runs standalone. `ns`/`jsDefs`/`runtimeDeps` are the TS prelude's
@@ -4427,6 +4188,7 @@ export const codegenWith: <A>(
       rawNames: new Map([]),
       rawArity: new Map([]),
       valueRefs: _Set_fromArray([]),
+      publicRefs: _Set_fromArray([]),
       userNames: _Set_union(
         boundNames$(_Set_fromArray([] as string[]), stmts),
         localBinderNames(stmts),
@@ -4443,12 +4205,16 @@ export const codegenWith: <A>(
       boundNames$(valueRefs, stmts),
       localBinderNames(stmts),
     );
-    const ctx: GCtx = withRawTwins$(
+    const ctx1: GCtx = withRawTwins$(
       { ...ctx0, valueRefs: valueRefs, userNames: userNames },
       localBinderNames(stmts),
       stmts,
       0,
     );
+    const ctx: GCtx = {
+      ...ctx1,
+      publicRefs: collectValueRefs$(ctx1, stmts, 0, _Set_fromArray([] as string[])),
+    };
     const needsMatch: boolean = someOf((s: Stmt) => {
       const $match = s;
       switch ($match._tag) {
@@ -4514,6 +4280,7 @@ export const runtimeDepNames: <A>(
       rawNames: new Map([]),
       rawArity: new Map([]),
       valueRefs: _Set_fromArray([]),
+      publicRefs: _Set_fromArray([]),
       userNames: _Set_union(
         boundNames$(_Set_fromArray([] as string[]), stmts),
         localBinderNames(stmts),

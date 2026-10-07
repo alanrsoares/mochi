@@ -47,10 +47,7 @@ const patternKeyAt$ = (ctorKeys: Map<string, string[]>, ctor: string, i: number)
     () => `_${show(i)}`,
     (ks) => _Option_unwrapOr(`_${show(i)}`, _Array_get(i, ks)),
   );
-const patternKeyAt: _Curry<[ctorKeys: Map<string, string[]>, ctor: string, i: number], string> =
-  _curry(3, patternKeyAt$);
 const keyedSlot$ = (key: string, sub: string): string => (eq(sub, key) ? key : `${key}: ${sub}`);
-const keyedSlot: _Curry<[key: string, sub: string], string> = _curry(2, keyedSlot$);
 const pctorEntries$ = (
   ctorKeys: Map<string, string[]>,
   ctor: string,
@@ -68,10 +65,6 @@ const pctorEntries$ = (
         : _Array_prepend(keyedSlot$(patternKeyAt$(ctorKeys, ctor, i), s), restEntries);
     },
   );
-const pctorEntries: _Curry<
-  [ctorKeys: Map<string, string[]>, ctor: string, args: Pattern[], i: number],
-  string[]
-> = _curry(4, pctorEntries$);
 const precordEntries$ = (
   ctorKeys: Map<string, string[]>,
   fields: PatField[],
@@ -86,10 +79,6 @@ const precordEntries$ = (
       return s === "" ? restEntries : _Array_prepend(keyedSlot$(f.label, s), restEntries);
     },
   );
-const precordEntries: _Curry<
-  [ctorKeys: Map<string, string[]>, fields: PatField[], i: number],
-  string[]
-> = _curry(3, precordEntries$);
 const patSlot$ = (ctorKeys: Map<string, string[]>, p: Pattern): string => {
   const $match = p;
   switch ($match._tag) {
@@ -184,10 +173,6 @@ const pctorConds$ = (
         pctorConds$(ctorKeys, ctor, args, i + 1, path),
       ),
   );
-const pctorConds: _Curry<
-  [ctorKeys: Map<string, string[]>, ctor: string, args: Pattern[], i: number, path: string],
-  string[]
-> = _curry(5, pctorConds$);
 const precordConds$ = (
   ctorKeys: Map<string, string[]>,
   fields: PatField[],
@@ -203,10 +188,6 @@ const precordConds$ = (
         precordConds$(ctorKeys, fields, i + 1, path),
       ),
   );
-const precordConds: _Curry<
-  [ctorKeys: Map<string, string[]>, fields: PatField[], i: number, path: string],
-  string[]
-> = _curry(4, precordConds$);
 const ptupleConds$ = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
@@ -222,10 +203,6 @@ const ptupleConds$ = (
         ptupleConds$(ctorKeys, elems, i + 1, path),
       ),
   );
-const ptupleConds: _Curry<
-  [ctorKeys: Map<string, string[]>, elems: Pattern[], i: number, path: string],
-  string[]
-> = _curry(4, ptupleConds$);
 const parrConds$ = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
@@ -241,10 +218,6 @@ const parrConds$ = (
         parrConds$(ctorKeys, elems, i + 1, path),
       ),
   );
-const parrConds: _Curry<
-  [ctorKeys: Map<string, string[]>, elems: Pattern[], i: number, path: string],
-  string[]
-> = _curry(4, parrConds$);
 const patConds$ = (ctorKeys: Map<string, string[]>, p: Pattern, path: string): string[] => {
   const $match = p;
   switch ($match._tag) {
@@ -324,6 +297,13 @@ export const patConds: _Curry<
   [ctorKeys: Map<string, string[]>, p: Pattern, path: string],
   string[]
 > = _curry(3, patConds$);
+/**
+ * A field's refined type when its sub-pattern narrows it, else `None` — a
+ * bind/wildcard/literal needs no narrowing and keeps its declared type.
+ * Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
+ * is two slots down, and without this the predicate stopped at the top level
+ * while the handler destructured all the way (TS2339 on the inner field).
+ */
 const fieldRefine$ = (
   ctorKeys: Map<string, string[]>,
   p: Pattern,
@@ -351,17 +331,6 @@ const fieldRefine$ = (
     }
   }
 };
-/**
- * A field's refined type when its sub-pattern narrows it, else `None` — a
- * bind/wildcard/literal needs no narrowing and keeps its declared type.
- * Tuple and array sub-patterns recurse: a ctor under `[Call(f, [g], _, _)]`
- * is two slots down, and without this the predicate stopped at the top level
- * while the handler destructured all the way (TS2339 on the inner field).
- */
-const fieldRefine: _Curry<
-  [ctorKeys: Map<string, string[]>, p: Pattern, fieldBase: string],
-  Option<string>
-> = _curry(3, fieldRefine$);
 const ctorRefines$ = (
   ctorKeys: Map<string, string[]>,
   args: Pattern[],
@@ -382,10 +351,6 @@ const ctorRefines$ = (
       );
     },
   );
-const ctorRefines: _Curry<
-  [ctorKeys: Map<string, string[]>, args: Pattern[], keys: string[], member: string, i: number],
-  string[]
-> = _curry(5, ctorRefines$);
 const recordRefines$ = (
   ctorKeys: Map<string, string[]>,
   fields: PatField[],
@@ -404,10 +369,6 @@ const recordRefines$ = (
       );
     },
   );
-const recordRefines: _Curry<
-  [ctorKeys: Map<string, string[]>, fields: PatField[], base: string, i: number],
-  string[]
-> = _curry(4, recordRefines$);
 /**
  * A tuple slot is indexed positionally, so each element has its own base.
  */
@@ -432,10 +393,6 @@ const tupleTargets$ = (
       );
     },
   );
-const tupleTargets: _Curry<
-  [ctorKeys: Map<string, string[]>, elems: Pattern[], base: string, i: number],
-  string[]
-> = _curry(4, tupleTargets$);
 const tupleRefines$ = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
@@ -451,10 +408,9 @@ const tupleRefines$ = (
         tupleRefines$(ctorKeys, elems, base, i + 1),
       ),
   );
-const tupleRefines: _Curry<
-  [ctorKeys: Map<string, string[]>, elems: Pattern[], base: string, i: number],
-  boolean
-> = _curry(4, tupleRefines$);
+/**
+ * Array elements all share one element base (`T[number]`).
+ */
 const arrTargets$ = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
@@ -470,13 +426,6 @@ const arrTargets$ = (
         arrTargets$(ctorKeys, elems, elemBase, i + 1),
       ),
   );
-/**
- * Array elements all share one element base (`T[number]`).
- */
-const arrTargets: _Curry<
-  [ctorKeys: Map<string, string[]>, elems: Pattern[], elemBase: string, i: number],
-  string[]
-> = _curry(4, arrTargets$);
 const arrRefines$ = (
   ctorKeys: Map<string, string[]>,
   elems: Pattern[],
@@ -492,10 +441,6 @@ const arrRefines$ = (
         arrRefines$(ctorKeys, elems, elemBase, i + 1),
       ),
   );
-const arrRefines: _Curry<
-  [ctorKeys: Map<string, string[]>, elems: Pattern[], elemBase: string, i: number],
-  boolean
-> = _curry(4, arrRefines$);
 const patTarget$ = (ctorKeys: Map<string, string[]>, p: Pattern, base: string): string => {
   const $match = p;
   switch ($match._tag) {

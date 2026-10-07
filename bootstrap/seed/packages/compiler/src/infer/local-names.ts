@@ -12,7 +12,7 @@ import type {
   Stmt,
 } from "../ast/ast";
 
-import type { Option, _Curry } from "@mochi/compiler/runtime";
+import type { Option } from "@mochi/compiler/runtime";
 
 import {
   None,
@@ -53,10 +53,6 @@ const patternNamesOpt$ = (p: Option<Pattern>, out: Set<string>): Set<string> =>
     () => out,
     (pat) => patternNames$(pat, out),
   );
-const patternNamesOpt: _Curry<[p: Option<Pattern>, out: Set<string>], Set<string>> = _curry(
-  2,
-  patternNamesOpt$,
-);
 const patternNamesAll$ = (pats: Pattern[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -66,10 +62,6 @@ const patternNamesAll$ = (pats: Pattern[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(pats);
-const patternNamesAll: _Curry<[pats: Pattern[], out: Set<string>], Set<string>> = _curry(
-  2,
-  patternNamesAll$,
-);
 const patternNamesFields$ = (fields: PatField[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -79,10 +71,6 @@ const patternNamesFields$ = (fields: PatField[], out: Set<string>): Set<string> 
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const patternNamesFields: _Curry<[fields: PatField[], out: Set<string>], Set<string>> = _curry(
-  2,
-  patternNamesFields$,
-);
 const patternNames$ = (p: Pattern, out: Set<string>): Set<string> => {
   const $match = p;
   switch ($match._tag) {
@@ -138,7 +126,6 @@ const patternNames$ = (p: Pattern, out: Set<string>): Set<string> => {
     }
   }
 };
-const patternNames: _Curry<[p: Pattern, out: Set<string>], Set<string>> = _curry(2, patternNames$);
 const exprNamesAll$ = (exprs: Expr[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -148,20 +135,12 @@ const exprNamesAll$ = (exprs: Expr[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(exprs);
-const exprNamesAll: _Curry<[exprs: Expr[], out: Set<string>], Set<string>> = _curry(
-  2,
-  exprNamesAll$,
-);
 const exprNamesOpt$ = (e: Option<Expr>, out: Set<string>): Set<string> =>
   _Option_match(
     e,
     () => out,
     (ex) => exprNames$(ex, out),
   );
-const exprNamesOpt: _Curry<[e: Option<Expr>, out: Set<string>], Set<string>> = _curry(
-  2,
-  exprNamesOpt$,
-);
 const seqNames$ = (elems: SeqElem[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -177,7 +156,6 @@ const seqNames$ = (elems: SeqElem[], out: Set<string>): Set<string> =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(elems);
-const seqNames: _Curry<[elems: SeqElem[], out: Set<string>], Set<string>> = _curry(2, seqNames$);
 const fieldNames$ = (fields: Field[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -187,7 +165,6 @@ const fieldNames$ = (fields: Field[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const fieldNames: _Curry<[fields: Field[], out: Set<string>], Set<string>> = _curry(2, fieldNames$);
 const entryNames$ = (entries: MapEntry[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -199,10 +176,6 @@ const entryNames$ = (entries: MapEntry[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(entries);
-const entryNames: _Curry<[entries: MapEntry[], out: Set<string>], Set<string>> = _curry(
-  2,
-  entryNames$,
-);
 const interpNames$ = (parts: InterpPart[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -218,10 +191,6 @@ const interpNames$ = (parts: InterpPart[], out: Set<string>): Set<string> =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(parts);
-const interpNames: _Curry<[parts: InterpPart[], out: Set<string>], Set<string>> = _curry(
-  2,
-  interpNames$,
-);
 const armNames$ = (arms: MatchArm[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -235,7 +204,6 @@ const armNames$ = (arms: MatchArm[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(arms);
-const armNames: _Curry<[arms: MatchArm[], out: Set<string>], Set<string>> = _curry(2, armNames$);
 const loopBinderNames$ = (params: LoopParam[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -245,10 +213,6 @@ const loopBinderNames$ = (params: LoopParam[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const loopBinderNames: _Curry<[params: LoopParam[], out: Set<string>], Set<string>> = _curry(
-  2,
-  loopBinderNames$,
-);
 const paramBinderNames$ = (p: LamParam, out: Set<string>): Set<string> => {
   const $match = p;
   switch ($match._tag) {
@@ -277,10 +241,6 @@ const paramBinderNames$ = (p: LamParam, out: Set<string>): Set<string> => {
     }
   }
 };
-const paramBinderNames: _Curry<[p: LamParam, out: Set<string>], Set<string>> = _curry(
-  2,
-  paramBinderNames$,
-);
 const paramNamesAll$ = (params: LamParam[], out: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -290,10 +250,6 @@ const paramNamesAll$ = (params: LamParam[], out: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const paramNamesAll: _Curry<[params: LamParam[], out: Set<string>], Set<string>> = _curry(
-  2,
-  paramNamesAll$,
-);
 const exprNames$ = (e: Expr, out: Set<string>): Set<string> => {
   const $match = e;
   switch ($match._tag) {
@@ -389,7 +345,6 @@ const exprNames$ = (e: Expr, out: Set<string>): Set<string> => {
     }
   }
 };
-const exprNames: _Curry<[e: Expr, out: Set<string>], Set<string>> = _curry(2, exprNames$);
 const namesFromStmts$ = (stmts: Stmt[], i: number, out: Set<string>): Set<string> =>
   ((_v) =>
     _v._tag === "None"
@@ -411,10 +366,6 @@ const namesFromStmts$ = (stmts: Stmt[], i: number, out: Set<string>): Set<string
             : (() => {
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts));
-const namesFromStmts: _Curry<[stmts: Stmt[], i: number, out: Set<string>], Set<string>> = _curry(
-  3,
-  namesFromStmts$,
-);
 /**
  * Every local binder in `stmts`.
  */

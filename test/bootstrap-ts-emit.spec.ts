@@ -58,7 +58,7 @@ const tscErrors = (ts: string): string => {
 };
 
 test("a concrete function binding gets a curry-compatible type (ADR 0093)", () => {
-  expect(emit("let addPair = (a, b) => add(a, b)")).toContain(
+  expect(emit("export let addPair = (a, b) => add(a, b)")).toContain(
     "const addPair: _Curry<[a: number, b: number], number> =",
   );
 });

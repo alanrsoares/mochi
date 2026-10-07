@@ -357,7 +357,6 @@ const arrMissingLen: <A>(
 );
 const rangeArr$ = (i: number, top: number): number[] =>
   i > top ? ([] as number[]) : _Array_prepend(i, rangeArr$(i + 1, top));
-const rangeArr: _Curry<[i: number, top: number], number[]> = _curry(2, rangeArr$);
 const arrLengths: <A>(shape: { restFrom: Option<number>; fixed: number[] } & A) => number[] = <A>(
   shape: { restFrom: Option<number>; fixed: number[] } & A,
 ) => {
@@ -472,10 +471,6 @@ const specializeRow$ = (h: MHead, mp: MP, labels: string[]): Option<MP[]> => {
     }
   }
 };
-const specializeRow: _Curry<[h: MHead, mp: MP, labels: string[]], Option<MP[]>> = _curry(
-  3,
-  specializeRow$,
-);
 const specializeOne$ = (h: MHead, arity: number, labels: string[], row: MP[]): MP[][] =>
   _Option_match(
     _Array_head(row),
@@ -491,14 +486,8 @@ const specializeOne$ = (h: MHead, arity: number, labels: string[], row: MP[]): M
           );
     },
   );
-const specializeOne: _Curry<[h: MHead, arity: number, labels: string[], row: MP[]], MP[][]> =
-  _curry(4, specializeOne$);
 const specializeM$ = (m: MP[][], h: MHead, arity: number, labels: string[]): MP[][] =>
   _Array_flatMap((row: MP[]) => specializeOne$(h, arity, labels, row), m);
-const specializeM: _Curry<[m: MP[][], h: MHead, arity: number, labels: string[]], MP[][]> = _curry(
-  4,
-  specializeM$,
-);
 const defaultM: (m: MP[][]) => MP[][] = (m: MP[][]) =>
   _Array_flatMap(
     (row: MP[]) =>
@@ -542,7 +531,6 @@ const rebuild$ = (h: MHead, args: MP[], labels: string[]): MP => {
     }
   }
 };
-const rebuild: _Curry<[h: MHead, args: MP[], labels: string[]], MP> = _curry(3, rebuild$);
 const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -558,7 +546,6 @@ const takenNums: (heads: MHead[]) => number[] = (heads: MHead[]) =>
   }, heads);
 const freshNum$ = (taken: number[], i: number): number =>
   _Array_contains(i, taken) ? freshNum$(taken, i + 1) : i;
-const freshNum: _Curry<[taken: number[], i: number], number> = _curry(2, freshNum$);
 const takenStrs: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -578,7 +565,6 @@ const freshStr$ = (taken: string[], i: number): string => {
   const s: string = starsOf(i);
   return _Array_contains(s, taken) ? freshStr$(taken, i + 1) : s;
 };
-const freshStr: _Curry<[taken: string[], i: number], string> = _curry(2, freshStr$);
 const ctorNames: (heads: MHead[]) => string[] = (heads: MHead[]) =>
   _Array_flatMap((h: MHead) => {
     const $match = h;
@@ -621,14 +607,6 @@ const ctorInfoSuffixed$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(keys);
-const ctorInfoSuffixed: _Curry<
-  [
-    keys: string[],
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    n: string,
-  ],
-  Option<{ owner: string; arity: number }>
-> = _curry(3, ctorInfoSuffixed$);
 const qualifierOf: (n: string) => string = (n: string) =>
   ((_v) => (_v.length === 2 ? (([alias]) => `${alias}.`)(_v) : ""))(_Str_split(".", n));
 const ctorInfoOf$ = (
@@ -640,13 +618,6 @@ const ctorInfoOf$ = (
     () => ctorInfoSuffixed$(_Map_keys(reg.ctors), reg, n),
     (info) => Some(info) as Option<{ owner: string; arity: number }>,
   );
-const ctorInfoOf: _Curry<
-  [
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    n: string,
-  ],
-  Option<{ owner: string; arity: number }>
-> = _curry(2, ctorInfoOf$);
 const arityOfCtor$ = (
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
@@ -656,13 +627,6 @@ const arityOfCtor$ = (
     () => 0,
     (info) => info.arity,
   );
-const arityOfCtor: _Curry<
-  [
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    n: string,
-  ],
-  number
-> = _curry(2, arityOfCtor$);
 const ownerOfCtor$ = (
   reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
   n: string,
@@ -672,13 +636,6 @@ const ownerOfCtor$ = (
     () => None as Option<string>,
     (info) => Some(info.owner) as Option<string>,
   );
-const ownerOfCtor: _Curry<
-  [
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    n: string,
-  ],
-  Option<string>
-> = _curry(2, ownerOfCtor$);
 const allNamesIn: <A>(all: A[], names: A[]) => boolean = _curry(2, <A>(all: A[], names: A[]) =>
   reduce(
     _curry(2, (acc: boolean, n: A) => and(acc, _Array_contains(n, names))),
@@ -701,15 +658,6 @@ const useful$ = (
       : length(m) === 0
         ? USome(mWilds(width), sub(fuel, 1))
         : usefulSplit$(m, width, reg, sub(fuel, 1));
-const useful: _Curry<
-  [
-    m: MP[][],
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-  ],
-  URes
-> = _curry(4, useful$);
 const usefulSplit$ = (
   m: MP[][],
   width: number,
@@ -724,15 +672,6 @@ const usefulSplit$ = (
     (h0) => usefulHead$(m, col, heads, h0, width, reg, fuel),
   );
 };
-const usefulSplit: _Curry<
-  [
-    m: MP[][],
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-  ],
-  URes
-> = _curry(4, usefulSplit$);
 const prependWitness$ = (mp: MP, r: URes): URes => {
   const $match = r;
   switch ($match._tag) {
@@ -752,7 +691,6 @@ const prependWitness$ = (mp: MP, r: URes): URes => {
     }
   }
 };
-const prependWitness: _Curry<[mp: MP, r: URes], URes> = _curry(2, prependWitness$);
 const tryHeads$ = (
   m: MP[][],
   heads: MHead[],
@@ -790,19 +728,6 @@ const tryHeads$ = (
       }
     },
   );
-const tryHeads: _Curry<
-  [
-    m: MP[][],
-    heads: MHead[],
-    arities: number[],
-    labels: string[],
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-    i: number,
-  ],
-  URes
-> = _curry(8, tryHeads$);
 const usefulHead$ = (
   m: MP[][],
   col: MP[],
@@ -848,18 +773,6 @@ const usefulHead$ = (
     }
   }
 };
-const usefulHead: _Curry<
-  [
-    m: MP[][],
-    col: MP[],
-    heads: MHead[],
-    h0: MHead,
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-  ],
-  URes
-> = _curry(7, usefulHead$);
 const usefulCtor$ = (
   m: MP[][],
   heads: MHead[],
@@ -903,16 +816,6 @@ const usefulCtor$ = (
         useful$(defaultM(m), sub(width, 1), reg, fuel),
       );
 };
-const usefulCtor: _Curry<
-  [
-    m: MP[][],
-    heads: MHead[],
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-  ],
-  URes
-> = _curry(5, usefulCtor$);
 const usefulBool$ = (
   m: MP[][],
   heads: MHead[],
@@ -926,16 +829,6 @@ const usefulBool$ = (
     ? tryHeads$(m, [HBool(true), HBool(false)], [0, 0], [] as string[], width, reg, fuel, 0)
     : prependWitness$(MBool(!hasTrue), useful$(defaultM(m), sub(width, 1), reg, fuel));
 };
-const usefulBool: _Curry<
-  [
-    m: MP[][],
-    heads: MHead[],
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-  ],
-  URes
-> = _curry(5, usefulBool$);
 const usefulArr$ = (
   m: MP[][],
   col: MP[],
@@ -961,16 +854,6 @@ const usefulArr$ = (
         useful$(defaultM(m), sub(width, 1), reg, fuel),
       );
 };
-const usefulArr: _Curry<
-  [
-    m: MP[][],
-    col: MP[],
-    width: number,
-    reg: { ctors: Map<string, { owner: string; arity: number }>; types: Map<string, string[]> },
-    fuel: number,
-  ],
-  URes
-> = _curry(5, usefulArr$);
 const showFields$ = (labels: string[], pats: MP[], i: number): string[] =>
   _Option_match(
     _Array_get(i, labels),
@@ -981,10 +864,6 @@ const showFields$ = (labels: string[], pats: MP[], i: number): string[] =>
         showFields$(labels, pats, i + 1),
       ),
   );
-const showFields: _Curry<[labels: string[], pats: MP[], i: number], string[]> = _curry(
-  3,
-  showFields$,
-);
 /**
  * Render a witness the way the user would have to write it as an arm.
  */

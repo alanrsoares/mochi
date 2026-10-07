@@ -217,10 +217,6 @@ const parseModule$ = (src: string, plugins: Option<HostPlugin[]>): Result<Stmt[]
         (stmts) => Ok(stmts) as Result<Stmt[], MErr>,
       ),
   );
-const parseModule: _Curry<
-  [src: string, plugins: Option<HostPlugin[]>],
-  Result<Stmt[], MErr>
-> = _curry(2, parseModule$);
 const importFromsFrom$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
   _Option_match(
     _Array_get(i, stmts),
@@ -242,10 +238,6 @@ const importFromsFrom$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
       }
     },
   );
-const importFromsFrom: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
-  3,
-  importFromsFrom$,
-);
 const importFroms: (stmts: Stmt[]) => string[] = (stmts: Stmt[]) =>
   importFromsFrom$(stmts, 0, [] as string[]);
 
@@ -277,10 +269,6 @@ const visit$ = (path: string, acc: Acc, plugins: Option<HostPlugin[]>): Result<A
             ))({ state: _Map_set(path, "loading", acc.state), order: acc.order }))(
     _Map_get(path, acc.state),
   );
-const visit: _Curry<
-  [path: string, acc: Acc, plugins: Option<HostPlugin[]>],
-  Result<Acc, MErr>
-> = _curry(3, visit$);
 const visitAll$ = (
   froms: string[],
   importer: string,
@@ -300,10 +288,6 @@ const visitAll$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(froms);
-const visitAll: _Curry<
-  [froms: string[], importer: string, acc: Acc, plugins: Option<HostPlugin[]>],
-  Result<Acc, MErr>
-> = _curry(4, visitAll$);
 const loadGraphWith$ = (entry: string, plugins: Option<HostPlugin[]>): Result<Loaded[], MErr> =>
   _Result_flatMap(
     (acc) => Ok(acc.order) as Result<Loaded[], MErr>,
@@ -439,10 +423,6 @@ const withTagEntry$ = (
     () => keys,
     (t) => _Map_set(tagEntryOf(name), t, keys),
   );
-const withTagEntry: _Curry<
-  [name: string, depKeys: Map<string, string[]>, keys: Map<string, string[]>],
-  Map<string, string[]>
-> = _curry(3, withTagEntry$);
 const withNamedCtor: <A, B, C, D, E, F, G, H, I>(
   name: string,
   info: { owner: A } & F,
@@ -602,10 +582,6 @@ const prefixKeysInto$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(names);
-const prefixKeysInto: _Curry<
-  [names: string[], alias: string, from: Map<string, string[]>, into: Map<string, string[]>],
-  Map<string, string[]>
-> = _curry(4, prefixKeysInto$);
 const resolveNames: <D, E, F, G, H, I, J, K>(
   names: ({ name: string; span: { end: number; start: number } & H } & I)[],
   from: string,
@@ -826,10 +802,6 @@ const resolveImportsFrom: <B, C>(
 );
 const openFor$ = (loaded: Loaded, isEntry: boolean, opts: Opts): boolean =>
   and(isEntry, opts.strictEntry) ? opts.open : openMode(loaded.src, opts.open);
-const openFor: _Curry<[loaded: Loaded, isEntry: boolean, opts: Opts], boolean> = _curry(
-  3,
-  openFor$,
-);
 const compileOne: <A>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
@@ -942,10 +914,6 @@ const compileAll$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(graph);
-const compileAll: _Curry<
-  [ctx: RecoveryCtx, graph: Loaded[], opts: Opts],
-  Result<ModuleOutput[], MErr[]>
-> = _curry(3, compileAll$);
 const compileGraphWith$ = (graph: Loaded[], opts: Opts): Result<ModuleOutput[], MErr[]> =>
   compileAll$(
     {
@@ -1074,13 +1042,11 @@ const sameErr$ = (a: MErr, b: MErr): boolean =>
     and(and(eq(a.kind, b.kind), eq(a.message, b.message)), eq(a.start, b.start)),
     eq(a.end, b.end),
   );
-const sameErr: _Curry<[a: MErr, b: MErr], boolean> = _curry(2, sameErr$);
 const mergeRecovered$ = (es: MErr[], checks: MErr[]): MErr[] =>
   _Array_concat(
     checks,
     filter((e: MErr) => length(filter((c: MErr) => sameErr$(c, e), checks)) === 0, es),
   );
-const mergeRecovered: _Curry<[es: MErr[], checks: MErr[]], MErr[]> = _curry(2, mergeRecovered$);
 const recoverOne$ = (
   ctx: RecoveryCtx,
   m: Loaded,
@@ -1096,10 +1062,6 @@ const recoverOne$ = (
     },
     (ctx1) => ({ ctx: ctx1, errors: errors }),
   );
-const recoverOne: _Curry<
-  [ctx: RecoveryCtx, m: Loaded, isEntry: boolean, errors: MErr[], opts: Opts],
-  RecoveryGraphState
-> = _curry(5, recoverOne$);
 const compileAllRecovering$ = (
   ctx: RecoveryCtx,
   graph: Loaded[],
@@ -1118,10 +1080,6 @@ const compileAllRecovering$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(graph);
-const compileAllRecovering: _Curry<
-  [ctx: RecoveryCtx, graph: Loaded[], errors: MErr[], opts: Opts],
-  RecoveryGraphState
-> = _curry(4, compileAllRecovering$);
 /**
  * freshRecoveryGraphState : unit -> RecoveryGraphState
  * Opaque open-world graph context plus accumulated errors. Hosts retain this
@@ -1862,13 +1820,8 @@ const occursAsWordFrom$ = (parts: string[], i: number): boolean =>
         ? true
         : occursAsWordFrom$(parts, i + 1),
   );
-const occursAsWordFrom: _Curry<[parts: string[], i: number], boolean> = _curry(
-  2,
-  occursAsWordFrom$,
-);
 const occursAsWord$ = (name: string, text: string): boolean =>
   occursAsWordFrom$(_Str_split(name, text), 1);
-const occursAsWord: _Curry<[name: string, text: string], boolean> = _curry(2, occursAsWord$);
 const importedBinding: (spec: string) => string = (spec: string) => {
   const parts: string[] = _Str_split(" as ", spec);
   return _Str_trim(_Option_unwrapOr(spec, _Array_get(length(parts) - 1, parts)));
@@ -1889,10 +1842,6 @@ const bindingsInLine$ = (line: string, acc: Set<string>): Set<string> =>
           ),
       ),
   );
-const bindingsInLine: _Curry<[line: string, acc: Set<string>], Set<string>> = _curry(
-  2,
-  bindingsInLine$,
-);
 const valueImported: (ts: string) => Set<string> = (ts: string) =>
   reduce(
     _curry(2, (acc: Set<string>, line: string) => bindingsInLine$(line, acc)),
@@ -2079,6 +2028,11 @@ const groupByOwner: <A>(
       names,
     ),
 );
+/**
+ * `import type { … }` lines for every non-local type name the EMITTED text
+ * references, grouped by declaring module. Builtin variants never appear in
+ * `typeOwner` — the emitter inlines their decls instead (ADR 0031).
+ */
 const crossModuleTypeImports$ = (
   ts: string,
   importer: string,
@@ -2098,15 +2052,6 @@ const crossModuleTypeImports$ = (
     _Map_keys(byOwner),
   );
 };
-/**
- * `import type { … }` lines for every non-local type name the EMITTED text
- * references, grouped by declaring module. Builtin variants never appear in
- * `typeOwner` — the emitter inlines their decls instead (ADR 0031).
- */
-const crossModuleTypeImports: _Curry<
-  [ts: string, importer: string, localTypes: Set<string>, typeOwner: Map<string, string>],
-  string[]
-> = _curry(4, crossModuleTypeImports$);
 const externBindingsInto: <A>(
   stmts: Stmt[],
   path: string,

@@ -63,7 +63,7 @@ export type Comment =
 export type TPart = { _tag: "PLit"; value: string } | { _tag: "PHole"; start: number; end: number };
 export type LocTok = { tok: Tok; start: number; end: number; doc: Option<string> };
 
-import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
+import type { Option, Result } from "@mochi/compiler/runtime";
 
 import {
   Err,
@@ -286,10 +286,6 @@ const scanWhile$ = (pred: (a: string) => boolean, src: string, j: number): numbe
     _v._tag === "Some" && (({ value: c }) => pred(c))(_v)
       ? (({ value: c }) => scanWhile$(pred, src, j + 1))(_v)
       : j)(_Str_get(j, src));
-const scanWhile: _Curry<[pred: (a: string) => boolean, src: string, j: number], number> = _curry(
-  3,
-  scanWhile$,
-);
 const escChar: (n: string) => string = (n: string) =>
   ((_v) => (_v === "n" ? "\n" : _v === "t" ? "\t" : ((c) => c)(_v)))(n);
 const PLit = (value: string): TPart => ({ _tag: "PLit", value });
@@ -305,7 +301,6 @@ const literalTok$ = (idx: number, total: number, value: string): Tok =>
       : eq(idx, total - 1)
         ? TTmplEnd(value)
         : TTmplMid(value);
-const literalTok: _Curry<[idx: number, total: number, value: string], Tok> = _curry(3, literalTok$);
 const scanTemplateLoop$ = (
   src: string,
   j0: number,
@@ -354,16 +349,8 @@ const scanTemplateLoop$ = (
     return _step.value;
   }
 };
-const scanTemplateLoop: _Curry<
-  [src: string, j0: number, value0: string, parts0: TPart[]],
-  Option<{ parts: TPart[]; end: number }>
-> = _curry(4, scanTemplateLoop$);
 const scanTemplate$ = (src: string, i: number): Option<{ parts: TPart[]; end: number }> =>
   scanTemplateLoop$(src, i + 1, "", [] as TPart[]);
-const scanTemplate: _Curry<
-  [src: string, i: number],
-  Option<{ parts: TPart[]; end: number }>
-> = _curry(2, scanTemplate$);
 const notNewline: (c: string) => boolean = (c: string) => c !== "\n";
 const scanComment$ = (src: string, start: number, lineTok: boolean): Comment => {
   const stop: number = scanWhile$(notNewline, src, start);
@@ -375,10 +362,6 @@ const scanComment$ = (src: string, start: number, lineTok: boolean): Comment => 
         )
       : PlainOwn(stop);
 };
-const scanComment: _Curry<[src: string, start: number, lineTok: boolean], Comment> = _curry(
-  3,
-  scanComment$,
-);
 const mkTok$ = (tok: Tok, start: number, stop: number, doc: string[]): LocTok =>
   ((_v) =>
     _v.length === 0
@@ -389,10 +372,6 @@ const mkTok$ = (tok: Tok, start: number, stop: number, doc: string[]): LocTok =>
           end: stop,
           doc: Some(_Str_join("\n", lines)) as Option<string>,
         }))(_v))(doc);
-const mkTok: _Curry<[tok: Tok, start: number, stop: number, doc: string[]], LocTok> = _curry(
-  4,
-  mkTok$,
-);
 
 const pushRun$ = (run: LocTok[], buf: LocTok[][]): LocTok[][] => {
   const n: number = length(buf);
@@ -401,9 +380,7 @@ const pushRun$ = (run: LocTok[], buf: LocTok[][]): LocTok[][] => {
       ? (({ value: top }) => pushRun$(_Array_concat(top, run), _Array_take(n - 1, buf)))(_v)
       : _Array_append(run, buf))(_Array_get(n - 1, buf));
 };
-const pushRun: _Curry<[run: LocTok[], buf: LocTok[][]], LocTok[][]> = _curry(2, pushRun$);
 const pushTok$ = (t: LocTok, buf: LocTok[][]): LocTok[][] => pushRun$([t], buf);
-const pushTok: _Curry<[t: LocTok, buf: LocTok[][]], LocTok[][]> = _curry(2, pushTok$);
 const bufToks: (buf: LocTok[][]) => LocTok[] = (buf: LocTok[][]) =>
   _Array_flatMap((run: LocTok[]) => run, buf);
 const lexError: <A, B, C, D>(
@@ -418,7 +395,6 @@ const numValue: (raw: string) => number = (raw: string) =>
   _Option_unwrapOr(0 / 0, _Str_toNumber(raw));
 const numStart$ = (src: string, i: number, c: string): boolean =>
   or(isDigit(c), and(c === "-", _Option_exists(isDigit, _Str_get(i + 1, src))));
-const numStart: _Curry<[src: string, i: number, c: string], boolean> = _curry(3, numStart$);
 const offsetLocTok: <C>(
   lt: { doc: Option<string>; end: number; start: number; tok: Tok } & C,
   by: number,
@@ -471,10 +447,6 @@ const spliceHole$ = (
         { message: string; start: number; end: number }
       >,
   );
-const spliceHole: _Curry<
-  [src: string, start: number, stop: number, toks: LocTok[][]],
-  Result<LocTok[][], { message: string; start: number; end: number }>
-> = _curry(4, spliceHole$);
 const lexParts$ = (
   src: string,
   parts: TPart[],
@@ -520,19 +492,6 @@ const lexParts$ = (
       }
     },
   );
-const lexParts: _Curry<
-  [
-    src: string,
-    parts: TPart[],
-    idx: number,
-    total: number,
-    wholeStart: number,
-    wholeEnd: number,
-    doc: string[],
-    toks: LocTok[][],
-  ],
-  Result<LocTok[][], { end: number; start: number; message: string }>
-> = _curry(8, lexParts$);
 const emit$ = (
   src: string,
   tok: Tok,
@@ -542,10 +501,6 @@ const emit$ = (
   toks: LocTok[][],
 ): Result<LocTok[], { end: number; start: number; message: string }> =>
   go$(src, stop, [] as string[], 0, true, pushTok$(mkTok$(tok, start, stop, doc), toks));
-const emit: _Curry<
-  [src: string, tok: Tok, start: number, stop: number, doc: string[], toks: LocTok[][]],
-  Result<LocTok[], { end: number; start: number; message: string }>
-> = _curry(6, emit$);
 const lexString$ = (
   src: string,
   i: number,
@@ -562,10 +517,6 @@ const lexString$ = (
         (toks2) => go$(src, scanned.end, [] as string[], 0, true, toks2),
       ),
   );
-const lexString: _Curry<
-  [src: string, i: number, doc: string[], toks: LocTok[][]],
-  Result<LocTok[], { message: string; start: number; end: number }>
-> = _curry(4, lexString$);
 const go$ = (
   src: string,
   i: number,
@@ -636,10 +587,6 @@ const go$ = (
             : (() => {
                 throw new Error("non-exhaustive match");
               })())(_Str_get(i, src));
-const go: _Curry<
-  [src: string, i: number, doc: string[], nlRun: number, lineTok: boolean, toks: LocTok[][]],
-  Result<LocTok[], { end: number; start: number; message: string }>
-> = _curry(6, go$);
 export const lex: (
   src: string,
 ) => Result<LocTok[], { end: number; start: number; message: string }> = (src: string) =>

@@ -177,7 +177,6 @@ const tsWritePath$ = (path: string, body: string): string =>
       ? `${_Str_slice(0, _Str_length(path) - 6, path)}.tsx`
       : tsOutPath(path)
     : path;
-const tsWritePath: _Curry<[path: string, body: string], string> = _curry(2, tsWritePath$);
 export const writeAllTs: <A>(outs: ({ path: string; js: string } & A)[]) => Result<string, string> =
   <A>(outs: ({ path: string; js: string } & A)[]) => {
     let remaining = outs;

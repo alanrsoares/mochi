@@ -162,17 +162,12 @@ const collect$ = (t: Ty, acc: VarSets): VarSets => {
 };
 export const collect: _Curry<[t: Ty, acc: VarSets], VarSets> = _curry(2, collect$);
 const collectArgs$ = (args: Ty[], acc: VarSets): VarSets => collectArgsFrom$(args, 0, acc);
-const collectArgs: _Curry<[args: Ty[], acc: VarSets], VarSets> = _curry(2, collectArgs$);
 const collectArgsFrom$ = (args: Ty[], i: number, acc: VarSets): VarSets =>
   _Option_match(
     _Array_get(i, args),
     () => acc,
     (a) => collectArgsFrom$(args, i + 1, collect$(a, acc)),
   );
-const collectArgsFrom: _Curry<[args: Ty[], i: number, acc: VarSets], VarSets> = _curry(
-  3,
-  collectArgsFrom$,
-);
 const collectRow$ = (row: Row, acc: VarSets): VarSets => {
   const $match = row;
   switch ($match._tag) {
@@ -192,8 +187,16 @@ const collectRow$ = (row: Row, acc: VarSets): VarSets => {
     }
   }
 };
-const collectRow: _Curry<[row: Row, acc: VarSets], VarSets> = _curry(2, collectRow$);
 export const freeInType: (t: Ty) => VarSets = (t: Ty) => collect$(t, emptyVarSets);
+/**
+ * Free vars of an env type, resolved THROUGH the substitution. An env scheme
+ * keeps the var it was built with, and unification may since have pointed that
+ * var at another one; reading `sc.ty` raw reports a var the env no longer owns
+ * and misses the one it now does, so `generalize` quantifies a var that is
+ * still monomorphic (issue #72 — `let … in` over-generalization). Bound vars
+ * stay OPAQUE, and the check precedes the resolve: a generalized scheme's own
+ * quantified var can collide with a subst key.
+ */
 const collectFree$ = (t: Ty, bound: VarSets, st: St, acc: VarSets): VarSets => {
   const $match = t;
   switch ($match._tag) {
@@ -231,25 +234,8 @@ const collectFree$ = (t: Ty, bound: VarSets, st: St, acc: VarSets): VarSets => {
     }
   }
 };
-/**
- * Free vars of an env type, resolved THROUGH the substitution. An env scheme
- * keeps the var it was built with, and unification may since have pointed that
- * var at another one; reading `sc.ty` raw reports a var the env no longer owns
- * and misses the one it now does, so `generalize` quantifies a var that is
- * still monomorphic (issue #72 — `let … in` over-generalization). Bound vars
- * stay OPAQUE, and the check precedes the resolve: a generalized scheme's own
- * quantified var can collide with a subst key.
- */
-const collectFree: _Curry<[t: Ty, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
-  4,
-  collectFree$,
-);
 const collectFreeArgs$ = (args: Ty[], bound: VarSets, st: St, acc: VarSets): VarSets =>
   collectFreeArgsFrom$(args, 0, bound, st, acc);
-const collectFreeArgs: _Curry<[args: Ty[], bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
-  4,
-  collectFreeArgs$,
-);
 const collectFreeArgsFrom$ = (
   args: Ty[],
   i: number,
@@ -262,10 +248,6 @@ const collectFreeArgsFrom$ = (
     () => acc,
     (a) => collectFreeArgsFrom$(args, i + 1, bound, st, collectFree$(a, bound, st, acc)),
   );
-const collectFreeArgsFrom: _Curry<
-  [args: Ty[], i: number, bound: VarSets, st: St, acc: VarSets],
-  VarSets
-> = _curry(5, collectFreeArgsFrom$);
 const collectFreeRow$ = (row: Row, bound: VarSets, st: St, acc: VarSets): VarSets => {
   const $match = row;
   switch ($match._tag) {
@@ -291,10 +273,6 @@ const collectFreeRow$ = (row: Row, bound: VarSets, st: St, acc: VarSets): VarSet
     }
   }
 };
-const collectFreeRow: _Curry<[row: Row, bound: VarSets, st: St, acc: VarSets], VarSets> = _curry(
-  4,
-  collectFreeRow$,
-);
 const freeInScheme: <A>(
   sc: { ty: Ty; rvars: number[]; vars: number[] } & A,
   st: St,
@@ -547,10 +525,6 @@ const instSub$ = (t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>): Ty => {
     }
   }
 };
-const instSub: _Curry<[t: Ty, tmap: Map<number, Ty>, rmap: Map<number, Row>], Ty> = _curry(
-  3,
-  instSub$,
-);
 const instSubRow$ = (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>): Row => {
   const $match = row;
   switch ($match._tag) {
@@ -575,10 +549,6 @@ const instSubRow$ = (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>): R
     }
   }
 };
-const instSubRow: _Curry<[row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>], Row> = _curry(
-  3,
-  instSubRow$,
-);
 export const instantiate: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   st: St,
@@ -828,7 +798,6 @@ const spreadFieldsInto$ = (row: Row, rest: Row): Row => {
     }
   }
 };
-const spreadFieldsInto: _Curry<[row: Row, rest: Row], Row> = _curry(2, spreadFieldsInto$);
 const aliasFieldsFrom$ = (
   fields: AliasField[],
   vars: Map<string, Ty>,
@@ -853,16 +822,6 @@ const aliasFieldsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const aliasFieldsFrom: _Curry<
-  [
-    fields: AliasField[],
-    vars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    expanding: Set<string>,
-  ],
-  [Row, St]
-> = _curry(5, aliasFieldsFrom$);
 const aliasRow$ = (
   name: string,
   info: AliasInfo,
@@ -948,16 +907,6 @@ const ctorFieldsArrowFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const ctorFieldsArrowFrom: _Curry<
-  [
-    fields: CtorField[],
-    pvars: Map<string, Ty>,
-    st: St,
-    aliases: Map<string, AliasInfo>,
-    result: Ty,
-  ],
-  [Ty, St]
-> = _curry(5, ctorFieldsArrowFrom$);
 /**
  * A variant's constructors become curried functions into that variant type,
  * polymorphic over the type's parameters. `type Result a e = | Ok(a) | Err(e)`
@@ -1010,10 +959,9 @@ const matchTysFrom$ = (
       : (Some(binds) as Option<Map<number, Ty>>))(
     _tuple(_Array_get(i, tpls), _Array_get(i, actuals)),
   );
-const matchTysFrom: _Curry<
-  [tpls: Ty[], actuals: Ty[], params: Set<number>, binds: Map<number, Ty>, i: number],
-  Option<Map<number, Ty>>
-> = _curry(5, matchTysFrom$);
+/**
+ * A closed row's fields; `None` for an open one, which never folds.
+ */
 const closedFieldsOf$ = (
   row: Row,
   acc: { label: string; fieldType: Ty; optional: boolean }[],
@@ -1038,13 +986,6 @@ const closedFieldsOf$ = (
     }
   }
 };
-/**
- * A closed row's fields; `None` for an open one, which never folds.
- */
-const closedFieldsOf: _Curry<
-  [row: Row, acc: { label: string; fieldType: Ty; optional: boolean }[]],
-  Option<{ label: string; fieldType: Ty; optional: boolean }[]>
-> = _curry(2, closedFieldsOf$);
 const matchFieldsFrom$ = (
   tpls: { label: string; optional: boolean; fieldType: Ty }[],
   actuals: { label: string; optional: boolean; fieldType: Ty }[],
@@ -1071,16 +1012,10 @@ const matchFieldsFrom$ = (
             : (None as Option<Map<number, Ty>>),
       ),
   );
-const matchFieldsFrom: _Curry<
-  [
-    tpls: { label: string; optional: boolean; fieldType: Ty }[],
-    actuals: { label: string; optional: boolean; fieldType: Ty }[],
-    params: Set<number>,
-    binds: Map<number, Ty>,
-    i: number,
-  ],
-  Option<Map<number, Ty>>
-> = _curry(5, matchFieldsFrom$);
+/**
+ * Does `actual` fit the template `tpl`? A var in `params` binds, and a repeat
+ * must agree; a record matches only closed, with the same labels.
+ */
 const matchTy$ = (
   tpl: Ty,
   actual: Ty,
@@ -1189,14 +1124,6 @@ const matchTy$ = (
                     ? (Some(binds) as Option<Map<number, Ty>>)
                     : (None as Option<Map<number, Ty>>)
                   : (None as Option<Map<number, Ty>>))(_tuple(tpl, actual));
-/**
- * Does `actual` fit the template `tpl`? A var in `params` binds, and a repeat
- * must agree; a record matches only closed, with the same labels.
- */
-const matchTy: _Curry<
-  [tpl: Ty, actual: Ty, params: Set<number>, binds: Map<number, Ty>],
-  Option<Map<number, Ty>>
-> = _curry(4, matchTy$);
 const templateRowFrom$ = (
   fields: AliasField[],
   vars: Map<string, Ty>,
@@ -1218,10 +1145,6 @@ const templateRowFrom$ = (
         typeExprToType$(f.fieldType, vars, Types.mkSt(0), aliases, _Set_fromArray([] as string[])),
       ),
   );
-const templateRowFrom: _Curry<
-  [fields: AliasField[], vars: Map<string, Ty>, aliases: Map<string, AliasInfo>, i: number],
-  Row
-> = _curry(4, templateRowFrom$);
 /**
  * Template ids sit far below the inferrer's (which start at 1000), so a
  * template var never collides with a var of the type it is matched against.
@@ -1237,7 +1160,6 @@ const templateVars: <A>(params: A[]) => [Map<A, Ty>, number[]] = <A>(params: A[]
   );
 const allBound$ = (ids: number[], binds: Map<number, Ty>): boolean =>
   length(filter((id: number) => !_Map_has(id, binds), ids)) === 0;
-const allBound: _Curry<[ids: number[], binds: Map<number, Ty>], boolean> = _curry(2, allBound$);
 const bareAliasName: (key: string) => string = (key: string) => {
   const parts: string[] = _Str_split(".", key);
   return _Option_unwrapOr(key, _Array_get(length(parts) - 1, parts));
@@ -1274,10 +1196,6 @@ const foldingAliasFrom$ = (
       );
     },
   );
-const foldingAliasFrom: _Curry<
-  [t: Ty, keys: string[], aliases: Map<string, AliasInfo>, i: number],
-  Option<string>
-> = _curry(4, foldingAliasFrom$);
 const nominalTypeName$ = (t: Ty, aliases: Map<string, AliasInfo>): Option<string> => {
   const $match = widenLits(t);
   switch ($match._tag) {
@@ -1340,10 +1258,10 @@ const foldTemplatesFrom$ = (
           })(templateVars(info.params)),
       ),
   );
-const foldTemplatesFrom: _Curry<
-  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: FoldTemplate[]],
-  FoldTemplate[]
-> = _curry(4, foldTemplatesFrom$);
+/**
+ * The first template (declaration order) `t` fits, as the alias name and its
+ * arguments. A phantom param cannot be read off `t`, so that alias is skipped.
+ */
 const foldHeadFrom$ = (t: Ty, tpls: FoldTemplate[], i: number): Option<[string, Ty[]]> =>
   _Option_match(
     _Array_get(i, tpls),
@@ -1364,13 +1282,8 @@ const foldHeadFrom$ = (t: Ty, tpls: FoldTemplate[], i: number): Option<[string, 
       ),
   );
 /**
- * The first template (declaration order) `t` fits, as the alias name and its
- * arguments. A phantom param cannot be read off `t`, so that alias is skipped.
+ * Top-down: a node is tried whole first, then its children fold too.
  */
-const foldHeadFrom: _Curry<
-  [t: Ty, tpls: FoldTemplate[], i: number],
-  Option<[string, Ty[]]>
-> = _curry(3, foldHeadFrom$);
 const foldWith$ = (t: Ty, tpls: FoldTemplate[]): Ty =>
   ((_v) =>
     _v._tag === "Some"
@@ -1398,10 +1311,6 @@ const foldWith$ = (t: Ty, tpls: FoldTemplate[]): Ty =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(foldHeadFrom$(t, tpls, 0));
-/**
- * Top-down: a node is tried whole first, then its children fold too.
- */
-const foldWith: _Curry<[t: Ty, tpls: FoldTemplate[]], Ty> = _curry(2, foldWith$);
 const foldRowWith$ = (row: Row, tpls: FoldTemplate[]): Row => {
   const $match = row;
   switch ($match._tag) {
@@ -1414,7 +1323,6 @@ const foldRowWith$ = (row: Row, tpls: FoldTemplate[]): Row => {
     }
   }
 };
-const foldRowWith: _Curry<[row: Row, tpls: FoldTemplate[]], Row> = _curry(2, foldRowWith$);
 const foldAliases$ = (t: Ty, aliases: Map<string, AliasInfo>): Ty =>
   foldAliasesAt$(t, _Map_keys(aliases), aliases);
 /**

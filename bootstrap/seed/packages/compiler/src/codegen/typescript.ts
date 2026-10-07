@@ -161,6 +161,11 @@ const genericHead: <A>(params: A[], i: number, acc: string[]) => string = _curry
       () => genericHead(params, i + 1, _Array_append(letterAt(i), acc)),
     ),
 );
+/**
+ * A ctor field's type is a full TypeExpr (ADR 0015). Lower it to a Ty first —
+ * params bound positionally, aliases left nominal — then render through `tsOf`,
+ * so the TS grammar has exactly one encoder.
+ */
 const fieldTs$ = (
   te: TypeExpr,
   params: string[],
@@ -174,14 +179,10 @@ const fieldTs$ = (
   );
 };
 /**
- * A ctor field's type is a full TypeExpr (ADR 0015). Lower it to a Ty first —
- * params bound positionally, aliases left nominal — then render through `tsOf`,
- * so the TS grammar has exactly one encoder.
+ * Keys come from `keysOf` (the same projection the runtime shape uses, so a
+ * declared field name and its emitted key can never drift); this loop only
+ * ever reads `fieldType`.
  */
-const fieldTs: _Curry<
-  [te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
-  string
-> = _curry(4, fieldTs$);
 const ctorFieldsFrom$ = (
   fields: CtorField[],
   keys: string[],
@@ -200,21 +201,8 @@ const ctorFieldsFrom$ = (
       ),
   );
 /**
- * Keys come from `keysOf` (the same projection the runtime shape uses, so a
- * declared field name and its emitted key can never drift); this loop only
- * ever reads `fieldType`.
+ * One ctor's runtime shape: its discriminant (`_tag` unless `@tag`/`@as`, ADR 0156) plus its fields.
  */
-const ctorFieldsFrom: _Curry<
-  [
-    fields: CtorField[],
-    keys: string[],
-    params: string[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    i: number,
-  ],
-  string[]
-> = _curry(6, ctorFieldsFrom$);
 const ctorVariant$ = (
   c: Ctor,
   params: string[],
@@ -226,13 +214,6 @@ const ctorVariant$ = (
     ? `{ ${c.tagKey}: ${jsStringLit(c.tagLit)} }`
     : `{ ${c.tagKey}: ${jsStringLit(c.tagLit)}; ${_Str_join("; ", fields)} }`;
 };
-/**
- * One ctor's runtime shape: its discriminant (`_tag` unless `@tag`/`@as`, ADR 0156) plus its fields.
- */
-const ctorVariant: _Curry<
-  [c: Ctor, params: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>],
-  string
-> = _curry(4, ctorVariant$);
 const ctorVariantsFrom$ = (
   ctors: Ctor[],
   params: string[],
@@ -249,16 +230,6 @@ const ctorVariantsFrom$ = (
         ctorVariantsFrom$(ctors, params, aliases, recs, i + 1),
       ),
   );
-const ctorVariantsFrom: _Curry<
-  [
-    ctors: Ctor[],
-    params: string[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    i: number,
-  ],
-  string[]
-> = _curry(5, ctorVariantsFrom$);
 const typeDecl$ = (
   name: string,
   params: string[],
@@ -301,16 +272,9 @@ const aliasFieldsFrom$ = (
             aliasFieldsFrom$(fields, params, aliases, recs, i + 1),
           ),
   );
-const aliasFieldsFrom: _Curry<
-  [
-    fields: AliasField[],
-    params: string[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    i: number,
-  ],
-  string[]
-> = _curry(5, aliasFieldsFrom$);
+/**
+ * Labels a `...A` spread brings in — its record row's, as inference sees them.
+ */
 const spreadLabelsOf$ = (
   te: TypeExpr,
   params: string[],
@@ -336,13 +300,6 @@ const spreadLabelsOf$ = (
       _Set_fromArray([] as string[]),
     ),
   );
-/**
- * Labels a `...A` spread brings in — its record row's, as inference sees them.
- */
-const spreadLabelsOf: _Curry<
-  [te: TypeExpr, params: string[], aliases: Map<string, AliasInfo>],
-  string[]
-> = _curry(3, spreadLabelsOf$);
 const rowLabelsOf$ = (row: Row, acc: string[]): string[] => {
   const $match = row;
   switch ($match._tag) {
@@ -355,7 +312,10 @@ const rowLabelsOf$ = (row: Row, acc: string[]): string[] => {
     }
   }
 };
-const rowLabelsOf: _Curry<[row: Row, acc: string[]], string[]> = _curry(2, rowLabelsOf$);
+/**
+ * Labels written after spread `i` — they override it (ADR 0154), so the TS
+ * intersection must not also demand the spread's own, possibly differing, type.
+ */
 const laterLabelsFrom$ = (
   fields: AliasField[],
   params: string[],
@@ -372,13 +332,9 @@ const laterLabelsFrom$ = (
       ),
   );
 /**
- * Labels written after spread `i` — they override it (ADR 0154), so the TS
- * intersection must not also demand the spread's own, possibly differing, type.
+ * Labels brought in by spreads written after position `i` — they override an
+ * earlier own field of the same name.
  */
-const laterLabelsFrom: _Curry<
-  [fields: AliasField[], params: string[], aliases: Map<string, AliasInfo>, i: number],
-  string[]
-> = _curry(4, laterLabelsFrom$);
 const laterSpreadLabelsFrom$ = (
   fields: AliasField[],
   params: string[],
@@ -394,14 +350,6 @@ const laterSpreadLabelsFrom$ = (
         laterSpreadLabelsFrom$(fields, params, aliases, i + 1),
       ),
   );
-/**
- * Labels brought in by spreads written after position `i` — they override an
- * earlier own field of the same name.
- */
-const laterSpreadLabelsFrom: _Curry<
-  [fields: AliasField[], params: string[], aliases: Map<string, AliasInfo>, i: number],
-  string[]
-> = _curry(4, laterSpreadLabelsFrom$);
 const spreadPartsFrom$ = (
   fields: AliasField[],
   params: string[],
@@ -434,16 +382,6 @@ const spreadPartsFrom$ = (
         : rest;
     },
   );
-const spreadPartsFrom: _Curry<
-  [
-    fields: AliasField[],
-    params: string[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    i: number,
-  ],
-  string[]
-> = _curry(5, spreadPartsFrom$);
 const recordAliasDecl$ = (
   name: string,
   params: string[],
@@ -676,6 +614,13 @@ export const guardParamTs: _Curry<[t: Ty, recs: Map<string, string>], Option<str
   2,
   guardParamTs$,
 );
+/**
+ * Peel one arrow per collapsed lambda param, annotating each (ADR 0028).
+ * A param whose vars are ALL in scope renders with those letters (ADR 0042);
+ * otherwise only a fully concrete param renders, because a generic binding's
+ * letters live on the const's TYPE head and naming one in a value position
+ * would be an out-of-scope TS2304.
+ */
 const lambdaParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[] =>
   i >= arity
     ? ([] as Option<string>[])
@@ -691,21 +636,21 @@ const lambdaParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option<
                 lambdaParamsFrom$(toT, arity, env, i + 1),
               ))(_v)
           : _Array_prepend(None as Option<string>, lambdaParamsFrom$(t, arity, env, i + 1)))(t);
-/**
- * Peel one arrow per collapsed lambda param, annotating each (ADR 0028).
- * A param whose vars are ALL in scope renders with those letters (ADR 0042);
- * otherwise only a fully concrete param renders, because a generic binding's
- * letters live on the const's TYPE head and naming one in a value position
- * would be an out-of-scope TS2304.
- */
-const lambdaParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
-  _curry(4, lambdaParamsFrom$);
 const lambdaParamTypesTs$ = (lamType: Ty, arity: number, env: TsEnv): Option<string>[] =>
   lambdaParamsFrom$(lamType, arity, env, 0);
 export const lambdaParamTypesTs: _Curry<
   [lamType: Ty, arity: number, env: TsEnv],
   Option<string>[]
 > = _curry(3, lambdaParamTypesTs$);
+/**
+ * Every param annotated with the scheme's OWN letters, scoped by a generic
+ * head on the arrow itself (ADR 0032). This closes the polymorphic
+ * higher-order tail ADR 0028 leaves open: `lambdaParamTypesTs` skips generic
+ * params precisely because their letters are out of scope in the value
+ * expression, so `_curry` erased them to `any`. Scoping the SAME letters on
+ * the lambda brings them into value scope. `None` when the binding is not
+ * generic — the concrete-only path already covers it.
+ */
 const genericParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option<string>[] =>
   i >= arity
     ? ([] as Option<string>[])
@@ -717,17 +662,6 @@ const genericParamsFrom$ = (t: Ty, arity: number, env: TsEnv, i: number): Option
                 genericParamsFrom$(toT, arity, env, i + 1),
               ))(_v)
           : _Array_prepend(None as Option<string>, genericParamsFrom$(t, arity, env, i + 1)))(t);
-/**
- * Every param annotated with the scheme's OWN letters, scoped by a generic
- * head on the arrow itself (ADR 0032). This closes the polymorphic
- * higher-order tail ADR 0028 leaves open: `lambdaParamTypesTs` skips generic
- * params precisely because their letters are out of scope in the value
- * expression, so `_curry` erased them to `any`. Scoping the SAME letters on
- * the lambda brings them into value scope. `None` when the binding is not
- * generic — the concrete-only path already covers it.
- */
-const genericParamsFrom: _Curry<[t: Ty, arity: number, env: TsEnv, i: number], Option<string>[]> =
-  _curry(4, genericParamsFrom$);
 export const genericLambdaParams: <A>(
   sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
   arity: number,
@@ -777,16 +711,6 @@ const ctorParamTypes$ = (
         ctorParamTypes$(fields, params, aliases, recs, i + 1),
       ),
   );
-const ctorParamTypes: _Curry<
-  [
-    fields: CtorField[],
-    params: string[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    i: number,
-  ],
-  string[]
-> = _curry(5, ctorParamTypes$);
 const ctorFactoryTs$ = (
   typeName: string,
   params: string[],
@@ -846,7 +770,6 @@ const compositionsFrom$ = (n: number, k: number): number[][] =>
   k > n
     ? ([] as number[][])
     : _Array_concat(map(_Array_prepend(k), compositions(n - k)), compositionsFrom$(n, k + 1));
-const compositionsFrom: _Curry<[n: number, k: number], number[][]> = _curry(2, compositionsFrom$);
 /**
  * Slice `params` into consecutive groups of the given sizes.
  */
@@ -863,6 +786,9 @@ const sliceGroups: <A>(params: A[], groups: number[], i: number, at: number) => 
         ),
     ),
 );
+/**
+ * Fold the trailing groups into a curried tail: `(c) => (d) => R`.
+ */
 const curriedTail$ = (slices: string[][], i: number, acc: string): string =>
   i < 1
     ? acc
@@ -871,13 +797,6 @@ const curriedTail$ = (slices: string[][], i: number, acc: string): string =>
         i - 1,
         `(${_Str_join(", ", _Option_unwrapOr([] as string[], _Array_get(i, slices)))}) => ${acc}`,
       );
-/**
- * Fold the trailing groups into a curried tail: `(c) => (d) => R`.
- */
-const curriedTail: _Curry<[slices: string[][], i: number, acc: string], string> = _curry(
-  3,
-  curriedTail$,
-);
 const overloadSig$ = (head: string, params: string[], ret: string, groups: number[]): string => {
   const slices: string[][] = sliceGroups(params, groups, 0, 0);
   const tail: string = curriedTail$(slices, length(slices) - 1, ret);
@@ -921,6 +840,11 @@ export const curriedFnType: _Curry<[params: string[], ret: string], string> = _c
   2,
   curriedFnType$,
 );
+/**
+ * Walk the value's lambda spine and the type's arrow spine together,
+ * collecting one rendered `name: T` per param. A zero-param lambda consumes
+ * the `unit` arrow the JS side erases.
+ */
 const flatParamsFrom$ = (
   t: Ty,
   value: Expr,
@@ -948,15 +872,6 @@ const flatParamsFrom$ = (
     }
   }
 };
-/**
- * Walk the value's lambda spine and the type's arrow spine together,
- * collecting one rendered `name: T` per param. A zero-param lambda consumes
- * the `unit` arrow the JS side erases.
- */
-const flatParamsFrom: _Curry<
-  [t: Ty, value: Expr, env: TsEnv, n: number, acc: string[]],
-  [string[], string]
-> = _curry(5, flatParamsFrom$);
 const takeParams$ = (
   t: Ty,
   params: LamParam[],
@@ -988,10 +903,10 @@ const takeParams$ = (
       }
     },
   );
-const takeParams: _Curry<
-  [t: Ty, params: LamParam[], env: TsEnv, i: number, n: number, acc: string[]],
-  [Ty, number, string[]]
-> = _curry(6, takeParams$);
+/**
+ * Arity-aware nested form: one arrow peeled per param, recursing into the body
+ * so a curried definition keeps its shape.
+ */
 const declType$ = (t: Ty, value: Expr, env: TsEnv): string => {
   const $match = value;
   switch ($match._tag) {
@@ -1014,11 +929,6 @@ const declType$ = (t: Ty, value: Expr, env: TsEnv): string => {
     }
   }
 };
-/**
- * Arity-aware nested form: one arrow peeled per param, recursing into the body
- * so a curried definition keeps its shape.
- */
-const declType: _Curry<[t: Ty, value: Expr, env: TsEnv], string> = _curry(3, declType$);
 /**
  * What a `bindingType` or `dtsBinding` hook renders with (ADR 0055, 0109).
  */
@@ -1149,6 +1059,10 @@ export const typeAtTable: <A, B, C, D, E>(
   types: ({ span: { start: A; end: B } & D; ty: C } & E)[],
 ) => Map<string, C> = <A, B, C, D, E>(types: ({ span: { start: A; end: B } & D; ty: C } & E)[]) =>
   typeAtFrom(types, 0, new Map<string, C>());
+/**
+ * Every `con` name a type mentions — used to decide which builtin variant
+ * decls a module has to carry so its own references resolve.
+ */
 const consInTy$ = (t: Ty, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v._tag === "TyCon" && _v.name === "Task" && _v.args.length === 2
@@ -1165,21 +1079,12 @@ const consInTy$ = (t: Ty, acc: Set<string>): Set<string> =>
             : _v._tag === "TyOneOf"
               ? (({ members }) => consInAll$(members, acc, 0))(_v)
               : acc)(t);
-/**
- * Every `con` name a type mentions — used to decide which builtin variant
- * decls a module has to carry so its own references resolve.
- */
-const consInTy: _Curry<[t: Ty, acc: Set<string>], Set<string>> = _curry(2, consInTy$);
 const consInAll$ = (ts: Ty[], acc: Set<string>, i: number): Set<string> =>
   _Option_match(
     _Array_get(i, ts),
     () => acc,
     (t) => consInAll$(ts, consInTy$(t, acc), i + 1),
   );
-const consInAll: _Curry<[ts: Ty[], acc: Set<string>, i: number], Set<string>> = _curry(
-  3,
-  consInAll$,
-);
 const consInRow$ = (row: Row, acc: Set<string>): Set<string> => {
   const $match = row;
   switch ($match._tag) {
@@ -1192,7 +1097,6 @@ const consInRow$ = (row: Row, acc: Set<string>): Set<string> => {
     }
   }
 };
-const consInRow: _Curry<[row: Row, acc: Set<string>], Set<string>> = _curry(2, consInRow$);
 const declaredTypeNames$ = (stmts: Stmt[], i: number, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v._tag === "None"
@@ -1328,6 +1232,11 @@ export const builtinTypeNamesFor: _Curry<
   [declared: Set<string>, wanted: Set<string>, body: string, i: number],
   string[]
 > = _curry(4, builtinTypeNamesFor$);
+/**
+ * A declared record alias lowered back to the row its USES carry. ADR 0005
+ * expands a record alias at `typeExprToType`, so this reproduces exactly what
+ * inference will have put in the type table for a value of that alias.
+ */
 const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: number): Row =>
   _Option_match(
     _Array_get(i, fields),
@@ -1350,19 +1259,8 @@ const aliasRowOf$ = (fields: AliasField[], aliases: Map<string, AliasInfo>, i: n
         ),
       ),
   );
-/**
- * A declared record alias lowered back to the row its USES carry. ADR 0005
- * expands a record alias at `typeExprToType`, so this reproduces exactly what
- * inference will have put in the type table for a value of that alias.
- */
-const aliasRowOf: _Curry<[fields: AliasField[], aliases: Map<string, AliasInfo>, i: number], Row> =
-  _curry(3, aliasRowOf$);
 const aliasShapeKey$ = (fields: AliasField[], aliases: Map<string, AliasInfo>): Option<string> =>
   rowShapeKey(aliasRowOf$(fields, aliases, 0), new Map<number, string>());
-const aliasShapeKey: _Curry<
-  [fields: AliasField[], aliases: Map<string, AliasInfo>],
-  Option<string>
-> = _curry(2, aliasShapeKey$);
 /**
  * Every record alias IN SCOPE, keyed by canonical row shape (ADR 0092). Built
  * from the merged alias map rather than this module's own `SType`s, so a dep's
@@ -1420,13 +1318,13 @@ const recordAliasIndexFrom$ = (
     (key) =>
       recordAliasIndexFrom$(keys, aliases, i + 1, indexAlias(key, bareName(key), aliases, acc)),
   );
-const recordAliasIndexFrom: _Curry<
-  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Map<string, string>],
-  Map<string, string>
-> = _curry(4, recordAliasIndexFrom$);
 export const recordAliasIndex: (aliases: Map<string, AliasInfo>) => Map<string, string> = (
   aliases: Map<string, AliasInfo>,
 ) => recordAliasIndexFrom$(_Array_sort(_Map_keys(aliases)), aliases, 0, new Map<string, string>());
+/**
+ * Bare names of parameterised aliases. `LocTok` and `LocTok<t>` share one,
+ * and printing the nullary name then imports the parameterised one.
+ */
 const parameterizedBares$ = (
   keys: string[],
   aliases: Map<string, AliasInfo>,
@@ -1450,13 +1348,10 @@ const parameterizedBares$ = (
       ),
   );
 /**
- * Bare names of parameterised aliases. `LocTok` and `LocTok<t>` share one,
- * and printing the nullary name then imports the parameterised one.
+ * Last nullary alias of `shape` whose bare name is safe to print, or `""`
+ * when every owner is ambiguous. Keys are sorted, so a later qualified copy
+ * (`Schemes.AliasInfo`) cannot bury an earlier unique name (`QualAliasInfo`).
  */
-const parameterizedBares: _Curry<
-  [keys: string[], aliases: Map<string, AliasInfo>, i: number, acc: Set<string>],
-  Set<string>
-> = _curry(4, parameterizedBares$);
 const printableName$ = (
   keys: string[],
   shape: string,
@@ -1496,22 +1391,6 @@ const printableName$ = (
       );
     },
   );
-/**
- * Last nullary alias of `shape` whose bare name is safe to print, or `""`
- * when every owner is ambiguous. Keys are sorted, so a later qualified copy
- * (`Schemes.AliasInfo`) cannot bury an earlier unique name (`QualAliasInfo`).
- */
-const printableName: _Curry<
-  [
-    keys: string[],
-    shape: string,
-    aliases: Map<string, AliasInfo>,
-    bad: Set<string>,
-    acc: string,
-    i: number,
-  ],
-  string
-> = _curry(6, printableName$);
 const dropAmbiguous$ = (
   keys: string[],
   recs: Map<string, string>,
@@ -1542,18 +1421,6 @@ const dropAmbiguous$ = (
           ),
       ),
   );
-const dropAmbiguous: _Curry<
-  [
-    keys: string[],
-    recs: Map<string, string>,
-    aliases: Map<string, AliasInfo>,
-    bad: Set<string>,
-    localNames: Set<string>,
-    aliasKeys: string[],
-    i: number,
-  ],
-  Map<string, string>
-> = _curry(7, dropAmbiguous$);
 const withoutAmbiguousAlias$ = (
   recs: Map<string, string>,
   aliases: Map<string, AliasInfo>,
@@ -1660,16 +1527,6 @@ ${docComment}type ${name} = { readonly [${name}]: never };`,
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-const typeHeaderFrom: _Curry<
-  [
-    stmts: Stmt[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    docs: boolean,
-    i: number,
-  ],
-  string[]
-> = _curry(5, typeHeaderFrom$);
 /**
  * Generic top-level function bindings, keyed by their value-lambda span ->
  * scheme (ADR 0032). Such a lambda gets a generic head plus ALL params
@@ -1842,7 +1699,6 @@ const scopedSpansAt$ = (exprs: Expr[], i: number): SpanAt[] =>
     () => [] as SpanAt[],
     (e) => _Array_concat(scopedSpans(e), scopedSpansAt$(exprs, i + 1)),
   );
-const scopedSpansAt: _Curry<[exprs: Expr[], i: number], SpanAt[]> = _curry(2, scopedSpansAt$);
 const scopedSpansInArms$ = (arms: MatchArm[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, arms),
@@ -1857,20 +1713,12 @@ const scopedSpansInArms$ = (arms: MatchArm[], i: number): SpanAt[] =>
         _Array_concat(scopedSpans(a.body), scopedSpansInArms$(arms, i + 1)),
       ),
   );
-const scopedSpansInArms: _Curry<[arms: MatchArm[], i: number], SpanAt[]> = _curry(
-  2,
-  scopedSpansInArms$,
-);
 const scopedSpansInFields$ = (fields: Field[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, fields),
     () => [] as SpanAt[],
     (f) => _Array_concat(scopedSpans(f.value), scopedSpansInFields$(fields, i + 1)),
   );
-const scopedSpansInFields: _Curry<[fields: Field[], i: number], SpanAt[]> = _curry(
-  2,
-  scopedSpansInFields$,
-);
 const scopedSpansInEntries$ = (entries: MapEntry[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, entries),
@@ -1881,10 +1729,6 @@ const scopedSpansInEntries$ = (entries: MapEntry[], i: number): SpanAt[] =>
         _Array_concat(scopedSpans(en.value), scopedSpansInEntries$(entries, i + 1)),
       ),
   );
-const scopedSpansInEntries: _Curry<[entries: MapEntry[], i: number], SpanAt[]> = _curry(
-  2,
-  scopedSpansInEntries$,
-);
 const scopedSpansInElems$ = (elements: SeqElem[], i: number): SpanAt[] =>
   ((_v) =>
     _v._tag === "None"
@@ -1912,32 +1756,20 @@ const scopedSpansInElems$ = (elements: SeqElem[], i: number): SpanAt[] =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, elements));
-const scopedSpansInElems: _Curry<[elements: SeqElem[], i: number], SpanAt[]> = _curry(
-  2,
-  scopedSpansInElems$,
-);
-const scopedSpansInSeq$ = (elements: SeqElem[], sp: SpanAt): SpanAt[] => {
-  const inner: SpanAt[] = scopedSpansInElems$(elements, 0);
-  return length(elements) === 0 ? _Array_prepend(sp, inner) : inner;
-};
 /**
  * An EMPTY `[]` / `@{}` / `#{}` is itself annotatable; a populated one only
  * carries its elements' nested nodes.
  */
-const scopedSpansInSeq: _Curry<[elements: SeqElem[], sp: SpanAt], SpanAt[]> = _curry(
-  2,
-  scopedSpansInSeq$,
-);
+const scopedSpansInSeq$ = (elements: SeqElem[], sp: SpanAt): SpanAt[] => {
+  const inner: SpanAt[] = scopedSpansInElems$(elements, 0);
+  return length(elements) === 0 ? _Array_prepend(sp, inner) : inner;
+};
 const scopedSpansInLoop$ = (params: LoopParam[], i: number): SpanAt[] =>
   _Option_match(
     _Array_get(i, params),
     () => [] as SpanAt[],
     (p) => _Array_concat(scopedSpans(p.init), scopedSpansInLoop$(params, i + 1)),
   );
-const scopedSpansInLoop: _Curry<[params: LoopParam[], i: number], SpanAt[]> = _curry(
-  2,
-  scopedSpansInLoop$,
-);
 const scopedSpansInParts$ = (parts: InterpPart[], i: number): SpanAt[] =>
   ((_v) =>
     _v._tag === "None"
@@ -1957,10 +1789,6 @@ const scopedSpansInParts$ = (parts: InterpPart[], i: number): SpanAt[] =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, parts));
-const scopedSpansInParts: _Curry<[parts: InterpPart[], i: number], SpanAt[]> = _curry(
-  2,
-  scopedSpansInParts$,
-);
 const scopedNamesAt: <A, B, C, D>(
   spans: ({ start: A; end: B } & D)[],
   i: number,
@@ -2513,6 +2341,12 @@ export const emitTsModule: <A, B, C, D, E, F, G, H, I>(
       bindingHooksFor(None),
     ),
 );
+/**
+ * Free TYPE vars in FIRST-OCCURRENCE order. Not `freeInType`: its Sets lose the
+ * order letters are assigned in, and it also collects row vars, which a bare
+ * type has no head to bind — a record's trailing row var is skipped here and
+ * the declaration prints the closed body.
+ */
 const freeIdsIn$ = (t: Ty, acc: number[]): number[] => {
   const $match = t;
   switch ($match._tag) {
@@ -2544,20 +2378,12 @@ const freeIdsIn$ = (t: Ty, acc: number[]): number[] => {
     }
   }
 };
-/**
- * Free TYPE vars in FIRST-OCCURRENCE order. Not `freeInType`: its Sets lose the
- * order letters are assigned in, and it also collects row vars, which a bare
- * type has no head to bind — a record's trailing row var is skipped here and
- * the declaration prints the closed body.
- */
-const freeIdsIn: _Curry<[t: Ty, acc: number[]], number[]> = _curry(2, freeIdsIn$);
 const freeIdsInAll$ = (ts: Ty[], acc: number[]): number[] =>
   reduce(
     _curry(2, (a: number[], t: Ty) => freeIdsIn$(t, a)),
     acc,
     ts,
   );
-const freeIdsInAll: _Curry<[ts: Ty[], acc: number[]], number[]> = _curry(2, freeIdsInAll$);
 const freeIdsInRow$ = (row: Row, acc: number[]): number[] => {
   const $match = row;
   switch ($match._tag) {
@@ -2570,7 +2396,6 @@ const freeIdsInRow$ = (row: Row, acc: number[]): number[] => {
     }
   }
 };
-const freeIdsInRow: _Curry<[row: Row, acc: number[]], number[]> = _curry(2, freeIdsInRow$);
 /**
  * id -> letter, positionally. Accumulator-first so `Map.values` comes back in
  * index order — the generic head and the rendered params must agree.
@@ -2614,6 +2439,10 @@ const arrowCount: (t: Ty) => number = (t: Ty) => {
     }
   }
 };
+/**
+ * Peel `arity` arrows into `a: T`, `b: T`, … — the same positional naming
+ * `tsArrow` uses, so a declaration and a call site read alike.
+ */
 const hostParams$ = (t: Ty, arity: number, names: Map<number, string>, i: number): string[] =>
   i >= arity
     ? ([] as string[])
@@ -2625,17 +2454,16 @@ const hostParams$ = (t: Ty, arity: number, names: Map<number, string>, i: number
                 hostParams$(toT, arity, names, i + 1),
               ))(_v)
           : ([] as string[]))(t);
-/**
- * Peel `arity` arrows into `a: T`, `b: T`, … — the same positional naming
- * `tsArrow` uses, so a declaration and a call site read alike.
- */
-const hostParams: _Curry<[t: Ty, arity: number, names: Map<number, string>, i: number], string[]> =
-  _curry(4, hostParams$);
 const hostReturn$ = (t: Ty, arity: number, i: number): Ty =>
   i >= arity
     ? t
     : ((_v) => (_v._tag === "TyFn" ? (({ to: toT }) => hostReturn$(toT, arity, i + 1))(_v) : t))(t);
-const hostReturn: _Curry<[t: Ty, arity: number, i: number], Ty> = _curry(3, hostReturn$);
+/**
+ * `(a: A) => (b: B) => R` — a CURRIED host's own shape (ADR 0064). Unlike
+ * `flatHostType` there are no partial-application overloads to offer: `_curry`
+ * is built AROUND this host, not exported by it, so it takes exactly one
+ * argument per call. Folded right-to-left, hence the reverse.
+ */
 const curriedHostType$ = (t: Ty, arity: number): string => {
   const ids: number[] = freeIdsIn$(t, [] as number[]);
   const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());
@@ -2645,13 +2473,6 @@ const curriedHostType$ = (t: Ty, arity: number): string => {
     _Array_reverse(hostParams$(t, arity, names, 0)),
   )}`;
 };
-/**
- * `(a: A) => (b: B) => R` — a CURRIED host's own shape (ADR 0064). Unlike
- * `flatHostType` there are no partial-application overloads to offer: `_curry`
- * is built AROUND this host, not exported by it, so it takes exactly one
- * argument per call. Folded right-to-left, hence the reverse.
- */
-const curriedHostType: _Curry<[t: Ty, arity: number], string> = _curry(2, curriedHostType$);
 const flatHostType$ = (t: Ty, arity: number): string => {
   const ids: number[] = freeIdsIn$(t, [] as number[]);
   const names: Map<number, string> = lettersFor(ids, 0, new Map<number, string>());

@@ -446,7 +446,7 @@ let tsOf = src => emitTs(src) |> Result.unwrapOr("<error>")
 test("emits a typed const for a concrete function binding", () =>
   assertEq(
     true,
-    tsOf("let addPair = (a, b) => add(a, b)")
+    tsOf("export let addPair = (a, b) => add(a, b)")
       |> Str.contains("const addPair: _Curry<[a: number, b: number], number>")
   ))
 

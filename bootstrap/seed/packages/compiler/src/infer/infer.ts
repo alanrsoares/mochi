@@ -485,7 +485,6 @@ const typeErr$ = (msg: string, sp: SpanAt): IErr => ({
   help: None as Option<string>,
   suggestions: noSuggestions,
 });
-const typeErr: _Curry<[msg: string, sp: SpanAt], IErr> = _curry(2, typeErr$);
 const typeErrHelp$ = (msg: string, sp: SpanAt, help: string): IErr => ({
   message: msg,
   start: sp.start,
@@ -493,7 +492,6 @@ const typeErrHelp$ = (msg: string, sp: SpanAt, help: string): IErr => ({
   help: Some(help) as Option<string>,
   suggestions: noSuggestions,
 });
-const typeErrHelp: _Curry<[msg: string, sp: SpanAt, help: string], IErr> = _curry(3, typeErrHelp$);
 const typeErrSuggest$ = (msg: string, sp: SpanAt, help: string, hint: string): IErr => ({
   message: msg,
   start: sp.start,
@@ -503,10 +501,6 @@ const typeErrSuggest$ = (msg: string, sp: SpanAt, help: string, hint: string): I
     { title: `Did you mean '${hint}'?`, start: sp.start, end: sp.end, replaceWith: hint },
   ],
 });
-const typeErrSuggest: _Curry<[msg: string, sp: SpanAt, help: string, hint: string], IErr> = _curry(
-  4,
-  typeErrSuggest$,
-);
 const lastSeg: (name: string) => string = (name: string) => {
   const parts: string[] = _Str_split(".", name);
   return _Option_unwrapOr(name, _Array_get(length(parts) - 1, parts));
@@ -618,15 +612,6 @@ const printsFrom$ = (
           ),
       ),
   );
-const printsFrom: _Curry<
-  [
-    keys: string[],
-    aliases: Map<string, AliasInfo>,
-    i: number,
-    acc: { shown: string; name: string }[],
-  ],
-  { shown: string; name: string }[]
-> = _curry(4, printsFrom$);
 const applyPrints: <A>(
   msg: string,
   prints: ({ shown: string; name: string } & A)[],
@@ -646,10 +631,6 @@ const nameAliases$ = (msg: string, aliases: Map<string, AliasInfo>): string =>
     printsFrom$(_Map_keys(aliases), aliases, 0, [] as { shown: string; name: string }[]),
     0,
   );
-const nameAliases: _Curry<[msg: string, aliases: Map<string, AliasInfo>], string> = _curry(
-  2,
-  nameAliases$,
-);
 const u$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -672,26 +653,9 @@ const u$ = (
     (e) => Err(typeErr$(nameAliases$(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
     (newSt) => Ok(newSt) as Result<St, IErr>,
   );
-const u: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    left: Ty,
-    right: Ty,
-    st: St,
-    sp: SpanAt,
-  ],
-  Result<St, IErr>
-> = _curry(5, u$);
+/**
+ * `actual` may be used as `expected` (ADR 0098 optional fields).
+ */
 const checkFits$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -714,29 +678,6 @@ const checkFits$ = (
     (e) => Err(typeErr$(nameAliases$(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
     (newSt) => Ok(newSt) as Result<St, IErr>,
   );
-/**
- * `actual` may be used as `expected` (ADR 0098 optional fields).
- */
-const checkFits: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    actual: Ty,
-    expected: Ty,
-    st: St,
-    sp: SpanAt,
-  ],
-  Result<St, IErr>
-> = _curry(5, checkFits$);
 const bindParamNamesFrom: <A>(
   names: A[],
   env: Map<A, Scheme>,
@@ -778,10 +719,6 @@ const bindParamFieldsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const bindParamFieldsFrom: _Curry<
-  [fields: string[], env: Map<string, Scheme>, row: Row, st: St],
-  [Row, Map<string, Scheme>, St]
-> = _curry(4, bindParamFieldsFrom$);
 const recordParamNamesFrom$ = (
   names: string[],
   spans: SpanAt[],
@@ -806,10 +743,6 @@ const recordParamNamesFrom$ = (
           ],
         )
       : st)(_tuple(_Array_get(i, names), _Array_get(i, spans), _Array_get(i, types)));
-const recordParamNamesFrom: _Curry<
-  [names: string[], spans: SpanAt[], types: Ty[], i: number, st: St],
-  St
-> = _curry(5, recordParamNamesFrom$);
 const envTypesOf: <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) => B[] = _curry(
   2,
   <A, B, C>(names: A[], env: Map<A, { ty: B } & C>) =>
@@ -880,10 +813,6 @@ const bindParam$ = (
     }
   }
 };
-const bindParam: _Curry<
-  [p: LamParam, env: Map<string, Scheme>, st: St],
-  [Ty, Map<string, Scheme>, St]
-> = _curry(3, bindParam$);
 const bindParamsFrom$ = (
   params: LamParam[],
   env: Map<string, Scheme>,
@@ -902,10 +831,6 @@ const bindParamsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const bindParamsFrom: _Curry<
-  [params: LamParam[], env: Map<string, Scheme>, st: St],
-  [Ty[], Map<string, Scheme>, St]
-> = _curry(3, bindParamsFrom$);
 const constrainParamAnnotsFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -978,26 +903,6 @@ const constrainParamAnnotsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const constrainParamAnnotsFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    params: LamParam[],
-    paramTypes: Ty[],
-    vars: Map<string, Ty>,
-    st: St,
-  ],
-  Result<[Map<string, Ty>, St], IErr>
-> = _curry(5, constrainParamAnnotsFrom$);
 const arrowChain$ = (paramTypes: Ty[], resultT: Ty): Ty =>
   ((_v) =>
     _v.length === 0
@@ -1009,7 +914,6 @@ const arrowChain$ = (paramTypes: Ty[], resultT: Ty): Ty =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(paramTypes);
-const arrowChain: _Curry<[paramTypes: Ty[], resultT: Ty], Ty> = _curry(2, arrowChain$);
 const ctxWithEnv: <B>(
   ctx: {
     env: Map<string, Scheme>;
@@ -1260,28 +1164,6 @@ const inferLoopParamsFrom$ = (
         inferExpr$(ctx, p.init, st),
       ),
   );
-const inferLoopParamsFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    params: LoopParam[],
-    i: number,
-    envAcc: Map<string, Scheme>,
-    frameAcc: Ty[],
-    ownerAcc: Map<string, SpanAt>,
-    st: St,
-  ],
-  Result<[Ty[], Map<string, Scheme>, Map<string, SpanAt>, St], IErr>
-> = _curry(7, inferLoopParamsFrom$);
 const unifyRecurArgsFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1317,26 +1199,6 @@ const unifyRecurArgsFrom$ = (
         inferExpr$(ctx, a, st),
       ),
   );
-const unifyRecurArgsFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    args: Expr[],
-    frame: Ty[],
-    i: number,
-    st: St,
-  ],
-  Result<St, IErr>
-> = _curry(5, unifyRecurArgsFrom$);
 const inferRecur$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1368,25 +1230,6 @@ const inferRecur$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(ctx.loopStack);
-const inferRecur: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    args: Expr[],
-    sp: SpanAt,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(4, inferRecur$);
 const rowHasOptional: (row: Row) => boolean = (row: Row) => {
   const $match = row;
   switch ($match._tag) {
@@ -1411,7 +1254,6 @@ const domainNeedsFits$ = (t: Ty, st: St): boolean => {
     }
   }
 };
-const domainNeedsFits: _Curry<[t: Ty, st: St], boolean> = _curry(2, domainNeedsFits$);
 /**
  * True when every known field is optional. This is what makes `f()` legal:
  * the nullary call applies `{}`, which only `fits` an all-optional domain.
@@ -1440,10 +1282,6 @@ const domainIsOmittableRecord$ = (t: Ty, st: St): boolean => {
     }
   }
 };
-const domainIsOmittableRecord: _Curry<[t: Ty, st: St], boolean> = _curry(
-  2,
-  domainIsOmittableRecord$,
-);
 const isLabeledParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1475,10 +1313,10 @@ const splitLamParams$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const splitLamParams: _Curry<
-  [params: LamParam[], positional: LamParam[], labeled: LamParam[]],
-  [LamParam[], LamParam[]]
-> = _curry(3, splitLamParams$);
+/**
+ * One pass per label, threading `st` but NOT `env`: a default is inferred in
+ * the positional-only scope, so one label's default cannot read another's.
+ */
 const labFieldsFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1602,30 +1440,6 @@ const labFieldsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(labs);
-/**
- * One pass per label, threading `st` but NOT `env`: a default is inferred in
- * the positional-only scope, so one label's default cannot read another's.
- */
-const labFieldsFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    labs: LamParam[],
-    env: Map<string, Scheme>,
-    vars: Map<string, Ty>,
-    st: St,
-  ],
-  Result<[{ name: string; fieldType: Ty; omittable: boolean; bodyType: Ty }[], St], IErr>
-> = _curry(5, labFieldsFrom$);
 const rowOfLabFields: <A>(
   fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[],
 ) => Row = <A>(fields: ({ name: string; fieldType: Ty; omittable: boolean } & A)[]) =>
@@ -1707,6 +1521,9 @@ const recordLabParamsFrom: <A>(
               throw new Error("non-exhaustive match");
             })())(labs),
 );
+/**
+ * Each plain positional name at its span, after the body has constrained it.
+ */
 const recordNameParamsFrom$ = (params: LamParam[], types: Ty[], st: St): St =>
   ((_v) =>
     _v[0].length >= 1 &&
@@ -1745,13 +1562,6 @@ const recordNameParamsFrom$ = (params: LamParam[], types: Ty[], st: St): St =>
       : _v[0].length >= 1 && _v[1].length >= 1
         ? (([[, ...rest], [, ...ts]]) => recordNameParamsFrom$(rest, ts, st))(_v)
         : st)(_tuple(params, types));
-/**
- * Each plain positional name at its span, after the body has constrained it.
- */
-const recordNameParamsFrom: _Curry<[params: LamParam[], types: Ty[], st: St], St> = _curry(
-  3,
-  recordNameParamsFrom$,
-);
 const inferCallArgs$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1799,26 +1609,6 @@ const inferCallArgs$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(args);
-const inferCallArgs: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fnT: Ty,
-    args: Expr[],
-    st: St,
-    callSpan: SpanAt,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(5, inferCallArgs$);
 const isBuiltinCall$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1833,23 +1623,6 @@ const isBuiltinCall$ = (
   },
   name: string,
 ): boolean => and(_Map_has(name, ctx.letOwner) === false, _Set_has(name, ctx.localNames) === false);
-const isBuiltinCall: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    name: string,
-  ],
-  boolean
-> = _curry(2, isBuiltinCall$);
 const reachesList$ = (sorted: boolean, t: Ty): boolean =>
   ((_v) =>
     _v._tag === "TyCon" && _v.name === "List"
@@ -1868,7 +1641,6 @@ const reachesList$ = (sorted: boolean, t: Ty): boolean =>
             : _v._tag === "TyRecord"
               ? (({ row }) => rowReachesList$(sorted, row))(_v)
               : false)(t);
-const reachesList: _Curry<[sorted: boolean, t: Ty], boolean> = _curry(2, reachesList$);
 const rowReachesList$ = (sorted: boolean, row: Row): boolean => {
   const $match = row;
   switch ($match._tag) {
@@ -1881,7 +1653,6 @@ const rowReachesList$ = (sorted: boolean, row: Row): boolean => {
     }
   }
 };
-const rowReachesList: _Curry<[sorted: boolean, row: Row], boolean> = _curry(2, rowReachesList$);
 const checkEqEligible$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -1923,25 +1694,6 @@ const checkEqEligible$ = (
     }
   }
 };
-const checkEqEligible: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fn: Expr,
-    fnT: Ty,
-    st: St,
-  ],
-  Result<undefined, IErr>
-> = _curry(4, checkEqEligible$);
 const isTupleParam: (p: LamParam) => boolean = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -1992,27 +1744,6 @@ const inferTupleLet$ = (
         ))(bindParam$(param, ctx.env, st1)),
     inferExpr$(ctx, value, st),
   );
-const inferTupleLet: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    param: LamParam,
-    body: Expr,
-    lamSpan: SpanAt,
-    value: Expr,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(6, inferTupleLet$);
 const inferApplied$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2061,25 +1792,6 @@ const inferApplied$ = (
             ))(args),
     inferExpr$(ctx, fn, st),
   );
-const inferApplied: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fn: Expr,
-    args: Expr[],
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(4, inferApplied$);
 const inferNormalCall$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2112,25 +1824,6 @@ const inferNormalCall$ = (
           _v as [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]],
         )
       : inferApplied$(ctx, fn, args, st))(_tuple(fn, args));
-const inferNormalCall: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fn: Expr,
-    args: Expr[],
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(4, inferNormalCall$);
 const inferTernary$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2168,26 +1861,6 @@ const inferTernary$ = (
       ),
     inferExpr$(ctx, cond, st),
   );
-const inferTernary: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    cond: Expr,
-    thenE: Expr,
-    elseE: Expr,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(5, inferTernary$);
 const bindNameOf: (p: LamParam) => Option<string> = (p: LamParam) => {
   const $match = p;
   switch ($match._tag) {
@@ -2246,28 +1919,6 @@ const inferBindBody$ = (
         ),
       u$(ctx, paramT, payloadT, st1, paramSpan),
     ))(bindParam$(param, ctx.env, st));
-const inferBindBody: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    param: LamParam,
-    paramSpan: SpanAt,
-    body: Expr,
-    payloadT: Ty,
-    mkBody: (a: Ty) => Ty,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(7, inferBindBody$);
 const inferTwoSlotBind$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2303,29 +1954,6 @@ const inferTwoSlotBind$ = (
           ),
         u$(ctx, valT, tCon(ctor, [payloadT, errT]), st2, exprSpan(value)),
       ))(freshVar(st1)))(freshVar(st));
-const inferTwoSlotBind: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    param: LamParam,
-    paramSpan: SpanAt,
-    value: Expr,
-    body: Expr,
-    valT: Ty,
-    ctor: string,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(8, inferTwoSlotBind$);
 const inferQuestionBind$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2392,29 +2020,6 @@ const inferQuestionBind$ = (
     }
   }
 };
-const inferQuestionBind: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    bind: Expr,
-    param: LamParam,
-    paramSpan: SpanAt,
-    value: Expr,
-    body: Expr,
-    valT: Ty,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(8, inferQuestionBind$);
 const inferLetBind$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2442,29 +2047,6 @@ const inferLetBind$ = (
         : inferQuestionBind$(ctx, bind, param, paramSpan, value, body, valT, st1),
     inferExpr$(ctx, value, st),
   );
-const inferLetBind: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    bind: Expr,
-    param: LamParam,
-    paramSpan: SpanAt,
-    monad: string,
-    value: Expr,
-    body: Expr,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(8, inferLetBind$);
 const inferRecordRow$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2497,24 +2079,6 @@ const inferRecordRow$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const inferRecordRow: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fields: Field[],
-    st: St,
-  ],
-  Result<[Row, St], IErr>
-> = _curry(3, inferRecordRow$);
 const rWithTail$ = (row: Row, tail: Row): Row => {
   const $match = row;
   switch ($match._tag) {
@@ -2534,7 +2098,6 @@ const rWithTail$ = (row: Row, tail: Row): Row => {
     }
   }
 };
-const rWithTail: _Curry<[row: Row, tail: Row], Row> = _curry(2, rWithTail$);
 const lookupField$ = (row: Row, name: string): Option<[Ty, boolean]> => {
   const $match = row;
   switch ($match._tag) {
@@ -2549,10 +2112,6 @@ const lookupField$ = (row: Row, name: string): Option<[Ty, boolean]> => {
     }
   }
 };
-const lookupField: _Curry<[row: Row, name: string], Option<[Ty, boolean]>> = _curry(
-  2,
-  lookupField$,
-);
 const rowEndsEmpty: (row: Row) => boolean = (row: Row) => {
   const $match = row;
   switch ($match._tag) {
@@ -2619,27 +2178,6 @@ const inferFieldAccess$ = (
             : inferDuckField$(ctx, targetT, name, sp, st1))(zonked))(zonk(targetT, st1)),
     inferExpr$(ctx, target, st),
   );
-const inferFieldAccess: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    field: Expr,
-    target: Expr,
-    name: string,
-    sp: SpanAt,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(6, inferFieldAccess$);
 const inferDuckField$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2663,26 +2201,6 @@ const inferDuckField$ = (
         (st4) => Ok(_tuple(fieldT, st4)) as Result<[Ty, St], IErr>,
         u$(ctx, targetT, tRecord(rExtend(name, fieldT, restRow)), st3, sp),
       ))(freshRowVar(st2)))(freshVar(st));
-const inferDuckField: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    targetT: Ty,
-    name: string,
-    sp: SpanAt,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(5, inferDuckField$);
 const inferNsField$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2706,26 +2224,6 @@ const inferNsField$ = (
     (sc) =>
       (([t, st1]: [Ty, St]) => Ok(_tuple(t, st1)) as Result<[Ty, St], IErr>)(instantiate(sc, st)),
   );
-const inferNsField: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    tname: string,
-    name: string,
-    sp: SpanAt,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(5, inferNsField$);
 const inferInterpParts$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2761,24 +2259,6 @@ const inferInterpParts$ = (
           : (() => {
               throw new Error("non-exhaustive match");
             })())(parts);
-const inferInterpParts: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    parts: InterpPart[],
-    st: St,
-  ],
-  Result<St, IErr>
-> = _curry(3, inferInterpParts$);
 const inferTupleElems$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2811,24 +2291,6 @@ const inferTupleElems$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elements);
-const inferTupleElems: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elements: Expr[],
-    st: St,
-  ],
-  Result<[Ty[], St], IErr>
-> = _curry(3, inferTupleElems$);
 const seqElemExpr: (el: SeqElem) => Expr = (el: SeqElem) => {
   const $match = el;
   switch ($match._tag) {
@@ -2889,26 +2351,6 @@ const inferSeqSlotsElems$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elements);
-const inferSeqSlotsElems: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    con: string,
-    elem: Ty,
-    elements: SeqElem[],
-    st: St,
-  ],
-  Result<St, IErr>
-> = _curry(5, inferSeqSlotsElems$);
 const inferSeqSlots$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2930,25 +2372,6 @@ const inferSeqSlots$ = (
       (st2) => Ok(_tuple(tCon(con, [elem]), st2)) as Result<[Ty, St], IErr>,
       inferSeqSlotsElems$(ctx, con, elem, elements, st1),
     ))(freshVar(st));
-const inferSeqSlots: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    con: string,
-    elements: SeqElem[],
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(4, inferSeqSlots$);
 const inferMapEntries$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -2990,26 +2413,6 @@ const inferMapEntries$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(entries);
-const inferMapEntries: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    k: Ty,
-    v: Ty,
-    entries: MapEntry[],
-    st: St,
-  ],
-  Result<St, IErr>
-> = _curry(5, inferMapEntries$);
 const inferMapExpr$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3031,24 +2434,6 @@ const inferMapExpr$ = (
         (st3) => Ok(_tuple(tCon("Map", [k, v]), st3)) as Result<[Ty, St], IErr>,
         inferMapEntries$(ctx, k, v, entries, st2),
       ))(freshVar(st1)))(freshVar(st));
-const inferMapExpr: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    entries: MapEntry[],
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(3, inferMapExpr$);
 const mergeBindingMapsFrom: <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) => Map<A, B> =
   _curry(3, <A, B>(keys: A[], src: Map<A, B>, dest: Map<A, B>) =>
     match(keys)
@@ -3155,26 +2540,6 @@ const inferArms$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(arms);
-const inferArms: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    scrutT: Ty,
-    resultT: Ty,
-    arms: MatchArm[],
-    st: St,
-  ],
-  Result<St, IErr>
-> = _curry(5, inferArms$);
 const isPipeHole: (a: Expr) => boolean = (a: Expr) =>
   ((_v) => (_v._tag === "ERef" && _v.name === "_" ? true : false))(a);
 const hasPipeHole: (right: Expr) => boolean = (right: Expr) => {
@@ -3230,7 +2595,6 @@ const fillPipeHole$ = (left: Expr, right: Expr, sp: SpanAt): Expr => {
     }
   }
 };
-const fillPipeHole: _Curry<[left: Expr, right: Expr, sp: SpanAt], Expr> = _curry(3, fillPipeHole$);
 const inferMatch$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3256,25 +2620,11 @@ const inferMatch$ = (
         ))(freshVar(st1)),
     inferExpr$(ctx, scrutinee, st),
   );
-const inferMatch: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    scrutinee: Expr,
-    arms: MatchArm[],
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(4, inferMatch$);
+/**
+ * Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
+ * every expression node's inferred type lands in `st.recorded`, keyed by span,
+ * so the TS backend can annotate lambda params and empty literals (ADR 0090).
+ */
 const inferExpr$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3304,29 +2654,6 @@ const inferExpr$ = (
       ) as Result<[Ty, St], IErr>,
     inferExprRaw$(ctx, e, st),
   );
-/**
- * Recording wrapper over `inferExprRaw` (mirrors src/infer.ts's `infer`):
- * every expression node's inferred type lands in `st.recorded`, keyed by span,
- * so the TS backend can annotate lambda params and empty literals (ADR 0090).
- */
-const inferExpr: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    e: Expr,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(3, inferExpr$);
 const inferExprRaw$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3670,24 +2997,6 @@ const inferExprRaw$ = (
     }
   }
 };
-const inferExprRaw: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    e: Expr,
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(3, inferExprRaw$);
 const inferDo$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3716,24 +3025,6 @@ const inferDo$ = (
           : (() => {
               throw new Error("non-exhaustive match");
             })())(exprs);
-const inferDo: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    exprs: Expr[],
-    st: St,
-  ],
-  Result<[Ty, St], IErr>
-> = _curry(3, inferDo$);
 const inferPatRecordFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3770,26 +3061,6 @@ const inferPatRecordFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const inferPatRecordFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fields: PatField[],
-    row: Row,
-    bindings: Map<string, Ty>,
-    st: St,
-  ],
-  Result<[Row, Map<string, Ty>, St], IErr>
-> = _curry(5, inferPatRecordFrom$);
 const inferPatRecord$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3811,24 +3082,6 @@ const inferPatRecord$ = (
         Ok(_tuple(tRecord(row), bindings, st2)) as Result<[Ty, Map<string, Ty>, St], IErr>,
       inferPatRecordFrom$(ctx, fields, rowBase, new Map<string, Ty>(), st1),
     ))(freshRowVar(st));
-const inferPatRecord: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    fields: PatField[],
-    st: St,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(3, inferPatRecord$);
 const inferPatCtorArgs$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3879,28 +3132,6 @@ const inferPatCtorArgs$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(args);
-const inferPatCtorArgs: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    ctor: string,
-    curT: Ty,
-    args: Pattern[],
-    st: St,
-    bindings: Map<string, Ty>,
-    sp: SpanAt,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(7, inferPatCtorArgs$);
 const inferPatTupleFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3942,24 +3173,6 @@ const inferPatTupleFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elems);
-const inferPatTupleFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elems: Pattern[],
-    st: St,
-  ],
-  Result<[Ty[], Map<string, Ty>, St], IErr>
-> = _curry(3, inferPatTupleFrom$);
 const inferPatTuple$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -3980,24 +3193,6 @@ const inferPatTuple$ = (
       Ok(_tuple(tTuple(elemTs), bindings, st1)) as Result<[Ty, Map<string, Ty>, St], IErr>,
     inferPatTupleFrom$(ctx, elems, st),
   );
-const inferPatTuple: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elems: Pattern[],
-    st: St,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(3, inferPatTuple$);
 const inferSeqPatElems$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -4038,25 +3233,6 @@ const inferSeqPatElems$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(elems);
-const inferSeqPatElems: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    elem: Ty,
-    elems: Pattern[],
-    st: St,
-  ],
-  Result<[Map<string, Ty>, St], IErr>
-> = _curry(4, inferSeqPatElems$);
 const inferSeqPat$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -4098,26 +3274,10 @@ const inferSeqPat$ = (
       inferSeqPatElems$(ctx, elem, elems, st1),
     );
   })(freshVar(st));
-const inferSeqPat: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    con: string,
-    elems: Pattern[],
-    restPat: Option<Pattern>,
-    st: St,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(5, inferSeqPat$);
+/**
+ * Pattern-side analogue of `inferExpr` — records every pattern node's span
+ * and type, so a pattern-bound param can be annotated by span.
+ */
 const inferPat$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -4148,28 +3308,6 @@ const inferPat$ = (
       ) as Result<[Ty, Map<string, Ty>, St], IErr>,
     inferPatRaw$(ctx, p, st),
   );
-/**
- * Pattern-side analogue of `inferExpr` — records every pattern node's span
- * and type, so a pattern-bound param can be annotated by span.
- */
-const inferPat: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    p: Pattern,
-    st: St,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(3, inferPat$);
 const inferPatRaw$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -4299,24 +3437,6 @@ const inferPatRaw$ = (
     }
   }
 };
-const inferPatRaw: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    p: Pattern,
-    st: St,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(3, inferPatRaw$);
 const unifyOrPatBinding: <B>(
   ctx: {
     env: Map<string, Scheme>;
@@ -4461,27 +3581,6 @@ const inferOrPatAlts$ = (
         inferPat$(ctx, alt, st),
       ),
   );
-const inferOrPatAlts: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    alts: Pattern[],
-    i: number,
-    t: Ty,
-    bindings: Map<string, Ty>,
-    st: St,
-  ],
-  Result<St, IErr>
-> = _curry(6, inferOrPatAlts$);
 const inferOrPat$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -4517,25 +3616,6 @@ const inferOrPat$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(alts);
-const inferOrPat: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    alts: Pattern[],
-    sp: SpanAt,
-    st: St,
-  ],
-  Result<[Ty, Map<string, Ty>, St], IErr>
-> = _curry(4, inferOrPat$);
 const patternBindsOpt: (rest: Option<Pattern>) => string[] = (rest: Option<Pattern>) =>
   _Option_match(
     rest,
@@ -4628,7 +3708,6 @@ const paramBound$ = (p: LamParam, bound: Set<string>): Set<string> => {
     }
   }
 };
-const paramBound: _Curry<[p: LamParam, bound: Set<string>], Set<string>> = _curry(2, paramBound$);
 const lambdaBound$ = (params: LamParam[], bound: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -4638,10 +3717,10 @@ const lambdaBound$ = (params: LamParam[], bound: Set<string>): Set<string> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-const lambdaBound: _Curry<[params: LamParam[], bound: Set<string>], Set<string>> = _curry(
-  2,
-  lambdaBound$,
-);
+/**
+ * A labeled default names the enclosing scope, not the lambda's own params,
+ * so its refs are free in the lambda — the SCC needs that edge (ADR 0098 §2).
+ */
 const labeledDefaultRefs$ = (
   params: LamParam[],
   bound: Set<string>,
@@ -4669,14 +3748,6 @@ const labeledDefaultRefs$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(params);
-/**
- * A labeled default names the enclosing scope, not the lambda's own params,
- * so its refs are free in the lambda — the SCC needs that edge (ADR 0098 §2).
- */
-const labeledDefaultRefs: _Curry<
-  [params: LamParam[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, labeledDefaultRefs$);
 const loopBound: <A, B>(params: ({ name: A } & B)[], bound: Set<A>) => Set<A> = _curry(
   2,
   <A, B>(params: ({ name: A } & B)[], bound: Set<A>) =>
@@ -4697,10 +3768,6 @@ const loopInitRefsFrom$ = (
     () => acc,
     (p) => loopInitRefsFrom$(params, i + 1, bound, freeRefs$(p.init, bound, acc)),
   );
-const loopInitRefsFrom: _Curry<
-  [params: LoopParam[], i: number, bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(4, loopInitRefsFrom$);
 const freeRefsList$ = (es: Expr[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -4710,10 +3777,6 @@ const freeRefsList$ = (es: Expr[], bound: Set<string>, acc: Set<string>): Set<st
         : (() => {
             throw new Error("non-exhaustive match");
           })())(es);
-const freeRefsList: _Curry<
-  [es: Expr[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, freeRefsList$);
 const freeRefsFields$ = (fields: Field[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -4723,10 +3786,6 @@ const freeRefsFields$ = (fields: Field[], bound: Set<string>, acc: Set<string>):
         : (() => {
             throw new Error("non-exhaustive match");
           })())(fields);
-const freeRefsFields: _Curry<
-  [fields: Field[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, freeRefsFields$);
 const freeRefsEntries$ = (entries: MapEntry[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -4741,10 +3800,6 @@ const freeRefsEntries$ = (entries: MapEntry[], bound: Set<string>, acc: Set<stri
         : (() => {
             throw new Error("non-exhaustive match");
           })())(entries);
-const freeRefsEntries: _Curry<
-  [entries: MapEntry[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, freeRefsEntries$);
 const freeRefsInterpParts$ = (
   parts: InterpPart[],
   bound: Set<string>,
@@ -4765,10 +3820,6 @@ const freeRefsInterpParts$ = (
           : (() => {
               throw new Error("non-exhaustive match");
             })())(parts);
-const freeRefsInterpParts: _Curry<
-  [parts: InterpPart[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, freeRefsInterpParts$);
 const freeRefsArms$ = (arms: MatchArm[], bound: Set<string>, acc: Set<string>): Set<string> =>
   ((_v) =>
     _v.length === 0
@@ -4787,10 +3838,6 @@ const freeRefsArms$ = (arms: MatchArm[], bound: Set<string>, acc: Set<string>): 
         : (() => {
             throw new Error("non-exhaustive match");
           })())(arms);
-const freeRefsArms: _Curry<
-  [arms: MatchArm[], bound: Set<string>, acc: Set<string>],
-  Set<string>
-> = _curry(3, freeRefsArms$);
 const freeRefs$ = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> => {
   const $match = e;
   switch ($match._tag) {
@@ -4899,10 +3946,6 @@ const freeRefs$ = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> =
     }
   }
 };
-const freeRefs: _Curry<[e: Expr, bound: Set<string>, acc: Set<string>], Set<string>> = _curry(
-  3,
-  freeRefs$,
-);
 const seedBuiltinsFrom: <A>(
   keys: A[],
   builtins: Map<A, Ty>,
@@ -5099,10 +4142,6 @@ const aliasMapFrom$ = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, 
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
-const aliasMapFrom: _Curry<
-  [stmts: Stmt[], acc: Map<string, AliasInfo>],
-  Map<string, AliasInfo>
-> = _curry(2, aliasMapFrom$);
 const registerCtorsFrom: <A, B>(
   ctors: ({ fields: CtorField[]; name: A } & B)[],
   typeName: string,
@@ -5159,10 +4198,6 @@ const registerUserCtorsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
-const registerUserCtorsFrom: _Curry<
-  [stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St],
-  [Map<string, Scheme>, St]
-> = _curry(4, registerUserCtorsFrom$);
 const registerBuiltinCtorGroup: <A, B>(
   ctors: ({ name: A; fields: CtorField[] } & B)[],
   typeName: string,
@@ -5286,10 +4321,6 @@ const registerExternsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
-const registerExternsFrom: _Curry<
-  [stmts: Stmt[], aliasMap: Map<string, AliasInfo>, env: Map<string, Scheme>, st: St],
-  [Map<string, Scheme>, St]
-> = _curry(4, registerExternsFrom$);
 const letsOfFrom: (stmts: Stmt[]) => Stmt[] = (stmts: Stmt[]) =>
   ((_v) =>
     _v.length === 0
@@ -5365,10 +4396,6 @@ const idxOfFrom$ = (lets: Stmt[], i0: number, acc0: Map<string, number>): Map<st
     return _step.value;
   }
 };
-const idxOfFrom: _Curry<
-  [lets: Stmt[], i0: number, acc0: Map<string, number>],
-  Map<string, number>
-> = _curry(3, idxOfFrom$);
 const idxOfMap: (lets: Stmt[]) => Map<string, number> = (lets: Stmt[]) =>
   idxOfFrom$(lets, 0, new Map<string, number>());
 const depsOf: <A>(letStmt: Stmt, idxOf: Map<string, A>) => A[] = _curry(
@@ -5436,10 +4463,6 @@ const preBindGroupFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const preBindGroupFrom: _Curry<
-  [group: Stmt[], env: Map<string, Scheme>, st: St],
-  [Map<string, Scheme>, St]
-> = _curry(3, preBindGroupFrom$);
 
 const inferMember$ = (
   ctx: {
@@ -5500,27 +4523,6 @@ const inferMember$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(inferExpr$(ctx, value, st));
-const inferMember: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    name: string,
-    annot: Option<TypeExpr>,
-    value: Expr,
-    span: SpanAt,
-    st: St,
-  ],
-  Result<[Ty, St], MemberErr>
-> = _curry(6, inferMember$);
 const inferGroupFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -5567,25 +4569,6 @@ const inferGroupFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const inferGroupFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    group: Stmt[],
-    st: St,
-    errs: IErr[],
-  ],
-  [Map<string, Ty>, St, IErr[]]
-> = _curry(4, inferGroupFrom$);
 const dropGroupFrom: <A>(group: Stmt[], env: Map<string, A>) => Map<string, A> = _curry(
   2,
   <A>(group: Stmt[], env: Map<string, A>) =>
@@ -5615,7 +4598,6 @@ const groupNamesFrom$ = (group: Stmt[], acc: string[]): string[] =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const groupNamesFrom: _Curry<[group: Stmt[], acc: string[]], string[]> = _curry(2, groupNamesFrom$);
 const generalizeGroupFrom$ = (
   group: Stmt[],
   bodyTypes: Map<string, Ty>,
@@ -5667,17 +4649,6 @@ const generalizeGroupFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const generalizeGroupFrom: _Curry<
-  [
-    group: Stmt[],
-    bodyTypes: Map<string, Ty>,
-    preEnv: Map<string, Scheme>,
-    env: Map<string, Scheme>,
-    names: string[],
-    st: St,
-  ],
-  Map<string, Scheme>
-> = _curry(6, generalizeGroupFrom$);
 const noteGroupLets$ = (
   group: Stmt[],
   letOwner: Map<string, SpanAt>,
@@ -5699,10 +4670,6 @@ const noteGroupLets$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(group);
-const noteGroupLets: _Curry<
-  [group: Stmt[], letOwner: Map<string, SpanAt>, st: St],
-  [Map<string, SpanAt>, St]
-> = _curry(3, noteGroupLets$);
 const processGroupsFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -5764,40 +4731,6 @@ const processGroupsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(sccs);
-const processGroupsFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    sccs: number[][],
-    lets: Stmt[],
-    st: St,
-    errs: IErr[],
-  ],
-  [
-    {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    St,
-    IErr[],
-  ]
-> = _curry(5, processGroupsFrom$);
 const inferExprStmtsFrom$ = (
   ctx: {
     env: Map<string, Scheme>;
@@ -5840,25 +4773,6 @@ const inferExprStmtsFrom$ = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
-const inferExprStmtsFrom: _Curry<
-  [
-    ctx: {
-      env: Map<string, Scheme>;
-      open: boolean;
-      ns: Map<string, Map<string, Scheme>>;
-      aliasMap: Map<string, AliasInfo>;
-      plugins: HostPlugin[];
-      loopStack: Ty[][];
-      letOwner: Map<string, SpanAt>;
-      localNames: Set<string>;
-      scopeNames: string[];
-    },
-    stmts: Stmt[],
-    st: St,
-    errs: IErr[],
-  ],
-  [St, IErr[]]
-> = _curry(4, inferExprStmtsFrom$);
 const seedImportsFrom: <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) => Map<A, B> = _curry(
   3,
   <A, B>(keys: A[], imports: Map<A, B>, env: Map<A, B>) =>
@@ -6096,13 +5010,14 @@ const allSameConcreteFrom$ = (shown: string, uses: Ty[], i: number): boolean =>
     (t) =>
       and(isConcrete(t), eq(showType(t), shown)) ? allSameConcreteFrom$(shown, uses, i + 1) : false,
   );
-const allSameConcreteFrom: _Curry<[shown: string, uses: Ty[], i: number], boolean> = _curry(
-  3,
-  allSameConcreteFrom$,
-);
 const allSameConcrete$ = (shown: string, uses: Ty[]): boolean =>
   allSameConcreteFrom$(shown, uses, 0);
-const allSameConcrete: _Curry<[shown: string, uses: Ty[]], boolean> = _curry(2, allSameConcrete$);
+/**
+ * Resolve `letParams` for TS emit (ADR 0035): a noted `let` is annotated only
+ * when its body instantiated it at ONE fully-concrete type. Uses zonk against
+ * the FINAL state, like `zonkRecorded` — a use recorded mid-inference is still
+ * full of unsolved vars.
+ */
 const resolveLetParamsFrom$ = (keys: string[], st: St): TypeAt[] =>
   ((_v) =>
     _v.length === 0
@@ -6128,16 +5043,6 @@ const resolveLetParamsFrom$ = (keys: string[], st: St): TypeAt[] =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(keys);
-/**
- * Resolve `letParams` for TS emit (ADR 0035): a noted `let` is annotated only
- * when its body instantiated it at ONE fully-concrete type. Uses zonk against
- * the FINAL state, like `zonkRecorded` — a use recorded mid-inference is still
- * full of unsolved vars.
- */
-const resolveLetParamsFrom: _Curry<[keys: string[], st: St], TypeAt[]> = _curry(
-  2,
-  resolveLetParamsFrom$,
-);
 const resolveLetParams: (st: St) => TypeAt[] = (st: St) =>
   resolveLetParamsFrom$(_Map_keys(st.letSpans), st);
 /**

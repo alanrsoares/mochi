@@ -166,7 +166,6 @@ const escFrom$ = (chars: string[], i: number, acc: string): string =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, chars));
-const escFrom: _Curry<[chars: string[], i: number, acc: string], string> = _curry(3, escFrom$);
 export const escStrBody: (s: string) => string = (s: string) => escFrom$(_Str_chars(s), 0, "");
 export const strLit: (s: string) => string = (s: string) => `"${escStrBody(s)}"`;
 const WIDTH: number = 80;
@@ -346,7 +345,11 @@ const braced$ = (open: string, close: string, items: Doc[]): Doc =>
  */
 export const braced: _Curry<[open: string, close: string, items: Doc[]], Doc> = _curry(3, braced$);
 const parenIf$ = (cond: boolean, d: Doc): Doc => (cond ? cat([txt("("), d, txt(")")]) : d);
-const parenIf: _Curry<[cond: boolean, d: Doc], Doc> = _curry(2, parenIf$);
+/**
+ * A callee / operand needs parens when dropping them would reparse to a
+ * different tree: a lambda or ternary binds looser than application, and a
+ * nested pipe would re-associate.
+ */
 const loosePrefix$ = (cts: Ctx, e: Expr): boolean => {
   const $match = e;
   switch ($match._tag) {
@@ -361,12 +364,6 @@ const loosePrefix$ = (cts: Ctx, e: Expr): boolean => {
     }
   }
 };
-/**
- * A callee / operand needs parens when dropping them would reparse to a
- * different tree: a lambda or ternary binds looser than application, and a
- * nested pipe would re-associate.
- */
-const loosePrefix: _Curry<[cts: Ctx, e: Expr], boolean> = _curry(2, loosePrefix$);
 /**
  * `LPSpanned` carries binder spans for the IDE; the printer only wants the shape.
  */
@@ -494,14 +491,13 @@ export const noComments: Ctx = {
   commentStarts: [] as number[],
   src: "",
 };
-const spanKey$ = (kind: string, sp: SpanAt): string => `${kind}:${show(sp.start)}:${show(sp.end)}`;
 /**
  * A statement and its expression can carry the SAME span (`test(…)` as an
  * expression statement), and TypeScript tells them apart by node identity.
  * The kind tag restores that: without it the comment attaches once but prints
  * twice, at the statement and again at the expression.
  */
-const spanKey: _Curry<[kind: string, sp: SpanAt], string> = _curry(2, spanKey$);
+const spanKey$ = (kind: string, sp: SpanAt): string => `${kind}:${show(sp.start)}:${show(sp.end)}`;
 const STMT: string = "s";
 const EXPR: string = "e";
 const CTOR: string = "c";
@@ -519,6 +515,12 @@ const pushAt: <A, B>(key: A, c: B, table: Map<A, B[]>) => Map<A, B[]> = _curry(
   <A, B>(key: A, c: B, table: Map<A, B[]>) =>
     _Map_set(key, _Array_append(c, atKey(table, key)), table),
 );
+/**
+ * Scan every `//` / `///` comment, string-aware: a `//` inside a string
+ * literal (or a `${…}` hole) is not a comment. Uses the lexer's own string
+ * skipper, so the two agree exactly on where a literal ends.
+ * Index of the next newline at or after `i`, or the end of source.
+ */
 const lineEndFrom$ = (src: string, i: number): number =>
   ((_v) =>
     _v._tag === "None"
@@ -531,12 +533,11 @@ const lineEndFrom$ = (src: string, i: number): number =>
               throw new Error("non-exhaustive match");
             })())(_Str_get(i, src));
 /**
- * Scan every `//` / `///` comment, string-aware: a `//` inside a string
- * literal (or a `${…}` hole) is not a comment. Uses the lexer's own string
- * skipper, so the two agree exactly on where a literal ends.
- * Index of the next newline at or after `i`, or the end of source.
+ * Trailing horizontal whitespace, by CHAR CODE: mochi string literals have no
+ * `\r` escape (the lexer's `escChar` knows `\n` and `\t` only), so a literal
+ * "\r" would be the letter `r` and this would eat the last letter of every
+ * comment ending in one. Space 32, tab 9, carriage return 13.
  */
-const lineEndFrom: _Curry<[src: string, i: number], number> = _curry(2, lineEndFrom$);
 const trimEndFrom$ = (s: string, n: number): string =>
   n === 0
     ? ""
@@ -548,13 +549,6 @@ const trimEndFrom$ = (s: string, n: number): string =>
             : _v._tag === "Some" && _v.value === 13
               ? trimEndFrom$(s, n - 1)
               : _Str_slice(0, n, s))(_Str_codeAt(n - 1, s));
-/**
- * Trailing horizontal whitespace, by CHAR CODE: mochi string literals have no
- * `\r` escape (the lexer's `escChar` knows `\n` and `\t` only), so a literal
- * "\r" would be the letter `r` and this would eat the last letter of every
- * comment ending in one. Space 32, tab 9, carriage return 13.
- */
-const trimEndFrom: _Curry<[s: string, n: number], string> = _curry(2, trimEndFrom$);
 const trimEnd: (s: string) => string = (s: string) => trimEndFrom$(s, _Str_length(s));
 const commentAt$ = (src: string, i: number, end: number): Comment => {
   const lineEnd: number = lineEndFrom$(src, end + 1);
@@ -566,7 +560,6 @@ const commentAt$ = (src: string, i: number, end: number): Comment => {
     trailing: false,
   };
 };
-const commentAt: _Curry<[src: string, i: number, end: number], Comment> = _curry(3, commentAt$);
 const scanComments$ = (src: string, i: number, lineHasToken: boolean, acc: Comment[]): Comment[] =>
   ((_v) =>
     _v._tag === "None"
@@ -601,10 +594,6 @@ const scanComments$ = (src: string, i: number, lineHasToken: boolean, acc: Comme
                     : (() => {
                         throw new Error("non-exhaustive match");
                       })())(_Str_get(i, src));
-const scanComments: _Curry<
-  [src: string, i: number, lineHasToken: boolean, acc: Comment[]],
-  Comment[]
-> = _curry(4, scanComments$);
 export const collectComments: (src: string) => Comment[] = (src: string) =>
   scanComments$(src, 0, false, [] as Comment[]);
 /**
@@ -778,6 +767,10 @@ const anchorIndex: (sorted: Anchor[]) => AnchorIndex = (sorted: Anchor[]) => ({
   byStart: sorted,
   byEnd: _Array_sortBy((a: Anchor) => a.sp.end, sorted),
 });
+/**
+ * The first index in `[lo, hi)` whose anchor has `key(a) >= target`, for a
+ * `key` that `anchors` is sorted by; `hi` when there is none.
+ */
 const lowerBound$ = (
   anchors: Anchor[],
   key: (a: Anchor) => number,
@@ -794,22 +787,19 @@ const lowerBound$ = (
             : lowerBound$(anchors, key, target, lo, mid))(_Array_get(mid, anchors)))(
         floor((lo + hi) / 2),
       );
-/**
- * The first index in `[lo, hi)` whose anchor has `key(a) >= target`, for a
- * `key` that `anchors` is sorted by; `hi` when there is none.
- */
-const lowerBound: _Curry<
-  [anchors: Anchor[], key: (a: Anchor) => number, target: number, lo: number, hi: number],
-  number
-> = _curry(5, lowerBound$);
 const startOf: (a: Anchor) => number = (a: Anchor) => a.sp.start;
 const endOf: (a: Anchor) => number = (a: Anchor) => a.sp.end;
-const lineStartOf$ = (src: string, i: number): number =>
-  i <= 0 ? 0 : _Option_contains("\n", _Str_get(i - 1, src)) ? i : lineStartOf$(src, i - 1);
 /**
  * Where the line holding offset `i` starts.
  */
-const lineStartOf: _Curry<[src: string, i: number], number> = _curry(2, lineStartOf$);
+const lineStartOf$ = (src: string, i: number): number =>
+  i <= 0 ? 0 : _Option_contains("\n", _Str_get(i - 1, src)) ? i : lineStartOf$(src, i - 1);
+/**
+ * The node a trailing comment most tightly follows ON ITS OWN LINE: the
+ * largest `end` at or before the comment's start, with no newline between.
+ * Among anchors sharing that end, the first in `byStart` order wins; the
+ * stable sort keeps that order within `byEnd`.
+ */
 const trailedBy$ = (idx: AnchorIndex, c: Comment, src: string): Option<Anchor> => {
   const n: number = length(idx.byEnd);
   const past: number = lowerBound$(idx.byEnd, endOf, c.start + 1, 0, n);
@@ -820,23 +810,16 @@ const trailedBy$ = (idx: AnchorIndex, c: Comment, src: string): Option<Anchor> =
       : (None as Option<Anchor>))(_Array_get(past - 1, idx.byEnd));
 };
 /**
- * The node a trailing comment most tightly follows ON ITS OWN LINE: the
- * largest `end` at or before the comment's start, with no newline between.
- * Among anchors sharing that end, the first in `byStart` order wins; the
- * stable sort keeps that order within `byEnd`.
- */
-const trailedBy: _Curry<[idx: AnchorIndex, c: Comment, src: string], Option<Anchor>> = _curry(
-  3,
-  trailedBy$,
-);
-const leadTarget$ = (idx: AnchorIndex, c: Comment): Option<Anchor> =>
-  _Array_get(lowerBound$(idx.byStart, startOf, c.end, 0, length(idx.byStart)), idx.byStart);
-/**
  * The node an own-line comment most tightly precedes: the first anchor
  * starting at or after the comment ends (the sort puts outermost first).
  */
-const leadTarget: _Curry<[idx: AnchorIndex, c: Comment], Option<Anchor>> = _curry(2, leadTarget$);
+const leadTarget$ = (idx: AnchorIndex, c: Comment): Option<Anchor> =>
+  _Array_get(lowerBound$(idx.byStart, startOf, c.end, 0, length(idx.byStart)), idx.byStart);
 
+/**
+ * `None` when the comment has no anchor at all (it sits past the last node) —
+ * the program printer emits those after the final statement.
+ */
 const attachOne$ = (idx: AnchorIndex, src: string, c: Comment, tbl: Ctx): Option<Ctx> => {
   const trailed: Option<Anchor> = c.trailing ? trailedBy$(idx, c, src) : (None as Option<Anchor>);
   return _Option_match(
@@ -852,14 +835,6 @@ const attachOne$ = (idx: AnchorIndex, src: string, c: Comment, tbl: Ctx): Option
       Some({ ...tbl, trailing: pushAt(spanKey$(a.kind, a.sp), c, tbl.trailing) }) as Option<Ctx>,
   );
 };
-/**
- * `None` when the comment has no anchor at all (it sits past the last node) —
- * the program printer emits those after the final statement.
- */
-const attachOne: _Curry<
-  [idx: AnchorIndex, src: string, c: Comment, tbl: Ctx],
-  Option<Ctx>
-> = _curry(4, attachOne$);
 const attachFrom$ = (
   comments: Comment[],
   i: number,
@@ -883,10 +858,6 @@ const attachFrom$ = (
         ),
       ),
   );
-const attachFrom: _Curry<
-  [comments: Comment[], i: number, idx: AnchorIndex, src: string, acc: Attached],
-  Attached
-> = _curry(5, attachFrom$);
 const commentsForExpr$ = (src: string, e: Expr): Ctx =>
   attachFrom$(collectComments(src), 0, anchorIndex(sortAnchors(exprAnchors(e))), src, {
     table: noComments,
@@ -896,41 +867,37 @@ const commentsForExpr$ = (src: string, e: Expr): Ctx =>
  * Build the table for one expression: scan the source, anchor every node.
  */
 export const commentsForExpr: _Curry<[src: string, e: Expr], Ctx> = _curry(2, commentsForExpr$);
+/**
+ * Leading comment lines for a node: each on its own line, with a blank line
+ * kept after any comment the source separated from what follows.
+ */
 const leadingDocs$ = (cts: Ctx, kind: string, sp: SpanAt): Doc[] =>
   _Array_flatMap(
     (c: Comment) => (c.blankAfter ? [txt(c.text), hardline, hardline] : [txt(c.text), hardline]),
     atKey(cts.leading, spanKey$(kind, sp)),
   );
 /**
- * Leading comment lines for a node: each on its own line, with a blank line
- * kept after any comment the source separated from what follows.
+ * A trailing comment prints ` // text` after the node, then `breakParent` so
+ * whatever follows lands on a new line (otherwise it would be commented out)
+ * without emitting a newline here — the enclosing group supplies it.
  */
-const leadingDocs: _Curry<[cts: Ctx, kind: string, sp: SpanAt], Doc[]> = _curry(3, leadingDocs$);
 const trailingDocs$ = (cts: Ctx, kind: string, sp: SpanAt): Doc[] =>
   _Array_flatMap(
     (c: Comment) => [lineSuffix(txt(` ${c.text}`)), breakParent],
     atKey(cts.trailing, spanKey$(kind, sp)),
   );
-/**
- * A trailing comment prints ` // text` after the node, then `breakParent` so
- * whatever follows lands on a new line (otherwise it would be commented out)
- * without emitting a newline here — the enclosing group supplies it.
- */
-const trailingDocs: _Curry<[cts: Ctx, kind: string, sp: SpanAt], Doc[]> = _curry(3, trailingDocs$);
 const hasLead$ = (cts: Ctx, kind: string, sp: SpanAt): boolean =>
   length(atKey(cts.leading, spanKey$(kind, sp))) > 0;
-const hasLead: _Curry<[cts: Ctx, kind: string, sp: SpanAt], boolean> = _curry(3, hasLead$);
 const withComments$ = (cts: Ctx, kind: string, sp: SpanAt, doc: Doc): Doc => {
   const lead: Doc[] = leadingDocs$(cts, kind, sp);
   const trail: Doc[] = trailingDocs$(cts, kind, sp);
   return and(length(lead) === 0, length(trail) === 0) ? doc : cat([...lead, doc, ...trail]);
 };
-const withComments: _Curry<[cts: Ctx, kind: string, sp: SpanAt, doc: Doc], Doc> = _curry(
-  4,
-  withComments$,
-);
 import { namespaceRuntime } from "../prelude/prelude.gen.mjs";
 import { preludeJsDefs } from "../prelude/prelude.gen.mjs";
+/**
+ * Digits of the leading `_curry(N,` in an emitted definition, or None.
+ */
 const curryArityFrom$ = (def: string, i: number, acc: string): string =>
   _Option_match(
     _Str_codeAt(i, def),
@@ -941,12 +908,8 @@ const curryArityFrom$ = (def: string, i: number, acc: string): string =>
         : acc,
   );
 /**
- * Digits of the leading `_curry(N,` in an emitted definition, or None.
+ * Count the parameters of a bare `const name = (a, b) => …` definition.
  */
-const curryArityFrom: _Curry<[def: string, i: number, acc: string], string> = _curry(
-  3,
-  curryArityFrom$,
-);
 const commaCountFrom$ = (s: string, i: number, acc: number): number =>
   ((_v) =>
     _v._tag === "None"
@@ -958,20 +921,12 @@ const commaCountFrom$ = (s: string, i: number, acc: number): number =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Str_get(i, s));
-/**
- * Count the parameters of a bare `const name = (a, b) => …` definition.
- */
-const commaCountFrom: _Curry<[s: string, i: number, acc: number], number> = _curry(
-  3,
-  commaCountFrom$,
-);
 const indexOfFrom$ = (needle: string, s: string, i: number): number =>
   i + _Str_length(needle) > _Str_length(s)
     ? -1
     : eq(_Str_slice(i, i + _Str_length(needle), s), needle)
       ? i
       : indexOfFrom$(needle, s, i + 1);
-const indexOfFrom: _Curry<[needle: string, s: string, i: number], number> = _curry(3, indexOfFrom$);
 /**
  * The emitted arity of one runtime definition: `_curry(N, …)` states it, a
  * bare `(a, b) => …` counts its outer params, anything else (a value like
@@ -1004,6 +959,10 @@ const runtimeArityOf: (jsId: string) => Option<number> = (jsId: string) =>
       return n >= 2 ? (Some(n) as Option<number>) : (None as Option<number>);
     },
   );
+/**
+ * `Array.map` -> its runtime's flat arity, or None when the namespace is
+ * shadowed by a local binding or the member is unknown.
+ */
 const namespaceArity$ = (shadowed: Set<string>, target: Expr, member: string): Option<number> => {
   const $match = target;
   switch ($match._tag) {
@@ -1027,14 +986,6 @@ const namespaceArity$ = (shadowed: Set<string>, target: Expr, member: string): O
     }
   }
 };
-/**
- * `Array.map` -> its runtime's flat arity, or None when the namespace is
- * shadowed by a local binding or the member is unknown.
- */
-const namespaceArity: _Curry<
-  [shadowed: Set<string>, target: Expr, member: string],
-  Option<number>
-> = _curry(3, namespaceArity$);
 /**
  * Params codegen collapses into ONE flat JS function — `x => y => e` and
  * `(x, y) => e` alike.
@@ -1394,16 +1345,8 @@ const withLetArities$ = (
     base,
     stmts,
   );
-const withLetArities: _Curry<
-  [stmts: Stmt[], innerBound: Set<string>, base: Map<string, number>],
-  Map<string, number>
-> = _curry(3, withLetArities$);
 const buildFlatArity$ = (stmts: Stmt[], innerBound: Set<string>): Map<string, number> =>
   withLetArities$(stmts, innerBound, preludeArity(innerBound));
-const buildFlatArity: _Curry<
-  [stmts: Stmt[], innerBound: Set<string>],
-  Map<string, number>
-> = _curry(2, buildFlatArity$);
 /**
  * Values whose evaluation is observationally the same once or per call —
  * lifting one out of a lambda cannot change how often it runs.
@@ -1451,7 +1394,9 @@ const mentionsRef$ = (e: Expr, name: string): boolean => {
     }
   }
 };
-const mentionsRef: _Curry<[e: Expr, name: string], boolean> = _curry(2, mentionsRef$);
+/**
+ * Flat arity of a ref or namespace member, or None when ADR 0065 cannot see it.
+ */
 const calleeArity$ = (ctx: Ctx, fn: Expr): Option<number> => {
   const $match = fn;
   switch ($match._tag) {
@@ -1469,9 +1414,11 @@ const calleeArity$ = (ctx: Ctx, fn: Expr): Option<number> => {
   }
 };
 /**
- * Flat arity of a ref or namespace member, or None when ADR 0065 cannot see it.
+ * Prelude and namespace arity ONLY. Same-file lets are fine for ADR 0065
+ * flattening, but eta of a generic user binding is tsc-unclean: ADR 0037 emits
+ * partial-application overloads for concrete functions only, and `fmt` cannot
+ * see schemes.
  */
-const calleeArity: _Curry<[ctx: Ctx, fn: Expr], Option<number>> = _curry(2, calleeArity$);
 const etaCalleeArity$ = (ctx: Ctx, fn: Expr): Option<number> => {
   const $match = fn;
   switch ($match._tag) {
@@ -1488,13 +1435,6 @@ const etaCalleeArity$ = (ctx: Ctx, fn: Expr): Option<number> => {
     }
   }
 };
-/**
- * Prelude and namespace arity ONLY. Same-file lets are fine for ADR 0065
- * flattening, but eta of a generic user binding is tsc-unclean: ADR 0037 emits
- * partial-application overloads for concrete functions only, and `fmt` cannot
- * see schemes.
- */
-const etaCalleeArity: _Curry<[ctx: Ctx, fn: Expr], Option<number>> = _curry(2, etaCalleeArity$);
 const PIPE_PREC: number = 5;
 const FAST_PIPE_PREC: number = 21;
 const NEQ_PREC: number = 8;
@@ -1554,6 +1494,11 @@ const isLambdaExpr: (e: Expr) => boolean = (e: Expr) => {
     }
   }
 };
+/**
+ * False when the lambda eta-contracts to a partial: it then prints as a call,
+ * which needs no parens. Keeping this in step with `lambdaD` is what makes the
+ * layout a fixpoint (ADR 0091).
+ */
 const printsAsLambda$ = (cts: Ctx, e: Expr): boolean => {
   const $match = e;
   switch ($match._tag) {
@@ -1567,11 +1512,9 @@ const printsAsLambda$ = (cts: Ctx, e: Expr): boolean => {
   }
 };
 /**
- * False when the lambda eta-contracts to a partial: it then prints as a call,
- * which needs no parens. Keeping this in step with `lambdaD` is what makes the
- * layout a fixpoint (ADR 0091).
+ * Forced parens for an infix operand: a lambda or ternary binds looser than
+ * any operator. A pipe is NOT here — it carries a precedence of its own.
  */
-const printsAsLambda: _Curry<[cts: Ctx, e: Expr], boolean> = _curry(2, printsAsLambda$);
 const isLambdaOrTernary$ = (cts: Ctx, e: Expr): boolean => {
   const $match = e;
   switch ($match._tag) {
@@ -1583,11 +1526,6 @@ const isLambdaOrTernary$ = (cts: Ctx, e: Expr): boolean => {
     }
   }
 };
-/**
- * Forced parens for an infix operand: a lambda or ternary binds looser than
- * any operator. A pipe is NOT here — it carries a precedence of its own.
- */
-const isLambdaOrTernary: _Curry<[cts: Ctx, e: Expr], boolean> = _curry(2, isLambdaOrTernary$);
 const binOpFor$ = (fn: Expr, args: Expr[]): Option<{ symbol: string; prec: number }> =>
   ((_v) =>
     _v[0]._tag === "ERef" && _v[1].length === 2
@@ -1595,10 +1533,6 @@ const binOpFor$ = (fn: Expr, args: Expr[]): Option<{ symbol: string; prec: numbe
           _v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]],
         )
       : (None as Option<{ symbol: string; prec: number }>))(_tuple(fn, args));
-const binOpFor: _Curry<[fn: Expr, args: Expr[]], Option<{ symbol: string; prec: number }>> = _curry(
-  2,
-  binOpFor$,
-);
 const binOpOf: (e: Expr) => Option<{ symbol: string; prec: number }> = (e: Expr) => {
   const $match = e;
   switch ($match._tag) {
@@ -1630,6 +1564,11 @@ const pipePrecOf: (e: Expr) => Option<number> = (e: Expr) => {
     }
   }
 };
+/**
+ * `!=` desugars to `not(eq(a, b))`, and an explicit `!(a == b)` desugars to the
+ * exact same shape — so folding either back to `!=` is a deliberate (lossy)
+ * simplification, in the same spirit as the composition re-fold.
+ */
 const neqFor$ = (fn: Expr, args: Expr[]): Option<[Expr, Expr]> =>
   ((_v) =>
     _v[0]._tag === "ERef" &&
@@ -1660,12 +1599,6 @@ const neqFor$ = (fn: Expr, args: Expr[]): Option<[Expr, Expr]> =>
           ],
         )
       : (None as Option<[Expr, Expr]>))(_tuple(fn, args));
-/**
- * `!=` desugars to `not(eq(a, b))`, and an explicit `!(a == b)` desugars to the
- * exact same shape — so folding either back to `!=` is a deliberate (lossy)
- * simplification, in the same spirit as the composition re-fold.
- */
-const neqFor: _Curry<[fn: Expr, args: Expr[]], Option<[Expr, Expr]>> = _curry(2, neqFor$);
 const neqOperands: (e: Expr) => Option<[Expr, Expr]> = (e: Expr) => {
   const $match = e;
   switch ($match._tag) {
@@ -1694,6 +1627,11 @@ const infixPrec: (e: Expr) => Option<number> = (e: Expr) =>
       ),
     (p) => Some(p) as Option<number>,
   );
+/**
+ * An operand of an infix operator. A lambda or ternary always parenthesizes;
+ * otherwise precedence decides, with the right operand also parenthesizing at
+ * EQUAL precedence, since every infix operator here is left-associative.
+ */
 const binOperandD$ = (cts: Ctx, e: Expr, parentPrec: number, isRight: boolean): Doc =>
   isLambdaOrTernary$(cts, e)
     ? cat([txt("("), exprD$(cts, e), txt(")")])
@@ -1703,14 +1641,9 @@ const binOperandD$ = (cts: Ctx, e: Expr, parentPrec: number, isRight: boolean): 
         (prec) => parenIf$(isRight ? prec <= parentPrec : prec < parentPrec, exprD$(cts, e)),
       );
 /**
- * An operand of an infix operator. A lambda or ternary always parenthesizes;
- * otherwise precedence decides, with the right operand also parenthesizing at
- * EQUAL precedence, since every infix operator here is left-associative.
+ * A pipe's left operand parenthesizes when dropping the parens would reparse:
+ * a looser infix (`(a ++ b)->f`), a nested pipe, or a lambda / ternary.
  */
-const binOperandD: _Curry<[cts: Ctx, e: Expr, parentPrec: number, isRight: boolean], Doc> = _curry(
-  4,
-  binOperandD$,
-);
 const pipeLeftD$ = (cts: Ctx, e: Expr, parentPrec: number): Doc =>
   isLambdaOrTernary$(cts, e)
     ? cat([txt("("), exprD$(cts, e), txt(")")])
@@ -1720,10 +1653,9 @@ const pipeLeftD$ = (cts: Ctx, e: Expr, parentPrec: number): Doc =>
         (prec) => parenIf$(prec < parentPrec, exprD$(cts, e)),
       );
 /**
- * A pipe's left operand parenthesizes when dropping the parens would reparse:
- * a looser infix (`(a ++ b)->f`), a nested pipe, or a lambda / ternary.
+ * `++` is left-associative (`concat(concat(a, b), c)`); flatten it like `|>` so
+ * a long string build breaks one segment per line instead of overflowing.
  */
-const pipeLeftD: _Curry<[cts: Ctx, e: Expr, parentPrec: number], Doc> = _curry(3, pipeLeftD$);
 const concatSegmentsFrom$ = (e: Expr, acc: Expr[]): Expr[] =>
   ((_v) =>
     _v._tag === "ECall" && _v.fn._tag === "ERef" && _v.fn.name === "concat" && _v.args.length === 2
@@ -1733,11 +1665,6 @@ const concatSegmentsFrom$ = (e: Expr, acc: Expr[]): Expr[] =>
           },
         )
       : _Array_prepend(e, acc))(e);
-/**
- * `++` is left-associative (`concat(concat(a, b), c)`); flatten it like `|>` so
- * a long string build breaks one segment per line instead of overflowing.
- */
-const concatSegmentsFrom: _Curry<[e: Expr, acc: Expr[]], Expr[]> = _curry(2, concatSegmentsFrom$);
 const concatD$ = (cts: Ctx, l: Expr, r: Expr): Doc =>
   ((_v) =>
     _v.length === 0
@@ -1760,7 +1687,6 @@ const concatD$ = (cts: Ctx, l: Expr, r: Expr): Doc =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(concatSegmentsFrom$(l, [r]));
-const concatD: _Curry<[cts: Ctx, l: Expr, r: Expr], Doc> = _curry(3, concatD$);
 const binaryD$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
   ((_v) =>
     _v._tag === "Some"
@@ -1798,7 +1724,11 @@ const binaryD$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(neqFor$(fn, args));
-const binaryD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(3, binaryD$);
+/**
+ * `not(x)` → `!x`, `negate(x)` → `-x`. Unary binds tighter than every infix
+ * operator (its operand parses at atom level), so an operator-shaped operand
+ * always needs parens regardless of precedence.
+ */
 const unaryD$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
   ((_v) =>
     _v[0]._tag === "ERef" && _v[1].length === 1
@@ -1818,11 +1748,12 @@ const unaryD$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
           ))(_v as [Extract<[Expr, Expr[]][0], { _tag: "ERef" }>, [Expr, Expr[]][1]])
       : (None as Option<Doc>))(_tuple(fn, args));
 /**
- * `not(x)` → `!x`, `negate(x)` → `-x`. Unary binds tighter than every infix
- * operator (its operand parses at atom level), so an operator-shaped operand
- * always needs parens regardless of precedence.
+ * `x => f(a, x)` -> `f(a)` when that is a clean refactor (ADR 0091): `f` is a
+ * prelude or namespace builtin, the eta argument saturates the last slot, the
+ * prefix args are inert (so lifting them out of the lambda cannot change how
+ * often they run), and `x` is free in neither `f` nor the prefix. A `$`-prefixed
+ * param belongs to sections / compose, and an annotation is load-bearing.
  */
-const unaryD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(3, unaryD$);
 const etaPartial$ = (ctx: Ctx, params: LamParam[], body: Expr): Option<Expr> =>
   ((_v) =>
     _v.length === 1
@@ -1912,22 +1843,19 @@ const etaPartial$ = (ctx: Ctx, params: LamParam[], body: Expr): Option<Expr> =>
                 )
               : (None as Option<Expr>))(unspan(only)))(_v)
       : (None as Option<Expr>))(params);
-/**
- * `x => f(a, x)` -> `f(a)` when that is a clean refactor (ADR 0091): `f` is a
- * prelude or namespace builtin, the eta argument saturates the last slot, the
- * prefix args are inert (so lifting them out of the lambda cannot change how
- * often they run), and `x` is free in neither `f` nor the prefix. A `$`-prefixed
- * param belongs to sections / compose, and an annotation is load-bearing.
- */
-const etaPartial: _Curry<[ctx: Ctx, params: LamParam[], body: Expr], Option<Expr>> = _curry(
-  3,
-  etaPartial$,
-);
 const allInert: (args: Expr[]) => boolean = (args: Expr[]) =>
   length(filter((a: Expr) => !isInert(a), args)) === 0;
 const anyMentions$ = (args: Expr[], name: string): boolean =>
   length(filter((a: Expr) => mentionsRef$(a, name), args)) > 0;
-const anyMentions: _Curry<[args: Expr[], name: string], boolean> = _curry(2, anyMentions$);
+/**
+ * `f(a)(b)` -> `f(a, b)` when `f`'s flat arity is known (ADR 0065): both lower
+ * to one `_curry`-wrapped flat function, so every grouping of the same
+ * arguments is the same call and the flat one is canonical. Purely syntactic.
+ *
+ * Bails on anything it cannot see through: an unknown callee, a sugar-provenance
+ * call, a nullary group (`f()(x)` passes `unit`, which merging would drop), and
+ * over-application past the known arity, where the extra groups apply the RESULT.
+ */
 const spineGroups$ = (e: Expr, acc: Expr[][]): Option<[Expr, Expr[][]]> =>
   ((_v) =>
     _v._tag === "ECall" && _v.origin._tag === "Some"
@@ -1939,19 +1867,6 @@ const spineGroups$ = (e: Expr, acc: Expr[][]): Option<[Expr, Expr[][]]> =>
             },
           )
         : (Some(_tuple(e, acc)) as Option<[Expr, Expr[][]]>))(e);
-/**
- * `f(a)(b)` -> `f(a, b)` when `f`'s flat arity is known (ADR 0065): both lower
- * to one `_curry`-wrapped flat function, so every grouping of the same
- * arguments is the same call and the flat one is canonical. Purely syntactic.
- *
- * Bails on anything it cannot see through: an unknown callee, a sugar-provenance
- * call, a nullary group (`f()(x)` passes `unit`, which merging would drop), and
- * over-application past the known arity, where the extra groups apply the RESULT.
- */
-const spineGroups: _Curry<[e: Expr, acc: Expr[][]], Option<[Expr, Expr[][]]>> = _curry(
-  2,
-  spineGroups$,
-);
 const flattenCallSpine$ = (ctx: Ctx, e: Expr): Option<Expr> =>
   ((_v) =>
     _v._tag === "None"
@@ -1993,7 +1908,6 @@ const flattenCallSpine$ = (ctx: Ctx, e: Expr): Option<Expr> =>
         : (() => {
             throw new Error("non-exhaustive match");
           })())(spineGroups$(e, [] as Expr[][]));
-const flattenCallSpine: _Curry<[ctx: Ctx, e: Expr], Option<Expr>> = _curry(2, flattenCallSpine$);
 const anyEmptyGroup: <A>(groups: A[][]) => boolean = <A>(groups: A[][]) =>
   length(filter((g: A[]) => length(g) === 0, groups)) > 0;
 const anyUnit: (args: Expr[]) => boolean = (args: Expr[]) =>
@@ -2028,7 +1942,6 @@ const isRef$ = (e: Expr, name: string): boolean => {
     }
   }
 };
-const isRef: _Curry<[e: Expr, name: string], boolean> = _curry(2, isRef$);
 const sectionParts: (body: Expr) => Option<[{ symbol: string; prec: number }, Expr, Expr]> = (
   body: Expr,
 ) =>
@@ -2093,10 +2006,9 @@ const sectionOf$ = (cts: Ctx, params: LamParam[], body: Expr): Option<Doc> =>
                       })())(sectionParts(body))
             : (None as Option<Doc>))(_v)
       : (None as Option<Doc>))(params);
-const sectionOf: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Option<Doc>> = _curry(
-  3,
-  sectionOf$,
-);
+/**
+ * `($x) => g(f($x))` — the shape `>>` desugars to.
+ */
 const composeParts$ = (params: LamParam[], body: Expr): Option<[Expr, Expr]> =>
   ((_v) =>
     _v[0].length === 1 &&
@@ -2136,12 +2048,8 @@ const composeParts$ = (params: LamParam[], body: Expr): Option<[Expr, Expr]> =>
         )
       : (None as Option<[Expr, Expr]>))(_tuple(params, body));
 /**
- * `($x) => g(f($x))` — the shape `>>` desugars to.
+ * `>>` is left-associative, so `a >> b >> c` nests to the left; flatten it.
  */
-const composeParts: _Curry<[params: LamParam[], body: Expr], Option<[Expr, Expr]>> = _curry(
-  2,
-  composeParts$,
-);
 const composeSegmentsFrom$ = (e: Expr, acc: Expr[]): Expr[] => {
   const $match = e;
   switch ($match._tag) {
@@ -2164,9 +2072,9 @@ const composeSegmentsFrom$ = (e: Expr, acc: Expr[]): Expr[] => {
   }
 };
 /**
- * `>>` is left-associative, so `a >> b >> c` nests to the left; flatten it.
+ * A destructuring `let (a, b) = e in body` reaches the printer as the IIFE the
+ * parser desugared it to; fold it back. Kept in step with `printsAsLet`.
  */
-const composeSegmentsFrom: _Curry<[e: Expr, acc: Expr[]], Expr[]> = _curry(2, composeSegmentsFrom$);
 const destructureLetD$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
   ((_v) =>
     _v[0]._tag === "ELambda" && _v[0].params.length === 1 && _v[1].length === 1
@@ -2184,14 +2092,6 @@ const destructureLetD$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
             unspan(p),
           ))(_v as [Extract<[Expr, Expr[]][0], { _tag: "ELambda" }>, [Expr, Expr[]][1]])
       : (None as Option<Doc>))(_tuple(fn, args));
-/**
- * A destructuring `let (a, b) = e in body` reaches the printer as the IIFE the
- * parser desugared it to; fold it back. Kept in step with `printsAsLet`.
- */
-const destructureLetD: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(
-  3,
-  destructureLetD$,
-);
 const refoldCall$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
   _Option_match(
     destructureLetD$(cts, fn, args),
@@ -2203,17 +2103,15 @@ const refoldCall$ = (cts: Ctx, fn: Expr, args: Expr[]): Option<Doc> =>
       ),
     (d) => Some(d) as Option<Doc>,
   );
-const refoldCall: _Curry<[cts: Ctx, fn: Expr, args: Expr[]], Option<Doc>> = _curry(3, refoldCall$);
+/**
+ * `f(~tone="amber")` — a labeled call is lowered to a record argument tagged
+ * `origin: "labeled"` (ADR 0098 §2); print the labels back.
+ */
 const labeledFieldD$ = (cts: Ctx, f: Field): Doc =>
   ((_v) =>
     _v._tag === "ERef" && (({ name }) => eq(name, f.name))(_v)
       ? (({ name }) => txt(`~${f.name}`))(_v)
       : cat([txt(`~${f.name}=`), exprD$(cts, f.value)]))(f.value);
-/**
- * `f(~tone="amber")` — a labeled call is lowered to a record argument tagged
- * `origin: "labeled"` (ADR 0098 §2); print the labels back.
- */
-const labeledFieldD: _Curry<[cts: Ctx, f: Field], Doc> = _curry(2, labeledFieldD$);
 const callArgDocs$ = (cts: Ctx, args: Expr[], origin: Option<string>): Doc[] =>
   ((_v) =>
     _v._tag === "Some" && _v.value === "labeled"
@@ -2241,10 +2139,6 @@ const callArgDocs$ = (cts: Ctx, args: Expr[], origin: Option<string>): Doc[] =>
               )
             : map((x: Expr) => exprD$(cts, x), args))(_Array_get(length(args) - 1, args))
       : map((x: Expr) => exprD$(cts, x), args))(origin);
-const callArgDocs: _Curry<[cts: Ctx, args: Expr[], origin: Option<string>], Doc[]> = _curry(
-  3,
-  callArgDocs$,
-);
 const labeledParamText$ = (
   cts: Ctx,
   name: string,
@@ -2264,10 +2158,6 @@ const labeledParamText$ = (
   );
   return `~${name}${optional ? "?" : ""}${ann}${def}`;
 };
-const labeledParamText: _Curry<
-  [cts: Ctx, name: string, annot: Option<TypeExpr>, optional: boolean, defaultValue: Option<Expr>],
-  string
-> = _curry(5, labeledParamText$);
 const paramText$ = (cts: Ctx, p: LamParam): string => {
   const $match = unspan(p);
   switch ($match._tag) {
@@ -2299,7 +2189,10 @@ const paramText$ = (cts: Ctx, p: LamParam): string => {
     }
   }
 };
-const paramText: _Curry<[cts: Ctx, p: LamParam], string> = _curry(2, paramText$);
+/**
+ * A lone un-annotated name drops its parens (`x => …`); annotations and every
+ * other shape keep them (`(x: number) => …`, `(a, b) => …`, `({ x }) => …`).
+ */
 const paramsText$ = (cts: Ctx, ps: LamParam[]): string =>
   ((_v) =>
     _v.length === 1
@@ -2316,11 +2209,6 @@ const paramsText$ = (cts: Ctx, ps: LamParam[]): string =>
                 )
               : `(${commaJoin((p: LamParam) => paramText$(cts, p), ps)})`)(unspan(only)))(_v)
       : `(${commaJoin((p: LamParam) => paramText$(cts, p), ps)})`)(ps);
-/**
- * A lone un-annotated name drops its parens (`x => …`); annotations and every
- * other shape keep them (`(x: number) => …`, `(a, b) => …`, `({ x }) => …`).
- */
-const paramsText: _Curry<[cts: Ctx, ps: LamParam[]], string> = _curry(2, paramsText$);
 /**
  * `"…${x}…"` (ADR 0023) — round-trip the sugar; holes render flat. The body is
  * escaped per part, so it wraps in quotes directly rather than through `strLit`.
@@ -2351,7 +2239,10 @@ const interpText$ = (cts: Ctx, parts: InterpPart[]): string => {
     ),
   );
 };
-const interpText: _Curry<[cts: Ctx, parts: InterpPart[]], string> = _curry(2, interpText$);
+/**
+ * `let _ = a in let _ = b in result` is sequencing, not value binding — it
+ * prints as `do { … }`, so the chain collapses to its expression list.
+ */
 const discardedFrom$ = (e: Expr, acc: Expr[]): Option<Expr[]> =>
   ((_v) =>
     _v._tag === "ELetIn" && _v.name === "_"
@@ -2359,11 +2250,6 @@ const discardedFrom$ = (e: Expr, acc: Expr[]): Option<Expr[]> =>
       : length(acc) === 0
         ? (None as Option<Expr[]>)
         : (Some(_Array_append(e, acc)) as Option<Expr[]>))(e);
-/**
- * `let _ = a in let _ = b in result` is sequencing, not value binding — it
- * prints as `do { … }`, so the chain collapses to its expression list.
- */
-const discardedFrom: _Curry<[e: Expr, acc: Expr[]], Option<Expr[]>> = _curry(2, discardedFrom$);
 const discardedLetExprs: (e: Expr) => Option<Expr[]> = (e: Expr) => discardedFrom$(e, [] as Expr[]);
 const doBlockD$ = (cts: Ctx, exprs: Expr[]): Doc =>
   cat([
@@ -2380,9 +2266,7 @@ const doBlockD$ = (cts: Ctx, exprs: Expr[]): Doc =>
     hardline,
     txt("}"),
   ]);
-const doBlockD: _Curry<[cts: Ctx, exprs: Expr[]], Doc> = _curry(2, doBlockD$);
 const doD$ = (cts: Ctx, exprs: Expr[]): Doc => cat([txt("do "), doBlockD$(cts, exprs)]);
-const doD: _Curry<[cts: Ctx, exprs: Expr[]], Doc> = _curry(2, doD$);
 const lambdaD$ = (cts: Ctx, params: LamParam[], body: Expr): Doc =>
   _Option_match(
     sectionOf$(cts, params, body),
@@ -2419,7 +2303,6 @@ const lambdaD$ = (cts: Ctx, params: LamParam[], body: Expr): Doc =>
       ),
     (section) => section,
   );
-const lambdaD: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Doc> = _curry(3, lambdaD$);
 const plainLambdaD$ = (cts: Ctx, params: LamParam[], body: Expr): Doc => {
   const head: Doc = txt(`${paramsText$(cts, params)} =>`);
   const $match = body;
@@ -2441,10 +2324,6 @@ const plainLambdaD$ = (cts: Ctx, params: LamParam[], body: Expr): Doc => {
     }
   }
 };
-const plainLambdaD: _Curry<[cts: Ctx, params: LamParam[], body: Expr], Doc> = _curry(
-  3,
-  plainLambdaD$,
-);
 const condD$ = (cts: Ctx, c: Expr): Doc => {
   const $match = c;
   switch ($match._tag) {
@@ -2456,16 +2335,18 @@ const condD$ = (cts: Ctx, c: Expr): Doc => {
     }
   }
 };
-const condD: _Curry<[cts: Ctx, c: Expr], Doc> = _curry(2, condD$);
+/**
+ * A commented branch drops to its own indented line, so the comment stays
+ * own-line and the layout stays idempotent.
+ */
 const branchD$ = (cts: Ctx, marker: string, e: Expr): Doc =>
   hasLead$(cts, EXPR, exprSpan(e))
     ? cat([txt(marker), indent(cat([hardline, exprD$(cts, e)]))])
     : cat([txt(`${marker} `), exprD$(cts, e)]);
 /**
- * A commented branch drops to its own indented line, so the comment stays
- * own-line and the layout stays idempotent.
+ * Right-nested `a ? b : c ? d : e` flattens to one arm list, so a cascading
+ * conditional shares a single indent instead of staircasing.
  */
-const branchD: _Curry<[cts: Ctx, marker: string, e: Expr], Doc> = _curry(3, branchD$);
 const ternaryArmsFrom$ = (
   e: Expr,
   acc: { cond: Expr; thenE: Expr }[],
@@ -2481,14 +2362,6 @@ const ternaryArmsFrom$ = (
     }
   }
 };
-/**
- * Right-nested `a ? b : c ? d : e` flattens to one arm list, so a cascading
- * conditional shares a single indent instead of staircasing.
- */
-const ternaryArmsFrom: _Curry<
-  [e: Expr, acc: { cond: Expr; thenE: Expr }[]],
-  [{ cond: Expr; thenE: Expr }[], Expr]
-> = _curry(2, ternaryArmsFrom$);
 const ternaryRestParts$ = (cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i: number): Doc[] =>
   _Option_match(
     _Array_get(i, arms),
@@ -2503,8 +2376,10 @@ const ternaryRestParts$ = (cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i: num
       ...ternaryRestParts$(cts, arms, i + 1),
     ],
   );
-const ternaryRestParts: _Curry<[cts: Ctx, arms: { cond: Expr; thenE: Expr }[], i: number], Doc[]> =
-  _curry(3, ternaryRestParts$);
+/**
+ * Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
+ * at one indent — a flat chain, not a nested pyramid.
+ */
 const ternaryD$ = (cts: Ctx, e: Expr): Doc =>
   (([arms, elseE]: [{ cond: Expr; thenE: Expr }[], Expr]) =>
     _Option_match(
@@ -2526,11 +2401,6 @@ const ternaryD$ = (cts: Ctx, e: Expr): Doc =>
           ]),
         ),
     ))(ternaryArmsFrom$(e, [] as { cond: Expr; thenE: Expr }[]));
-/**
- * Inline when it fits; else `cond` / `? then` / `: cond` / `? then` / `: else`
- * at one indent — a flat chain, not a nested pyramid.
- */
-const ternaryD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, ternaryD$);
 /**
  * Does this expression PRINT as `let … in …`? A destructuring
  * `let (a, b) = v in body` reaches the formatter as the IIFE the parser
@@ -2557,6 +2427,11 @@ const printsAsLet: (e: Expr) => boolean = (e: Expr) =>
               },
             )
           : false)(e);
+/**
+ * `let x = v in body`; when it overflows, `in` stays at the end of the value
+ * line. A chain of `let … in let … in …` stays left-aligned, but a terminal
+ * non-let body indents under `in` so a ternary branch's payload looks bound.
+ */
 const letLikeD$ = (cts: Ctx, head: string, value: Expr, body: Expr): Doc => {
   const cont: Doc = printsAsLet(body)
     ? cat([line, exprD$(cts, body)])
@@ -2573,23 +2448,13 @@ const letLikeD$ = (cts: Ctx, head: string, value: Expr, body: Expr): Doc => {
   );
 };
 /**
- * `let x = v in body`; when it overflows, `in` stays at the end of the value
- * line. A chain of `let … in let … in …` stays left-aligned, but a terminal
- * non-let body indents under `in` so a ternary branch's payload looks bound.
+ * `{ x }` when the value is a same-name ref, else `{ x: e }` (ADR 0068).
  */
-const letLikeD: _Curry<[cts: Ctx, head: string, value: Expr, body: Expr], Doc> = _curry(
-  4,
-  letLikeD$,
-);
 const recordFieldD$ = (cts: Ctx, f: Field): Doc =>
   ((_v) =>
     _v._tag === "ERef" && (({ name }) => eq(name, f.name))(_v)
       ? (({ name }) => exprD$(cts, f.value))(_v)
       : cat([txt(`${f.name}: `), exprD$(cts, f.value)]))(f.value);
-/**
- * `{ x }` when the value is a same-name ref, else `{ x: e }` (ADR 0068).
- */
-const recordFieldD: _Curry<[cts: Ctx, f: Field], Doc> = _curry(2, recordFieldD$);
 const recordD$ = (cts: Ctx, fields: Field[], spread: Option<Expr>): Doc => {
   const fieldDocs: Doc[] = map((f: Field) => recordFieldD$(cts, f), fields);
   return braced$(
@@ -2602,7 +2467,6 @@ const recordD$ = (cts: Ctx, fields: Field[], spread: Option<Expr>): Doc => {
     ),
   );
 };
-const recordD: _Curry<[cts: Ctx, fields: Field[], spread: Option<Expr>], Doc> = _curry(3, recordD$);
 const seqElemD$ = (cts: Ctx, el: SeqElem): Doc => {
   const $match = el;
   switch ($match._tag) {
@@ -2619,19 +2483,17 @@ const seqElemD$ = (cts: Ctx, el: SeqElem): Doc => {
     }
   }
 };
-const seqElemD: _Curry<[cts: Ctx, el: SeqElem], Doc> = _curry(2, seqElemD$);
-const pipeSegmentsFrom$ = (e: Expr, acc: Expr[]): Expr[] =>
-  ((_v) =>
-    _v._tag === "EPipe" && _v.fast === false
-      ? (({ left, right }) => pipeSegmentsFrom$(left, _Array_prepend(right, acc)))(_v)
-      : _Array_prepend(e, acc))(e);
 /**
  * `|>` is left-associative, so `a |> b |> c` is pipe(pipe(a, b), c); flatten it
  * back to source order. Do NOT walk into `->`: the fast pipe inserts first
  * (ADR 0069) while `|>` is data-last, so flattening a mixed chain would rewrite
  * `val->fn(a, b) |> g(c)` into `val |> fn(a, b) |> g(c)`.
  */
-const pipeSegmentsFrom: _Curry<[e: Expr, acc: Expr[]], Expr[]> = _curry(2, pipeSegmentsFrom$);
+const pipeSegmentsFrom$ = (e: Expr, acc: Expr[]): Expr[] =>
+  ((_v) =>
+    _v._tag === "EPipe" && _v.fast === false
+      ? (({ left, right }) => pipeSegmentsFrom$(left, _Array_prepend(right, acc)))(_v)
+      : _Array_prepend(e, acc))(e);
 const matchArmD$ = (cts: Ctx, a: MatchArm): Doc => {
   const guard: string = _Option_match(
     a.guard,
@@ -2643,7 +2505,11 @@ const matchArmD$ = (cts: Ctx, a: MatchArm): Doc => {
     ? cat([head, indent(cat([hardline, exprD$(cts, a.body)]))])
     : cat([head, txt(" "), indent(exprD$(cts, a.body))]);
 };
-const matchArmD: _Curry<[cts: Ctx, a: MatchArm], Doc> = _curry(2, matchArmD$);
+/**
+ * Inline `switch s { | A => x | _ => y }` when it fits, else one arm per line.
+ * A multi-line arm body nests one level past the arm's `|`, so its own lines
+ * never align with the parent's arms.
+ */
 const matchD$ = (cts: Ctx, scrutinee: Expr, arms: MatchArm[]): Doc =>
   group(
     cat([
@@ -2654,11 +2520,9 @@ const matchD$ = (cts: Ctx, scrutinee: Expr, arms: MatchArm[]): Doc =>
     ]),
   );
 /**
- * Inline `switch s { | A => x | _ => y }` when it fits, else one arm per line.
- * A multi-line arm body nests one level past the arm's `|`, so its own lines
- * never align with the parent's arms.
+ * `loop (acc = 0, i = 0) { body }` (ADR 0056) — inline when it fits, else the
+ * body indents on its own lines, brace layout matching `switch`.
  */
-const matchD: _Curry<[cts: Ctx, scrutinee: Expr, arms: MatchArm[]], Doc> = _curry(3, matchD$);
 const loopD$ = (cts: Ctx, params: LoopParam[], body: Expr): Doc =>
   group(
     cat([
@@ -2673,11 +2537,6 @@ const loopD$ = (cts: Ctx, params: LoopParam[], body: Expr): Doc =>
       txt("}"),
     ]),
   );
-/**
- * `loop (acc = 0, i = 0) { body }` (ADR 0056) — inline when it fits, else the
- * body indents on its own lines, brace layout matching `switch`.
- */
-const loopD: _Curry<[cts: Ctx, params: LoopParam[], body: Expr], Doc> = _curry(3, loopD$);
 /**
  * A lambda argument in last position hugs its closing paren, so a `switch` or
  * `do` body ends `})` rather than staircasing a lone closer onto its own line.
@@ -2722,10 +2581,6 @@ const callArgsD$ = (
       ),
     (d) => d,
   );
-const callArgsD: _Curry<
-  [cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>, asCallee: boolean],
-  Doc
-> = _curry(5, callArgsD$);
 const plainCallD$ = (
   cts: Ctx,
   fn: Expr,
@@ -2773,16 +2628,8 @@ const plainCallD$ = (
                     ),
                   ]))(_Array_get(length(args) - 1, args)))(callArgDocs$(cts, args, origin)))(args);
 };
-const plainCallD: _Curry<
-  [cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>, asCallee: boolean],
-  Doc
-> = _curry(5, plainCallD$);
 const callD$ = (cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>): Doc =>
   callArgsD$(cts, fn, args, origin, false);
-const callD: _Curry<[cts: Ctx, fn: Expr, args: Expr[], origin: Option<string>], Doc> = _curry(
-  4,
-  callD$,
-);
 const calleeD$ = (cts: Ctx, e: Expr): Doc => {
   const $match = hooked$(cts, e);
   switch ($match._tag) {
@@ -2795,9 +2642,11 @@ const calleeD$ = (cts: Ctx, e: Expr): Doc => {
     }
   }
 };
-const calleeD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, calleeD$);
 const operandD$ = (cts: Ctx, e: Expr): Doc => parenIf$(loosePrefix$(cts, e), exprD$(cts, e));
-const operandD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, operandD$);
+/**
+ * A record in member position is ambiguous with a block, so it parenthesizes
+ * where a callee would not.
+ */
 const memberD$ = (cts: Ctx, e: Expr): Doc => {
   const $match = e;
   switch ($match._tag) {
@@ -2810,10 +2659,8 @@ const memberD$ = (cts: Ctx, e: Expr): Doc => {
   }
 };
 /**
- * A record in member position is ambiguous with a block, so it parenthesizes
- * where a callee would not.
+ * Inline when it fits, else one `|> stage` per line indented under the head.
  */
-const memberD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, memberD$);
 const pipeD$ = (cts: Ctx, e: Expr): Doc =>
   ((_v) =>
     _v._tag === "EPipe" && _v.right._tag === "ECall" && _v.fast === true
@@ -2844,16 +2691,12 @@ const pipeD$ = (cts: Ctx, e: Expr): Doc =>
                 : (() => {
                     throw new Error("non-exhaustive match");
                   })())(segments))(pipeSegmentsFrom$(e, [] as Expr[])))(e);
-/**
- * Inline when it fits, else one `|> stage` per line indented under the head.
- */
-const pipeD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, pipeD$);
 const letBindHead$ = (cts: Ctx, monad: string, param: LamParam): string =>
   `let${monad === "Task" ? "!" : "?"} ${paramText$(cts, param)}`;
-const letBindHead: _Curry<[cts: Ctx, monad: string, param: LamParam], string> = _curry(
-  3,
-  letBindHead$,
-);
+/**
+ * Plugin `format` hooks may rewrite a node before layout (ADR 0109), except
+ * when a comment sits inside it: the rewrite would drop or duplicate it.
+ */
 const hooked$ = (cts: Ctx, e: Expr): Expr =>
   length(cts.formatHooks) === 0
     ? e
@@ -2861,11 +2704,6 @@ const hooked$ = (cts: Ctx, e: Expr): Expr =>
         _Option_isSome(_Array_find((s: number) => and(s > sp.start, s < sp.end), cts.commentStarts))
           ? e
           : _Option_unwrapOr(e, runFormatHooks(cts.formatHooks, e)))(exprSpan(e));
-/**
- * Plugin `format` hooks may rewrite a node before layout (ADR 0109), except
- * when a comment sits inside it: the rewrite would drop or duplicate it.
- */
-const hooked: _Curry<[cts: Ctx, e: Expr], Expr> = _curry(2, hooked$);
 /**
  * What a `formatDoc` hook is handed: the printers below, bound to `cts`.
  */
@@ -2876,6 +2714,10 @@ const formatApi: (cts: Ctx) => FormatApi = (cts: Ctx) => ({
   strLit: strLit,
   sourceText: _curry(2, (start: number, end: number) => _Str_slice(start, end, cts.src)),
 });
+/**
+ * Every expression prints through here, so every path sees the hooks. A
+ * `formatDoc` hook sees the node after any `format` rewrite.
+ */
 const exprRaw$ = (cts: Ctx, e: Expr): Doc => {
   const node: Expr = hooked$(cts, e);
   return length(cts.formatDocHooks) === 0
@@ -2886,11 +2728,6 @@ const exprRaw$ = (cts: Ctx, e: Expr): Doc => {
         (doc) => doc,
       );
 };
-/**
- * Every expression prints through here, so every path sees the hooks. A
- * `formatDoc` hook sees the node after any `format` rewrite.
- */
-const exprRaw: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, exprRaw$);
 const exprRawOf$ = (cts: Ctx, e: Expr): Doc => {
   const $match = e;
   switch ($match._tag) {
@@ -3029,7 +2866,6 @@ const exprRawOf$ = (cts: Ctx, e: Expr): Doc => {
     }
   }
 };
-const exprRawOf: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, exprRawOf$);
 const aliasFieldText: (f: AliasField) => string = (f: AliasField) =>
   f.spread
     ? `...${showTypeExpr(f.fieldType)}`
@@ -3044,7 +2880,6 @@ const ctorArms$ = (cts: Ctx, ctors: Ctor[], i: number): Doc[] =>
         ctorArms$(cts, ctors, i + 1),
       ),
   );
-const ctorArms: _Curry<[cts: Ctx, ctors: Ctor[], i: number], Doc[]> = _curry(3, ctorArms$);
 const typeStmtD$ = (
   cts: Ctx,
   name: string,
@@ -3117,6 +2952,9 @@ const exprD$ = (cts: Ctx, e: Expr): Doc => withComments$(cts, EXPR, exprSpan(e),
  */
 export const exprD: _Curry<[cts: Ctx, e: Expr], Doc> = _curry(2, exprD$);
 const expPrefix: (exported: boolean) => string = (exported: boolean) => (exported ? "export " : "");
+/**
+ * A field access `<tmp>.<name>` reading the given destructuring temp.
+ */
 const fieldOf$ = (e: Expr, tmp: string): Option<string> =>
   ((_v) =>
     _v._tag === "EField" && _v.target._tag === "ERef"
@@ -3128,9 +2966,9 @@ const fieldOf$ = (e: Expr, tmp: string): Option<string> =>
         )
       : (None as Option<string>))(e);
 /**
- * A field access `<tmp>.<name>` reading the given destructuring temp.
+ * How many of the `$d` temp's shorthand field-access lets follow it, so the
+ * group re-folds into a single `let { x, y } = e`.
  */
-const fieldOf: _Curry<[e: Expr, tmp: string], Option<string>> = _curry(2, fieldOf$);
 const destructureFieldsFrom$ = (stmts: Stmt[], j: number, tmp: string, acc: string[]): string[] =>
   ((_v) =>
     _v._tag === "Some" && _v.value._tag === "SLet"
@@ -3146,15 +2984,12 @@ const destructureFieldsFrom$ = (stmts: Stmt[], j: number, tmp: string, acc: stri
           },
         )
       : acc)(_Array_get(j, stmts));
-/**
- * How many of the `$d` temp's shorthand field-access lets follow it, so the
- * group re-folds into a single `let { x, y } = e`.
- */
-const destructureFieldsFrom: _Curry<
-  [stmts: Stmt[], j: number, tmp: string, acc: string[]],
-  string[]
-> = _curry(4, destructureFieldsFrom$);
 
+/**
+ * Print one statement, re-folding a `$d` destructuring temp plus its
+ * field-access lets back into one `let { … } = e`. Reports how many
+ * statements it consumed.
+ */
 const stmtDoc$ = (cts: Ctx, stmts: Stmt[], i: number, src: string): StmtDoc =>
   _Option_match(
     _Array_get(i, stmts),
@@ -3226,15 +3061,6 @@ const stmtDoc$ = (cts: Ctx, stmts: Stmt[], i: number, src: string): StmtDoc =>
       }
     },
   );
-/**
- * Print one statement, re-folding a `$d` destructuring temp plus its
- * field-access lets back into one `let { … } = e`. Reports how many
- * statements it consumed.
- */
-const stmtDoc: _Curry<[cts: Ctx, stmts: Stmt[], i: number, src: string], StmtDoc> = _curry(
-  4,
-  stmtDoc$,
-);
 const stmtSpan: (s: Stmt) => SpanAt = (s: Stmt) => {
   const $match = s;
   switch ($match._tag) {
@@ -3271,6 +3097,12 @@ const stmtSpan: (s: Stmt) => SpanAt = (s: Stmt) => {
     }
   }
 };
+/**
+ * A blank separator between two statements: a newline, only whitespace, then
+ * another newline somewhere in the source gap. Any run of blank lines
+ * collapses to one; a doc comment is not whitespace, so `let a\n/// d\nlet b`
+ * reads as adjacent.
+ */
 const blankBetweenFrom$ = (s: string, i: number, seenNl: boolean): boolean =>
   ((_v) =>
     _v._tag === "None"
@@ -3288,17 +3120,12 @@ const blankBetweenFrom$ = (s: string, i: number, seenNl: boolean): boolean =>
                 : (() => {
                     throw new Error("non-exhaustive match");
                   })())(_Str_get(i, s));
-/**
- * A blank separator between two statements: a newline, only whitespace, then
- * another newline somewhere in the source gap. Any run of blank lines
- * collapses to one; a doc comment is not whitespace, so `let a\n/// d\nlet b`
- * reads as adjacent.
- */
-const blankBetweenFrom: _Curry<[s: string, i: number, seenNl: boolean], boolean> = _curry(
-  3,
-  blankBetweenFrom$,
-);
 const blankBetween: (gap: string) => boolean = (gap: string) => blankBetweenFrom$(gap, 0, false);
+/**
+ * Where a statement's rendering begins in source: its first leading comment
+ * when it has one, else its own token — so a kept blank line lands before the
+ * comment block rather than inside it.
+ */
 const anchorStart$ = (cts: Ctx, s: Stmt): number => {
   const sp: SpanAt = stmtSpan(s);
   return _Option_match(
@@ -3307,12 +3134,6 @@ const anchorStart$ = (cts: Ctx, s: Stmt): number => {
     (c) => c.start,
   );
 };
-/**
- * Where a statement's rendering begins in source: its first leading comment
- * when it has one, else its own token — so a kept blank line lands before the
- * comment block rather than inside it.
- */
-const anchorStart: _Curry<[cts: Ctx, s: Stmt], number> = _curry(2, anchorStart$);
 const stmtParts$ = (
   cts: Ctx,
   stmts: Stmt[],
@@ -3353,10 +3174,10 @@ const stmtParts$ = (
       );
     },
   );
-const stmtParts: _Curry<
-  [cts: Ctx, stmts: Stmt[], i: number, src: string, prevEnd: Option<number>, acc: Doc[]],
-  [Doc[], Option<number>]
-> = _curry(6, stmtParts$);
+/**
+ * Comments after the last statement have no node to attach to; they print
+ * after it, keeping a blank line if the source had one.
+ */
 const tailParts$ = (tail: Comment[], src: string, prevEnd: Option<number>): Doc[] =>
   _Option_match(
     _Array_get(0, tail),
@@ -3377,23 +3198,11 @@ const tailParts$ = (tail: Comment[], src: string, prevEnd: Option<number>): Doc[
       );
     },
   );
-/**
- * Comments after the last statement have no node to attach to; they print
- * after it, keeping a blank line if the source had one.
- */
-const tailParts: _Curry<[tail: Comment[], src: string, prevEnd: Option<number>], Doc[]> = _curry(
-  3,
-  tailParts$,
-);
 const programDoc$ = (cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]): Doc =>
   (([parts, prevEnd]: [Doc[], Option<number>]) =>
     cat(_Array_concat(_Array_concat(parts, tailParts$(tail, src, prevEnd)), [hardline])))(
     stmtParts$(cts, stmts, 0, src, None as Option<number>, [] as Doc[]),
   );
-const programDoc: _Curry<[cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]], Doc> = _curry(
-  4,
-  programDoc$,
-);
 /**
  * Every anchor in a program: each statement span plus every expression under
  * it, so a comment binds to the tightest node that follows (or precedes) it.
@@ -3410,6 +3219,10 @@ const stmtAnchors: (s: Stmt) => Anchor[] = (s: Stmt) =>
             ? (({ ctors }) => map((c: Ctor) => ({ kind: CTOR, sp: c.span }), ctors))(_v)
             : ([] as Anchor[]))(s),
   );
+/**
+ * A comment inside an unparsable region is part of the bytes `SError` re-emits
+ * verbatim; attaching it too would print it twice.
+ */
 const inErrorSpanFrom$ = (stmts: Stmt[], i: number, c: Comment): boolean =>
   ((_v) =>
     _v._tag === "None"
@@ -3426,16 +3239,7 @@ const inErrorSpanFrom$ = (stmts: Stmt[], i: number, c: Comment): boolean =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-/**
- * A comment inside an unparsable region is part of the bytes `SError` re-emits
- * verbatim; attaching it too would print it twice.
- */
-const inErrorSpanFrom: _Curry<[stmts: Stmt[], i: number, c: Comment], boolean> = _curry(
-  3,
-  inErrorSpanFrom$,
-);
 const inErrorSpan$ = (stmts: Stmt[], c: Comment): boolean => inErrorSpanFrom$(stmts, 0, c);
-const inErrorSpan: _Curry<[stmts: Stmt[], c: Comment], boolean> = _curry(2, inErrorSpan$);
 /**
  * `"use open"` is a directive, not a statement — the parser skips it, so the
  * printer restores it verbatim.

@@ -88,6 +88,9 @@ const WCons = _curry(2, (head, tail) => ({ _tag: "WCons", head, tail })) as (
   head: Item,
   tail: Work,
 ) => Work;
+/**
+ * Prepend a cat's parts so `parts[0]` ends up at the head, processed first.
+ */
 const consParts$ = (parts: Doc[], i: number, m: string, tail: Work): Work => {
   let k: number = length(parts) - 1;
   let w: Work = tail;
@@ -116,12 +119,10 @@ const consParts$ = (parts: Doc[], i: number, m: string, tail: Work): Work => {
   }
 };
 /**
- * Prepend a cat's parts so `parts[0]` ends up at the head, processed first.
+ * Would the documents on `work` (head-first, groups forced flat) stay within
+ * `width` columns before the line ends? A break-mode line or a hardline ends
+ * the line, so success is reported there.
  */
-const consParts: _Curry<[parts: Doc[], i: number, m: string, tail: Work], Work> = _curry(
-  4,
-  consParts$,
-);
 const fits$ = (width: number, start: Work): boolean => {
   let rem: number = width;
   let work: Work = start;
@@ -171,19 +172,12 @@ const fits$ = (width: number, start: Work): boolean => {
     }
   }
 };
-/**
- * Would the documents on `work` (head-first, groups forced flat) stay within
- * `width` columns before the line ends? A break-mode line or a hardline ends
- * the line, so success is reported there.
- */
-const fits: _Curry<[width: number, start: Work], boolean> = _curry(2, fits$);
 const anyForcesBreak$ = (parts: Doc[], i: number): boolean =>
   _Option_match(
     _Array_get(i, parts),
     () => false,
     (p) => or(forcesBreak(p), anyForcesBreak$(parts, i + 1)),
   );
-const anyForcesBreak: _Curry<[parts: Doc[], i: number], boolean> = _curry(2, anyForcesBreak$);
 /**
  * Does this document contain a hardline anywhere in its subtree? If so every
  * enclosing group must break — a group can never print flat across a forced
@@ -243,6 +237,9 @@ const spaces: (n: number) => string = (n: number) => {
     }
   }
 };
+/**
+ * Column of the end of `s`, which may itself contain newlines.
+ */
 const posAfter$ = (pos: number, s: string): number => {
   const parts: string[] = _Str_split("\n", s);
   return length(parts) === 1
@@ -250,9 +247,8 @@ const posAfter$ = (pos: number, s: string): number => {
     : _Str_length(_Option_unwrapOr("", _Array_get(length(parts) - 1, parts)));
 };
 /**
- * Column of the end of `s`, which may itself contain newlines.
+ * Prepend deferred suffix items so the first one is processed first.
  */
-const posAfter: _Curry<[pos: number, s: string], number> = _curry(2, posAfter$);
 const consItems$ = (items: Item[], tail: Work): Work => {
   let k: number = length(items) - 1;
   let w: Work = tail;
@@ -280,10 +276,6 @@ const consItems$ = (items: Item[], tail: Work): Work => {
     }
   }
 };
-/**
- * Prepend deferred suffix items so the first one is processed first.
- */
-const consItems: _Curry<[items: Item[], tail: Work], Work> = _curry(2, consItems$);
 const render$ = (root: Doc, width: number): string => {
   let out: string = "";
   let pos: number = 0;

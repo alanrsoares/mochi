@@ -7,7 +7,7 @@ export type TSt = {
   sccs: number[][];
 };
 
-import type { Option, _Curry } from "@mochi/compiler/runtime";
+import type { Option } from "@mochi/compiler/runtime";
 
 import {
   None,
@@ -109,10 +109,6 @@ const visitNeighbors$ = (v: number, ws: number[], adj: number[][], st: TSt): TSt
     return _step.value;
   }
 };
-const visitNeighbors: _Curry<[v: number, ws: number[], adj: number[][], st: TSt], TSt> = _curry(
-  4,
-  visitNeighbors$,
-);
 const connect$ = (v: number, adj: number[][], st: TSt): TSt => {
   const st1: TSt = {
     ...st,
@@ -133,7 +129,6 @@ const connect$ = (v: number, adj: number[][], st: TSt): TSt => {
         }))(_Array_drop(start, st2.stack)))(indexOfFrom(v, st2.stack, 0))
     : st2;
 };
-const connect: _Curry<[v: number, adj: number[][], st: TSt], TSt> = _curry(3, connect$);
 const connectAllFrom$ = (i: number, n: number, adj: number[][], st: TSt): TSt => {
   let j: number = i;
   let current: TSt = st;
@@ -151,10 +146,6 @@ const connectAllFrom$ = (i: number, n: number, adj: number[][], st: TSt): TSt =>
     }
   }
 };
-const connectAllFrom: _Curry<[i: number, n: number, adj: number[][], st: TSt], TSt> = _curry(
-  4,
-  connectAllFrom$,
-);
 export const stronglyConnected: (adj: number[][]) => number[][] = (adj: number[][]) => {
   const n: number = length(adj);
   const initSt: TSt = {

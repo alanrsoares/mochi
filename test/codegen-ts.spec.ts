@@ -44,7 +44,7 @@ test("Option let? flattens to the all-at-once Option flatMap grouping (ADR 0079)
 });
 
 test("a concrete multi-param function annotates with a curry-compatible type (ADR 0093)", () => {
-  const out = ts("let sum = (a, b) => add(a, b)");
+  const out = ts("export let sum = (a, b) => add(a, b)");
   expect(out).toContain("const sum: _Curry<[a: number, b: number], number> = _curry(2,");
 });
 

@@ -83,6 +83,11 @@ import { foldAliasesAt } from "../infer/schemes";
 import * as Schemes from "../infer/schemes";
 import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "../compile/compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensions";
+/**
+ * Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
+ * resolve, without needing the module graph: single-file dts sees the `tqual`
+ * nodes even though it cannot see the dependency's exports.
+ */
 const writtenQualsIn$ = (
   te: TypeExpr,
   local: Set<string>,
@@ -128,15 +133,6 @@ const writtenQualsIn$ = (
     }
   }
 };
-/**
- * Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
- * resolve, without needing the module graph: single-file dts sees the `tqual`
- * nodes even though it cannot see the dependency's exports.
- */
-const writtenQualsIn: _Curry<
-  [te: TypeExpr, local: Set<string>, acc: Map<string, string>],
-  Map<string, string>
-> = _curry(3, writtenQualsIn$);
 const writtenQualsInAll$ = (
   tes: TypeExpr[],
   local: Set<string>,
@@ -148,10 +144,6 @@ const writtenQualsInAll$ = (
     () => acc,
     (te) => writtenQualsInAll$(tes, local, writtenQualsIn$(te, local, acc), i + 1),
   );
-const writtenQualsInAll: _Curry<
-  [tes: TypeExpr[], local: Set<string>, acc: Map<string, string>, i: number],
-  Map<string, string>
-> = _curry(4, writtenQualsInAll$);
 const ctorQualsFrom$ = (
   ctors: Ctor[],
   local: Set<string>,
@@ -174,10 +166,6 @@ const ctorQualsFrom$ = (
         i + 1,
       ),
   );
-const ctorQualsFrom: _Curry<
-  [ctors: Ctor[], local: Set<string>, acc: Map<string, string>, i: number],
-  Map<string, string>
-> = _curry(4, ctorQualsFrom$);
 const writtenQualsFrom$ = (
   stmts: Stmt[],
   local: Set<string>,
@@ -245,10 +233,11 @@ const writtenQualsFrom$ = (
               : (() => {
                   throw new Error("non-exhaustive match");
                 })())(_Array_get(i, stmts));
-const writtenQualsFrom: _Curry<
-  [stmts: Stmt[], local: Set<string>, acc: Map<string, string>, i: number],
-  Map<string, string>
-> = _curry(4, writtenQualsFrom$);
+/**
+ * `Shape` -> `D.Shape` for a type an `import * as D` brings into type position
+ * (ADR 0046). Applied to inferred types before they print; the printers stay
+ * qualification-free so the `.ts` backend is untouched.
+ */
 const qualifyRow$ = (row: Row, qualify: Map<string, string>): Row => {
   const $match = row;
   switch ($match._tag) {
@@ -268,12 +257,6 @@ const qualifyRow$ = (row: Row, qualify: Map<string, string>): Row => {
     }
   }
 };
-/**
- * `Shape` -> `D.Shape` for a type an `import * as D` brings into type position
- * (ADR 0046). Applied to inferred types before they print; the printers stay
- * qualification-free so the `.ts` backend is untouched.
- */
-const qualifyRow: _Curry<[row: Row, qualify: Map<string, string>], Row> = _curry(2, qualifyRow$);
 const qualifyTy$ = (t: Ty, qualify: Map<string, string>): Ty => {
   const $match = t;
   switch ($match._tag) {
@@ -309,7 +292,10 @@ const qualifyTy$ = (t: Ty, qualify: Map<string, string>): Ty => {
     }
   }
 };
-const qualifyTy: _Curry<[t: Ty, qualify: Map<string, string>], Ty> = _curry(2, qualifyTy$);
+/**
+ * The same rename on a written `TypeExpr` — ctor and alias field types print
+ * from the AST, not from an inferred `Ty`.
+ */
 const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
   const $match = te;
   switch ($match._tag) {
@@ -366,22 +352,10 @@ const qualifyTe$ = (te: TypeExpr, qualify: Map<string, string>): TypeExpr => {
     }
   }
 };
-/**
- * The same rename on a written `TypeExpr` — ctor and alias field types print
- * from the AST, not from an inferred `Ty`.
- */
-const qualifyTe: _Curry<[te: TypeExpr, qualify: Map<string, string>], TypeExpr> = _curry(
-  2,
-  qualifyTe$,
-);
 const qualifyField$ = (f: CtorField, qualify: Map<string, string>): CtorField => ({
   name: f.name,
   fieldType: qualifyTe$(f.fieldType, qualify),
 });
-const qualifyField: _Curry<[f: CtorField, qualify: Map<string, string>], CtorField> = _curry(
-  2,
-  qualifyField$,
-);
 const qualifyCtor$ = (c: Ctor, qualify: Map<string, string>): Ctor => ({
   name: c.name,
   fields: map((f: CtorField) => qualifyField$(f, qualify), c.fields),
@@ -389,7 +363,6 @@ const qualifyCtor$ = (c: Ctor, qualify: Map<string, string>): Ctor => ({
   tagLit: c.tagLit,
   span: c.span,
 });
-const qualifyCtor: _Curry<[c: Ctor, qualify: Map<string, string>], Ctor> = _curry(2, qualifyCtor$);
 const qualifyAliasField$ = (f: AliasField, qualify: Map<string, string>): AliasField => ({
   name: f.name,
   nameSpan: f.nameSpan,
@@ -397,10 +370,11 @@ const qualifyAliasField$ = (f: AliasField, qualify: Map<string, string>): AliasF
   optional: f.optional,
   spread: f.spread,
 });
-const qualifyAliasField: _Curry<[f: AliasField, qualify: Map<string, string>], AliasField> = _curry(
-  2,
-  qualifyAliasField$,
-);
+/**
+ * One `export`ed declaration per `type` statement. `typescript`'s own walker
+ * emits these module-locally for the `.ts` backend; a `.d.ts` exports them, and
+ * an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
+ */
 const typeDeclsFrom$ = (
   stmts: Stmt[],
   aliases: Map<string, AliasInfo>,
@@ -464,21 +438,10 @@ const typeDeclsFrom$ = (
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
 /**
- * One `export`ed declaration per `type` statement. `typescript`'s own walker
- * emits these module-locally for the `.ts` backend; a `.d.ts` exports them, and
- * an opaque `extern type` goes through `opaqueTypeDecl` for the same reason.
+ * The file's own aliases (record and expression forms), in declaration order
+ * — the order `foldAliasesAt` tries them, as src/dts/dts.ts folds with the
+ * inference result's local alias list.
  */
-const typeDeclsFrom: _Curry<
-  [
-    stmts: Stmt[],
-    aliases: Map<string, AliasInfo>,
-    recs: Map<string, string>,
-    qualify: Map<string, string>,
-    docs: boolean,
-    i: number,
-  ],
-  string[]
-> = _curry(6, typeDeclsFrom$);
 const localAliasKeys$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
   ((_v) =>
     _v._tag === "None"
@@ -499,15 +462,6 @@ const localAliasKeys$ = (stmts: Stmt[], i: number, acc: string[]): string[] =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-/**
- * The file's own aliases (record and expression forms), in declaration order
- * — the order `foldAliasesAt` tries them, as src/dts/dts.ts folds with the
- * inference result's local alias list.
- */
-const localAliasKeys: _Curry<[stmts: Stmt[], i: number, acc: string[]], string[]> = _curry(
-  3,
-  localAliasKeys$,
-);
 /**
  * `export declare const` per top-level binding that has an inferred scheme.
  * `$`-prefixed synthetic binders declare nothing.
@@ -610,6 +564,11 @@ const bindingDeclsFrom: <A>(
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts)),
 );
+/**
+ * A builtin variant named in an exported type (`Option<number>` from `Map.get`)
+ * has to be DECLARED here — unlike the `.ts` backend, which imports it from the
+ * runtime instead (ADR 0093).
+ */
 const builtinDeclsFor$ = (
   names: string[],
   aliases: Map<string, AliasInfo>,
@@ -627,15 +586,6 @@ const builtinDeclsFor$ = (
     },
   );
 /**
- * A builtin variant named in an exported type (`Option<number>` from `Map.get`)
- * has to be DECLARED here — unlike the `.ts` backend, which imports it from the
- * runtime instead (ADR 0093).
- */
-const builtinDeclsFor: _Curry<
-  [names: string[], aliases: Map<string, AliasInfo>, recs: Map<string, string>, i: number],
-  string[]
-> = _curry(4, builtinDeclsFor$);
-/**
  * Sidecar imports keep the `.mochi` specifier so `allowArbitraryExtensions`
  * maps `./shapes.mochi` onto `shapes.d.mochi.ts`. Package specs stay untouched.
  */
@@ -645,6 +595,9 @@ const mochiDtsSpec: (from: string) => string = (from: string) => {
     : from;
   return or(_Str_startsWith("./", bare), _Str_startsWith("../", bare)) ? `${bare}.mochi` : from;
 };
+/**
+ * `import type * as D from "./shapes.mochi"` for each namespace alias the body names.
+ */
 const nsTypeImportsFrom$ = (stmts: Stmt[], body: string, seen: Set<string>, i: number): string[] =>
   ((_v) =>
     _v._tag === "None"
@@ -669,13 +622,6 @@ const nsTypeImportsFrom$ = (stmts: Stmt[], body: string, seen: Set<string>, i: n
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
-/**
- * `import type * as D from "./shapes.mochi"` for each namespace alias the body names.
- */
-const nsTypeImportsFrom: _Curry<
-  [stmts: Stmt[], body: string, seen: Set<string>, i: number],
-  string[]
-> = _curry(4, nsTypeImportsFrom$);
 /**
  * A `.d.ts` has no named-import pass. `recordAliasIndex` stores `bareName`,
  * so `Ast.Span` is printed as `Span` — a type this file never imports.
@@ -858,6 +804,11 @@ export const emitDtsFromTypedWith: <A>(
 ${body}`;
   },
 );
+/**
+ * `Shape` -> `D.Shape` for every type an `import * as D` brings into type
+ * position (ADR 0046). A name the file declares itself wins — it is already
+ * writable bare, and it shadows. First alias wins on a collision.
+ */
 const addQuals$ = (
   alias: string,
   names: string[],
@@ -879,15 +830,6 @@ const addQuals$ = (
         i + 1,
       ),
   );
-/**
- * `Shape` -> `D.Shape` for every type an `import * as D` brings into type
- * position (ADR 0046). A name the file declares itself wins — it is already
- * writable bare, and it shadows. First alias wins on a collision.
- */
-const addQuals: _Curry<
-  [alias: string, names: string[], local: Set<string>, acc: Map<string, string>, i: number],
-  Map<string, string>
-> = _curry(5, addQuals$);
 const qualsFromAliases: <A>(
   aliases: string[],
   quals: Map<string, { types: Set<string> } & A>,
