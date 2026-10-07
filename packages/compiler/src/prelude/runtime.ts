@@ -777,17 +777,97 @@ export const _Array_sortBy: {
 } = _curry(2, (f: any, xs: any) => [...xs].sort((a: any, b: any) => compare(f(a), f(b))));
 export const _Array_dedupe: <A>(a: A[]) => A[] = (xs: any) =>
   xs.filter((x: any, i: any) => xs.findIndex((y: any) => eq(x, y)) === i);
+export const _hashStr = (s: string): number => {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h, 33) ^ s.charCodeAt(i);
+  return h | 0;
+};
+// A hash consistent with `eq`: eq-equal values hash alike (collisions only cost
+// time). `undefined` marks a value whose inspection could be observable or whose
+// `eq` throws (accessors, holes, iterables): dedupeBy compares those linearly.
+export const _eqHash = (x: any, depth: number): number | undefined => {
+  switch (typeof x) {
+    case "number":
+      return Number.isInteger(x) && x > -2147483648 && x < 2147483647 ? x | 0 : _hashStr(String(x));
+    case "string":
+      return _hashStr(x) ^ 0x5bd1;
+    case "boolean":
+      return x ? 10 : 11;
+    case "undefined":
+      return 12;
+    case "bigint":
+      return _hashStr(String(x)) + 13;
+    case "symbol":
+      return 14;
+    case "function":
+      return 15;
+  }
+  if (x === null) return 1;
+  if (depth <= 0) return 2;
+  if (Array.isArray(x)) {
+    let h = 3 + x.length * 7;
+    for (let i = 0; i < x.length; i++) {
+      if (!(i in x)) return undefined;
+      const d = Object.getOwnPropertyDescriptor(x, i)!;
+      if (d.get || d.set) return undefined;
+      const v = _eqHash(d.value, depth - 1);
+      if (v === undefined) return undefined;
+      h = (Math.imul(h, 31) + v) | 0;
+    }
+    return h;
+  }
+  if (x instanceof Map || x instanceof Set || typeof x[Symbol.iterator] === "function")
+    return undefined;
+  const keys = Object.keys(x);
+  let sum = 0;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i]!;
+    const d = Object.getOwnPropertyDescriptor(x, k)!;
+    if (d.get || d.set) return undefined;
+    const v = _eqHash(d.value, depth - 1);
+    if (v === undefined) return undefined;
+    sum = (sum + (_hashStr(k) ^ Math.imul(v, 16777619))) | 0;
+  }
+  return (4 + keys.length + sum) | 0;
+};
 export const _Array_dedupeBy: {
   <A, B>(a: (a: A) => B): (b: A[]) => A[];
   <A, B>(a: (a: A) => B, b: A[]): A[];
 } = _curry(2, (f: any, xs: any) => {
   const primitive = new Set();
+  // Retained object keys in order, plus hash buckets over the inspectable ones.
+  // Unhashable keys keep the ordered eq scan so getter reads happen as before.
   const structural: any[] = [];
+  const buckets = new Map<number, { k: any; idx: number }[]>();
+  const unhashable: { k: any; idx: number }[] = [];
   return xs.filter((x: any) => {
     const k = f(x);
     if (k !== null && typeof k === "object") {
-      if (structural.some((s: any) => eq(s, k))) return false;
+      const h = _eqHash(k, 3);
+      if (h === undefined) {
+        if (structural.some((s: any) => eq(s, k))) return false;
+        unhashable.push({ k, idx: structural.length });
+        structural.push(k);
+        return true;
+      }
+      const bucket = buckets.get(h);
+      let first = Infinity;
+      if (bucket)
+        for (const e of bucket)
+          if (eq(e.k, k)) {
+            first = e.idx;
+            break;
+          }
+      // Only unhashable keys retained before the first match can have been read.
+      for (const u of unhashable) {
+        if (u.idx >= first) break;
+        if (eq(u.k, k)) return false;
+      }
+      if (first !== Infinity) return false;
+      const entry = { k, idx: structural.length };
       structural.push(k);
+      if (bucket) bucket.push(entry);
+      else buckets.set(h, [entry]);
       return true;
     }
     // eq(NaN, NaN) is false; keep every projected NaN as before.

@@ -21700,15 +21700,103 @@ var _preludeJsDefs = {
   _Array_sort: "const _Array_sort = (xs) => [...xs].sort(compare);",
   _Array_sortBy: "const _Array_sortBy = _curry(2, (f, xs) => [...xs].sort((a, b) => compare(f(a), f(b))));",
   _Array_dedupe: "const _Array_dedupe = (xs) => xs.filter((x, i) => xs.findIndex((y) => eq(x, y)) === i);",
+  _hashStr: `const _hashStr = (s) => {
+  let h = 5381;
+  for (let i = 0;i < s.length; i++)
+    h = Math.imul(h, 33) ^ s.charCodeAt(i);
+  return h | 0;
+};`,
+  _eqHash: `const _eqHash = (x, depth) => {
+  switch (typeof x) {
+    case "number":
+      return Number.isInteger(x) && x > -2147483648 && x < 2147483647 ? x | 0 : _hashStr(String(x));
+    case "string":
+      return _hashStr(x) ^ 23505;
+    case "boolean":
+      return x ? 10 : 11;
+    case "undefined":
+      return 12;
+    case "bigint":
+      return _hashStr(String(x)) + 13;
+    case "symbol":
+      return 14;
+    case "function":
+      return 15;
+  }
+  if (x === null)
+    return 1;
+  if (depth <= 0)
+    return 2;
+  if (Array.isArray(x)) {
+    let h = 3 + x.length * 7;
+    for (let i = 0;i < x.length; i++) {
+      if (!(i in x))
+        return;
+      const d = Object.getOwnPropertyDescriptor(x, i);
+      if (d.get || d.set)
+        return;
+      const v = _eqHash(d.value, depth - 1);
+      if (v === undefined)
+        return;
+      h = Math.imul(h, 31) + v | 0;
+    }
+    return h;
+  }
+  if (x instanceof Map || x instanceof Set || typeof x[Symbol.iterator] === "function")
+    return;
+  const keys = Object.keys(x);
+  let sum = 0;
+  for (let i = 0;i < keys.length; i++) {
+    const k = keys[i];
+    const d = Object.getOwnPropertyDescriptor(x, k);
+    if (d.get || d.set)
+      return;
+    const v = _eqHash(d.value, depth - 1);
+    if (v === undefined)
+      return;
+    sum = sum + (_hashStr(k) ^ Math.imul(v, 16777619)) | 0;
+  }
+  return 4 + keys.length + sum | 0;
+};`,
   _Array_dedupeBy: `const _Array_dedupeBy = _curry(2, (f, xs) => {
   const primitive = new Set;
   const structural = [];
+  const buckets = new Map;
+  const unhashable = [];
   return xs.filter((x) => {
     const k = f(x);
     if (k !== null && typeof k === "object") {
-      if (structural.some((s) => eq(s, k)))
+      const h = _eqHash(k, 3);
+      if (h === undefined) {
+        if (structural.some((s) => eq(s, k)))
+          return false;
+        unhashable.push({ k, idx: structural.length });
+        structural.push(k);
+        return true;
+      }
+      const bucket = buckets.get(h);
+      let first = 1 / 0;
+      if (bucket) {
+        for (const e of bucket)
+          if (eq(e.k, k)) {
+            first = e.idx;
+            break;
+          }
+      }
+      for (const u of unhashable) {
+        if (u.idx >= first)
+          break;
+        if (eq(u.k, k))
+          return false;
+      }
+      if (first !== 1 / 0)
         return false;
+      const entry = { k, idx: structural.length };
       structural.push(k);
+      if (bucket)
+        bucket.push(entry);
+      else
+        buckets.set(h, [entry]);
       return true;
     }
     if (Number.isNaN(k))
@@ -22114,9 +22202,13 @@ var _runtimeDeps = {
   _Array_dedupe: [
     "eq"
   ],
+  _eqHash: [
+    "_hashStr"
+  ],
   _Array_dedupeBy: [
     "_curry",
-    "eq"
+    "eq",
+    "_eqHash"
   ],
   _Array_max: [
     "Some",

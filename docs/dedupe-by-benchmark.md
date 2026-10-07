@@ -65,3 +65,15 @@ projection mutations and first representative identity. Compiled-language guards
 exercise effectful ID projections and structural record projections. The runtime
 definitions, bootstrap prelude and seed are regenerated through repo scripts;
 the full gate includes strict self-TS, fixpoint and artifact freshness.
+
+## Structural keys (ADR 0158)
+
+Object projection keys are now hashed (`_eqHash`) and compared with eq only within
+a bucket; accessor, hole and iterable keys keep the ordered scan. Median ms per
+operation, previous scan versus emitted (mean of the two rounds):
+
+| Workload | Bun previous | Bun emitted | Node previous | Node emitted |
+|---|---:|---:|---:|---:|
+| 400 record keys | 1.85 | 0.042 | 2.27 | 0.10 |
+| 4,000 nested record keys | 184.5 | 0.68 | 231.1 | 0.77 |
+| 4,000 keys, 100 distinct | 5.05 | 0.73 | 6.76 | 0.97 |

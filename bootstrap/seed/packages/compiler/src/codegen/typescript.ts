@@ -63,6 +63,8 @@ import {
   _compareRecords,
   _compareSortedKeys,
   _curry,
+  _eqHash,
+  _hashStr,
   _keyOf,
   _list,
   _setAdd,
