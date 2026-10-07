@@ -626,12 +626,7 @@ let genExpr = (ctx: GCtx, e) => switch e {
       | None => switch ctx->nsRuntimeId(target, name) {
           | Some(rt) => rt
           | None => let member = "${ctx->genMember(target)}.${name}" in
-              optional
-                ? let tagType = Option.isSome(ctx.guardBaseType)
-                  ? " as const"
-                  : "" in
-                  "((v) => v != null ? { _tag: \"Some\"${tagType}, value: v } : { _tag: \"None\"${tagType} })(${member})"
-                : member
+              optional ? "_opt(${member})" : member
         }
     }
   | Ast.ETuple(elements, _) =>
@@ -2300,7 +2295,7 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
       0,
       switch spread { | Some(s) => ctx->exprRefs(s, acc) | None => acc }
     )
-  | Ast.EField(target, name, _, _) => switch emptyNsEmit(target, name, None) {
+  | Ast.EField(target, name, optional, _) => switch emptyNsEmit(target, name, None) {
       | Some(_) => switch target {
           | Ast.ERef("List", _) => Set.add("_list", acc)
           | _ => acc
@@ -2310,7 +2305,7 @@ let exprRefs = (ctx: GCtx, e, acc) => switch e {
               rt,
               acc
             ) // its runtime deps get pulled in by preludePreamble's closure
-          | None => ctx->exprRefs(target, acc)
+          | None => ctx->exprRefs(target, optional ? Set.add("_opt", acc) : acc)
         }
     }
   | Ast.ELoop(params, body, _) =>

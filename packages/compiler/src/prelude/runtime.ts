@@ -113,6 +113,9 @@ export const _recur = <A extends unknown[]>(...args: A): { _tag: "recur"; args: 
 export const _done = <R>(value: R): { _tag: "done"; value: R } => ({ _tag: "done", value });
 export const Some: <A>(value: A) => Option<A> = (value: any) => ({ _tag: "Some", value });
 export const None: Option<never> = { _tag: "None" };
+// An escaping optional read `u.f`: one member read, nullish -> None (ADR 0139).
+export const _opt = <A>(v: A | null | undefined): Option<A> =>
+  v != null ? { _tag: "Some", value: v } : { _tag: "None" };
 export const Ok: <A, B>(value: A) => Result<A, B> = (value: any) => ({ _tag: "Ok", value });
 export const Err: <A, B>(error: B) => Result<A, B> = (error: any) => ({ _tag: "Err", error });
 export const add: { (a: number): (b: number) => number; (a: number, b: number): number } = _curry(

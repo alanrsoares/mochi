@@ -14194,7 +14194,7 @@ var genExpr = (ctx, e) => {
       const { target, name, optional } = $match;
       return _Option_match18(emptyNsEmit(target, name, hook1(ctx.annotateEmpty, e)), () => _Option_match18(nsRuntimeId(ctx, target, name), () => {
         const member = `${genMember(ctx, target)}.${name}`;
-        return optional ? ((tagType) => `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(_Option_isSome6(ctx.guardBaseType) ? " as const" : "") : member;
+        return optional ? `_opt(${member})` : member;
       }, (rt) => rt), (js) => js);
     }
     case "ETuple": {
@@ -15502,8 +15502,8 @@ var exprRefs = (ctx, e, acc) => {
       return exprRefsFieldsFrom(ctx, fields, 0, _Option_match18(spread, () => acc, (s) => exprRefs(ctx, s, acc)));
     }
     case "EField": {
-      const { target, name } = $match;
-      return _Option_match18(emptyNsEmit(target, name, None18), () => _Option_match18(nsRuntimeId(ctx, target, name), () => exprRefs(ctx, target, acc), (rt) => _Set_add6(rt, acc)), () => ((_v) => _v._tag === "ERef" && _v.name === "List" ? _Set_add6("_list", acc) : acc)(target));
+      const { target, name, optional } = $match;
+      return _Option_match18(emptyNsEmit(target, name, None18), () => _Option_match18(nsRuntimeId(ctx, target, name), () => exprRefs(ctx, target, optional ? _Set_add6("_opt", acc) : acc), (rt) => _Set_add6(rt, acc)), () => ((_v) => _v._tag === "ERef" && _v.name === "List" ? _Set_add6("_list", acc) : acc)(target));
     }
     case "ELoop": {
       const { params, body } = $match;
@@ -21286,6 +21286,7 @@ var _preludeJsDefs = {
   _done: 'const _done = (value) => ({ _tag: "done", value });',
   Some: 'const Some = (value) => ({ _tag: "Some", value });',
   None: 'const None = { _tag: "None" };',
+  _opt: 'const _opt = (v) => v != null ? { _tag: "Some", value: v } : { _tag: "None" };',
   Ok: 'const Ok = (value) => ({ _tag: "Ok", value });',
   Err: 'const Err = (error) => ({ _tag: "Err", error });',
   add: "const add = _curry(2, (a, b) => a + b);",

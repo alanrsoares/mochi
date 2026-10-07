@@ -984,12 +984,7 @@ const genExpr = (ctx: GCtx, e: Expr): string => {
             nsRuntimeId(ctx, target, name),
             () => {
               const member: string = `${genMember(ctx, target)}.${name}`;
-              return optional
-                ? ((tagType: string) =>
-                    `((v) => v != null ? { _tag: "Some"${tagType}, value: v } : { _tag: "None"${tagType} })(${member})`)(
-                    _Option_isSome(ctx.guardBaseType) ? " as const" : "",
-                  )
-                : member;
+              return optional ? `_opt(${member})` : member;
             },
             (rt) => rt,
           ),
@@ -3802,13 +3797,13 @@ const exprRefs = (ctx: GCtx, e: Expr, acc: Set<string>): Set<string> => {
       );
     }
     case "EField": {
-      const { target, name } = $match;
+      const { target, name, optional } = $match;
       return _Option_match(
         emptyNsEmit(target, name, None as Option<string>),
         () =>
           _Option_match(
             nsRuntimeId(ctx, target, name),
-            () => exprRefs(ctx, target, acc),
+            () => exprRefs(ctx, target, optional ? _Set_add("_opt", acc) : acc),
             (rt) => _Set_add(rt, acc),
           ),
         () =>

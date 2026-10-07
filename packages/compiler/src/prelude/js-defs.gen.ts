@@ -16,6 +16,7 @@ export const preludeJsDefs: Record<string, string> = {
   _done: "const _done = (value) => ({ _tag: \"done\", value });",
   Some: "const Some = (value) => ({ _tag: \"Some\", value });",
   None: "const None = { _tag: \"None\" };",
+  _opt: "const _opt = (v) => v != null ? { _tag: \"Some\", value: v } : { _tag: \"None\" };",
   Ok: "const Ok = (value) => ({ _tag: \"Ok\", value });",
   Err: "const Err = (error) => ({ _tag: \"Err\", error });",
   add: "const add = _curry(2, (a, b) => a + b);",

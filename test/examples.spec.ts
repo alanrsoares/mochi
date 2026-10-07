@@ -352,7 +352,7 @@ test.each([
 let read = (row: Row) => switch row.value { ${arms} }`;
   const fn = compileAndEval(src, "read") as (row: Record<string, unknown>) => number;
   expect([0, 7, undefined, null].map((value) => fn({ value }))).toEqual([...expected]);
-  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+  expect(compileJs(src, { open: false })).not.toContain("_opt(");
 });
 
 test("optional match fusion evaluates targets and getters once, before only the selected body", () => {
@@ -403,7 +403,7 @@ let read = (get: () -> Row, mark: number -> number) => switch get().value {
     ),
   ).toBe(99);
   expect(events).toEqual(["target", "field", "body:99"]);
-  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+  expect(compileJs(src, { open: false })).not.toContain("_opt(");
 });
 
 test("optional match fusion preserves nested bindings, record results and synthetic-name references", () => {
@@ -419,7 +419,7 @@ let absent = read({})`;
   expect(
     compileAndEval(src, "[present.value, present.next(), absent.value, absent.next()]"),
   ).toEqual([14, 7, 5, 2]);
-  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+  expect(compileJs(src, { open: false })).not.toContain("_opt(");
 });
 
 test("optional match fusion composes with loop tail-switch lowering", () => {
@@ -432,7 +432,7 @@ let run = (row: Row) => loop (i = 0) {
 }`;
   const fn = compileAndEval(src, "run") as (row: Record<string, unknown>) => number;
   expect([fn({ value: 7 }), fn({})]).toEqual([7, 0]);
-  expect(compileJs(src, { open: false })).not.toContain('_tag: "Some"');
+  expect(compileJs(src, { open: false })).not.toContain("_opt(");
 });
 
 test.each([
@@ -456,7 +456,7 @@ test.each([
 let read = (row: Row) => switch row.value { ${arms} }`;
   const fn = compileAndEval(src, "read") as (row: Record<string, unknown>) => unknown;
   expect([0, 7, undefined].map((value) => fn({ value }))).toEqual([...expected]);
-  expect(compileJs(src, { open: false })).toContain('_tag: "Some"');
+  expect(compileJs(src, { open: false })).toContain("_opt(");
 });
 
 test("direct loop/recur rotates state simultaneously across nested loop scopes", () => {

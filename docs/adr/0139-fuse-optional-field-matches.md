@@ -43,3 +43,15 @@ The benchmark compares production output with the frozen previous match body.
   cross-engine timing win.
 - **Fuse arbitrary patterns and guards now:** requires a broader pattern plan and
   preservation of observable Option values; the narrow case has measured value.
+
+## Amendment: escaping reads call `_opt`
+
+An optional read that is not fused (escaping or ordinarily matched) now emits
+`_opt(target.f)` instead of an inline `((v) => v != null ? {…} : {…})(target.f)`
+IIFE. `_opt` is a runtime helper with the same `{ _tag: "Some", value }` /
+`{ _tag: "None" }` representation, so the Option shape (ADR 0098) and single
+evaluation of the target are unchanged. TS infers `Option<A>` from the member's
+`A | undefined`, with no `as const` literals in the emit. Median ms per million
+reads (inline → `_opt`): Bun consumed 3.7 → 2.9, Bun escaping 7.5 → 5.0,
+Node escaping ~30 → ~29, Node consumed 2.85 → 3.0 (about 5% slower, within the
+noise band of earlier runs). The emitted code is shorter at every read site.
