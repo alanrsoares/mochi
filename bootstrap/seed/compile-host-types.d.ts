@@ -10,7 +10,15 @@ export type Stamped = {
   suggestions: Suggestion[];
 };
 export type Suggestion = { title: string; start: number; end: number; replaceWith: string };
-export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
+export type Scheme = {
+  vars: number[];
+  rvars: number[];
+  ty: Ty;
+  eq: number[];
+  ord: number[];
+  eqRows: number[];
+  ordRows: number[];
+};
 export type Ty =
   | { _tag: "TyVar"; id: number }
   | { _tag: "TyCon"; name: string; args: Ty[] }
@@ -205,8 +213,15 @@ export type St = {
   recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
+  eqVars: Set<number>;
+  ordVars: Set<number>;
+  eqRows: Set<number>;
+  ordRows: Set<number>;
+  variants: Map<string, VariantInfo>;
 };
 export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
+export type VariantInfo = { arms: VariantArm[] };
+export type VariantArm = { params: Ty[]; fields: Ty[] };
 export type InferApi = {
   inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
   unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, IErr>;

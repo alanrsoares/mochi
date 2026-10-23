@@ -43,7 +43,15 @@ test("generalizeOver reads free variables only from the named entries", () =>
 
 test("instantiate makes each quantified variable fresh", () =>
   let (ty, st) = instantiate(
-    { vars: [0], rvars: [], ty: identityType },
+    {
+      vars: [0],
+      rvars: [],
+      ty: identityType,
+      eq: [],
+      ord: [],
+      eqRows: [],
+      ordRows: []
+    },
     mkSt(5)
   ) in
     showType(ty) == "'t5 -> 't5" && st.next == 6 |> ok)

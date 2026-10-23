@@ -252,7 +252,7 @@ import { match as match5 } from "@onrails/pattern";
 import { Err as Err3, None as None6, Ok as Ok3, Some as Some6, _Array_append as _Array_append5, _Array_concat as _Array_concat3, _Array_find, _Array_get as _Array_get5, _Map_get as _Map_get2, _Map_keys as _Map_keys2, _Option_exists as _Option_exists2, _Option_isSome, _Option_match as _Option_match6, _Option_unwrapOr as _Option_unwrapOr3, _Result_flatMap as _Result_flatMap2, _Result_map as _Result_map2, _Str_codeAt as _Str_codeAt2, _Str_contains, _Str_join as _Str_join3, _Str_length as _Str_length4, _Str_slice as _Str_slice2, _Str_split as _Str_split3, _Str_startsWith as _Str_startsWith2, _curry as _curry7, _tuple as _tuple3, and as and5, eq as eq4, length as length4, map as map2, or as or5, reduce, show as show2 } from "@mochi/compiler/runtime";
 import { match } from "@onrails/pattern";
 
-import { Err as Err2, None as None3, Ok as Ok2, Some as Some3, _Array_append as _Array_append2, _Array_concat as _Array_concat2, _Array_flatMap as _Array_flatMap2, _Array_get as _Array_get2, _Array_prepend, _Map_get, _Map_getOr, _Map_keys, _Map_set, _Map_values, _Option_match as _Option_match3, _Result_flatMap, _Result_map, _Result_match as _Result_match2, _Str_join as _Str_join2, _curry as _curry4, _tuple, and as and2, eq as eq2, floor, length as length2, map, or as or2, show } from "@mochi/compiler/runtime";
+import { Err as Err2, None as None3, Ok as Ok2, Some as Some3, _Array_append as _Array_append2, _Array_concat as _Array_concat2, _Array_flatMap as _Array_flatMap2, _Array_get as _Array_get2, _Array_prepend, _Array_tail as _Array_tail2, _Map_get, _Map_getOr, _Map_keys, _Map_set, _Map_values, _Option_match as _Option_match3, _Result_flatMap, _Result_map, _Result_match as _Result_match2, _Set_add, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Str_join as _Str_join2, _curry as _curry4, _tuple, and as and2, eq as eq2, floor, length as length2, map, or as or2, show } from "@mochi/compiler/runtime";
 var TyVar = (id) => ({ _tag: "TyVar", id });
 var TyCon = _curry4(2, (name, args) => ({ _tag: "TyCon", name, args }));
 var TyFn = _curry4(2, (from, to) => ({ _tag: "TyFn", from, to }));
@@ -488,7 +488,7 @@ var showRow = (row) => (([fields, tailId]) => {
 })(showRowFields(row));
 var someOfFrom = _curry4(3, (f, xs, i) => _Option_match3(_Array_get2(i, xs), () => false, (x) => f(x) ? true : someOfFrom(f, xs, i + 1)));
 var someOf = _curry4(2, (f, xs) => someOfFrom(f, xs, 0));
-var mkSt = (start) => ({ tv: new Map, rv: new Map, next: start, recorded: { cur: [], full: [] }, letSpans: new Map, letUses: new Map });
+var mkSt = (start) => ({ tv: new Map, rv: new Map, next: start, recorded: { cur: [], full: [] }, letSpans: new Map, letUses: new Map, eqVars: _Set_fromArray2([]), ordVars: _Set_fromArray2([]), eqRows: _Set_fromArray2([]), ordRows: _Set_fromArray2([]), variants: new Map });
 var ID_CHUNK = 64;
 var idGet = _curry4(2, (id, m) => _Option_match3(_Map_get(floor(id / ID_CHUNK), m), () => None3, (chunk) => _Map_get(id, chunk)));
 var idSet = _curry4(3, (id, v, m) => {
@@ -962,7 +962,119 @@ var unify$ = (a, b, st) => {
   }
 };
 var unify = _curry4(3, unify$);
-var bindVar = (id, t, st) => occurs$(id, t, st) ? fail(`infinite type: 't${show(id)} occurs in ${showType(zonk$(t, st))}`) : Ok2({ ...st, tv: idSet(id, t, st.tv) });
+var lazyListMsg = "cannot compare a lazy List: `==` and `compare` walk their operands structurally";
+var obligateVar$ = (id, wantEq, wantOrd, st) => ({ ...st, eqVars: wantEq ? _Set_add(id, st.eqVars) : st.eqVars, ordVars: wantOrd ? _Set_add(id, st.ordVars) : st.ordVars });
+var obligateVar = _curry4(4, obligateVar$);
+var obligateRow$ = (id, wantEq, wantOrd, st) => ({ ...st, eqRows: wantEq ? _Set_add(id, st.eqRows) : st.eqRows, ordRows: wantOrd ? _Set_add(id, st.ordRows) : st.ordRows });
+var obligateRow = _curry4(4, obligateRow$);
+var varIdOf = (t) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return id;
+    }
+    default: {
+      return -1;
+    }
+  }
+};
+var rowIdOf = (row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowVar": {
+      const { id } = $match;
+      return id;
+    }
+    default: {
+      return -1;
+    }
+  }
+};
+var carryRowFlags = (id, field, tail, st) => {
+  const wantEq = _Set_has2(id, st.eqRows);
+  const wantOrd = _Set_has2(id, st.ordRows);
+  return obligateRow$(rowIdOf(tail), wantEq, wantOrd, obligateVar$(varIdOf(field), wantEq, wantOrd, st));
+};
+var impose = (wantEq, wantOrd, t, seen, st) => or2(wantEq, wantOrd) ? imposeTy(wantEq, wantOrd, resolve$(t, st), seen, st) : Ok2(st);
+var imposeArgsFrom = (wantEq, wantOrd, args, i, seen, st) => _Option_match3(_Array_get2(i, args), () => Ok2(st), (a) => _Result_match2(impose(wantEq, wantOrd, a, seen, st), (e) => Err2(e), (st1) => imposeArgsFrom(wantEq, wantOrd, args, i + 1, seen, st1)));
+var substTy = (t, tmap) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return _Map_getOr(t, id, tmap);
+    }
+    case "TyCon": {
+      const { name, args } = $match;
+      return tCon$(name, map((a) => substTy(a, tmap), args));
+    }
+    case "TyFn": {
+      const { from, to } = $match;
+      return tArrow$(substTy(from, tmap), substTy(to, tmap));
+    }
+    case "TyRecord": {
+      const { row } = $match;
+      return tRecord(substRow(row, tmap));
+    }
+    case "TySingleton": {
+      const { base, value } = $match;
+      return TySingleton(base, value);
+    }
+    case "TyOneOf": {
+      const { members } = $match;
+      return tUnion(map((m) => substTy(m, tmap), members));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+var substRow = (row, tmap) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowEmpty": {
+      return row;
+    }
+    case "RowVar": {
+      return row;
+    }
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return rField$(label, substTy(fieldType, tmap), substRow(rest, tmap), optional);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+var bindArmParams = _curry4(3, (params, args, acc) => or2(length2(params) === 0, length2(args) === 0) ? acc : ((_v) => _v._tag === "Some" && _v.value._tag === "TyVar" ? (({ value: { id } }) => _Option_match3(_Array_get2(0, args), () => acc, (a) => bindArmParams(_Array_tail2(params), _Array_tail2(args), _Map_set(id, a, acc))))(_v) : bindArmParams(_Array_tail2(params), _Array_tail2(args), acc))(_Array_get2(0, params)));
+var imposeArmFields = (wantEq, wantOrd, fields, i, seen, st) => _Option_match3(_Array_get2(i, fields), () => Ok2(st), (f) => _Result_match2(impose(wantEq, wantOrd, f, seen, st), (e) => Err2(e), (st1) => imposeArmFields(wantEq, wantOrd, fields, i + 1, seen, st1)));
+var imposeArmsFrom = (wantEq, wantOrd, arms, args, i, seen, st) => _Option_match3(_Array_get2(i, arms), () => Ok2(st), (arm) => eq2(length2(arm.params), length2(args)) ? _Result_match2(imposeArmFields(wantEq, wantOrd, map((f) => substTy(f, bindArmParams(arm.params, args, new Map)), arm.fields), 0, seen, st), (e) => Err2(e), (st1) => imposeArmsFrom(wantEq, wantOrd, arms, args, i + 1, seen, st1)) : imposeArmsFrom(wantEq, wantOrd, arms, args, i + 1, seen, st));
+var imposeVariant = (wantEq, wantOrd, name, args, seen, st) => _Set_has2(name, seen) ? Ok2(st) : _Option_match3(_Map_get(name, st.variants), () => Ok2(st), (info) => imposeArmsFrom(wantEq, wantOrd, info.arms, args, 0, _Set_add(name, seen), st));
+var imposeTy = (wantEq, wantOrd, t, seen, st) => ((_v) => _v._tag === "TyVar" ? (({ id }) => Ok2(obligateVar$(id, wantEq, wantOrd, st)))(_v) : _v._tag === "TyCon" && _v.name === "List" ? fail(lazyListMsg) : _v._tag === "TyCon" && _v.name === "Map" ? (({ args }) => ((_v) => _v.length === 2 ? (([k, v]) => wantOrd ? _Result_match2(impose(wantEq, wantOrd, k, seen, st), (e) => Err2(e), (st1) => impose(wantEq, wantOrd, v, seen, st1)) : impose(wantEq, wantOrd, v, seen, st))(_v) : Ok2(st))(args))(_v) : _v._tag === "TyCon" && _v.name === "Set" ? (({ args }) => wantOrd ? imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st) : Ok2(st))(_v) : _v._tag === "TyCon" && _v.name === "Task" ? Ok2(st) : _v._tag === "TyCon" && _v.name === "Promise" ? Ok2(st) : _v._tag === "TyCon" ? (({ name, args }) => _Result_match2(imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st), (e) => Err2(e), (st1) => imposeVariant(wantEq, wantOrd, name, args, seen, st1)))(_v) : _v._tag === "TyFn" ? Ok2(st) : _v._tag === "TyRecord" ? (({ row }) => imposeRow(wantEq, wantOrd, row, seen, st))(_v) : _v._tag === "TySingleton" ? Ok2(st) : _v._tag === "TyOneOf" ? (({ members }) => imposeArgsFrom(wantEq, wantOrd, members, 0, seen, st))(_v) : (() => {
+  throw new Error("non-exhaustive match");
+})())(t);
+var imposeRow = (wantEq, wantOrd, row, seen, st) => {
+  const $match = resolveRow(row, st);
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { fieldType, rest } = $match;
+      return _Result_match2(impose(wantEq, wantOrd, fieldType, seen, st), (e) => Err2(e), (st1) => imposeRow(wantEq, wantOrd, rest, seen, st1));
+    }
+    case "RowVar": {
+      const { id } = $match;
+      return Ok2(obligateRow$(id, wantEq, wantOrd, st));
+    }
+    case "RowEmpty": {
+      return Ok2(st);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+var bindVar = (id, t, st) => occurs$(id, t, st) ? fail(`infinite type: 't${show(id)} occurs in ${showType(zonk$(t, st))}`) : ((wantEq) => ((wantOrd) => ((st1) => or2(wantEq, wantOrd) ? ((_v) => _v._tag === "TyVar" ? (({ id: bid }) => Ok2(obligateVar$(bid, wantEq, wantOrd, st1)))(_v) : ((bound) => impose(wantEq, wantOrd, bound, _Set_fromArray2([]), st1))(_v))(resolve$(t, st)) : Ok2(st1))({ ...st, tv: idSet(id, t, st.tv) }))(_Set_has2(id, st.ordVars)))(_Set_has2(id, st.eqVars));
 var rewriteRow = (row, label, st) => {
   const $match = resolveRow(row, st);
   switch ($match._tag) {
@@ -975,7 +1087,10 @@ var rewriteRow = (row, label, st) => {
     }
     case "RowVar": {
       const { id: rid } = $match;
-      return (([freshT, st1]) => (([freshTail, st2]) => Ok2(_tuple(freshT, false, freshTail, { ...st2, rv: idSet(rid, rExtend$(label, freshT, freshTail), st2.rv) })))(freshRowVar(st1)))(freshVar(st));
+      return (([freshT, st1]) => (([freshTail, st2]) => {
+        const st3 = carryRowFlags(rid, freshT, freshTail, st2);
+        return Ok2(_tuple(freshT, false, freshTail, { ...st3, rv: idSet(rid, rExtend$(label, freshT, freshTail), st3.rv) }));
+      })(freshRowVar(st1)))(freshVar(st));
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -1035,7 +1150,7 @@ var unifyRows$ = (r1, r2, st) => {
   }
 };
 var unifyRows = _curry4(3, unifyRows$);
-var bindRowVar = (id, row, st) => ((_v) => _v._tag === "RowVar" && (({ id: rid }) => eq2(rid, id))(_v) ? (({ id: rid }) => Ok2(st))(_v) : ((r) => rowVarOccurs$(id, r, st) ? fail("infinite record type") : Ok2({ ...st, rv: idSet(id, r, st.rv) }))(_v))(resolveRow(row, st));
+var bindRowVar = (id, row, st) => ((_v) => _v._tag === "RowVar" && (({ id: rid }) => eq2(rid, id))(_v) ? (({ id: rid }) => Ok2(st))(_v) : ((r) => rowVarOccurs$(id, r, st) ? fail("infinite record type") : ((wantEq) => ((wantOrd) => ((st1) => or2(wantEq, wantOrd) ? ((_v) => _v._tag === "RowVar" ? (({ id: rid }) => Ok2(obligateRow$(rid, wantEq, wantOrd, st1)))(_v) : imposeRow(wantEq, wantOrd, r, _Set_fromArray2([]), st1))(r) : Ok2(st1))({ ...st, rv: idSet(id, r, st.rv) }))(_Set_has2(id, st.ordRows)))(_Set_has2(id, st.eqRows)))(_v))(resolveRow(row, st));
 var fits$ = (actual, expected, st) => {
   const ra = resolve$(actual, st);
   const rb = resolve$(expected, st);
@@ -7786,7 +7901,7 @@ var jsxPlugin = { name: "jsx", parse: Some6(parseJsxAtom), inferCall: Some6(infe
 import { Err as Err5, None as None9, Ok as Ok5, Some as Some9, _Array_get as _Array_get8, _Option_match as _Option_match9, _Result_flatMap as _Result_flatMap4, _Result_map as _Result_map4, _curry as _curry10, _tuple as _tuple6, and as and8, eq as eq7, length as length7 } from "@mochi/compiler/runtime";
 import { match as match4 } from "@onrails/pattern";
 
-import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get4, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_match as _Option_match8, _Option_unwrapOr as _Option_unwrapOr5, _Set_add, _Set_diff, _Set_fromArray as _Set_fromArray2, _Set_has as _Set_has2, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt3, _Str_split as _Str_split5, _curry as _curry9, _tuple as _tuple5, and as and7, eq as eq6, filter as filter2, length as length6, map as map4, or as or6, reduce as reduce2 } from "@mochi/compiler/runtime";
+import { None as None8, Some as Some8, _Array_append as _Array_append6, _Array_contains, _Array_find as _Array_find2, _Array_get as _Array_get7, _Array_prepend as _Array_prepend3, _Map_get as _Map_get4, _Map_getOr as _Map_getOr2, _Map_has as _Map_has2, _Map_keys as _Map_keys3, _Map_set as _Map_set3, _Map_values as _Map_values2, _Option_flatMap, _Option_match as _Option_match8, _Option_unwrapOr as _Option_unwrapOr5, _Set_add as _Set_add2, _Set_diff, _Set_fromArray as _Set_fromArray3, _Set_has as _Set_has3, _Set_size, _Set_toArray, _Str_codeAt as _Str_codeAt3, _Str_split as _Str_split5, _curry as _curry9, _tuple as _tuple5, and as and7, eq as eq6, filter as filter2, length as length6, map as map4, or as or6, reduce as reduce2 } from "@mochi/compiler/runtime";
 import { match as match3 } from "@onrails/pattern";
 
 import { Err as Err4, Ok as Ok4, Some as Some7, _Array_get as _Array_get6, _Array_prepend as _Array_prepend2, _Map_delete, _Map_get as _Map_get3, _Map_has, _Map_set as _Map_set2, _Option_match as _Option_match7, _Option_unwrapOr as _Option_unwrapOr4, _Result_flatMap as _Result_flatMap3, _Result_map as _Result_map3, _Str_split as _Str_split4, _curry as _curry8, _done as _done4, _recur as _recur4, _tuple as _tuple4, and as and6, eq as eq5, filter, length as length5, map as map3, show as show3 } from "@mochi/compiler/runtime";
@@ -7825,18 +7940,19 @@ var seedKeyDeclsFrom = _curry8(3, (decls, i, m) => match2(_Array_get6(i, decls))
 var seedBuiltinCtorKeys$ = (stmts, m) => seedKeyDeclsFrom(builtinDeclsFor(stmts), 0, m);
 var seedBuiltinCtorKeys = _curry8(2, seedBuiltinCtorKeys$);
 
+var bareScheme = (vars, rvars, ty) => ({ vars, rvars, ty, eq: [], ord: [], eqRows: [], ordRows: [] });
 var tNumber = tPrim("number");
 var tBool = tPrim("bool");
 var tString = tPrim("string");
 var primType = (name) => ((_v) => _v === "float" ? tNumber : _v === "int" ? tNumber : _v === "string" ? tString : _v === "bool" ? tBool : tPrim(name))(name);
-var emptyVarSets = { tv: _Set_fromArray2([]), rv: _Set_fromArray2([]) };
+var emptyVarSets = { tv: _Set_fromArray3([]), rv: _Set_fromArray3([]) };
 var diffVarSets = _curry9(2, (a, b) => ({ tv: _Set_diff(a.tv, b.tv), rv: _Set_diff(a.rv, b.rv) }));
 var collect$ = (t, acc) => {
   const $match = t;
   switch ($match._tag) {
     case "TyVar": {
       const { id } = $match;
-      return { tv: _Set_add(id, acc.tv), rv: acc.rv };
+      return { tv: _Set_add2(id, acc.tv), rv: acc.rv };
     }
     case "TyCon": {
       const { args } = $match;
@@ -7870,7 +7986,7 @@ var collectRow = (row, acc) => {
   switch ($match._tag) {
     case "RowVar": {
       const { id } = $match;
-      return { tv: acc.tv, rv: _Set_add(id, acc.rv) };
+      return { tv: acc.tv, rv: _Set_add2(id, acc.rv) };
     }
     case "RowExtend": {
       const { fieldType, rest } = $match;
@@ -7890,7 +8006,7 @@ var collectFree = (t, bound, st, acc) => {
   switch ($match._tag) {
     case "TyVar": {
       const { id } = $match;
-      return _Set_has2(id, bound.tv) ? acc : _Option_match8(idGet(id, st.tv), () => ({ tv: _Set_add(id, acc.tv), rv: acc.rv }), (next) => collectFree(next, bound, st, acc));
+      return _Set_has3(id, bound.tv) ? acc : _Option_match8(idGet(id, st.tv), () => ({ tv: _Set_add2(id, acc.tv), rv: acc.rv }), (next) => collectFree(next, bound, st, acc));
     }
     case "TyCon": {
       const { args } = $match;
@@ -7923,7 +8039,7 @@ var collectFreeRow = (row, bound, st, acc) => {
   switch ($match._tag) {
     case "RowVar": {
       const { id } = $match;
-      return _Set_has2(id, bound.rv) ? acc : _Option_match8(idGet(id, st.rv), () => ({ tv: acc.tv, rv: _Set_add(id, acc.rv) }), (next) => collectFreeRow(next, bound, st, acc));
+      return _Set_has3(id, bound.rv) ? acc : _Option_match8(idGet(id, st.rv), () => ({ tv: acc.tv, rv: _Set_add2(id, acc.rv) }), (next) => collectFreeRow(next, bound, st, acc));
     }
     case "RowExtend": {
       const { fieldType, rest } = $match;
@@ -7937,15 +8053,18 @@ var collectFreeRow = (row, bound, st, acc) => {
     }
   }
 };
-var freeInScheme = _curry9(3, (sc, st, acc) => collectFree(sc.ty, { tv: _Set_fromArray2(sc.vars), rv: _Set_fromArray2(sc.rvars) }, st, acc));
+var freeInScheme = _curry9(3, (sc, st, acc) => collectFree(sc.ty, { tv: _Set_fromArray3(sc.vars), rv: _Set_fromArray3(sc.rvars) }, st, acc));
 var freeInEnvFrom = _curry9(4, (schemes, i, st, acc) => _Option_match8(_Array_get7(i, schemes), () => acc, (sc) => freeInEnvFrom(schemes, i + 1, st, freeInScheme(sc, st, acc))));
 var freeInEnv = _curry9(2, (env, st) => freeInEnvFrom(_Map_values2(env), 0, st, emptyVarSets));
 var freeInNamedFrom = _curry9(5, (names, i, env, st, acc) => _Option_match8(_Array_get7(i, names), () => acc, (n) => freeInNamedFrom(names, i + 1, env, st, _Option_match8(_Map_get4(n, env), () => acc, (sc) => freeInScheme(sc, st, acc)))));
+var keepFlagged = _curry9(2, (ids, flags) => filter2((id) => _Set_has3(id, flags), ids));
 var generalizeAgainst = _curry9(4, (envFree, t, st, widen) => {
   const zt = widen ? widenLits(zonk(t, st)) : zonk(t, st);
   const own = freeInType(zt);
   const free = and7(_Set_size(own.tv) === 0, _Set_size(own.rv) === 0) ? own : diffVarSets(own, envFree());
-  return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
+  const vars = _Set_toArray(free.tv);
+  const rvars = _Set_toArray(free.rv);
+  return { vars, rvars, ty: zt, eq: keepFlagged(vars, st.eqVars), ord: keepFlagged(vars, st.ordVars), eqRows: keepFlagged(rvars, st.eqRows), ordRows: keepFlagged(rvars, st.ordRows) };
 });
 var generalize = _curry9(4, (env, t, st, widen) => generalizeAgainst(() => freeInEnv(env, st), t, st, widen));
 var generalizeOver = _curry9(5, (env, names, t, st, widen) => generalizeAgainst(() => freeInNamedFrom(names, 0, env, st, emptyVarSets), t, st, widen));
@@ -7980,10 +8099,16 @@ var widenRow = (row) => {
     }
   }
 };
-var instMapFrom = _curry9(3, (vars, acc, st) => match3(vars).with((_v) => _v.length === 0, () => _tuple5(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fv, st1]) => instMapFrom(rest, _Map_set3(v, fv, acc), st1))(freshVar(st))).otherwise(() => {
+var instMapFrom = _curry9(5, (vars, eqIds, ordIds, acc, st) => match3(vars).with((_v) => _v.length === 0, () => _tuple5(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fv, st1]) => {
+  const st2 = ((_v) => _v._tag === "TyVar" ? (({ id }) => obligateVar(id, _Set_has3(v, eqIds), _Set_has3(v, ordIds), st1))(_v) : st1)(fv);
+  return instMapFrom(rest, eqIds, ordIds, _Map_set3(v, fv, acc), st2);
+})(freshVar(st))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var instRowMapFrom = _curry9(3, (vars, acc, st) => match3(vars).with((_v) => _v.length === 0, () => _tuple5(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fr, st1]) => instRowMapFrom(rest, _Map_set3(v, fr, acc), st1))(freshRowVar(st))).otherwise(() => {
+var instRowMapFrom = _curry9(5, (vars, eqIds, ordIds, acc, st) => match3(vars).with((_v) => _v.length === 0, () => _tuple5(acc, st)).with((_v) => _v.length >= 1, ([v, ...rest]) => (([fr, st1]) => {
+  const st2 = ((_v) => _v._tag === "RowVar" ? (({ id }) => obligateRow(id, _Set_has3(v, eqIds), _Set_has3(v, ordIds), st1))(_v) : st1)(fr);
+  return instRowMapFrom(rest, eqIds, ordIds, _Map_set3(v, fr, acc), st2);
+})(freshRowVar(st))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
 var instSub = (t, tmap, rmap) => {
@@ -8037,7 +8162,7 @@ var instSubRow = (row, tmap, rmap) => {
     }
   }
 };
-var instantiate = _curry9(2, (sc, st) => (([tmap, st1]) => (([rmap, st2]) => _tuple5(instSub(sc.ty, tmap, rmap), st2))(instRowMapFrom(sc.rvars, new Map, st1)))(instMapFrom(sc.vars, new Map, st)));
+var instantiate = _curry9(2, (sc, st) => (([tmap, st1]) => (([rmap, st2]) => _tuple5(instSub(sc.ty, tmap, rmap), st2))(instRowMapFrom(sc.rvars, _Set_fromArray3(sc.eqRows), _Set_fromArray3(sc.ordRows), new Map, st1)))(instMapFrom(sc.vars, _Set_fromArray3(sc.eq), _Set_fromArray3(sc.ord), new Map, st)));
 var isUpperStart = (s) => _Option_match8(_Str_codeAt3(0, s), () => false, (c) => and7(c >= 65, c <= 90));
 var typeExprListToType$ = (tes, vars, st, aliases, expanding) => ((_v) => _v.length === 0 ? _tuple5([], vars, st) : _v.length >= 1 ? (([te, ...rest]) => (([t, vars1, st1]) => (([restTs, vars2, st2]) => _tuple5(_Array_prepend3(t, restTs), vars2, st2))(typeExprListToType$(rest, vars1, st1, aliases, expanding)))(typeExprToType$(te, vars, st, aliases, expanding)))(_v) : (() => {
   throw new Error("non-exhaustive match");
@@ -8132,24 +8257,31 @@ var spreadFieldsInto = (row, rest) => {
 var aliasFieldsFrom = (fields, vars, st, aliases, expanding) => ((_v) => _v.length === 0 ? _tuple5(RowEmpty, st) : _v.length >= 1 ? (([fld, ...rest]) => (([ft, vars1, st1]) => (([restRow, st2]) => fld.spread ? _tuple5(spreadRowInto$(ft, restRow), st2) : rowHasLabel$(fld.name, restRow) ? _tuple5(restRow, st2) : _tuple5(rField(fld.name, ft, restRow, fld.optional), st2))(aliasFieldsFrom(rest, vars1, st1, aliases, expanding)))(typeExprToType$(fld.fieldType, vars, st, aliases, expanding)))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(fields);
-var aliasRow$ = (name, info, args, st, aliases, expanding) => _Set_has2(name, expanding) ? _tuple5(tCon(name, args), st) : _Option_match8(info.expr, () => (([local, st1]) => {
-  const next = _Set_add(name, expanding);
+var aliasRow$ = (name, info, args, st, aliases, expanding) => _Set_has3(name, expanding) ? _tuple5(tCon(name, args), st) : _Option_match8(info.expr, () => (([local, st1]) => {
+  const next = _Set_add2(name, expanding);
   return (([row, st2]) => _tuple5(tRecord(row), st2))(aliasFieldsFrom(info.fields, local, st1, aliases, next));
-})(aliasLocalVarsFrom(info.params, args, st)), (te) => (([local, st1]) => (([t, , st2]) => _tuple5(t, st2))(typeExprToType$(te, local, st1, aliases, _Set_add(name, expanding))))(aliasLocalVarsFrom(info.params, args, st)));
+})(aliasLocalVarsFrom(info.params, args, st)), (te) => (([local, st1]) => (([t, , st2]) => _tuple5(t, st2))(typeExprToType$(te, local, st1, aliases, _Set_add2(name, expanding))))(aliasLocalVarsFrom(info.params, args, st)));
 var aliasRow = _curry9(6, aliasRow$);
 var pvarsFrom = _curry9(2, (params, st) => match3(params).with((_v) => _v.length === 0, () => _tuple5(new Map, [], st)).with((_v) => _v.length >= 1, ([p, ...rest]) => (([v, st1]) => (([restMap, restVars, st2]) => _tuple5(_Map_set3(p, v, restMap), _Array_prepend3(v, restVars), st2))(pvarsFrom(rest, st1)))(freshVar(st))).otherwise(() => {
   throw new Error("non-exhaustive match");
 }));
-var ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => ((_v) => _v.length === 0 ? _tuple5(result, st) : _v.length >= 1 ? (([fld, ...rest]) => (([ft, , st1]) => (([restT, st2]) => _tuple5(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType$(fld.fieldType, pvars, st, aliases, _Set_fromArray2([]))))(_v) : (() => {
+var ctorFieldsArrowFrom = (fields, pvars, st, aliases, result) => ((_v) => _v.length === 0 ? _tuple5(result, st) : _v.length >= 1 ? (([fld, ...rest]) => (([ft, , st1]) => (([restT, st2]) => _tuple5(tArrow(ft, restT), st2))(ctorFieldsArrowFrom(rest, pvars, st1, aliases, result)))(typeExprToType$(fld.fieldType, pvars, st, aliases, _Set_fromArray3([]))))(_v) : (() => {
   throw new Error("non-exhaustive match");
 })())(fields);
 var ctorScheme = _curry9(5, (typeName, params, c, st, aliases) => (([pvars, pvarTypes, st1]) => {
   const result = tCon(typeName, pvarTypes);
   return (([ty, st2]) => {
     const sets = collect$(ty, emptyVarSets);
-    return _tuple5({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty }, st2);
+    return _tuple5(bareScheme(_Set_toArray(sets.tv), _Set_toArray(sets.rv), ty), st2);
   })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
 })(pvarsFrom(params, st)));
+var variantArm = _curry9(4, (params, ctors, st, aliases) => (([pvars, pvarTypes, st1]) => (([fields, st2]) => _tuple5({ params: pvarTypes, fields }, st2))(armFieldsFrom(ctors, pvars, st1, aliases, [])))(pvarsFrom(params, st)));
+var armFieldsFrom = _curry9(5, (ctors, pvars, st, aliases, acc) => match3(ctors).with((_v) => _v.length === 0, () => _tuple5(acc, st)).with((_v) => _v.length >= 1, ([c, ...rest]) => (([acc1, st1]) => armFieldsFrom(rest, pvars, st1, aliases, acc1))(armFieldTypes(c.fields, pvars, st, aliases, acc))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
+var armFieldTypes = _curry9(5, (fields, pvars, st, aliases, acc) => match3(fields).with((_v) => _v.length === 0, () => _tuple5(acc, st)).with((_v) => _v.length >= 1, ([fld, ...rest]) => (([ft, , st1]) => armFieldTypes(rest, pvars, st1, aliases, _Array_append6(ft, acc)))(typeExprToType$(fld.fieldType, pvars, st, aliases, _Set_fromArray3([])))).otherwise(() => {
+  throw new Error("non-exhaustive match");
+}));
 var matchTysFrom = (tpls, actuals, params, binds, i) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: tpl }, { value: actual }]) => _Option_flatMap((b) => matchTysFrom(tpls, actuals, params, b, i + 1), matchTy(tpl, actual, params, binds)))(_v) : Some8(binds))(_tuple5(_Array_get7(i, tpls), _Array_get7(i, actuals)));
 var closedFieldsOf = (row, acc) => {
   const $match = row;
@@ -8170,11 +8302,11 @@ var closedFieldsOf = (row, acc) => {
   }
 };
 var matchFieldsFrom = (tpls, actuals, params, binds, i) => _Option_match8(_Array_get7(i, tpls), () => Some8(binds), (t) => _Option_match8(_Array_find2((a) => eq6(a.label, t.label), actuals), () => None8, (a) => eq6(a.optional, t.optional) ? _Option_flatMap((b) => matchFieldsFrom(tpls, actuals, params, b, i + 1), matchTy(t.fieldType, a.fieldType, params, binds)) : None8));
-var matchTy = (tpl, actual, params, binds) => ((_v) => _v[0]._tag === "TyVar" && (([{ id }]) => _Set_has2(id, params))(_v) ? (([{ id }]) => _Option_match8(_Map_get4(id, binds), () => Some8(_Map_set3(id, actual, binds)), (prev) => eq6(prev, actual) ? Some8(binds) : None8))(_v) : _v[0]._tag === "TyVar" && _v[1]._tag === "TyVar" ? (([{ id: a }, { id: b }]) => eq6(a, b) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyCon" && _v[1]._tag === "TyCon" ? (([{ name: n, args: targs }, { name: m, args: aargs }]) => and7(eq6(n, m), eq6(length6(targs), length6(aargs))) ? matchTysFrom(targs, aargs, params, binds, 0) : None8)(_v) : _v[0]._tag === "TyFn" && _v[1]._tag === "TyFn" ? (([{ from: tf, to: tt }, { from: af, to: at }]) => _Option_flatMap((b) => matchTy(tt, at, params, b), matchTy(tf, af, params, binds)))(_v) : _v[0]._tag === "TyRecord" && _v[1]._tag === "TyRecord" ? (([{ row: trow }, { row: arow }]) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: tfs }, { value: afs }]) => eq6(length6(tfs), length6(afs)) ? matchFieldsFrom(tfs, afs, params, binds, 0) : None8)(_v) : None8)(_tuple5(closedFieldsOf(trow, []), closedFieldsOf(arow, []))))(_v) : _v[0]._tag === "TySingleton" && _v[1]._tag === "TySingleton" ? (([{ base: tb, value: tv }, { base: ab, value: av }]) => and7(eq6(tb, ab), eq6(tv, av)) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf" ? eq6(tpl, actual) ? Some8(binds) : None8 : None8)(_tuple5(tpl, actual));
+var matchTy = (tpl, actual, params, binds) => ((_v) => _v[0]._tag === "TyVar" && (([{ id }]) => _Set_has3(id, params))(_v) ? (([{ id }]) => _Option_match8(_Map_get4(id, binds), () => Some8(_Map_set3(id, actual, binds)), (prev) => eq6(prev, actual) ? Some8(binds) : None8))(_v) : _v[0]._tag === "TyVar" && _v[1]._tag === "TyVar" ? (([{ id: a }, { id: b }]) => eq6(a, b) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyCon" && _v[1]._tag === "TyCon" ? (([{ name: n, args: targs }, { name: m, args: aargs }]) => and7(eq6(n, m), eq6(length6(targs), length6(aargs))) ? matchTysFrom(targs, aargs, params, binds, 0) : None8)(_v) : _v[0]._tag === "TyFn" && _v[1]._tag === "TyFn" ? (([{ from: tf, to: tt }, { from: af, to: at }]) => _Option_flatMap((b) => matchTy(tt, at, params, b), matchTy(tf, af, params, binds)))(_v) : _v[0]._tag === "TyRecord" && _v[1]._tag === "TyRecord" ? (([{ row: trow }, { row: arow }]) => ((_v) => _v[0]._tag === "Some" && _v[1]._tag === "Some" ? (([{ value: tfs }, { value: afs }]) => eq6(length6(tfs), length6(afs)) ? matchFieldsFrom(tfs, afs, params, binds, 0) : None8)(_v) : None8)(_tuple5(closedFieldsOf(trow, []), closedFieldsOf(arow, []))))(_v) : _v[0]._tag === "TySingleton" && _v[1]._tag === "TySingleton" ? (([{ base: tb, value: tv }, { base: ab, value: av }]) => and7(eq6(tb, ab), eq6(tv, av)) ? Some8(binds) : None8)(_v) : _v[0]._tag === "TyOneOf" && _v[1]._tag === "TyOneOf" ? eq6(tpl, actual) ? Some8(binds) : None8 : None8)(_tuple5(tpl, actual));
 var templateRowFrom = (fields, vars, aliases, i) => _Option_match8(_Array_get7(i, fields), () => RowEmpty, (f) => (([t, _vars, _st]) => {
   const rest = templateRowFrom(fields, vars, aliases, i + 1);
   return f.spread ? spreadRowInto$(t, rest) : rowHasLabel$(f.name, rest) ? rest : RowExtend(f.name, t, f.optional, rest);
-})(typeExprToType$(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray2([]))));
+})(typeExprToType$(f.fieldType, vars, mkSt(0), aliases, _Set_fromArray3([]))));
 var templateVars = (params) => reduce2(_curry9(2, ([vs, ids], p) => {
   const id = -1e6 - length6(ids);
   return _tuple5(_Map_set3(p, TyVar(id), vs), _Array_append6(id, ids));
@@ -8188,7 +8320,7 @@ var foldingAliasFrom = (t, keys, aliases, i) => _Option_match8(_Array_get7(i, ke
   const next = () => foldingAliasFrom(t, keys, aliases, i + 1);
   return _Option_match8(_Map_get4(key, aliases), () => next(), (info) => _Option_match8(info.expr, () => (([vars, ids]) => {
     const tpl = TyRecord(templateRowFrom(info.fields, vars, aliases, 0));
-    return _Option_match8(matchTy(tpl, t, _Set_fromArray2(ids), new Map), () => next(), (binds) => allBound(ids, binds) ? Some8(bareAliasName(key)) : next());
+    return _Option_match8(matchTy(tpl, t, _Set_fromArray3(ids), new Map), () => next(), (binds) => allBound(ids, binds) ? Some8(bareAliasName(key)) : next());
   })(templateVars(info.params)), () => next()));
 });
 var nominalTypeName$ = (t, aliases) => {
@@ -8210,9 +8342,9 @@ var nominalTypeName$ = (t, aliases) => {
 var nominalTypeName = _curry9(2, nominalTypeName$);
 var foldTemplatesFrom = (keys, aliases, i, acc) => _Option_match8(_Array_get7(i, keys), () => acc, (key) => _Option_match8(_Map_get4(key, aliases), () => foldTemplatesFrom(keys, aliases, i + 1, acc), (info) => (([_vars, ids]) => {
   const name = bareAliasName(key);
-  return (([tpl, _st]) => foldTemplatesFrom(keys, aliases, i + 1, _Array_append6({ name, ids, tpl }, acc)))(aliasRow$(name, info, map4((id) => TyVar(id), ids), mkSt(0), aliases, _Set_fromArray2([])));
+  return (([tpl, _st]) => foldTemplatesFrom(keys, aliases, i + 1, _Array_append6({ name, ids, tpl }, acc)))(aliasRow$(name, info, map4((id) => TyVar(id), ids), mkSt(0), aliases, _Set_fromArray3([])));
 })(templateVars(info.params))));
-var foldHeadFrom = (t, tpls, i) => _Option_match8(_Array_get7(i, tpls), () => None8, (a) => _Option_match8(matchTy(a.tpl, t, _Set_fromArray2(a.ids), new Map), () => foldHeadFrom(t, tpls, i + 1), (binds) => allBound(a.ids, binds) ? Some8(_tuple5(a.name, map4((id) => _Map_getOr2(t, id, binds), a.ids))) : foldHeadFrom(t, tpls, i + 1)));
+var foldHeadFrom = (t, tpls, i) => _Option_match8(_Array_get7(i, tpls), () => None8, (a) => _Option_match8(matchTy(a.tpl, t, _Set_fromArray3(a.ids), new Map), () => foldHeadFrom(t, tpls, i + 1), (binds) => allBound(a.ids, binds) ? Some8(_tuple5(a.name, map4((id) => _Map_getOr2(t, id, binds), a.ids))) : foldHeadFrom(t, tpls, i + 1)));
 var foldWith = (t, tpls) => ((_v) => _v._tag === "Some" ? (({ value: [name, args] }) => tCon(name, map4((a) => foldWith(a, tpls), args)))(_v) : _v._tag === "None" ? ((_v) => _v._tag === "TyCon" ? (({ name, args }) => tCon(name, map4((a) => foldWith(a, tpls), args)))(_v) : _v._tag === "TyFn" ? (({ from: fromT, to: toT }) => tArrow(foldWith(fromT, tpls), foldWith(toT, tpls)))(_v) : _v._tag === "TyRecord" ? (({ row }) => tRecord(foldRowWith(row, tpls)))(_v) : _v._tag === "TyOneOf" ? (({ members }) => tUnion(map4((m) => foldWith(m, tpls), members)))(_v) : t)(t) : (() => {
   throw new Error("non-exhaustive match");
 })())(foldHeadFrom(t, tpls, 0));
@@ -9667,7 +9799,7 @@ var parseWith = _curry12(2, (toks, pluginsOpt) => {
   const r = parseRecovering(toks, pluginsOpt);
   return _Option_match11(_Array_get10(0, r.diagnostics), () => Ok7(r.stmts), (d) => Err7(d));
 });
-import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_prepend as _Array_prepend5, _Array_sortBy, _Array_take as _Array_take2, _Map_delete as _Map_delete2, _Map_get as _Map_get5, _Map_keys as _Map_keys4, _Map_set as _Map_set4, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome3, _Option_match as _Option_match12, _Option_unwrapOr as _Option_unwrapOr7, _Set_fromArray as _Set_fromArray3, _Set_has as _Set_has3, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt5, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry14, _tuple as _tuple8, and as and10, concat, eq as eq10, filter as filter4, floor as floor3, length as length11, map as map8, or as or8, reduce as reduce3, show as show5 } from "@mochi/compiler/runtime";
+import { None as None12, Some as Some12, _Array_append as _Array_append9, _Array_concat as _Array_concat6, _Array_find as _Array_find4, _Array_flatMap as _Array_flatMap3, _Array_get as _Array_get11, _Array_prepend as _Array_prepend5, _Array_sortBy, _Array_take as _Array_take2, _Map_delete as _Map_delete2, _Map_get as _Map_get5, _Map_keys as _Map_keys4, _Map_set as _Map_set4, _Option_contains as _Option_contains3, _Option_isNone, _Option_isSome as _Option_isSome3, _Option_match as _Option_match12, _Option_unwrapOr as _Option_unwrapOr7, _Set_fromArray as _Set_fromArray4, _Set_has as _Set_has4, _Set_union, _Str_chars as _Str_chars2, _Str_codeAt as _Str_codeAt5, _Str_fromCode as _Str_fromCode2, _Str_get as _Str_get4, _Str_join as _Str_join5, _Str_length as _Str_length5, _Str_slice as _Str_slice3, _Str_split as _Str_split6, _Str_startsWith as _Str_startsWith3, _Str_toNumber as _Str_toNumber2, _Str_trim, _curry as _curry14, _tuple as _tuple8, and as and10, concat, eq as eq10, filter as filter4, floor as floor3, length as length11, map as map8, or as or8, reduce as reduce3, show as show5 } from "@mochi/compiler/runtime";
 
 import { _Str_chars, _Str_join as _Str_join4, _curry as _curry13, length as length10, map as map7 } from "@mochi/compiler/runtime";
 var escChar2 = (c) => ((_v) => _v === "\\" ? "\\\\" : _v === '"' ? "\\\"" : _v === `
@@ -15460,7 +15592,7 @@ var exprSpan2 = (e) => {
     }
   }
 };
-var noComments = { leading: new Map, trailing: new Map, flatArity: new Map, shadowed: _Set_fromArray3([]), etaSkip: false, formatHooks: [], formatDocHooks: [], commentStarts: [], src: "" };
+var noComments = { leading: new Map, trailing: new Map, flatArity: new Map, shadowed: _Set_fromArray4([]), etaSkip: false, formatHooks: [], formatDocHooks: [], commentStarts: [], src: "" };
 var spanKey = (kind, sp) => `${kind}:${show5(sp.start)}:${show5(sp.end)}`;
 var STMT = "s";
 var EXPR = "e";
@@ -15561,7 +15693,7 @@ var namespaceArity = (shadowed, target, member) => {
   switch ($match._tag) {
     case "ERef": {
       const { name: nsName } = $match;
-      return _Set_has3(nsName, shadowed) ? None12 : _Option_match12(_Map_get5(nsName, namespaceRuntime), () => None12, (members) => _Option_match12(_Map_get5(member, members), () => None12, (jsId) => runtimeArityOf(jsId)));
+      return _Set_has4(nsName, shadowed) ? None12 : _Option_match12(_Map_get5(nsName, namespaceRuntime), () => None12, (members) => _Option_match12(_Map_get5(member, members), () => None12, (jsId) => runtimeArityOf(jsId)));
     }
     default: {
       return None12;
@@ -15793,13 +15925,13 @@ var topLevelNames = (stmts) => _Array_flatMap3((s) => {
     }
   }
 }, stmts);
-var preludeArity = (innerBound) => reduce3(_curry14(2, (acc, name) => _Set_has3(name, innerBound) ? acc : _Option_match12(runtimeArityOf(name), () => acc, (n) => _Map_set4(name, n, acc))), new Map, _Map_keys4(preludeJsDefs));
+var preludeArity = (innerBound) => reduce3(_curry14(2, (acc, name) => _Set_has4(name, innerBound) ? acc : _Option_match12(runtimeArityOf(name), () => acc, (n) => _Map_set4(name, n, acc))), new Map, _Map_keys4(preludeJsDefs));
 var withLetArities = (stmts, innerBound, base) => reduce3(_curry14(2, (acc, s) => {
   const $match = s;
   switch ($match._tag) {
     case "SLet": {
       const { name, value } = $match;
-      return _Set_has3(name, innerBound) ? _Map_delete2(name, acc) : ((n) => n >= 2 ? _Map_set4(name, n, acc) : _Map_delete2(name, acc))(collapsedArity(value));
+      return _Set_has4(name, innerBound) ? _Map_delete2(name, acc) : ((n) => n >= 2 ? _Map_set4(name, n, acc) : _Map_delete2(name, acc))(collapsedArity(value));
     }
     case "SExtern": {
       const { name } = $match;
@@ -15875,7 +16007,7 @@ var etaCalleeArity = (ctx, fn) => {
   switch ($match._tag) {
     case "ERef": {
       const { name } = $match;
-      return _Set_has3(name, ctx.shadowed) ? None12 : runtimeArityOf(name);
+      return _Set_has4(name, ctx.shadowed) ? None12 : runtimeArityOf(name);
     }
     case "EField": {
       const { target, name: member } = $match;
@@ -16449,8 +16581,8 @@ var formatProgram$ = (stmts, src) => {
 };
 var formatProgram = _curry14(2, formatProgram$);
 var formatProgramWith$ = (stmts, src, hooks) => {
-  const innerBound = _Set_fromArray3(_Array_flatMap3(stmtInnerNames, stmts));
-  const shadowed = _Set_union(innerBound, _Set_fromArray3(topLevelNames(stmts)));
+  const innerBound = _Set_fromArray4(_Array_flatMap3(stmtInnerNames, stmts));
+  const shadowed = _Set_union(innerBound, _Set_fromArray4(topLevelNames(stmts)));
   const comments = filter4((c) => !inErrorSpan(stmts, c), collectComments(src));
   const base = { ...noComments, flatArity: buildFlatArity(stmts, innerBound), shadowed, formatHooks: hooks.rewrite, formatDocHooks: hooks.layout, commentStarts: map8((c) => c.start, comments), src };
   const attached = attachFrom(comments, 0, anchorIndex(sortAnchors(_Array_flatMap3(stmtAnchors, stmts))), src, { table: base, tail: [] });

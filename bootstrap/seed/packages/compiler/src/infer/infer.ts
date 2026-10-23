@@ -236,6 +236,7 @@ import {
   recordedTypes,
   unify,
   fits,
+  lazyListMsg,
 } from "./types";
 import * as Ast from "../ast/ast";
 import * as Layout from "../doc/doc";
@@ -266,6 +267,7 @@ import {
   instantiate,
   typeExprToType,
   ctorScheme,
+  variantArm,
   freeInType,
   widenLits,
 } from "./schemes";
@@ -650,7 +652,13 @@ const u = (
 ): Result<St, IErr> =>
   _Result_match(
     unify(left, right, st),
-    (e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>,
+    (e) =>
+      eq(e.message, lazyListMsg)
+        ? (Err(typeErrHelp(e.message, sp, "force it first with `List.toArray`")) as Result<
+            St,
+            IErr
+          >)
+        : (Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp)) as Result<St, IErr>),
     (newSt) => Ok(newSt) as Result<St, IErr>,
   );
 /**
@@ -1455,12 +1463,12 @@ const rowOfLabFields: <A>(
     .otherwise(() => {
       throw new Error("non-exhaustive match");
     });
-const envWithLabFields: <A, E>(
-  fields: ({ name: A; bodyType: Ty } & E)[],
+const envWithLabFields: <A, I>(
+  fields: ({ name: A; bodyType: Ty } & I)[],
   env: Map<A, Scheme>,
 ) => Map<A, Scheme> = _curry(
   2,
-  <A, E>(fields: ({ name: A; bodyType: Ty } & E)[], env: Map<A, Scheme>) =>
+  <A, I>(fields: ({ name: A; bodyType: Ty } & I)[], env: Map<A, Scheme>) =>
     match(fields)
       .with(
         (_v) => _v.length === 0,
@@ -1634,13 +1642,16 @@ const reachesList = (sorted: boolean, t: Ty): boolean =>
         : _v._tag === "TyCon" && _v.name === "Set"
           ? (({ args: targs }) =>
               and(sorted, length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0))(_v)
-          : _v._tag === "TyCon"
-            ? (({ args: targs }) => length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0)(
-                _v,
-              )
-            : _v._tag === "TyRecord"
-              ? (({ row }) => rowReachesList(sorted, row))(_v)
-              : false)(t);
+          : _v._tag === "TyCon" && _v.name === "Task"
+            ? false
+            : _v._tag === "TyCon" && _v.name === "Promise"
+              ? false
+              : _v._tag === "TyCon"
+                ? (({ args: targs }) =>
+                    length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0)(_v)
+                : _v._tag === "TyRecord"
+                  ? (({ row }) => rowReachesList(sorted, row))(_v)
+                  : false)(t);
 const rowReachesList = (sorted: boolean, row: Row): boolean => {
   const $match = row;
   switch ($match._tag) {
@@ -1680,7 +1691,7 @@ const checkEqEligible = (
                   reachesList(name === "compare", zonk(operandT, st))
                     ? (Err(
                         typeErrHelp(
-                          "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+                          lazyListMsg,
                           exprSpan(fn),
                           "force it first with `List.toArray`",
                         ),
@@ -3941,35 +3952,53 @@ const freeRefs = (e: Expr, bound: Set<string>, acc: Set<string>): Set<string> =>
     }
   }
 };
-const seedBuiltinsFrom: <A>(
-  keys: A[],
-  builtins: Map<A, Ty>,
-  env: Map<A, Scheme>,
-  st: St,
-) => Map<A, Scheme> = _curry(4, <A>(keys: A[], builtins: Map<A, Ty>, env: Map<A, Scheme>, st: St) =>
-  match(keys)
-    .with(
-      (_v) => _v.length === 0,
-      () => env,
-    )
-    .with(
-      (_v) => _v.length >= 1,
-      ([n, ...rest]) =>
-        _Option_match(
-          _Map_get(n, builtins),
-          () => seedBuiltinsFrom(rest, builtins, env, st),
-          (t) =>
-            seedBuiltinsFrom(rest, builtins, _Map_set(n, generalize(env, t, st, true), env), st),
-        ),
-    )
-    .otherwise(() => {
-      throw new Error("non-exhaustive match");
-    }),
+/**
+ * `eq` / `compare` are born obligated: every quantified variable is the
+ * operand the runtime walks (ADR 0138). The flag lives on the scheme, not on
+ * the shared prelude var id, which other builtins reuse.
+ */
+const obligateBuiltin: <A, B, C>(
+  name: string,
+  sc: { rvars: A; vars: B; eq: B; eqRows: A; ord: B; ordRows: A } & C,
+) => { rvars: A; vars: B; eq: B; eqRows: A; ord: B; ordRows: A } & C = _curry(
+  2,
+  <A, B, C>(name: string, sc: { rvars: A; vars: B; eq: B; eqRows: A; ord: B; ordRows: A } & C) =>
+    name === "eq"
+      ? { ...sc, eq: sc.vars, eqRows: sc.rvars }
+      : name === "compare"
+        ? { ...sc, ord: sc.vars, ordRows: sc.rvars }
+        : sc,
 );
-const seedBuiltins: <A>(builtins: Map<A, Ty>, env: Map<A, Scheme>, st: St) => Map<A, Scheme> =
-  _curry(3, <A>(builtins: Map<A, Ty>, env: Map<A, Scheme>, st: St) =>
-    seedBuiltinsFrom(_Map_keys(builtins), builtins, env, st),
-  );
+const seedBuiltinsFrom = (
+  keys: string[],
+  builtins: Map<string, Ty>,
+  env: Map<string, Scheme>,
+  st: St,
+): Map<string, Scheme> =>
+  ((_v) =>
+    _v.length === 0
+      ? env
+      : _v.length >= 1
+        ? (([n, ...rest]) =>
+            _Option_match(
+              _Map_get(n, builtins),
+              () => seedBuiltinsFrom(rest, builtins, env, st),
+              (t) =>
+                seedBuiltinsFrom(
+                  rest,
+                  builtins,
+                  _Map_set(n, obligateBuiltin(n, generalize(env, t, st, true)), env),
+                  st,
+                ),
+            ))(_v)
+        : (() => {
+            throw new Error("non-exhaustive match");
+          })())(keys);
+const seedBuiltins = (
+  builtins: Map<string, Ty>,
+  env: Map<string, Scheme>,
+  st: St,
+): Map<string, Scheme> => seedBuiltinsFrom(_Map_keys(builtins), builtins, env, st);
 const seedNsMembersFrom: <A, B, C>(
   keys: A[],
   members: Map<A, Ty>,
@@ -4137,8 +4166,62 @@ const aliasMapFrom = (stmts: Stmt[], acc: Map<string, AliasInfo>): Map<string, A
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
-const registerCtorsFrom: <A, B>(
-  ctors: ({ fields: CtorField[]; name: A } & B)[],
+/**
+ * Remember a variant's payloads so `==` can see a `List` that is not a type
+ * argument (ADR 0138). Aliases and opaque types have no constructors.
+ */
+const noteVariant: <A, B>(
+  name: string,
+  params: string[],
+  ctors: ({ fields: ({ fieldType: TypeExpr } & A)[] } & B)[],
+  aliasMap: Map<string, AliasInfo>,
+  st: St,
+) => St = _curry(
+  5,
+  <A, B>(
+    name: string,
+    params: string[],
+    ctors: ({ fields: ({ fieldType: TypeExpr } & A)[] } & B)[],
+    aliasMap: Map<string, AliasInfo>,
+    st: St,
+  ) =>
+    ((_v) =>
+      _v.length === 0
+        ? st
+        : (([arm, st1]: [{ params: Ty[]; fields: Ty[] }, St]) => ({
+            ...st1,
+            variants: _Map_set(name, { arms: [arm] }, st1.variants),
+          }))(variantArm(params, ctors, st, aliasMap)))(ctors),
+);
+/**
+ * Local arms win: a type this module declares keeps the payloads it built,
+ * and a dep's arm fills in only when this module has none (ADR 0138).
+ */
+const mergeVariantFrom: <A, B>(keys: A[], extra: Map<A, B>, acc: Map<A, B>) => Map<A, B> = _curry(
+  3,
+  <A, B>(keys: A[], extra: Map<A, B>, acc: Map<A, B>) =>
+    match(keys)
+      .with(
+        (_v) => _v.length === 0,
+        () => acc,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([k, ...rest]) =>
+          _Map_has(k, acc)
+            ? mergeVariantFrom(rest, extra, acc)
+            : _Option_match(
+                _Map_get(k, extra),
+                () => mergeVariantFrom(rest, extra, acc),
+                (info) => mergeVariantFrom(rest, extra, _Map_set(k, info, acc)),
+              ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const registerCtorsFrom: <A, F>(
+  ctors: ({ fields: CtorField[]; name: A } & F)[],
   typeName: string,
   params: string[],
   aliasMap: Map<string, AliasInfo>,
@@ -4146,8 +4229,8 @@ const registerCtorsFrom: <A, B>(
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B>(
-    ctors: ({ fields: CtorField[]; name: A } & B)[],
+  <A, F>(
+    ctors: ({ fields: CtorField[]; name: A } & F)[],
     typeName: string,
     params: string[],
     aliasMap: Map<string, AliasInfo>,
@@ -4185,16 +4268,16 @@ const registerUserCtorsFrom = (
             ((_v) =>
               _v._tag === "SType"
                 ? (({ name, params, ctors }) =>
-                    (([env1, st1]: [Map<string, Scheme>, St]) =>
-                      registerUserCtorsFrom(rest, aliasMap, env1, st1))(
-                      registerCtorsFrom(ctors, name, params, aliasMap, env, st),
-                    ))(_v)
+                    (([env1, st1]: [Map<string, Scheme>, St]) => {
+                      const st2: St = noteVariant(name, params, ctors, aliasMap, st1);
+                      return registerUserCtorsFrom(rest, aliasMap, env1, st2);
+                    })(registerCtorsFrom(ctors, name, params, aliasMap, env, st)))(_v)
                 : registerUserCtorsFrom(rest, aliasMap, env, st))(s))(_v)
         : (() => {
             throw new Error("non-exhaustive match");
           })())(stmts);
-const registerBuiltinCtorGroup: <A, B>(
-  ctors: ({ name: A; fields: CtorField[] } & B)[],
+const registerBuiltinCtorGroup: <A, F>(
+  ctors: ({ name: A; fields: CtorField[] } & F)[],
   typeName: string,
   params: string[],
   aliasMap: Map<string, AliasInfo>,
@@ -4202,8 +4285,8 @@ const registerBuiltinCtorGroup: <A, B>(
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   6,
-  <A, B>(
-    ctors: ({ name: A; fields: CtorField[] } & B)[],
+  <A, F>(
+    ctors: ({ name: A; fields: CtorField[] } & F)[],
     typeName: string,
     params: string[],
     aliasMap: Map<string, AliasInfo>,
@@ -4234,23 +4317,23 @@ const registerBuiltinCtorGroup: <A, B>(
         throw new Error("non-exhaustive match");
       }),
 );
-const registerBuiltinCtorsFrom: <A, B, C>(
+const registerBuiltinCtorsFrom: <A, F, G>(
   decls: ({
-    ctors: ({ name: A; fields: CtorField[] } & B)[];
+    ctors: ({ name: A; fields: CtorField[] } & F)[];
     name: string;
     params: string[];
-  } & C)[],
+  } & G)[],
   aliasMap: Map<string, AliasInfo>,
   env: Map<A, Scheme>,
   st: St,
 ) => [Map<A, Scheme>, St] = _curry(
   4,
-  <A, B, C>(
+  <A, F, G>(
     decls: ({
-      ctors: ({ name: A; fields: CtorField[] } & B)[];
+      ctors: ({ name: A; fields: CtorField[] } & F)[];
       name: string;
       params: string[];
-    } & C)[],
+    } & G)[],
     aliasMap: Map<string, AliasInfo>,
     env: Map<A, Scheme>,
     st: St,
@@ -5057,16 +5140,18 @@ const runInferImports: <A, B>(
     } & B
   >,
   pluginsOpt: Option<HostPlugin[]>,
+  importedVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>,
 ) => Result<
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
+    variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
   },
   IErr[]
 > = _curry(
-  8,
+  9,
   <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
@@ -5084,6 +5169,7 @@ const runInferImports: <A, B>(
       } & B
     >,
     pluginsOpt: Option<HostPlugin[]>,
+    importedVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>,
   ) => {
     const plugins: {
       name: string;
@@ -5122,6 +5208,10 @@ const runInferImports: <A, B>(
       (([env2, st2]: [Map<string, Scheme>, St]) =>
         (([env3, st3]: [Map<string, Scheme>, St]) => {
           const env4: Map<string, Scheme> = seedImportsFrom(_Map_keys(imports), imports, env3);
+          const st3b: St = {
+            ...st3,
+            variants: mergeVariantFrom(_Map_keys(importedVariants), importedVariants, st3.variants),
+          };
           const lets: Stmt[] = letsOfFrom(stmts);
           const idxOf: Map<string, number> = idxOfMap(lets);
           const sccs: number[][] = stronglyConnected(adjOf(lets, idxOf));
@@ -5149,12 +5239,14 @@ const runInferImports: <A, B>(
                       types: zonkRecorded(st5),
                       aliases: aliasMap,
                       letParams: resolveLetParams(st5),
+                      variants: st5.variants,
                     }) as Result<
                       {
                         env: Map<string, Scheme>;
                         types: TypeAt[];
                         aliases: Map<string, AliasInfo>;
                         letParams: TypeAt[];
+                        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
                       },
                       IErr[]
                     >)
@@ -5164,6 +5256,7 @@ const runInferImports: <A, B>(
                         types: TypeAt[];
                         aliases: Map<string, AliasInfo>;
                         letParams: TypeAt[];
+                        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
                       },
                       IErr[]
                     >))(errs1))(inferExprStmtsFrom(finalCtx, stmts, st4, errs)))(
@@ -5181,7 +5274,7 @@ const runInferImports: <A, B>(
               },
               sccs,
               lets,
-              st3,
+              st3b,
               noErrs,
             ),
           );
@@ -5237,8 +5330,9 @@ export const inferProgramImports: <A, B>(
     } & B
   >,
   pluginsOpt: Option<HostPlugin[]>,
+  importedVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>,
 ) => Result<Map<string, Scheme>, IErr[]> = _curry(
-  8,
+  9,
   <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
@@ -5256,6 +5350,7 @@ export const inferProgramImports: <A, B>(
       } & B
     >,
     pluginsOpt: Option<HostPlugin[]>,
+    importedVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>,
   ) =>
     _Result_map(
       (r: {
@@ -5263,12 +5358,31 @@ export const inferProgramImports: <A, B>(
         types: TypeAt[];
         aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
+        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
       }) => r.env,
-      runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
+      runInferImports(
+        stmts,
+        builtins,
+        namespaces,
+        openMode,
+        imports,
+        nsImports,
+        quals,
+        pluginsOpt,
+        importedVariants,
+      ),
     ),
 );
 
 const emptyQuals: Map<string, QualScope> = new Map<string, QualScope>();
+/**
+ * Variant payloads published by imported modules (ADR 0138). Pinned so an
+ * empty map does not generalize to `Map<unknown, unknown>`.
+ */
+const noVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }> = new Map<
+  string,
+  { arms: { params: Ty[]; fields: Ty[] }[] }
+>();
 const inferProgram$ = (
   stmts: Stmt[],
   builtins: Map<string, Ty>,
@@ -5284,6 +5398,7 @@ const inferProgram$ = (
     new Map<string, Map<string, Scheme>>(),
     emptyQuals,
     None as Option<HostPlugin[]>,
+    noVariants,
   );
 export const inferProgram: _Curry<
   [
@@ -5314,16 +5429,18 @@ export const inferProgramImportsTypes: <A, B>(
     } & B
   >,
   pluginsOpt: Option<HostPlugin[]>,
+  importedVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>,
 ) => Result<
   {
     env: Map<string, Scheme>;
     types: TypeAt[];
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
+    variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
   },
   IErr[]
 > = _curry(
-  8,
+  9,
   <A, B>(
     stmts: Stmt[],
     builtins: Map<string, Ty>,
@@ -5341,8 +5458,19 @@ export const inferProgramImportsTypes: <A, B>(
       } & B
     >,
     pluginsOpt: Option<HostPlugin[]>,
+    importedVariants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>,
   ) =>
-    runInferImports(stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt),
+    runInferImports(
+      stmts,
+      builtins,
+      namespaces,
+      openMode,
+      imports,
+      nsImports,
+      quals,
+      pluginsOpt,
+      importedVariants,
+    ),
 );
 const inferProgramTypes$ = (
   stmts: Stmt[],
@@ -5355,6 +5483,7 @@ const inferProgramTypes$ = (
     types: TypeAt[];
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
+    variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
   },
   IErr[]
 > =>
@@ -5367,6 +5496,7 @@ const inferProgramTypes$ = (
     new Map<string, Map<string, Scheme>>(),
     emptyQuals,
     None as Option<HostPlugin[]>,
+    noVariants,
   );
 /**
  * Like `inferProgram`, but also returns the span -> type map and alias scope
@@ -5385,6 +5515,7 @@ export const inferProgramTypes: _Curry<
       types: TypeAt[];
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
+      variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
     },
     IErr[]
   >
@@ -5401,6 +5532,7 @@ const inferProgramTypesWith$ = (
     types: TypeAt[];
     aliases: Map<string, AliasInfo>;
     letParams: TypeAt[];
+    variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
   },
   IErr[]
 > =>
@@ -5413,6 +5545,7 @@ const inferProgramTypesWith$ = (
     new Map<string, Map<string, Scheme>>(),
     emptyQuals,
     pluginsOpt,
+    noVariants,
   );
 /**
  * `inferProgramTypes` under a host plugin list (ADR 0109).
@@ -5431,6 +5564,7 @@ export const inferProgramTypesWith: _Curry<
       types: TypeAt[];
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
+      variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
     },
     IErr[]
   >
@@ -5451,6 +5585,7 @@ const inferProgramWith$ = (
     new Map<string, Map<string, Scheme>>(),
     emptyQuals,
     pluginsOpt,
+    noVariants,
   );
 export const inferProgramWith: _Curry<
   [

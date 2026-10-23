@@ -42,6 +42,7 @@ import {
   _setAdd,
   add,
   and,
+  eq,
   gt,
   length,
   map,
@@ -49,6 +50,8 @@ import {
   or,
   reduce,
 } from "@mochi/compiler/runtime";
+
+import { match } from "@onrails/pattern";
 
 import * as Ast from "../ast/ast";
 import { builtinTypeDecls } from "../ast/ctors";
@@ -80,6 +83,7 @@ import {
 } from "../infer/types";
 import { jsDoc } from "../codegen/codegen";
 import { foldAliasesAt } from "../infer/schemes";
+import { genericNames } from "./ts-types";
 import * as Schemes from "../infer/schemes";
 import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "../compile/compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensions";
@@ -462,6 +466,53 @@ const localAliasKeys = (stmts: Stmt[], i: number, acc: string[]): string[] =>
           : (() => {
               throw new Error("non-exhaustive match");
             })())(_Array_get(i, stmts));
+const obligParts: <A>(ids: A[], word: string, names: Map<A, string>, acc: string[]) => string[] =
+  _curry(4, <A>(ids: A[], word: string, names: Map<A, string>, acc: string[]) =>
+    match(ids)
+      .with(
+        (_v) => _v.length === 0,
+        () => acc,
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([id, ...rest]) =>
+          _Option_match(
+            _Map_get(id, names),
+            () => obligParts(rest, word, names, acc),
+            (letter) => obligParts(rest, word, names, _Array_append(`${word} <${letter}>`, acc)),
+          ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+  );
+/**
+ * `@requires Eq <A>` on an export whose scheme carries an eligibility
+ * obligation (ADR 0138). TypeScript generics cannot express it, so the
+ * declared type stays unconstrained and the contract is a doc line.
+ */
+const requiresComment: <A, B>(
+  sc: { vars: A[]; rvars: A[]; eqRows: A[]; ordRows: A[]; ord: A[]; eq: A[] } & B,
+) => string = <A, B>(
+  sc: { vars: A[]; rvars: A[]; eqRows: A[]; ordRows: A[]; ord: A[]; eq: A[] } & B,
+) => {
+  const names = genericNames(sc);
+  const parts: string[] = obligParts(
+    sc.eqRows,
+    "Eq",
+    names,
+    obligParts(
+      sc.ordRows,
+      "Ord",
+      names,
+      obligParts(sc.ord, "Ord", names, obligParts(sc.eq, "Eq", names, [] as string[])),
+    ),
+  );
+  return length(parts) === 0
+    ? ""
+    : `/** @requires ${_Str_join(", ", parts)} */
+`;
+};
 /**
  * `export declare const` per top-level binding that has an inferred scheme.
  * `$`-prefixed synthetic binders declare nothing.
@@ -471,7 +522,18 @@ const localAliasKeys = (stmts: Stmt[], i: number, acc: string[]): string[] =>
  */
 const bindingDeclsFrom: <A>(
   stmts: Stmt[],
-  env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+  env: Map<
+    string,
+    {
+      ty: Ty;
+      rvars: number[];
+      vars: number[];
+      eqRows: number[];
+      ordRows: number[];
+      ord: number[];
+      eq: number[];
+    } & A
+  >,
   aliases: Map<string, AliasInfo>,
   keys: string[],
   recs: Map<string, string>,
@@ -484,7 +546,18 @@ const bindingDeclsFrom: <A>(
   10,
   <A>(
     stmts: Stmt[],
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+    env: Map<
+      string,
+      {
+        ty: Ty;
+        rvars: number[];
+        vars: number[];
+        eqRows: number[];
+        ordRows: number[];
+        ord: number[];
+        eq: number[];
+      } & A
+    >,
     aliases: Map<string, AliasInfo>,
     keys: string[],
     recs: Map<string, string>,
@@ -500,7 +573,7 @@ const bindingDeclsFrom: <A>(
         : _v._tag === "Some" && _v.value._tag === "SLet"
           ? (({ value: { name, value, doc } }) =>
               ((rest: string[]) =>
-                ((decl: (a: string) => string) =>
+                ((decl) =>
                   _Str_startsWith("$", name)
                     ? rest
                     : _Option_match(
@@ -523,12 +596,17 @@ const bindingDeclsFrom: <A>(
                                 ),
                                 runDtsHooks(dtsHooks, name, value, ty, tsApiFor(recs)),
                               ),
+                              sc,
                             ),
                             rest,
                           );
                         },
                       ))(
-                  (ts: string) => `${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`,
+                  _curry(
+                    2,
+                    (ts: string, sc) =>
+                      `${requiresComment(sc)}${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};`,
+                  ),
                 ))(
                 bindingDeclsFrom(
                   stmts,
@@ -744,7 +822,18 @@ const hostTypeRecs: <A>(
  */
 export const emitDtsFromTypedWith: <A>(
   stmts: Stmt[],
-  env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+  env: Map<
+    string,
+    {
+      ty: Ty;
+      rvars: number[];
+      vars: number[];
+      eqRows: number[];
+      ordRows: number[];
+      ord: number[];
+      eq: number[];
+    } & A
+  >,
   aliases: Map<string, AliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
@@ -756,7 +845,18 @@ export const emitDtsFromTypedWith: <A>(
   9,
   <A>(
     stmts: Stmt[],
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+    env: Map<
+      string,
+      {
+        ty: Ty;
+        rvars: number[];
+        vars: number[];
+        eqRows: number[];
+        ordRows: number[];
+        ord: number[];
+        eq: number[];
+      } & A
+    >,
     aliases: Map<string, AliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
@@ -880,7 +980,18 @@ export const qualifierMapOf: <A>(
  */
 export const emitDtsFromTyped: <A>(
   stmts: Stmt[],
-  env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+  env: Map<
+    string,
+    {
+      ty: Ty;
+      rvars: number[];
+      vars: number[];
+      eqRows: number[];
+      ordRows: number[];
+      ord: number[];
+      eq: number[];
+    } & A
+  >,
   aliases: Map<string, AliasInfo>,
   qualify: Map<string, string>,
   runtimeImport: string,
@@ -888,7 +999,18 @@ export const emitDtsFromTyped: <A>(
   5,
   <A>(
     stmts: Stmt[],
-    env: Map<string, { ty: Ty; rvars: number[]; vars: number[] } & A>,
+    env: Map<
+      string,
+      {
+        ty: Ty;
+        rvars: number[];
+        vars: number[];
+        eqRows: number[];
+        ordRows: number[];
+        ord: number[];
+        eq: number[];
+      } & A
+    >,
     aliases: Map<string, AliasInfo>,
     qualify: Map<string, string>,
     runtimeImport: string,
@@ -950,6 +1072,7 @@ const emitDtsTextWith$ = (
         aliases: Map<string, AliasInfo>;
         types: TypeAt[];
         letParams: TypeAt[];
+        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
       },
     ]) =>
       emitDtsFromTypedWith(
@@ -1060,6 +1183,7 @@ const compileTargetsWith$ = (
         aliases: Map<string, AliasInfo>;
         types: TypeAt[];
         letParams: TypeAt[];
+        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
       },
     ]) => ({
       js: emitJsWith(stmts, opts),

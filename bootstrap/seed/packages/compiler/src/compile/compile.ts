@@ -243,6 +243,7 @@ const typedProgramWith$ = (
       types: TypeAt[];
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
+      variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
     },
   ],
   Stamped[]
@@ -257,6 +258,7 @@ const typedProgramWith$ = (
             types: TypeAt[];
             aliases: Map<string, AliasInfo>;
             letParams: TypeAt[];
+            variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
           }) => _tuple(stmts, r),
           inferProgramTypesWith(
             stmts,
@@ -284,6 +286,7 @@ export const typedProgramWith: _Curry<
         types: TypeAt[];
         aliases: Map<string, AliasInfo>;
         letParams: TypeAt[];
+        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
       },
     ],
     Stamped[]
@@ -297,6 +300,7 @@ export const typedProgram: (src: string) => Result<
       types: TypeAt[];
       aliases: Map<string, AliasInfo>;
       letParams: TypeAt[];
+      variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
     },
   ],
   Stamped[]
@@ -322,6 +326,7 @@ const typedQuery = (
         aliases: Map<string, AliasInfo>;
         types: TypeAt[];
         env: Map<string, Scheme>;
+        variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
       }) => ({
         env: r.env,
         types: map(
@@ -547,6 +552,7 @@ const compileTsWith$ = (
             types: TypeAt[];
             letParams: TypeAt[];
             aliases: Map<string, AliasInfo>;
+            variants: Map<string, { arms: { params: Ty[]; fields: Ty[] }[] }>;
           }) => emitTsWith(stmts, r, runtimeImport, opts),
           inferProgramTypesWith(
             stmts,

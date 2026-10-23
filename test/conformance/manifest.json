@@ -18,6 +18,9 @@
       "multiple-graph-check-errors",
       "graph-qualified-missing-type",
       "graph-type-error",
+      "eq-lazy-list",
+      "eq-obligations",
+      "eq-obligations-import",
       "dts",
       "dts-param-alias",
       "dts-qualified",
@@ -108,6 +111,18 @@
       "kind": "diagnostic",
       "source": "eq-lazy-list.mochi",
       "expect": "eq-lazy-list.expect.json"
+    },
+    {
+      "id": "eq-obligations",
+      "kind": "diagnostic",
+      "source": "eq-obligations.mochi",
+      "expect": "eq-obligations.expect.json"
+    },
+    {
+      "id": "eq-obligations-import",
+      "kind": "graph-diagnostic",
+      "entry": "eq-obligations-import/main.mochi",
+      "expect": "eq-obligations-import.expect.json"
     },
     {
       "id": "multiple-type-errors",

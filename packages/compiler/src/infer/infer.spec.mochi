@@ -1,7 +1,12 @@
 import { assertEq, ok, test, testEach } from "@mochi/test"
 import { check } from "../check/check.mochi"
-import { inferProgram, inferProgramTypes } from "./infer.mochi"
-import { showType } from "./types.mochi"
+import {
+  inferProgram,
+  inferProgramImports,
+  inferProgramTypes
+} from "./infer.mochi"
+import { showType, tCon, tPrim } from "./types.mochi"
+import { mono } from "./schemes.mochi"
 import { lex } from "../lexer/lexer.mochi"
 import { parse } from "../parser/parser.mochi"
 
@@ -101,6 +106,44 @@ testEach("inference reports every failing top-level binding", [
   ("let a = add(1, true)\nadd(1, 2)\nadd(\"x\", 1)", 3)
 ], ((src, want)) => switch inferErrs(src) {
   | Err(es) => assertEq(want, Array.length(es))
+  | Ok(_) => false |> ok
+})
+
+testEach("equality rejects a List the walk can reach (ADR 0138)", [
+  "let same = (x, y) => eq(x, y)\nlet a = same(@{1}, @{1})",
+  "let cmp = (x, y) => compare(x, y)\nlet a = cmp(@{1}, @{1})",
+  "let touch = r => r == r\nlet a = touch({ l: @{1} })",
+  "type Box = B(List<number>)\nlet a = B(@{1}) == B(@{1})",
+  "type Hold a = H(xs: List<a>)\nlet a = H(@{1}) == H(@{1})",
+  "type Hold<a> = H(List<a>)\nlet a = H(@{1}) == H(@{1})",
+  "let cmp = (x, y) => compare(x, y)\nlet a = cmp(#{ @{1}: 1 }, #{ @{1}: 1 })"
+], src => switch inferErrs(src) {
+  | Err(es) => es
+      |> map(e => e.message)
+      |> Str.join("\n")
+      |> Str.contains("lazy List")
+      |> ok
+  | Ok(_) => false |> ok
+})
+
+test("a generic eq accepts a number and a List-keyed Map (ADR 0138)", () => switch inferSrc("let same = (x, y) => x == y\nlet n = same(1, 1)\nlet m = same(#{ @{1}: 1 }, #{ @{1}: 1 })") {
+  | Ok(_) => true |> ok
+  | Err(_) => false |> ok
+})
+
+test("Task and Promise stop the equality walk (ADR 0138)", () => switch inferSrc("let t = Task.of(@{1})\nlet same = t == t\nlet ord = compare(t, t)\nlet p = Task.run(t)\nlet psame = p == p\nlet pord = compare(p, p)\nlet wrap = (x, y) => x == y\nlet wrapped = wrap(t, t)") {
+  | Ok(_) => true |> ok
+  | Err(_) => false |> ok
+})
+
+/// The constructor is not in this module. The payload arrives as a published
+/// variant arm, the same map a dependency forwards through a re-export.
+test("an imported variant payload rejects List (ADR 0138)", () => switch lex("let bad = box == box") |> Result.flatMap(parse) |> Result.flatMap(check) |> Result.mapErr(e => [slim(e)]) |> Result.flatMap(stmts => inferProgramImports(stmts, builtins, namespaces, false, Map.set("box", mono(tCon("Box", [])), #{}), #{}, #{}, None, Map.set("Box", { arms: [{ params: [], fields: [tCon("List", [tPrim("number")])] }] }, #{})) |> Result.mapErr(es => es |> map(slim))) {
+  | Err(es) => es
+      |> map(e => e.message)
+      |> Str.join("\n")
+      |> Str.contains("lazy List")
+      |> ok
   | Ok(_) => false |> ok
 })
 

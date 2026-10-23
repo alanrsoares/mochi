@@ -1,0 +1,16 @@
+[
+  {
+    "kind": "type",
+    "message": "module '<fixtures>/eq-obligations-import/main.mochi': cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+    "start": 65,
+    "end": 69,
+    "entry": "eq-obligations-import/main.mochi"
+  },
+  {
+    "kind": "type",
+    "message": "module '<fixtures>/eq-obligations-import/main.mochi': cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+    "start": 90,
+    "end": 99,
+    "entry": "eq-obligations-import/main.mochi"
+  }
+]

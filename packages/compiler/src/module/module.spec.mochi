@@ -42,6 +42,15 @@ test("loadGraph reports an unreadable entry as an Err verdict", () => switch loa
   | Ok(_) => false |> ok
 })
 
+test("a re-exported variant payload is rejected by equality (ADR 0138)", () => switch buildModules("test/conformance/eq-obligations-import/main.mochi") {
+  | Err(es) => es
+      |> map(e => e.message)
+      |> Str.join("\n")
+      |> Str.contains("lazy List")
+      |> ok
+  | Ok(_) => false |> ok
+})
+
 test("a graph load failure is a check diagnostic", () => switch loadGraph("bootstrap/not-a-module.mochi") {
   | Err(e) => e.kind == "check" |> ok
   | Ok(_) => false |> ok

@@ -10,7 +10,12 @@ type Coverage = {
 
 const ROOT = REPO_ROOT;
 const COVERAGE_DIR = "coverage/mochi";
-const MINIMUM_PERCENT = 65;
+const MINIMUM_FUNCTION_PERCENT = 65;
+// Bun 1.4.4 maps line hits onto comments, imports, and lines past EOF.
+// Function totals match Bun 1.4.2. On 492b8c9, lines were 65.99% under 1.4.2
+// and 63.24% under 1.4.4, both at 79.16% functions. 62 keeps that commit's
+// headroom under the 1.4.4 reading.
+const MINIMUM_LINE_PERCENT = 62;
 
 export const bootstrapMochiCoverage = (lcov: string): Coverage => {
   let inMochi = false;
@@ -71,11 +76,16 @@ const main = async (): Promise<void> => {
   const functions = percent(coverage.functionsHit, coverage.functionsFound);
   const lines = percent(coverage.linesHit, coverage.linesFound);
   console.log(
-    `bootstrap Mochi coverage: functions ${functions.toFixed(2)}%, lines ${lines.toFixed(2)}% (minimum ${MINIMUM_PERCENT}%)`,
+    `bootstrap Mochi coverage: functions ${functions.toFixed(2)}% ` +
+      `(minimum ${MINIMUM_FUNCTION_PERCENT}%), lines ${lines.toFixed(2)}% ` +
+      `(minimum ${MINIMUM_LINE_PERCENT}%)`,
   );
 
-  if (functions < MINIMUM_PERCENT || lines < MINIMUM_PERCENT) {
-    process.stderr.write("bootstrap Mochi coverage is below the 65% shipping floor\n");
+  if (functions < MINIMUM_FUNCTION_PERCENT || lines < MINIMUM_LINE_PERCENT) {
+    process.stderr.write(
+      "bootstrap Mochi coverage is below the shipping floor " +
+        `(functions ${MINIMUM_FUNCTION_PERCENT}%, lines ${MINIMUM_LINE_PERCENT}%)\n`,
+    );
     process.exit(1);
   }
 };

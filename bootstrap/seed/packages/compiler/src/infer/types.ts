@@ -13,6 +13,12 @@ export type Row =
   | { _tag: "RowVar"; id: number }
   | { _tag: "RowExtend"; label: string; fieldType: Ty; optional: boolean; rest: Row };
 /**
+ * One constructor's payload, written in that variant's parameter variables
+ * (ADR 0138). `params` lines up with the `TyCon` arguments at a use site.
+ */
+export type VariantArm = { params: Ty[]; fields: Ty[] };
+export type VariantInfo = { arms: VariantArm[] };
+/**
  * TS's `Subst` (mutable Map pair) + `Fresh` (mutable counter) become one
  * immutable, threaded `St` — every fresh-var mint AND every unify call
  * returns a NEW St rather than mutating in place. Type vars and row vars
@@ -59,7 +65,21 @@ export type St = {
   recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
+  eqVars: Set<number>;
+  ordVars: Set<number>;
+  eqRows: Set<number>;
+  ordRows: Set<number>;
+  variants: Map<string, VariantInfo>;
 };
+/**
+ * Type vars that must stay eligible for `==` (ADR 0138). Not a dictionary:
+ * the runtime walk is unchanged; unifying one of these with a `List` the
+ * walk can reach is a type error.
+ * Type vars that must stay eligible for `compare`. Stricter than `eqVars`:
+ * the walk also enters `Map` keys and `Set` elements.
+ * Variant payloads keyed by type name, so a `List` buried in a constructor
+ * is visible even when it is not a type argument.
+ */
 export type TypeErr = { message: string };
 
 import type { Option, Result, _Curry } from "@mochi/compiler/runtime";
@@ -74,6 +94,7 @@ import {
   _Array_flatMap,
   _Array_get,
   _Array_prepend,
+  _Array_tail,
   _Map_get,
   _Map_getOr,
   _Map_keys,
@@ -83,10 +104,15 @@ import {
   _Result_flatMap,
   _Result_map,
   _Result_match,
+  _Set_add,
+  _Set_fromArray,
+  _Set_has,
   _Str_join,
   _curry,
   _keyOf,
+  _setAdd,
   _tuple,
+  add,
   and,
   eq,
   floor,
@@ -122,6 +148,7 @@ export const RowExtend = _curry(4, (label, fieldType, optional, rest) => ({
   optional,
   rest,
 })) as (label: string, fieldType: Ty, optional: boolean, rest: Row) => Row;
+
 export const tVar: (id: number) => Ty = (id: number) => TyVar(id);
 const tCon$ = (name: string, args: Ty[]): Ty => TyCon(name, args);
 export const tCon: _Curry<[name: string, args: Ty[]], Ty> = _curry(2, tCon$);
@@ -456,6 +483,11 @@ export const mkSt: (start: number) => St = (start: number) => ({
   recorded: { cur: [] as TypeAt[], full: [] as TypeAt[][] },
   letSpans: new Map<string, SpanAt>(),
   letUses: new Map<string, Ty[]>(),
+  eqVars: _Set_fromArray([] as number[]),
+  ordVars: _Set_fromArray([] as number[]),
+  eqRows: _Set_fromArray([] as number[]),
+  ordRows: _Set_fromArray([] as number[]),
+  variants: new Map<string, VariantInfo>(),
 });
 const ID_CHUNK: number = 64;
 /**
@@ -1168,10 +1200,328 @@ const unify$ = (a: Ty, b: Ty, st: St): Result<St, TypeErr> => {
   }
 };
 export const unify: _Curry<[a: Ty, b: Ty, st: St], Result<St, TypeErr>> = _curry(3, unify$);
+/**
+ * `==` / `compare` throw if their structural walk reaches a lazy `List` (ADR 0138).
+ */
+export const lazyListMsg: string =
+  "cannot compare a lazy List: `==` and `compare` walk their operands structurally";
+const obligateVar$ = (id: number, wantEq: boolean, wantOrd: boolean, st: St): St => ({
+  ...st,
+  eqVars: wantEq ? _Set_add(id, st.eqVars) : st.eqVars,
+  ordVars: wantOrd ? _Set_add(id, st.ordVars) : st.ordVars,
+});
+export const obligateVar: _Curry<[id: number, wantEq: boolean, wantOrd: boolean, st: St], St> =
+  _curry(4, obligateVar$);
+const obligateRow$ = (id: number, wantEq: boolean, wantOrd: boolean, st: St): St => ({
+  ...st,
+  eqRows: wantEq ? _Set_add(id, st.eqRows) : st.eqRows,
+  ordRows: wantOrd ? _Set_add(id, st.ordRows) : st.ordRows,
+});
+export const obligateRow: _Curry<[id: number, wantEq: boolean, wantOrd: boolean, st: St], St> =
+  _curry(4, obligateRow$);
+const varIdOf: (t: Ty) => number = (t: Ty) => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return id;
+    }
+    default: {
+      return -1;
+    }
+  }
+};
+const rowIdOf: (row: Row) => number = (row: Row) => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowVar": {
+      const { id } = $match;
+      return id;
+    }
+    default: {
+      return -1;
+    }
+  }
+};
+/**
+ * Copy a row variable's eligibility onto the field and tail invented when an
+ * open row grows a label. The walk will see both.
+ */
+const carryRowFlags = (id: number, field: Ty, tail: Row, st: St): St => {
+  const wantEq: boolean = _Set_has(id, st.eqRows);
+  const wantOrd: boolean = _Set_has(id, st.ordRows);
+  return obligateRow$(
+    rowIdOf(tail),
+    wantEq,
+    wantOrd,
+    obligateVar$(varIdOf(field), wantEq, wantOrd, st),
+  );
+};
+const impose = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  t: Ty,
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> =>
+  or(wantEq, wantOrd)
+    ? imposeTy(wantEq, wantOrd, resolve$(t, st), seen, st)
+    : (Ok(st) as Result<St, TypeErr>);
+const imposeArgsFrom = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  args: Ty[],
+  i: number,
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> =>
+  _Option_match(
+    _Array_get(i, args),
+    () => Ok(st) as Result<St, TypeErr>,
+    (a) =>
+      _Result_match(
+        impose(wantEq, wantOrd, a, seen, st),
+        (e) => Err(e) as Result<St, TypeErr>,
+        (st1) => imposeArgsFrom(wantEq, wantOrd, args, i + 1, seen, st1),
+      ),
+  );
+const substTy = (t: Ty, tmap: Map<number, Ty>): Ty => {
+  const $match = t;
+  switch ($match._tag) {
+    case "TyVar": {
+      const { id } = $match;
+      return _Map_getOr(t, id, tmap);
+    }
+    case "TyCon": {
+      const { name, args } = $match;
+      return tCon$(
+        name,
+        map((a: Ty) => substTy(a, tmap), args),
+      );
+    }
+    case "TyFn": {
+      const { from, to } = $match;
+      return tArrow$(substTy(from, tmap), substTy(to, tmap));
+    }
+    case "TyRecord": {
+      const { row } = $match;
+      return tRecord(substRow(row, tmap));
+    }
+    case "TySingleton": {
+      const { base, value } = $match;
+      return TySingleton(base, value);
+    }
+    case "TyOneOf": {
+      const { members } = $match;
+      return tUnion(map((m: Ty) => substTy(m, tmap), members));
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const substRow = (row: Row, tmap: Map<number, Ty>): Row => {
+  const $match = row;
+  switch ($match._tag) {
+    case "RowEmpty": {
+      return row;
+    }
+    case "RowVar": {
+      return row;
+    }
+    case "RowExtend": {
+      const { label, fieldType, optional, rest } = $match;
+      return rField$(label, substTy(fieldType, tmap), substRow(rest, tmap), optional);
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
+const bindArmParams: <A>(params: Ty[], args: A[], acc: Map<number, A>) => Map<number, A> = _curry(
+  3,
+  <A>(params: Ty[], args: A[], acc: Map<number, A>) =>
+    or(length(params) === 0, length(args) === 0)
+      ? acc
+      : ((_v) =>
+          _v._tag === "Some" && _v.value._tag === "TyVar"
+            ? (({ value: { id } }) =>
+                _Option_match(
+                  _Array_get(0, args),
+                  () => acc,
+                  (a) =>
+                    bindArmParams(_Array_tail(params), _Array_tail(args), _Map_set(id, a, acc)),
+                ))(
+                _v as Extract<Option<Ty>, { _tag: "Some" }> & {
+                  value: Extract<Extract<Option<Ty>, { _tag: "Some" }>["value"], { _tag: "TyVar" }>;
+                },
+              )
+            : bindArmParams(_Array_tail(params), _Array_tail(args), acc))(_Array_get(0, params)),
+);
+const imposeArmFields = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  fields: Ty[],
+  i: number,
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> =>
+  _Option_match(
+    _Array_get(i, fields),
+    () => Ok(st) as Result<St, TypeErr>,
+    (f) =>
+      _Result_match(
+        impose(wantEq, wantOrd, f, seen, st),
+        (e) => Err(e) as Result<St, TypeErr>,
+        (st1) => imposeArmFields(wantEq, wantOrd, fields, i + 1, seen, st1),
+      ),
+  );
+const imposeArmsFrom = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  arms: VariantArm[],
+  args: Ty[],
+  i: number,
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> =>
+  _Option_match(
+    _Array_get(i, arms),
+    () => Ok(st) as Result<St, TypeErr>,
+    (arm) =>
+      eq(length(arm.params), length(args))
+        ? _Result_match(
+            imposeArmFields(
+              wantEq,
+              wantOrd,
+              map(
+                (f: Ty) => substTy(f, bindArmParams(arm.params, args, new Map<number, Ty>())),
+                arm.fields,
+              ),
+              0,
+              seen,
+              st,
+            ),
+            (e) => Err(e) as Result<St, TypeErr>,
+            (st1) => imposeArmsFrom(wantEq, wantOrd, arms, args, i + 1, seen, st1),
+          )
+        : imposeArmsFrom(wantEq, wantOrd, arms, args, i + 1, seen, st),
+  );
+const imposeVariant = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  name: string,
+  args: Ty[],
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> =>
+  _Set_has(name, seen)
+    ? (Ok(st) as Result<St, TypeErr>)
+    : _Option_match(
+        _Map_get(name, st.variants),
+        () => Ok(st) as Result<St, TypeErr>,
+        (info) => imposeArmsFrom(wantEq, wantOrd, info.arms, args, 0, _Set_add(name, seen), st),
+      );
+const imposeTy = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  t: Ty,
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> =>
+  ((_v) =>
+    _v._tag === "TyVar"
+      ? (({ id }) => Ok(obligateVar$(id, wantEq, wantOrd, st)) as Result<St, TypeErr>)(_v)
+      : _v._tag === "TyCon" && _v.name === "List"
+        ? fail(lazyListMsg)
+        : _v._tag === "TyCon" && _v.name === "Map"
+          ? (({ args }) =>
+              ((_v) =>
+                _v.length === 2
+                  ? (([k, v]) =>
+                      wantOrd
+                        ? _Result_match(
+                            impose(wantEq, wantOrd, k, seen, st),
+                            (e) => Err(e) as Result<St, TypeErr>,
+                            (st1) => impose(wantEq, wantOrd, v, seen, st1),
+                          )
+                        : impose(wantEq, wantOrd, v, seen, st))(_v)
+                  : (Ok(st) as Result<St, TypeErr>))(args))(_v)
+          : _v._tag === "TyCon" && _v.name === "Set"
+            ? (({ args }) =>
+                wantOrd
+                  ? imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st)
+                  : (Ok(st) as Result<St, TypeErr>))(_v)
+            : _v._tag === "TyCon" && _v.name === "Task"
+              ? (Ok(st) as Result<St, TypeErr>)
+              : _v._tag === "TyCon" && _v.name === "Promise"
+                ? (Ok(st) as Result<St, TypeErr>)
+                : _v._tag === "TyCon"
+                  ? (({ name, args }) =>
+                      _Result_match(
+                        imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st),
+                        (e) => Err(e) as Result<St, TypeErr>,
+                        (st1) => imposeVariant(wantEq, wantOrd, name, args, seen, st1),
+                      ))(_v)
+                  : _v._tag === "TyFn"
+                    ? (Ok(st) as Result<St, TypeErr>)
+                    : _v._tag === "TyRecord"
+                      ? (({ row }) => imposeRow(wantEq, wantOrd, row, seen, st))(_v)
+                      : _v._tag === "TySingleton"
+                        ? (Ok(st) as Result<St, TypeErr>)
+                        : _v._tag === "TyOneOf"
+                          ? (({ members }) =>
+                              imposeArgsFrom(wantEq, wantOrd, members, 0, seen, st))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(t);
+const imposeRow = (
+  wantEq: boolean,
+  wantOrd: boolean,
+  row: Row,
+  seen: Set<string>,
+  st: St,
+): Result<St, TypeErr> => {
+  const $match = resolveRow(row, st);
+  switch ($match._tag) {
+    case "RowExtend": {
+      const { fieldType, rest } = $match;
+      return _Result_match(
+        impose(wantEq, wantOrd, fieldType, seen, st),
+        (e) => Err(e) as Result<St, TypeErr>,
+        (st1) => imposeRow(wantEq, wantOrd, rest, seen, st1),
+      );
+    }
+    case "RowVar": {
+      const { id } = $match;
+      return Ok(obligateRow$(id, wantEq, wantOrd, st)) as Result<St, TypeErr>;
+    }
+    case "RowEmpty": {
+      return Ok(st) as Result<St, TypeErr>;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
 const bindVar = (id: number, t: Ty, st: St): Result<St, TypeErr> =>
   occurs$(id, t, st)
     ? fail(`infinite type: 't${show(id)} occurs in ${showType(zonk$(t, st))}`)
-    : (Ok({ ...st, tv: idSet(id, t, st.tv) }) as Result<St, TypeErr>);
+    : ((wantEq: boolean) =>
+        ((wantOrd: boolean) =>
+          ((st1: St) =>
+            or(wantEq, wantOrd)
+              ? ((_v) =>
+                  _v._tag === "TyVar"
+                    ? (({ id: bid }) =>
+                        Ok(obligateVar$(bid, wantEq, wantOrd, st1)) as Result<St, TypeErr>)(_v)
+                    : ((bound) =>
+                        impose(wantEq, wantOrd, bound, _Set_fromArray([] as string[]), st1))(_v))(
+                  resolve$(t, st),
+                )
+              : (Ok(st1) as Result<St, TypeErr>))({ ...st, tv: idSet(id, t, st.tv) }))(
+          _Set_has(id, st.ordVars),
+        ))(_Set_has(id, st.eqVars));
 /**
  * Bring `label` to the head of a row, extending an open tail if needed.
  * Returns the field's type, optionality, the remaining row, and state.
@@ -1195,13 +1545,15 @@ const rewriteRow = (row: Row, label: string, st: St): Result<[Ty, boolean, Row, 
     case "RowVar": {
       const { id: rid } = $match;
       return (([freshT, st1]: [Ty, St]) =>
-        (([freshTail, st2]: [Row, St]) =>
-          Ok(
+        (([freshTail, st2]: [Row, St]) => {
+          const st3: St = carryRowFlags(rid, freshT, freshTail, st2);
+          return Ok(
             _tuple(freshT, false, freshTail, {
-              ...st2,
-              rv: idSet(rid, rExtend$(label, freshT, freshTail), st2.rv),
+              ...st3,
+              rv: idSet(rid, rExtend$(label, freshT, freshTail), st3.rv),
             }),
-          ) as Result<[Ty, boolean, Row, St], TypeErr>)(freshRowVar(st1)))(freshVar(st));
+          ) as Result<[Ty, boolean, Row, St], TypeErr>;
+        })(freshRowVar(st1)))(freshVar(st));
     }
     default: {
       throw new Error("non-exhaustive match");
@@ -1287,9 +1639,20 @@ const bindRowVar = (id: number, row: Row, st: St): Result<St, TypeErr> =>
       : ((r) =>
           rowVarOccurs$(id, r, st)
             ? fail("infinite record type")
-            : (Ok({ ...st, rv: idSet(id, r, st.rv) }) as Result<St, TypeErr>))(_v))(
-    resolveRow(row, st),
-  );
+            : ((wantEq: boolean) =>
+                ((wantOrd: boolean) =>
+                  ((st1: St) =>
+                    or(wantEq, wantOrd)
+                      ? ((_v) =>
+                          _v._tag === "RowVar"
+                            ? (({ id: rid }) =>
+                                Ok(obligateRow$(rid, wantEq, wantOrd, st1)) as Result<St, TypeErr>)(
+                                _v,
+                              )
+                            : imposeRow(wantEq, wantOrd, r, _Set_fromArray([] as string[]), st1))(r)
+                      : (Ok(st1) as Result<St, TypeErr>))({ ...st, rv: idSet(id, r, st.rv) }))(
+                  _Set_has(id, st.ordRows),
+                ))(_Set_has(id, st.eqRows)))(_v))(resolveRow(row, st));
 const fits$ = (actual: Ty, expected: Ty, st: St): Result<St, TypeErr> => {
   const ra: Ty = resolve$(actual, st);
   const rb: Ty = resolve$(expected, st);

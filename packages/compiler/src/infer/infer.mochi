@@ -53,7 +53,8 @@ import {
   zonk,
   recordedTypes,
   unify,
-  fits
+  fits,
+  lazyListMsg
 } from "./types.mochi"
 
 // ============================================================
@@ -106,6 +107,7 @@ import {
   instantiate,
   typeExprToType,
   ctorScheme,
+  variantArm,
   freeInType,
   widenLits
 } from "./schemes.mochi"
@@ -290,7 +292,9 @@ let nameAliases = (msg, aliases) =>
 
 let u = (ctx: Ctx<a>, left, right, st: Types.St, sp) => switch unify(left, right, st) {
   | Ok(newSt) => Ok(newSt)
-  | Err(e) => Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp))
+  | Err(e) => e.message == lazyListMsg
+      ? Err(typeErrHelp(e.message, sp, "force it first with `List.toArray`"))
+      : Err(typeErr(nameAliases(e.message, ctx.aliasMap), sp))
 }
 
 /// `actual` may be used as `expected` (ADR 0098 optional fields).
@@ -696,16 +700,19 @@ let inferCallArgs = (ctx: Ctx<a>, fnT, args, st: Types.St, callSpan) => switch a
       }
 }
 
-// ADR 0138 gate 2: `==` / `compare` walk their operands structurally and throw
-// on a lazy `List`, so a resolved `List` the walk can reach is a type error.
-// Functions compare by reference and `Map` keys / `Set` elements by host
-// identity, so neither is walked. A still-open variable is assumed eligible
-// until the scheme-level obligation lands.
+// ADR 0138: `==` / `compare` walk their operands structurally and throw on a
+// lazy `List`. The prelude schemes carry `Eq` / `Ord`, and unification
+// rejects a `List` the walk can reach — including one found later, through a
+// generic, an open row, or a variant payload. This name check is the direct
+// call's backup for a `List` already visible in the operand. Functions
+// compare by reference. `compare` walks `Map` keys and `Set` elements;
+// `==` keeps them on host identity.
 let isBuiltinCall = (ctx: Ctx<a>, name) =>
   Map.has(name, ctx.letOwner) == false && Set.has(name, ctx.localNames) == false
 
 // `compare` sorts `Map` keys and `Set` elements structurally, so it walks them;
-// `==` keeps them on host identity.
+// `==` keeps them on host identity. `Task` and `Promise` are a thunk and a
+// host object, so their type arguments are not payloads.
 let reachesList = (sorted, t) => switch t {
   | TyCon("List", _) => true
   | TyCon("Map", [k, v]) => sorted && reachesList(
@@ -715,6 +722,8 @@ let reachesList = (sorted, t) => switch t {
   | TyCon("Set", targs) => sorted && Array.length(
       Array.filter(a => reachesList(sorted, a), targs)
     ) > 0
+  | TyCon("Task", _) => false
+  | TyCon("Promise", _) => false
   | TyCon(_, targs) => Array.length(
       Array.filter(a => reachesList(sorted, a), targs)
     ) > 0
@@ -742,7 +751,7 @@ let checkEqEligible = (ctx: Ctx<a>, fn, fnT, st: Types.St) => switch fn {
           )
             ? Err(
               typeErrHelp(
-                "cannot compare a lazy List: `==` and `compare` walk their operands structurally",
+                lazyListMsg,
                 exprSpan(fn),
                 "force it first with `List.toArray`"
               )
@@ -1760,13 +1769,23 @@ let freeRefs = (e, bound, acc) => switch e {
 // shared constructor-knowledge module; `builtinDeclsFor` applies the
 // type-name-shadow rule so all passes share one shadowing semantics.
 
+/// `eq` / `compare` are born obligated: every quantified variable is the
+/// operand the runtime walks (ADR 0138). The flag lives on the scheme, not on
+/// the shared prelude var id, which other builtins reuse.
+let obligateBuiltin = (name, sc) =>
+  name == "eq"
+    ? { ...sc, eq: sc.vars, eqRows: sc.rvars }
+    : name == "compare"
+    ? { ...sc, ord: sc.vars, ordRows: sc.rvars }
+    : sc
+
 let seedBuiltinsFrom = (keys, builtins, env, st: Types.St) => switch keys {
   | [] => env
   | [n, ...rest] => switch Map.get(n, builtins) {
       | Some(t) => seedBuiltinsFrom(
           rest,
           builtins,
-          Map.set(n, generalize(env, t, st, true), env),
+          Map.set(n, obligateBuiltin(n, generalize(env, t, st, true)), env),
           st
         )
       | None => seedBuiltinsFrom(rest, builtins, env, st)
@@ -1849,6 +1868,26 @@ let aliasMapFrom = (stmts, acc) => switch stmts {
     }
 }
 
+/// Remember a variant's payloads so `==` can see a `List` that is not a type
+/// argument (ADR 0138). Aliases and opaque types have no constructors.
+let noteVariant = (name, params, ctors, aliasMap: Map<string, Schemes.AliasInfo>, st: Types.St) => switch ctors {
+  | [] => st
+  | _ => let (arm, st1) = variantArm(params, ctors, st, aliasMap) in
+      { ...st1, variants: Map.set(name, { arms: [arm] }, st1.variants) }
+}
+
+/// Local arms win: a type this module declares keeps the payloads it built,
+/// and a dep's arm fills in only when this module has none (ADR 0138).
+let mergeVariantFrom = (keys, extra, acc) => switch keys {
+  | [] => acc
+  | [k, ...rest] => Map.has(k, acc)
+      ? mergeVariantFrom(rest, extra, acc)
+      : switch Map.get(k, extra) {
+        | Some(info) => mergeVariantFrom(rest, extra, Map.set(k, info, acc))
+        | None => mergeVariantFrom(rest, extra, acc)
+      }
+}
+
 let registerCtorsFrom = (ctors, typeName, params, aliasMap: Map<string, Schemes.AliasInfo>, env, st: Types.St) => switch ctors {
   | [] => (env, st)
   | [c, ...rest] => let (sc, st1) = ctorScheme(
@@ -1879,7 +1918,8 @@ let registerUserCtorsFrom = (stmts, aliasMap: Map<string, Schemes.AliasInfo>, en
           env,
           st
         ) in
-          registerUserCtorsFrom(rest, aliasMap, env1, st1)
+        let st2 = noteVariant(name, params, ctors, aliasMap, st1) in
+          registerUserCtorsFrom(rest, aliasMap, env1, st2)
       | _ => registerUserCtorsFrom(rest, aliasMap, env, st)
     }
 }
@@ -2379,7 +2419,7 @@ let resolveLetParams : Types.St -> [Types.TypeAt] = st =>
 
 /// Full inference result — the metadata the TS backend needs on top of `env`
 /// (ADR 0090), including `letParams` (ADR 0035).
-let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
+let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>, importedVariants) =>
   let plugins = resolvePluginsDefault(pluginsOpt) in
   let st0 = mkSt(1000) in
   let env0 = seedBuiltins(builtins, #{}, st0) in
@@ -2394,6 +2434,14 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
   ) in
   let (env3, st3) = registerExternsFrom(stmts, aliasMap, env2, st2) in
   let env4 = seedImportsFrom(Map.keys(imports), imports, env3) in
+  let st3b = {
+    ...st3,
+    variants: mergeVariantFrom(
+      Map.keys(importedVariants),
+      importedVariants,
+      st3.variants
+    )
+  } in
   let lets = letsOfFrom(stmts) in
   let idxOf = idxOfMap(lets) in
   let sccs = stronglyConnected(adjOf(lets, idxOf)) in
@@ -2412,7 +2460,7 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
     },
     sccs,
     lets,
-    st3,
+    st3b,
     noErrs
   ) in
   let (st5, errs1) = finalCtx->inferExprStmtsFrom(stmts, st4, errs) in
@@ -2423,7 +2471,8 @@ let runInferImports = (stmts, builtins, namespaces, openMode, imports, nsImports
             env: finalCtx.env,
             types: zonkRecorded(st5),
             aliases: aliasMap,
-            letParams: resolveLetParams(st5)
+            letParams: resolveLetParams(st5),
+            variants: st5.variants
           }
         )
       | _ => Err(errs1)
@@ -2438,7 +2487,7 @@ export let scopeAliases = (stmts, quals) =>
 
 /// Env-only view — the shape every existing caller (compile.mochi,
 /// module.mochi) and the host façades expect.
-export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
+export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>, importedVariants) =>
   runInferImports(
     stmts,
     builtins,
@@ -2447,7 +2496,8 @@ export let inferProgramImports = (stmts, builtins, namespaces, openMode, imports
     imports,
     nsImports,
     quals,
-    pluginsOpt
+    pluginsOpt,
+    importedVariants
   )
     |> Result.map(r => r.env)
 
@@ -2533,6 +2583,10 @@ type Ctx<p> = {
 // prelude, and walking it at each `let` was a quarter of inference).
 let emptyQuals : Map<string, QualScope> = #{}
 
+/// Variant payloads published by imported modules (ADR 0138). Pinned so an
+/// empty map does not generalize to `Map<unknown, unknown>`.
+let noVariants : Map<string, Types.VariantInfo> = #{}
+
 export let inferProgram = (stmts, builtins, namespaces, openMode) =>
   inferProgramImports(
     stmts,
@@ -2542,14 +2596,15 @@ export let inferProgram = (stmts, builtins, namespaces, openMode) =>
     #{},
     #{},
     emptyQuals,
-    None
+    None,
+    noVariants
   )
 
 /// The imports-aware full result — what the TS GRAPH driver needs (ADR 0090).
 /// `inferProgramImports` throws away everything but `env`; a module in a graph
 /// still has to annotate from its span -> type table, so the driver calls this
 /// instead and reads `env` off the record itself.
-export let inferProgramImportsTypes = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>) =>
+export let inferProgramImportsTypes = (stmts, builtins, namespaces, openMode, imports, nsImports, quals, pluginsOpt: Option<[Plugin<a>]>, importedVariants) =>
   runInferImports(
     stmts,
     builtins,
@@ -2558,7 +2613,8 @@ export let inferProgramImportsTypes = (stmts, builtins, namespaces, openMode, im
     imports,
     nsImports,
     quals,
-    pluginsOpt
+    pluginsOpt,
+    importedVariants
   )
 
 /// Like `inferProgram`, but also returns the span -> type map and alias scope
@@ -2572,7 +2628,8 @@ export let inferProgramTypes = (stmts, builtins, namespaces, openMode) =>
     #{},
     #{},
     emptyQuals,
-    None
+    None,
+    noVariants
   )
 
 /// `inferProgramTypes` under a host plugin list (ADR 0109).
@@ -2585,7 +2642,8 @@ export let inferProgramTypesWith = (stmts, builtins, namespaces, openMode, plugi
     #{},
     #{},
     emptyQuals,
-    pluginsOpt
+    pluginsOpt,
+    noVariants
   )
 
 export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt: Option<[Plugin<a>]>) =>
@@ -2597,7 +2655,8 @@ export let inferProgramWith = (stmts, builtins, namespaces, openMode, pluginsOpt
     #{},
     #{},
     emptyQuals,
-    pluginsOpt
+    pluginsOpt,
+    noVariants
   )
 
 // The schemes a module PUBLISHES: exported let/extern bindings and the ctors of

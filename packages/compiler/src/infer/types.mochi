@@ -32,6 +32,11 @@ export type Row =
   | RowVar(id: number)
   | RowExtend(label: string, fieldType: Ty, optional: bool, rest: Row)
 
+/// One constructor's payload, written in that variant's parameter variables
+/// (ADR 0138). `params` lines up with the `TyCon` arguments at a use site.
+export type VariantArm = { params: [Ty], fields: [Ty] }
+export type VariantInfo = { arms: [VariantArm] }
+
 export let tVar = id => TyVar(id)
 export let tCon = (name, args) => TyCon(name, args)
 export let tArrow = (fromT, toT) => TyFn(fromT, toT)
@@ -250,8 +255,20 @@ export type St = {
   next: number,
   recorded: Recorded,
   letSpans: Map<string, SpanAt>,
-  letUses: Map<string, [Ty]>
+  letUses: Map<string, [Ty]>,
+  eqVars: Set<number>,
+  ordVars: Set<number>,
+  eqRows: Set<number>,
+  ordRows: Set<number>,
+  variants: Map<string, VariantInfo>
 }
+/// Type vars that must stay eligible for `==` (ADR 0138). Not a dictionary:
+/// the runtime walk is unchanged; unifying one of these with a `List` the
+/// walk can reach is a type error.
+/// Type vars that must stay eligible for `compare`. Stricter than `eqVars`:
+/// the walk also enters `Map` keys and `Set` elements.
+/// Variant payloads keyed by type name, so a `List` buried in a constructor
+/// is visible even when it is not a type argument.
 export type TypeErr = { message: string }
 
 export let mkSt : number -> St = start =>
@@ -261,7 +278,12 @@ export let mkSt : number -> St = start =>
     next: start,
     recorded: { cur: [], full: [] },
     letSpans: #{},
-    letUses: #{}
+    letUses: #{},
+    eqVars: Set.fromArray([]),
+    ordVars: Set.fromArray([]),
+    eqRows: Set.fromArray([]),
+    ordRows: Set.fromArray([]),
+    variants: #{}
   }
 
 let ID_CHUNK = 64
@@ -632,10 +654,185 @@ export let unify = (a, b, st: St) =>
         }
     }
 
+/// `==` / `compare` throw if their structural walk reaches a lazy `List` (ADR 0138).
+export let lazyListMsg = "cannot compare a lazy List: `==` and `compare` walk their operands structurally"
+
+export let obligateVar = (id, wantEq, wantOrd, st: St) =>
+  {
+    ...st,
+    eqVars: wantEq ? Set.add(id, st.eqVars) : st.eqVars,
+    ordVars: wantOrd ? Set.add(id, st.ordVars) : st.ordVars
+  }
+
+export let obligateRow = (id, wantEq, wantOrd, st: St) =>
+  {
+    ...st,
+    eqRows: wantEq ? Set.add(id, st.eqRows) : st.eqRows,
+    ordRows: wantOrd ? Set.add(id, st.ordRows) : st.ordRows
+  }
+
+let varIdOf = t => switch t { | TyVar(id) => id | _ => -1 }
+
+let rowIdOf = row => switch row { | RowVar(id) => id | _ => -1 }
+
+/// Copy a row variable's eligibility onto the field and tail invented when an
+/// open row grows a label. The walk will see both.
+let carryRowFlags = (id, field, tail, st: St) =>
+  let wantEq = Set.has(id, st.eqRows) in
+  let wantOrd = Set.has(id, st.ordRows) in
+    obligateRow(
+      rowIdOf(tail),
+      wantEq,
+      wantOrd,
+      obligateVar(varIdOf(field), wantEq, wantOrd, st)
+    )
+
+// Eligibility walk (ADR 0138). `wantEq` enters arrays, tuples, records, variant
+// payloads and `Map` values. `wantOrd` also enters `Map` keys and `Set`
+// elements, matching `compare`. Functions compare by reference, so an arrow
+// stops the walk. `Task` is a thunk and `Promise` is a host object, so those
+// constructors stop the walk too: their type arguments are not payloads.
+// A `List` anywhere the walk enters is an error; an open variable or row tail
+// keeps the same flags. The flags are not named `eq` or `ord`, which are the
+// prelude functions.
+let impose = (wantEq, wantOrd, t, seen, st: St) =>
+  wantEq || wantOrd
+    ? imposeTy(wantEq, wantOrd, resolve(t, st), seen, st)
+    : Ok(st)
+
+let imposeArgsFrom = (wantEq, wantOrd, args, i, seen, st: St) => switch Array.get(i, args) {
+  | None => Ok(st)
+  | Some(a) => switch impose(wantEq, wantOrd, a, seen, st) {
+      | Ok(st1) => imposeArgsFrom(wantEq, wantOrd, args, i + 1, seen, st1)
+      | Err(e) => Err(e)
+    }
+}
+
+let substTy = (t, tmap) => switch t {
+  | TyVar(id) => Map.getOr(t, id, tmap)
+  | TyCon(name, args) => tCon(name, args |> map(a => substTy(a, tmap)))
+  | TyFn(from, to) => tArrow(substTy(from, tmap), substTy(to, tmap))
+  | TyRecord(row) => tRecord(substRow(row, tmap))
+  | TySingleton(base, value) => TySingleton(base, value)
+  | TyOneOf(members) => tUnion(members |> map(m => substTy(m, tmap)))
+}
+
+let substRow = (row, tmap) => switch row {
+  | RowEmpty => row
+  | RowVar(_) => row
+  | RowExtend(label, fieldType, optional, rest) => rField(
+      label,
+      substTy(fieldType, tmap),
+      substRow(rest, tmap),
+      optional
+    )
+}
+
+let bindArmParams = (params, args, acc) =>
+  Array.length(params) == 0 || Array.length(args) == 0
+    ? acc
+    : switch Array.get(0, params) {
+      | Some(TyVar(id)) => switch Array.get(0, args) {
+          | Some(a) => bindArmParams(
+              Array.tail(params),
+              Array.tail(args),
+              Map.set(id, a, acc)
+            )
+          | None => acc
+        }
+      | _ => bindArmParams(Array.tail(params), Array.tail(args), acc)
+    }
+
+let imposeArmFields = (wantEq, wantOrd, fields, i, seen, st: St) => switch Array.get(i, fields) {
+  | None => Ok(st)
+  | Some(f) => switch impose(wantEq, wantOrd, f, seen, st) {
+      | Ok(st1) => imposeArmFields(wantEq, wantOrd, fields, i + 1, seen, st1)
+      | Err(e) => Err(e)
+    }
+}
+
+let imposeArmsFrom = (wantEq, wantOrd, arms, args, i, seen, st: St) => switch Array.get(i, arms) {
+  | None => Ok(st)
+  | Some(arm) => Array.length(arm.params) == Array.length(args)
+      ? switch imposeArmFields(wantEq, wantOrd, arm.fields |> map(f => substTy(f, bindArmParams(arm.params, args, #{}))), 0, seen, st) {
+        | Ok(st1) => imposeArmsFrom(
+            wantEq,
+            wantOrd,
+            arms,
+            args,
+            i + 1,
+            seen,
+            st1
+          )
+        | Err(e) => Err(e)
+      }
+      : imposeArmsFrom(wantEq, wantOrd, arms, args, i + 1, seen, st)
+}
+
+let imposeVariant = (wantEq, wantOrd, name, args, seen, st: St) =>
+  Set.has(name, seen)
+    ? Ok(st)
+    : switch Map.get(name, st.variants) {
+      | None => Ok(st)
+      | Some(info) => imposeArmsFrom(
+          wantEq,
+          wantOrd,
+          info.arms,
+          args,
+          0,
+          Set.add(name, seen),
+          st
+        )
+    }
+
+let imposeTy = (wantEq, wantOrd, t, seen, st: St) => switch t {
+  | TyVar(id) => Ok(obligateVar(id, wantEq, wantOrd, st))
+  | TyCon("List", _) => fail(lazyListMsg)
+  | TyCon("Map", args) => switch args {
+      | [k, v] => wantOrd
+          ? switch impose(wantEq, wantOrd, k, seen, st) {
+            | Ok(st1) => impose(wantEq, wantOrd, v, seen, st1)
+            | Err(e) => Err(e)
+          }
+          : impose(wantEq, wantOrd, v, seen, st)
+      | _ => Ok(st)
+    }
+  | TyCon("Set", args) => wantOrd
+      ? imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st)
+      : Ok(st)
+  | TyCon("Task", _) => Ok(st)
+  | TyCon("Promise", _) => Ok(st)
+  | TyCon(name, args) => switch imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st) {
+      | Ok(st1) => imposeVariant(wantEq, wantOrd, name, args, seen, st1)
+      | Err(e) => Err(e)
+    }
+  | TyFn(_, _) => Ok(st)
+  | TyRecord(row) => imposeRow(wantEq, wantOrd, row, seen, st)
+  | TySingleton(_, _) => Ok(st)
+  | TyOneOf(members) => imposeArgsFrom(wantEq, wantOrd, members, 0, seen, st)
+}
+
+let imposeRow = (wantEq, wantOrd, row, seen, st: St) => switch resolveRow(row, st) {
+  | RowExtend(_, fieldType, _, rest) => switch impose(wantEq, wantOrd, fieldType, seen, st) {
+      | Ok(st1) => imposeRow(wantEq, wantOrd, rest, seen, st1)
+      | Err(e) => Err(e)
+    }
+  | RowVar(id) => Ok(obligateRow(id, wantEq, wantOrd, st))
+  | RowEmpty => Ok(st)
+}
+
 let bindVar = (id, t, st: St) =>
   occurs(id, t, st)
     ? fail("infinite type: 't${show(id)} occurs in ${showType(zonk(t, st))}")
-    : Ok({ ...st, tv: idSet(id, t, st.tv) })
+    : let wantEq = Set.has(id, st.eqVars) in
+    let wantOrd = Set.has(id, st.ordVars) in
+    let st1 = { ...st, tv: idSet(id, t, st.tv) } in
+      wantEq || wantOrd
+        ? switch resolve(t, st) {
+          | TyVar(bid) => Ok(obligateVar(bid, wantEq, wantOrd, st1))
+          | bound => impose(wantEq, wantOrd, bound, Set.fromArray([]), st1)
+        }
+        : Ok(st1)
 
 // ---- row unification ----
 
@@ -650,11 +847,12 @@ let rewriteRow = (row, label, st: St) => switch resolveRow(row, st) {
           (subType, subOpt, rField(rlabel, rtype, subRest, ropt), subSt))
   | RowVar(rid) => let (freshT, st1) = freshVar(st) in
     let (freshTail, st2) = freshRowVar(st1) in
+    let st3 = carryRowFlags(rid, freshT, freshTail, st2) in
       Ok((
         freshT,
         false,
         freshTail,
-        { ...st2, rv: idSet(rid, rExtend(label, freshT, freshTail), st2.rv) }
+        { ...st3, rv: idSet(rid, rExtend(label, freshT, freshTail), st3.rv) }
       ))
 }
 
@@ -689,7 +887,15 @@ let bindRowVar = (id, row, st: St) => switch resolveRow(row, st) {
   | RowVar(rid) when rid == id => Ok(st)
   | r => rowVarOccurs(id, r, st)
       ? fail("infinite record type")
-      : Ok({ ...st, rv: idSet(id, r, st.rv) })
+      : let wantEq = Set.has(id, st.eqRows) in
+      let wantOrd = Set.has(id, st.ordRows) in
+      let st1 = { ...st, rv: idSet(id, r, st.rv) } in
+        wantEq || wantOrd
+          ? switch r {
+            | RowVar(rid) => Ok(obligateRow(rid, wantEq, wantOrd, st1))
+            | _ => imposeRow(wantEq, wantOrd, r, Set.fromArray([]), st1)
+          }
+          : Ok(st1)
 }
 
 /// Directional record check: `actual` may be used where `expected` is required

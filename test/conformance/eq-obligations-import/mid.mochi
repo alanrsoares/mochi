@@ -1,0 +1,3 @@
+import { box, same } from "./lib.mochi"
+export let forwarded = box
+export let sameFn = same

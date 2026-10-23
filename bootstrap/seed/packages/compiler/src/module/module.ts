@@ -17,13 +17,24 @@ export type MErr = { kind: string; message: string; start: number; end: number }
 export type Acc = { state: Map<string, string>; order: Loaded[] };
 export type CtorInfo = { owner: string; arity: number };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
+export type VariantArm = { params: Ty[]; fields: Ty[] };
+export type VariantInfo = { arms: VariantArm[] };
 export type GraphRecovery = { outputs: ModuleOutput[]; errors: MErr[] };
 export type RecoveryAliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
 export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
-export type RecoveryScheme = { vars: number[]; rvars: number[]; ty: Ty };
+export type RecoveryScheme = {
+  vars: number[];
+  rvars: number[];
+  ty: Ty;
+  eq: number[];
+  ord: number[];
+  eqRows: number[];
+  ordRows: number[];
+};
 export type RecoveryCtx = {
   exportsByPath: Map<string, Map<string, Scheme>>;
   regByPath: Map<string, Registry>;
+  variantsByPath: Map<string, Map<string, VariantInfo>>;
   keysByPath: Map<string, Map<string, string[]>>;
   qualsByPath: Map<string, RecoveryQualScope>;
   outputs: ModuleOutput[];
@@ -180,7 +191,15 @@ const stamp: <D>(kind: string, e: { end: number; start: number; message: string 
     start: e.start,
     end: e.end,
   }));
-const recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) };
+const recoveryScheme = {
+  vars: [0],
+  rvars: [],
+  ty: tVar(0),
+  eq: [],
+  ord: [],
+  eqRows: [],
+  ordRows: [],
+};
 const atPath: <C>(
   kind: string,
   path: string,
@@ -341,6 +360,23 @@ const mergeMap: <A, B>(from: Map<A, B>, into: Map<A, B>) => Map<A, B> = _curry(
   2,
   <A, B>(from: Map<A, B>, into: Map<A, B>) => mergeInto(_Map_keys(from), from, into),
 );
+const withDepVariants: <A, B, C, D, E, F, G, H>(
+  depVariants: Map<A, B>,
+  res: { importedVariants: Map<A, B>; quals: C; keys: D; reg: E; nsImports: F; imports: G } & H,
+) => { imports: G; nsImports: F; reg: E; keys: D; quals: C; importedVariants: Map<A, B> } = _curry(
+  2,
+  <A, B, C, D, E, F, G, H>(
+    depVariants: Map<A, B>,
+    res: { importedVariants: Map<A, B>; quals: C; keys: D; reg: E; nsImports: F; imports: G } & H,
+  ) => ({
+    imports: res.imports,
+    nsImports: res.nsImports,
+    reg: res.reg,
+    keys: res.keys,
+    quals: res.quals,
+    importedVariants: mergeMap(depVariants, res.importedVariants),
+  }),
+);
 const exportedTypeNames: (stmts: Stmt[]) => Set<string> = (stmts: Stmt[]) =>
   _Set_fromArray(
     _Array_flatMap(
@@ -423,38 +459,41 @@ const withTagEntry = (
     () => keys,
     (t) => _Map_set(tagEntryOf(name), t, keys),
   );
-const withNamedCtor: <A, B, C, D, E, F, G, H, I>(
+const withNamedCtor: <A, B, C, D, E, F, G, H, I, J>(
   name: string,
-  info: { owner: A } & F,
-  depReg: { types: Map<A, B> } & G,
+  info: { owner: A } & G,
+  depReg: { types: Map<A, B> } & H,
   depKeys: Map<string, string[]>,
   res: {
-    quals: C;
+    importedVariants: C;
+    quals: D;
     keys: Map<string, string[]>;
-    reg: { types: Map<A, B>; ctors: Map<string, { owner: A } & F> } & H;
-    nsImports: D;
-    imports: E;
-  } & I,
+    reg: { types: Map<A, B>; ctors: Map<string, { owner: A } & G> } & I;
+    nsImports: E;
+    imports: F;
+  } & J,
 ) => {
-  imports: E;
-  nsImports: D;
-  reg: { ctors: Map<string, { owner: A } & F>; types: Map<A, B> };
+  imports: F;
+  nsImports: E;
+  reg: { ctors: Map<string, { owner: A } & G>; types: Map<A, B> };
   keys: Map<string, string[]>;
-  quals: C;
+  quals: D;
+  importedVariants: C;
 } = _curry(
   5,
-  <A, B, C, D, E, F, G, H, I>(
+  <A, B, C, D, E, F, G, H, I, J>(
     name: string,
-    info: { owner: A } & F,
-    depReg: { types: Map<A, B> } & G,
+    info: { owner: A } & G,
+    depReg: { types: Map<A, B> } & H,
     depKeys: Map<string, string[]>,
     res: {
-      quals: C;
+      importedVariants: C;
+      quals: D;
       keys: Map<string, string[]>;
-      reg: { types: Map<A, B>; ctors: Map<string, { owner: A } & F> } & H;
-      nsImports: D;
-      imports: E;
-    } & I,
+      reg: { types: Map<A, B>; ctors: Map<string, { owner: A } & G> } & I;
+      nsImports: E;
+      imports: F;
+    } & J,
   ) => ({
     imports: res.imports,
     nsImports: res.nsImports,
@@ -472,42 +511,46 @@ const withNamedCtor: <A, B, C, D, E, F, G, H, I>(
       (ks) => withTagEntry(name, depKeys, _Map_set(name, ks, res.keys)),
     ),
     quals: res.quals,
+    importedVariants: res.importedVariants,
   }),
 );
-const takeNamedCtor: <C, D, E, F, G, H, I, J>(
+const takeNamedCtor: <C, D, E, F, G, H, I, J, K>(
   name: string,
-  span: { end: number; start: number } & H,
-  depReg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> } & J,
+  span: { end: number; start: number } & I,
+  depReg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> } & K,
   depKeys: Map<string, string[]>,
   res: {
-    reg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> };
-    quals: E;
+    reg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> };
+    importedVariants: E;
+    quals: F;
     keys: Map<string, string[]>;
-    nsImports: F;
-    imports: G;
+    nsImports: G;
+    imports: H;
   },
 ) => Result<
   {
-    reg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> };
-    quals: E;
+    reg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> };
+    importedVariants: E;
+    quals: F;
     keys: Map<string, string[]>;
-    nsImports: F;
-    imports: G;
+    nsImports: G;
+    imports: H;
   },
   MErr
 > = _curry(
   5,
-  <C, D, E, F, G, H, I, J>(
+  <C, D, E, F, G, H, I, J, K>(
     name: string,
-    span: { end: number; start: number } & H,
-    depReg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> } & J,
+    span: { end: number; start: number } & I,
+    depReg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> } & K,
     depKeys: Map<string, string[]>,
     res: {
-      reg: { ctors: Map<string, { owner: C } & I>; types: Map<C, D> };
-      quals: E;
+      reg: { ctors: Map<string, { owner: C } & J>; types: Map<C, D> };
+      importedVariants: E;
+      quals: F;
       keys: Map<string, string[]>;
-      nsImports: F;
-      imports: G;
+      nsImports: G;
+      imports: H;
     },
   ) =>
     _Option_match(
@@ -582,42 +625,45 @@ const prefixKeysInto = (
         : (() => {
             throw new Error("non-exhaustive match");
           })())(names);
-const resolveNames: <D, E, F, G, H, I, J, K>(
-  names: ({ name: string; span: { end: number; start: number } & H } & I)[],
+const resolveNames: <H, I, J, K, L, M, N, O, P>(
+  names: ({ name: string; span: { end: number; start: number } & M } & N)[],
   from: string,
   depExports: Map<string, Scheme>,
-  depReg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> } & K,
+  depReg: { ctors: Map<string, { owner: H } & O>; types: Map<H, I> } & P,
   depKeys: Map<string, string[]>,
   res: {
-    quals: F;
+    importedVariants: J;
+    quals: K;
     keys: Map<string, string[]>;
-    reg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> };
-    nsImports: G;
+    reg: { ctors: Map<string, { owner: H } & O>; types: Map<H, I> };
+    nsImports: L;
     imports: Map<string, Scheme>;
   },
   recovering: boolean,
 ) => Result<
   {
-    quals: F;
+    importedVariants: J;
+    quals: K;
     keys: Map<string, string[]>;
-    reg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> };
-    nsImports: G;
+    reg: { ctors: Map<string, { owner: H } & O>; types: Map<H, I> };
+    nsImports: L;
     imports: Map<string, Scheme>;
   },
   MErr
 > = _curry(
   7,
-  <D, E, F, G, H, I, J, K>(
-    names: ({ name: string; span: { end: number; start: number } & H } & I)[],
+  <H, I, J, K, L, M, N, O, P>(
+    names: ({ name: string; span: { end: number; start: number } & M } & N)[],
     from: string,
     depExports: Map<string, Scheme>,
-    depReg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> } & K,
+    depReg: { ctors: Map<string, { owner: H } & O>; types: Map<H, I> } & P,
     depKeys: Map<string, string[]>,
     res: {
-      quals: F;
+      importedVariants: J;
+      quals: K;
       keys: Map<string, string[]>;
-      reg: { ctors: Map<string, { owner: D } & J>; types: Map<D, E> };
-      nsImports: G;
+      reg: { ctors: Map<string, { owner: H } & O>; types: Map<H, I> };
+      nsImports: L;
       imports: Map<string, Scheme>;
     },
     recovering: boolean,
@@ -646,6 +692,7 @@ const resolveNames: <D, E, F, G, H, I, J, K>(
                       reg: res.reg,
                       keys: res.keys,
                       quals: res.quals,
+                      importedVariants: res.importedVariants,
                     },
                     recovering,
                   )
@@ -663,6 +710,7 @@ const resolveNames: <D, E, F, G, H, I, J, K>(
                   reg: res.reg,
                   keys: res.keys,
                   quals: res.quals,
+                  importedVariants: res.importedVariants,
                 }),
                 (e) => Err(e),
                 (res1) => resolveNames(rest, from, depExports, depReg, depKeys, res1, recovering),
@@ -673,18 +721,20 @@ const resolveNames: <D, E, F, G, H, I, J, K>(
         throw new Error("non-exhaustive match");
       }),
 );
-const resolveImportsFrom: <B, C>(
+const resolveImportsFrom: <F, G, H, I>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, B>;
-  } & C,
+    variantsByPath: Map<string, Map<F, G>>;
+    qualsByPath: Map<string, H>;
+  } & I,
   stmts: Stmt[],
   i: number,
   path: string,
   res: {
-    quals: Map<string, B>;
+    importedVariants: Map<F, G>;
+    quals: Map<string, H>;
     keys: Map<string, string[]>;
     reg: Registry;
     nsImports: Map<string, Map<string, Scheme>>;
@@ -693,7 +743,8 @@ const resolveImportsFrom: <B, C>(
   recovering: boolean,
 ) => Result<
   {
-    quals: Map<string, B>;
+    importedVariants: Map<F, G>;
+    quals: Map<string, H>;
     keys: Map<string, string[]>;
     reg: Registry;
     nsImports: Map<string, Map<string, Scheme>>;
@@ -702,18 +753,20 @@ const resolveImportsFrom: <B, C>(
   MErr
 > = _curry(
   6,
-  <B, C>(
+  <F, G, H, I>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, B>;
-    } & C,
+      variantsByPath: Map<string, Map<F, G>>;
+      qualsByPath: Map<string, H>;
+    } & I,
     stmts: Stmt[],
     i: number,
     path: string,
     res: {
-      quals: Map<string, B>;
+      importedVariants: Map<F, G>;
+      quals: Map<string, H>;
       keys: Map<string, string[]>;
       reg: Registry;
       nsImports: Map<string, Map<string, Scheme>>;
@@ -730,10 +783,13 @@ const resolveImportsFrom: <B, C>(
                 ((depExports) =>
                   ((depReg: Registry) =>
                     ((depKeys: Map<string, string[]>) =>
-                      _Result_match(
-                        resolveNames(names, from, depExports, depReg, depKeys, res, recovering),
-                        (e) => Err(e),
-                        (res1) => resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
+                      ((resV) =>
+                        _Result_match(
+                          resolveNames(names, from, depExports, depReg, depKeys, resV, recovering),
+                          (e) => Err(e),
+                          (res1) => resolveImportsFrom(ctx, stmts, i + 1, path, res1, recovering),
+                        ))(
+                        withDepVariants(_Map_getOr(new Map<F, G>(), dp, ctx.variantsByPath), res),
                       ))(_Map_getOr(new Map<string, string[]>(), dp, ctx.keysByPath)))(
                     _Map_getOr(emptyReg, dp, ctx.regByPath),
                   ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
@@ -752,36 +808,40 @@ const resolveImportsFrom: <B, C>(
                   ((depExports) =>
                     ((depReg: Registry) =>
                       ((depKeys: Map<string, string[]>) =>
-                        resolveImportsFrom(
-                          ctx,
-                          stmts,
-                          i + 1,
-                          path,
-                          {
-                            imports: res.imports,
-                            nsImports: _Map_set(alias.name, depExports, res.nsImports),
-                            reg: {
-                              ctors: prefixCtorsInto(
-                                _Map_keys(depReg.ctors),
+                        ((resV) =>
+                          resolveImportsFrom(
+                            ctx,
+                            stmts,
+                            i + 1,
+                            path,
+                            {
+                              imports: resV.imports,
+                              nsImports: _Map_set(alias.name, depExports, resV.nsImports),
+                              reg: {
+                                ctors: prefixCtorsInto(
+                                  _Map_keys(depReg.ctors),
+                                  alias.name,
+                                  depReg.ctors,
+                                  resV.reg.ctors,
+                                ),
+                                types: mergeMap(depReg.types, resV.reg.types),
+                              },
+                              keys: prefixKeysInto(
+                                filter((k: string) => !_Str_startsWith("@", k), _Map_keys(depKeys)),
                                 alias.name,
-                                depReg.ctors,
-                                res.reg.ctors,
+                                depKeys,
+                                resV.keys,
                               ),
-                              types: mergeMap(depReg.types, res.reg.types),
+                              quals: _Option_match(
+                                _Map_get(dp, ctx.qualsByPath),
+                                () => resV.quals,
+                                (q) => _Map_set(alias.name, q, resV.quals),
+                              ),
+                              importedVariants: resV.importedVariants,
                             },
-                            keys: prefixKeysInto(
-                              filter((k: string) => !_Str_startsWith("@", k), _Map_keys(depKeys)),
-                              alias.name,
-                              depKeys,
-                              res.keys,
-                            ),
-                            quals: _Option_match(
-                              _Map_get(dp, ctx.qualsByPath),
-                              () => res.quals,
-                              (q) => _Map_set(alias.name, q, res.quals),
-                            ),
-                          },
-                          recovering,
+                            recovering,
+                          ))(
+                          withDepVariants(_Map_getOr(new Map<F, G>(), dp, ctx.variantsByPath), res),
                         ))(_Map_getOr(new Map<string, string[]>(), dp, ctx.keysByPath)))(
                       _Map_getOr(emptyReg, dp, ctx.regByPath),
                     ))(_Map_getOr(new Map<string, Scheme>(), dp, ctx.exportsByPath)))(
@@ -807,6 +867,7 @@ const compileOne: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: ModuleOutput[];
   } & A,
@@ -821,6 +882,7 @@ const compileOne: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: ModuleOutput[];
     } & A,
@@ -841,6 +903,7 @@ const compileOne: <A>(
           reg: emptyReg,
           keys: new Map<string, string[]>(),
           quals: new Map<string, RecoveryQualScope>(),
+          importedVariants: new Map<string, VariantInfo>(),
         },
         recovering,
       ),
@@ -851,7 +914,7 @@ const compileOne: <A>(
           (e) => Err([atPath("check", loaded.path, e)]) as Result<RecoveryCtx, MErr[]>,
           () =>
             _Result_match(
-              inferProgramImports(
+              inferProgramImportsTypes(
                 loaded.stmts,
                 builtins,
                 namespaces,
@@ -860,13 +923,14 @@ const compileOne: <A>(
                 res.nsImports,
                 res.quals,
                 opts.plugins,
+                res.importedVariants,
               ),
               (es) =>
                 Err(map((e: IErr) => atPath("type", loaded.path, e), es)) as Result<
                   RecoveryCtx,
                   MErr[]
                 >,
-              (env) => {
+              (r) => {
                 const js: string = codegenWith(
                   loaded.stmts,
                   res.keys,
@@ -879,10 +943,11 @@ const compileOne: <A>(
                 return Ok({
                   exportsByPath: _Map_set(
                     loaded.path,
-                    exportedSchemes(loaded.stmts, env),
+                    exportedSchemes(loaded.stmts, r.env),
                     ctx.exportsByPath,
                   ),
                   regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  variantsByPath: _Map_set(loaded.path, r.variants, ctx.variantsByPath),
                   keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
                   qualsByPath: _Map_set(
                     loaded.path,
@@ -919,6 +984,7 @@ const compileGraphWith$ = (graph: Loaded[], opts: Opts): Result<ModuleOutput[], 
     {
       exportsByPath: new Map<string, Map<string, Scheme>>(),
       regByPath: new Map<string, Registry>(),
+      variantsByPath: new Map<string, Map<string, VariantInfo>>(),
       keysByPath: new Map<string, Map<string, string[]>>(),
       qualsByPath: new Map<string, RecoveryQualScope>(),
       outputs: [] as ModuleOutput[],
@@ -969,23 +1035,25 @@ const depsPublished: <A, B>(
                 throw new Error("non-exhaustive match");
               })())(_Array_get(i, stmts)),
 );
-const checkErrorsRecovering: <B, C>(
+const checkErrorsRecovering: <F, G, H, I>(
   ctx: {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
-    qualsByPath: Map<string, { types: Set<string> } & B>;
-  } & C,
+    variantsByPath: Map<string, Map<F, G>>;
+    qualsByPath: Map<string, { types: Set<string> } & H>;
+  } & I,
   loaded: Loaded,
 ) => MErr[] = _curry(
   2,
-  <B, C>(
+  <F, G, H, I>(
     ctx: {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
-      qualsByPath: Map<string, { types: Set<string> } & B>;
-    } & C,
+      variantsByPath: Map<string, Map<F, G>>;
+      qualsByPath: Map<string, { types: Set<string> } & H>;
+    } & I,
     loaded: Loaded,
   ) => {
     const importErrors: MErr[] = depsPublished(ctx, loaded.stmts, 0, loaded.path)
@@ -1000,7 +1068,8 @@ const checkErrorsRecovering: <B, C>(
               nsImports: new Map<string, Map<string, Scheme>>(),
               reg: emptyReg,
               keys: new Map<string, string[]>(),
-              quals: new Map<string, { types: Set<string> } & B>(),
+              quals: new Map<string, { types: Set<string> } & H>(),
+              importedVariants: new Map<F, G>(),
             },
             false,
           ),
@@ -1019,7 +1088,8 @@ const checkErrorsRecovering: <B, C>(
           nsImports: new Map<string, Map<string, Scheme>>(),
           reg: emptyReg,
           keys: new Map<string, string[]>(),
-          quals: new Map<string, { types: Set<string> } & B>(),
+          quals: new Map<string, { types: Set<string> } & H>(),
+          importedVariants: new Map<F, G>(),
         },
         true,
       ),
@@ -1088,6 +1158,7 @@ export const freshRecoveryGraphState: () => RecoveryGraphState = () => ({
   ctx: {
     exportsByPath: new Map<string, Map<string, Scheme>>(),
     regByPath: new Map<string, Registry>(),
+    variantsByPath: new Map<string, Map<string, VariantInfo>>(),
     keysByPath: new Map<string, Map<string, string[]>>(),
     qualsByPath: new Map<string, RecoveryQualScope>(),
     outputs: [] as ModuleOutput[],
@@ -1147,6 +1218,7 @@ const recoverySliceOf$ = (state: RecoveryGraphState, path: string): RecoveryGrap
   ctx: {
     exportsByPath: onlyAt(path, state.ctx.exportsByPath),
     regByPath: onlyAt(path, state.ctx.regByPath),
+    variantsByPath: onlyAt(path, state.ctx.variantsByPath),
     keysByPath: onlyAt(path, state.ctx.keysByPath),
     qualsByPath: onlyAt(path, state.ctx.qualsByPath),
     outputs: filter((o: ModuleOutput) => eq(o.path, path), state.ctx.outputs),
@@ -1169,6 +1241,7 @@ const mergeRecoveryStates$ = (
   ctx: {
     exportsByPath: mergeMap(b.ctx.exportsByPath, a.ctx.exportsByPath),
     regByPath: mergeMap(b.ctx.regByPath, a.ctx.regByPath),
+    variantsByPath: mergeMap(b.ctx.variantsByPath, a.ctx.variantsByPath),
     keysByPath: mergeMap(b.ctx.keysByPath, a.ctx.keysByPath),
     qualsByPath: mergeMap(b.ctx.qualsByPath, a.ctx.qualsByPath),
     outputs: _Array_concat(a.ctx.outputs, b.ctx.outputs),
@@ -1200,6 +1273,7 @@ const inferOne: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1216,6 +1290,7 @@ const inferOne: <A, B>(
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
@@ -1235,6 +1310,7 @@ const inferOne: <A, B>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: {
         path: string;
@@ -1260,6 +1336,7 @@ const inferOne: <A, B>(
           reg: emptyReg,
           keys: new Map<string, string[]>(),
           quals: new Map<string, RecoveryQualScope>(),
+          importedVariants: new Map<string, VariantInfo>(),
         },
         false,
       ),
@@ -1268,6 +1345,7 @@ const inferOne: <A, B>(
           {
             exportsByPath: Map<string, Map<string, Scheme>>;
             regByPath: Map<string, Registry>;
+            variantsByPath: Map<string, Map<string, VariantInfo>>;
             keysByPath: Map<string, Map<string, string[]>>;
             qualsByPath: Map<string, RecoveryQualScope>;
             aliases: Map<string, AliasInfo>;
@@ -1289,6 +1367,7 @@ const inferOne: <A, B>(
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
                 regByPath: Map<string, Registry>;
+                variantsByPath: Map<string, Map<string, VariantInfo>>;
                 keysByPath: Map<string, Map<string, string[]>>;
                 qualsByPath: Map<string, RecoveryQualScope>;
                 aliases: Map<string, AliasInfo>;
@@ -1313,12 +1392,14 @@ const inferOne: <A, B>(
                 res.nsImports,
                 res.quals,
                 opts.plugins,
+                res.importedVariants,
               ),
               (es) =>
                 Err(firstAtPath(loaded.path, es)) as Result<
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
+                    variantsByPath: Map<string, Map<string, VariantInfo>>;
                     keysByPath: Map<string, Map<string, string[]>>;
                     qualsByPath: Map<string, RecoveryQualScope>;
                     aliases: Map<string, AliasInfo>;
@@ -1340,6 +1421,7 @@ const inferOne: <A, B>(
                     ctx.exportsByPath,
                   ),
                   regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  variantsByPath: _Map_set(loaded.path, r.variants, ctx.variantsByPath),
                   keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
                   qualsByPath: _Map_set(
                     loaded.path,
@@ -1369,6 +1451,7 @@ const inferOne: <A, B>(
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
+                    variantsByPath: Map<string, Map<string, VariantInfo>>;
                     keysByPath: Map<string, Map<string, string[]>>;
                     qualsByPath: Map<string, RecoveryQualScope>;
                     aliases: Map<string, AliasInfo>;
@@ -1391,6 +1474,7 @@ const inferAll: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1408,6 +1492,7 @@ const inferAll: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1426,6 +1511,7 @@ const inferAll: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: {
         path: string;
@@ -1448,6 +1534,7 @@ const inferAll: <A>(
               exportsByPath: Map<string, Map<string, Scheme>>;
               regByPath: Map<string, Registry>;
               keysByPath: Map<string, Map<string, string[]>>;
+              variantsByPath: Map<string, Map<string, VariantInfo>>;
               qualsByPath: Map<string, RecoveryQualScope>;
               outputs: {
                 path: string;
@@ -1472,6 +1559,7 @@ const inferAll: <A>(
                   exportsByPath: Map<string, Map<string, Scheme>>;
                   regByPath: Map<string, Registry>;
                   keysByPath: Map<string, Map<string, string[]>>;
+                  variantsByPath: Map<string, Map<string, VariantInfo>>;
                   qualsByPath: Map<string, RecoveryQualScope>;
                   outputs: {
                     path: string;
@@ -1496,20 +1584,22 @@ const inferAll: <A>(
  * Opaque imports-aware inference context for host-owned graph caching. A state
  * records every dependency's exports plus its accumulated typed outputs.
  */
-export const freshInferGraphState: <A, B, C, D, E, F, G, H, I, J, K>() => {
+export const freshInferGraphState: <A, B, C, D, E, F, G, H, I, J, K, L, M>() => {
   exportsByPath: Map<A, B>;
   regByPath: Map<C, D>;
-  keysByPath: Map<E, F>;
-  qualsByPath: Map<G, H>;
-  aliases: Map<I, J>;
-  outputs: K[];
-} = <A, B, C, D, E, F, G, H, I, J, K>() => ({
+  variantsByPath: Map<E, F>;
+  keysByPath: Map<G, H>;
+  qualsByPath: Map<I, J>;
+  aliases: Map<K, L>;
+  outputs: M[];
+} = <A, B, C, D, E, F, G, H, I, J, K, L, M>() => ({
   exportsByPath: new Map<A, B>(),
   regByPath: new Map<C, D>(),
-  keysByPath: new Map<E, F>(),
-  qualsByPath: new Map<G, H>(),
-  aliases: new Map<I, J>(),
-  outputs: [] as K[],
+  variantsByPath: new Map<E, F>(),
+  keysByPath: new Map<G, H>(),
+  qualsByPath: new Map<I, J>(),
+  aliases: new Map<K, L>(),
+  outputs: [] as M[],
 });
 /**
  * inferGraphTypesFrom : InferGraphState -> [Loaded] -> Result InferGraphState MErr
@@ -1521,6 +1611,7 @@ export const inferGraphTypesFromWith: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1538,6 +1629,7 @@ export const inferGraphTypesFromWith: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1556,6 +1648,7 @@ export const inferGraphTypesFromWith: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: {
         path: string;
@@ -1575,6 +1668,7 @@ export const inferGraphTypesFrom: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1591,6 +1685,7 @@ export const inferGraphTypesFrom: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     outputs: {
       path: string;
@@ -1609,6 +1704,7 @@ export const inferGraphTypesFrom: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: {
         path: string;
@@ -1627,94 +1723,104 @@ export const inferGraphTypesFrom: <A>(
  * The entries and typed output `path` added to `state` (ADR 0111). `aliases`
  * is the whole accumulated scope, which merging leaves unchanged.
  */
-export const inferSliceOf: <A, B, C, D, E, F, G, H>(
+export const inferSliceOf: <A, B, C, D, E, F, G, H, I>(
   state: {
-    outputs: ({ path: A } & G)[];
+    outputs: ({ path: A } & H)[];
     aliases: B;
     qualsByPath: Map<A, C>;
     keysByPath: Map<A, D>;
-    regByPath: Map<A, E>;
-    exportsByPath: Map<A, F>;
-  } & H,
+    variantsByPath: Map<A, E>;
+    regByPath: Map<A, F>;
+    exportsByPath: Map<A, G>;
+  } & I,
   path: A,
 ) => {
-  exportsByPath: Map<A, F>;
-  regByPath: Map<A, E>;
+  exportsByPath: Map<A, G>;
+  regByPath: Map<A, F>;
+  variantsByPath: Map<A, E>;
   keysByPath: Map<A, D>;
   qualsByPath: Map<A, C>;
   aliases: B;
-  outputs: ({ path: A } & G)[];
+  outputs: ({ path: A } & H)[];
 } = _curry(
   2,
-  <A, B, C, D, E, F, G, H>(
+  <A, B, C, D, E, F, G, H, I>(
     state: {
-      outputs: ({ path: A } & G)[];
+      outputs: ({ path: A } & H)[];
       aliases: B;
       qualsByPath: Map<A, C>;
       keysByPath: Map<A, D>;
-      regByPath: Map<A, E>;
-      exportsByPath: Map<A, F>;
-    } & H,
+      variantsByPath: Map<A, E>;
+      regByPath: Map<A, F>;
+      exportsByPath: Map<A, G>;
+    } & I,
     path: A,
   ) => ({
     exportsByPath: onlyAt(path, state.exportsByPath),
     regByPath: onlyAt(path, state.regByPath),
+    variantsByPath: onlyAt(path, state.variantsByPath),
     keysByPath: onlyAt(path, state.keysByPath),
     qualsByPath: onlyAt(path, state.qualsByPath),
     aliases: state.aliases,
-    outputs: filter((o: { path: A } & G) => eq(o.path, path), state.outputs),
+    outputs: filter((o: { path: A } & H) => eq(o.path, path), state.outputs),
   }),
 );
 /**
  * mergeInferStates : InferGraphState -> InferGraphState -> InferGraphState
  * `b`'s modules after `a`'s.
  */
-export const mergeInferStates: <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+export const mergeInferStates: <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>(
   a: {
     outputs: A[];
     aliases: Map<B, C>;
     qualsByPath: Map<D, E>;
     keysByPath: Map<F, G>;
-    regByPath: Map<H, I>;
-    exportsByPath: Map<J, K>;
-  } & L,
+    variantsByPath: Map<H, I>;
+    regByPath: Map<J, K>;
+    exportsByPath: Map<L, M>;
+  } & N,
   b: {
     outputs: A[];
     aliases: Map<B, C>;
     qualsByPath: Map<D, E>;
     keysByPath: Map<F, G>;
-    regByPath: Map<H, I>;
-    exportsByPath: Map<J, K>;
-  } & M,
+    variantsByPath: Map<H, I>;
+    regByPath: Map<J, K>;
+    exportsByPath: Map<L, M>;
+  } & O,
 ) => {
-  exportsByPath: Map<J, K>;
-  regByPath: Map<H, I>;
+  exportsByPath: Map<L, M>;
+  regByPath: Map<J, K>;
+  variantsByPath: Map<H, I>;
   keysByPath: Map<F, G>;
   qualsByPath: Map<D, E>;
   aliases: Map<B, C>;
   outputs: A[];
 } = _curry(
   2,
-  <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+  <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>(
     a: {
       outputs: A[];
       aliases: Map<B, C>;
       qualsByPath: Map<D, E>;
       keysByPath: Map<F, G>;
-      regByPath: Map<H, I>;
-      exportsByPath: Map<J, K>;
-    } & L,
+      variantsByPath: Map<H, I>;
+      regByPath: Map<J, K>;
+      exportsByPath: Map<L, M>;
+    } & N,
     b: {
       outputs: A[];
       aliases: Map<B, C>;
       qualsByPath: Map<D, E>;
       keysByPath: Map<F, G>;
-      regByPath: Map<H, I>;
-      exportsByPath: Map<J, K>;
-    } & M,
+      variantsByPath: Map<H, I>;
+      regByPath: Map<J, K>;
+      exportsByPath: Map<L, M>;
+    } & O,
   ) => ({
     exportsByPath: mergeMap(b.exportsByPath, a.exportsByPath),
     regByPath: mergeMap(b.regByPath, a.regByPath),
+    variantsByPath: mergeMap(b.variantsByPath, a.variantsByPath),
     keysByPath: mergeMap(b.keysByPath, a.keysByPath),
     qualsByPath: mergeMap(b.qualsByPath, a.qualsByPath),
     aliases: mergeMap(b.aliases, a.aliases),
@@ -2106,6 +2212,7 @@ const compileOneTs: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
     dupNames: string[];
@@ -2120,6 +2227,7 @@ const compileOneTs: <A, B>(
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
@@ -2137,6 +2245,7 @@ const compileOneTs: <A, B>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       aliases: Map<string, AliasInfo>;
       dupNames: string[];
@@ -2160,6 +2269,7 @@ const compileOneTs: <A, B>(
           reg: emptyReg,
           keys: new Map<string, string[]>(),
           quals: new Map<string, RecoveryQualScope>(),
+          importedVariants: new Map<string, VariantInfo>(),
         },
         false,
       ),
@@ -2168,6 +2278,7 @@ const compileOneTs: <A, B>(
           {
             exportsByPath: Map<string, Map<string, Scheme>>;
             regByPath: Map<string, Registry>;
+            variantsByPath: Map<string, Map<string, VariantInfo>>;
             keysByPath: Map<string, Map<string, string[]>>;
             qualsByPath: Map<string, RecoveryQualScope>;
             aliases: Map<string, AliasInfo>;
@@ -2187,6 +2298,7 @@ const compileOneTs: <A, B>(
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
                 regByPath: Map<string, Registry>;
+                variantsByPath: Map<string, Map<string, VariantInfo>>;
                 keysByPath: Map<string, Map<string, string[]>>;
                 qualsByPath: Map<string, RecoveryQualScope>;
                 aliases: Map<string, AliasInfo>;
@@ -2209,12 +2321,14 @@ const compileOneTs: <A, B>(
                 res.nsImports,
                 res.quals,
                 opts.plugins,
+                res.importedVariants,
               ),
               (es) =>
                 Err(firstAtPath(loaded.path, es)) as Result<
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
+                    variantsByPath: Map<string, Map<string, VariantInfo>>;
                     keysByPath: Map<string, Map<string, string[]>>;
                     qualsByPath: Map<string, RecoveryQualScope>;
                     aliases: Map<string, AliasInfo>;
@@ -2265,6 +2379,7 @@ ${body}`;
                     ctx.exportsByPath,
                   ),
                   regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  variantsByPath: _Map_set(loaded.path, r.variants, ctx.variantsByPath),
                   keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
                   qualsByPath: _Map_set(
                     loaded.path,
@@ -2281,6 +2396,7 @@ ${body}`;
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
+                    variantsByPath: Map<string, Map<string, VariantInfo>>;
                     keysByPath: Map<string, Map<string, string[]>>;
                     qualsByPath: Map<string, RecoveryQualScope>;
                     aliases: Map<string, AliasInfo>;
@@ -2324,6 +2440,7 @@ const compileAllTs: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
     dupNames: string[];
@@ -2341,6 +2458,7 @@ const compileAllTs: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       aliases: Map<string, AliasInfo>;
       dupNames: string[];
@@ -2395,6 +2513,7 @@ export const compileGraphTsWith: <A>(
       {
         exportsByPath: new Map<string, Map<string, Scheme>>(),
         regByPath: new Map<string, Registry>(),
+        variantsByPath: new Map<string, Map<string, VariantInfo>>(),
         keysByPath: new Map<string, Map<string, string[]>>(),
         qualsByPath: new Map<string, RecoveryQualScope>(),
         aliases: new Map<string, AliasInfo>(),
@@ -2422,6 +2541,7 @@ const dtsOne: <A, B>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     target: string;
     aliases: Map<string, AliasInfo>;
@@ -2434,6 +2554,7 @@ const dtsOne: <A, B>(
   {
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     keysByPath: Map<string, Map<string, string[]>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     aliases: Map<string, AliasInfo>;
@@ -2449,6 +2570,7 @@ const dtsOne: <A, B>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       target: string;
       aliases: Map<string, AliasInfo>;
@@ -2470,6 +2592,7 @@ const dtsOne: <A, B>(
           reg: emptyReg,
           keys: new Map<string, string[]>(),
           quals: new Map<string, RecoveryQualScope>(),
+          importedVariants: new Map<string, VariantInfo>(),
         },
         false,
       ),
@@ -2478,6 +2601,7 @@ const dtsOne: <A, B>(
           {
             exportsByPath: Map<string, Map<string, Scheme>>;
             regByPath: Map<string, Registry>;
+            variantsByPath: Map<string, Map<string, VariantInfo>>;
             keysByPath: Map<string, Map<string, string[]>>;
             qualsByPath: Map<string, RecoveryQualScope>;
             aliases: Map<string, AliasInfo>;
@@ -2495,6 +2619,7 @@ const dtsOne: <A, B>(
               {
                 exportsByPath: Map<string, Map<string, Scheme>>;
                 regByPath: Map<string, Registry>;
+                variantsByPath: Map<string, Map<string, VariantInfo>>;
                 keysByPath: Map<string, Map<string, string[]>>;
                 qualsByPath: Map<string, RecoveryQualScope>;
                 aliases: Map<string, AliasInfo>;
@@ -2515,12 +2640,14 @@ const dtsOne: <A, B>(
                 res.nsImports,
                 res.quals,
                 opts.plugins,
+                res.importedVariants,
               ),
               (es) =>
                 Err(firstAtPath(loaded.path, es)) as Result<
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
+                    variantsByPath: Map<string, Map<string, VariantInfo>>;
                     keysByPath: Map<string, Map<string, string[]>>;
                     qualsByPath: Map<string, RecoveryQualScope>;
                     aliases: Map<string, AliasInfo>;
@@ -2538,6 +2665,7 @@ const dtsOne: <A, B>(
                     ctx.exportsByPath,
                   ),
                   regByPath: _Map_set(loaded.path, exportedRegistry(loaded.stmts), ctx.regByPath),
+                  variantsByPath: _Map_set(loaded.path, r.variants, ctx.variantsByPath),
                   keysByPath: _Map_set(loaded.path, exportedCtorKeys(loaded.stmts), ctx.keysByPath),
                   qualsByPath: _Map_set(
                     loaded.path,
@@ -2564,6 +2692,7 @@ const dtsOne: <A, B>(
                   {
                     exportsByPath: Map<string, Map<string, Scheme>>;
                     regByPath: Map<string, Registry>;
+                    variantsByPath: Map<string, Map<string, VariantInfo>>;
                     keysByPath: Map<string, Map<string, string[]>>;
                     qualsByPath: Map<string, RecoveryQualScope>;
                     aliases: Map<string, AliasInfo>;
@@ -2583,6 +2712,7 @@ const dtsAll: <A>(
     exportsByPath: Map<string, Map<string, Scheme>>;
     regByPath: Map<string, Registry>;
     keysByPath: Map<string, Map<string, string[]>>;
+    variantsByPath: Map<string, Map<string, VariantInfo>>;
     qualsByPath: Map<string, RecoveryQualScope>;
     target: string;
     aliases: Map<string, AliasInfo>;
@@ -2598,6 +2728,7 @@ const dtsAll: <A>(
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       target: string;
       aliases: Map<string, AliasInfo>;
@@ -2635,6 +2766,7 @@ const emitDtsForFileWith$ = (
         {
           exportsByPath: new Map<string, Map<string, Scheme>>(),
           regByPath: new Map<string, Registry>(),
+          variantsByPath: new Map<string, Map<string, VariantInfo>>(),
           keysByPath: new Map<string, Map<string, string[]>>(),
           qualsByPath: new Map<string, RecoveryQualScope>(),
           aliases: new Map<string, AliasInfo>(),
