@@ -211,6 +211,14 @@ test("eq/compare on a lazy List behind a generic wrapper is a compile-time error
   }
 });
 
+test("Task and Promise compare without entering a List payload (ADR 0138)", () => {
+  expect(run("let t = Task.of(@{1})\nlet a = t == t", "a")).toBe(true);
+  expect(run("let a = Task.of(@{1}) == Task.of(@{1})", "a")).toBe(false);
+  expect(run("let t = Task.of(@{1})\nlet a = compare(t, t)", "a")).toBe(0);
+  expect(run("let t = Task.of(@{1})\nlet p = Task.run(t)\nlet a = p == p", "a")).toBe(true);
+  expect(run("let t = Task.of(@{1})\nlet p = Task.run(t)\nlet a = compare(p, p)", "a")).toBe(0);
+});
+
 test("a generic eq still accepts types the walk can compare (ADR 0138)", () => {
   expect(run("let same = (x, y) => eq(x, y)\nlet a = same(1, 1)", "a")).toBe(true);
   expect(run("let same = (x, y) => x == y\nlet a = same(#{ 1: 1 }, #{ 1: 1 })", "a")).toBe(true);

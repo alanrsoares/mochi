@@ -711,7 +711,8 @@ let isBuiltinCall = (ctx: Ctx<a>, name) =>
   Map.has(name, ctx.letOwner) == false && Set.has(name, ctx.localNames) == false
 
 // `compare` sorts `Map` keys and `Set` elements structurally, so it walks them;
-// `==` keeps them on host identity.
+// `==` keeps them on host identity. `Task` and `Promise` are a thunk and a
+// host object, so their type arguments are not payloads.
 let reachesList = (sorted, t) => switch t {
   | TyCon("List", _) => true
   | TyCon("Map", [k, v]) => sorted && reachesList(
@@ -721,6 +722,8 @@ let reachesList = (sorted, t) => switch t {
   | TyCon("Set", targs) => sorted && Array.length(
       Array.filter(a => reachesList(sorted, a), targs)
     ) > 0
+  | TyCon("Task", _) => false
+  | TyCon("Promise", _) => false
   | TyCon(_, targs) => Array.length(
       Array.filter(a => reachesList(sorted, a), targs)
     ) > 0

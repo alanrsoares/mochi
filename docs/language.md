@@ -287,6 +287,8 @@ enclosing loop. For iteration purely for effect, use
   warning. `eq`/`compare` reject a lazy List the walk can reach, including through a
   generic, an open row, or a variant payload (`List.toArray` first); `show` prints
   `<List>` without pulling. Map/Set **keys** use host identity, not deep `eq`.
+  `Task` is a thunk and `Promise` is a host object, so neither walk enters
+  their type arguments.
   `eq` can reach Lists nested in records, variants, arrays and Map values.
   `compare` recursively visits record and variant fields, arrays, Map keys and
   values, and Set elements. Records use sorted own enumerable string keys;

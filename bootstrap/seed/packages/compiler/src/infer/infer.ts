@@ -1642,13 +1642,16 @@ const reachesList = (sorted: boolean, t: Ty): boolean =>
         : _v._tag === "TyCon" && _v.name === "Set"
           ? (({ args: targs }) =>
               and(sorted, length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0))(_v)
-          : _v._tag === "TyCon"
-            ? (({ args: targs }) => length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0)(
-                _v,
-              )
-            : _v._tag === "TyRecord"
-              ? (({ row }) => rowReachesList(sorted, row))(_v)
-              : false)(t);
+          : _v._tag === "TyCon" && _v.name === "Task"
+            ? false
+            : _v._tag === "TyCon" && _v.name === "Promise"
+              ? false
+              : _v._tag === "TyCon"
+                ? (({ args: targs }) =>
+                    length(filter((a: Ty) => reachesList(sorted, a), targs)) > 0)(_v)
+                : _v._tag === "TyRecord"
+                  ? (({ row }) => rowReachesList(sorted, row))(_v)
+                  : false)(t);
 const rowReachesList = (sorted: boolean, row: Row): boolean => {
   const $match = row;
   switch ($match._tag) {

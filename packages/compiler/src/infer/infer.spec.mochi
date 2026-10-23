@@ -131,6 +131,11 @@ test("a generic eq accepts a number and a List-keyed Map (ADR 0138)", () => swit
   | Err(_) => false |> ok
 })
 
+test("Task and Promise stop the equality walk (ADR 0138)", () => switch inferSrc("let t = Task.of(@{1})\nlet same = t == t\nlet ord = compare(t, t)\nlet p = Task.run(t)\nlet psame = p == p\nlet pord = compare(p, p)\nlet wrap = (x, y) => x == y\nlet wrapped = wrap(t, t)") {
+  | Ok(_) => true |> ok
+  | Err(_) => false |> ok
+})
+
 /// The constructor is not in this module. The payload arrives as a published
 /// variant arm, the same map a dependency forwards through a re-export.
 test("an imported variant payload rejects List (ADR 0138)", () => switch lex("let bad = box == box") |> Result.flatMap(parse) |> Result.flatMap(check) |> Result.mapErr(e => [slim(e)]) |> Result.flatMap(stmts => inferProgramImports(stmts, builtins, namespaces, false, Map.set("box", mono(tCon("Box", [])), #{}), #{}, #{}, None, Map.set("Box", { arms: [{ params: [], fields: [tCon("List", [tPrim("number")])] }] }, #{})) |> Result.mapErr(es => es |> map(slim))) {

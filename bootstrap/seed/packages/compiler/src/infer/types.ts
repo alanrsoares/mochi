@@ -1452,24 +1452,29 @@ const imposeTy = (
                 wantOrd
                   ? imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st)
                   : (Ok(st) as Result<St, TypeErr>))(_v)
-            : _v._tag === "TyCon"
-              ? (({ name, args }) =>
-                  _Result_match(
-                    imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st),
-                    (e) => Err(e) as Result<St, TypeErr>,
-                    (st1) => imposeVariant(wantEq, wantOrd, name, args, seen, st1),
-                  ))(_v)
-              : _v._tag === "TyFn"
+            : _v._tag === "TyCon" && _v.name === "Task"
+              ? (Ok(st) as Result<St, TypeErr>)
+              : _v._tag === "TyCon" && _v.name === "Promise"
                 ? (Ok(st) as Result<St, TypeErr>)
-                : _v._tag === "TyRecord"
-                  ? (({ row }) => imposeRow(wantEq, wantOrd, row, seen, st))(_v)
-                  : _v._tag === "TySingleton"
+                : _v._tag === "TyCon"
+                  ? (({ name, args }) =>
+                      _Result_match(
+                        imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st),
+                        (e) => Err(e) as Result<St, TypeErr>,
+                        (st1) => imposeVariant(wantEq, wantOrd, name, args, seen, st1),
+                      ))(_v)
+                  : _v._tag === "TyFn"
                     ? (Ok(st) as Result<St, TypeErr>)
-                    : _v._tag === "TyOneOf"
-                      ? (({ members }) => imposeArgsFrom(wantEq, wantOrd, members, 0, seen, st))(_v)
-                      : (() => {
-                          throw new Error("non-exhaustive match");
-                        })())(t);
+                    : _v._tag === "TyRecord"
+                      ? (({ row }) => imposeRow(wantEq, wantOrd, row, seen, st))(_v)
+                      : _v._tag === "TySingleton"
+                        ? (Ok(st) as Result<St, TypeErr>)
+                        : _v._tag === "TyOneOf"
+                          ? (({ members }) =>
+                              imposeArgsFrom(wantEq, wantOrd, members, 0, seen, st))(_v)
+                          : (() => {
+                              throw new Error("non-exhaustive match");
+                            })())(t);
 const imposeRow = (
   wantEq: boolean,
   wantOrd: boolean,

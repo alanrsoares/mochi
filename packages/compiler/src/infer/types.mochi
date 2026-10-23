@@ -690,9 +690,11 @@ let carryRowFlags = (id, field, tail, st: St) =>
 // Eligibility walk (ADR 0138). `wantEq` enters arrays, tuples, records, variant
 // payloads and `Map` values. `wantOrd` also enters `Map` keys and `Set`
 // elements, matching `compare`. Functions compare by reference, so an arrow
-// stops the walk. A `List` anywhere the walk enters is an error; an open
-// variable or row tail keeps the same flags. The flags are not named `eq` or
-// `ord`, which are the prelude functions.
+// stops the walk. `Task` is a thunk and `Promise` is a host object, so those
+// constructors stop the walk too: their type arguments are not payloads.
+// A `List` anywhere the walk enters is an error; an open variable or row tail
+// keeps the same flags. The flags are not named `eq` or `ord`, which are the
+// prelude functions.
 let impose = (wantEq, wantOrd, t, seen, st: St) =>
   wantEq || wantOrd
     ? imposeTy(wantEq, wantOrd, resolve(t, st), seen, st)
@@ -798,6 +800,8 @@ let imposeTy = (wantEq, wantOrd, t, seen, st: St) => switch t {
   | TyCon("Set", args) => wantOrd
       ? imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st)
       : Ok(st)
+  | TyCon("Task", _) => Ok(st)
+  | TyCon("Promise", _) => Ok(st)
   | TyCon(name, args) => switch imposeArgsFrom(wantEq, wantOrd, args, 0, seen, st) {
       | Ok(st1) => imposeVariant(wantEq, wantOrd, name, args, seen, st1)
       | Err(e) => Err(e)
