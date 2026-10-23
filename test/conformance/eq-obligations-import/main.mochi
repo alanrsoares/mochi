@@ -1,0 +1,3 @@
+import { forwarded, sameFn } from "./mid.mochi"
+let bad = sameFn(@{1}, @{1})
+let badBox = forwarded == forwarded

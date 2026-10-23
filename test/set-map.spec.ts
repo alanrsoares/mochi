@@ -199,14 +199,38 @@ test("compare also walks Map keys and Set elements (ADR 0138)", () => {
   ).not.toThrow();
 });
 
-// Stage 1 only sees resolved types: a generic wrapper still reaches the runtime guard.
-test("eq/compare on a lazy List behind a generic wrapper throw rather than silently lying", () => {
-  expect(() => run("let same = (x, y) => eq(x, y)\nlet a = same(@{1, 2}, @{1, 2})", "a")).toThrow(
-    /List/,
-  );
+test("eq/compare on a lazy List behind a generic wrapper is a compile-time error (ADR 0138)", () => {
+  for (const src of [
+    "let same = (x, y) => eq(x, y)\nlet a = same(@{1, 2}, @{1, 2})",
+    "let cmp = (x, y) => compare(x, y)\nlet a = cmp(@{1, 2}, @{1, 2})",
+    "let touch = r => r == r\nlet a = touch({ l: @{1} })",
+    "type Box = B(List<number>)\nlet a = B(@{1}) == B(@{1})",
+    "type Hold<a> = H(List<a>)\nlet a = H(@{1}) == H(@{1})",
+  ]) {
+    expect(() => compileJs(src, { stripImports: true, runtime: true })).toThrow();
+  }
+});
+
+test("a generic eq still accepts types the walk can compare (ADR 0138)", () => {
+  expect(run("let same = (x, y) => eq(x, y)\nlet a = same(1, 1)", "a")).toBe(true);
+  expect(run("let same = (x, y) => x == y\nlet a = same(#{ 1: 1 }, #{ 1: 1 })", "a")).toBe(true);
+  // List keys stay eligible for `==` (host identity). Runtime key lookup still
+  // walks them, so this only asserts that the comparison typechecks.
   expect(() =>
-    run("let cmp = (x, y) => compare(x, y)\nlet a = cmp(@{1, 2}, @{1, 2})", "a"),
-  ).toThrow(/List/);
+    compileJs("let same = (x, y) => x == y\nlet a = same(#{ @{1}: 1 }, #{ @{1}: 1 })", {
+      stripImports: true,
+      runtime: true,
+    }),
+  ).not.toThrow();
+});
+
+test("generic compare still rejects a List used as a Map key (ADR 0138)", () => {
+  expect(() =>
+    compileJs("let cmp = (x, y) => compare(x, y)\nlet a = cmp(#{ @{1}: 1 }, #{ @{1}: 1 })", {
+      stripImports: true,
+      runtime: true,
+    }),
+  ).toThrow();
 });
 
 test("show on a lazy List does not force it — renders the `<List>` marker", () => {

@@ -7,7 +7,15 @@ import type { Row, St, Ty } from "./types";
  * this row back to (ADR 0092) — a record alias is structural and nothing
  * annotates with it, so this changes no inference.
  */
-export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
+export type Scheme = {
+  vars: number[];
+  rvars: number[];
+  ty: Ty;
+  eq: number[];
+  ord: number[];
+  eqRows: number[];
+  ordRows: number[];
+};
 export type VarSets = { tv: Set<number>; rv: Set<number> };
 /**
  * A declared type alias: its parameters, plus EITHER a record body (`fields`)
@@ -90,15 +98,26 @@ import {
   freshRowVar,
   zonk,
   idGet,
+  obligateVar,
+  obligateRow,
 } from "./types";
 import * as Types from "./types";
 import { primTypeNames } from "../ast/ctors";
 
-export const mono: (t: Ty) => Scheme = (t: Ty) => ({
-  vars: [] as number[],
-  rvars: [] as number[],
-  ty: t,
+/**
+ * Quantified type-var ids that carry an `Eq` obligation (ADR 0138).
+ * Quantified type-var ids that carry an `Ord` obligation.
+ */
+const bareScheme = (vars: number[], rvars: number[], ty: Ty): Scheme => ({
+  vars: vars,
+  rvars: rvars,
+  ty: ty,
+  eq: [] as number[],
+  ord: [] as number[],
+  eqRows: [] as number[],
+  ordRows: [] as number[],
 });
+export const mono: (t: Ty) => Scheme = (t: Ty) => bareScheme([] as number[], [] as number[], t);
 export const tNumber: Ty = tPrim("number");
 export const tBool: Ty = tPrim("bool");
 export const tString: Ty = tPrim("string");
@@ -341,6 +360,9 @@ const freeInNamedFrom: <A, B>(
         ),
     ),
 );
+const keepFlagged: <A>(ids: A[], flags: Set<A>) => A[] = _curry(2, <A>(ids: A[], flags: Set<A>) =>
+  filter((id: A) => _Set_has(id, flags), ids),
+);
 const generalizeAgainst: <A>(
   envFree: () => { rv: Set<number>; tv: Set<number> } & A,
   t: Ty,
@@ -354,7 +376,17 @@ const generalizeAgainst: <A>(
     const free: VarSets = and(_Set_size(own.tv) === 0, _Set_size(own.rv) === 0)
       ? own
       : diffVarSets(own, envFree());
-    return { vars: _Set_toArray(free.tv), rvars: _Set_toArray(free.rv), ty: zt };
+    const vars: number[] = _Set_toArray(free.tv);
+    const rvars: number[] = _Set_toArray(free.rv);
+    return {
+      vars: vars,
+      rvars: rvars,
+      ty: zt,
+      eq: keepFlagged(vars, st.eqVars),
+      ord: keepFlagged(vars, st.ordVars),
+      eqRows: keepFlagged(rvars, st.eqRows),
+      ordRows: keepFlagged(rvars, st.ordRows),
+    };
   },
 );
 /**
@@ -454,9 +486,15 @@ const widenRow: (row: Row) => Row = (row: Row) => {
     }
   }
 };
-const instMapFrom: <A>(vars: A[], acc: Map<A, Ty>, st: St) => [Map<A, Ty>, St] = _curry(
-  3,
-  <A>(vars: A[], acc: Map<A, Ty>, st: St) =>
+const instMapFrom: <A>(
+  vars: A[],
+  eqIds: Set<A>,
+  ordIds: Set<A>,
+  acc: Map<A, Ty>,
+  st: St,
+) => [Map<A, Ty>, St] = _curry(
+  5,
+  <A>(vars: A[], eqIds: Set<A>, ordIds: Set<A>, acc: Map<A, Ty>, st: St) =>
     match(vars)
       .with(
         (_v) => _v.length === 0,
@@ -465,15 +503,27 @@ const instMapFrom: <A>(vars: A[], acc: Map<A, Ty>, st: St) => [Map<A, Ty>, St] =
       .with(
         (_v) => _v.length >= 1,
         ([v, ...rest]) =>
-          (([fv, st1]: [Ty, St]) => instMapFrom(rest, _Map_set(v, fv, acc), st1))(freshVar(st)),
+          (([fv, st1]: [Ty, St]) => {
+            const st2: St = ((_v) =>
+              _v._tag === "TyVar"
+                ? (({ id }) => obligateVar(id, _Set_has(v, eqIds), _Set_has(v, ordIds), st1))(_v)
+                : st1)(fv);
+            return instMapFrom(rest, eqIds, ordIds, _Map_set(v, fv, acc), st2);
+          })(freshVar(st)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
       }),
 );
-const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, St] = _curry(
-  3,
-  <A>(vars: A[], acc: Map<A, Row>, st: St) =>
+const instRowMapFrom: <A>(
+  vars: A[],
+  eqIds: Set<A>,
+  ordIds: Set<A>,
+  acc: Map<A, Row>,
+  st: St,
+) => [Map<A, Row>, St] = _curry(
+  5,
+  <A>(vars: A[], eqIds: Set<A>, ordIds: Set<A>, acc: Map<A, Row>, st: St) =>
     match(vars)
       .with(
         (_v) => _v.length === 0,
@@ -482,9 +532,13 @@ const instRowMapFrom: <A>(vars: A[], acc: Map<A, Row>, st: St) => [Map<A, Row>, 
       .with(
         (_v) => _v.length >= 1,
         ([v, ...rest]) =>
-          (([fr, st1]: [Row, St]) => instRowMapFrom(rest, _Map_set(v, fr, acc), st1))(
-            freshRowVar(st),
-          ),
+          (([fr, st1]: [Row, St]) => {
+            const st2: St = ((_v) =>
+              _v._tag === "RowVar"
+                ? (({ id }) => obligateRow(id, _Set_has(v, eqIds), _Set_has(v, ordIds), st1))(_v)
+                : st1)(fr);
+            return instRowMapFrom(rest, eqIds, ordIds, _Map_set(v, fr, acc), st2);
+          })(freshRowVar(st)),
       )
       .otherwise(() => {
         throw new Error("non-exhaustive match");
@@ -545,13 +599,48 @@ const instSubRow = (row: Row, tmap: Map<number, Ty>, rmap: Map<number, Row>): Ro
   }
 };
 export const instantiate: <A>(
-  sc: { vars: number[]; rvars: number[]; ty: Ty } & A,
+  sc: {
+    vars: number[];
+    eq: number[];
+    ord: number[];
+    rvars: number[];
+    eqRows: number[];
+    ordRows: number[];
+    ty: Ty;
+  } & A,
   st: St,
-) => [Ty, St] = _curry(2, <A>(sc: { vars: number[]; rvars: number[]; ty: Ty } & A, st: St) =>
-  (([tmap, st1]: [Map<number, Ty>, St]) =>
-    (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
-      instRowMapFrom(sc.rvars, new Map<number, Row>(), st1),
-    ))(instMapFrom(sc.vars, new Map<number, Ty>(), st)),
+) => [Ty, St] = _curry(
+  2,
+  <A>(
+    sc: {
+      vars: number[];
+      eq: number[];
+      ord: number[];
+      rvars: number[];
+      eqRows: number[];
+      ordRows: number[];
+      ty: Ty;
+    } & A,
+    st: St,
+  ) =>
+    (([tmap, st1]: [Map<number, Ty>, St]) =>
+      (([rmap, st2]: [Map<number, Row>, St]) => _tuple(instSub(sc.ty, tmap, rmap), st2))(
+        instRowMapFrom(
+          sc.rvars,
+          _Set_fromArray(sc.eqRows),
+          _Set_fromArray(sc.ordRows),
+          new Map<number, Row>(),
+          st1,
+        ),
+      ))(
+      instMapFrom(
+        sc.vars,
+        _Set_fromArray(sc.eq),
+        _Set_fromArray(sc.ord),
+        new Map<number, Ty>(),
+        st,
+      ),
+    ),
 );
 export const isUpperStart: (s: string) => boolean = (s: string) =>
   _Option_match(
@@ -909,18 +998,18 @@ const ctorFieldsArrowFrom = (
  * construction (quantifies every var the fields introduced), nothing leaks
  * from env.
  */
-export const ctorScheme: <A>(
+export const ctorScheme: <E>(
   typeName: string,
   params: string[],
-  c: { fields: CtorField[] } & A,
+  c: { fields: CtorField[] } & E,
   st: St,
   aliases: Map<string, AliasInfo>,
 ) => [Scheme, St] = _curry(
   5,
-  <A>(
+  <E>(
     typeName: string,
     params: string[],
-    c: { fields: CtorField[] } & A,
+    c: { fields: CtorField[] } & E,
     st: St,
     aliases: Map<string, AliasInfo>,
   ) =>
@@ -928,9 +1017,94 @@ export const ctorScheme: <A>(
       const result: Ty = tCon(typeName, pvarTypes);
       return (([ty, st2]: [Ty, St]) => {
         const sets: VarSets = collect$(ty, emptyVarSets);
-        return _tuple({ vars: _Set_toArray(sets.tv), rvars: _Set_toArray(sets.rv), ty: ty }, st2);
+        return _tuple(bareScheme(_Set_toArray(sets.tv), _Set_toArray(sets.rv), ty), st2);
       })(ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result));
     })(pvarsFrom(params, st)),
+);
+/**
+ * Payload of every constructor, in one shared copy of `params`, so inference
+ * can see a `List` that is not itself a type argument (ADR 0138).
+ */
+export const variantArm: <A, B>(
+  params: string[],
+  ctors: ({ fields: ({ fieldType: TypeExpr } & A)[] } & B)[],
+  st: St,
+  aliases: Map<string, AliasInfo>,
+) => [{ params: Ty[]; fields: Ty[] }, St] = _curry(
+  4,
+  <A, B>(
+    params: string[],
+    ctors: ({ fields: ({ fieldType: TypeExpr } & A)[] } & B)[],
+    st: St,
+    aliases: Map<string, AliasInfo>,
+  ) =>
+    (([pvars, pvarTypes, st1]: [Map<string, Ty>, Ty[], St]) =>
+      (([fields, st2]: [Ty[], St]) => _tuple({ params: pvarTypes, fields: fields }, st2))(
+        armFieldsFrom(ctors, pvars, st1, aliases, [] as Ty[]),
+      ))(pvarsFrom(params, st)),
+);
+const armFieldsFrom: <A, B>(
+  ctors: ({ fields: ({ fieldType: TypeExpr } & A)[] } & B)[],
+  pvars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  acc: Ty[],
+) => [Ty[], St] = _curry(
+  5,
+  <A, B>(
+    ctors: ({ fields: ({ fieldType: TypeExpr } & A)[] } & B)[],
+    pvars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
+    acc: Ty[],
+  ) =>
+    match(ctors)
+      .with(
+        (_v) => _v.length === 0,
+        () => _tuple(acc, st),
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([c, ...rest]) =>
+          (([acc1, st1]: [Ty[], St]) => armFieldsFrom(rest, pvars, st1, aliases, acc1))(
+            armFieldTypes(c.fields, pvars, st, aliases, acc),
+          ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
+);
+const armFieldTypes: <A>(
+  fields: ({ fieldType: TypeExpr } & A)[],
+  pvars: Map<string, Ty>,
+  st: St,
+  aliases: Map<string, AliasInfo>,
+  acc: Ty[],
+) => [Ty[], St] = _curry(
+  5,
+  <A>(
+    fields: ({ fieldType: TypeExpr } & A)[],
+    pvars: Map<string, Ty>,
+    st: St,
+    aliases: Map<string, AliasInfo>,
+    acc: Ty[],
+  ) =>
+    match(fields)
+      .with(
+        (_v) => _v.length === 0,
+        () => _tuple(acc, st),
+      )
+      .with(
+        (_v) => _v.length >= 1,
+        ([fld, ...rest]) =>
+          (([ft, , st1]: [Ty, Map<string, Ty>, St]) =>
+            armFieldTypes(rest, pvars, st1, aliases, _Array_append(ft, acc)))(
+            typeExprToType$(fld.fieldType, pvars, st, aliases, _Set_fromArray([] as string[])),
+          ),
+      )
+      .otherwise(() => {
+        throw new Error("non-exhaustive match");
+      }),
 );
 const matchTysFrom = (
   tpls: Ty[],

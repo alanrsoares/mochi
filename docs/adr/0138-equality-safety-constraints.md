@@ -1,9 +1,9 @@
 # 0138 — Static safety for structural equality and ordering
 
-- **Status:** Accepted (stage 1 shipped; scheme obligations pending)
+- **Status:** Accepted
 - **Date:** 2026-10-02
 - **Source:** `.scratch/issues-syntax-and-codegen-traps.md`, `packages/compiler/src/prelude/runtime.ts` (`eq`, `compare`), ADR 0084
-- **Would amend:** ADR 0084's lazy-List exception policy; stage 1 (resolved types only) ships; the scheme obligations are still a proposal and change no behavior yet.
+- **Amends:** ADR 0084's lazy-List exception policy. A `List` the structural walk can reach is a type error, including through a generic, an open row, or a variant payload.
 
 ## Context
 
@@ -39,10 +39,9 @@ explicit trust policy: the compiler cannot inspect hidden iterable contents.
 3. Add language guards and ADR 0105 conformance cases; refresh the seed and pass
    fixpoint, strict self-TS and the full gate before accepting this proposal.
 
-Until those gates pass, ADR 0084 remains in force. Convert a known finite List
-with `List.toArray` before comparison; convert nested fields explicitly or
-compare a safe projection. This proposal does not promise totality for cyclic or
-host-supplied values.
+Those gates are met. Convert a known finite List with `List.toArray` before
+comparison; convert nested fields explicitly or compare a safe projection. This
+does not promise totality for cyclic or host-supplied values.
 
 ## Alternatives rejected for this proposal
 
@@ -59,8 +58,12 @@ host-supplied values.
 - **`.d.ts`.** TypeScript generics cannot express the obligation, so emitted declarations stay unconstrained and the check is Mochi-side only. A doc line `@requires Eq <T>` is emitted on affected exports so TS consumers see the contract.
 - **FFI.** Opaque `extern` types are trusted eligible by default (the compiler cannot see hidden iterables); declaring an `extern type` as an iterable host collection is the explicit opt-out.
 
-## Stage 1 — shipped
+## Shipped
 
-`==` and `compare` reject a resolved type that reaches a `List` by the walk above, at the call. Still-open variables and rows are assumed eligible, and variant payloads are not yet inspected. Guard: ADR 0105 case `eq-lazy-list`. Stage 2 (scheme obligations, exports, `.d.ts` doc line, variants) is the remaining work on #164.
+`==` and `compare` reject a type that reaches a `List` by the walk above. The prelude schemes carry the obligation (`Eq` on `eq`, `Ord` on `compare`): instantiation copies it onto the fresh variable, unification re-runs the walk, and generalizing a binding keeps the flag on the quantified variable or row tail. The diagnostic is raised at the comparison, or at the application that resolves the obligation to `List`.
 
-Stage 1 refinements: the gate skips a name bound locally anywhere in the module (a conservative stand-in for real binding identity; the runtime guard still covers it), and `compare` also walks `Map` keys and `Set` elements, since it sorts them structurally, while `==` keeps them on host identity.
+Variant payloads are part of the walk, including a `List` that is not a type argument (`type Box = B(List<number>)`). A module publishes those payloads with its inference result, and every importer — including one that only imported a value, and one that received the value through a re-export — merges them in, so the constructor does not have to be in scope. A name bound locally anywhere in the module is not the prelude operator. `compare` walks `Map` keys and `Set` elements; `==` keeps them on host identity.
+
+Emitted `.d.ts` stays unconstrained and adds `@requires Eq <A>` / `@requires Ord <A>` on an export whose scheme carries the flag. Opaque `extern` types stay trusted eligible. The spec's iterable opt-out has no surface syntax, so there is nothing to declare one with.
+
+Guards: ADR 0105 cases `eq-lazy-list`, `eq-obligations`, and `eq-obligations-import`.

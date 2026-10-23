@@ -173,6 +173,11 @@ export type St = {
   recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
+  eqVars: Set<number>;
+  ordVars: Set<number>;
+  eqRows: Set<number>;
+  ordRows: Set<number>;
+  variants: Map<string, VariantInfo>;
 };
 export type Ty =
   | { _tag: "TyVar"; id: number }
@@ -189,6 +194,8 @@ export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
 export type TypeAt = { span: SpanAt; ty: Ty; sym: Option<BinderSym> };
 export type SpanAt = { start: number; end: number };
 export type BinderSym = { kind: string; name: string; doc: Option<string> };
+export type VariantInfo = { arms: VariantArm[] };
+export type VariantArm = { params: Ty[]; fields: Ty[] };
 export type InferApi = {
   inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
   unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, IErr>;
@@ -278,7 +285,15 @@ export type AliasField = {
 };
 export type Name = { name: string; span: Span };
 export type AliasInfo = { params: string[]; fields: AliasField[]; expr: Option<TypeExpr> };
-export type Scheme = { vars: number[]; rvars: number[]; ty: Ty };
+export type Scheme = {
+  vars: number[];
+  rvars: number[];
+  ty: Ty;
+  eq: number[];
+  ord: number[];
+  eqRows: number[];
+  ordRows: number[];
+};
 export type RecoveryQualScope = { types: Set<string>; aliases: Map<string, AliasInfo> };
 export type Registry = { ctors: Map<string, CtorInfo>; types: Map<string, string[]> };
 export type CtorInfo = { owner: string; arity: number };
@@ -286,6 +301,7 @@ export type RecoveryGraphState = { ctx: RecoveryCtx; errors: MErr[] };
 export type RecoveryCtx = {
   exportsByPath: Map<string, Map<string, Scheme>>;
   regByPath: Map<string, Registry>;
+  variantsByPath: Map<string, Map<string, VariantInfo>>;
   keysByPath: Map<string, Map<string, string[]>>;
   qualsByPath: Map<string, RecoveryQualScope>;
   outputs: ModuleOutput[];
@@ -351,19 +367,21 @@ export type SeedModule = {
     }[],
     MErr
   >;
-  freshInferGraphState: <A, B, C, D, E, F, G, H, I, J, K>() => {
+  freshInferGraphState: <A, B, C, D, E, F, G, H, I, J, K, L, M>() => {
     exportsByPath: Map<A, B>;
     regByPath: Map<C, D>;
-    keysByPath: Map<E, F>;
-    qualsByPath: Map<G, H>;
-    aliases: Map<I, J>;
-    outputs: K[];
+    variantsByPath: Map<E, F>;
+    keysByPath: Map<G, H>;
+    qualsByPath: Map<I, J>;
+    aliases: Map<K, L>;
+    outputs: M[];
   };
   inferGraphTypesFromWith: <A>(
     state: {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: {
         path: string;
@@ -381,6 +399,7 @@ export type SeedModule = {
       exportsByPath: Map<string, Map<string, Scheme>>;
       regByPath: Map<string, Registry>;
       keysByPath: Map<string, Map<string, string[]>>;
+      variantsByPath: Map<string, Map<string, VariantInfo>>;
       qualsByPath: Map<string, RecoveryQualScope>;
       outputs: {
         path: string;
@@ -393,44 +412,49 @@ export type SeedModule = {
     },
     MErr
   >;
-  inferSliceOf: <A, B, C, D, E, F, G, H>(
+  inferSliceOf: <A, B, C, D, E, F, G, H, I>(
     state: {
-      outputs: ({ path: A } & G)[];
+      outputs: ({ path: A } & H)[];
       aliases: B;
       qualsByPath: Map<A, C>;
       keysByPath: Map<A, D>;
-      regByPath: Map<A, E>;
-      exportsByPath: Map<A, F>;
-    } & H,
+      variantsByPath: Map<A, E>;
+      regByPath: Map<A, F>;
+      exportsByPath: Map<A, G>;
+    } & I,
     path: A,
   ) => {
-    exportsByPath: Map<A, F>;
-    regByPath: Map<A, E>;
+    exportsByPath: Map<A, G>;
+    regByPath: Map<A, F>;
+    variantsByPath: Map<A, E>;
     keysByPath: Map<A, D>;
     qualsByPath: Map<A, C>;
     aliases: B;
-    outputs: ({ path: A } & G)[];
+    outputs: ({ path: A } & H)[];
   };
-  mergeInferStates: <A, B, C, D, E, F, G, H, I, J, K, L, M>(
+  mergeInferStates: <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>(
     a: {
       outputs: A[];
       aliases: Map<B, C>;
       qualsByPath: Map<D, E>;
       keysByPath: Map<F, G>;
-      regByPath: Map<H, I>;
-      exportsByPath: Map<J, K>;
-    } & L,
+      variantsByPath: Map<H, I>;
+      regByPath: Map<J, K>;
+      exportsByPath: Map<L, M>;
+    } & N,
     b: {
       outputs: A[];
       aliases: Map<B, C>;
       qualsByPath: Map<D, E>;
       keysByPath: Map<F, G>;
-      regByPath: Map<H, I>;
-      exportsByPath: Map<J, K>;
-    } & M,
+      variantsByPath: Map<H, I>;
+      regByPath: Map<J, K>;
+      exportsByPath: Map<L, M>;
+    } & O,
   ) => {
-    exportsByPath: Map<J, K>;
-    regByPath: Map<H, I>;
+    exportsByPath: Map<L, M>;
+    regByPath: Map<J, K>;
+    variantsByPath: Map<H, I>;
     keysByPath: Map<F, G>;
     qualsByPath: Map<D, E>;
     aliases: Map<B, C>;

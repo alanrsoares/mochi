@@ -36,6 +36,7 @@ import {
 } from "../infer/types.mochi"
 import { jsDoc } from "../codegen/codegen.mochi"
 import { foldAliasesAt } from "../infer/schemes.mochi"
+import { genericNames } from "./ts-types.mochi"
 import * as Schemes from "../infer/schemes.mochi"
 import {
   defaultOpts,
@@ -266,6 +267,39 @@ let localAliasKeys = (stmts, i, acc) => switch Array.get(i, stmts) {
   | Some(_) => localAliasKeys(stmts, i + 1, acc)
 }
 
+let obligParts = (ids, word, names, acc) => switch ids {
+  | [] => acc
+  | [id, ...rest] => switch Map.get(id, names) {
+      | Some(letter) => obligParts(
+          rest,
+          word,
+          names,
+          Array.append("${word} <${letter}>", acc)
+        )
+      | None => obligParts(rest, word, names, acc)
+    }
+}
+
+/// `@requires Eq <A>` on an export whose scheme carries an eligibility
+/// obligation (ADR 0138). TypeScript generics cannot express it, so the
+/// declared type stays unconstrained and the contract is a doc line.
+let requiresComment = sc =>
+  let names = genericNames(sc) in
+  let parts = obligParts(
+    sc.eqRows,
+    "Eq",
+    names,
+    obligParts(
+      sc.ordRows,
+      "Ord",
+      names,
+      obligParts(sc.ord, "Ord", names, obligParts(sc.eq, "Eq", names, []))
+    )
+  ) in
+    Array.length(parts) == 0
+      ? ""
+      : "/** @requires ${Str.join(", ", parts)} */\n"
+
 /// `export declare const` per top-level binding that has an inferred scheme.
 /// `$`-prefixed synthetic binders declare nothing.
 /// A plugin `dtsBinding` hook (ADR 0109) may supply the type text instead; it
@@ -285,8 +319,8 @@ let bindingDeclsFrom = (stmts, env, aliases: Map<string, Schemes.AliasInfo>, key
       bindingHooks,
       i + 1
     ) in
-    let decl = ts =>
-      "${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};" in
+    let decl = (ts, sc) =>
+      "${requiresComment(sc)}${docs ? jsDoc(doc) : ""}export declare const ${name}: ${ts};" in
       Str.startsWith("$", name)
         ? rest
         : switch Map.get(name, env) {
@@ -306,7 +340,8 @@ let bindingDeclsFrom = (stmts, env, aliases: Map<string, Schemes.AliasInfo>, key
                         recs,
                         bindingHooks
                       )
-                    )
+                    ),
+                  sc
                 ),
                 rest
               )

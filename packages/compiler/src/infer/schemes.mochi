@@ -27,7 +27,9 @@ import {
   freshVar,
   freshRowVar,
   zonk,
-  idGet
+  idGet,
+  obligateVar,
+  obligateRow
 } from "./types.mochi"
 import * as Types from "./types.mochi"
 import { primTypeNames } from "../ast/ctors.mochi"
@@ -38,9 +40,21 @@ import { primTypeNames } from "../ast/ctors.mochi"
 /// vars, and the body. Declared purely so the TS backend has a NAME to fold
 /// this row back to (ADR 0092) — a record alias is structural and nothing
 /// annotates with it, so this changes no inference.
-export type Scheme = { vars: [number], rvars: [number], ty: Ty }
+export type Scheme = {
+  vars: [number],
+  rvars: [number],
+  ty: Ty,
+  eq: [number],
+  ord: [number],
+  eqRows: [number],
+  ordRows: [number]
+}
+/// Quantified type-var ids that carry an `Eq` obligation (ADR 0138).
+/// Quantified type-var ids that carry an `Ord` obligation.
+let bareScheme = (vars, rvars, ty) =>
+  { vars, rvars, ty, eq: [], ord: [], eqRows: [], ordRows: [] }
 
-export let mono = t => { vars: [], rvars: [], ty: t }
+export let mono = t => bareScheme([], [], t)
 
 export let tNumber = tPrim("number")
 export let tBool = tPrim("bool")
@@ -171,13 +185,25 @@ let freeInNamedFrom = (names, i, env, st: Types.St, acc) => switch Array.get(i, 
     )
 }
 
+let keepFlagged = (ids, flags) => Array.filter(id => Set.has(id, flags), ids)
+
 let generalizeAgainst = (envFree, t, st: Types.St, widen) =>
   let zt = widen ? widenLits(zonk(t, st)) : zonk(t, st) in
   let own = freeInType(zt) in
   let free = Set.size(own.tv) == 0 && Set.size(own.rv) == 0
     ? own
     : diffVarSets(own, envFree()) in
-    { vars: Set.toArray(free.tv), rvars: Set.toArray(free.rv), ty: zt }
+  let vars = Set.toArray(free.tv) in
+  let rvars = Set.toArray(free.rv) in
+    {
+      vars,
+      rvars,
+      ty: zt,
+      eq: keepFlagged(vars, st.eqVars),
+      ord: keepFlagged(vars, st.ordVars),
+      eqRows: keepFlagged(rvars, st.eqRows),
+      ordRows: keepFlagged(rvars, st.ordRows)
+    }
 
 /// A type with no free variables generalizes to itself, whatever the env
 /// holds, so the env walk is skipped.
@@ -225,15 +251,28 @@ let widenRow = row => switch row {
     )
 }
 
-let instMapFrom = (vars, acc, st: Types.St) => switch vars {
+let instMapFrom = (vars, eqIds, ordIds, acc, st: Types.St) => switch vars {
   | [] => (acc, st)
   | [v, ...rest] => let (fv, st1) = freshVar(st) in
-      instMapFrom(rest, Map.set(v, fv, acc), st1)
+    let st2 = switch fv {
+      | TyVar(id) => obligateVar(id, Set.has(v, eqIds), Set.has(v, ordIds), st1)
+      | _ => st1
+    } in
+      instMapFrom(rest, eqIds, ordIds, Map.set(v, fv, acc), st2)
 }
-let instRowMapFrom = (vars, acc, st: Types.St) => switch vars {
+let instRowMapFrom = (vars, eqIds, ordIds, acc, st: Types.St) => switch vars {
   | [] => (acc, st)
   | [v, ...rest] => let (fr, st1) = freshRowVar(st) in
-      instRowMapFrom(rest, Map.set(v, fr, acc), st1)
+    let st2 = switch fr {
+      | RowVar(id) => obligateRow(
+          id,
+          Set.has(v, eqIds),
+          Set.has(v, ordIds),
+          st1
+        )
+      | _ => st1
+    } in
+      instRowMapFrom(rest, eqIds, ordIds, Map.set(v, fr, acc), st2)
 }
 
 let instSub = (t, tmap, rmap) => switch t {
@@ -259,8 +298,20 @@ let instSubRow = (row, tmap, rmap) => switch row {
 }
 
 export let instantiate = (sc, st: Types.St) =>
-  let (tmap, st1) = instMapFrom(sc.vars, #{}, st) in
-  let (rmap, st2) = instRowMapFrom(sc.rvars, #{}, st1) in
+  let (tmap, st1) = instMapFrom(
+    sc.vars,
+    Set.fromArray(sc.eq),
+    Set.fromArray(sc.ord),
+    #{},
+    st
+  ) in
+  let (rmap, st2) = instRowMapFrom(
+    sc.rvars,
+    Set.fromArray(sc.eqRows),
+    Set.fromArray(sc.ordRows),
+    #{},
+    st1
+  ) in
     (instSub(sc.ty, tmap, rmap), st2)
 
 // ============================================================
@@ -546,7 +597,38 @@ export let ctorScheme = (typeName, params, c, st: Types.St, aliases: Map<string,
   let result = tCon(typeName, pvarTypes) in
   let (ty, st2) = ctorFieldsArrowFrom(c.fields, pvars, st1, aliases, result) in
   let sets = collect(ty, emptyVarSets) in
-    ({ vars: Set.toArray(sets.tv), rvars: Set.toArray(sets.rv), ty }, st2)
+    (bareScheme(Set.toArray(sets.tv), Set.toArray(sets.rv), ty), st2)
+
+/// Payload of every constructor, in one shared copy of `params`, so inference
+/// can see a `List` that is not itself a type argument (ADR 0138).
+export let variantArm = (params, ctors, st: Types.St, aliases: Map<string, AliasInfo>) =>
+  let (pvars, pvarTypes, st1) = pvarsFrom(params, st) in
+  let (fields, st2) = armFieldsFrom(ctors, pvars, st1, aliases, []) in
+    ({ params: pvarTypes, fields }, st2)
+
+let armFieldsFrom = (ctors, pvars, st: Types.St, aliases: Map<string, AliasInfo>, acc) => switch ctors {
+  | [] => (acc, st)
+  | [c, ...rest] => let (acc1, st1) = armFieldTypes(
+      c.fields,
+      pvars,
+      st,
+      aliases,
+      acc
+    ) in
+      armFieldsFrom(rest, pvars, st1, aliases, acc1)
+}
+
+let armFieldTypes = (fields, pvars, st: Types.St, aliases: Map<string, AliasInfo>, acc) => switch fields {
+  | [] => (acc, st)
+  | [fld, ...rest] => let (ft, _, st1) = typeExprToType(
+      fld.fieldType,
+      pvars,
+      st,
+      aliases,
+      Set.fromArray([])
+    ) in
+      armFieldTypes(rest, pvars, st1, aliases, Array.append(ft, acc))
+}
 
 // ============================================================
 // Alias folding for go-to-type (ADR 0119). The twin of src/ast/types.ts's

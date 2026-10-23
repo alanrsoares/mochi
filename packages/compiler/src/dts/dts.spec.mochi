@@ -1,4 +1,4 @@
-import { assertEq, test } from "@mochi/test"
+import { assertEq, ok, test } from "@mochi/test"
 import * as Ast from "../ast/ast.mochi"
 import { recordAliasIndex } from "../codegen/typescript.mochi"
 import { declarationRecs, emitDtsTextWith } from "./dts.mochi"
@@ -19,6 +19,15 @@ test("unconfigured JSX declarations retain their host-independent fallback", () 
     Ok("export declare const app: any;\n"),
     emitDtsTextWith("let app = <div />", "@mochi/runtime", defaultOpts)
   ))
+
+test("an equality obligation is a doc line on the export (ADR 0138)", () => switch emitDtsTextWith("let same = (x, y) => x == y", "@mochi/runtime", defaultOpts) {
+  | Ok(text) => (text
+      |> Str.contains(
+        "@requires Eq <A>"
+      )) && (text |> Str.contains("export declare const same:"))
+      |> ok
+  | Err(_) => false |> ok
+})
 
 let sp = { start: 0, end: 0 }
 let spanFields = [

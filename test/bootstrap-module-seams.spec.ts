@@ -37,6 +37,7 @@ let inferProgramImports: (
   nsImports: Map<string, Map<string, Scheme>>,
   quals: ReadonlyMap<string, unknown>,
   pluginsOpt: AlOption<unknown[]>,
+  importedVariants: ReadonlyMap<string, unknown>,
 ) => Res<Map<string, Scheme>>;
 let builtins: unknown;
 let namespaces: unknown;
@@ -144,9 +145,17 @@ test("inferProgramImports uses an imported scheme; open-world infer alone does n
   const importer = parseAl("let bad = add(f(1), 2)\n");
   expect(inferProgram(importer, builtins, namespaces, true)._tag).toBe("Ok");
   expect(
-    inferProgramImports(importer, builtins, namespaces, true, imports, new Map(), new Map(), {
-      _tag: "None",
-    })._tag,
+    inferProgramImports(
+      importer,
+      builtins,
+      namespaces,
+      true,
+      imports,
+      new Map(),
+      new Map(),
+      { _tag: "None" },
+      new Map(),
+    )._tag,
   ).toBe("Err");
 });
 

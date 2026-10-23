@@ -1,0 +1,4 @@
+export let same = (x, y) => x == y
+export type Box =
+  | B(List<number>)
+export let box = B(@{1})

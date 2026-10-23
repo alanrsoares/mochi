@@ -60,6 +60,13 @@ test("a nullary lambda declares () => T (ADR 0014)", () => {
   expect(dts("let one = () => 1")).toBe("export declare const one: () => number;");
 });
 
+test("an equality obligation is a doc line, not a TypeScript constraint (ADR 0138)", () => {
+  const out = dts("let same = (x, y) => x == y");
+  expect(out).toContain("@requires Eq <A>");
+  expect(out).toContain("export declare const same:");
+  expect(out).not.toContain("Eq<A>");
+});
+
 test("a unit result declares undefined, the type of the emitted value (ADR 0054)", () => {
   expect(dts("let nothing = ()")).toBe("export declare const nothing: undefined;");
   expect(dts("let drop = x => ignore(x)")).toBe(

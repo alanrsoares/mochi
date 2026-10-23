@@ -109,7 +109,15 @@ let stamp = (kind: string, e) =>
 // An unresolved import stands for an independently-instantiable host value,
 // not one shared type variable: `forall a. a` keeps later checks moving
 // without inventing an infinite-type cascade at each use site.
-let recoveryScheme = { vars: [0], rvars: [], ty: tVar(0) }
+let recoveryScheme = {
+  vars: [0],
+  rvars: [],
+  ty: tVar(0),
+  eq: [],
+  ord: [],
+  eqRows: [],
+  ordRows: []
+}
 let atPath = (kind: string, path: string, e) =>
   {
     kind,
@@ -224,6 +232,11 @@ export let loadGraph = entry => entry->loadGraphWith(None)
 type CtorInfo = { owner: string, arity: number }
 type Registry = { ctors: Map<string, CtorInfo>, types: Map<string, [string]> }
 
+// Payload of an imported variant, forwarded so `==` sees a `List` that is not
+// a type argument even when the constructor itself was not imported (ADR 0138).
+type VariantArm = { params: [Ty], fields: [Ty] }
+type VariantInfo = { arms: [VariantArm] }
+
 let emptyReg : Registry = { ctors: #{}, types: #{} }
 
 // Map has no bulk merge, so fold `from`'s keys into `into` (later source wins).
@@ -240,6 +253,18 @@ let mergeInto = (keys, from, into) => switch keys {
 }
 
 let mergeMap = (from, into) => mergeInto(Map.keys(from), from, into)
+
+// A dep's published payloads ride along with every import from it, named or
+// not, and again through a re-export: the next module publishes the union.
+let withDepVariants = (depVariants, res) =>
+  {
+    imports: res.imports,
+    nsImports: res.nsImports,
+    reg: res.reg,
+    keys: res.keys,
+    quals: res.quals,
+    importedVariants: mergeMap(depVariants, res.importedVariants)
+  }
 
 // --- qualified type names (C5 slice d, ADR 0046) --------------------------
 // A module hands its importers the set of type names it EXPORTS, plus its OWN
@@ -302,7 +327,8 @@ let withNamedCtor = (name, info, depReg, depKeys, res) =>
       | Some(ks) => withTagEntry(name, depKeys, res.keys |> Map.set(name, ks))
       | None => res.keys
     },
-    quals: res.quals
+    quals: res.quals,
+    importedVariants: res.importedVariants
   }
 
 let takeNamedCtor = (name, span, depReg, depKeys, res) => switch Map.get(name, depReg.ctors) {
@@ -370,7 +396,8 @@ let resolveNames = (names, from, depExports, depReg, depKeys, res, recovering) =
               nsImports: res.nsImports,
               reg: res.reg,
               keys: res.keys,
-              quals: res.quals
+              quals: res.quals,
+              importedVariants: res.importedVariants
             },
             recovering
           )
@@ -382,7 +409,7 @@ let resolveNames = (names, from, depExports, depReg, depKeys, res, recovering) =
               end: n.span.end
             }
           )
-      | Some(sc) => switch takeNamedCtor(n.name, n.span, depReg, depKeys, { imports: Map.set(n.name, sc, res.imports), nsImports: res.nsImports, reg: res.reg, keys: res.keys, quals: res.quals }) {
+      | Some(sc) => switch takeNamedCtor(n.name, n.span, depReg, depKeys, { imports: Map.set(n.name, sc, res.imports), nsImports: res.nsImports, reg: res.reg, keys: res.keys, quals: res.quals, importedVariants: res.importedVariants }) {
           | Err(e) => Err(e)
           | Ok(res1) => resolveNames(
               rest,
@@ -407,7 +434,8 @@ let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
-      switch resolveNames(names, from, depExports, depReg, depKeys, res, recovering) {
+    let resV = withDepVariants(Map.getOr(#{}, dp, ctx.variantsByPath), res) in
+      switch resolveNames(names, from, depExports, depReg, depKeys, resV, recovering) {
         | Err(e) => Err(e)
         | Ok(res1) => ctx->resolveImportsFrom(
             stmts,
@@ -421,36 +449,38 @@ let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.
     let depExports = Map.getOr(#{}, dp, ctx.exportsByPath) in
     let depReg = Map.getOr(emptyReg, dp, ctx.regByPath) in
     let depKeys = Map.getOr(#{}, dp, ctx.keysByPath) in
+    let resV = withDepVariants(Map.getOr(#{}, dp, ctx.variantsByPath), res) in
       ctx->resolveImportsFrom(
         stmts,
         i + 1,
         path,
         {
-          imports: res.imports,
-          nsImports: Map.set(alias.name, depExports, res.nsImports),
+          imports: resV.imports,
+          nsImports: Map.set(alias.name, depExports, resV.nsImports),
           reg: {
             ctors: prefixCtorsInto(
               Map.keys(depReg.ctors),
               alias.name,
               depReg.ctors,
-              res.reg.ctors
+              resV.reg.ctors
             ),
-            types: mergeMap(depReg.types, res.reg.types)
+            types: mergeMap(depReg.types, resV.reg.types)
           },
           keys: prefixKeysInto(
             Map.keys(depKeys) |> filter(k => !Str.startsWith("@", k)),
             alias.name,
             depKeys,
-            res.keys
+            resV.keys
           ),
           quals: // …and every exported TYPE of the dep becomes namable as `Alias.T`.
           // Absent from `qualsByPath` (a dep that failed to publish) leaves the
           // alias unmapped, which check.mochi reads as "not graph-compiled" and
           // stays silent — same fallback as src/module.ts.
           switch Map.get(dp, ctx.qualsByPath) {
-            | Some(q) => Map.set(alias.name, q, res.quals)
-            | None => res.quals
-          }
+            | Some(q) => Map.set(alias.name, q, resV.quals)
+            | None => resV.quals
+          },
+          importedVariants: resV.importedVariants
         },
         recovering
       )
@@ -468,13 +498,13 @@ let resolveImportsFrom = (ctx, stmts, i, path, res, recovering) => switch Array.
 let openFor = (loaded: Loaded, isEntry, opts: Compile.Opts) =>
   isEntry && opts.strictEntry ? opts.open : openMode(loaded.src, opts.open)
 
-let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, recovering) {
+let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{}, importedVariants: #{} }, recovering) {
   | Err(e) => Err([atPath("check", loaded.path, e)])
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err([atPath("check", loaded.path, e)])
-      | Ok(_) => switch inferProgramImports(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, opts.plugins) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openFor(loaded, isEntry, opts), res.imports, res.nsImports, res.quals, opts.plugins, res.importedVariants) {
           | Err(es) => Err(es |> map(e => atPath("type", loaded.path, e)))
-          | Ok(env) => let js = codegenWith(
+          | Ok(r) => let js = codegenWith(
               loaded.stmts,
               res.keys,
               opts.runtime,
@@ -487,13 +517,18 @@ let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Compile.Opts) 
                 {
                   exportsByPath: Map.set(
                     loaded.path,
-                    exportedSchemes(loaded.stmts, env),
+                    exportedSchemes(loaded.stmts, r.env),
                     ctx.exportsByPath
                   ),
                   regByPath: Map.set(
                     loaded.path,
                     exportedRegistry(loaded.stmts),
                     ctx.regByPath
+                  ),
+                  variantsByPath: Map.set(
+                    loaded.path,
+                    r.variants,
+                    ctx.variantsByPath
                   ),
                   keysByPath: Map.set(
                     loaded.path,
@@ -530,6 +565,7 @@ export let compileGraphWith = (graph, opts: Compile.Opts) =>
     {
       exportsByPath: #{},
       regByPath: #{},
+      variantsByPath: #{},
       keysByPath: #{},
       qualsByPath: #{},
       outputs: []
@@ -556,11 +592,20 @@ type RecoveryQualScope = {
   aliases: Map<string, RecoveryAliasInfo>
 }
 
-type RecoveryScheme = { vars: [number], rvars: [number], ty: Ty }
+type RecoveryScheme = {
+  vars: [number],
+  rvars: [number],
+  ty: Ty,
+  eq: [number],
+  ord: [number],
+  eqRows: [number],
+  ordRows: [number]
+}
 
 type RecoveryCtx = {
   exportsByPath: Map<string, Map<string, RecoveryScheme>>,
   regByPath: Map<string, Registry>,
+  variantsByPath: Map<string, Map<string, VariantInfo>>,
   keysByPath: Map<string, Map<string, [string]>>,
   qualsByPath: Map<string, RecoveryQualScope>,
   outputs: [ModuleOutput]
@@ -596,12 +641,12 @@ let depsPublished = (ctx, stmts, i, path) => switch Array.get(i, stmts) {
 // parameter type to infer from, and the self-hosted TS emit stops typechecking.
 let checkErrorsRecovering = (ctx, loaded: Loaded) =>
   let importErrors = ctx->depsPublished(loaded.stmts, 0, loaded.path)
-    ? switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+    ? switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{}, importedVariants: #{} }, false) {
       | Err(e) => [atPath("check", loaded.path, e)]
       | Ok(_) => []
     }
     : [] in
-    switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, true) {
+    switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{}, importedVariants: #{} }, true) {
       | Err(e) =>
         // An error the recovering pass still raises is not import-shaped (a ctor
         // clash, say) and stands alone — reporting `importErrors` beside it would
@@ -659,6 +704,7 @@ export let freshRecoveryGraphState : () -> RecoveryGraphState = () =>
     ctx: {
       exportsByPath: #{},
       regByPath: #{},
+      variantsByPath: #{},
       keysByPath: #{},
       qualsByPath: #{},
       outputs: []
@@ -703,6 +749,7 @@ export let recoverySliceOf = (state: RecoveryGraphState, path) =>
     ctx: {
       exportsByPath: onlyAt(path, state.ctx.exportsByPath),
       regByPath: onlyAt(path, state.ctx.regByPath),
+      variantsByPath: onlyAt(path, state.ctx.variantsByPath),
       keysByPath: onlyAt(path, state.ctx.keysByPath),
       qualsByPath: onlyAt(path, state.ctx.qualsByPath),
       outputs: Array.filter(o => o.path == path, state.ctx.outputs)
@@ -717,6 +764,7 @@ export let mergeRecoveryStates = (a: RecoveryGraphState, b: RecoveryGraphState) 
     ctx: {
       exportsByPath: mergeMap(b.ctx.exportsByPath, a.ctx.exportsByPath),
       regByPath: mergeMap(b.ctx.regByPath, a.ctx.regByPath),
+      variantsByPath: mergeMap(b.ctx.variantsByPath, a.ctx.variantsByPath),
       keysByPath: mergeMap(b.ctx.keysByPath, a.ctx.keysByPath),
       qualsByPath: mergeMap(b.ctx.qualsByPath, a.ctx.qualsByPath),
       outputs: Array.concat(a.ctx.outputs, b.ctx.outputs)
@@ -738,11 +786,11 @@ export let compileGraphRecovering = graph =>
 // without paying for code generation or reconstructing the import environment
 // in the TypeScript host. Keep every module's recorded spans together with the
 // alias scope accumulated through its dependencies.
-let inferOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let inferOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{}, importedVariants: #{} }, false) {
   | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins, res.importedVariants) {
           | Err(es) => Err(firstAtPath(loaded.path, es))
           | Ok(r) => Ok(
               {
@@ -755,6 +803,11 @@ let inferOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFr
                   loaded.path,
                   exportedRegistry(loaded.stmts),
                   ctx.regByPath
+                ),
+                variantsByPath: Map.set(
+                  loaded.path,
+                  r.variants,
+                  ctx.variantsByPath
                 ),
                 keysByPath: Map.set(
                   loaded.path,
@@ -808,6 +861,7 @@ export let freshInferGraphState = () =>
   {
     exportsByPath: #{},
     regByPath: #{},
+    variantsByPath: #{},
     keysByPath: #{},
     qualsByPath: #{},
     aliases: #{},
@@ -830,6 +884,7 @@ export let inferSliceOf = (state, path) =>
   {
     exportsByPath: onlyAt(path, state.exportsByPath),
     regByPath: onlyAt(path, state.regByPath),
+    variantsByPath: onlyAt(path, state.variantsByPath),
     keysByPath: onlyAt(path, state.keysByPath),
     qualsByPath: onlyAt(path, state.qualsByPath),
     aliases: state.aliases,
@@ -842,6 +897,7 @@ export let mergeInferStates = (a, b) =>
   {
     exportsByPath: mergeMap(b.exportsByPath, a.exportsByPath),
     regByPath: mergeMap(b.regByPath, a.regByPath),
+    variantsByPath: mergeMap(b.variantsByPath, a.variantsByPath),
     keysByPath: mergeMap(b.keysByPath, a.keysByPath),
     qualsByPath: mergeMap(b.qualsByPath, a.qualsByPath),
     aliases: mergeMap(b.aliases, a.aliases),
@@ -1078,11 +1134,11 @@ let externBindingsInto = (stmts, path, env, acc) =>
 // Compile one module to typed TS: the same resolve/check/infer prefix as
 // `compileOne`, then emit, then prepend the `import type` lines the emitted text
 // turned out to need.
-let compileOneTs = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let compileOneTs = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{}, importedVariants: #{} }, false) {
   | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins, res.importedVariants) {
           | Err(es) => Err(firstAtPath(loaded.path, es))
           | Ok(r) => let body = emitTsModuleWith(
               loaded.stmts,
@@ -1129,6 +1185,11 @@ let compileOneTs = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImpor
                     loaded.path,
                     exportedRegistry(loaded.stmts),
                     ctx.regByPath
+                  ),
+                  variantsByPath: Map.set(
+                    loaded.path,
+                    r.variants,
+                    ctx.variantsByPath
                   ),
                   keysByPath: Map.set(
                     loaded.path,
@@ -1189,6 +1250,7 @@ export let compileGraphTsWith = (graph, runtimeImport, opts: Compile.Opts) =>
       {
         exportsByPath: #{},
         regByPath: #{},
+        variantsByPath: #{},
         keysByPath: #{},
         qualsByPath: #{},
         aliases: #{},
@@ -1208,11 +1270,11 @@ export let compileGraphTs = (graph, runtimeImport) =>
 // Walk the graph exactly as inference does, so a module's imports, registry and
 // qualified type scopes are in place, and emit `.d.ts` for ONE target path. The
 // dependencies are inferred, not emitted — `.d.ts` is a per-file question.
-let dtsOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{} }, false) {
+let dtsOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom(loaded.stmts, 0, loaded.path, { imports: #{}, nsImports: #{}, reg: emptyReg, keys: #{}, quals: #{}, importedVariants: #{} }, false) {
   | Err(e) => Err(atPath("check", loaded.path, e))
   | Ok(res) => switch checkWith(loaded.stmts, res.reg, res.quals) {
       | Err(e) => Err(atPath("check", loaded.path, e))
-      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins) {
+      | Ok(_) => switch inferProgramImportsTypes(loaded.stmts, builtins, namespaces, openMode(loaded.src, opts.open), res.imports, res.nsImports, res.quals, opts.plugins, res.importedVariants) {
           | Err(es) => Err(firstAtPath(loaded.path, es))
           | Ok(r) => Ok(
               {
@@ -1225,6 +1287,11 @@ let dtsOne = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImportsFrom
                   loaded.path,
                   exportedRegistry(loaded.stmts),
                   ctx.regByPath
+                ),
+                variantsByPath: Map.set(
+                  loaded.path,
+                  r.variants,
+                  ctx.variantsByPath
                 ),
                 keysByPath: Map.set(
                   loaded.path,
@@ -1277,6 +1344,7 @@ export let emitDtsForFileWith = (entry, runtimeImport, opts: Compile.Opts) =>
       {
         exportsByPath: #{},
         regByPath: #{},
+        variantsByPath: #{},
         keysByPath: #{},
         qualsByPath: #{},
         aliases: #{},

@@ -219,6 +219,11 @@ export type St = {
   recorded: Recorded;
   letSpans: Map<string, SpanAt>;
   letUses: Map<string, Ty[]>;
+  eqVars: Set<number>;
+  ordVars: Set<number>;
+  eqRows: Set<number>;
+  ordRows: Set<number>;
+  variants: Map<string, VariantInfo>;
 };
 export type Ty =
   | { _tag: "TyVar"; id: number }
@@ -235,6 +240,8 @@ export type Recorded = { cur: TypeAt[]; full: TypeAt[][] };
 export type TypeAt = { span: SpanAt; ty: Ty; sym: Option<BinderSym> };
 export type SpanAt = { start: number; end: number };
 export type BinderSym = { kind: string; name: string; doc: Option<string> };
+export type VariantInfo = { arms: VariantArm[] };
+export type VariantArm = { params: Ty[]; fields: Ty[] };
 export type InferApi = {
   inferExpr: (a: Expr, b: St) => Result<[Ty, St], IErr>;
   unify: (a: Ty, b: Ty, c: St, d: SpanAt) => Result<St, IErr>;
