@@ -186,9 +186,11 @@ Run `bun run test:mochi:coverage` for a coverage report scoped to the colocated
 bootstrap Mochi specs, including builtin-plugin specs. It prints function and line
 coverage, including uncovered Mochi line ranges, and writes LCOV data to
 `coverage/mochi/lcov.info` for CI or editor integrations. It enforces a 65% function
-and line coverage floor for `bootstrap/**/*.mochi`; façade suites and non-bootstrap
-Mochi specs intentionally sit outside this scoped gate. `bun run check:full` runs
-the gate in CI.
+coverage floor and a 62% line coverage floor for `bootstrap/**/*.mochi`. Bun 1.4.4
+attributes line hits to comments, imports, and lines past EOF, so the line ratio sits
+about 2.7 points under the Bun 1.4.2 reading of the same sources; the function ratio
+does not move. Façade suites and non-bootstrap Mochi specs intentionally sit outside
+this scoped gate. `bun run check:full` runs the gate in CI.
 
 `bun install` runs `prepare` → `scripts/setup-hooks.ts` →
 `lefthook install --reset-hooks-path` (see `lefthook.yml`):
