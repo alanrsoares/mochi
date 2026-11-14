@@ -41,6 +41,7 @@ import {
   defaultOpts,
   emitJsWith,
   emitTsWith,
+  withDirectives,
   typedProgramWith
 } from "../compile/compile.mochi"
 import {
@@ -553,8 +554,12 @@ export let compileTargetsWith = (src, runtimeImport, opts) =>
   typedProgramWith(src, opts)
     |> Result.map(((stmts, r)) =>
       {
-        js: stmts->emitJsWith(opts),
-        ts: stmts->emitTsWith(r, runtimeImport, opts),
+        js: stmts->emitJsWith(opts)->withDirectives(src, stmts),
+        ts: stmts->emitTsWith(
+          r,
+          runtimeImport,
+          opts
+        )->withDirectives(src, stmts),
         dts: emitDtsFromTypedWith(
           stmts,
           r.env,

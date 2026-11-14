@@ -889,7 +889,10 @@ const compileOne: <A>(
                     qualScopeOf(loaded.stmts, res.quals),
                     ctx.qualsByPath,
                   ),
-                  outputs: [...ctx.outputs, { path: loaded.path, js: js }],
+                  outputs: [
+                    ...ctx.outputs,
+                    { path: loaded.path, js: Compile.withDirectives(js, loaded.src, loaded.stmts) },
+                  ],
                 }) as Result<RecoveryCtx, MErr[]>;
               },
             ),
@@ -2252,12 +2255,15 @@ const compileOneTs: <A, B>(
                   localTypeNames(loaded.stmts),
                   ctx.typeOwner,
                 );
-                const ts: string =
+                const ts: string = Compile.withDirectives(
                   length(lines) === 0
                     ? body
                     : `${_Str_join("\n", lines)}
 
-${body}`;
+${body}`,
+                  loaded.src,
+                  loaded.stmts,
+                );
                 return Ok({
                   exportsByPath: _Map_set(
                     loaded.path,

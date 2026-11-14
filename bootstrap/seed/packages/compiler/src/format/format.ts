@@ -1,3 +1,4 @@
+import type { Prologue } from "../lexer/str-scan";
 import type {
   AliasField,
   Ctor,
@@ -142,7 +143,7 @@ import {
   txt,
   verbatim,
 } from "../doc/doc";
-import { skipStringLiteral } from "../lexer/str-scan";
+import { scanPrologue, skipStringLiteral } from "../lexer/str-scan";
 import { showTypeExpr } from "../ast/show-type-expr";
 import * as Layout from "../doc/doc";
 import * as Fmt from "./format-api";
@@ -3055,42 +3056,6 @@ const stmtDoc = (cts: Ctx, stmts: Stmt[], i: number, src: string): StmtDoc =>
       }
     },
   );
-const stmtSpan: (s: Stmt) => SpanAt = (s: Stmt) => {
-  const $match = s;
-  switch ($match._tag) {
-    case "SLet": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    case "SType": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    case "SExtern": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    case "SImport": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    case "SImportNs": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    case "SExpr": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    case "SError": {
-      const { span: sp } = $match;
-      return sp;
-    }
-    default: {
-      throw new Error("non-exhaustive match");
-    }
-  }
-};
 /**
  * A blank separator between two statements: a newline, only whitespace, then
  * another newline somewhere in the source gap. Any run of blank lines
@@ -3121,7 +3086,7 @@ const blankBetween: (gap: string) => boolean = (gap: string) => blankBetweenFrom
  * comment block rather than inside it.
  */
 const anchorStart = (cts: Ctx, s: Stmt): number => {
-  const sp: SpanAt = stmtSpan(s);
+  const sp: SpanAt = Ast.stmtSpan(s);
   return _Option_match(
     _Array_get(0, atKey(cts.leading, spanKey(STMT, sp))),
     () => sp.start,
@@ -3153,7 +3118,7 @@ const stmtParts = (
       const end: number = _Option_match(
         _Array_get(lastIdx, stmts),
         () => 0,
-        (last) => stmtSpan(last).end,
+        (last) => Ast.stmtSpan(last).end,
       );
       return stmtParts(
         cts,
@@ -3161,7 +3126,10 @@ const stmtParts = (
         i + printed.consumed,
         src,
         Some(end) as Option<number>,
-        _Array_concat(acc, _Array_append(withComments(cts, STMT, stmtSpan(cur), printed.doc), sep)),
+        _Array_concat(
+          acc,
+          _Array_append(withComments(cts, STMT, Ast.stmtSpan(cur), printed.doc), sep),
+        ),
       );
     },
   );
@@ -3200,7 +3168,7 @@ const programDoc = (cts: Ctx, stmts: Stmt[], src: string, tail: Comment[]): Doc 
  */
 const stmtAnchors: (s: Stmt) => Anchor[] = (s: Stmt) =>
   _Array_append(
-    { kind: STMT, sp: stmtSpan(s) },
+    { kind: STMT, sp: Ast.stmtSpan(s) },
     ((_v) =>
       _v._tag === "SLet"
         ? (({ value }) => exprAnchors(value))(_v)
@@ -3232,14 +3200,23 @@ const inErrorSpanFrom = (stmts: Stmt[], i: number, c: Comment): boolean =>
             })())(_Array_get(i, stmts));
 const inErrorSpan = (stmts: Stmt[], c: Comment): boolean => inErrorSpanFrom(stmts, 0, c);
 /**
- * `"use open"` is a directive, not a statement — the parser skips it, so the
- * printer restores it verbatim.
+ * Directives (`"use open"`, `"use client"`, …) are not statements — the
+ * parser skips them (ADR 0160) — so the printer restores the prologue's source
+ * text, comments among it included, above the body.
  */
-const hasOpenDirective: (src: string) => boolean = (src: string) =>
-  _Option_match(
-    _Array_get(0, _Str_split("\n", _Str_trim(src))),
-    () => false,
-    (first) => _Str_trim(first) === '"use open"',
+const prologueOf = (stmts: Stmt[], src: string): Prologue =>
+  scanPrologue(
+    src,
+    _Option_match(
+      _Array_get(0, stmts),
+      () => _Str_length(src),
+      (s) => Ast.stmtSpan(s).start,
+    ),
+  );
+const prologueText = (src: string, stop: number): string =>
+  _Str_join(
+    "\n",
+    map((line: string) => trimEnd(line), _Str_split("\n", _Str_trim(_Str_slice(0, stop, src)))),
   );
 const formatProgram$ = (stmts: Stmt[], src: string): string => {
   const hooks: FormatHooks = formatHooksFor(None);
@@ -3255,7 +3232,11 @@ export const formatProgram: _Curry<[stmts: Stmt[], src: string], string> = _curr
 const formatProgramWith$ = (stmts: Stmt[], src: string, hooks: FormatHooks): string => {
   const innerBound: Set<string> = _Set_fromArray(_Array_flatMap(stmtInnerNames, stmts));
   const shadowed: Set<string> = _Set_union(innerBound, _Set_fromArray(topLevelNames(stmts)));
-  const comments: Comment[] = filter((c: Comment) => !inErrorSpan(stmts, c), collectComments(src));
+  const prologue: Prologue = prologueOf(stmts, src);
+  const comments: Comment[] = filter(
+    (c: Comment) => and(c.start >= prologue.end, !inErrorSpan(stmts, c)),
+    collectComments(src),
+  );
   const base: Ctx = {
     ...noComments,
     flatArity: buildFlatArity(stmts, innerBound),
@@ -3273,11 +3254,12 @@ const formatProgramWith$ = (stmts: Stmt[], src: string, hooks: FormatHooks): str
     { table: base, tail: [] as Comment[] },
   );
   const body: string = render(programDoc(attached.table, stmts, src, attached.tail), WIDTH);
-  return hasOpenDirective(src)
-    ? `"use open"
+  return ((_v) =>
+    _v.length === 0
+      ? body
+      : `${prologueText(src, prologue.end)}
 
-${body}`
-    : body;
+${body}`)(prologue.directives);
 };
 /**
  * `formatProgram` with a plugin list's format hooks (`formatHooksFor`).

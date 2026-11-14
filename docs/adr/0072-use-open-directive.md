@@ -1,6 +1,7 @@
 # 0072 — Open-world mode uses a header directive
 
 - **Status:** Accepted
+- **Extended by:** [ADR 0160](0160-directive-prologue.md) — `"use open"` may sit anywhere in the directive prologue.
 - **Source:** `packages/compiler/src/compile/open-mode.ts`, `packages/compiler/src/parser/parser.ts`, `packages/dx/src/format.ts`
 
 ## Context

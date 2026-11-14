@@ -37,6 +37,36 @@ export let skipLineCommentTo = (src, j) => switch Str.get(j, src) {
   | Some(_) => skipLineCommentTo(src, j + 1)
 }
 
+/// The directive prologue the parser dropped (ADR 0160): the raw text of each
+/// `"..."` literal that opens the source before `limit`, with only blanks and
+/// `//` comments around them, and the offset just past the last one. The
+/// caller passes the first statement's start, so this agrees with the parser
+/// without a second lex.
+export type Prologue = { directives: [string], end: number }
+
+let noDirectives : [string] = []
+
+export let scanPrologue : string -> number -> Prologue = (src, limit) =>
+  loop (i = 0, acc = noDirectives, stop = 0) {
+    i >= limit
+      ? { directives: acc, end: stop }
+      : switch Str.get(i, src) {
+        | None => { directives: acc, end: stop }
+        | Some("\"") => switch skipStringLiteral(src, i) {
+            | Some(j) => recur(j, Array.append(Str.slice(i, j, src), acc), j)
+            | None => { directives: acc, end: stop }
+          }
+        | Some("/") when Str.get(i + 1, src) |> Option.contains("/") => recur(
+            skipLineCommentTo(src, i),
+            acc,
+            stop
+          )
+        | Some(c) => Str.trim(c) == ""
+            ? recur(i + 1, acc, stop)
+            : { directives: acc, end: stop }
+      }
+  }
+
 // Find the index just past the `}` that closes a `${` hole whose contents
 // start at `start` (right after the `${`). Tracks brace depth so a nested
 // record literal or `switch` inside the hole doesn't close it early, and

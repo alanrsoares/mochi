@@ -2179,21 +2179,42 @@ let stmtsLoop = (toks, pos0, tmp0, acc0, diags0, hooks) =>
         }
   }
 
+// A token that can open a statement but never continue an expression, so a
+// string just before it ends there (`"a"->log` keeps going; `"a" import` stops).
+let opensStmt = tok => switch tok {
+  | TStr(_) => true
+  | TTmplStart(_) => true
+  | TId(_) => true
+  | TNum(_, _) => true
+  | TBool(_) => true
+  | TLet => true
+  | TType => true
+  | TExtern => true
+  | TImport => true
+  | TExport => true
+  | TSwitch => true
+  | TLoop => true
+  | TDo => true
+  | TEof => true
+  | _ => false
+}
+
+/// The directive prologue (ADR 0160): how many leading string literals stand
+/// alone as statements. A bare string statement can never type as `()`, so
+/// reading it as a directive changes no valid program. `"use open"` is one.
+export let directiveCount = toks =>
+  loop (i = 0) {
+    switch tokAt(toks, i).tok {
+      | TStr(_) => opensStmt(tokAt(toks, i + 1).tok) ? recur(i + 1) : i
+      | _ => i
+    }
+  }
+
 /// The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
 /// tooling that wants the partial tree calls this and says so.
 export let parseRecovering = (toks, pluginsOpt) =>
   let hooks = parseHooksOf(resolvePluginsDefault(pluginsOpt)) in
-    stmtsLoop(
-      toks,
-      switch tokAt(toks, 0).tok {
-        | TStr(value) => value == "use open" ? 1 : 0
-        | _ => 0
-      },
-      0,
-      [],
-      [],
-      hooks
-    )
+    stmtsLoop(toks, directiveCount(toks), 0, [], [], hooks)
 
 export let parse = toks => parseWith(toks, None)
 

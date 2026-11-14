@@ -43,6 +43,8 @@ import {
   None,
   Ok,
   Some,
+  _Array_contains,
+  _Array_get,
   _Map_get,
   _Map_keys,
   _Option_flatMap,
@@ -53,20 +55,22 @@ import {
   _Result_map,
   _Result_mapErr,
   _Result_match,
-  _Str_get,
-  _Str_startsWith,
-  _Str_trim,
+  _Str_join,
+  _Str_length,
   _curry,
   _keyOf,
   _tuple,
-  and,
   eq,
+  filter,
   map,
+  not,
   or,
   reduce,
 } from "@mochi/compiler/runtime";
 
 import { lex } from "../lexer/lexer";
+import { scanPrologue } from "../lexer/str-scan";
+import { stmtSpan } from "../ast/ast";
 import { parseRecovering } from "../parser/parser";
 import { checkAll } from "../check/check";
 import { inferProgramWith, inferProgramTypesWith } from "../infer/infer";
@@ -131,37 +135,53 @@ export const defaultOpts: Opts = {
   plugins: None as Option<HostPlugin[]>,
   dtsTypeNames: new Map<string, string>(),
 };
-const afterBlanks = (s: string, i: number): Option<string> =>
-  ((_v) =>
-    _v._tag === "Some" && _v.value === " "
-      ? afterBlanks(s, i + 1)
-      : _v._tag === "Some" && _v.value === "\t"
-        ? afterBlanks(s, i + 1)
-        : ((other) => other)(_v))(_Str_get(i, s));
 /**
- * The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
- * that intentionally reaches for host globals opts itself in, so a graph can
- * mix strict modules with one adapter without an all-or-nothing caller flag.
+ * The `"use open"` file-local directive (ADR 0072). A file that
+ * intentionally reaches for host globals opts itself in, so a graph can mix
+ * strict modules with one adapter without an all-or-nothing caller flag. It
+ * may sit anywhere in the directive prologue (ADR 0160).
  */
-export const openDirective: (src: string) => boolean = (src: string) => {
-  const t: string = _Str_trim(src);
-  return and(
-    _Str_startsWith('"use open"', t),
-    ((_v) =>
-      _v._tag === "None"
-        ? true
-        : _v._tag === "Some" && _v.value === "\n"
-          ? true
-          : _v._tag === "Some" && _v.value === "r"
-            ? true
-            : false)(afterBlanks(t, 10)),
-  );
-};
+export const openDirective: (src: string) => boolean = (src: string) =>
+  _Array_contains('"use open"', scanPrologue(src, _Str_length(src)).directives);
 const openMode$ = (src: string, requested: boolean): boolean => or(requested, openDirective(src));
 /**
  * The directive wins over the caller's default; it never turns open off.
  */
 export const openMode: _Curry<[src: string, requested: boolean], boolean> = _curry(2, openMode$);
+const directivesOf$ = (src: string, stmts: Stmt[]): string[] =>
+  scanPrologue(
+    src,
+    _Option_match(
+      _Array_get(0, stmts),
+      () => _Str_length(src),
+      (s) => stmtSpan(s).start,
+    ),
+  ).directives;
+/**
+ * The directive prologue the parser dropped (ADR 0160), as raw source text.
+ * The first statement bounds the scan, so this agrees with the parser.
+ */
+export const directivesOf: _Curry<[src: string, stmts: Stmt[]], string[]> = _curry(
+  2,
+  directivesOf$,
+);
+const withDirectives$ = (out: string, src: string, stmts: Stmt[]): string =>
+  ((_v) =>
+    _v.length === 0
+      ? out
+      : ((ds) => `${_Str_join(
+          "\n",
+          map((d: string) => `${d};`, ds),
+        )}
+${out}`)(_v))(filter((d: string) => d !== '"use open"', directivesOf$(src, stmts)));
+/**
+ * Emitted JS/TS with the host directives (`"use client"`, …) put first, where
+ * a bundler looks for them. `"use open"` is Mochi-only, so it never emits.
+ */
+export const withDirectives: _Curry<[out: string, src: string, stmts: Stmt[]], string> = _curry(
+  3,
+  withDirectives$,
+);
 const noSuggestions: Suggestion[] = [] as Suggestion[];
 
 const stampStage = (kind: string, e: StageErr): Stamped => ({
@@ -473,7 +493,7 @@ const emitJsWith$ = (stmts: Stmt[], opts: Opts): string =>
 export const emitJsWith: _Curry<[stmts: Stmt[], opts: Opts], string> = _curry(2, emitJsWith$);
 const compileWith$ = (src: string, opts: Opts): Result<string, Stamped[]> =>
   _Result_map(
-    (prog: Stmt[]) => emitJsWith$(prog, opts),
+    (prog: Stmt[]) => withDirectives$(emitJsWith$(prog, opts), src, prog),
     pipelineWith(src, openMode$(src, opts.open), opts.plugins),
   );
 /**
@@ -547,7 +567,7 @@ const compileTsWith$ = (
             types: TypeAt[];
             letParams: TypeAt[];
             aliases: Map<string, AliasInfo>;
-          }) => emitTsWith(stmts, r, runtimeImport, opts),
+          }) => withDirectives$(emitTsWith(stmts, r, runtimeImport, opts), src, stmts),
           inferProgramTypesWith(
             stmts,
             builtins,

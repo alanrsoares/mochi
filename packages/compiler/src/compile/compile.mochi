@@ -6,6 +6,8 @@
 // span and never reaches codegen. Passes are threaded opaquely (ticket 0002);
 // the prelude tables come from the generated shim (ticket 0004).
 import { lex } from "../lexer/lexer.mochi"
+import { scanPrologue } from "../lexer/str-scan.mochi"
+import { stmtSpan } from "../ast/ast.mochi"
 import { parseRecovering } from "../parser/parser.mochi"
 import { checkAll } from "../check/check.mochi"
 import { inferProgramWith, inferProgramTypesWith } from "../infer/infer.mochi"
@@ -84,30 +86,33 @@ export let defaultOpts : Opts = {
   dtsTypeNames: #{}
 }
 
-// First non-space, non-tab character at or after `i`.
-let afterBlanks = (s, i) => switch Str.get(i, s) {
-  | Some(" ") => s->afterBlanks(i + 1)
-  | Some("\t") => s->afterBlanks(i + 1)
-  | other => other
-}
-
-/// The `"use open"` file-local directive (`src/compile/open-mode.ts`). A file
-/// that intentionally reaches for host globals opts itself in, so a graph can
-/// mix strict modules with one adapter without an all-or-nothing caller flag.
+/// The `"use open"` file-local directive (ADR 0072). A file that
+/// intentionally reaches for host globals opts itself in, so a graph can mix
+/// strict modules with one adapter without an all-or-nothing caller flag. It
+/// may sit anywhere in the directive prologue (ADR 0160).
 export let openDirective = src =>
-  let t = Str.trim(src) in
-    Str.startsWith(
-      "\"use open\"",
-      t
-    ) && switch t->afterBlanks(10) {
-      | None => true
-      | Some("\n") => true
-      | Some("r") => true
-      | _ => false
-    }
+  Array.contains("\"use open\"", scanPrologue(src, Str.length(src)).directives)
 
 /// The directive wins over the caller's default; it never turns open off.
 export let openMode = (src, requested) => requested || openDirective(src)
+
+/// The directive prologue the parser dropped (ADR 0160), as raw source text.
+/// The first statement bounds the scan, so this agrees with the parser.
+export let directivesOf = (src, stmts) =>
+  scanPrologue(
+    src,
+    switch Array.get(0, stmts) {
+      | Some(s) => stmtSpan(s).start
+      | None => Str.length(src)
+    }
+  ).directives
+
+/// Emitted JS/TS with the host directives (`"use client"`, …) put first, where
+/// a bundler looks for them. `"use open"` is Mochi-only, so it never emits.
+export let withDirectives = (out, src, stmts) => switch directivesOf(src, stmts) |> Array.filter(d => d != "\"use open\"") {
+  | [] => out
+  | ds => "${ds |> map(d => "${d};") |> Str.join("\n")}\n${out}"
+}
 
 // Type-check gate: inference under `open`, program passed through unchanged.
 // One diagnostic shape for every stage. Lex/parse/check carry no help or
@@ -248,7 +253,7 @@ export let emitJsWith = (stmts, opts: Opts) =>
 /// compileWith : string -> Opts -> Result string Err
 export let compileWith = (src, opts: Opts) =>
   src->pipelineWith(openMode(src, opts.open), opts.plugins)
-    |> Result.map(prog => prog->emitJsWith(opts))
+    |> Result.map(prog => prog->emitJsWith(opts)->withDirectives(src, prog))
 
 /// compile : string -> Result string Err
 export let compile = src => src->compileWith(defaultOpts)
@@ -289,7 +294,8 @@ export let compileTsWith = (src, runtimeImport, opts: Opts) =>
       openMode(src, opts.open),
       opts.plugins
     )
-      |> Result.map(r => stmts->emitTsWith(r, runtimeImport, opts))
+      |> Result.map(r =>
+        stmts->emitTsWith(r, runtimeImport, opts)->withDirectives(src, stmts))
       |> Result.mapErr(es => es |> map(stampType))
 
 export let compileTs = (src, runtimeImport) =>

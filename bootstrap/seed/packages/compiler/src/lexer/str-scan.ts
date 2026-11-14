@@ -1,11 +1,23 @@
+/**
+ * The directive prologue the parser dropped (ADR 0160): the raw text of each
+ * `"..."` literal that opens the source before `limit`, with only blanks and
+ * `//` comments around them, and the offset just past the last one. The
+ * caller passes the first statement's start, so this agrees with the parser
+ * without a second lex.
+ */
+export type Prologue = { directives: string[]; end: number };
+
 import type { Option, _Curry } from "@mochi/compiler/runtime";
 
 import {
   None,
   Some,
+  _Array_append,
   _Option_contains,
   _Option_match,
   _Str_get,
+  _Str_slice,
+  _Str_trim,
   _curry,
   _done,
   _keyOf,
@@ -63,6 +75,47 @@ const skipLineCommentTo$ = (src: string, j: number): number =>
 export const skipLineCommentTo: _Curry<[src: string, j: number], number> = _curry(
   2,
   skipLineCommentTo$,
+);
+
+const noDirectives: string[] = [] as string[];
+const scanPrologue$ = (src: string, limit: number): Prologue => {
+  let i: number = 0;
+  let acc: string[] = noDirectives;
+  let stop: number = 0;
+  while (true) {
+    if (i >= limit) {
+      return { directives: acc, end: stop };
+    } else {
+      const _step = ((_v) =>
+        _v._tag === "None"
+          ? _done({ directives: acc, end: stop })
+          : _v._tag === "Some" && _v.value === '"'
+            ? _Option_match(
+                skipStringLiteral$(src, i),
+                () => _done({ directives: acc, end: stop }),
+                (j) => _recur(j, _Array_append(_Str_slice(i, j, src), acc), j),
+              )
+            : _v._tag === "Some" && _v.value === "/" && _Option_contains("/", _Str_get(i + 1, src))
+              ? _recur(skipLineCommentTo$(src, i), acc, stop)
+              : _v._tag === "Some"
+                ? (({ value: c }) =>
+                    _Str_trim(c) === ""
+                      ? _recur(i + 1, acc, stop)
+                      : _done({ directives: acc, end: stop }))(_v)
+                : (() => {
+                    throw new Error("non-exhaustive match");
+                  })())(_Str_get(i, src));
+      if (_step._tag === "recur") {
+        [i, acc, stop] = _step.args;
+        continue;
+      }
+      return _step.value;
+    }
+  }
+};
+export const scanPrologue: _Curry<[src: string, limit: number], Prologue> = _curry(
+  2,
+  scanPrologue$,
 );
 const findHoleLoop = (src: string, j0: number, depth0: number): Option<number> => {
   let j: number = j0;

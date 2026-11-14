@@ -25,7 +25,7 @@ import {
   txt,
   verbatim
 } from "../doc/doc.mochi"
-import { skipStringLiteral } from "../lexer/str-scan.mochi"
+import { scanPrologue, skipStringLiteral } from "../lexer/str-scan.mochi"
 import { showTypeExpr } from "../ast/show-type-expr.mochi"
 import * as Layout from "../doc/doc.mochi"
 import * as Fmt from "./format-api.mochi"
@@ -2007,16 +2007,6 @@ let stmtDoc = (cts: Ctx, stmts, i, src) => switch Array.get(i, stmts) {
     }
 }
 
-let stmtSpan = s => switch s {
-  | Ast.SLet(_, _, _, _, _, _, sp) => sp
-  | Ast.SType(_, _, _, _, _, _, _, _, sp) => sp
-  | Ast.SExtern(_, _, _, _, _, _, _, _, _, sp) => sp
-  | Ast.SImport(_, _, sp) => sp
-  | Ast.SImportNs(_, _, sp) => sp
-  | Ast.SExpr(_, sp) => sp
-  | Ast.SError(sp) => sp
-}
-
 /// A blank separator between two statements: a newline, only whitespace, then
 /// another newline somewhere in the source gap. Any run of blank lines
 /// collapses to one; a doc comment is not whitespace, so `let a\n/// d\nlet b`
@@ -2036,7 +2026,7 @@ let blankBetween = gap => blankBetweenFrom(gap, 0, false)
 /// when it has one, else its own token — so a kept blank line lands before the
 /// comment block rather than inside it.
 let anchorStart = (cts: Ctx, s) =>
-  let sp = stmtSpan(s) in
+  let sp = Ast.stmtSpan(s) in
     switch Array.get(0, atKey(cts.leading, spanKey(STMT, sp))) {
       | Some(c) => c.start
       | None => sp.start
@@ -2053,7 +2043,7 @@ let stmtParts = (cts: Ctx, stmts, i, src, prevEnd, acc) => switch Array.get(i, s
     let printed = cts->stmtDoc(stmts, i, src) in
     let lastIdx = i + printed.consumed - 1 in
     let end = switch Array.get(lastIdx, stmts) {
-      | Some(last) => stmtSpan(last).end
+      | Some(last) => Ast.stmtSpan(last).end
       | None => 0
     } in
       cts->stmtParts(
@@ -2063,7 +2053,10 @@ let stmtParts = (cts: Ctx, stmts, i, src, prevEnd, acc) => switch Array.get(i, s
         Some(end),
         Array.concat(
           acc,
-          Array.append(cts->withComments(STMT, stmtSpan(cur), printed.doc), sep)
+          Array.append(
+            cts->withComments(STMT, Ast.stmtSpan(cur), printed.doc),
+            sep
+          )
         )
       )
 }
@@ -2097,7 +2090,7 @@ let programDoc = (cts: Ctx, stmts, src, tail) =>
 /// it, so a comment binds to the tightest node that follows (or precedes) it.
 let stmtAnchors = s =>
   Array.append(
-    { kind: STMT, sp: stmtSpan(s) },
+    { kind: STMT, sp: Ast.stmtSpan(s) },
     switch s {
       | Ast.SLet(_, _, _, value, _, _, _) => exprAnchors(value)
       | Ast.SExpr(value, _) => exprAnchors(value)
@@ -2122,12 +2115,22 @@ let inErrorSpanFrom = (stmts, i, c: Comment) => switch Array.get(i, stmts) {
 
 let inErrorSpan = (stmts, c: Comment) => inErrorSpanFrom(stmts, 0, c)
 
-/// `"use open"` is a directive, not a statement — the parser skips it, so the
-/// printer restores it verbatim.
-let hasOpenDirective = src => switch Array.get(0, Str.split("\n", Str.trim(src))) {
-  | Some(first) => Str.trim(first) == "\"use open\""
-  | None => false
-}
+/// Directives (`"use open"`, `"use client"`, …) are not statements — the
+/// parser skips them (ADR 0160) — so the printer restores the prologue's source
+/// text, comments among it included, above the body.
+let prologueOf = (stmts, src) =>
+  scanPrologue(
+    src,
+    switch Array.get(0, stmts) {
+      | Some(s) => Ast.stmtSpan(s).start
+      | None => Str.length(src)
+    }
+  )
+
+let prologueText = (src, stop) =>
+  Str.split("\n", Str.trim(Str.slice(0, stop, src)))
+    |> map(line => trimEnd(line))
+    |> Str.join("\n")
 
 /// Print an already-parsed program with comment and blank-line fidelity to `src`.
 export let formatProgram = (stmts, src) =>
@@ -2140,8 +2143,9 @@ export let formatProgramWith = (stmts, src, hooks: FormatHooks) =>
   // not be regrouped against the prelude entry it shadows.
   let innerBound = Set.fromArray(Array.flatMap(stmtInnerNames, stmts)) in
   let shadowed = Set.union(innerBound, Set.fromArray(topLevelNames(stmts))) in
+  let prologue = prologueOf(stmts, src) in
   let comments = Array.filter(
-    c => !inErrorSpan(stmts, c),
+    c => c.start >= prologue.end && !inErrorSpan(stmts, c),
     collectComments(src)
   ) in
   let base = {
@@ -2164,7 +2168,10 @@ export let formatProgramWith = (stmts, src, hooks: FormatHooks) =>
     programDoc(attached.table, stmts, src, attached.tail),
     WIDTH
   ) in
-    hasOpenDirective(src) ? "\"use open\"\n\n${body}" : body
+    switch prologue.directives {
+      | [] => body
+      | _ => "${prologueText(src, prologue.end)}\n\n${body}"
+    }
 
 // The `lex` + `parseRecovering` + `formatProgram` composition lives in the
 // caller (the CLI), not here: this module prints an AST and stays independent

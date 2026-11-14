@@ -182,6 +182,26 @@ test("typed graph emit honours the entry's `use open` even under `strictEntry`",
   expect(buildModulesTsWith(entry, "@mochi/runtime", editorOptions)._tag).toBe("Ok");
 });
 
+type EmittedModule = { readonly path: string; readonly js: string };
+
+test("graph emit puts each module's host directives first (ADR 0160)", () => {
+  const dir = inTmp({
+    "dep.mochi": '"use client"\nexport let value = 1\n',
+    "main.mochi": 'import { value } from "./dep.mochi"\nexport let use = value\n',
+  });
+  const entry = join(dir, "main.mochi");
+  const firstLines = (outs: readonly EmittedModule[]) =>
+    outs.map((o) => [basename(o.path), o.js.split("\n")[0]]);
+  const expected = [
+    ["dep.mochi", '"use client";'],
+    ["main.mochi", expect.stringMatching(/^import /)],
+  ];
+  expect(firstLines(unwrapOk(buildModules(entry)))).toEqual(expected);
+  expect(firstLines(unwrapOk(buildModulesTsWith(entry, "@mochi/runtime", defaultOptions)))).toEqual(
+    expected,
+  );
+});
+
 test("`docs: false` drops docstrings from the emitted JS", () => {
   const dir = inTmp({ "main.mochi": "/// Doubles.\nexport let double = n => n * 2\n" });
   const entry = join(dir, "main.mochi");

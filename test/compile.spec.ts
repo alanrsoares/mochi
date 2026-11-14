@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compile } from "@mochi/compiler";
+import { compile, compileTargets } from "@mochi/compiler";
 import { formatError } from "@mochi/compiler/errors";
 import { compileJs } from "@mochi/test-support";
 import { isErr, unwrapErr, unwrapOk } from "@onrails/result";
@@ -31,6 +31,24 @@ test("open-world inference requires an explicit flag or file directive", () => {
   expect(isErr(compile("// @mochi open\nlet value = browserGlobal"))).toBe(true);
   expect(isErr(compile('"use open"\nlet value = browserGlobal'))).toBe(false);
   expect(js('"use open"\nlet value = browserGlobal')).toBe("const value = browserGlobal;\n");
+});
+
+// ADR 0160: a leading string that stands alone is a directive. Host ones emit
+// first, ahead of every import, where bundlers look; `"use open"` never emits.
+test("host directives emit first in JS and TS; use open stays Mochi-only", () => {
+  const src = '// header\n"use client"\n"use open"\n\nexport let value = browserGlobal\n';
+  const out = unwrapOk(compileTargets(src, { runtime: false }));
+  expect(out.js).toBe('"use client";\nexport const value = browserGlobal;\n');
+  expect(out.ts.startsWith('"use client";\n')).toBe(true);
+  expect(out.js).not.toContain("use open");
+  expect(js('"use client"\n"use server"\nlet x = 1')).toBe(
+    '"use client";\n"use server";\nconst x = 1;\n',
+  );
+});
+
+test("a leading string that continues an expression is not a directive", () => {
+  expect(js('"use client"->log()')).toBe('log("use client");\n');
+  expect(isErr(compile('"use open"\n(browserGlobal)'))).toBe(true);
 });
 
 test("pipeline desugars to nested calls", () => {

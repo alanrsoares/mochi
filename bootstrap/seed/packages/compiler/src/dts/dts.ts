@@ -81,7 +81,13 @@ import {
 import { jsDoc } from "../codegen/codegen";
 import { foldAliasesAt } from "../infer/schemes";
 import * as Schemes from "../infer/schemes";
-import { defaultOpts, emitJsWith, emitTsWith, typedProgramWith } from "../compile/compile";
+import {
+  defaultOpts,
+  emitJsWith,
+  emitTsWith,
+  withDirectives,
+  typedProgramWith,
+} from "../compile/compile";
 import { bindingHooksFor, dtsHooksFor, runDtsHooks } from "../extensions/extensions";
 /**
  * Fold `D.Shape` written in this file back to a name the emitted `.d.ts` can
@@ -1062,8 +1068,8 @@ const compileTargetsWith$ = (
         letParams: TypeAt[];
       },
     ]) => ({
-      js: emitJsWith(stmts, opts),
-      ts: emitTsWith(stmts, r, runtimeImport, opts),
+      js: withDirectives(emitJsWith(stmts, opts), src, stmts),
+      ts: withDirectives(emitTsWith(stmts, r, runtimeImport, opts), src, stmts),
       dts: emitDtsFromTypedWith(
         stmts,
         r.env,
