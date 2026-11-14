@@ -69,6 +69,10 @@ catches typos and enables did-you-mean quick fixes. Bind JavaScript values throu
 a typed `extern` whenever possible. For a narrow host-global seam, begin the file with
 `"use open"`; `--open` is the project-wide migration escape hatch.
 
+Leading string literals that stand alone form the file's directive prologue
+([ADR 0160](adr/0160-directive-prologue.md)). Host directives such as `"use client"`
+emit first in the JS and TS output, before every import. `"use open"` never emits.
+
 ## QA gate
 
 ```bash
