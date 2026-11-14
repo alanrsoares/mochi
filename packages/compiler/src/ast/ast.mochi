@@ -142,3 +142,14 @@ export type Stmt =
   // before the sync point. No message — diagnostics are the diagnostic channel —
   // and no bindings, so check/infer walk past it without cascading.
   | SError(span: Span)
+
+/// The whole-statement span every `Stmt` carries last.
+export let stmtSpan = s => switch s {
+  | SLet(_, _, _, _, _, _, sp) => sp
+  | SType(_, _, _, _, _, _, _, _, sp) => sp
+  | SExtern(_, _, _, _, _, _, _, _, _, sp) => sp
+  | SImport(_, _, sp) => sp
+  | SImportNs(_, _, sp) => sp
+  | SExpr(_, sp) => sp
+  | SError(sp) => sp
+}

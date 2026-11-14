@@ -505,7 +505,13 @@ let compileOne = (ctx, loaded: Loaded, recovering, isEntry, opts: Compile.Opts) 
                     qualScopeOf(loaded.stmts, res.quals),
                     ctx.qualsByPath
                   ),
-                  outputs: [...ctx.outputs, { path: loaded.path, js }]
+                  outputs: [
+                    ...ctx.outputs,
+                    {
+                      path: loaded.path,
+                      js: js->Compile.withDirectives(loaded.src, loaded.stmts)
+                    }
+                  ]
                 }
               )
         }
@@ -1115,9 +1121,13 @@ let compileOneTs = (ctx, loaded, opts: Compile.Opts) => switch ctx->resolveImpor
               localTypeNames(loaded.stmts),
               ctx.typeOwner
             ) in
-            let ts = Array.length(lines) == 0
-              ? body
-              : "${Str.join("\n", lines)}\n\n${body}" in
+            let ts = Compile.withDirectives(
+              Array.length(lines) == 0
+                ? body
+                : "${Str.join("\n", lines)}\n\n${body}",
+              loaded.src,
+              loaded.stmts
+            ) in
               Ok(
                 {
                   exportsByPath: Map.set(

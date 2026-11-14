@@ -4298,6 +4298,80 @@ const stmtsLoop = (
     }
   }
 };
+const opensStmt: (tok: Tok) => boolean = (tok: Tok) => {
+  const $match = tok;
+  switch ($match._tag) {
+    case "TStr": {
+      return true;
+    }
+    case "TTmplStart": {
+      return true;
+    }
+    case "TId": {
+      return true;
+    }
+    case "TNum": {
+      return true;
+    }
+    case "TBool": {
+      return true;
+    }
+    case "TLet": {
+      return true;
+    }
+    case "TType": {
+      return true;
+    }
+    case "TExtern": {
+      return true;
+    }
+    case "TImport": {
+      return true;
+    }
+    case "TExport": {
+      return true;
+    }
+    case "TSwitch": {
+      return true;
+    }
+    case "TLoop": {
+      return true;
+    }
+    case "TDo": {
+      return true;
+    }
+    case "TEof": {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+/**
+ * The directive prologue (ADR 0160): how many leading string literals stand
+ * alone as statements. A bare string statement can never type as `()`, so
+ * reading it as a directive changes no valid program. `"use open"` is one.
+ */
+export const directiveCount: (toks: LocTok[]) => number = (toks: LocTok[]) => {
+  let i: number = 0;
+  while (true) {
+    {
+      const $loopMatch = tokAt(toks, i).tok;
+      if ($loopMatch._tag === "TStr") {
+        if (opensStmt(tokAt(toks, i + 1).tok)) {
+          i = i + 1;
+          continue;
+        } else {
+          return i;
+        }
+      }
+      {
+        return i;
+      }
+    }
+  }
+};
 /**
  * The recovering parse (ADR 0045). `parse` is the hard-fail wrapper over this;
  * tooling that wants the partial tree calls this and says so.
@@ -4382,16 +4456,7 @@ export const parseRecovering: <A, B, C, D, E>(
       b: number,
       c: (a: LocTok[], b: number) => Result<[Expr, number], PErr>,
     ) => Result<Option<[Expr, number]>, PErr>)[] = parseHooksOf(resolvePluginsDefault(pluginsOpt));
-    return stmtsLoop(
-      toks,
-      ((_v) => (_v._tag === "TStr" ? (({ value }) => (value === "use open" ? 1 : 0))(_v) : 0))(
-        tokAt(toks, 0).tok,
-      ),
-      0,
-      [] as Stmt[],
-      [] as PErr[],
-      hooks,
-    );
+    return stmtsLoop(toks, directiveCount(toks), 0, [] as Stmt[], [] as PErr[], hooks);
   },
 );
 export const parse: (toks: LocTok[]) => Result<Stmt[], PErr> = (toks: LocTok[]) =>

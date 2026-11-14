@@ -23,6 +23,14 @@ test("canonicalizes the open-world directive as a module header", () => {
   expect(fmt('"use open"\nlet value = browserGlobal')).toBe(expected);
 });
 
+test("keeps the whole directive prologue, comments in place, above the body", () => {
+  const src = '// header\n"use client"   \n"use open"\nimport { a } from "./a.mochi"\nlet b = a';
+  const expected =
+    '// header\n"use client"\n"use open"\n\nimport { a } from "./a.mochi"\nlet b = a\n';
+  expect(fmt(src)).toBe(expected);
+  expect(fmt(expected)).toBe(expected);
+});
+
 test("a single-param lambda drops its parentheses", () => {
   expect(fmt("let f=(x)=>x")).toBe("let f = x => x\n");
 });

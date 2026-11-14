@@ -491,3 +491,42 @@ export const SExpr = _curry(2, (value, span) => ({ _tag: "SExpr", value, span })
   span: Span,
 ) => Stmt;
 export const SError = (span: Span): Stmt => ({ _tag: "SError", span });
+/**
+ * The whole-statement span every `Stmt` carries last.
+ */
+export const stmtSpan: (s: Stmt) => Span = (s: Stmt) => {
+  const $match = s;
+  switch ($match._tag) {
+    case "SLet": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "SType": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "SExtern": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "SImport": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "SImportNs": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "SExpr": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    case "SError": {
+      const { span: sp } = $match;
+      return sp;
+    }
+    default: {
+      throw new Error("non-exhaustive match");
+    }
+  }
+};
